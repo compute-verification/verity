@@ -4,7 +4,7 @@ public import Definitions.Pouw.Assumptions.Dimension.Assumptions
 public import Definitions.Pouw.Assumptions.NCP.Chain
 
 /-!
-# Theorem D's residue: pinned statements (trusted)
+# Theorem D's residue: guarantees (trusted)
 
 A1's witness, and Theorem D for the protocol's checked values, which are taken mod `2^32` (`Pouw.NCP.Chain`). The
 probabilistic lifting (`Lift_MinRank`) is open.

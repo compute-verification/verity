@@ -1,15 +1,16 @@
-/-
-`Tmpl.unrollOk` against `Tmpl.unrollAt`: `Flock.Test.Tmpl`'s unit passes it under every layout mode, and `unrollAt` builds
-its committed net (`FlockSoundness.TmplFold.unrollAt_ok`). Layouts it refuses, each one `unrollAt` refuses too: the pair's
-copies placed over the root's own columns (`layApart`), a lane count below the copies (`placeOk`), and a layout of the pair
-marked `ident` (`identOk`) placed at the input rows.
--/
 module
 
 public import Flock.Test.Tmpl
 public import Flock.TmplAt
 meta import Flock.Test.Tmpl
 meta import Flock.TmplAt
+
+/-!
+`Tmpl.unrollOk` against `Tmpl.unrollAt`: `Flock.Test.Tmpl`'s unit passes it under every layout mode, and `unrollAt` builds
+its committed net (`FlockSoundness.TmplFold.unrollAt_ok`). Layouts it refuses, each one `unrollAt` refuses too: the pair's
+copies placed over the root's own columns (`layApart`), a lane count below the copies (`placeOk`), and a layout of the pair
+marked `ident` (`identOk`) placed at the input rows.
+-/
 
 @[expose] public section
 

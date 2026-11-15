@@ -31,7 +31,7 @@ its level-0 cap, the first verifying opening at each position, then decoding. Th
 
 The decoder is **per sampled proof block** (`Decoder`): two sampled proof blocks that share a wire hold it in their
 own columns, and only the link makes the two readings agree. `cover` (`Pr[accept] ≤ ks + link` at a
-wrong sampled proof block, pointwise in the reruns) follows from **the lowering** (`LoweringSoundC`, named):
+incorrect sampled proof block, pointwise in the reruns) follows from **the lowering** (`LoweringSoundC`, named):
 a message packing a witness that satisfies the table's statement decodes, for each sampled proof block, to
 values on which that unit is correct. `loweringSoundC_of_place` discharges it from each sampled
 proof block's place in the table (`UnitPlace`, `Lowering.lean`), where the audit's circuit `C` is the rows
@@ -45,7 +45,7 @@ from `table_knowledge_sound_joint_tight`, with no named assumption. The binding 
 stays a named hypothesis (`BindSound`) until the link theorem, under expected-time collision
 resistance (`Assumptions.SHA512CRExpected`, DESIGN.md §3).
 
-`flock_compiled_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
+`flock_compiled_count`: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + ε_bind(σ)`.
 -/
 
 @[expose] public section
@@ -187,7 +187,7 @@ theorem prob_sessionC (S : Finset (Fin n)) (R : Reg) (τ : Strategy (sessionC H 
       prob (fun out : OutC 𝔽 D => out.accepted = true) ((plan S R).game H E) (tabStrat H E plan τ) :=
   prob_map _ _ _ _
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The compiled audit's analysis.** `X` is the committed transcript (the link theorem defines
 it), `decode` reads the witness, `Kr` is the extractor's rerun count, one for both terms. -/
@@ -195,7 +195,7 @@ noncomputable def analysisC (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) (Kr : ℕ)
     (hlow : P.LoweringSoundC plan decode) : ExtractionAnalysis L Reg (sessionC H E plan) where
   Tr := Fin C.N → Bool
-  wrong := P.wrong
+  incorrect := P.incorrect
   committed := Xc
   ks S R τ _ := ENNReal.ofReal ((plan S R).ksJoint H E Kr (tabStrat H E plan τ))
   link S R τ u Xt := ENNReal.ofReal (P.linkJoint H E plan decode Kr S R τ u Xt)
@@ -216,7 +216,7 @@ noncomputable def analysisC (decode : Decoder (C := C) (Reg := Reg) plan)
             refine ⟨hc, fun M _ hsat => ?_⟩
             by_contra hno
             push Not at hno
-            exact P.mem_wrong.1 hu (P.correct_congr (fun g hg => (hno g hg).symm)
+            exact P.mem_incorrect.1 hu (P.correct_congr (fun g hg => (hno g hg).symm)
               (hlow S R u hS M hsat))
           simp [ind, ha, hc, hlink]
         · have h1 : ind (fun out : OutC 𝔽 D => out.accepted = true ∧ ¬ Committed execArith
@@ -263,35 +263,35 @@ theorem flock_compiled_knowledgeSound
   exact avg_mono fun ω => (atTgt_le_const _ _ _).trans
     (ENNReal.ofReal_le_ofReal ((plan (L.draw ω) R).ksJoint_le H E Kr hK _))
 
-/-- **The compiled Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + δ_link(σ)`, with
-`ε_ks` the table theorem's bound averaged over the sample, and `δ_link` named. -/
+/-- **The compiled Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + ε_bind(σ)`, with
+`ε_ks` the table theorem's bound averaged over the sample, and `ε_bind` named. -/
 theorem flock_compiled_count
     (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode)
-    {δlink : (R : Reg) → Cont L Reg (sessionC H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisC H E plan decode Xc Kr hlow).BindSound δlink) (K : ℕ)
+    {εbind : (R : Reg) → Cont L Reg (sessionC H E plan) R → ℝ≥0∞}
+    (hlink : (P.analysisC H E plan decode Xc Kr hlow).BindSound εbind) (K : ℕ)
     (σ : Strategy (audit L Reg (sessionC H E plan))) :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (Xc (reg σ) (cont σ))).card)
         (audit L Reg (sessionC H E plan)) σ ≤
-      L.miss K + ksAvg H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) := by
-  show prob (fun o => o.1 = true ∧ K ≤ ((P.analysisC H E plan decode Xc Kr hlow).wrong
+      L.miss K + ksAvg H E plan Kr (reg σ) (cont σ) + εbind (reg σ) (cont σ) := by
+  show prob (fun o => o.1 = true ∧ K ≤ ((P.analysisC H E plan decode Xc Kr hlow).incorrect
     ((P.analysisC H E plan decode Xc Kr hlow).committedOf σ)).card) _ σ ≤ _
   exact extraction_audit_count (P.analysisC H E plan decode Xc Kr hlow)
     (P.flock_compiled_knowledgeSound H E plan decode Xc hK hlow) hlink K σ
 
-/-- **Sampled proof blocks of the compiled Flock audit** are correct up to `ε_ks(σ) + δ_link(σ)`. -/
-theorem flock_compiled_drawn
+/-- **Sampled proof blocks of the compiled Flock audit** are correct up to `ε_ks(σ) + ε_bind(σ)`. -/
+theorem flock_compiled_sampled
     (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode)
-    {δlink : (R : Reg) → Cont L Reg (sessionC H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisC H E plan decode Xc Kr hlow).BindSound δlink)
+    {εbind : (R : Reg) → Cont L Reg (sessionC H E plan) R → ℝ≥0∞}
+    (hlink : (P.analysisC H E plan decode Xc Kr hlow).BindSound εbind)
     (σ : Strategy (audit L Reg (sessionC H E plan))) :
-    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (sessionC H E plan)) σ ≤
-      ksAvg H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
-  extraction_audit_drawn (P.analysisC H E plan decode Xc Kr hlow)
+      ksAvg H E plan Kr (reg σ) (cont σ) + εbind (reg σ) (cont σ) :=
+  extraction_audit_sampled (P.analysisC H E plan decode Xc Kr hlow)
     (P.flock_compiled_knowledgeSound H E plan decode Xc hK hlow) hlink σ
 
 end Partition

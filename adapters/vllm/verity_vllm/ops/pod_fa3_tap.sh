@@ -37,7 +37,7 @@ fi
 [ "$(cd /workspace/cp/vllm-flash-attn && git rev-parse HEAD)" = "$PIN" ] || fail "tree is not at $PIN"
 TREE=$FA2/trees/fa3tap
 if [ ! -d "$TREE" ]; then cp -r /workspace/cp/vllm-flash-attn "$TREE" || fail "copy tree"; fi
-python3 "$SRC/apply_fa3_tap.py" "$TREE/hopper" "$SRC" | tail -4 || fail "apply_fa3_tap"
+PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm fa3-tap-apply --hopper "$TREE/hopper" --src-dir "$SRC" | tail -4 || fail "apply_fa3_tap"
 grep -q "Verity_mat_ctx_sm90<kBlockM, kBlockN, kHeadDim>" "$TREE/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp" || fail "tree not patched"
 [ "${TREE_ONLY:-0}" = "1" ] && { echo "FA3-TAP-TREE-OK $TREE"; exit 0; }
 OUT=$FA2/build/$BUILD

@@ -1,4 +1,4 @@
-"""Gate G2: the M1 log (`data/logs/m1.jsonl.gz`, produced on the pod) resolves with 0 Unsupported under
+"""Gate G2: the M1 log (`data/logs/m1.jsonl.gz`, a registered fixture) resolves with 0 Unsupported under
 the pinned profile, with the expected instance counts per step.  Skipped when the log is absent."""
 
 from __future__ import annotations

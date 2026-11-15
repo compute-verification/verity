@@ -42,6 +42,16 @@ def test_a_request_the_stated_request_steps_leave_out_is_placed_at_every_step():
     assert placed(ONE_MODULE, request_steps={"r1": [1]}) == [("r0", 0, OP, "out"), ("r0", 1, OP, "out"), ("r1", 1, OP, "out")]
 
 
+@pytest.mark.parametrize(("request_steps", "before"), [(ABSENT, [0, 1]), (None, [0, 1]), ({}, [0, 1]), ({"r1": [1]}, [1])],
+                         ids=["absent", "null", "empty", "stated"])
+@pytest.mark.parametrize("rid", [["r0"], {"r": 0}, {"r0"}], ids=["a list", "a dict", "a set"])
+def test_a_request_id_that_cannot_be_hashed_is_refused_whether_or_not_request_steps_are_stated(request_steps, before, rid):
+    pop = B.expected_population(ONE_MODULE, {"program_digest": PD, "requests": ["r1", rid], "steps": 2, **given(request_steps=request_steps)})
+    assert [(i[1], i[2]) for i in (next(pop) for _ in before)] == [("r1", s) for s in before]     # the request before it is placed
+    with pytest.raises(TypeError, match=f"unhashable type: '{type(rid).__name__}'"):
+        next(pop)
+
+
 @pytest.mark.parametrize("layers", [ABSENT, None, []])
 def test_a_structure_that_names_no_moe_layer_requires_no_moe_plane(layers):
     assert placed({"modules": [], "moe_planes": ["up", "sum"], **given(moe_layers=layers)}) == []

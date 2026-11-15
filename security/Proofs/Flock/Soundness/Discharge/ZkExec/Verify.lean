@@ -5,7 +5,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
 /-!
-# flock-verify `--zk` accepts, table by table and rep by rep
+# verity-verify-proof `--zk` accepts, table by table and rep by rep
 
 * `zk_verify_ok : ZkVerifyOk`: `Zk.verify`'s session checks (the coin tree, the record, the tables, the proof files),
   then every table's two reps with one cap.

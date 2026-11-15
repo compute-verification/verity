@@ -2,7 +2,7 @@
 (`prove_tie`), for tests: what Flock's prover behind the ZK server would deliver, and a stand-in for the verifier's own
 run of Flock's Lean verifier (`proofs.verify`), which reads each session's verdict from the session file the stand-in
 prover writes. The proof's output word is the proof block's on the prover's opening by each gate's reference
-(`LinkWindows.outputs`, `IngressTie.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim
+(`TransferBlocks.outputs`, `IngressTie.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim
 another. So the tests check everything the verifier does around the proof: its run's findings, the public row
 opened to the verifier's own copy, the output row, the certificates and the sync."""
 
@@ -15,7 +15,7 @@ from typing import Any, Sequence
 from verity.commitments import hm96
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import sha512_row_v2_digest
-from verity.protocols.accounting.certifier.verifier import service as SVC, tie_service as TS, warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import service as SVC, tie_service as TS, network_certifier_rows as WR
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF, registered as G
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
@@ -28,7 +28,7 @@ def _bc(data: bytes, bits: int, salt: bytes) -> bytes:
     return _INST.commit_string(_INST.default_key, sha512_row_v2_digest(data, bits), salt)
 
 
-def prove(lw: SVC.LinkWindows, opening: SVC.Hidden, draw: S.Draw, syncs: Sequence[Any], out: Path, *,
+def prove(lw: SVC.TransferBlocks, opening: SVC.Hidden, sample: S.Draw, syncs: Sequence[Any], out: Path, *,
           program: str | None = None, accepted: bool = True, word: int | None = None, root: bytes | None = None,
           salts: dict[str, bytes] | None = None, units: Sequence[int] | None = None) -> SVC.Delivered:
     """The delivered proof of the sampled proof block on `opening` under the registered root (or `root`): the
@@ -36,19 +36,19 @@ def prove(lw: SVC.LinkWindows, opening: SVC.Hidden, draw: S.Draw, syncs: Sequenc
     naming `program` (default: the link's registered Program) that the stand-in Lean `accepted`, and the circuit file.
     Where the unit takes no instance, the rows are zero and the output 0. `word` forges the output word,
     `salts` the salts delivered for ``pub`` and ``o0``, and `units` the public file's unit indices."""
-    root = bytes.fromhex(draw.registration.record["roots"][0]["root"]) if root is None else root
+    root = bytes.fromhex(sample.docket.record["roots"][0]["root"]) if root is None else root
     args = lw.arguments(opening, root, syncs)
     rows = {r: lw.row(args, r) if args is not None else bytes(lw.bits(r) // 8) for r in SVC.ROWS}
     rows["o0"] = SVC.output_row(lw.outputs(opening, root, syncs) if args is not None else 0)
-    return _deliver(lw, rows, draw, out, program=program, accepted=accepted, word=word, salts=salts, units=units)
+    return _deliver(lw, rows, sample, out, program=program, accepted=accepted, word=word, salts=salts, units=units)
 
 
-def _deliver(unit: Any, rows: dict[str, bytes], draw: S.Draw, out: Path, *, program: str | None, accepted: bool,
+def _deliver(unit: Any, rows: dict[str, bytes], sample: S.Draw, out: Path, *, program: str | None, accepted: bool,
              word: int | None, salts: dict[str, bytes] | None, units: Sequence[int] | None) -> SVC.Delivered:
-    """The statement's files for `rows` on `unit` (a `LinkWindows` or an `IngressTie`) and what the prover delivers."""
+    """The statement's files for `rows` on `unit` (a `TransferBlocks` or an `IngressTie`) and what the prover delivers."""
     out.mkdir(parents=True, exist_ok=True)
     public = out / "public.bin"
-    header = {"units": {"indices": list(draw.units if units is None else units)}, "instances": 1}
+    header = {"units": {"indices": list(sample.units if units is None else units)}, "instances": 1}
     public.write_bytes(json.dumps(header).encode() + b"\n"
                        + b"".join(_bc(rows[p], unit.bits(p), SALTS[p]) for p in SVC.PORTS))
     session = out / "session-0"
@@ -62,28 +62,28 @@ def _deliver(unit: Any, rows: dict[str, bytes], draw: S.Draw, out: Path, *, prog
     return SVC.Delivered(PF.Proof(circuit, public, (session,)), delivered, output)
 
 
-#: the domains by id, as `prove_tie` commits under them (the warden's, and the known values'): the stand-in Lean's
+#: the domains by id, as `prove_tie` commits under them (the network certifier's, and the known values'): the stand-in Lean's
 #: registered reads climb each port's rows under the domain its id names, which the real verifier derives from the port
 DOMAINS: dict[str, Any] = {}
 
 
-def prove_tie(tie: Any, cells: Any, draw: S.Draw, lanes: Any, out: Path, *, program: str | None = None,
+def prove_tie(tie: Any, cells: Any, sample: S.Draw, lanes: Any, out: Path, *, program: str | None = None,
               accepted: bool = True, words: dict[int, int] | None = None,
               salts: dict[int, dict[str, bytes]] | None = None, units: Sequence[int] | None = None,
               rows: Sequence[bytes] | None = None) -> TS.Delivered:
     """The delivered proof of the sampled ingress-tie proof blocks (`tie_service.IngressTie`) on the network certifier's
-    opening `cells` (`warden_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: proof
+    opening `cells` (`network_certifier_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: proof
     block t's ``wit`` row its
-    bucket row under the warden's salt and its header's registered read of the warden's root (`Cells.statement`), its
+    bucket row under the network certifier's salt and its header's registered read of the network certifier's root (`Cells.statement`), its
     ``pub`` row its lanes and its ``o0`` row its output bit by IoTieRequest's reference (`io_request.reference`),
     which the tests hold to the circuit, each read off the root of the prover's rows of the port as the verifier
     registers its own (`IngressTie.known_tree`, under their public salts). `rows` are the rows the prover proves on
-    instead, under the warden's salts and paths; where a unit takes no instance of its lanes, its public row is zero
+    instead, under the network certifier's salts and paths; where a unit takes no instance of its lanes, its public row is zero
     and its output 0. `words` forges output words, `salts` the salts delivered for ``pub`` and ``o0``, and `units`
     the public file's unit indices. The public file is a shared-row file as `verity_flock.circuit.write` lays one out:
     each port's table, one row an instance, port-major, then the instances' refs."""
     rows = list(cells.rows if rows is None else rows)
-    indices = list(draw.units if units is None else units)
+    indices = list(sample.units if units is None else units)
     got, outputs = [], {}
     for u in range(tie.T):
         args = None if lanes is None else tie.arguments(rows[u], lanes[u])
@@ -139,7 +139,7 @@ def _known(registered: dict) -> str | None:
 def _registered(public: Path, registered: dict) -> str | None:
     """The stand-in for Lean's registered reads: every port of the statement one of the verifier's
     (`Flock.Registered.checkComplete`), and each of the verifier's ports read by the statement's header entry
-    (`warden_rows.refusal`), its table rows (a shared-row file's, port-major) the public file's commitments; None when
+    (`network_certifier_rows.refusal`), its table rows (a shared-row file's, port-major) the public file's commitments; None when
     they hold."""
     data = public.read_bytes()
     head, body = data.split(b"\n", 1)
@@ -185,15 +185,15 @@ def lean(proof: PF.Proof, *, circuit_sha512: str, program: bytes, partition: dic
     return out, None
 
 
-def decide(lw: SVC.LinkWindows, stream: S.Stream, draw: S.Draw, opening: SVC.Hidden, syncs: Sequence[Any], out: Path,
+def decide(lw: SVC.TransferBlocks, stream: S.Stream, sample: S.Draw, opening: SVC.Hidden, syncs: Sequence[Any], out: Path,
            *, certificates: Sequence[Any] | None = None, **kw: Any) -> S.Outcome:
-    """The sampled link-window proved on `opening` (`prove`, with `kw`), delivered and decided by the verifier
+    """The sampled execution phase proved on `opening` (`prove`, with `kw`), delivered and decided by the verifier
     on the proof and the certificates (by default the opening's), with the opening's in-the-clear check beside it as the
     debug comparison, which must agree with the proof's verdict when nothing is forged."""
-    delivered = prove(lw, opening, draw, syncs, out, **kw)
-    assert stream.deliver(draw, delivered.sessions()) is None
+    delivered = prove(lw, opening, sample, syncs, out, **kw)
+    assert stream.deliver(sample, delivered.sessions()) is None
     certificates = [r.certificate for r in opening.records] if certificates is None else certificates
-    outcome = lw.outcome(stream, draw, certificates, syncs, delivered, circuit_sha512=circuit_sha512(delivered),
+    outcome = lw.outcome(stream, sample, certificates, syncs, delivered, circuit_sha512=circuit_sha512(delivered),
                          opening=opening)
     verdict = stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
     assert verdict["decided_by"] == "proof" and verdict["accepted"] == outcome.accepted

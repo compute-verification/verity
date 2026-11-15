@@ -45,12 +45,13 @@ constant gate is registered as 1 and is among `u`'s inputs, and copy `j`'s verdi
 at copy `j` refine `Hash.EmbeddingRead` (`ReadUnit.GatesRefine`), at the ports through the copy's gates
 (`Flock.Bridge.copyGate`). The values are the unit's local evaluation, where every copy holds the unit net's rows
 (`Flock.Bridge.rows_localEval`), so the read's row need not be committed: a block that consumes it inside itself binds
-it as a block that commits it does.
+it as a block that commits it does. `gatesRefine_layout` discharges its constant and verdict premises from the parsed
+file's layout, for one copy.
 
-`readUnitDrawn_partsOf` is the read's binding at the parsed file: `Accounting.SecurityProofs.readUnitDrawnCR` at
+`readUnitSampled_partsOf` is the read's binding at the parsed file: `Accounting.SecurityProofs.readUnitSampledCR` at
 `partsOf`, for reads each at one copy's gates in its unit, with its gate premise discharged by `gatesRefine_partsOf` at
-every read. `readUnitDrawn_layout` discharges its constant and verdict premises from the parsed file's layout, and
-`readUnitDrawn_check` the rest from the file's parse and the read's template check (`unrolled_leaves_of_parse`,
+every read. `readUnitSampled_layout` discharges its constant and verdict premises from the parsed file's layout, and
+`readUnitSampled_check` the rest from the file's parse and the read's template check (`unrolled_leaves_of_parse`,
 `read_of_check`): no premise about the read's gates remains.
 -/
 
@@ -89,6 +90,28 @@ theorem gatesRefine_partsOf (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : 
   obtain ⟨z, hsat, hz1, hz⟩ := Flock.Bridge.rows_localEval D hU n tr u hj
   exact ⟨fun c => z c.val, hsat, hz1.trans (hconsts _ hone_io true hone), fun c _ => hz c, fun i _ => hz _⟩
 
+/-- **`gatesRefine_partsOf` at the parsed file's layout.** Its premises that the unit's constant gate is among its
+inputs and copy `j`'s verdict gate is committed hold where the stack has a copy (`hupv`), the read has more than `16 H`
+outputs (`hlen`), and its verdict, output `16 H`, sits on bit 0 of copy `j`'s returned leaf `H` (`hout`, `hleaf`):
+`readUnitSampled_layout`'s two steps, for one copy and with no probability. -/
+theorem gatesRefine_layout (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
+    (n : ℕ) {run : (List Lin × Lin) × St}
+    (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
+    (hsound : ReadSound key V H hr) (hupv : 0 < D.unroll.upv) (hlen : 16 * H < (run.1.1 ++ [run.1.2]).length)
+    (hout : (hr.out (16 * H)).val = FlockSoundness.Discharge.Layout.outCol D.unroll H 0)
+    (consts : Fin (Flock.Bridge.circuitOf D hU n).N → Option Bool) (u : Fin n)
+    (hone : consts (Flock.Bridge.constGate D hU n u) = some true) {j : ℕ} (hj : j < D.unroll.upv)
+    (hleaf : H < (D.unroll.leavesOut.getD j #[]).size) :
+    ReadUnit.GatesRefine Verity.sha512 Verity.sha512 key consts (Flock.Bridge.partsOf D hU n) u
+      (readPorts (Flock.Bridge.copyGate D hU n u hj) hr V H) := by
+  obtain ⟨i, hi⟩ := hr.output (16 * H) hlen
+  have hcol : (hr.out (16 * H)).val = (FlockSoundness.Rows.ofNet hU).nIn + i.val := by
+    rw [hi]
+    rfl
+  have hlt := i.isLt
+  exact gatesRefine_partsOf key D hU n hr hsound consts u hj hone (Flock.Bridge.constGate_mem_io D hU n u hupv)
+    (Flock.Bridge.copyGate_mem_committed D hU n u hj (hr.out (16 * H)) hleaf (by omega) hout (by omega) (by omega))
+
 /-- **Each read of a sampled proof block of the parsed circuit file returns its table's row at its index**, but with probability
 at most the layer below's `ε` plus the chance of finding a SHA-512 collision. At the parsed file's partition
 (`partsOf`), let the unit net's rows hold the read's program and compute its reference wherever they hold (`hr`,
@@ -99,7 +122,7 @@ while a read of a sampled proof block returns, in its unit's local evaluation an
 its table's has probability at most `ε`, the layer below's bound on accepting while a sampled read's unit is wrong or the
 read's registered rows fail, plus `E[cost] / 2^256`, where `cost` is what the collision search behind the reads' checks
 costs (`Claims.ExpectedCR`). -/
-theorem readUnitDrawn_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc)
+theorem readUnitSampled_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc)
     (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) {run : (List Lin × Lin) × St}
     (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
     (hsound : ∀ z : Fin (FlockSoundness.Rows.ofNet hU).w → Bool, (FlockSoundness.Rows.ofNet hU).Sat z →
@@ -119,31 +142,31 @@ theorem readUnitDrawn_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash
     {ι : Type} (R : ReadUnit.Reads (Flock.Bridge.circuitOf D hU n) n ι)
     (hR : ∀ i ∈ R.reads, ∃ j, ∃ hj : j < D.unroll.upv,
       R.port i = readPorts (Flock.Bridge.copyGate D hU n (R.unit i) hj) hr V H)
-    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace)
+    (acc : Ω → Prop) (sampled : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace)
     (cost : Ω → ℕ) (ε : ℝ) (hcommitted : R.Committed Verity.sha512 Verity.sha512 key)
-    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) (R.unit i) ∧
         ReadUnit.RegisteredRows consts (Flock.Bridge.partsOf D hU n) (R.unit i) (R.port i) (R.root i) (R.domain i)
           (tr ω))) ≤ ε)
     (hcr : Claims.ExpectedCR (fun m => (Verity.sha512 m).bytes)
-      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 key drawn tr cost)) :
-    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 key sampled tr cost)) :
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) < (R.port i).count ∧
       (R.port i).hOf ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) ≠
         (R.table i (R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)))).row) ≤
       ε + Claims.Ex (fun ω => (cost ω : ℝ)) / 2 ^ (256 : ℝ) := by
-  refine Accounting.SecurityProofs.readUnitDrawnCR Verity.sha512 key consts (Flock.Bridge.partsOf D hU n) R acc drawn
+  refine Accounting.SecurityProofs.readUnitSampledCR Verity.sha512 key consts (Flock.Bridge.partsOf D hU n) R acc sampled
     tr cost ε (fun i hi => ?_) hcommitted below hcr
   obtain ⟨j, hj, hp⟩ := hR i hi
   rw [hp]
   exact gatesRefine_partsOf key D hU n hr hsound consts (R.unit i) hj (hone _) (hone_io _) (hok _ j hj)
 
-/-- **`readUnitDrawn_partsOf` at the parsed file's layout.** Its premises that each unit's constant gate is among its
+/-- **`readUnitSampled_partsOf` at the parsed file's layout.** Its premises that each unit's constant gate is among its
 inputs and each copy's verdict gate is committed hold where the stack has a copy (`hupv`), the read has more than
 `16 H` outputs (`hlen`), and its verdict, output `16 H`, sits on bit 0 of every copy's returned leaf `H` (`hout`,
 `hleaves`): the unit's constant gate is opened at the unit (`Flock.Bridge.constGate_mem_io`), and a copy's gate on a
 returned leaf is committed (`Flock.Bridge.copyGate_mem_committed`). -/
-theorem readUnitDrawn_layout {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc)
+theorem readUnitSampled_layout {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc)
     (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) {run : (List Lin × Lin) × St}
     (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
     (hsound : ∀ z : Fin (FlockSoundness.Rows.ofNet hU).w → Bool, (FlockSoundness.Rows.ofNet hU).Sat z →
@@ -163,15 +186,15 @@ theorem readUnitDrawn_layout {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.
     {ι : Type} (R : ReadUnit.Reads (Flock.Bridge.circuitOf D hU n) n ι)
     (hR : ∀ i ∈ R.reads, ∃ j, ∃ hj : j < D.unroll.upv,
       R.port i = readPorts (Flock.Bridge.copyGate D hU n (R.unit i) hj) hr V H)
-    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace)
+    (acc : Ω → Prop) (sampled : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace)
     (cost : Ω → ℕ) (ε : ℝ) (hcommitted : R.Committed Verity.sha512 Verity.sha512 key)
-    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) (R.unit i) ∧
         ReadUnit.RegisteredRows consts (Flock.Bridge.partsOf D hU n) (R.unit i) (R.port i) (R.root i) (R.domain i)
           (tr ω))) ≤ ε)
     (hcr : Claims.ExpectedCR (fun m => (Verity.sha512 m).bytes)
-      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 key drawn tr cost)) :
-    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 key sampled tr cost)) :
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) < (R.port i).count ∧
       (R.port i).hOf ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) ≠
         (R.table i (R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)))).row) ≤
@@ -181,11 +204,11 @@ theorem readUnitDrawn_layout {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.
     rw [hi]
     rfl
   have hlt := i.isLt
-  exact readUnitDrawn_partsOf key D hU n hr hsound consts hone
+  exact readUnitSampled_partsOf key D hU n hr hsound consts hone
     (fun u => Flock.Bridge.constGate_mem_io D hU n u hupv)
     (fun u j hj => Flock.Bridge.copyGate_mem_committed D hU n u hj (hr.out (16 * H)) (hleaves j hj) (by omega) hout
       (by omega) (by omega))
-    R hR acc drawn tr cost ε hcommitted below hcr
+    R hR acc sampled tr cost ε hcommitted below hcr
 
 /-- **A sampled read unit of a parsed circuit file returns its table's row, at a template the read's check accepts.**
 Let the circuit file parse into `ct` (`hparse`, `Flock.HmOut.parseTmpl`), with its unit template passing the read's
@@ -195,8 +218,8 @@ in the stack and one leaf per output port in each copy (`unrolled_leaves_of_pars
 `x` and its outputs on the unit's returned output group, and for any reads each at one copy's ports of that run,
 committed under the pinned hm96 key: over the outcomes `ω`, a run that accepts while a read of a sampled proof block returns, in
 its unit's local evaluation and at an index inside its table, a row other than its table's has probability at most the
-layer below's `ε` plus `E[cost] / 2^256` (`readUnitDrawn_layout`, `read_of_check`). -/
-theorem readUnitDrawn_check {Ω : Type} [Fintype Ω] [Nonempty Ω] {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray}
+layer below's `ε` plus `E[cost] / 2^256` (`readUnitSampled_layout`, `read_of_check`). -/
+theorem readUnitSampled_check {Ω : Type} [Fintype Ω] [Nonempty Ω] {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray}
     {tables : List (String × ByteArray)} {ct : Flock.Circuit} {tu : Flock.TmplUnit}
     (hparse : Flock.HmOut.parseTmpl tags bytes tables = .ok ct) (ht : ct.tmpl = some tu)
     (hcheck : Flock.ReadNet.check V H tu.t = true) (ho : ct.outNet = ct.unitNet)
@@ -211,16 +234,16 @@ theorem readUnitDrawn_check {Ω : Type} [Fintype Ω] [Nonempty Ω] {V H : ℕ} {
         ∀ {ι : Type} (R : ReadUnit.Reads (Flock.Bridge.circuitOf (.tmpl ct) hB n) n ι),
         (∀ i ∈ R.reads, ∃ j, ∃ hj : j < (Flock.HmOut.unrolled ct).upv,
           R.port i = readPorts (Flock.Bridge.copyGate (.tmpl ct) hB n (R.unit i) hj) hr V H) →
-        ∀ (acc : Ω → Prop) (drawn : Ω → Finset (Fin n))
+        ∀ (acc : Ω → Prop) (sampled : Ω → Finset (Fin n))
           (tr : Ω → (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (cost : Ω → ℕ) (ε : ℝ),
         R.Committed Verity.sha512 Verity.sha512 pinnedKey →
-        Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+        Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
           ¬ ((Flock.Bridge.partsOf (.tmpl ct) hB n).Correct (tr ω) (R.unit i) ∧
             ReadUnit.RegisteredRows consts (Flock.Bridge.partsOf (.tmpl ct) hB n) (R.unit i) (R.port i) (R.root i)
               (R.domain i) (tr ω))) ≤ ε →
         Claims.ExpectedCR (fun m => (Verity.sha512 m).bytes)
-          (R.finder (Flock.Bridge.partsOf (.tmpl ct) hB n) Verity.sha512 pinnedKey drawn tr cost) →
-        Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+          (R.finder (Flock.Bridge.partsOf (.tmpl ct) hB n) Verity.sha512 pinnedKey sampled tr cost) →
+        Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
           R.index i ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval (tr ω) (R.unit i)) < (R.port i).count ∧
           (R.port i).hOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval (tr ω) (R.unit i)) ≠
             (R.table i (R.index i ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval (tr ω) (R.unit i)))).row) ≤
@@ -240,8 +263,8 @@ theorem readUnitDrawn_check {Ω : Type} [Fintype Ω] [Nonempty Ω] {V H : ℕ} {
   have hv : (hr.out (16 * H)).val = FlockSoundness.Discharge.Layout.outCol (Flock.HmOut.unrolled ct) H 0 := by
     have h := hout (16 * H) (by omega)
     rwa [Nat.mul_div_cancel_left H (by norm_num : 0 < 16), Nat.mul_mod_right] at h
-  exact ⟨run, hr, hφ, hout, fun consts hone {ι} R hR acc drawn tr cost ε hcommitted below hcr =>
-    readUnitDrawn_layout pinnedKey (.tmpl ct) hB n hr hsound hupv hlen hv hH consts hone R hR acc drawn tr cost
+  exact ⟨run, hr, hφ, hout, fun consts hone {ι} R hR acc sampled tr cost ε hcommitted below hcr =>
+    readUnitSampled_layout pinnedKey (.tmpl ct) hB n hr hsound hupv hlen hv hH consts hone R hR acc sampled tr cost
       ε hcommitted below hcr⟩
 
 end Accounting.ReadUnit.Gates

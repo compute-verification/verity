@@ -1,34 +1,25 @@
-"""The wire every party speaks: frames, messages and their schemas, and refusals by name. Stdlib only, and it imports no
-other unit, so an auditor party and a developer party parse with the same code.
+"""What a channel's messages declare: messages and their schemas, and refusals by name. Stdlib only, and it imports no
+other unit, so an auditor party and a developer party read one declaration.
 
-~~~text
-frame     u32be len(head) ‖ u32be len(body) ‖ head ‖ body
-head      canonical JSON (the commitments' rules: sorted keys, no whitespace, UTF-8, no floats) of one object,
-          {"type": T, "v": V, ...fields}
-body      the message's bytes, never base64
-~~~
-
-The frame is `spot.remote`'s, with a body. A message type is a tag and a version, and its `Schema` states its
-head's fields, its body's bounds and its kind: one of the four public kinds (`structure`, `output`, `coins`,
-`commitment`) or `private`, which never enters a record. `MessageTypes.decode` parses every frame as adversarial and refuses
-by name (`Refused.name`, one of `REFUSALS`): a frame that isn't one (`malformed`), a head or body past its bound
-(`oversized`), a type the registry doesn't hold (`unknown-type`), a version it doesn't (`unknown-version`), and fields
-other than the schema's (`schema`). `Phase` refuses a message that isn't one the party expects next (`out-of-phase`).
-The head must be the canonical encoding of what it says, so one message has one frame. `handshake` is the exchange that
-opens every channel between parties.
+A message type is a tag and a version, and its `Schema` states its head's fields, its body's bounds and its kind: one of
+the four public kinds (`structure`, `output`, `coins`, `commitment`) or `private`, which never enters a record. A
+`MessageTypes` is the types one end of a channel accepts. A rule broken is refused by name (`Refused.name`, one of
+`REFUSALS`): a type the registry doesn't hold (`unknown-type`), a version it doesn't (`unknown-version`), and fields other
+than the schema's (`schema`); `Phase` refuses a message that isn't one the party expects next (`out-of-phase`). A head
+is canonical JSON (`canonical`). The bytes on a channel, a message's frame and the parse of one (`malformed`,
+`oversized`), are the runtime's (`verity.runtime.framing`). `Record` is a record entry: a message as it enters a run's
+transcript, numbered, chained and signed by its sender.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
-import struct
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-WIRE_VERSION = 1
-HEADER = struct.Struct(">II")
 MAX_HEAD = 1 << 16
 """A head's default bound: 64 KiB. A message with more to say says it in its body."""
 KINDS = ("structure", "output", "coins", "commitment", "private")
@@ -62,32 +53,6 @@ def _plain(value: Any, path: str = "$") -> Any:
 def canonical(value: Any) -> bytes:
     """`value` as canonical JSON: the commitments' rules (`verity.commitments.identity.canonical_json_bytes`)."""
     return json.dumps(_plain(value), ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")).encode()
-
-
-def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    if len({k for k, _ in pairs}) != len(pairs):
-        raise ValueError("an object repeats a key")
-    return dict(pairs)
-
-
-def _no_float(s: str) -> Any:
-    raise ValueError(f"a number with a fraction or an exponent ({s[:32]})")
-
-
-def _no_constant(s: str) -> Any:
-    raise ValueError(f"{s} is not JSON")
-
-
-def parse(data: bytes) -> Any:
-    """The canonical JSON `data` encodes; anything else (another encoding of it included) raises `Refused('malformed')`."""
-    try:
-        value = json.loads(data.decode("utf-8"), object_pairs_hook=_unique, parse_float=_no_float,
-                           parse_constant=_no_constant)
-    except (UnicodeDecodeError, ValueError, RecursionError) as e:
-        raise Refused("malformed", f"the head is not JSON ({e})") from None
-    if canonical(value) != data:
-        raise Refused("malformed", "the head is not in canonical form")
-    return value
 
 
 # --- schemas -----------------------------------------------------------------------------------------------------------
@@ -214,25 +179,9 @@ class Message:
         return {**self.fields, "type": self.type, "v": self.version}
 
 
-def frame(head: bytes, body: bytes = b"") -> bytes:
-    return HEADER.pack(len(head), len(body)) + head + body
-
-
-def split(data: bytes, max_head: int = MAX_HEAD, max_body: int = 1 << 32) -> tuple[bytes, bytes]:
-    """A frame's head and body, its header checked against the bounds before anything else."""
-    if len(data) < HEADER.size:
-        raise Refused("malformed", f"a frame is at least {HEADER.size} bytes, not {len(data)}")
-    nh, nb = HEADER.unpack_from(data)
-    if nh > max_head or nb > max_body:
-        raise Refused("oversized", f"a frame is a head of at most {max_head} bytes and a body of at most {max_body}, not "
-                                   f"{nh} + {nb}")
-    if len(data) != HEADER.size + nh + nb:
-        raise Refused("malformed", f"a frame of {nh} + {nb} bytes is {len(data) - HEADER.size} bytes long")
-    return data[HEADER.size:HEADER.size + nh], data[HEADER.size + nh:]
-
-
 class MessageTypes:
-    """The message types one end of a channel accepts, by type and version."""
+    """The message types one end of a channel accepts, by type and version, and its bounds on a frame's head and body
+    (`verity.runtime.framing` encodes and decodes under them)."""
 
     def __init__(self, schemas: Iterable[Schema] = (), max_head: int = MAX_HEAD) -> None:
         self.schemas: dict[tuple[str, int], Schema] = {}
@@ -267,62 +216,6 @@ class MessageTypes:
     def kind(self, type_: str, version: int = 1) -> str:
         return self.schema(type_, version).kind
 
-    def encode(self, msg: Message) -> bytes:
-        """`msg`'s frame, checked against its schema as `decode` checks it."""
-        head = msg.head()
-        s = self.schema(msg.type, msg.version)
-        if (why := s.why(head, msg.body)) is not None:
-            raise Refused(*why)
-        h = canonical(head)
-        if len(h) > self.max_head:
-            raise Refused("oversized", f"{msg.type}'s head is {len(h)} bytes, past {self.max_head}")
-        return frame(h, bytes(msg.body))
-
-    def decode(self, data: bytes) -> Message:
-        """The message `data` frames, parsed as adversarial: each rule broken is refused by name (`Refused`)."""
-        h, body = split(data, self.max_head, self.max_body)
-        head = parse(h)
-        if type(head) is not dict or type(head.get("type")) is not str:
-            raise Refused("malformed", "a head is an object with a string type")
-        t, v = head["type"], head.get("v")
-        if t not in self.types:
-            raise Refused("unknown-type", f"{t!r} is none of {sorted(self.types)}")
-        if type(v) is not int:
-            raise Refused("unknown-version", f"{t}'s version is an integer, not {v!r}")
-        s = self.schema(t, v)
-        if (why := s.why(head, body)) is not None:
-            raise Refused(*why)
-        return Message(t, {k: head[k] for k in s.fields}, bytes(body), v)
-
-
-class FrameReader:
-    """Frames out of a byte stream: `feed` the bytes as they arrive, `next` each whole frame. A header past the bounds
-    is refused as soon as it arrives (`oversized`), before its body is buffered."""
-
-    def __init__(self, max_head: int = MAX_HEAD, max_body: int = 1 << 32) -> None:
-        self.max_head, self.max_body, self._buf = max_head, max_body, bytearray()
-
-    def feed(self, data: bytes) -> None:
-        self._buf += data
-
-    @property
-    def pending(self) -> int:
-        return len(self._buf)
-
-    def next(self) -> bytes | None:
-        if len(self._buf) < HEADER.size:
-            return None
-        nh, nb = HEADER.unpack_from(self._buf)
-        if nh > self.max_head or nb > self.max_body:
-            raise Refused("oversized", f"a frame is a head of at most {self.max_head} bytes and a body of at most "
-                                       f"{self.max_body}, not {nh} + {nb}")
-        n = HEADER.size + nh + nb
-        if len(self._buf) < n:
-            return None
-        out = bytes(self._buf[:n])
-        del self._buf[:n]
-        return out
-
 
 class Phase:
     """The message types a party expects next: `check` refuses any other (`out-of-phase`)."""
@@ -339,18 +232,6 @@ class Phase:
         return msg
 
 
-def frames(data: bytes, max_head: int = MAX_HEAD, max_body: int = 1 << 32) -> list[bytes]:
-    """Every frame of `data`, which holds whole frames back to back."""
-    r = FrameReader(max_head, max_body)
-    r.feed(data)
-    out = []
-    while (f := r.next()) is not None:
-        out.append(f)
-    if r.pending:
-        raise Refused("malformed", f"{r.pending} bytes after the last whole frame")
-    return out
-
-
 def names(values: Sequence[str]) -> tuple[str, ...]:
     """`values` as a tuple of names, each checked (`NAME`)."""
     bad = [v for v in values if type(v) is not str or not NAME.fullmatch(v)]
@@ -359,6 +240,75 @@ def names(values: Sequence[str]) -> tuple[str, ...]:
     return tuple(values)
 
 
-__all__ = ["HEADER", "KINDS", "MAX_HEAD", "NAME", "PUBLIC", "REFUSALS", "WIRE_VERSION", "Body", "Bool", "FrameReader",
-           "Hex", "Int", "Json", "List", "Message", "Phase", "Refused", "MessageTypes", "Schema", "Str", "canonical", "frame",
-           "frames", "names", "parse", "split"]
+# --- the record --------------------------------------------------------------------------------------------------------
+
+
+class Record:
+    """`Core.Record` in Python: a record entry, one message of a run's transcript, numbered, chained to the entry before
+    it and signed by the party that sent it (`verity/protocols/interface`, `CoreProtocol/Record.lean`).
+
+        entry   = {body, kind, prev, schema, seq, session, sig}
+        message = SHA-512([role] || I || [d])              d: the schema's tagged SHA-512 of the entry without its sig
+
+    each `[x]` a u64 big-endian length then `x`, and `I` the signer's 16-byte LMS identifier.  `body` is the message, an
+    object of the schema's form; `kind` its kind under the schema; `schema` the protocol's entry schema and version,
+    which names the tag `d` is under; `session` the session it belongs to, None for an entry of none.  Entry `i` of a
+    record has `seq = i` and `prev` the SHA-512 of entry `i - 1`'s line (`ZERO` for entry 0, `prev_of`), the line being
+    the entry's `line`: sorted keys, no whitespace, every character past ASCII escaped.
+
+    * `of_json`: `Record.ofJson`, the form: the seven keys, each of its type.  Everything a protocol accepts beyond the
+      form (its schemas, kinds and bodies, which key signs, its sessions) is its own check; the auditor's ledger
+      (`spot.challenger`) is the first.
+    * `line`: an entry's line, as the auditor's ledger writes it (Lean `Spot.PyJson.canonical`).
+    * `unsigned`, `message`, `prev_of`: `Record.unsigned`, `Record.message`, `Record.prevOf`.
+    """
+
+    FIELDS = ("body", "kind", "prev", "schema", "seq", "session", "sig")
+    """A record entry's keys, sorted."""
+    ZERO = "0" * 128
+    """The `prev` of a record's first entry."""
+    FORM = ("a record entry is {body, kind, prev, schema, seq, session, sig}: an object, a string, a SHA-512 in "
+            "lowercase hex, a string, a natural number, a string or null, and lowercase hex")
+    _PREV = re.compile(r"[0-9a-f]{128}")
+    _HEX = re.compile(r"(?:[0-9a-f]{2})*")
+
+    @staticmethod
+    def of_json(e: Any) -> dict:
+        """`e`, a parsed JSON value, when it is a record entry: its seven keys, each of its type; ValueError(`FORM`)
+        otherwise."""
+        if not (isinstance(e, dict) and sorted(e) == list(Record.FIELDS) and isinstance(e["body"], dict)
+                and type(e["kind"]) is str and type(e["prev"]) is str and Record._PREV.fullmatch(e["prev"]) is not None
+                and type(e["schema"]) is str and type(e["seq"]) is int and e["seq"] >= 0
+                and (e["session"] is None or type(e["session"]) is str)
+                and type(e["sig"]) is str and Record._HEX.fullmatch(e["sig"]) is not None):
+            raise ValueError(Record.FORM)
+        return e
+
+    @staticmethod
+    def line(entry: dict) -> str:
+        """An entry's line: sorted keys, no whitespace, every character past ASCII escaped."""
+        return json.dumps(entry, sort_keys=True, separators=(",", ":"))
+
+    @staticmethod
+    def unsigned(entry: dict) -> dict:
+        """An entry without its `sig`: what its signature's digest is over."""
+        return {k: v for k, v in entry.items() if k != "sig"}
+
+    @staticmethod
+    def _field(b: bytes) -> bytes:
+        return len(b).to_bytes(8, "big") + b
+
+    @staticmethod
+    def message(role: str, I: bytes, d: bytes) -> bytes:
+        """What an entry's `sig` signs under the protocol's `role`, the signer's identifier `I` and `d`, the digest of
+        the entry without its sig under the tag its schema names."""
+        return hashlib.sha512(Record._field(role.encode()) + I + Record._field(d)).digest()
+
+    @staticmethod
+    def prev_of(line: str | bytes) -> str:
+        """The `prev` of the entry after the one whose line is `line`."""
+        return hashlib.sha512(line.encode() if isinstance(line, str) else line).hexdigest()
+
+
+__all__ = ["KINDS", "MAX_HEAD", "NAME", "PUBLIC", "REFUSALS", "Body", "Bool", "Hex", "Int", "Json", "List", "Message",
+           "Phase", "Record", "Refused", "MessageTypes", "Schema", "Str", "canonical", "names"]

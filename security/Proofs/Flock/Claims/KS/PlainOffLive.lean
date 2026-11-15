@@ -39,7 +39,7 @@ theorem liveOp_some {β α Pt V : Type} {R : β → α → Prop} {op : α → Pt
   exact ⟨_, Classical.choose_spec he, h⟩
 
 /-- **A live outcome decodes to one model outcome**: the reps' runs on the decoded tapes end at one result each
-(`PlainDraw.playsT_det`). -/
+(`PlainSample.playsT_det`). -/
 theorem retOK_det {P OutT Cp Op : Type} {J mPts : ℕ} {out : Fin J → Cp → P × P → Op → OutT}
     {pL : LiveOutJ J mPts → Prop} {opn : Array ByteArray → Fin J → Op} {dec : Fin J → ℕ → ByteArray → List Game.Msg}
     {one : Fin J → ℕ → Bool} {fin : Fin J → Fin 2 → Array ByteArray → List Game.Msg}
@@ -49,8 +49,8 @@ theorem retOK_det {P OutT Cp Op : Type} {J mPts : ℕ} {out : Fin J → Cp → P
   obtain ⟨-, pend, hp, rfl⟩ := h
   obtain ⟨-, pend', hp', rfl⟩ := h'
   have e : pend = pend' := funext fun j => by
-    have h0 := PlainDraw.playsT_det (hp j 0) (hp' j 0)
-    have h1 := PlainDraw.playsT_det (hp j 1) (hp' j 1)
+    have h0 := PlainSample.playsT_det (hp j 0) (hp' j 0)
+    have h1 := PlainSample.playsT_det (hp j 1) (hp' j 1)
     simp only [sel] at h0 h1
     exact Prod.ext (by simpa using h0) (by simpa using h1)
   rw [e]

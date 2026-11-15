@@ -42,7 +42,7 @@ DAYS = 7
 #: the queue's target: a PR on `main` within two hours of its mark
 TARGET_H = Q.TARGET_MIN / 60
 CLASSES = ("plain", "lean")
-#: each class's measurements, by name: the first is its metric's id (benchmarks/metrics.toml)
+#: each class's measurements, by name: the first is its metric's id (benchmarks/landing/metrics.toml)
 NAMES = {"plain": ("ci/plain-mark-to-main-p90", "ci/plain-mark-to-main-median", "ci/plain-landed", "ci/plain-within-2h"),
          "lean": ("ci/lean-mark-to-main-p90", "ci/lean-mark-to-main-median", "ci/lean-landed", "ci/lean-within-2h")}
 WHAT = {"plain": "with no Lean change", "lean": "changing Lean"}
@@ -204,7 +204,7 @@ def write(w: kit.Writer, doc: dict, out: Path, days: float) -> bool:
     w.validation("passed" if holds else "failed", "benchmarks/landing/landing.py", detail, [rel])
     if holds:
         for m in measurements(doc["summary"]):
-            w.measurement(inputs=[f"{Q.CONTROL}:{Q.LIVE}/decisions.jsonl"], **m)
+            w.measurement(inputs=[f"{Q.CONTROL}:{Q.LIVE}/decisions.jsonl"], **m, mark="measured")
     return holds
 
 

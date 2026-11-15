@@ -644,7 +644,7 @@ and whose `Finish` the ZK server's own `Finish` takes (`live`), whose openings p
 whose messages are the deferred release's own (`ZkServer.OwnHist`), the workers' values `vs` satisfy every table's rows
 at the pads the tape samples at the coins the openings open (`RefSession.RowsAtTape`). A named hypothesis, one of the
 transport's trusts, beside `FinalRoundEq`: the ZK server's own `Finish` stops where the workers' values fail a constraint
-at the sampled pads (`refusesFinish`), since `Flock.Firewall.Finish.repFw` releases a rep's inner proof only where none
+at the sampled pads (`refusesFinish`), since `Flock.ZkServer.Finish.repFw` releases a rep's inner proof only where none
 fails on its pads, and where that check passes at both reps the rows hold (`Composed.gated_of_cons`). -/
 def FinishRows (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=

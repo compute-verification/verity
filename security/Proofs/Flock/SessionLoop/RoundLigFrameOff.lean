@@ -25,7 +25,7 @@ set_option synthInstance.maxHeartbeats 1000000
 namespace Claims.ZKServer.LigOff
 
 open _root_.Flock (V F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker roundFree check labelFrame isLabel LABEL_ZC LABEL_PCS)
+open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree check labelFrame isLabel LABEL_ZC LABEL_PCS)
 open FlockSoundness.Refine (Frame encs)
 open Loop
 
@@ -73,7 +73,7 @@ theorem label_close_out {c : Cfg} {s : Masker} {q : Masker × ByteArray} (hl : s
       rw [hl0] at this
       cases this
   · by_cases hpos : s.pos = c.order.size
-    · by_cases hrho : s.rho.size = _root_.Flock.Firewall.Frame.RHO_COINS
+    · by_cases hrho : s.rho.size = _root_.Flock.ZkServer.Frame.RHO_COINS
       · simp [Masker.label, Ranked.isLabel_self, p1, p2, p3, p4, hl0, hpos, hrho] at h
         cases h
         exact ⟨rfl, rfl⟩
@@ -205,8 +205,8 @@ theorem run_good {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
     (h0 : sched.getD 0 (.empty, 0) = (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest,
       .bytes cap, .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray, 6))
     {J : ℕ} (hJ0 : 0 < J) (hJ : J < sched.size)
-    (h2 : (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr J)).2 = false) :
-    Ranked.Good c (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr J)).1.m := by
+    (h2 : (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr J)).2 = false) :
+    Ranked.Good c (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr J)).1.m := by
   rw [Ranked.schedReqs_pairs P sched #[] cr J hJ] at h2 ⊢
   obtain ⟨p, -, -, he⟩ := Ranked.run_prior_eq c P _ h2
   rw [he] at h2 ⊢
@@ -251,11 +251,11 @@ theorem run_past {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
     {A C : ℕ} (hA0 : 0 < A) (hp : Flags.PcsRound (sched.getD A (.empty, 0)))
     (hq : ∀ k, 1 ≤ k → k < A → Quiet.QRound (sched.getD k (.empty, 0))) :
     ∀ J, A ≤ J → J < sched.size → (∀ k, C ≤ k → k ≤ J → PastRound C k (sched.getD k (.empty, 0))) →
-      (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr J)).2 = false →
-      (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr J)).1.m.owed = none ∨
-        (Ranked.Good c (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr J)).1.m ∧
-          (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr J)).1.m.done = true ∧
-          (C ≤ J → (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr J)).1.m.on = false))
+      (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr J)).2 = false →
+      (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr J)).1.m.owed = none ∨
+        (Ranked.Good c (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr J)).1.m ∧
+          (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr J)).1.m.done = true ∧
+          (C ≤ J → (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr J)).1.m.on = false))
   | 0, hAJ, _, _, _ => absurd hAJ (by omega)
   | J + 1, hAJ, hJ, hP, h2 => by
     by_cases hJA : J + 1 = A
@@ -267,10 +267,10 @@ theorem run_past {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
     · have hI0 := fun hb => run_past hc P sched cr hdg hcap hdom h0 hA0 hp hq J (by omega) (by omega)
         (fun k h1 hk => hP k h1 (by omega)) hb
       rw [schedReqs_succ, Loop.run_append] at h2 ⊢
-      cases hb : (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr J)).2
+      cases hb : (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr J)).2
       · simp only [hb, Bool.false_eq_true, ↓reduceIte] at h2 ⊢
         have hI := hI0 hb
-        generalize (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr J)).1 = S at h2 hI ⊢
+        generalize (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr J)).1 = S at h2 hI ⊢
         obtain ⟨s1, ha, he⟩ := run_coins_cons c S _ _ h2
         rw [he] at h2 ⊢
         rcases hI with ho | ⟨hg, hd, hon⟩
@@ -295,12 +295,12 @@ theorem run_past {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
 `C` to the opening's last takes the coins before it, at the layout `c''`, the frame is in level 0 if in a masked phase
 at all, and past the close outside every masked phase. -/
 theorem repState_close {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
-    {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+    {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hm14 : 14 ≤ t.st.m) (hm : t.st.m < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
-    (hcap : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
+    (hcap : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) (hk : 1 ≤ t.sch.k0)
     (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63) (hn0 : t.sch.n ≠ 0)
     (htp : 2 * t.tPad < 2 ^ 64) (hd : ∀ i, 64 * 2 ^ (t.sch.levels.getD i default).d < 2 ^ 64)
@@ -331,7 +331,7 @@ theorem repState_close {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p
     rw [hrest, Array.getD_eq_getD_getElem?, Array.getElem?_append_left hk']
   have h1s : 1 < alg.size := (Array.getElem?_eq_some_iff.1 ha1).1
   have h0 : sched.getD 0 (.empty, 0) = (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8,
-      .bytes t.st.digest, .bytes (_root_.Flock.Firewall.Finish.flat t.cm0.cap),
+      .bytes t.st.digest, .bytes (_root_.Flock.ZkServer.Finish.flat t.cm0.cap),
       .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray, 6) := by
     rw [hg 0 (by omega), ha0, Option.getD_some, head_encs]
   have hN0 : xs.size + 2 ≠ 0 := by omega
@@ -352,7 +352,7 @@ theorem repState_close {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p
   rw [show cr.size = cr.pop.size + 1 by omega,
     repState_at c t rep dom xs hi cr0 cr ns cr.pop.size hal hs (by omega)] at ha
   dsimp only at ha
-  cases h2 : (_root_.Flock.Firewall.Frame.run c {} (schedReqs
+  cases h2 : (_root_.Flock.ZkServer.Frame.run c {} (schedReqs
       (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr cr.pop.size)).2
   · rw [h2] at ha
     simp only [Bool.false_eq_true, ↓reduceIte] at ha

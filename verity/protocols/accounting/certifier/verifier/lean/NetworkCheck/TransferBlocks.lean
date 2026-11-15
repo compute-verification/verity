@@ -7,8 +7,8 @@ public import Flock.FV3
 /-!
 # N2's execution phase verdict of record
 
-`verdict` decides one execution phase of N2 (`verity/core/protocols/certifier/service.py`, `LinkWindows.verify`) from
-the proof as the verifier receives it and the link's public fields, and nothing else: it is accepted exactly when
+`verdict` decides one execution phase of N2 (`verity/protocols/accounting/certifier/verifier/service.py`,
+`TransferBlocks.verify`) from the proof as the verifier receives it and the link's public fields, and nothing else: it is accepted exactly when
 
 * the verifier's own run of Flock's Lean verifier (`proofs.verify`, whose findings `Case.findings` carries) refused
   nothing, every gate of the link's proof block names a pinned circuit digest (`pinned`), one or more sessions each
@@ -23,13 +23,13 @@ the proof as the verifier receives it and the link's public fields, and nothing 
   link, their end (egress first) and the window (`certified`);
 * the window's declared sync is one of Σ_sync.
 
-A network certifier link (`Kind.warden`, `service.WardenProfile`) is the plain proof block under the active network
+A network certifier link (`Kind.networkCertifier`, `service.NetworkCertifierProfile`) is the plain proof block under the active network
 certifier's records: both ends' grids are the network certifier's one grid, with no profile, and both carry the network
 certifier's parameters digest (`gridBytes`) in place of a certifier's; the active network certifier runs no shaper
 clock, so a window declares no sync and nothing is read of the syncs (`synced`). Its outputs are a plain link's.
 
 Its public outputs are `verdict` and the proved `deadline` bit, and `digest` binds them to the registration, the
-sessions and the accept bit (`verdictDigest`). A link is plain, served or a warden's (`service.OF_RECORD`); a case of
+sessions and the accept bit (`verdictDigest`). A link is plain, served or a network certifier's (`service.OF_RECORD`); a case of
 kind ``advised`` is refused by name (`caseOf`): no advised link has a verdict of record.
 
 `transferBlocksFn` is the `link-window` function of `network-records verdicts` (`Difftest.serve`), which `service.py` calls
@@ -52,7 +52,7 @@ open Flock (V)
 open NetworkCheck.Check (Certificate)
 
 def verdictFormat : String := "verity-network-certifier/verdict/v0"
-/-- `verity.ml.commitments.window.WINDOW_DOMAIN`, one-stage's served domain. -/
+/-- `verity.commitments.window.WINDOW_DOMAIN`, one-stage's served domain. -/
 def executionPhaseDomainTag : String := "verity/one-stage/served-domain/v1"
 def value : String := "certificates"
 def schema : String := "hm96-sha512/row/v2"
@@ -87,8 +87,8 @@ structure Sync where
 inductive Kind where
   | plain
   | served
-  /-- the warden's parameters digest (`service.WardenProfile.digest`), which both ends' heads bind -/
-  | warden (digest : ByteArray)
+  /-- the network certifier's parameters digest (`service.NetworkCertifierProfile.digest`), which both ends' heads bind -/
+  | networkCertifier (digest : ByteArray)
 
 structure Case where
   link : String
@@ -185,9 +185,9 @@ def caseOf (j : Json) : V Case := do
     | "advised" => throw "an advised link is refused: no advised link has a verdict of record"
     | "warden" => do
       let d ← bytesOf (← get j "warden" "case") "warden"
-      unless d.size = digestBytes do throw s!"a warden's parameters digest is {digestBytes} bytes, not {d.size}"
-      pure (Kind.warden d)
-    | k => throw s!"a link is plain, served or a warden's, not {k}"
+      unless d.size = digestBytes do throw s!"a network certifier's parameters digest is {digestBytes} bytes, not {d.size}"
+      pure (Kind.networkCertifier d)
+    | k => throw s!"a link is plain, served or a network certifier's, not {k}"
   let ss ← get j "sync_set" "case"
   let deltas ← natsOf (← get ss "deltas" "sync_set") "sync_set.deltas"
   let rhos ← (← arr ss "rhos" "sync_set").mapM (ratOf · "sync_set.rhos")
@@ -199,10 +199,10 @@ def caseOf (j : Json) : V Case := do
   let salts ← get j "salts" "case"
   let egress ← endOf (← get j "egress" "case") "egress"
   let ingress ← endOf (← get j "ingress" "case") "ingress"
-  if let .warden _ := kind then
+  if let .networkCertifier _ := kind then
     let fields (g : NetworkCheck.Params) := (g.buckets, g.allocation, g.frameBytes, g.bucketMs, g.queueCapacity)
     unless egress.profile.isNone && ingress.profile.isNone && fields egress.grid == fields ingress.grid do
-      throw "a warden link's two ends are on the warden's one grid, with no occupancy profile"
+      throw "a network certifier link's two ends are on the network certifier's one grid, with no occupancy profile"
   pure { link := ← str j "link" "case", run := ← str j "run" "case", window := ← nat j "window" "case",
          root := ← bytesOf (← get j "root" "case") "root", registration := ← str j "registration" "case",
          units := ← natsOf (← get j "units" "case") "units", program := ← str j "program" "case",
@@ -234,7 +234,7 @@ def le (width x : Nat) : ByteArray := ⟨(Array.range width).map fun i => (x >>>
 /-- `x` as `width` big-endian bytes, `x < 2^(8·width)`. -/
 def be (width x : Nat) : ByteArray := ⟨(Array.range width).map fun i => (x >>> (8 * (width - 1 - i))).toUInt8⟩
 
-/-- The link-window's served domain id (`LinkWindows.domain(window).domain_id`): one-stage's window domain over four
+/-- The execution phase's served domain id (`TransferBlocks.domain(window).domain_id`): one-stage's window domain over four
 leaves, its binding the identity digest of the registered Program, the partition, the value, its schema and leaf count,
 and the run `<run>/<link>/<window>`; the boundary's owner, positions `RangeIndexedDomain(0, 4)`
 (`Flock.FV3.Sha512.Domain.make`). -/
@@ -250,12 +250,12 @@ def manifestSet (c : Case) : NetworkCheck.SyncSet :=
 
 /-- An end's grid as its head encodes it (`head_check.grid_bytes`): T, r, B and τ_b as u32 big-endian, then the grid's
 parameters digest, which binds Σ_sync on egress; on a network certifier link, both ends' the network certifier's
-(`LinkWindows.grid`). -/
+(`TransferBlocks.grid`). -/
 def gridBytes (c : Case) (d : Nat) : V ByteArray := do
   let e := if d = 0 then c.egress else c.ingress
   let g := e.grid
   let digest ← match c.kind with
-    | .warden w => pure w
+    | .networkCertifier w => pure w
     | _ => parametersDigest g (if d = 0 then some (manifestSet c) else none)
   return be 4 g.buckets ++ be 4 g.allocation ++ be 4 g.frameBytes ++ be 4 g.bucketMs ++ digest
 
@@ -266,8 +266,8 @@ def syncWords (s : Sync) : Option (Nat × Nat × Nat) :=
   let w := (s.delta, s.num / g, s.den / g)
   if w.1 < 2 ^ 16 ∧ w.2.1 < 2 ^ 16 ∧ w.2.2 < 2 ^ 16 then some w else none
 
-/-- The unit's public row as the verifier derives it from public fields alone (`LinkWindows.public_arguments`, then
-`LinkWindows.row`): both certificates' signed digests, then each end's registered root, served domain, link, window,
+/-- The unit's public row as the verifier derives it from public fields alone (`TransferBlocks.public_arguments`, then
+`TransferBlocks.row`): both certificates' signed digests, then each end's registered root, served domain, link, window,
 grid and (with a profile) its row for the window, then on a served link the window's declared sync. None where the unit
 takes no instance: not two certificates, a signed digest of another length, a window past an end's profile, or no sync
 a served unit can hold. -/
@@ -276,7 +276,7 @@ def pubRow (c : Case) : V (Option ByteArray) := do
   let digests := [d0, d1]
   if c.certificates.size ≠ 2 ∨ digests.any (·.size ≠ 64) then return none
   let tail : Option ByteArray ← match c.kind with
-    | .plain | .warden _ => pure (some ByteArray.empty)
+    | .plain | .networkCertifier _ => pure (some ByteArray.empty)
     | .served => pure do
         let s ← c.syncs[c.window]?
         let (d, p, q) ← syncWords s
@@ -309,7 +309,7 @@ def pinned (g : String) : Bool :=
     !defn.isEmpty && !defn.contains '\n' && rest.head? == some '@' && (rest.drop 1).all hex
   else false
 
-/-- Whether the findings prove this link's proof block and the sample (`LinkWindows.proved`, then each session's proof
+/-- Whether the findings prove this link's proof block and the sample (`TransferBlocks.proved`, then each session's proof
 blocks): nothing refused, every gate pinned, one or more sessions, each accepted, naming the registered Program and
 proving exactly the sampled proof blocks. -/
 def proved (c : Case) : Bool :=
@@ -383,7 +383,7 @@ def opened (c : Case) (row : Option ByteArray) : Option Nat := do
 
 /-! ## The certificates and the sync -/
 
-/-- The certificates' check (`LinkWindows.certified`): two, each naming this link, its end (egress first) and the window,
+/-- The certificates' check (`TransferBlocks.certified`): two, each naming this link, its end (egress first) and the window,
 and the key's and verifying in the link's certifier session (`Certificate.signs`). -/
 def certified (c : Case) : Bool :=
   c.certificates.size == 2 && (List.range 2).all fun d =>
@@ -395,7 +395,7 @@ def certified (c : Case) : Bool :=
 link declares none (the active network certifier runs no shaper clock), so nothing is read of the syncs there. -/
 def synced (c : Case) : Bool :=
   match c.kind with
-  | .warden _ => true
+  | .networkCertifier _ => true
   | _ => match c.syncs[c.window]? with
     | some s => c.deltas.contains s.delta && c.rhos.any fun (n, d) => s.num * d == n * s.den
     | none => false
@@ -485,7 +485,7 @@ def servedOf (j : Json) : V Served := do
 end Served
 
 /-- Why the client refuses certificate `x`, in the order it checks, or none where it keeps it: another key's (`key`),
-another link-window's (`link-window`), a clock certificate that isn't egress (`clock`), a signature that doesn't verify
+another execution phase's (`link-window`), a clock certificate that isn't egress (`clock`), a signature that doesn't verify
 under the key in the session (`Certificate.signs`: `signature`), a second of its direction among those `kept`
 (`second`), or a clock certificate signing a digest that one kept earlier signs (`signed`: `reused`). -/
 def refusal (s : Served) (clock : Bool) (kept : Array Direction) (signed : Array ByteArray) (x : Certificate) :

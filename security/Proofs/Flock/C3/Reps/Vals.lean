@@ -52,10 +52,10 @@ open Flock Flock.RecAlgebra FlockSoundness.Refine FlockVBridge.Compiled
 open FlockVBridge.Family (CombFolds proofOf proofOf_zc le_of_fast100)
 open FlockVBridge.Runs (pair_append_get)
 
-/-- `CoinSource.ofRounds` hands `n` coins wherever it reads a round of `n` (RecAlgebra.lean:40–45), empty rounds or not. -/
+/-- `RoundCoins.ofRounds` hands `n` coins wherever it reads a round of `n` (RecAlgebra.lean:40–45), empty rounds or not. -/
 theorem ofRounds_size {rs : Array (Array F128)} {k n : ℕ} {c : Array F128}
-    (h : (Flock.RecAlgebra.CoinSource.ofRounds rs).round k n = .ok c) : c.size = n := by
-  simp only [Flock.RecAlgebra.CoinSource.ofRounds] at h
+    (h : (Flock.RecAlgebra.RoundCoins.ofRounds rs).round k n = .ok c) : c.size = n := by
+  simp only [Flock.RecAlgebra.RoundCoins.ofRounds] at h
   split at h
   · split at h
     · cases h; assumption
@@ -254,7 +254,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL Floc
 open FlockC3.Compose
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 

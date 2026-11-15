@@ -1,7 +1,7 @@
 """Render the inference-only policy's literature index as Markdown on stdout: the parameters with the findings each estimate merges, the
 board's slowdown brackets, and every source with its quoted findings, by topic. Never committed (README.md, "Rendering").
 
-    python benchmarks/nci/render.py > /tmp/nci-index.md
+    python benchmarks/nci/render.py > /tmp/literature-index.md
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ sys.path.insert(0, str(HERE))
 
 import arguments  # noqa: E402
 import catalog  # noqa: E402
-import slowdown  # noqa: E402
+import bracket  # noqa: E402
 
 
 def _num(x: float) -> str:
@@ -48,9 +48,9 @@ def render() -> str:
         out += [f"### Calibration `{c['id']}`: K = {_num(c['K'])} bits, Gamma = {_num(c['Gamma'])} gates, "
                 f"b_tok = {_num(c['b_tok'])}", "", c["description"], "",
                 "| Row | Thread theorem | Upper (construction) |", "|---|---|---|"]
-        for b in slowdown.brackets(rows, [c], parameters):
+        for b in bracket.brackets(rows, [c], parameters):
             out.append(f"| `{b['row']}` | {_num(b['lower'])} | {_num(b['upper'])} ({b['upper_basis']}) |")
-        out += ["", f"The lower bound is proven: `{slowdown.THREAD_THEOREM}`.", ""]
+        out += ["", f"The lower bound is proven: `{bracket.THREAD_THEOREM}`.", ""]
     for r in rows:
         out += [f"- **`{r['id']}`**: {r['method']}, {r['configuration']}. State: {r['state']}."
                 + (f" Sources: {', '.join(r['sources'])}." if r.get("sources") else "")]

@@ -4,7 +4,8 @@
 # packages below, no Mathlib and nothing of Security.
 name = "core_memory_challenger"
 defaultTargets = ["MemoryChallenger", "memory-challenger", "memory-challenger-test", "memory-challenger-verdict",
-                  "streamed-wipe-verdict", "wipe-protocol", "wipe-protocol-test", "memory-challenger-difftest"]
+                  "streamed-wipe-verdict", "wipe-protocol", "wipe-protocol-test", "wipe-count-test",
+                  "memory-challenger-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -68,6 +69,12 @@ root = "MemoryChallenger.WipeProtocolMain"
 [[lean_exe]]
 name = "wipe-protocol-test"
 root = "MemoryChallenger.WipeProtocolTestMain"
+
+# The wipe's component with its count held (`MemoryChallenger.WipeProtocol.countedTest`), under the test signers'
+# schemes alone, for the difftest. No executable serves it under the accepted schemes.
+[[lean_exe]]
+name = "wipe-count-test"
+root = "MemoryChallenger.WipeCountTestMain"
 
 [[lean_exe]]
 name = "memory-challenger-difftest"

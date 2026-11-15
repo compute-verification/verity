@@ -304,7 +304,7 @@ theorem embed_gen (L : List (Noise N m n k → ℚ)) (P : List (M4090Instr (Nois
 
 end Spec
 
-/-! ## The pinned theorems -/
+/-! ## The guarantees -/
 
 /-- **The embedding theorem.** -/
 theorem embedM4090 : EmbedM4090 := by

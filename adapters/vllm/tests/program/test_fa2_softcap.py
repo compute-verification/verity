@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity.circuits.defs import bind
-from verity.circuits.evaluation.reference import evaluate
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry import b1, dense, hopper
-from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import fa2_softcap as F2S
-from verity.definitions.registry import prims as P
-
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.registry import b1, dense, hopper
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import fa2_softcap as F2S
+from verity_vllm.definitions.registry import prims as P
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity_vllm.query import program_view as PV
+
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
 
 FA2 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}
 PRO6000 = TargetProfile(compute_capability=(12, 0), num_sms=188)
@@ -133,8 +134,8 @@ def test_the_capture_compare_accepts_the_definitions_own_rows(tanh_table, tmp_pa
 
 @pytest.mark.parametrize("masked_from", [2, 0])
 def test_the_replay_row_kernel_is_the_definition(masked_from):
-    from verity.definitions.numerics import rows as R
-    from verity.definitions.numerics import softcap_rows as SR
+    from verity_vllm.definitions.numerics import rows as R
+    from verity_vllm.definitions.numerics import softcap_rows as SR
 
     rng = np.random.default_rng(20 + masked_from)
     T, NH, KVH, D, BN = 40, 4, 2, 16, 16
@@ -188,8 +189,8 @@ def test_the_partition_rule():
     statics = {"T": 40, "NH": 2, "KVH": 1, "D": 16, "BN": 16, "CAP": CAP, "DOT": {"fn": "HopperBF16WgmmaDot16_v1"},
                "INV": {"fn": "Fa2InvSum_v1"}}
     for mf in (2, 0):
-        r = W.unit_rule(W.specialization("AttentionSoftcap_v2", dict(statics, MASKED_FROM=mf)))
+        r = W.unit_rule(PV.specialization("AttentionSoftcap_v2", dict(statics, MASKED_FROM=mf)))
         assert r["violations"] == [] and r["max_out_bits"] <= 32
-    g = W.Graph(W.specialization("AttentionHeadSoftcap_v2", {k: v for k, v in dict(statics, MASKED_FROM=2).items() if k not in ("NH", "KVH")}))
+    g = W.Graph(PV.specialization("AttentionHeadSoftcap_v2", {k: v for k, v in dict(statics, MASKED_FROM=2).items() if k not in ("NH", "KVH")}))
     R = W.units(g, 16, 32)
     assert R["cut"].ok and not g.recomputed and bool(R["ok"].all())

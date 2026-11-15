@@ -5,7 +5,7 @@ public import Lean.Data.Json.Basic
 /-!
 # JSON as Python's `json.dumps(v, sort_keys=True, separators=(",", ":"))` writes it
 
-`ir_lower.netlist` writes `LEAVES` and `circuit.compose` writes `META` this way, not as RFC 8785: every character outside
+`ir_lower.circuit_description` writes `LEAVES` and `circuit.compose` writes `META` this way, not as RFC 8785: every character outside
 `' '..'~'` is escaped (`ensure_ascii`), as `\uXXXX` in lowercase hex, a pair of surrogates past the BMP, or the short forms
 `\" \\ \b \f \n \r \t`; keys sort by code point. Only integers are accepted as numbers.
 -/

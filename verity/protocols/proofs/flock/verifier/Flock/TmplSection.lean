@@ -1,14 +1,15 @@
-/-
-A templated statement's template section (`Tags.isTmpl`): right after META, a line `TEMPLATE n`, then the template's `n`
-`flock-ir-tmpl/v2` lines, then the `CIRCUIT` sections. `HmRow.tmplLines` is what `HmRow.parse` passes over before the
-sections, and `HmOut.tmplOf` reads the template off the file's head alone.
--/
 module
 
 public import Flock.Bytes
 public import Flock.Net
 public import Flock.SplitNL
 public import Flock.Tags
+
+/-!
+A templated statement's template section (`Tags.isTmpl`): right after META, a line `TEMPLATE n`, then the template's `n`
+`flock-ir-tmpl/v2` lines, then the `CIRCUIT` sections. `HmRow.tmplLines` is what `HmRow.parse` passes over before the
+sections, and `HmOut.tmplOf` reads the template off the file's head alone.
+-/
 
 @[expose] public section
 

@@ -38,7 +38,7 @@ def test_the_h1_units_larger_definitions_lower_to_one_text_in_any_interpreter():
     assert _verdicts(big) == dict.fromkeys(big, "same")
 
 
-BAD = {"Counted": "differs", "SetOrder": "differs", "Environ": "reads", "Clocked": "reads", "Drawn": "reads"}
+BAD = {"Counted": "differs", "SetOrder": "differs", "Environ": "reads", "Clocked": "reads", "Sampled": "reads"}
 
 
 def test_a_builder_that_reads_state_besides_its_operands_is_refused_by_name():
@@ -52,7 +52,7 @@ def test_a_builder_that_reads_state_besides_its_operands_is_refused_by_name():
     reads = {s.split(":")[1]: r["failures"][0]["reads"] for s, r in rs.items() if r["ambient"]["verdict"] == "reads"}
     assert [x.split(" at ")[0] for x in reads["Environ"]] == ["os.environ['VERITY_AMBIENT_TEST']"]
     assert [x.split(" at ")[0] for x in reads["Clocked"]] == ["time.perf_counter"]
-    assert [x.split(" at ")[0] for x in reads["Drawn"]] == ["random.random"]
+    assert [x.split(" at ")[0] for x in reads["Sampled"]] == ["random.random"]
     assert all(x.split(" at ")[1].startswith("tools/verity/circuit_check/tests/fixtures/ambient_builders.py:")
                for xs in reads.values() for x in xs)
 
@@ -63,11 +63,11 @@ def test_a_target_that_does_not_lower_is_an_error_by_name():
     assert "AttributeError" in r["failures"][0]["name"]
 
 
-def test_no_word_primitive_is_lowered_by_whichever_builder_registered_first():
+def test_no_word_primitive_is_built_by_two_builders():
     assert A.ambiguous_words() == {}, (
         "these word primitives are built by two registered Boolean Definitions with different builders, so "
-        "`ir_lower._boolean_build` lowers each by whichever module was imported first: give each word one Boolean "
-        "Definition, or its own piece in `ir_lower.PIECES`")
+        "`ir_lower._boolean_build` refuses each (`AmbiguousWord`): give each word one Boolean Definition, or its own piece "
+        "in `ir_lower.PIECES`")
 
 
 def _traced(name, fn):

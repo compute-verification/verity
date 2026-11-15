@@ -13,7 +13,7 @@ norm computes it (`query.norm_scales.site_of`):
 * `aten` (`RsqrtF32_v1`, an ATen-chain norm): the output of `torch.rsqrt` inside the module.
 
 Outside a committed step, or outside the manifest's norm modules, the installed kernels run.  The tapped kernels compute exactly the
-installed kernels' outputs and write every row's scale, which equals the circuit's (`properties.norm_tap_exactness`).  Every patch goes
+installed kernels' outputs and write every row's scale, which equals the circuit's (`tests.properties.norm_tap_exactness`).  Every patch goes
 through `engine.hooks` and `uninstall` undoes it.  A norm kernel of another kind inside a norm module is a collector error.
 """
 from __future__ import annotations
@@ -95,7 +95,7 @@ class NormScaleSource:
         self.kinds = sorted(set(self.modules.values()))
         self.so_path = so_path
         self.ns: Any = None
-        so_sha256: str | None = None
+        loaded: str | None = None
         if "cuda" in self.kinds:
             if not so_path:
                 raise RuntimeError("norm scales: the manifest names fused norms and no tap build was given (--norm-tap-so, ops/pod_norm_tap.sh)")
@@ -104,14 +104,14 @@ class NormScaleSource:
             version = int(self.ns.tap_version())
             if version != TAP_VERSION:
                 raise RuntimeError(f"norm scales: {so_path} is tap version {version}, this source launches version {TAP_VERSION}")
-            so_sha256 = _file_sha256(so_path)
+            loaded = so_path
         self.words_per_token = int(words_per_token or len(self.modules))
         self._hooks = hooks.Hooks()
         self._handles: list[Any] = []
         self._scope: list[tuple[str, tuple[int, ...]]] = []
         self._held: list[Any] = []
         self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "by_kind": {k: 0 for k in self.kinds}, "errors": 0, "modules": len(self.modules),
-                                      "so": so_path, "so_sha256": so_sha256, "triton_source": None}
+                                      "so": so_path, "so_sha256": _file_sha256(loaded) if loaded is not None else None, "triton_source": None}
         self.active = False
 
     # ------------------------------------------------------------------------------------------------------------ install / uninstall
@@ -243,7 +243,7 @@ class NormScaleSource:
                  "tensors": self.stats["tensors"], "kinds": dict(self.stats["by_kind"]), "errors": self.stats["errors"],
                  "evidence": (f"norm-scale source: `<norm module>/{NS.MEMBER}` of {len(self.modules)} norm modules (sites {', '.join(self.kinds)}); "
                               f"tap build {self.so_path} (sha256 {self.stats['so_sha256']}), Triton source {self.stats['triton_source']}; outputs "
-                              "bit-identical to the installed kernels and every scale == the IR model's: verity_vllm.properties.norm_tap_exactness")}]
+                              "bit-identical to the installed kernels and every scale == the IR model's: tests.properties.norm_tap_exactness")}]
 
 
 def attach(com: Any, so: str | None, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,

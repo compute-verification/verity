@@ -1,6 +1,6 @@
 """``vllm-v1``: the reference reproduces its conformance vectors, and its verifier accepts exactly the
 vector openings and rejects the rejection vectors.  That vLLM's own code produces the same bytes is checked in
-``adapters/vllm/tests/commit/test_production_vectors.py``.  ``vllm-v1-sha512``: the reference reproduces its vectors,
+``adapters/vllm/tests/commit/test_serving_vectors.py``.  ``vllm-v1-sha512``: the reference reproduces its vectors,
 openings verify only under their own hash, and a configuration never mixes hashes."""
 
 from __future__ import annotations
@@ -8,14 +8,15 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+from verity.commitments import domains
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.scheme import CommitmentScheme
 from verity.errors import InvalidArtifact
 
+from tests.commitments import vectors as V
+from tests.commitments import vectors_sha512 as V512
 from verity_vllm.commitments import vllm_v1 as ref
 from verity_vllm.commitments.leaves import LIFT_TAG, NODE_TAG, H
-from verity_vllm.commitments.vllm_v1 import vectors as V
-from verity_vllm.commitments.vllm_v1 import vectors_sha512 as V512
 
 VECTORS = V.load()
 VECTORS_SHA512 = V512.load()
@@ -30,29 +31,8 @@ def _path(entries: list[str | None]) -> list[bytes | None]:
 
 
 def test_vectors_file_is_what_the_reference_generates() -> None:
-    assert V.main(["--check"]) == 0, "rerun `python -m verity_vllm.commitments.vllm_v1.vectors`"
-
-
-def test_write_or_check_writes_the_text_and_with_check_only_compares(tmp_path) -> None:
-    path = tmp_path / "vectors.json"
-    assert not V.write_or_check("a\n", path, ["--check"]) and not path.exists()
-    assert V.write_or_check("a\n", path, []) and path.read_text(encoding="utf-8") == "a\n"
-    assert V.write_or_check("a\n", path, ["--check"])
-    assert not V.write_or_check("b\n", path, ["--check"]) and path.read_text(encoding="utf-8") == "a\n"
-
-
-@pytest.mark.parametrize("generator", [V, V512], ids=["vllm-v1", "vllm-v1-sha512"])
-def test_a_generators_main_writes_its_file_and_with_check_says_a_stale_one(generator, tmp_path, monkeypatch, capsys) -> None:
-    path = tmp_path / "vectors.json"
-    monkeypatch.setattr(generator, "VECTORS", path)
-    assert generator.main(["--check"]) == 1 and not path.exists()
-    assert capsys.readouterr().err == f"{path} is stale; rerun without --check\n"
-    assert generator.main([]) == 0 and path.read_text(encoding="utf-8") == generator.render()
-    path.write_text(generator.render() + "\n", encoding="utf-8")
-    assert generator.main(["--check"]) == 1
-    assert capsys.readouterr().err == f"{path} is stale; rerun without --check\n"
-    path.write_text(generator.render(), encoding="utf-8")
-    assert generator.main(["--check"]) == 0 and capsys.readouterr().err == ""
+    assert V.VECTORS.read_text(encoding="utf-8") == V.render(), (
+        f"{V.VECTORS} is not what tests/commitments/vectors.py renders; from adapters/vllm, `{V.GENERATOR}` writes it again")
 
 
 def test_scheme_implements_the_interface() -> None:
@@ -211,7 +191,9 @@ def test_headers_refuse_fields_that_would_alias() -> None:
 
 
 def test_sha512_vectors_file_is_what_the_reference_generates() -> None:
-    assert V512.main(["--check"]) == 0, "rerun `python -m verity_vllm.commitments.vllm_v1.vectors_sha512`"
+    assert V512.VECTORS.read_text(encoding="utf-8") == V512.render(), (
+        f"{V512.VECTORS} is not what tests/commitments/vectors_sha512.py renders; from adapters/vllm, "
+        f"`{V512.GENERATOR}` writes it again")
 
 
 def test_sha512_leaves_and_tree_hash_vectors() -> None:
@@ -295,3 +277,7 @@ def test_sha512_domain_digests_are_sha512() -> None:
     assert ref.domain_digest(s512) == identity_digest_sha512(ref.DOMAIN_DIGEST_TAG, doc)
     assert len(ref.domain_digest(s512)) == 64 and len(ref.domain_digest(ref.StepDomain(d, d, d, d, 3))) == 32
     assert all(len(_b(c["domain_digest"])) == 64 for c in VECTORS_SHA512["openings"])
+
+
+def test_the_domain_digest_tag_is_the_tables_and_its_bytes_dont_move():
+    assert ref.DOMAIN_DIGEST_TAG is domains.VLLM_V1_DOMAIN and ref.DOMAIN_DIGEST_TAG == "verity/vllm-v1/domain/v1"

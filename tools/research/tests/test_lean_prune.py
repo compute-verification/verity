@@ -15,7 +15,7 @@ LIB = "/usr/local/lib/vy-monitoring/lean-audit/"
 
 def test_the_files_deploy_toml_installs_run_the_hourly_lean_prune(tmp_path):
     """Catches lean_audit.py loading a module deploy.toml doesn't install beside it: every hourly prune on every node then fails
-    at import, and the records trees it caps fill the nodes' disks."""
+    at import, and the records trees it bounds fill the nodes' disks."""
     manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
     files = {e["path"]: e for e in manifest["file"] if e["path"].startswith(LIB)}
     argv = re.search(r"^ExecStart=(.+)$", (NEBIUS / "vy-lean-prune.service").read_text(), re.M)[1].split()

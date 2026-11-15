@@ -66,8 +66,8 @@ fn word(s: &str) -> Option<F128> {
 
 impl Challenger {
     /// The challenger at `address` (`HOST:PORT`), greeted with the session's `secret` when it has one. Its answer to the
-    /// hello (the session's commitment, or a withheld session's layout) is checked for its form and not read: the coin
-    /// server asks it for coin trees alone.
+    /// hello (the session's commitment, or a withheld session's layout) is checked for its form and not read: the challenger's
+    /// live-coin part asks it for coin trees alone.
     pub fn connect(address: &str, secret: Option<&[u8]>) -> Result<Self, String> {
         let stream = TcpStream::connect(address).map_err(|e| format!("the challenger at {address}: {e}"))?;
         stream.set_nodelay(true).map_err(|e| format!("the challenger at {address}: {e}"))?;
@@ -172,8 +172,8 @@ impl Challenger {
     }
 }
 
-/// A challenger in this process, for tests: it serves one connection, samples each tree from a ChaCha20 tape as a coin
-/// server's test harness does (`coin_tape`), and returns every head the client sent.
+/// A challenger in this process, for tests: it serves one connection, samples each tree from a ChaCha20 tape as a live-coin
+/// part's test harness does (`coin_tape`), and returns every head the client sent.
 #[cfg(test)]
 pub(crate) mod fake {
     use super::*;

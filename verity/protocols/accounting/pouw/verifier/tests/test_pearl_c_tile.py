@@ -1,4 +1,4 @@
-"""TileRead and the served y as registered Definitions (`verity.definitions.registry.pearl_c_tile`), word and Boolean, against
+"""TileRead and the served y as registered Definitions (`verity.protocols.accounting.pouw.prover.circuit.pearl_c_tile`), word and Boolean, against
 PoUW's pin (`schemes.pearl_c_u`) on its vectors (the H100 kernel's gate problem, ``vectors/pearl_c_u.json``) and random codes
 at both devices' atoms, against pc8's tile (`circuit.pc8`'s `Pc8Tile`), and the unscale against the kernels' epilogue order on
 the vectors' U and their rows' α."""
@@ -18,8 +18,8 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
-from verity.definitions.registry import pearl_c_tile as PT
 from verity.circuits.silicon import fp32
+from verity.protocols.accounting.pouw.prover.circuit import pearl_c_tile as PT
 from verity.protocols.accounting.pouw.prover.circuit import pc8
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as U
@@ -117,7 +117,7 @@ def vector_alphas() -> tuple[list[int], list[int]]:
 
 def test_unscale_is_the_kernels_epilogue():
     """The vectors' 6 x 6 U (forming v1, the served one) at its rows' α: y is the kernels' store_y word for word, on words and
-    on bits, and with a bias each word then torch's BF16 add."""
+    on bits, and with a bias each word then the device library's BF16 add."""
     f = VECTORS["formings"]["v1"]
     u = {(c["i"], c["j"]): c["u"] for c in f["cells"]}
     grid = [u[(i, j)] for i in UV.ROWS for j in UV.COLS]

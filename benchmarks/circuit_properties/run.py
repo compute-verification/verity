@@ -1,11 +1,11 @@
-"""Measure the reference circuits' structural properties and set them beside benchmarks/rho's shape-derived ones.
+"""Measure the registered circuits' structural properties and set them beside benchmarks/slowdown's shape-derived ones.
 
     uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 
 For each configuration in `references.configs()`, one b1 layer at T positions on bits (`references.layer`) is measured
 (`measure.measure`) under `references.GEMM_PRODUCTS`, and so is the Boolean GEMM `Gemm_v3{K=32,N=4}`. Beside each layer's
-a_out, a_in and |𝒥| per position: rho's `fanout`, `legs` and active layer products, as recorded for the model in
-benchmarks/rho/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
+a_out, a_in and |𝒥| per position: the slowdown calculator's `fanout`, `fanin` and active layer products, as recorded for the model in
+benchmarks/slowdown/data/models.toml when it has a row, and as `derived_fanout` / `derived_fanin` derive them from the
 config's own matrices (q, k, v, o, gate, up, down) otherwise and always. Each circuit's products are also checked
 whole-in-block (`measure.whole`) under two partitions: one block per root activation, and the gates cut in half. Writes
 DIR/properties.json (DIR defaults to $OUT) and prints one line per circuit.
@@ -23,31 +23,31 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rho"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "slowdown"))
 
 from circuit_properties import references as R
 from circuit_properties.measure import Blocks, describe, measure, whole
 
 
-def rho_shapes(name: str, C: dict) -> dict:
-    from rho import instances as I
-    from rho.params import Registry
+def slowdown_shapes(name: str, C: dict) -> dict:
+    from slowdown import instances as I
+    from slowdown.params import Registry
     H, NH, KVH, D, IM, NL = C["H"], C["NH"], C["KVH"], C["D"], C["I"], C["NL"]
     own = I.Model(name, 0, 0, H, NL, C["V"], 0, 0, matrices={
         "attention": tuple(I.Matrix(n, a, b, NL, NL) for n, a, b in
                            (("q", H, NH * D), ("k", H, KVH * D), ("v", H, KVH * D), ("o", NH * D, H))),
         "dense": tuple(I.Matrix(n, a, b, NL, NL) for n, a, b in (("gate", H, IM), ("up", H, IM), ("down", IM, H)))})
-    out = {"config": {"fanout": I.derived_fanout(own), "legs": I.derived_legs(own),
+    out = {"config": {"fanout": I.derived_fanout(own), "fanin": I.derived_fanin(own),
                       "layer_products": own.active(I.LAYERED) / NL}}
     reg = Registry.load()
     if name in reg.names("model"):
         m = I.model(reg, name)
-        out["models.toml"] = {"fanout": m.fanout, "legs": m.legs, "derived_fanout": I.derived_fanout(m),
-                              "derived_legs": I.derived_legs(m), "layer_products": m.active(I.LAYERED) / m.layers}
+        out["models.toml"] = {"fanout": m.fanout, "fanin": m.fanin, "derived_fanout": I.derived_fanout(m),
+                              "derived_fanin": I.derived_fanin(m), "layer_products": m.active(I.LAYERED) / m.layers}
     return out
 
 
-def row(name: str, program, source: str, T: int, rho: dict | None) -> dict:
+def row(name: str, program, source: str, T: int, shapes: dict | None) -> dict:
     t = time.time()
     m = measure(program, R.GEMM_PRODUCTS)
     out = {"circuit": name, "source": source, "positions": T, "program_fn": program.fn.id[:120],
@@ -59,14 +59,14 @@ def row(name: str, program, source: str, T: int, rho: dict | None) -> dict:
         w = whole(program, R.GEMM_PRODUCTS, blocks)
         out["whole"][part] = {"per_block": {str(b): c for b, c in w.per_block.items()}, "split": w.split,
                               "split_at": [describe(program, g) for g, _ in w.split_examples[:2]]}
-    if rho is not None:
-        out["rho"] = rho
+    if shapes is not None:
+        out["rho"] = shapes
         cmp = {}
-        for src, r in rho.items():
-            cmp[src] = {"a_out": m.a_out == r.get("fanout"), "a_in": m.a_in == r.get("legs"),
+        for src, r in shapes.items():
+            cmp[src] = {"a_out": m.a_out == r.get("fanout"), "a_in": m.a_in == r.get("fanin"),
                         "products": m.products // T == r["layer_products"]}
             if "derived_fanout" in r:
-                cmp[src].update(derived_a_out=m.a_out == r["derived_fanout"], derived_a_in=m.a_in == r["derived_legs"])
+                cmp[src].update(derived_a_out=m.a_out == r["derived_fanout"], derived_a_in=m.a_in == r["derived_fanin"])
         out["agrees"] = cmp
     return out
 
@@ -86,7 +86,7 @@ def main() -> int:
         t = time.time()
         program = R.layer(C, a.T)
         built = round(time.time() - t, 2)
-        r = row(name, program, source, a.T, rho_shapes(name, C))
+        r = row(name, program, source, a.T, slowdown_shapes(name, C))
         r["build_seconds"] = built
         r["maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6, 2)
         rows.append(r)
@@ -96,7 +96,26 @@ def main() -> int:
     if a.out:
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "properties.json").write_text(json.dumps(rows, indent=1, default=str) + "\n")
+        if a.models == ",".join(names):
+            write_metric(a.out, rows)
     return 0
+
+
+#: the metric's id (`metrics.toml` beside this file), whose row gives the unit it is written in
+METRIC = "training/smallest-product-subcircuit"
+
+
+def write_metric(out: str, rows: list[dict]) -> None:
+    """s_×, the least over the circuits of `rows` (the Boolean GEMM and each configuration's layer), written into the
+    run's result under `METRIC` in its row's unit: measured, an exact count on the circuits it builds. Written only for
+    a run of every configuration."""
+    import tomllib
+
+    from verity_bench import kit
+
+    rows_of = tomllib.loads(Path(__file__).with_name("metrics.toml").read_text())["metric"]
+    unit = next(m["unit"] for m in rows_of if m["id"] == METRIC)
+    kit.writer(out).measurement(METRIC, min(r["s_x"] for r in rows), unit, mark="measured")
 
 
 if __name__ == "__main__":

@@ -14,9 +14,7 @@ the 128-word test instances of `test_pearl_c_vllm` can't: a verifier or y check 
 (a 64-row tile grid, y's segments, W's weight entry at 128,256 leaves), and the head's credit at the linears' rate."""
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from fractions import Fraction
 from pathlib import Path
 
@@ -25,18 +23,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-HERE = Path(__file__).resolve().parent
-
-
-def _module(name: str, path: Path):
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, path)
-        sys.modules[name] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(sys.modules[name])
-    return sys.modules[name]
-
-
-T = _module("test_pearl_c_vllm", HERE / "test_pearl_c_vllm.py")
+import test_pearl_c_vllm as T  # the served passes' test: the modules it loads and its helpers
 
 SCHEME = "pearl-c-h100-v1-h3"
 M16, K, N, REAL, WEIGHT, INDEX = 16, 2_048, 128_256, 4, 64, 0
@@ -101,7 +88,7 @@ def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs
     root_b = tree_b[-64:]
     weights = {str(WEIGHT): {"n": N, "k": K, "root": root_b.hex(), "excluded_b": [ZERO_ROW],
                              "rows": T.PH._entry(d / "weights" / f"{WEIGHT}.rows.bf16", N * K * 2),
-                             "tree": T.PPD._write(d / "weights" / f"{WEIGHT}.tree", tree_b)}}
+                             "tree": T.PH._write(d / "weights" / f"{WEIGHT}.tree", tree_b)}}
     roots = {WEIGHT: root_b}
     coins = T.salt_coin(roots)
     mm = T.Matmul(INDEX, T.Shape(M16, K, N), WEIGHT)
@@ -138,8 +125,8 @@ def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs
     records = [T.PW.UnitRecord(mm, REAL, K, (), (ZERO_ROW,), (), ())]
     matmuls = [{"index": INDEX, "m": M16, "k": K, "n": N, "weight": WEIGHT, "real_rows": REAL, "k_kept": K, "excluded_a": [],
                 "root_a": root_a.hex(),
-                "rows": T.PPD._write(d / "calls" / f"{INDEX}.rows.bf16", T.bf16_file(a_rows), digest=False),
-                "tree": T.PPD._write(d / "calls" / f"{INDEX}.tree", tree_a),
+                "rows": T.PH._write(d / "calls" / f"{INDEX}.rows.bf16", T.bf16_file(a_rows), digest=False),
+                "tree": T.PH._write(d / "calls" / f"{INDEX}.tree", tree_a),
                 "y": T.SY.retain_y(d, INDEX, y.tobytes(), N, epoch.salt, KEY)}]
     dt = T.transcript_domain(epoch, len(leaves), h)
     tree_t = T.laid_out(dt, [dt.leaf(i, i, T.TILE_SCHEMA, v + T.hm96_salt(KEY, T.HM96_TRANSCRIPT, i)) for i, v in enumerate(leaves)])
@@ -147,9 +134,9 @@ def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs
             "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
             "records_root": T.PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tree_t[-64:].hex(), "count": len(leaves)},
-            "leaves": T.PPD._write(d / "leaves", b"".join(leaves)),
-            "tree_t": T.PPD._write(d / "tree_t", tree_t), "hm96_salt_key": KEY.hex()}
-    path = T.PPD.write_manifest(d, head, weights, matmuls)
+            "leaves": T.PH._write(d / "leaves", b"".join(leaves)),
+            "tree_t": T.PH._write(d / "tree_t", tree_t), "hm96_salt_key": KEY.hex()}
+    path = T.PH.write_manifest(d, head, weights, matmuls)
     (d / "coins.json").write_text(json.dumps(coins[0].to_json()))
     return path
 

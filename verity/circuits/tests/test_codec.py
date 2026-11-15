@@ -226,7 +226,7 @@ def test_decode_refuses_a_record_its_registered_composite_refuses():
     """The decoder holds a binding record of a composite the registry holds to that composite's `refuse`, as `bind` holds a
     built one: the token feed at FIRST=1, its id, record and body otherwise well formed, is no Program's, so no reader that
     accepts by id meets it."""
-    from verity.definitions.registry.io_shell import TokenFeed
+    from verity_vllm.definitions.registry.io_shell import TokenFeed
 
     feed = bind(TokenFeed, NP=2, FIRST=True)
     sig = feed.signature()

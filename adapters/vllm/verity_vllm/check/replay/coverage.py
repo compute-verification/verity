@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.definitions.numerics.rows import EVALUATORS
+from verity_vllm.definitions.numerics.rows import EVALUATORS
 
 from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.opening import alias_table, resolve_op_path
@@ -17,10 +17,10 @@ from verity_vllm.check.replay.population import (
     EXECUTED_PREFIX_RULE,
     NOT_EXECUTED_SCOPE,
 )
-from verity_vllm.check.replay.replay_codes import NOT_YET
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.fields import RecordError
+from verity_vllm.records.replay_codes import NOT_YET
 from verity_vllm.records.required_manifest import RequiredManifest
 
 __all__ = ["form_b_families"]
@@ -65,13 +65,13 @@ QUERY_FAMILY_MECHANISM: dict[str, str] = {
                              "state-linked (NOT_YET) -- C1 / C3 + form (B) where present; form (A) over it is an engineering gap, not a domain"),
     "norm_scales": ("opt-in, never the record (query.norm_scales): a norm's scale, one f32 per row -- interior to the kernel norms' Calls (the "
                     "norm-scale tap) or an ATen-chain norm's rsqrt output: no VU row of its own under Q_module_body_v1; C1 / C3 here, and the "
-                    "tapped kernels' scale == the IR model's scale bit for bit is the norm-tap exactness property (properties.norm_tap_exactness)"),
+                    "tapped kernels' scale == the IR model's scale bit for bit is the norm-tap exactness property (tests.properties.norm_tap_exactness)"),
     "router_softmax": ("opt-in, never the record (query.router_softmax): the selection-order router's softmax per token row -- interior to the "
                        "router Call (the router-softmax tap): no VU row of its own under Q_module_body_v1; C1 / C3 here, and every tapped word == the "
-                       "ordered router's committed value in the IR bit for bit is the router-tap exactness property (properties.router_tap_exactness)"),
+                       "ordered router's committed value in the IR bit for bit is the router-tap exactness property (tests.properties.router_tap_exactness)"),
     "vocab_range": ("opt-in, never the record (query.vocab_range): a TP rank's range values per token row -- interior to EmbeddingShard_v1 "
                     "(the vocabulary-range source): no VU row of its own under Q_module_body_v1; C1 / C3 here, and every value == the IR's is the "
-                    "vocabulary-range exactness property (properties.vocab_range_exactness)"),
+                    "vocabulary-range exactness property (tests.properties.vocab_range_exactness)"),
     "scale_products": ("additive (query.scale_products): a shared-scale FP8 GEMM's scale products per token row -- interior to "
                        "ScaledMmFp8BlockSharedScale_v1 (the scale-products source, F32Mul_v1 of the Call's own scale operands through the IR): "
                        "no VU row of its own under Q_module_body_v1; C1 / C3 here"),
@@ -398,7 +398,7 @@ def _controller(mq: Mapping[str, Any] | None, controller_rows: dict[str, int] | 
 
 def _manifest_cut(man: RequiredManifest | None, executed_prefix: dict[str, dict] | None, req_max_step: dict[str, int], not_exec_req: Counter) -> list[dict]:
     """The classified requests whose Q(P) carries no identity at their not-executed steps, by name."""
-    # the class is an EXCLUSION over the cap-length manifest of record: a classified request whose Q(P) carries NO
+    # the class is an EXCLUSION over the full-length manifest of record: a classified request whose Q(P) carries NO
     # identity at its not-executed steps was CUT before it reached the population (a restricted manifest handed in as Q(P)) -- N_manifest
     # would shrink silently and the class count 0.  Named here, fails the reconciliation: the manifest of record is never restricted.
     manifest_cut: list[dict] = []
@@ -411,7 +411,7 @@ def _manifest_cut(man: RequiredManifest | None, executed_prefix: dict[str, dict]
                 manifest_cut.append({"request_id": str(r), "manifest_last_step": req_max_step.get(str(r)), "cap_last_step": last,
                                      "n_exec": int(e["n_exec"]), "identities_at_not_executed_steps": int(not_exec_req.get(str(r), 0)),
                                      "why": "Q(P) carries no identity at the request's not-executed steps: the manifest was restricted before the "
-                                            "population (the manifest of record stays cap-length; the class is the exclusion)"})
+                                            "population (the manifest of record stays full-length; the class is the exclusion)"})
     return manifest_cut
 
 
@@ -460,9 +460,10 @@ def _guard_line(man: RequiredManifest | None, refused: RecordError | None) -> st
     # the one-release cross-check (traversal of record, inventory beside it) travels onto the record and the scope line
     cc = man.cross_check if man is not None else None
     if cc is not None:
+        counted = cc.get("identities")                         # each engine's count of identities; a cross-check that states none counts neither
         guard_line += ("; cross-check " + ("AGREED" if cc.get("agree") else "DISAGREED") +
-                       f" ({cc.get('primary_engine')} vs {cc.get('other_engine')}: {(cc.get('identities') or {}).get(cc.get('primary_engine'))} / "
-                       f"{(cc.get('identities') or {}).get(cc.get('other_engine'))} identities)")
+                       f" ({cc.get('primary_engine')} vs {cc.get('other_engine')}: {(counted if counted else {}).get(cc.get('primary_engine'))} / "
+                       f"{(counted if counted else {}).get(cc.get('other_engine'))} identities)")
     elif man is not None:
         guard_line += f"; no cross-check on the manifest (one engine asked for by name: {_manifest_engine_name(man)})"
     return guard_line

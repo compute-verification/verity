@@ -37,19 +37,19 @@ from typing import Any
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.commitments.windows import rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.commitments.periods import rows as CS
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import served as RS
 
 from verity_vllm.pipeline.boundary_rows import (
     EGRESS,
     FIELD_AT,
-    HEAD_U32,
     REQUEST,
     SCHEMA,
     Span,
     class_size,
     layout_of,
+    row_type,
 )
 from verity_vllm.records.boundary_commit import FILE as COMMIT
 from verity_vllm.records.boundary_commit import BoundaryCommit
@@ -69,21 +69,22 @@ def _stop_refusal(S: Mapping[str, Any]) -> str | None:
 
 
 def egress_stop(outputs: int, stops: Sequence[int], max_model_len: int) -> SpecializedDefinition:
-    """`EgressStop_v1{T, STOP, MAX_MODEL_LEN}` (request: Array<`HEAD_U32`, i32>, ids: Array<T, i32>) -> u16 at T =
-    ``outputs``: `StopRule16_v1{T, NSTOP}`'s word over ``ids``, ``request``'s ``max_tokens`` and prompt length
-    (`FIELD_AT`), the stop ids STOP and MAX_MODEL_LEN: where a span's `b.egress` row stops and why, n + finish * 8192.
+    """`EgressStop_v1{T, STOP, MAX_MODEL_LEN}` (request, ids: a span's rows of the values `STOP_READS` names, as
+    `boundary_rows.row_type` gives them, the ids T) -> u16 at T = ``outputs``: `StopRule16_v1{T, NSTOP}`'s word over
+    ``ids``, ``request``'s ``max_tokens`` and prompt length (`FIELD_AT`), the stop ids STOP and MAX_MODEL_LEN: where a
+    span's `b.egress` row stops and why, n + finish * 8192.
     A request whose ``ignore_eos`` word in ``request`` is not 0 has no stop id: the rule reads `stop_check.NOT_AN_ID`,
     no token's id, in place of each, as it does where STOP is empty (`StopCheck_v1`'s way). Its gates are the rule's,
     the constants' and that choice's: the registered stop ids and model length are statics, public in its id, where the
     rule takes them as inputs, since a population reads each parameter as one value's whole rows (`stop_registration`)
     and the registered model's are no value."""
-    from verity.definitions.registry import stop_check as SC
-    from verity.definitions.registry import stop_rule as X
+    from verity_vllm.definitions.registry import stop_check as SC
+    from verity_vllm.definitions.registry import stop_rule as X
 
     I32 = X.WORDS.I32
 
     def signature(S: Any) -> tuple[tuple[tuple[str, Any], ...], Any]:
-        return (("request", Array(HEAD_U32, I32)), ("ids", Array(S.T, I32))), X.WORDS.U16
+        return tuple((p, row_type(v, S.T)) for p, v in STOP_READS.items()), X.WORDS.U16
 
     def body(B: Any, S: Any, request: Any, ids: Any) -> Any:
         o = X.word_ops(B)
@@ -143,8 +144,8 @@ class Stop:
         stop id where the span sets ``ignore_eos``), where that is how the span was served: n the ids it was served and
         its finish a stop on 1 or a length on 2 or 3, with a ``min_tokens`` of 0, which the rule doesn't read. None
         otherwise: a span no stop class holds."""
-        from verity.definitions.registry import stop_check as SC
-        from verity.definitions.registry import stop_rule as X
+        from verity_vllm.definitions.registry import stop_check as SC
+        from verity_vllm.definitions.registry import stop_rule as X
 
         s = span.sampling
         mt = s.get("max_tokens") or 0
@@ -166,13 +167,15 @@ def filed(spans: Sequence[Span], stop: Stop | None = None,
     no stop class. Each class's spans in admission order, the classes in order of their first span."""
     out: dict[tuple[int, int, bool], list[Span]] = {}
     for s in spans:
-        held = stop is not None and not (released and s.release is None) and stop.word(s) is not None
-        out.setdefault((s.shape[0], stop.outputs, True) if held else (*s.shape, False), []).append(s)
+        if stop is not None and not (released and s.release is None) and stop.word(s) is not None:
+            out.setdefault((s.shape[0], stop.outputs, True), []).append(s)
+        else:
+            out.setdefault((*s.shape, False), []).append(s)
     return out
 
 
 def stop_registration(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Stop,
-                      boundary: Mapping[str, Any]) -> RS.ServedRegistration:
+                      boundary: Mapping[str, Any]) -> RS.ServedDocket:
     """A stop class's stop population's registered values, from its ``commit.json``, the verifier's rule ``stop`` and
     its boundary record (``boundary``, `boundary_rows.record`'s, the log's): each of the stop block's parameters
     (`STOP_READS`) is the boundary record's port of that value, one row a span, as an output value under that port's

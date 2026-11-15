@@ -17,9 +17,9 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.registry import b1, sampling
-from verity.definitions.registry import prims as P
-from verity.definitions.registry.prims import BF16, F32, I32
+from verity_vllm.definitions.registry import b1, sampling
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.prims import BF16, F32, I32
 
 from tests.regression import lift_expected as LE
 from tests.regression import resolver
@@ -117,19 +117,19 @@ def test_the_self_check_decodes_each_component_the_workload_program_names(tmp_pa
         SS.actual(row)
 
 
-def test_rows_the_index_does_not_name_are_carried_over(tmp_path):
+def test_rows_the_index_does_not_name_are_carried_over():
     carried = {"old": {"row": 11, "class": "GREEN", "selection": "green", "tp": 1, "batch": 1, "oracle": "/o/old", "programs_state": "uploaded",
                        "local": {}, "artifacts": {"records": "art:" + "a" * 64, "programs": ""},
                        "files": {"row.log": {"role": "record", "bytes": 3, "sha256": "b" * 64}}}}
     index = {"rows": {"new": {"row": 101, "class": "GREEN", "selection": "green", "dir": "/o/new",
                               "files": {"stages.txt": {"bytes": 5, "sha256": "c" * 64, "extracted": True}}}}}
-    text, ftext, rows_out = LE.build_fixtures(index, tmp_path, {"record"}, carried=carried)
+    text, ftext, rows_out = LE.build_fixtures(index, {"record"}, carried=carried)
     fx, files = tomllib.loads(text), tomllib.loads(ftext)
     assert list(fx["rows"]) == ["old", "new"] and list(rows_out) == ["old", "new"] and "files" not in fx["rows"]["old"]
     assert fx["rows"]["old"]["artifacts"]["records"] == "art:" + "a" * 64 and files["rows"]["old"]["files"]["row.log"]["sha256"] == "b" * 64
     assert fx["rows"]["new"]["selection"] == "green" and fx["rows"]["new"]["artifacts"] == {"records": "", "programs": ""}
     assert list(files["rows"]["new"]["files"]) == ["stages.txt"]
-    assert LE.build_fixtures(index, tmp_path, {"record"}, carried={"new": dict(carried["old"], row=101)})[2]["new"]["oracle"] == "/o/new"
+    assert LE.build_fixtures(index, {"record"}, carried={"new": dict(carried["old"], row=101)})[2]["new"]["oracle"] == "/o/new"
 
 
 @pytest.mark.slow

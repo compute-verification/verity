@@ -15,14 +15,14 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions.numerics import fa2_relation
-from verity.definitions.numerics import fa3_model as FM
-from verity.definitions.registry import attention_vocab, hopper
-from verity.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.numerics import fa2_relation
+from verity_vllm.definitions.numerics import fa3_model as FM
+from verity_vllm.definitions.registry import attention_vocab, hopper
+from verity_vllm.definitions.registry import fa3_check_inf as F3
 
 from tests.properties import glm53_fa3_prefill_capture_gpu as X
 from verity_vllm.program.frontend.rules import vllm_dsa_dense
-from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.records.property_record import REGISTRY, digest_of
 
 COMBINE = ("void cutlass::device_kernel<flash::enable_sm90_or_later<flash::FlashAttnFwdCombine<cute::tuple<cute::C<8>, cute::C<128> >, "
            "5, 256, 1, false, true, cutlass::bfloat16_t, float, cutlass::arch::Sm90> > >(flash::FlashAttnFwdCombine<...>::Params)")

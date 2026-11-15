@@ -1,4 +1,8 @@
-/-
+module
+
+public import Spot.Select
+
+/-!
 The claims' slots over the verifier's partition (`Claims.Sampling.Partition` and `Deploy.checked`): the partition the
 verifier evaluates, as the claims read it, and the slots of the proof blocks a sample checks.
 
@@ -18,9 +22,6 @@ verifier evaluates, as the claims read it, and the slots of the proof blocks a s
 * **JSON.** The layout's JSON keeps a block's keys `unit` and `pus` (its gates as a list of one `[lo, hi]`), and
   `checked` its `[slot, 0]` pairs, until a format version: the difftest's Python side reads them.
 -/
-module
-
-public import Spot.Select
 
 @[expose] public section
 

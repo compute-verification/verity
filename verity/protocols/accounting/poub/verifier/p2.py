@@ -8,14 +8,15 @@ unit g        blocks 4g … 4g + 3, 8,224 bytes at byte 8224·g: 257 whole 32-by
               N − 4U blocks (none in a store of whole units, as PoUS's of 2^16-block segments) are in no unit, and no
               receipt certifies them
 registration  node, P2's parameters, PoUS's commitment to W, PoUS's salt, the vk root, k_s: PoUS's setup's, the salt
-              sampled after the commitment (`setup.draw_salt`) and the root the verifier built from the C* it decoded to
-              the committed W (`setup.verifier_key_from_encoding`)
+              sampled after the commitment (`setup.sample_salt`) and the root the verifier built from the C* it decoded
+              to the committed W (`setup.verifier_key_from_encoding`)
 digest        SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u32be w ‖ u32be c0 ‖ u32be blocks_per_segment ‖
               u64be segments ‖ frame(expander) ‖ commitment ‖ salt ‖ root ‖ frame(layout) ‖ frame(receipt kind) ‖
               u32be k_s),  REGISTRATION_DOMAIN = "verity/remote-bandwidth/p2-registration/v0\\0"
-S_i           k_s × 8224 signs (`receipts.sign_bits(seed_i, k_s, 8224)`): K = derive(seed_i, SIGN_DOMAIN, {"tag":
-              "sketch-sha512", "k": k_s, "n": 8224}), row c the first 1,028 bytes of K.stream(("row", c)), bit x
-              (byte x // 8, LSB first) 1 → −1, 0 → +1
+S_i           k_s × 8224 signs (`receipts.sign_bits(seed_i, k_s, 8224)`): K = `receipts.sign_key(seed_i, k_s, 8224)`,
+              under {"tag": "sketch-sha512", "k": k_s, "n": 8224} (SIGN_DOMAIN's 32 bytes at 16 rows,
+              SIGN_DOMAIN_WIDE's 64 at 64), row c the first 1,028 bytes of K.stream(("row", c)), bit x (byte x // 8,
+              LSB first) 1 → −1, 0 → +1
 π_(i,j)       block j's partial: Σ_x S_i[c][2056·(j mod 4) + x] · int8(block_j[x]) over x < 2056, the block's bytes
               as stored; its signs are bytes 257·(j mod 4) … 257·(j mod 4) + 256 of each row.  k_s int32
               little-endian, |π[c]| ≤ 128·2056
@@ -25,12 +26,12 @@ y_(i,p)       SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ 
 ~~~
 
 Everything else is the audit's (`audit.py`): seeds, plans (over units), leaves of sixteen receipts, their trees,
-windows, deadlines, coins and draws.  A unit is the receipt's vector so that it is whole sectors: block j starts at
+windows, deadlines, coins and samples.  A unit is the receipt's vector so that it is whole sectors: block j starts at
 byte 8j mod 32 of the store, so a receipt of one block would leave a sector half read, and the sketch's bound on a
 guessed receipt (`SketchBoundRun`, over sectors) would lose a factor 2^32 a receipt.
 
 An opening (`Opening`) is the unit's four blocks, each with its path to the registration's root, and the receipt
-leaf with its salt and path to the pass's root.  The verifier, the audit's session over a P2 codec
+leaf with its salt and path to the pass's root; the honest prover's is `poub/prover/p2_prover.py`.  The verifier, the audit's session over a P2 codec
 (`audit.AuditRun.verify`, by `check`), checks the leaf on the pass's root, each block on the vk root under PoUS's leaf
 (`pous.verifier.leaf_hash`; `payload-path` if one fails), and the receipt recomputed from the four blocks.  It decodes
 nothing: vk's leaves are of the C* the verifier decoded to the committed W at PoUS's setup, so a block on its path is
@@ -45,20 +46,19 @@ per unit σ and y.  `Sketcher` is its CPU reference.
 from __future__ import annotations
 
 import hashlib
-import os
 import struct
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from verity.commitments.randomness import frame
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.params import SALT_BITS
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.accounting.pous.verifier.verifier import MerkleTree, VerifierKey, leaf_hash
+from verity.protocols.accounting.pous.verifier.verifier import VerifierKey
 
 from . import audit, receipts
 from .codec import P2_LAYOUT, P2Codec
-from .receipts import DIGEST_BYTES, PER_LEAF, SALT_BYTES, Plan
+from .receipts import DIGEST_BYTES, SALT_BYTES, Plan
 
 REGISTRATION_DOMAIN = b"verity/remote-bandwidth/p2-registration/v0\0"
 BLOCK_BYTES = 2056
@@ -141,9 +141,9 @@ class Registration:
 def register(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
              rows: int | None = None) -> Registration:
     """The verifier's registration of a node's P2 store from its PoUS setup: the salt it samples from its own secret
-    `source` after the commitment (`setup.draw_salt`), which `vk`, the key it built from the C* it decoded at setup
+    `source` after the commitment (`setup.sample_salt`), which `vk`, the key it built from the C* it decoded at setup
     (`setup.verifier_key_from_encoding`), must be under."""
-    salt = setup.draw_salt(source, _bytes(commitment, DIGEST_BYTES, "PoUS's commitment to W"))
+    salt = setup.sample_salt(source, _bytes(commitment, DIGEST_BYTES, "PoUS's commitment to W"))
     if type(vk) is not VerifierKey or type(vk.params) is not P2Params or vk.salt != salt:
         raise ValueError("vk is the verifier's own, built at PoUS's setup under the salt it drew after the commitment")
     rows = receipts.sketch_rows(receipts.SKETCH_SHA512, rows)
@@ -179,23 +179,6 @@ class Sketcher(receipts.SketchReceipter):
         return receipts.sign_bits(self.seed, self.rows, UNIT_BYTES)
 
 
-class Store:
-    """The prover's C* under a P2 registration: its N blocks and PoUS's vk tree over them, whose root must be the
-    registration's."""
-
-    def __init__(self, registration: Registration, blocks: Sequence[bytes]) -> None:
-        params = registration.params
-        if len(blocks) != params.blocks or any(type(b) is not bytes or len(b) != BLOCK_BYTES for b in blocks):
-            raise ValueError(f"the registration's C* is {params.blocks} blocks of {BLOCK_BYTES} bytes")
-        self.registration, self.blocks = registration, tuple(blocks)
-        self.tree = MerkleTree([leaf_hash(params, registration.salt, j, b) for j, b in enumerate(self.blocks)])
-        if self.tree.root != registration.root:
-            raise ValueError("these blocks are not the registered C*: their vk root is not the registration's")
-
-    def unit(self, g: int) -> bytes:
-        return b"".join(self.blocks[UNIT_BLOCKS * g:UNIT_BLOCKS * (g + 1)])
-
-
 @dataclass(frozen=True, slots=True)
 class Opening:
     """Receipt (i, p) of a window opened, position p of pass i, unit g = plan_i[p]: its four blocks, each block's path
@@ -214,30 +197,6 @@ class Opening:
         """Its bytes on the wire, with u32 and u64 headers for the indices and a u32 for each path's length."""
         return (4 + 8 + UNIT_BYTES + len(self.leaf) + len(self.leaf_salt)
                 + DIGEST_BYTES * (len(self.receipt_path) + sum(len(x) for x in self.paths)) + 4 * (2 + UNIT_BLOCKS))
-
-
-class Prover(audit.Prover):
-    """The honest prover over a P2 store: each pass's receipts from its plan's units (`pass_under`), or from receipts
-    the decode computed (`commit`), committed in the audit's tree."""
-
-    def __init__(self, store: Store, *, entropy: Callable[[int], bytes] = os.urandom) -> None:
-        super().__init__(store, None, entropy=entropy)
-
-    def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> audit.Pass:
-        plan = plan or Plan.whole(self.store.registration.blocks)
-        sketcher = Sketcher(seed, self.store.registration.rows)
-        return self.commit(window, i, seed, plan, [sketcher(g, self.store.unit(g)) for g in plan])
-
-    def commit(self, window: int, i: int, seed: bytes, plan: Plan, ys: Sequence[bytes]) -> audit.Pass:
-        """Pass i of `window` under `seed` from its receipts `ys` in plan order, however they were computed."""
-        salts = tuple(self.entropy(SALT_BYTES) for _ in range(receipts.leaves(plan.length)))
-        return audit.Pass(window, i, seed, plan, tuple(ys), salts, receipts.tree(seed, plan, ys, salts))
-
-    def open(self, ps: audit.Pass, p: int) -> Opening:
-        g, c = ps.plan.block(p), p // PER_LEAF
-        js = range(UNIT_BLOCKS * g, UNIT_BLOCKS * (g + 1))
-        return Opening(ps.index, p, tuple(self.store.blocks[j] for j in js), tuple(self.store.tree.path(j) for j in js),
-                       b"".join(ps.receipts[PER_LEAF * c:PER_LEAF * (c + 1)]), ps.salts[c], ps.tree.open(c).path)
 
 
 def _paths(paths: object) -> bool:
@@ -270,3 +229,7 @@ def check(registration: Registration, seed: bytes, plan: Plan, root: bytes, i: i
     if (sketcher or Sketcher(seed, registration.rows))(g, b"".join(o.blocks)) != y:
         return "receipt"
     return None
+
+
+__all__ = ["BLOCK_BYTES", "Opening", "Registration", "Sketcher", "UNIT_BLOCKS", "UNIT_BYTES",
+           "codec_of", "register"]

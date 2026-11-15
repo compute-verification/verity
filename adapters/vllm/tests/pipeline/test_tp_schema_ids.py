@@ -1,8 +1,8 @@
 """The ids the TP row's records carry.  Each of `verity_vllm.pipeline.tp.c2`, `verity_vllm.pipeline.tp.commit_replay`,
 `verity_vllm.pipeline.tp.emit_ranks`, `verity_vllm.pipeline.tp.fold_match`, `verity_vllm.pipeline.tp.rank_replay` and
 `verity_vllm.pipeline.tp.relabel_build` reads its record's id from `verity_vllm.records.schema_ids` under the name it
-always had, and `verity_vllm.pipeline.tp.rank_replay`, `verity_vllm.pipeline.tp.links` and
-`verity_vllm.pipeline.tp.xrank_dump` write the id their records on disk have."""
+always had, and `verity_vllm.pipeline.tp.rank_replay`, `verity_vllm.pipeline.tp.links`,
+`verity_vllm.pipeline.tp.xrank_dump` and `verity_vllm.pipeline.tp.commit` write the id their records on disk have."""
 from __future__ import annotations
 
 import json
@@ -12,6 +12,7 @@ from types import ModuleType, SimpleNamespace
 import pytest
 import torch
 
+from tests.pipeline import test_tp_commit_options as TO
 from verity_vllm.pipeline.tp import (
     c2,
     commit_replay,
@@ -23,6 +24,8 @@ from verity_vllm.pipeline.tp import (
     xrank_dump,
 )
 from verity_vllm.records import schema_ids
+
+driver, whole_commit = TO.driver, TO.whole_commit
 
 #: a module, its own name for its record's id, the constant it reads, and the id as the records on disk have it
 NAMED: list[tuple[ModuleType, str, str, str]] = [
@@ -78,3 +81,20 @@ def test_a_ranks_picks_are_saved_under_their_id(tmp_path):
     saved = torch.load(wrote["file"], weights_only=False)
     assert saved == {"schema": "verity/tp2/xrank-picks/v1", "rank": 1, "pair": 3, "seed": "00" * 8, "strata": {}, "picks": [],
                      "per_stratum": 2, "max_rows": 16, "steps_in_layout": 0}
+
+
+def test_a_tp_commits_records_carry_their_ids_on_disk(whole_commit):
+    """`tp-commit` over a stand-in engine of two ranks, one rank's commitment left out of the vector and the value check asked
+    for: the Commit fails closed, and each record it writes that names a schema names the one its readers know."""
+    rc, out = whole_commit("--pairs", "1", "--omit-rank", "1", "--value-check", "--all-pairs")
+    assert rc == 1
+    docs = {p.name: json.loads(p.read_text()) for p in sorted(out.glob("*.json"))}
+    assert {name: doc["schema"] for name, doc in docs.items() if isinstance(doc, dict) and "schema" in doc} == {
+        "import_path_runtime.json": "verity/tp2/import-path-runtime/v1",
+        "summary.json": "verity/commit-integ/delta-tp/v1",
+        "t6_4_check.json": "verity/commit-integ/t6_4-check/v1",
+        "value_check.json": "verity/commit-integ/value-check-tp/v1",
+        "versions.json": "verity/commit-integ/delta-tp/v1",
+        "weights_pin.json": "verity-sweep/tp-weights-pin/v1",
+        "xrank_collectives.json": "verity/tp2/xrank-collectives-fold/v1"}
+    assert [json.loads(ln)["schema"] for ln in (out / "runs.jsonl").read_text().splitlines()] == ["verity/commit-integ/delta-tp/v1"] * 2

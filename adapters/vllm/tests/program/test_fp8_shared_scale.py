@@ -11,14 +11,14 @@ import re
 import types
 
 import pytest
+from verity_vllm.definitions.registry import fp8, fp8_vocab
+from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
+
+from verity.circuits import word as W
 from verity.circuits.cut import call_scope
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.layout import resolve
-from verity.circuits import word as W
-from verity.definitions.registry import fp8, fp8_vocab
-
-from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 SHAPES = [(256, 256), (384, 128), (128, 512)]
 #: (K, N) of `ScaledMmFp8Block_v1`'s circuit-check targets, N = 192 ending mid-block
@@ -197,8 +197,7 @@ def test_the_frontend_rule_binds_a_ragged_n(monkeypatch):
     reads `weight_scale_inv` as the [21, 48] matrix b_scales views, and binds the Definition at N = 2624.  A b_scales of N // G = 20
     columns and a K that ends mid-group are refused."""
     import torch
-
-    from verity_vllm.program.frontend.derive import Alloc
+    from verity_torch.frontend.derive import Alloc
     from verity_vllm.program.frontend.rules.vllm_bindings import (
         clear_observations,
         observe_target_profile,

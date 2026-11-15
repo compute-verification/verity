@@ -1,7 +1,9 @@
 """The network certifier's content rows (`content_rows`): each of a connection's three rows is its class's size and
 whole 16-bit words, a decoder gives back what its encoder was given, and bytes that are not a row of the form are
 refused by the field that says so. A request row's room is the canonical id request's length at its class's prompt
-ids, the end row has a fails slot's layout, and a response row's ids are bounded by the widest public size class."""
+ids, the end row has a fails slot's layout, and a response row's ids are bounded by the widest public size class.
+A request's words are read from its bytes cell by cell, as the device reads a cell before it releases it, and a
+words row is those two as u32 words."""
 
 from __future__ import annotations
 
@@ -10,19 +12,20 @@ import struct
 
 import pytest
 
-from verity.circuits.partition_v2 import UNIT_CLASSES
+from verity.circuits.partition_v2 import SIZE_CLASSES
 from verity.protocols.accounting.certifier.prover import lengths_row as LR
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 
 
 def test_a_class_is_two_powers_of_two():
     """A class's size, of prompt ids or of ids released, is a power of two of at least 2; a response row's ids are
     at most 4,096, the most whose row fits the widest public size class behind its tie's verdict."""
     assert CT.MIN_SIZE == 2 and CT.most_ids() == 4096
-    assert 16 + 8 * CT.response_bytes(4096) == 131_120 <= UNIT_CLASSES[-1] < 16 + 32 * (8192 + 1)
+    assert 16 + 8 * CT.response_bytes(4096) == 131_120 <= SIZE_CLASSES[-1] < 16 + 32 * (8192 + 1)
     for size in (2, 4, 1024, 4096):
         CT.check_ids(size)
         CT.check_size(size, "prompt ids")
@@ -39,11 +42,11 @@ def test_a_class_is_two_powers_of_two():
 def test_the_most_ids_follow_the_widest_class(monkeypatch):
     """The bound on a response row's ids is computed from the widest public size class, not stated beside it: at
     the 16-bit limit no row fits, and at a class of 2^20 bits a row holds 16,384 ids."""
-    monkeypatch.setattr(CT, "UNIT_CLASS_MAX", 1 << 20)
+    monkeypatch.setattr(CT, "SIZE_CLASS_MAX", 1 << 20)
     assert CT.most_ids() == 16_384 and CT.response_bytes(16_384) == 65_540
-    monkeypatch.setattr(CT, "UNIT_CLASS_MAX", 16 + 32 * 3)
+    monkeypatch.setattr(CT, "SIZE_CLASS_MAX", 16 + 32 * 3)
     assert CT.most_ids() == 2
-    monkeypatch.setattr(CT, "UNIT_CLASS_MAX", 16)
+    monkeypatch.setattr(CT, "SIZE_CLASS_MAX", 16)
     assert CT.most_ids() == 0
     with pytest.raises(ValueError, match="at most 0 ids"):
         CT.check_ids(2)
@@ -51,7 +54,7 @@ def test_the_most_ids_follow_the_widest_class(monkeypatch):
 
 def test_every_row_is_whole_words_of_its_classes_size():
     """A response row is its count and O ids, an end row the four bytes of a fails slot, and a request row its count and
-    its class's room to a whole word, so each is whole 16-bit words (`warden_rows.words` reads it)."""
+    its class's room to a whole word, so each is whole 16-bit words (`network_certifier_rows.words` reads it)."""
     assert [CT.response_bytes(O) for O in (2, 16, 4096)] == [12, 68, 16_388]
     assert CT.END_BYTES == 4 and CT.END_SLOT.format == CR.SLOT[CR.FAILS].format
     for B, P in ((512, 2), (512, 64), (387, 4), (4096, 512)):
@@ -157,3 +160,54 @@ def test_an_end_row_is_how_the_connection_ended_and_its_cells():
                      (bytes(3), "is 4 bytes, not 3"), (bytes(8), "is 4 bytes, not 8")):
         with pytest.raises(ValueError, match=why):
             CT.end_of(bad)
+
+
+@pytest.mark.parametrize("B", (387, 512, 4096))
+def test_a_requests_words_are_its_max_tokens_and_its_prompts_count_read_cell_by_cell(B):
+    """The rule reads a canonical id request in the network certifier's cells whatever its other fields: its
+    `max_tokens` at its place in the first cell and the count of its prompt's ids over its cells, from a prompt of
+    one id to one of many cells. The form has no key for `ignore_eos`, so the rule reads none. Bytes that are not
+    such a request are refused, naming the first cell that doesn't read as the device reads it: a request cut short
+    or with a byte after its end, one with another byte in its head or between two ids, and no byte at all."""
+    rng = random.Random(B)
+    room = B - HEADER.size
+    for prompt in (1, 2, 3, 40, 100, 2048):
+        for max_tokens in (0, 1, 8, 4096, 0xFFFF_FFFF):
+            request = id_request(model="m" * rng.randrange(1, 60), user="u" * rng.randrange(1, 60),
+                                 prompt=[rng.randrange(1 << 32) for _ in range(prompt)], max_tokens=max_tokens,
+                                 seed=rng.randrange(1 << 32), temperature=0.5, top_p=0.25, frame_bytes=B, offset=0)
+            assert CT.request_words(request, B) == (max_tokens, prompt) and b"ignore_eos" not in request
+            assert CT.request_words(bytearray(request), B) == (max_tokens, prompt)
+    assert len(request) > 5 * room
+    last = (len(request) - 1) // room
+    for bad, cell in ((request[:-1], last), (request + b" ", last if len(request) % room else last + 1),
+                      (request[:room], 0), (request[:2 * room + 7], 2), (b"x" + request[1:], 0),
+                      (request[:room] + b"x" + request[room + 1:], 1), (bytes(40), 0)):
+        with pytest.raises(ValueError, match=f"cell {cell} of the request's [0-9]+ is not that cell of a canonical id "
+                                             f"request .*fails such a connection as malformed and releases nothing"):
+            CT.request_words(bad, B)
+    for bad in (b"", None, "request"):
+        with pytest.raises(ValueError, match="a released request has a byte"):
+            CT.request_words(bad, B)
+
+
+def test_a_words_row_is_two_u32_words():
+    """The words row is the request's `max_tokens` and the count of its prompt's ids, a little-endian u32 each:
+    four 16-bit words, a field's low word first, `max_tokens` before the count. A `max_tokens` or a count that is
+    no u32, a prompt of no id and a row of another size, a row of three u32 among them, are each refused."""
+    assert CT.WORDS_BYTES == 8 and CT.WORDS_ROW.format == "<II"
+    row = CT.words_row(0x0001_0002, 0x0003_0004)
+    assert row == b"\x02\0\x01\0" + b"\x04\0\x03\0" and len(WR.words(row)) == 4
+    assert CT.words_row(8, 3) == struct.pack("<II", 8, 3) and CT.words_of(struct.pack("<II", 3, 8)) == (3, 8)
+    for words in ((0, 1), (0xFFFF_FFFF, 0xFFFF_FFFF), (7, 4096)):
+        assert CT.words_of(CT.words_row(*words)) == words
+    for bad in ((-1, 1), (1 << 32, 1), (8, 0), (8, -1), (8, 1 << 32), (8.0, 1), (True, 1), (8, True), (8, None)):
+        with pytest.raises(ValueError, match="a words row is a u32 max_tokens and a u32 of at least 1 prompt id"):
+            CT.words_row(*bad)
+    with pytest.raises(TypeError):
+        CT.words_row(8, 0, 3)
+    for bad, why in ((row[:-1], "a words row is 8 bytes, not 7"), (row + b"\0", "a words row is 8 bytes, not 9"),
+                     (struct.pack("<III", 8, 0, 3), "a words row is 8 bytes, not 12"),
+                     (struct.pack("<II", 8, 0), "prompt has no id"), (bytes(8), "prompt has no id")):
+        with pytest.raises(ValueError, match=why):
+            CT.words_of(bad)

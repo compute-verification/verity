@@ -53,9 +53,12 @@ from verity_vllm.config import (
 )
 from verity_vllm.engine.profiles import dense_generic
 from verity_vllm.engine.profiles import family_facts as FF
-from verity_vllm.observe.fold import profiles
 from verity_vllm.pipeline import circuit_db as RC
 from verity_vllm.pipeline import config_record as CR
+from verity_vllm.pipeline.cli import write
+
+#: The names the library's other modules read here: ``Options`` and ``main``, the ``glue`` command.
+__all__ = ["Options", "main"]
 
 MARKER = "__models__"
 SCAN = (Path(__file__).parent, ROOT / "tests")
@@ -188,9 +191,10 @@ def _rules(path: Path) -> list[str]:
         if not (isinstance(n, ast.Call) and getattr(n.func, "id", getattr(n.func, "attr", None)) == "RuleInfo" and n.args):
             continue
         name, version = n.args[0], n.args[1] if len(n.args) > 1 else None
-        if isinstance(name, ast.Constant) and isinstance(name.value, str):
-            v = version.value if isinstance(version, ast.Constant) and isinstance(version.value, (int, str)) else None
-            out.append(f"{name.value}_v{v}" if v is not None else name.value)
+        if isinstance(name, ast.Constant):
+            rule: Any = name.value
+            v: Any = version.value if isinstance(version, ast.Constant) else None
+            out.append(f"{rule}_v{v}" if v is not None else rule)
     return out
 
 
@@ -212,6 +216,8 @@ def _family(model_type: str | None, repo: str) -> dict[str, Any] | None:
 
 
 def _profile(role: str | None, world: int, files: set[str], config: tuple[dict[str, Any] | None, str]) -> dict[str, Any]:
+    # Here, not at the module's head: the package adds its finder to `sys.meta_path` when it is first imported.
+    from verity_vllm.observe.fold import profiles
     from verity_vllm.observe.fold.profiles import generic
     cfg, source = config
     if cfg is None:
@@ -336,5 +342,5 @@ def main(o: Options) -> int:
     if set(models) - pinned:
         raise UsageError(f"{sorted(set(models) - pinned)}: no checkpoint or capture map pins it")
     invs = [inventory(m, marks, store_sql if o.store else None) for m in models]
-    print(json.dumps(invs, indent=1) if o.json else "\n\n".join(map(render, invs)))
+    write(json.dumps(invs, indent=1) if o.json else "\n\n".join(map(render, invs)))
     return 0
