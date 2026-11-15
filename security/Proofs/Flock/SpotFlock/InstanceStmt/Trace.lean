@@ -236,7 +236,7 @@ theorem zIX_srcB (hn : Properties.Flock.Nets.FixedNetsBuild) {x : ℕ} (h1 : 262
   rw [zIX_cs hn, ite_eq_right (show ¬ x - 262144 < 512 by omega), ite_eq_left (show x - 262144 < 1536 by omega),
     show x - 262720 + 64 = x - 262144 - 512 by omega]
 
-theorem zIX_hm1_zero {x : ℕ} (h1 : 265216 ≤ x) (h2 : x < 266240) : zIX x = false := by
+theorem zIX_hm1_zero {x : ℕ} (h1 : 263680 ≤ x) (h2 : x < 266240) : zIX x = false := by
   have h := zIX_h1 (j := x - 262144) (by omega)
   rw [show 262144 + (x - 262144) = x by omega] at h
   rw [h, xH1_input (j := x - 262144) (by omega)]
@@ -257,6 +257,13 @@ theorem zIX_sha_cv0 (hn : Properties.Flock.Nets.FixedNetsBuild) {x : ℕ} (h1 : 
   rw [zIX_cs hn, h, xS_input (j := x - 524288) (by omega)]
   unfold xS
   rw [ite_eq_left (show x - 524288 < 512 by omega)]
+
+theorem zIX_sha_in {x : ℕ} (h1 : 524800 ≤ x) (h2 : x < 528896) : zIX x = false := by
+  have h := zIX_s (j := x - 524288) (by omega)
+  rw [show 524288 + (x - 524288) = x by omega] at h
+  rw [h, xS_input (j := x - 524288) (by omega)]
+  unfold xS
+  rw [ite_eq_right (show ¬ x - 524288 < 512 by omega)]
 
 theorem zIX_sha_gap {x : ℕ} (h1 : 528896 ≤ x) (h2 : x < 532480) : zIX x = false := by
   have h := zIX_s (j := x - 524288) (by omega)

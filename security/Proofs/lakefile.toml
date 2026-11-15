@@ -74,7 +74,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Flock.SpotFlock.InstanceStmt.TraceFacts", "Proofs.Flock.SpotFlock.InstanceStmt.TraceRows",
   "Proofs.Flock.SpotFlock.InstanceStmt.TraceNetRows", "Proofs.Flock.SpotFlock.InstanceStmt.TraceDelta",
   "Proofs.Flock.SpotFlock.InstanceStmt.TraceDa", "Proofs.Flock.SpotFlock.InstanceStmt.Trace",
-  "Proofs.Flock.SpotFlock.InstanceStmt.TraceHolds",
+  "Proofs.Flock.SpotFlock.InstanceStmt.TraceHolds", "Proofs.Flock.SpotFlock.InstanceStmt.TraceRegions",
   "Proofs.Flock.SpotFlock.AddressFacts.RowSample", "Proofs.Flock.SpotFlock.AddressFacts.RowPublished",
   "Proofs.Flock.SpotFlock.AddressFacts.RowFirst",
   "Proofs.Flock.SpotFlock.AddressFacts.RowWires",
