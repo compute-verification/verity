@@ -7,8 +7,8 @@ Lower is better; the tree holds no site a lint finds at zero.
     research run --on auto --cwd source -- uv run python benchmarks/tree/lint_sites.py
 
 A list `lint_counts.py` couldn't count is left out of both sums, which are then `partial`, and the validation's detail
-names it with its reason beside each counted list's totals; where it counted none, nothing is written. It counts the checkout's HEAD and writes under `--out`
-(`out/` outside a research run).
+names it with its reason beside each counted list's totals; where it counted none, nothing is written. It counts the
+checkout's HEAD and writes under `--out` (`out/` outside a research run).
 """
 from __future__ import annotations
 
