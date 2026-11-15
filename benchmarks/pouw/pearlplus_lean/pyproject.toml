@@ -6,6 +6,9 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# Each test proves its own passes under its tmp_path and runs the Lean on them; the build is `verity_difftest.build`, one at a
+# time across processes, so the tests spread over workers rather than holding the suite for their sum.
+parallel = true
 # `lake build pouw-pearlplus` reads the package and what it requires by path, all under verity/core; the passes are
 # test_pearl_c_vllm's (`proved_pass`), which loads the sm_120 kernel's run and fixture, the simt twin, the hash-decode and
 # sm_90 prefill tests at import, the reference verifier and its give-up (pearl_c_vllm) over the clear audit, and
