@@ -48,7 +48,7 @@ statement = "11 of the 15 CPU machines install only a short list of security upd
 check = "updates-and-kernel"
 reads = "machine"
 how = """On each CPU machine of the deploy map (not staged): closed when apt's effective configuration (`apt-config dump`) \
-runs unattended upgrades with Ubuntu's security pocket among the origins and no strict package allow-list, and `uname -r`'s \
+runs unattended upgrades with Ubuntu's security pocket among the origins and no package allow-list (any `Package-Whitelist` entry, `-Strict` or not), and `uname -r`'s \
 series is maintained on the machine's release by kernels.toml (Ubuntu's kernel release schedule, its source). The machine \
 the metric runs on is read there; the others through the [machines] reading, which decides nothing once older than \
 MAX_AGE_DAYS. What security updates are still pending is not read."""

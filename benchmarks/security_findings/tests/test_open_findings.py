@@ -411,14 +411,17 @@ def test_a_machine_reading_is_six_lines_and_apts(O: ModuleType) -> None:
 
 @pytest.mark.parametrize(("lines", "why"), [
     (FIXED, "maintained"),
-    (STRICT, "kernel 6.11 on 24.04 is not maintained (kernels.toml); a strict package allow-list"),
+    (STRICT, "kernel 6.11 on 24.04 is not maintained (kernels.toml); a package allow-list"),
+    ([*FIXED, STRICT[10]], "a package allow-list"),
+    ([*FIXED, STRICT[10], 'Unattended-Upgrade::Package-Whitelist-Strict "false";'], "a package allow-list"),
+    ([*FIXED, 'Unattended-Upgrade::Package-Whitelist "";', 'Unattended-Upgrade::Package-Whitelist-Strict "true";'], "maintained"),
     ([*FIXED[:4], "7.0.0-12-generic", "24.04", *FIXED[6:]], "maintained"),
     ([*FIXED[:4], "6.8.0-90-generic", "22.04", *FIXED[6:]], "kernel 6.8 on 22.04 is not maintained (kernels.toml)"),
     ([*FIXED[:6], 'APT::Periodic::Unattended-Upgrade "0";', *FIXED[7:]], "no unattended upgrades"),
     ([*FIXED[:6], *FIXED[6:8], FIXED[9]], "Ubuntu's security pocket is no origin"),
     (FIXED[:6], "no unattended upgrades; Ubuntu's security pocket is no origin"),
 ])
-def test_updates_hold_on_a_maintained_kernel_the_security_pocket_and_no_strict_list(O: ModuleType, monkeypatch: pytest.MonkeyPatch,
+def test_updates_hold_on_a_maintained_kernel_the_security_pocket_and_no_allow_list(O: ModuleType, monkeypatch: pytest.MonkeyPatch,
                                                                                     lines: list, why: str) -> None:
     """The kernel table's dates are its own: 6.8 on 22.04 ends in May 2027, so on a day after it the series is not maintained."""
     monkeypatch.setattr(O, "clock", lambda: O.datetime(2027, 6, 1, tzinfo=O.UTC).timestamp())

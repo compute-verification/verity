@@ -298,8 +298,9 @@ def updates_judge(maintained: Mapping[tuple[str, str], date]) -> Judge:
         origins = apt.get("Unattended-Upgrade::Allowed-Origins::", []) + apt.get("Unattended-Upgrade::Origins-Pattern::", [])
         if not any(re.search(r"(\$\{distro_codename\}|\b[a-z]+)-security\b", o) and "ESM" not in o for o in origins):
             problems.append("Ubuntu's security pocket is no origin")
-        if apt.get("Unattended-Upgrade::Package-Whitelist-Strict", ["false"])[-1].lower() in ("true", "1", "yes", "on"):
-            problems.append("a strict package allow-list")
+        # any entry limits upgrades to the list; -Strict only decides whether their dependencies come too
+        if any(apt.get("Unattended-Upgrade::Package-Whitelist::", [])):
+            problems.append("a package allow-list")
         return not problems, "; ".join(problems) or "maintained"
     return judge
 
