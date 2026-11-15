@@ -7,7 +7,7 @@ public import Poub.Line
 
 `audit.ledger`'s terms for an accepted session's record against a capacity R, in exact rationals, as
 `Verifier.ledgers` declares them (`audit.GammaTerms`): each a fraction of R over the session's span, and over each
-window's own span `[b_(t−1), D_t]` (`Window`). The record credits its registered blocks only, and charges no host, link
+window's own span `[b_(t−1), D_t]` (`WindowGamma`). The record credits its registered blocks only, and charges no host, link
 or carrier term: no other form is computed here.
 
 * timing, `1 − credited/whole`: each pass's credited bytes are its registered receipts' (its length less its post-seed
@@ -187,7 +187,8 @@ def Terms.gamma (t : Terms) : Rat :=
 /-- γ with the pooled sample. -/
 def Terms.gammaHorizon (t : Terms) : Rat := t.gamma - t.sample + t.horizon
 
-structure Window where
+/-- Window `window`'s terms over its own span. -/
+structure WindowGamma where
   window : Nat
   spanNs : Nat
   terms : Terms
@@ -196,12 +197,12 @@ structure Window where
 /-- `audit.GammaTerms` for the credit this module computes. -/
 structure Gamma where
   terms : Terms
-  windows : Array Window
+  windows : Array WindowGamma
   error : Rat
   errorHorizon : Rat
 
 /-- The first window of the largest γ (`by`), the windows nonempty. -/
-def worst (ws : Array Window) (by_ : Terms → Rat) : Window :=
+def worst (ws : Array WindowGamma) (by_ : Terms → Rat) : WindowGamma :=
   ws.foldl (fun w x => if by_ w.terms < by_ x.terms then x else w) ws[0]!
 
 /-- A block's encode in squarings (`Codec.encode_squarings`): k roots a word, each the bit length of (p + 1)/4 less one. -/
@@ -237,7 +238,7 @@ def gamma (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : 
       if !(named.any (·.1 == k)) then named := named.push (k, (← namedBits k) + SLACK_LOG2)
   let bits : Nat → Nat := fun k => ((named.find? (·.1 == k)).map (·.2)).getD 0
   let rebuild := squaringsPerS * ((Codec.BLOCK_BYTES : Nat) : Rat) / (((encodeSquarings reg.codec : Nat) : Rat) * capacity)
-  let mut out : Array Window := #[]
+  let mut out : Array WindowGamma := #[]
   let mut wrong := 0
   let mut credited := 0
   let mut counted := 0
