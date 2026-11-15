@@ -269,7 +269,6 @@ NOT_READ = {
     "unread-caps.json": "the ratchet's caps, which `unread.py` reads",
     "unread_gate.py": "drive's landing gate on the seeds the ratchet reads, which runs `main`'s copy of this tool",
     "warm.py": "the audit of a ready mark's merge, which starts `lean_audit.py` for the packages a change reaches",
-    "pyproject.toml": "the tools/verity/lean suite's settings",
 }
 
 #: the packages whose audits write `Unread.lean`'s facts (`check.py`'s `UNREAD_FACTS`): a pass of one is reused only with
