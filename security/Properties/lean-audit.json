@@ -2328,7 +2328,8 @@
     "Properties.Pous.Wipe",
     "Properties.Pous.WipeCount",
     "Properties.Pous.PeriodGame",
-    "Properties.Pous.MemoryChallenger.Session"
+    "Properties.Pous.MemoryChallenger.Session",
+    "Properties.Pous.InProofs"
    ],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
@@ -2797,7 +2798,8 @@
     "Properties.Poub.Remote.Line.Record",
     "Properties.Poub.Remote.Schedule",
     "Properties.Poub.Remote.Subprotocol",
-    "Properties.Poub.Remote.SubprotocolDeployed"
+    "Properties.Poub.Remote.SubprotocolDeployed",
+    "Properties.Poub.Remote.InProofs"
    ],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
