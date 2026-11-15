@@ -119,7 +119,7 @@ start's own, so a start's certificate opens as no record's or mark's.
 The tag says which clock the session's ticks are read on: ``verity-network-certifier/start/v2`` means the host's raw
 clock, and a device whose ticks read any other clock signs its starts under another tag. The digest names no clock:
 the base is a sum of spans, not a reading, and that a device's ticks read the clock its tag means rests on
-`trusted-host`. A device that signs no start has no session a check of the start accepts.
+`trusted-device`. A device that signs no start has no session a check of the start accepts.
 """
 
 from __future__ import annotations

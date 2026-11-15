@@ -286,7 +286,7 @@ def lock(tmp_path_factory, monkeypatch) -> Path:
 
 def answer(public: dict | None, verdict: str = "accept") -> dict:
     return {"protocol": OR.NETWORK, "verdict": verdict, "reason": None, "commitment": "ab" * 64, "public": public,
-            "profile": {"link": "served", "windows": 1, "placement": {"trusted-host": "the certifier on the gate's host"}}}
+            "profile": {"link": "served", "windows": 1, "placement": {"trusted-device": "the certifier on the gate's host"}}}
 
 
 def network_row(public: dict | None) -> dict:
@@ -547,7 +547,7 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert sum(t["bits"] for t in b["terms"]) == b["K"]
     assert b["notes"] == [OR.OVERCOUNT] and "k_sched" in OR.OVERCOUNT and "k_fail" in OR.OVERCOUNT
     assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}
-    assert rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
+    assert rec["placement"] == {"trusted-device": "the certifier on the gate's host"}
     assert rec["advice_charge"]["charged"] == {"is": OR.CHARGED, "bits_per_phase": [9088], "share": 9088 / K,
                                                "lean": "scans[j].free"}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
@@ -644,7 +644,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     wrong = OR.PREMISES["wrong-bounds"]["is"]
     assert all(x in wrong for x in ("RegMatches", "`sampled-leg-bridge`", "v.law is g.rule.lawOver n",
                                     "Draw.sameLaw", "jeq a (toJson n) → nat? a = some n"))
-    assert all(x in OR.PREMISES[OR.CERTIFIER_KEY]["is"] for x in ("certifier-key/v1", "beside trusted-host",
+    assert all(x in OR.PREMISES[OR.CERTIFIER_KEY]["is"] for x in ("certifier-key/v1", "beside trusted-device",
                                                                  "`NOT_ESTABLISHED`", "`UNCHARGED`", "hA, hr and hkey"))
     assert all(x in OR.CHECKED[OR.AUDITOR_RECORD] for x in ("never the prover's node or its deployment.json",
                                                             "an obligation on the auditor's configuration"))
@@ -2451,7 +2451,7 @@ def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_a
     rec = record(out)
     assert rec["verdicts"]["the network certifier"] == {"protocol": OR.NETWORK, "verdict": "accept",
                                                         "from": "pieces/certifier/answer.json"}
-    assert rec["bound"]["K"] == K and rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
+    assert rec["bound"]["K"] == K and rec["placement"] == {"trusted-device": "the certifier on the gate's host"}
     assert rec == record(accepted(tmp_path / "onsite")) | {"verdicts": rec["verdicts"]}
 
 

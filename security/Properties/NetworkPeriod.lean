@@ -475,7 +475,7 @@ the entry's key in the entry's session; the listed sessions under one key carry 
 order; and each such session's signed base is its predecessor's plus the execution phases between their starts, so it
 is after every execution phase of the predecessor's stretch (`RowsSessionsCompleteAt`). The network certifier's device
 state gives each session it starts the next ordinal and none twice, and moves the key's life on by the session's whole
-span (`certificate.DeviceState`, on `trusted-host`), so no session of the key started between two such entries'
+span (`certificate.DeviceState`, on `trusted-device`), so no session of the key started between two such entries'
 sessions.
 
 The base condition is read off the certificates, through `heldTo` and the entries' order, and needs no device state.

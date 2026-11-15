@@ -486,7 +486,7 @@ CHECKED = {
                      "registration's link figures (each link's beta and latency) are the auditor's stated parameters, "
                      "not measured, and nothing here reads them. That the network certifier splits the node's uplink "
                      "is what the registration asserts; that the node has no other egress is the auditor's placement, "
-                     "under trusted-host (`STANDING`), and no file establishes it"),
+                     "under trusted-device (`STANDING`), and no file establishes it"),
     AUDITOR_LISTING: ("each circuit file the period lists, an audit's (circuits) or the scan's (scan_circuits), is by "
                       "SHA-512 the file its audit's sessions were verified against: a5's per-template pin, which "
                       "records_audit.py period publishes in V3c's period.json (`PERIOD`) for the audit whose "
@@ -659,7 +659,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                               "every window's statement the network certifier's openings register its observations at "
                               "the window's operator. The period check's half: on an accepted rows-form execution phase "
                               "the scan's rows/<d> root and domain are those the network certifier signed for its "
-                              "link, d and window; the device's, under trusted-host: its rows at the transfer gates are "
+                              "link, d and window; the device's, under trusted-device: its rows at the transfer gates are "
                               "its observations, its ingress values its operator on the earlier ones",
                         "discharged_by": ("Properties.NetworkCertifier.certifiersOpen",)},
     "certifier-key": {"is": "that the network certifier's key, LMS parameters and session every check reads are the "
@@ -667,7 +667,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "auditor's registration holds for the network certifier it placed (Registration.Auditor.key), "
                             "never the evidence's or the prover's copy. PeriodLeakRegistered states it (``stated_by``) as "
                             "its hA, hr and hkey, which the run checks of the auditor's inputs (``checked``, "
-                            f"`{AUDITOR_RECORD}`). Open, by this name, beside trusted-host, until the lock holds that "
+                            f"`{AUDITOR_RECORD}`). Open, by this name, beside trusted-device, until the lock holds that "
                             "guarantee at the statement `RESTS_ON` pins, taking them by that name, and the run's check "
                             "holds (``unchecked``: why it doesn't); while it is open the network verdict is not "
                             "established (`NOT_ESTABLISHED`), and its bound is conditional on it (`UNCHARGED`)",
@@ -701,7 +701,7 @@ PREMISES: dict[str, dict[str, Any]] = {
     "schedules-covered": {"is": "SchedulesCovered, MonitoringPeriodLeakAccepted's hs: each secret K counts runs on a schedule of "
                                 "Ss, whose number k_sched counts, so Ss must hold every schedule the network "
                                 "certifier's signed records can show, the union over their arrivals. A property of "
-                                "the compiled Lean audit the verification runs over those records, which trusted-host "
+                                "the compiled Lean audit the verification runs over those records, which trusted-device "
                                 "makes the traffic that crossed, never of the device's code. Open, by this name, "
                                 "until k_sched's count bounds that union and the Property that gives it, stated over "
                                 "that audit, is in the lock at the statement `DISCHARGES` pins; SenderDecodes, the "
@@ -754,14 +754,14 @@ NOT_CHECKED = "no run's inputs were checked"
 DISCHARGES: dict[str, dict[str, Any]] = {}
 #: the named assumptions that may stand under the figure of record, each on an auditor-trusted device or the auditor's
 #: placement of one, named beside the bound
-STANDING = {"Verity.Assumptions.TrustedDevice": "trusted-host: the network certifier and its host are the auditor's, "
+STANDING = {"Verity.Assumptions.TrustedDevice": "trusted-device: the network certifier and its host are the auditor's, "
                                               "which covers that the records it signs are the traffic that crossed, "
                                               "at the times it crossed, not what the device's code computes, and, "
                                               "with the auditor's placement of it (certifier-coverage), that the "
                                               "node has no egress but through it",
             "Accounting.Covered": "certifier-coverage: the links in the room are the registered ones, each through the "
                                   "network certifier (a listed physical premise, the auditor's placement, under "
-                                  "trusted-host). The site registration asserts that the network certifier splits the "
+                                  "trusted-device). The site registration asserts that the network certifier splits the "
                                   "node's uplink; that the node has no other egress is this placement, which the "
                                   "registration doesn't establish"}
 #: what K counts: the hypotheses on the covert sender's strategy that its guarantee quantifies, which no deployment
