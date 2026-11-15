@@ -13,7 +13,8 @@ n·log2 D`, is the advice's length under the residual code's compression (`code_
 rows, and the form the compiler reads. The advice is private: a compile slice's proof block, always proved in zero
 knowledge, states that the committed Programs are compile(advice) under the advice's hiding root, with the compiler's
 digest registered. The advice's root is registered before the live sample, and the compiler refuses every ill-formed
-advice up to the public cap deterministically; v0's validity is that proof block's first part (`advice_check`, below).
+advice up to the public cap deterministically; v0's validity is that proof block's first part
+(`verity_vllm.compiler.advice_check`, below).
 
 **Interface.** The `Advice`, `RequestAdvice`, `StepAdvice`, `Row` and `Source` dataclasses are frozen, and construction
 refuses (`MalformedAdvice`) anything that isn't a schedule vLLM could have run. The module's functions are:

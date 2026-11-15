@@ -3373,37 +3373,6 @@
    "due": "2026-11-17"
   }
  },
- "ids": {
-  "Accounting.Assumptions.KeyBinding": "key-binding",
-  "Accounting.Assumptions.WorkHardness": "rate-codec-work",
-  "Accounting.Covered": "certifier-coverage",
-  "Claims.ExpectedCR": "ecr/sha-512",
-  "Claims.Hm96Hiding": "hash-derived-key",
-  "Claims.StrictBirthday": "cr/sha-512",
-  "Claims.ZKServer.Loop.Src": "flock-zk-server-os-src",
-  "FlockSoundness.Assumptions.KeyedStreamsUniform": "prf/sha-512",
-  "FlockSoundness.Assumptions.SHA512CRExpected": "ecr/sha-512",
-  "FlockSoundness.Assumptions.SHA512CRStrict": "cr/sha-512",
-  "FlockSoundness.Assumptions.UniformRandomBytes": "uniform/io-getrandombytes",
-  "FlockSoundness.Assumptions.UniformRandomBytesTest": "uniform/io-getrandombytes",
-  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "hash-derived-key",
-  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "live-verifier",
-  "Pouw.Assumptions.HonestClock": "honest-clock",
-  "Pouw.CostModel.Hashless": "pouw-hashless",
-  "Slowdown.Cut.Assumptions.Exports": "training-cut-exports",
-  "Slowdown.Cut.Assumptions.Hardness": "training-cut-hardness",
-  "Slowdown.Formalism.Assumptions.CutCost": "training-cut-cost",
-  "Slowdown.Formalism.Assumptions.EfficiencyFloor": "training-efficiency-floor",
-  "Slowdown.Formalism.Assumptions.TokenWork": "training-token-work",
-  "Verity.Assumptions.ChallengerLogsCoins": "honest-verifier",
-  "Verity.Assumptions.ChannelAuthentic": "channel-authentic",
-  "Verity.Assumptions.FlipsAfterRecorded": "honest-verifier",
-  "Verity.Assumptions.ImprintPathPrivate": "imprint-path-private",
-  "Verity.Assumptions.TrustedDevice": "trusted-device",
-  "Verity.Assumptions.VerifierReadsLog": "honest-verifier",
-  "Verity.Assumptions.ZkServerOwnUser": "zk-server-own-user",
-  "WeightSecurity.Assumptions.FaultedUseHard": "faulted-use-hard"
- },
  "trust": {
   "base": {
    "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
@@ -4936,10 +4905,6 @@
     "NetTiming.Witness.MonitoringPeriodLeakCharged_nontrivial",
     "NetTiming.Witness.MonitoringPeriodLeakCharged_kraft_exclusion"
    ]
-  },
-  "Verity.SecurityProofs.RegistrationSound": {
-   "honest": ["Verity.SecurityProofs.RegistrationSound_honest"],
-   "nontrivial": "Verity.SecurityProofs.RegistrationSound_nontrivial"
   }
  },
  "unwitnessed": {
@@ -27521,7 +27486,12 @@
    "Flock.SecurityProofs.IntegrityMonitoringPeriodLog": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "NetTiming.Guarantees.HeldCutInTail": "unstated: the device model's line that every egress cell of a connection admitted before a bucket is sent in a phase at most that bucket's plus the span's tail (NetTiming.spanTail); stated first, beside NetTiming.Guarantees.SpanCovers, and its theorem is not proved yet",
    "NetTiming.Guarantees.MarkOrders": "unstated: the device model's line that a mark's phase (NetTiming.markPhase) is at most the phase of every bucket at or after the mark's and at least the phase of every bucket before it; stated first, beside NetTiming.Guarantees.SpanCovers, and its theorem is not proved yet",
-   "NetTiming.Guarantees.SpanCovers": "unstated: HeldCutInTail and MarkOrders for a span, every cell sent between two marks in a phase from the start mark's to the end mark's plus the tail; stated first, for the wipe's count over its span (MemoryChallenger.Properties.WipeCountTied, in the properties tree), which reads it as an antecedent listed open there, and its theorem is not proved yet"
+   "NetTiming.Guarantees.SpanCovers": "unstated: HeldCutInTail and MarkOrders for a span, every cell sent between two marks in a phase from the start mark's to the end mark's plus the tail; stated first, for the wipe's count over its span (MemoryChallenger.Properties.WipeCountTied, in the properties tree), which reads it as an antecedent listed open there, and its theorem is not proved yet",
+   "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTileFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the registered scheme's noise (pearl-c-nvfp4-v0, h0: sha512Fp4Sem base salt rootA rootB at the cost model's own salt, with rootA h0's root of the unit's rows) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, about a semantics at a salt other than the cost model's, or about a rootA that does not read the activations, where Pearl-C's adaptive-A attack runs (measured on FP8, not run on FP4) and the conjecture is not believed.",
+   "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTileFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the registered scheme's noise (pearl-c-nvfp4-v0, h0: sha512Fp4Sem base salt rootA rootB at the cost model's own salt, with rootA h0's root of the unit's rows) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, about a semantics at a salt other than the cost model's, or about a rootA that does not read the activations, where Pearl-C's adaptive-A attack runs (measured on FP8, not run on FP4) and the conjecture is not believed.",
+   "Pouw.SecurityProofs.PearlC.GapFp4Sm120_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the registered scheme's noise (pearl-c-nvfp4-v0, h0: sha512Fp4Sem base salt rootA rootB at the cost model's own salt, with rootA h0's root of the unit's rows) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, about a semantics at a salt other than the cost model's, or about a rootA that does not read the activations, where Pearl-C's adaptive-A attack runs (measured on FP8, not run on FP4) and the conjecture is not believed.",
+   "Pouw.SecurityProofs.PearlC.GapFp4Sm120_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the registered scheme's noise (pearl-c-nvfp4-v0, h0: sha512Fp4Sem base salt rootA rootB at the cost model's own salt, with rootA h0's root of the unit's rows) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, about a semantics at a salt other than the cost model's, or about a rootA that does not read the activations, where Pearl-C's adaptive-A attack runs (measured on FP8, not run on FP4) and the conjecture is not believed.",
+   "Pouw.SecurityProofs.PearlC.EpsFp4Sm120_8192": "frozen (conjecture,no-function,hash): GapFp4Sm120_8192 in ε form. It is a consequence of the named open conjecture TTOutFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is sampled uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the registered scheme's noise (pearl-c-nvfp4-v0, h0: sha512Fp4Sem base salt rootA rootB at the cost model's own salt, with rootA h0's root of the unit's rows) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, about a semantics at a salt other than the cost model's, or about a rootA that does not read the activations, where Pearl-C's adaptive-A attack runs (measured on FP8, not run on FP4) and the conjecture is not believed."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -39424,7 +39394,7 @@
    }
   },
   "Definitions.Pouw.PearlC.DeviceFp4": {
-   "digest": "5f403aa0c8d6bdbf969f1c664504631e446a0e70e0a51c96b185880883d6504f",
+   "digest": "f9fd2eb051e575649c4169d2e42b83a09e6bf4a2f61c51031970660af6a8cccd",
    "definitions": {
     "Pouw.PearlC.Fp4Dev.Fire4": "30b9898b21ff1a6d0b1809ad5a3901728d7cfbec1e2d3617fbf938ac1b99be98",
     "Pouw.PearlC.Fp4Dev.Op4": "fac14db9df452432138fc3e58c0abe9218e1f3697f2580bc5523740f16d79adc",
@@ -39496,7 +39466,7 @@
     "Pouw.PearlC.Fp4Sem": "a294e7e8c08e387935c6d690658108d5eaf76acb88231a4bf5ac8e0b6ce62d79",
     "Pouw.PearlC.Fp4Sem.OperandOK": "17fc2e3397bef6d83487c7a44836217320798952a3f98e2e6e2d4c0a9e768c69",
     "Pouw.PearlC.Fp4Sem.RowOK": "72ebde3f0ce492c1f3da044f38b92391d5ab259b4dbdb424064c892fdae2e24c",
-    "Pouw.PearlC.Fp4Sem.SaltKeyedB": "759e9549b693ec46f18728c4a3de1de1869f40c98837656022b7a212593aaa5f",
+    "Pouw.PearlC.Fp4Sem.SaltKeyedB": "c0fe39a513a2e7382d36f3865a05fc6189f1df2ff2461b3c46295e2a672f7835",
     "Pouw.PearlC.Fp4Sem.alpha": "40e94b94e471b610172cb47dd2ab5a0b39f67ca231b746d9be9774e301e91b00",
     "Pouw.PearlC.Fp4Sem.beta": "b1bfd5721c3acfec18c9e78abaa6b94d913a45d4d3b80d4447c353f730fde9de",
     "Pouw.PearlC.Fp4Sem.lines": "68df5f1f9818bdeaef3ba328d67b19686dee43f1e0d5a7c8ca18d16329b62f37",
@@ -39743,6 +39713,19 @@
     "Pouw.PearlC.Mend.cutFold": "00df7cecf02aed153fc4862d8e82f647fa63291a16828682176996a3fac4d1e8",
     "Pouw.PearlC.Mend.cuts": "4d92e9de8770171d365be8fc5d463ed2397d333b27a2ee2fbb14fadaf6f17a1d",
     "Pouw.PearlC.Mend.endRow": "cc449ffd0fb61fc950f94a8aff398d526ae5a2b8489e1f93e3ed13fe818060ff"
+   }
+  },
+  "Definitions.Pouw.PearlC.NoiseSha512Fp4": {
+   "digest": "c216cb88906e6b85d79966d367be5bbb0a1904ea1480f890e6c4ce201d4514d4",
+   "definitions": {
+    "Pouw.PearlC.NoiseSha512Fp4.codes": "501320fecdb2ca017604aa470dee3e01b4ee99976306ca8372cefa5400a80246",
+    "Pouw.PearlC.NoiseSha512Fp4.drawB": "25b33e24eb7236383e126b833768b4b9e2400f2692629274b2e0b66c18a5f9d4",
+    "Pouw.PearlC.NoiseSha512Fp4.label": "061940d14f71c527d3be60aa2a74364ac855df4530cd0ebc0935a6c3d482958d",
+    "Pouw.PearlC.NoiseSha512Fp4.labelled": "5e321b21c41d756adabc7b7799dff89c65918bfd7e4521081e13a62509781993",
+    "Pouw.PearlC.NoiseSha512Fp4.line": "567a6f0ba0e83a290e0635f97f4ee241d6112587b50d0f0882fd4ba564c5eeb3",
+    "Pouw.PearlC.NoiseSha512Fp4.lineBlock": "8cb70235dadef1dcb2a457a61712ff069d5f51201d51f73a3975d182b531db4e",
+    "Pouw.PearlC.NoiseSha512Fp4.lineList": "2dcd2a9590808fdee022e70df5492a22b4ce4935bf1dd4b97a5176efe0a80869",
+    "Pouw.PearlC.NoiseSha512Fp4.seedB": "d2c14d65b9bdcd9020e9becbb9da6b6b893676b912b9a9fe5160168174d0554e"
    }
   },
   "Definitions.Pouw.PearlC.PeelExact": {
@@ -39993,7 +39976,7 @@
    }
   },
   "Definitions.Pouw.PearlC.Sha512": {
-   "digest": "bc2d519de945ba18ec9452456f4442b351c0f93719f12590ce6462f13c9d3639",
+   "digest": "ec3ea52fa0beb90d28baf106b042f634a12b14eb432ccd358902145c75b6fcee",
    "definitions": {
     "Pouw.PearlC.Sha512.IV": "93e747f83d3dd44161bb1cdaaeccc7f503b638d327434dc8a9aa126465ec0b9e",
     "Pouw.PearlC.Sha512.K": "6e21fb598815038e3c7ae44dd9fde56d671ac8e63e9a864bb7d5abe3f72eaae6",
@@ -40019,6 +40002,7 @@
     "Pouw.PearlC.Sha512.compl": "a6ee31f98e90cac73416a58bb78c4b617a4f42d7b58053988d6323f6199044d5",
     "Pouw.PearlC.Sha512.compress": "13e04134178da8789df44b7646af7cbdfb6a8cf1ac3284690dc888f00e1fe92e",
     "Pouw.PearlC.Sha512.digest": "ec3cf409c94f412a906e130ccdaabe29be2ee61e717298c462dfc631b3dbb9c9",
+    "Pouw.PearlC.Sha512.leBytes": "35f35252ae95e4c02cf431e0b21724c8e001c404dddd02a248c7e06b8b6644bd",
     "Pouw.PearlC.Sha512.maj": "2473a4d47bcaf3e23c7de354a5c80e5264d9e71975cada1de6cba6f0a7639350",
     "Pouw.PearlC.Sha512.pad": "e4f5df15d705902375ee1e49f5a9254c4bee56a059a30b8329b822f9e59865ed",
     "Pouw.PearlC.Sha512.padTo": "504608fcfbc60bc3da59e2491b0bbf881cd6c39bc68c9b1e33649894435e9844",
@@ -60307,6 +60291,37 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "ids": {
+  "Accounting.Assumptions.KeyBinding": "key-binding",
+  "Accounting.Assumptions.WorkHardness": "rate-codec-work",
+  "Accounting.Covered": "certifier-coverage",
+  "Claims.ExpectedCR": "ecr/sha-512",
+  "Claims.Hm96Hiding": "hash-derived-key",
+  "Claims.StrictBirthday": "cr/sha-512",
+  "Claims.ZKServer.Loop.Src": "flock-zk-server-os-src",
+  "FlockSoundness.Assumptions.KeyedStreamsUniform": "prf/sha-512",
+  "FlockSoundness.Assumptions.SHA512CRExpected": "ecr/sha-512",
+  "FlockSoundness.Assumptions.SHA512CRStrict": "cr/sha-512",
+  "FlockSoundness.Assumptions.UniformRandomBytes": "uniform/io-getrandombytes",
+  "FlockSoundness.Assumptions.UniformRandomBytesTest": "uniform/io-getrandombytes",
+  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "hash-derived-key",
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "live-verifier",
+  "Pouw.Assumptions.HonestClock": "honest-clock",
+  "Pouw.CostModel.Hashless": "pouw-hashless",
+  "Slowdown.Cut.Assumptions.Exports": "training-cut-exports",
+  "Slowdown.Cut.Assumptions.Hardness": "training-cut-hardness",
+  "Slowdown.Formalism.Assumptions.CutCost": "training-cut-cost",
+  "Slowdown.Formalism.Assumptions.EfficiencyFloor": "training-efficiency-floor",
+  "Slowdown.Formalism.Assumptions.TokenWork": "training-token-work",
+  "Verity.Assumptions.ChallengerLogsCoins": "honest-verifier",
+  "Verity.Assumptions.ChannelAuthentic": "channel-authentic",
+  "Verity.Assumptions.FlipsAfterRecorded": "honest-verifier",
+  "Verity.Assumptions.ImprintPathPrivate": "imprint-path-private",
+  "Verity.Assumptions.TrustedDevice": "trusted-device",
+  "Verity.Assumptions.VerifierReadsLog": "honest-verifier",
+  "Verity.Assumptions.ZkServerOwnUser": "zk-server-own-user",
+  "WeightSecurity.Assumptions.FaultedUseHard": "faulted-use-hard"
  },
  "four_names_except": {
   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; `check.py --lift` lifts it"

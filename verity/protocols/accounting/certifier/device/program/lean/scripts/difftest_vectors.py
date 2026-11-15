@@ -1,15 +1,16 @@
-"""The difftest's data: random instances, and the Python audit's results on each, for `NetTimingDifftest.lean`.
+"""The difftest's data: random instances, and the Python audit's results on each, for `NetworkCertifier/Difftest.lean`.
 
     python scripts/difftest_vectors.py <verity checkout> --out DIR [--count N]
 
-Writes `DIR/difftest/instances.jsonl`, one instance per line as `NetTiming.Difftest.rawOfJson` reads it, and
+Writes `DIR/difftest/instances.jsonl`, one instance per line as `NetworkCertifier.Difftest.rawOfJson` reads it, and
 `DIR/difftest/python.jsonl`, the same line's results from the checkout's `verity.protocols.accounting.certifier.verifier`:
 `schedule.expected_grids` of each egress link (`rows`), `Audit.check_link`'s verdicts (`verdicts`) and the first bucket
 of each recorded window whose row differs from the expected one (`diff`), `Audit.check_ingress_link`'s verdict for
 every boundary execution phase (`status`), and whether the audit accepts every execution phase of the first `m` windows
-(`accepted`) and every status there (`complete`), for `m = 0 … W`. The Lean audit runs `NetTimingDifftest.lean` on
-both files (`runs` in `lean-audit.json`, which pins their SHA-256), and `verity/protocols/accounting/certifier/verifier/tests/
-test_network_certifier_lean_difftest.py` checks that this script still writes them.
+(`accepted`) and every status there (`complete`), for `m = 0 … W`. The Lean audit runs
+`NetworkCertifier/DifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256), and
+`verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_lean_difftest.py` checks that this script
+still writes them.
 
 An instance has one to three egress links and up to two ingress links, varied `T`, `W`, allocation, `Σ_sync` (δ, and ρ
 fractional or not), anchors (some past the horizon) and indices, sessions out of anchor order, bursts beyond the

@@ -13,7 +13,7 @@ boundary links (`Site.Boundary`). At a small onsite site (`Registration.Witness`
 * `RegistrationSound_nontrivial`: the view of a log whose device names no sheet fails the registered facts, so the
   conclusion fails for a check that accepts every log.
 
-The proofs are in `Security/Proofs/Accounting/Registration/Sound.lean`.
+Neither is proved: at the present Site the witness log fails the check.
 -/
 
 @[expose] public section

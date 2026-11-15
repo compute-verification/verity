@@ -93,7 +93,8 @@ def beBytes (w n : Nat) : ByteArray :=
 def beAt (b : ByteArray) (i w : Nat) : Nat :=
   (List.range w).foldl (fun a k => a * 256 + (b.data.getD (i + k) 0).toNat) 0
 
-/-- The reference's `cell`: the cell's `B` bytes (`active.encode_frame`), its header, its payload, then zero fill. -/
+/-- The reference's `cell`: the cell's `B` bytes (`link_frame.encode_frame`), its header, its payload, then zero
+fill. -/
 def Cell.encode (B : Nat) (c : Cell) : ByteArray :=
   ⟨#[c.kind.code.toUInt8]⟩ ++ beBytes 4 c.conn ++ beBytes 4 c.payload.size ++ c.payload ++
     ⟨Array.replicate (B - headerBytes - c.payload.size) 0⟩

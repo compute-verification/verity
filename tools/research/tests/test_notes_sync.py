@@ -1248,6 +1248,51 @@ def test_a_cursor_agent_whose_mint_fails_sends_nothing_and_says_the_mint_failed(
     assert len(asked) == 2 and broker["waits"] == [NS.MINT_WAIT_S] and broker["seen"] == [] and "dummy-old" not in str(rep)
 
 
+IDENTITY_429 = ("the Cursor identity service is unavailable (HTTP 429): this VM asked Cursor for too many identity tokens at once, "
+                "which clears in seconds")
+
+
+@pytest.mark.parametrize("given", [{}, {NS.SOURCE_ENV: "broker", NS.EXPIRES_ENV: f"{BROKER_NOW - 1:.0f}"}],
+                         ids=["injected", "an-expired-brokers"])
+def test_a_cursor_agent_whose_mint_fails_never_sends_the_token_its_shell_holds_and_says_the_mint_failed(
+        cloud_vm, identity, broker, monkeypatch, capsys, given):
+    """A VM started before its injected notes token was removed still holds it, expired, and a shell may hold an expired token
+    an earlier mint exported: sent while the mint fails, GitHub's `Invalid username or token` was all the sync said, and why the
+    mint failed was only a line above it.  Neither is sent: the sync says the mint failed, as with no variable."""
+    _, a, _ = cloud_vm
+    for k, v in {NS.TOKEN_ENV: TOKEN, **given}.items():
+        monkeypatch.setenv(k, v)
+    asked = _identity_refuses(monkeypatch, 99)
+    refused = _github_refuses(monkeypatch, "fetch", 401, token=TOKEN)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"], rep["attempts"]) == (1, False, 1) and rep["commit"], rep
+    assert rep["error"].startswith(f"git fetch origin failed: {NS.MINT_FAILED} ({IDENTITY_429}), so nothing was sent"), rep["error"]
+    assert refused == [] and len(asked) == 2 and broker["seen"] == [], "the token the shell holds is never sent"
+    assert capsys.readouterr().err == "" and TOKEN not in str(rep)
+    assert NS.token_source() == (None, f"git's own: there is no notes token ({IDENTITY_429}, and {NS.TOKEN_ENV} is set but not "
+                                       "used: a Cursor agent sends only the broker's)")
+
+
+def test_a_refused_brokers_token_this_process_only_inherited_names_the_mint_when_none_replaces_it(cloud_vm, identity, broker,
+                                                                                                   monkeypatch):
+    """A token a parent's mint exported is the broker's by its labels, but no mint here worked: when GitHub refuses it and the
+    fresh mint gives none, the failure names the mint, not the helper of a mint that 'worked'."""
+    _, a, _ = cloud_vm
+    for k, v in {NS.TOKEN_ENV: TOKEN, NS.SOURCE_ENV: "broker", NS.EXPIRES_ENV: f"{BROKER_NOW + 3000:.0f}"}.items():
+        monkeypatch.setenv(k, v)
+    asked = _identity_refuses(monkeypatch, 99)
+    refused = _github_refuses(monkeypatch, "fetch", 401, token=TOKEN)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["attempts"]) == (1, 1) and rep["error"].startswith("git fetch origin failed: remote: Invalid username"), rep
+    assert (len(refused), len(asked), broker["waits"]) == (1, 2, [NS.MINT_WAIT_S] * 2), "sent once, then one fresh mint, asked twice"
+    assert rep["error"].endswith(f" -> {NS.MINT_FAILED} ({IDENTITY_429}): GitHub refused the broker's token this process was given "
+                                 f"({NS.SOURCE_ENV}=broker in its environment, minted elsewhere), and nothing minted one to replace "
+                                 "it; sync again in a minute, and `research doctor` checks the mint"), rep["error"]
+    assert "the mint worked" not in rep["error"] and TOKEN not in str(rep)
+
+
 def test_the_rewrite_git_uses_is_the_first_of_equally_long_rules_and_its_credential_is_masked(tmp_path, monkeypatch):
     """What `rewrite` says is what git does: of rules with one prefix, the first, the oldest on a VM that adds one a refresh."""
     repo = tmp_path / "r"

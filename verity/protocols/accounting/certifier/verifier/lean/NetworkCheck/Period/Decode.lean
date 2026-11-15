@@ -11,7 +11,6 @@ public import InferenceOnlyCheck.Desc
 public import InferenceOnlyCheck.DefinitionDigest
 public import NetworkCheck.Period.ConnectionRows
 public import NetworkCheck.Period.Start
-public import Spot.Record
 meta import NetworkCheck.Check
 meta import NetworkCheck.Clocks
 meta import NetworkCheck.ScanOk
@@ -23,7 +22,6 @@ meta import InferenceOnlyCheck.Desc
 meta import InferenceOnlyCheck.DefinitionDigest
 meta import NetworkCheck.Period.ConnectionRows
 meta import NetworkCheck.Period.Start
-meta import Spot.Record
 
 /-! The period check's structures and their decoding, which `NetworkCheck.Period` reads: its parameters, commitment,
 evidence, facts and public, and the decoding of each from its JSON. The check and its bound are in
@@ -64,7 +62,7 @@ of another form has a digest no schedule here has. -/
 def egressForm : String := "id"
 /-- A cell's header: its kind u8, its connection's ordinal u32 and its payload's length u32. -/
 def cellHeader : Nat := 9
-/-- The byte of an id request past its `max_tokens` field (`active.MAX_TOKENS_AT + ID_DIGITS`): under a response cap a
+/-- The byte of an id request past its `max_tokens` field (`id_form.MAX_TOKENS_AT + ID_DIGITS`): under a response cap a
 cell's payload holds at least this much, so the network certifier reads the field off the request's first cell. -/
 def maxTokensEnd : Nat := 130
 
@@ -155,10 +153,10 @@ def Schedule.rowsCells (s : Schedule) (windows : Nat) : Array Nat :=
   Array.replicate (s.lanes * (windows * s.window)) s.egressCells
 
 /-- **The rows form's frames read back** (`NetTiming.RowsFormat.Wf` at the network certifier's frames,
-`active.encode_frame`: kind u8, ordinal u32, payload length u32, payload, zero fill): a cell's `B` bytes are under 2^32,
-so its payload's length is a u32, and the `lanes · windows · window` connections of a period of `windows` of a link's
-execution phases, the k-th at ordinal k + 1 (0 is a refusal's), have distinct u32 ordinals, so no two frames encode
-alike. -/
+`link_frame.encode_frame`: kind u8, ordinal u32, payload length u32, payload, zero fill): a cell's `B` bytes are under
+2^32, so its payload's length is a u32, and the `lanes · windows · window` connections of a period of `windows` of a
+link's execution phases, the k-th at ordinal k + 1 (0 is a refusal's), have distinct u32 ordinals, so no two frames
+encode alike. -/
 def rowsWf (s : Schedule) (windows : Nat) : Bool :=
   s.cellBytes < 2 ^ 32 && s.lanes * (windows * s.window) < 2 ^ 32
 

@@ -4597,6 +4597,27 @@
       "paths": {
         "verity/protocols/proofs/spot/device/tests/test_two_stage_verdicts.py": "benchmarks/one_stage/tests/test_two_stage_verdicts.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/device/leak_guard.py": "benchmarks/network_traces/leak_guard.py",
+        "verity/protocols/accounting/certifier/device/leak_guard.json": "benchmarks/network_traces/leak_guard.json",
+        "verity/protocols/accounting/certifier/device/tests/test_leak_guard.py": "benchmarks/network_traces/tests/test_leak_guard.py",
+        "verity/protocols/accounting/certifier/device/tests/gate_runs.py": "benchmarks/network_traces/tests/gate_runs.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/device/released_keys.py": "verity/protocols/accounting/certifier/prover/released_keys.py",
+        "verity/protocols/accounting/certifier/device/released_keys.json": "verity/protocols/accounting/certifier/prover/released_keys.json",
+        "verity/protocols/accounting/certifier/device/tests/test_released_keys.py": "verity/protocols/accounting/certifier/prover/tests/test_released_keys.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/device/tests/test_network_certifier_serve.py": "verity/protocols/accounting/certifier/prover/tests/test_network_certifier_serve.py",
+        "verity/protocols/accounting/certifier/device/tests/verdict_records.py": "verity/protocols/accounting/certifier/prover/tests/verdict_records.py"
+      }
     }
   ]
 }

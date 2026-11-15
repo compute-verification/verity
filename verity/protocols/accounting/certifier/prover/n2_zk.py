@@ -3,10 +3,14 @@ run: each execution phase committed, registered on the link's own stream (`servi
 system's `Stream`), selected (Selection All: its one proof block, no coins), its proof block (`NetworkTransferBlocks_v5`,
 both ends' head checks on their pinned gate ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and
 decided by `TransferBlocks.outcome`: the verifier's own Lean `verify --zk` of the proof, the proof's public row opened to
-the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
-comparison to each verdict, which decides nothing and goes to ``--witness``, the public summary keeping the flag alone.
+the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear`, a run by hand's,
+adds the in-the-clear comparison to each verdict, which decides nothing and goes to ``--witness`` alone (it needs one),
+the public summary keeping the flag and the outcome the verifier receives carrying none of it.
 The public summary (``summary.json``) holds only the keys its list of released_keys.json declares; the run's path,
 the device, timings and memory, the references' failed parts and the scan's finds go to ``--witness``.
+The printed log is the summary's split too (`log`, `wlog`, `sides`): stdout carries only public lines, a failure as its
+name alone; the process's stdout and stderr, which every child it starts inherits, its tracebacks and failures' text and
+the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness`` nowhere.
 
     python benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
       [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K] [--witness FILE]
@@ -54,13 +58,16 @@ the device, timings and memory, the references' failed parts and the scan's find
 from __future__ import annotations
 
 import argparse
+import contextlib
 import functools
 import gc
 import hashlib
 import json
 import os
 import socket
+import sys
 import time
+import traceback
 from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
@@ -84,21 +91,54 @@ ROUNDS = ("honest", "tampered")
 #: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
 ONE_SESSION = "outer proofs go through the ZK server one at a time (AGENTS.md, 'Live coins only')"
 #: what the verifier receives per execution phase, by file (`member`)
-RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
+RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's sample",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
             "pub-1.bin": "the statement's public file", "session-*": "the session's files",
             "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record"}
 
 
+#: where `log` writes inside `sides`: the stdout the process had, which the chain releases as ``n2.log``
+PUBLIC = None
+
+
 def log(msg: str) -> None:
-    print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+    print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", file=PUBLIC or sys.stdout, flush=True)
+
+
+@contextlib.contextmanager
+def sides(witness: Path | None):
+    """The process's stdout and stderr, which every child it starts inherits and where a traceback, a stray print or a
+    child's message lands, sent to ``n2.log`` beside ``witness``, or to nowhere without one; `log` writes to the
+    stdout the process had."""
+    global PUBLIC
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if witness is not None:
+        witness.parent.mkdir(parents=True, exist_ok=True)
+    sink = os.open(witness.with_name("n2.log") if witness is not None else os.devnull,
+                   os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    saved, streams = (os.dup(1), os.dup(2)), (sys.stdout, sys.stderr)
+    PUBLIC = os.fdopen(os.dup(1), "w", buffering=1)
+    os.dup2(sink, 1)
+    os.dup2(sink, 2)
+    sys.stdout = sys.stderr = os.fdopen(sink, "w", buffering=1)
+    try:
+        yield
+    finally:
+        sys.stdout.close()
+        sys.stdout, sys.stderr = streams
+        PUBLIC.close()
+        PUBLIC = None
+        for fd, kept in zip((1, 2), saved):
+            os.dup2(kept, fd)
+            os.close(kept)
 
 
 def wlog(a, msg: str) -> None:
-    """A line of what the public summary leaves out: appended to ``n2.log`` beside ``--witness``, or printed when
-    there is no witness side (a run by hand, which releases nothing)."""
+    """A line of what the public summary leaves out: appended to ``n2.log`` beside ``--witness``, and dropped without
+    one."""
     if a.witness is None:
-        return log(msg)
+        return
     a.witness.parent.mkdir(parents=True, exist_ok=True)
     with open(a.witness.with_name("n2.log"), "a") as f:
         f.write(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}\n")
@@ -111,7 +151,7 @@ def plog(a, msg: str) -> None:
 
 
 def _no_coins(n: int) -> bytes:
-    raise AssertionError("Selection All draws every execution phase and reads no coins")
+    raise AssertionError("Selection All samples every execution phase and reads no coins")
 
 
 #: the verifier's own Lean runs (`proofs.verify`'s findings and refusal), by the proof's public file, so each
@@ -130,6 +170,17 @@ def _record_lean_runs(PF) -> None:
     if not hasattr(verify, "recorded"):
         recorded.recorded = True
         PF.verify = recorded
+
+
+def _without_clear(body: dict) -> dict:
+    """The outcome record as the verifier receives it: without `--debug-clear`'s in-the-clear check, which is witness
+    (the window's ``clear``)."""
+    verdict = ((body.get("audit") or {}).get("verdicts") or {}).get(SVC.VERIFIER) or {}
+    if "clear" not in verdict:
+        return body
+    body = json.loads(json.dumps(body, default=str))
+    del body["audit"]["verdicts"][SVC.VERIFIER]["clear"]
+    return body
 
 
 # --- the run's execution phases ---------------------------------------------------------------------------------------
@@ -357,11 +408,11 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def other_subset(drawn: dict) -> list[int]:
+def other_subset(sampled: dict) -> list[int]:
     """A K-subset of the period's windows that isn't the sample's: the first K the sample didn't hold, then sampled ones
     from the start where it left fewer than K (none other at K = n)."""
-    held = set(drawn["units"])
-    return sorted(([w for w in range(drawn["population"]) if w not in held] + drawn["units"])[:drawn["k"]])
+    held = set(sampled["units"])
+    return sorted(([w for w in range(sampled["population"]) if w not in held] + sampled["units"])[:sampled["k"]])
 
 
 def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
@@ -390,39 +441,39 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
-    drawn, windows, segment = None, rd.windows, None
+    sampled, windows, segment = None, rd.windows, None
     if k is not None:
         try:
-            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins)
+            sampled = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins)
         finally:
             if callable(getattr(coins, "drawn", None)):
                 segment = coins.drawn()
-        plog(a, f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) on "
-             f"{len(drawn['read']) // 2} coin bytes after the period's commitment {drawn['commitment'][:16]}")
+        plog(a, f"{name}: sampled windows {sampled['units']} ({sampled['k']} of {sampled['population']}) on "
+             f"{len(sampled['read']) // 2} coin bytes after the period's commitment {sampled['commitment'][:16]}")
         if forge is not None:
-            drawn = {**drawn, "units": forge(drawn)}
-            plog(a, f"{name}: the prover proves windows {drawn['units']} instead")
-        (vdir / "period.json").write_text(json.dumps(drawn, indent=1, sort_keys=True))
-        windows = [rd.windows[u] for u in drawn["units"]]
+            sampled = {**sampled, "units": forge(sampled)}
+            plog(a, f"{name}: the prover proves windows {sampled['units']} instead")
+        (vdir / "period.json").write_text(json.dumps(sampled, indent=1, sort_keys=True))
+        windows = [rd.windows[u] for u in sampled["units"]]
     previous, rows = None, []
     for j, x in enumerate(windows):
         wdir, pre = out / f"w{x.window:03d}", f"w{x.window:03d}-"
-        reg = lw.register(stream, lw.registration(x.opening, previous), drawn)
+        reg = lw.register(stream, lw.registration(x.opening, previous), sampled)
         previous = reg.digest
         if reg.record["roots"][0]["root"] != x.root.hex():
             raise SystemExit(f"{name} window {x.window}: the registered root is not the statement's")
-        draw = stream.select(reg)
-        if list(draw.units) != [0]:
-            raise SystemExit(f"{name} window {x.window}: the stream drew {list(draw.units)}, not the one unit")
+        sample = stream.select(reg)
+        if list(sample.units) != [0]:
+            raise SystemExit(f"{name} window {x.window}: the stream sampled {list(sample.units)}, not the one unit")
         sdir = wdir / "session"
         m = {"dir": x.statement.dir, "n": 1, "pin": sg.st.pin}
         record, live, proc = M.a8.session(av, m, sdir, [0], port + j if port else _free_port(), env=env)
         sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
         delivered = SVC.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / "pub-1.bin", sessions), x.statement.salts,
                                   x.statement.output)
-        late = stream.deliver(draw, delivered.sessions())
+        late = stream.deliver(sample, delivered.sessions())
         t = time.time()
-        outcome = late or lw.outcome(stream, draw, x.certificates, rd.syncs, delivered,
+        outcome = late or lw.outcome(stream, sample, x.certificates, rd.syncs, delivered,
                                      circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
@@ -434,9 +485,9 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                  and all(list(f.units) == [0] for f in findings),
                  "opened_word": None if args is None else SVC._opened(delivered, 0, lw.row(args, "pub"), lw.bits("pub")),
                  "certified": lw.certified(x.window, x.certificates)}
-        files = {"registration.json": reg.record, "draw.json": dict(draw.draw),
+        files = {"registration.json": reg.record, "draw.json": dict(sample.draw),
                  "certificates.json": [_certificate(c) for c in x.certificates],
-                 "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": body,
+                 "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": _without_clear(body),
                  "delivered.json": {"salts": {r: s.hex() for r, s in x.statement.salts.items()},
                                     "output": x.statement.output}}
         for f, v in files.items():
@@ -465,13 +516,13 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
              f"{proof['opened_word']}; {'as expected' if row['as_expected'] else 'UNEXPECTED'}")
         wlog(a, f"{name} window {x.window}: prove {row['prove']['session_s']} s (prove_total "
              f"{row['prove']['prove_total_s']} s, {row['prove']['proof_bytes']} B), verify {verify_s} s")
-    network = lw.network_verdict(stream, rd.plan["windows"], drawn)
-    if drawn is not None:
+    network = lw.network_verdict(stream, rd.plan["windows"], sampled)
+    if sampled is not None:
         sel = network["selection"]
-        plog(a, f"{name}: the draw of record ({sel['by']}) is windows {sel['units']}; proved "
+        plog(a, f"{name}: the sample of record ({sel['by']}) is windows {sel['units']}; proved "
              f"{[r['window'] for r in rows]}; " + (f"REFUSED by name: {network['why']}" if network["why"] else
-                                                    "the windows proved are the draw of record's"))
-    return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn}),
+                                                    "the windows proved are the sample of record's"))
+    return {"windows": rows, "network": network, **({} if sampled is None else {"period": sampled}),
             **({} if segment is None else {"segment": segment})}
 
 
@@ -545,7 +596,7 @@ def prove(a) -> int:
     members["tampered"].every = bool(a.draw)
     n = len(members["honest"].windows)
     if a.draw and not 1 <= a.draw <= n:
-        raise SystemExit(f"--draw {a.draw}: a period draw takes 1 to {n} of the link's {n} windows")
+        raise SystemExit(f"--draw {a.draw}: a period sample takes 1 to {n} of the link's {n} windows")
     if a.draw and a.draw < n:
         members[OTHER] = phases(run)
     summary["draw"] = ({"selection": "all", "k": n, "population": n, "coins": None} if not a.draw else {
@@ -624,7 +675,7 @@ def prove(a) -> int:
                 "audit": {"accepted": net["accepted"], "wrong_units": wu},
                 "charge": {"delta": wu["delta"], "wrong_units": wu, "epsilon": wu["epsilon"]} if net["accepted"]
                 else None}
-            plog(a, f"member {name}: the draw of record ({sel['by']}) {sel['units']}, {sel['k']} of "
+            plog(a, f"member {name}: the sample of record ({sel['by']}) {sel['units']}, {sel['k']} of "
                  f"{sel['population']}: at most {wu['bound']} wrong, epsilon {wu['epsilon']:.4f} at delta "
                  f"{wu['delta']:.3g}" + (f"; refused by name {sorted(net['why'])}" if net["why"] else ""))
         plog(a, f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
@@ -661,7 +712,7 @@ def main(argv=None) -> int:
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
     p.add_argument("--draw", type=int, default=0,
-                   help="K: each member's period sampled, K of its windows drawn on the verifier's coins after every "
+                   help="K: each member's period sampled, K of its windows sampled on the verifier's coins after every "
                         "window's root is committed, and only those proved (TransferBlocks.period_draw); tampered then "
                         "changes every window, and other_subset proves another K-subset; 0 (the default): every window")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
@@ -673,7 +724,22 @@ def main(argv=None) -> int:
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
-    return prove(a)
+    if a.debug_clear and a.witness is None:
+        raise SystemExit("--debug-clear writes the in-the-clear check to the witness side alone: it needs --witness")
+    if a.witness is not None and Path(a.out).resolve() in a.witness.resolve().parents:
+        raise SystemExit("--witness is under --out, which the chain releases: put it on the private side")
+    with sides(a.witness):
+        if a.witness is None:
+            log("no --witness asked for: what the public summary leaves out is not written (witness lines, stderr and "
+                "every child's output)")
+        try:
+            return prove(a)
+        except BaseException as e:  # noqa: BLE001 - any failure's text, an interrupt's too, stays off stdout
+            if isinstance(e, SystemExit) and e.code in (0, None):
+                return 0
+            traceback.print_exc()
+            log(f"failed: {type(e).__name__}")
+            return e.code if isinstance(e, SystemExit) and isinstance(e.code, int) else 1
 
 
 if __name__ == "__main__":

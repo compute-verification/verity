@@ -526,18 +526,18 @@ class IngressTie:
         return all(HC.pinned(g) for g in self.gates()) and bool(findings) \
             and all(f.accepted and f.program == want for f in findings)
 
-    def clear(self, cells: WR.Cells, draw: S.Draw, advice: Any, releases: Sequence[Q.Release]) -> dict[str, Any]:
+    def clear(self, cells: WR.Cells, sample: S.Draw, advice: Any, releases: Sequence[Q.Release]) -> dict[str, Any]:
         """The in-the-clear check on the network certifier's opening of the rows, the witness: the debug comparison
         `verify` makes on request, never a verdict of record. Accepted when the opening reproduces the registered root
         and IoTieRequest's reference accepts every row on the verifier's lanes from `advice` and `releases`."""
-        reg = draw.docket.record
+        reg = sample.docket.record
         root, w = reg["roots"][0]["root"], reg["window"]["window"]
         lanes = self.lanes(advice, releases, w)
         accepted = cells.window == w and cells.root.hex() == root and lanes is not None and \
             all(self.outputs(r, ln) == 1 for r, ln in zip(cells.rows, lanes))
         return {"of_record": False, "accepted": accepted}
 
-    def verify(self, draw: S.Draw, delivered: Delivered, *, circuit_sha512: str, advice: Any,
+    def verify(self, sample: S.Draw, delivered: Delivered, *, circuit_sha512: str, advice: Any,
                releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> dict[str, Any]:
         """The verdict of record on the window's delivered proof, from public inputs and the proof alone: accepted when
         the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
@@ -549,7 +549,7 @@ class IngressTie:
         `advice`'s digest (`digest`), None without an `LinkAdvice`. A head that isn't the registered
         root's refuses. `opening` (the witness) is for a debug comparison only: given, the verdict also carries
         `clear`'s accept bit, which decides nothing."""
-        reg = draw.docket.record
+        reg = sample.docket.record
         w, root = reg["window"]["window"], reg["roots"][0]
         try:
             self._held(head)
@@ -562,33 +562,33 @@ class IngressTie:
         if reads is not None:
             findings, refused = PF.verify(delivered.proof, circuit_sha512=circuit_sha512, program=self.program,
                                           partition=self._partition, registered=reads)
-            units = list(draw.units)
+            units = list(sample.units)
             proved = refused is None and self.proved(findings) and all(list(f.units) == units for f in findings)
             accepted = proved and len(units) == self.T and all(
                 _opened(delivered, u, self.row(self.public_arguments(lanes[u]), "pub"), self.bits("pub")) == 1
                 for u in units)
         public = {"verdict": int(accepted), "advice": digest(advice) if type(advice) is LinkAdvice else None}
         sessions = delivered.sessions()
-        bound = _sha512({"format": VERDICT, "registration": draw.docket.digest, "sessions": sessions,
+        bound = _sha512({"format": VERDICT, "registration": sample.docket.digest, "sessions": sessions,
                          "accepted": accepted, "public": public})
         verdict = {"of_record": True, "decided_by": "proof", "accepted": accepted, "digest": bound,
                    "sessions": sessions, "public": public}
         if opening is not None:
-            verdict["clear"] = {"accepted": self.clear(opening, draw, advice, releases)["accepted"]}
+            verdict["clear"] = {"accepted": self.clear(opening, sample, advice, releases)["accepted"]}
         return verdict
 
-    def statement(self, draw: S.Draw) -> dict[str, Any]:
-        reg = draw.docket.record
+    def statement(self, sample: S.Draw) -> dict[str, Any]:
+        reg = sample.docket.record
         return {"format": STATEMENT, "check": self.spec.check.program, "link": self.link,
                 "window": reg["window"]["window"], "root": reg["roots"][0]["root"]}
 
-    def outcome(self, stream: S.Stream, draw: S.Draw, delivered: Delivered, *, circuit_sha512: str, advice: Any,
+    def outcome(self, stream: S.Stream, sample: S.Draw, delivered: Delivered, *, circuit_sha512: str, advice: Any,
                 releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> S.Outcome:
         """`stream.outcome` on the verifier's verdict (`verify`), with the registered root as the session's."""
-        verdict = self.verify(draw, delivered, circuit_sha512=circuit_sha512, advice=advice, releases=releases,
+        verdict = self.verify(sample, delivered, circuit_sha512=circuit_sha512, advice=advice, releases=releases,
                               head=head, opening=opening)
-        return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
-                              session_roots={VALUE: draw.docket.record["roots"][0]["root"]})
+        return stream.outcome(sample, {VERIFIER: verdict}, self.statement(sample),
+                              session_roots={VALUE: sample.docket.record["roots"][0]["root"]})
 
     def tie(self, stream: S.Stream, advice: LinkAdvice, profile: AdvisedProfile,
             releases: Sequence[Q.Release]) -> IoTieVerdict:

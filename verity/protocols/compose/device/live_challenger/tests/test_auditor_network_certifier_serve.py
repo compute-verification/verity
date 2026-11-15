@@ -15,7 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.device import released_keys as RK, network_certifier_serve as ws
+from verity.protocols.accounting.certifier.prover import released_keys as RK
+from verity.protocols.accounting.certifier.device import network_certifier_serve as ws
 from verity.protocols.accounting.certifier.device.tests.relay_runs import _response, _run, _session_argv
 from verity.protocols.accounting.certifier.prover import scan_zk as sz
 from verity.protocols.accounting.certifier.verifier import load_check as LK, relay_check as RC, network_certifier_rows as WR

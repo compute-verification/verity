@@ -26,12 +26,12 @@ path: `research msg owners PATH`.
 |---|---|
 | `Accounting` | The device model every resource audit is about, and a joint audit's run on it |
 | `Assumptions` | The named assumptions: the few `Prop`s the guarantees take without proof |
+| `Certifier` | The network certifier's protocol: grids, the interaction, the Program |
 | `Claims` | Flock's claim statements, over Core's interaction model |
 | `Core` | The model every area states its guarantees in: circuits, partitions, coins |
 | `Flock` | The vocabulary Flock's guarantees are stated in, extracted from `Proofs/Flock` |
 | `Hash` | Messages, digests and collisions; frame-v3 trees; the served row leaf; the keyed leaf |
 | `InferenceOnly` | The inference-only policy: `Complies c k`, `CompliesRate c α` |
-| `NetworkCertifier` | The network certifier's protocol: grids, the interaction, the Program |
 | `Pous` | PoUS: its game, its models and the requirement `Pous.Meets` |
 | `Pouw` | PoUW's protocol: the definitions its statements read |
 | `Spot` | Populations: units over committed value slots, their dataflow, cones and egress |

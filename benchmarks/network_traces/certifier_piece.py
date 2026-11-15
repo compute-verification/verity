@@ -757,7 +757,7 @@ def captured(argv: list[str], **kw) -> subprocess.CompletedProcess:
         return subprocess.CompletedProcess(argv, rc, out.read(), err.read())
 
 
-def run_chain(keep: Path, run: str, endpoint: Path, eos: str, draw: int | None, sets: list[str],
+def run_chain(keep: Path, run: str, endpoint: Path, eos: str, sample: int | None, sets: list[str],
               cmd: str | None = None) -> int:
     """`served_session.py chain` on the kept run (or ``cmd``, run as ``bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...``),
     its run dir (RESEARCH_RUN_DIR, whose out/ holds the report) and quarantine private under KEEP/RUN."""
@@ -766,7 +766,7 @@ def run_chain(keep: Path, run: str, endpoint: Path, eos: str, draw: int | None, 
     (d / "chain").mkdir(mode=0o700, exist_ok=True)
     argv = ["bash", "-c", cmd, "_", str(keep), run, str(endpoint), *sets] if cmd else [
         sys.executable, str(HERE / "served_session.py"), "chain", "--run", run, "--keep", str(keep),
-        "--endpoint", str(endpoint), "--eos-ids", eos, *(["--draw", str(draw)] if draw else []), *sets]
+        "--endpoint", str(endpoint), "--eos-ids", eos, *(["--draw", str(sample)] if sample else []), *sets]
     with open(d / "chain" / "stdout.log", "w") as log:
         return run_group(argv, cwd=TREE, env=env, stdout=log, stderr=subprocess.STDOUT)
 
@@ -953,7 +953,7 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
     `PIECE_FILES`, which releases the hold to DIR once it passes (0 when nothing was found, 3 when a find, a file
     holding a piece of the witness or of another path, was moved to the quarantine)."""
     quarantine.mkdir(mode=0o700, parents=True, exist_ok=True)
-    got = captured([sys.executable, "-m", "verity.protocols.accounting.certifier.device.leak_guard", str(d), str(quarantine),
+    got = captured([sys.executable, "-m", "benchmarks.network_traces.leak_guard", str(d), str(quarantine),
                     *(["--gates", str(unpacked)] if unpacked is not None else []), "--hold", str(hold),
                     "--release-to", str(d), *(x for f in PIECE_FILES for x in ("--public", f)),
                     "--report", str(quarantine / "piece-guard.json")])
