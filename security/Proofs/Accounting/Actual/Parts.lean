@@ -18,7 +18,7 @@ limit (`RecordsWithin`), the joint record is within the limits' sum, and the lim
   `2 ^ ∑ K` values (`seen_record_single_Ico`, `encard_le_two_pow_sum`).
 * `leak_le_sum_K`: `B4` with the joint record's count replaced by `2 ^ ∑ K`.
 * `leak_le_sum_K_sinks`, `leak_le_sum_K_sealed`: a location with sinks. An uncovered link across the boundary of
-  `X ∪ sink` is one of `X`'s or one of the sinks' (`uncertifiedCapacity_union_le`), and sealed sinks have none.
+  `X ∪ sink` is one of `X`'s or one of the sinks' (`uncertifiedLinkCapacity_union_le`), and sealed sinks have none.
 * `LeakParts`: a memory challenger is a sealed sink or a trusted device, the guarantee.
 -/
 
@@ -103,7 +103,7 @@ theorem leak_le_sum_K {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (
     (hK : RecordsWithin S cert record a b K) :
     (Set.range fun r => (S r).acts (X ∪ cert)ᶜ (Set.Ico a b)).encard ≤
       ((2 ^ ((∑ y ∈ cert, K y) + jitter * ((Finset.Ico a b).image bucket).card * cert.card +
-        uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞) := by
+        uncertifiedLinkCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞) := by
   refine (SecurityProofs.B4 S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec).trans ?_
   refine (mul_le_mul' (records_encard_le S cert record a b K hK) le_rfl).trans_eq ?_
   rw [← Nat.cast_mul, ← pow_add, Nat.add_assoc]
@@ -114,13 +114,13 @@ variable {L E : Type*} [Fintype E]
 
 /-- **The uncovered links of a location with sinks**: an uncovered link across the boundary of `X ∪ Y`, for `X` and
 `Y` apart, is an uncovered link of `X` that ends at no place of `Y`, or one of `Y` that ends at no place of `X`. -/
-theorem uncertifiedCapacity_union_le [DecidableEq L] (ends : E → L × L) (β : E → ℕ) (cert X Y : Finset L)
+theorem uncertifiedLinkCapacity_union_le [DecidableEq L] (ends : E → L × L) (β : E → ℕ) (cert X Y : Finset L)
     (hXY : Disjoint X Y) :
-    uncertifiedCapacity ends β cert (X ∪ Y) ≤
-      uncertifiedCapacity ends β (cert ∪ Y) X + uncertifiedCapacity ends β (cert ∪ X) Y := by
+    uncertifiedLinkCapacity ends β cert (X ∪ Y) ≤
+      uncertifiedLinkCapacity ends β (cert ∪ Y) X + uncertifiedLinkCapacity ends β (cert ∪ X) Y := by
   classical
   have hd : ∀ z, z ∈ X → z ∉ Y := fun z h => Finset.disjoint_left.1 hXY h
-  unfold uncertifiedCapacity
+  unfold uncertifiedLinkCapacity
   refine le_trans ?_ (Nat.le.intro Finset.sum_union_inter)
   refine Finset.sum_le_sum_of_subset ?_
   intro e he
@@ -145,12 +145,12 @@ theorem leak_le_sum_K_sinks {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintyp
     (hsec : Secrets S cert (X ∪ sink) a) (hK : RecordsWithin S cert record a b K) :
     (Set.range fun r => (S r).acts (X ∪ sink ∪ cert)ᶜ (Set.Ico a b)).encard ≤
       ((2 ^ ((∑ y ∈ cert, K y) + jitter * ((Finset.Ico a b).image bucket).card * cert.card +
-        (uncertifiedCapacity ends β (cert ∪ sink) X + uncertifiedCapacity ends β (cert ∪ X) sink) * (b - a)) : ℕ) :
+        (uncertifiedLinkCapacity ends β (cert ∪ sink) X + uncertifiedLinkCapacity ends β (cert ∪ X) sink) * (b - a)) : ℕ) :
           ℕ∞) := by
   refine (leak_le_sum_K S ℓ ends β link 𝒱 cert (X ∪ sink) spec record bucket jitter a b K hcs hdl hT hsec
     hK).trans ?_
   exact Nat.mono_cast (Nat.pow_le_pow_right Nat.two_pos (Nat.add_le_add_left
-    (Nat.mul_le_mul_right _ (uncertifiedCapacity_union_le ends β cert X sink hXs)) _))
+    (Nat.mul_le_mul_right _ (uncertifiedLinkCapacity_union_le ends β cert X sink hXs)) _))
 
 /-- **A location with sealed sinks** (`Covered` at the sinks, with the devices and `X` as what covers them): the
 sinks' own term drops, and what is left of `β°` is the capacity of the links across `X`'s boundary with neither a
@@ -164,9 +164,9 @@ theorem leak_le_sum_K_sealed {L E Ω : Type*} [LinearOrder L] [Fintype L] [Finty
     (hK : RecordsWithin S cert record a b K) :
     (Set.range fun r => (S r).acts (X ∪ sink ∪ cert)ᶜ (Set.Ico a b)).encard ≤
       ((2 ^ ((∑ y ∈ cert, K y) + jitter * ((Finset.Ico a b).image bucket).card * cert.card +
-        uncertifiedCapacity ends β (cert ∪ sink) X * (b - a)) : ℕ) : ℕ∞) := by
+        uncertifiedLinkCapacity ends β (cert ∪ sink) X * (b - a)) : ℕ) : ℕ∞) := by
   have h := leak_le_sum_K_sinks S ℓ ends β link 𝒱 cert X sink spec record bucket jitter a b K hcs hdl hT hXs hsec hK
-  rw [show uncertifiedCapacity ends β (cert ∪ X) sink = 0 from hseal, Nat.add_zero] at h
+  rw [show uncertifiedLinkCapacity ends β (cert ∪ X) sink = 0 from hseal, Nat.add_zero] at h
   exact h
 
 end Accounting
