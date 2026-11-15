@@ -356,6 +356,10 @@ paths = [
     "verity/protocols/compose/verifier",
 ]
 trusted = true
+loaded_by = [
+    "verity/protocols/resource_accounting/network/prover/tests/attester_runs.py",
+    "verity/protocols/resource_accounting/network/prover/tests/test_wipe_egress.py",
+]
 
 [[place]]
 paths = [
@@ -841,6 +845,8 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_run.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_store.py",
     "verity/protocols/resource_accounting/memory/pous/tests/test_weight_store.py",
+    "verity/protocols/resource_accounting/network/prover/tests/test_wipe_egress.py",
+    "verity/protocols/resource_accounting/network/prover/wipe_egress.py",
 ]
 
 [[place]]
@@ -869,8 +875,10 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
+    "verity/protocols/resource_accounting/network/prover/tests/test_network_attester_chain.py",
     "verity/protocols/resource_accounting/network/prover/tests/test_network_attester_serve.py",
     "verity/protocols/resource_accounting/network/prover/tests/test_scan_zk.py",
+    "verity/protocols/resource_accounting/network/prover/tests/test_wipe_egress.py",
 ]
 
 [[place]]
@@ -884,6 +892,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/periods",
     "verity/protocols/proofs/spot/verifier",
+    "verity/protocols/resource_accounting/memory/pous/verifier",
     "verity/protocols/resource_accounting/network/verifier",
     "verity/runtime",
 ]
@@ -918,16 +927,20 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/lengths_row.py",
     "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
     "verity/protocols/resource_accounting/network/prover/n2_zk.py",
+    "verity/protocols/resource_accounting/network/prover/network_attester_chain.py",
     "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
     "verity/protocols/resource_accounting/network/prover/response_tie.py",
     "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
+    "verity/protocols/resource_accounting/network/prover/tests/test_network_attester_chain.py",
     "verity/protocols/resource_accounting/network/prover/tests/test_network_attester_serve.py",
     "verity/protocols/resource_accounting/network/prover/tests/test_scan_zk.py",
+    "verity/protocols/resource_accounting/network/prover/tests/test_wipe_egress.py",
     "verity/protocols/resource_accounting/network/prover/tests/verdict_records.py",
     "verity/protocols/resource_accounting/network/prover/window_chain.py",
     "verity/protocols/resource_accounting/network/prover/window_charge.py",
+    "verity/protocols/resource_accounting/network/prover/wipe_egress.py",
 ]
 
 [[place]]
