@@ -21,6 +21,10 @@ width d_ff and vocabulary V (`MODELS`):
                                                                PV, d_h MACs each a head
     LM head   = S * O * d * V                                  one row of logits an output token
 
+The load is the benchmark's, not the run's (`LOAD`, `load.toml`): the served model, its revision and the class S, P, O
+it fixes. A record whose policy registers another model, revision or class is refused (exit 2, naming both), since the
+share depends on the class (a class of long prompts and one output credits more of its MACs than one with more outputs).
+
 What has no multiply-accumulate (the embedding's read, the norms, the activations, RoPE, the softmax) is not counted.
 Pearl+ credits linears, and the LM head where the run's passes hold its calls: the record holds the head when the
 verifier's per-call split (below), over the answer's run commitment, names a call of the head's shape, k = d and n = V
@@ -113,6 +117,7 @@ import json
 import math
 import re
 import sys
+import tomllib
 from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
@@ -131,6 +136,10 @@ UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens se
 METRIC = "compute-accounting/verified-compute-share"
 #: the share the number is driven to
 TARGET = Fraction(97, 100)
+#: the load the number is of, which a record's policy must register (`fixed_load`)
+LOAD = Path(__file__).with_name("load.toml")
+#: the load's keys, the policy's names for them
+LOAD_KEYS = ("model", "revision", "slots", "prompt", "outputs")
 PROTOCOL = "verity/pouw/pearl-plus/v1"
 #: the files of a run this command reads
 ANSWER = "out/pieces/pouw/pearlplus-answer.json"
@@ -327,6 +336,18 @@ def coins(tree: Path) -> dict:
             "development": not (sample == salt == "challenger" and lean in ("of record", None))}
 
 
+def fixed_load() -> dict:
+    """The load the benchmark fixes (`LOAD`): the served model, its revision and the class's slots, prompt tokens and
+    output tokens a request."""
+    with LOAD.open("rb") as f:
+        held = tomllib.load(f)
+    return {k: held[k] for k in LOAD_KEYS}
+
+
+def _load_words(d: dict) -> str:
+    return f"{d['model']} at revision {d['revision']}, class {d['slots']},{d['prompt']},{d['outputs']}"
+
+
 def load(tree: Path) -> dict:
     """The load the run's inference-only policy registers, from the record under `tree`: the model, the class and the
     MACs the model computes on it. `Unreadable` unless the policy names a class and a model of `MODELS`, and its own
@@ -335,7 +356,7 @@ def load(tree: Path) -> dict:
         policy = _held(tree, POLICY)
         if policy is None:
             raise Unreadable("the run's record holds no inference-only policy, so no class to count the model's MACs at")
-        cls, model = policy["class"], policy["serve"]["model"]
+        cls, model, revision = policy["class"], policy["serve"]["model"], policy["serve"].get("revision")
         slots, prompt, outputs, positions = (cls.get(k) for k in ("slots", "prompt", "outputs", "positions"))
         priced = (policy.get("n_inputs") or {}).get("work")
     except (OSError, KeyError, TypeError, ValueError, AttributeError) as e:
@@ -355,7 +376,12 @@ def load(tree: Path) -> dict:
             raise Unreadable(f"the policy counts its class's MACs as {theirs} and {Path(__file__).name} as {macs}: one "
                              f"of the two has the wrong shape for {model}")
         agrees = True
-    return {"model": model, "class": {"slots": slots, "prompt": prompt, "outputs": outputs}, "macs": macs,
+    fixed = fixed_load()
+    if (theirs := {"model": model, "revision": revision, "slots": slots, "prompt": prompt, "outputs": outputs}) != fixed:
+        raise Unreadable(f"the record's policy registers {_load_words(theirs)} and the benchmark's load is "
+                         f"{_load_words(fixed)} ({LOAD.name}; class is slots, prompt tokens and output tokens a "
+                         "request): the number is of that load alone")
+    return {"model": model, "revision": revision, "class": {"slots": slots, "prompt": prompt, "outputs": outputs}, "macs": macs,
             "policy_agrees": agrees,
             "tokens": {"prompt": slots * prompt, "output": slots * outputs, "positions": slots * (prompt + outputs - 1)}}
 
@@ -503,7 +529,7 @@ def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[st
             "macs": macs, "linears_share": macs["linears"] / total, "passes_macs": c["passes"], "scheme": c["scheme"],
             "epsilon_s": c["epsilon_s"], "delta_s": c["delta_s"], "lean": c["lean"], "coins": coins(tree), "record": record,
             "withdrawn": withdrawn,
-            "model": served["model"], "class": served["class"], "policy_agrees": served["policy_agrees"],
+            "model": served["model"], "revision": served["revision"], "class": served["class"], "policy_agrees": served["policy_agrees"],
             "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None, **head}
 
 
@@ -646,8 +672,8 @@ def text(doc: dict) -> str:
                  + ", so the credit is the Pearl+ piece's alone" + (f": {record['why']}" if record["why"] else "")))
     if doc["withdrawn"]:
         lines.append(f"  part of the run's record was withdrawn, none of it a file read here: {'; '.join(doc['withdrawn'])}")
-    lines.append(f"  {doc['model']} at {cls['slots']} slots of {cls['prompt']} prompt and {cls['outputs']} output "
-                 f"tokens: linears {macs['linears']:,}, attention {macs['attention']:,} and LM head {macs['lm_head']:,} "
+    lines.append(f"  {doc['model']} at revision {doc['revision']}, {cls['slots']} slots of {cls['prompt']} prompt and "
+                 f"{cls['outputs']} output tokens, the benchmark's load ({LOAD.name}): linears {macs['linears']:,}, attention {macs['attention']:,} and LM head {macs['lm_head']:,} "
                  f"MACs" + (", which is the policy's own count of its class" if doc["policy_agrees"] else ""))
     head = doc.get("lm_head")
     can, share = (head["creditable_macs"], head["creditable_share"]) if head else (macs["linears"], doc["linears_share"])

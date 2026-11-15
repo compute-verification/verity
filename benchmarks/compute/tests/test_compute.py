@@ -32,6 +32,8 @@ MACS = {"linears": 136_230_993_920, "attention": 165_150_720, "lm_head": 4_202_6
 TOTAL = 140_598_837_248
 #: the fixture's credit, three quarters of TOTAL
 CREDITED = 105_449_127_936
+#: the revision of the benchmark's load (load.toml), which the fixture's policy registers
+REVISION = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"
 #: the fixture's parameters as the coins line prints them, a development run's
 PARAMETERS = "parameters: draws 459, delta 1/100, development"
 
@@ -167,8 +169,9 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
          f"verdict is the same"),
         ("  PoUW's row in the run's composed record is `missing`, not an accept, so the credit is the Pearl+ piece's "
          "alone: development run, credits nothing: the registration can't be read"),
-        ("  unsloth/Llama-3.2-1B at 4 slots of 32 prompt and 4 output tokens: linears 136,230,993,920, attention "
-         "165,150,720 and LM head 4,202,692,608 MACs, which is the policy's own count of its class"),
+        (f"  unsloth/Llama-3.2-1B at revision {REVISION}, 4 slots of 32 prompt and 4 output tokens, the benchmark's load "
+         "(load.toml): linears 136,230,993,920, attention 165,150,720 and LM head 4,202,692,608 MACs, which is the "
+         "policy's own count of its class"),
         ("  Pearl+ credits linears alone, 96.89% of the model's MACs at this class: its passes hold 120,000,000,000 of "
          "them and its credit is 77.40% of them all"),
         ("  tokens, the class's since the record holds no count of those served: 128 prompt and 16 output, over 140 "
@@ -380,6 +383,14 @@ def test_the_command_line_names_a_run(store, capsys):
     ({"POLICY": to("n_inputs", "work", "lm_head", value=1)},
      ("the policy counts its class's MACs as {'linears': 136230993920, 'attention': 165150720, 'lm_head': 4} and "
       "run.py as {'linears': 136230993920, 'attention': 165150720, 'lm_head': 4202692608}")),
+    ({"POLICY": lambda d: (d["class"].update(slots=1, prompt=90, outputs=1, positions=90), d.pop("n_inputs"))},
+     (f"the record's policy registers unsloth/Llama-3.2-1B at revision {REVISION}, class 1,90,1 and the benchmark's "
+      f"load is unsloth/Llama-3.2-1B at revision {REVISION}, class 4,32,4 (load.toml; class is slots, prompt tokens "
+      "and output tokens a request): the number is of that load alone")),
+    ({"POLICY": to("serve", "revision", value="0" * 40)},
+     f"the record's policy registers unsloth/Llama-3.2-1B at revision {'0' * 40}, class 4,32,4 and the benchmark's"),
+    ({"POLICY": lambda d: d["serve"].pop("revision")},
+     "the record's policy registers unsloth/Llama-3.2-1B at revision None, class 4,32,4 and the benchmark's"),
     ({"VERDICTS": "[]"}, "the run's composed record doesn't read as one"),
     ({"ANSWER": to("public", "work", "credited", value=MACS["linears"] + 1), "LEAN": None},
      ("Pearl+'s answer holds 136,230,993,921 MACs, more than the 136,230,993,920 of the linears of the policy's class: "
@@ -446,8 +457,7 @@ def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp
     assert json.loads((out / "compute.json").read_text()) == doc
     assert list(doc) == ["value", "unit", "commit", "run", "target", "met", "credited_macs", "model_macs", "macs",
                          "linears_share", "passes_macs", "scheme", "epsilon_s", "delta_s", "lean", "coins", "record",
-                         "withdrawn",
-                         "model", "class", "policy_agrees", "tokens", "tokens_from", "wall_s", "capacity_share"]
+                         "withdrawn", "model", "revision", "class", "policy_agrees", "tokens", "tokens_from", "wall_s", "capacity_share"]
     written = (out / "result.json").read_bytes()
     store.add(RUN, a_record(tmp_path / "run", ANSWER=to("verdict", value="reject")))
     (out / "compute.json").unlink()
@@ -953,3 +963,12 @@ def test_the_coins_line_says_which_coins_and_parameters_the_record_states_and_ne
         text, doc, _ = printed(capsys)
         assert text[1] == f"  coins: {said}" and doc["value"] == 0.75
         assert doc["coins"]["development"] is development
+
+
+def test_the_benchmarks_load_is_the_fixtures_and_the_harness_class_of_record():
+    """`load.toml` is the class the tied path serves (`served_verdicts.sh`'s V3C_CLASS default, 4,32,4) of the
+    checkpoint it serves, and the fixture's policy registers it."""
+    assert C.fixed_load() == {"model": "unsloth/Llama-3.2-1B", "revision": REVISION, "slots": 4, "prompt": 32,
+                              "outputs": 4}
+    policy = json.loads((RECORD / C.POLICY).read_text())
+    assert {**policy["serve"], **{k: policy["class"][k] for k in ("slots", "prompt", "outputs")}} == C.fixed_load()
