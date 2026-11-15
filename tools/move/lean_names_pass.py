@@ -156,7 +156,7 @@ def ontology() -> list[str]:
         if own[f]:
             lines += [f"# {f} spells another namespace's `{WORD}` too: only the root's names."]
             lines += words_in(both([f]), {o: NEW + o[len(WORD):] for o in sorted(own[f])})
-    lines += [f"# Outside the Lean, the root's names at the start of a dotted name."]
+    lines += ["# Outside the Lean, the root's names at the start of a dotted name."]
     lines += words_in(OTHER_FILES, {WORD + ".": NEW + "."})
     lines += ["# The network attester in the Lean's prose; a string literal keeps its bytes ([keep]): a verifier's message.",
               "# `network_certifier` stays: in the Lean it names the Python modules, which keep their names."]
