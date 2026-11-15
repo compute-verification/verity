@@ -10,6 +10,7 @@ import dataclasses
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,11 @@ from research.clone import RECORD_DRIVER
 from research.queue import StoreLabels, label_target
 from research.store import vocab
 from test_queue import World, _git
-from test_queue_moves_carry import LIB, MAP, A, B, _kept, _land, _mark, _move, _push_main, _queue, world  # noqa: F401
+from test_queue_moves_carry import (ENV, LIB, MAP, PATHS, A, B, _kept, _land, _mark, _marks, _move, _push_main, _queue,
+                                    world)  # noqa: F401
+from waits import wait_exit
+
+OWN, HAND = "tools/move/demo_own_map.toml", "notes.txt"
 
 
 def _open(world: World, n: int, head: str) -> None:
@@ -188,6 +193,118 @@ def test_a_head_based_before_two_moves_made_on_one_base_crosses_the_first_and_th
     assert _git(q.workdir, "show", f"{new}:e/d/x.py") == "X = 1"
     labels = StoreLabels(world.store, change=q.own_change, moved=q.mapped_change, owners=lambda n: {f"lane-{n}"})
     assert _kept(labels, 1, new) == (True, [("land", "reviewer")])
+
+
+def _own_move(world: World) -> str:
+    """A move on `main` that adds the map it runs by, `old_proto/` to `new_proto/` as `PATHS` maps it, which `main` lacks: the
+    map and what `layout.py` writes by it in one commit, as a move branch squashed onto `main` makes it."""
+    on = _git(world.dev, "rev-parse", "origin/main")
+    _git(world.dev, "checkout", "-q", "--detach", on)
+    (world.dev / OWN).write_text(_git(world.dev, "show", f"{on}:{PATHS}") + "\n")
+    _git(world.dev, "add", OWN)
+    _git(world.dev, "commit", "-q", "-m", "the map")
+    subprocess.run([sys.executable, "tools/move/layout.py", "--map", OWN, "--no-lock"], cwd=world.dev, env=ENV, check=True,
+                   capture_output=True)
+    _git(world.dev, "add", "-A")
+    return _git(world.dev, "commit-tree", _git(world.dev, "write-tree"), "-p", on, "-m",
+                f"Move by {OWN}\n\nLayout-move: {OWN} --no-lock\n")
+
+
+def _hand_move(world: World, path: str) -> str:
+    """``path``'s move on `main` with a change made by hand beside what its script writes, in `HAND`, and `main`'s
+    `move_lines.toml` entry listing it, pushed once the move lands."""
+    _move(world, path)
+    (world.dev / HAND).write_text("a line the move's author fixed by hand\n")
+    _git(world.dev, "add", HAND)
+    _git(world.dev, "commit", "-q", "--amend", "--no-edit")
+    return _git(world.dev, "rev-parse", "HEAD")
+
+
+def _hand_lines(move: str) -> dict[str, str]:
+    return {Q.MOVE_LINES: f'["{move}"]\nhand = ["{HAND}"]\nreason = "The move\'s author fixed a line by hand."\n'}
+
+
+@pytest.mark.parametrize("kinds", [("own",), ("hand",), ("own", "hand")], ids=["own-map", "hand", "both"])
+def test_a_crossing_over_moves_with_their_own_map_or_hand_changes_carries_the_mark_as_the_check_runs_them_as_restack_does(
+        world, monkeypatch, kinds):
+    """A move may add the map it runs by, which its base lacks (`own_map`), and hold changes made by hand beside its script's
+    output, which its entry in `move_lines.toml` lists (`hand`): restack.py runs its script by the move's own map and merges
+    both in against what the script writes on the move's base.  The carry check runs each move so too (`_MAPPED`), so #1,
+    marked and passed, crossed over such a move, or one of each, crosses clean, its own change the old one mapped, and its mark
+    and verdict carry.  Without the move's map its script fails; without the hand change the crossing's own change reverts it;
+    either way the mark wouldn't carry."""
+    _open(world, 1, old := world.change({"old_proto/a.py": A.replace("return 2", "return 3")}))
+    _mark(world, 1, old)
+    moves = []
+    if "own" in kinds:
+        _land(world, own := _own_move(world))
+        moves.append(own)
+    if "hand" in kinds:
+        _land(world, hand := _hand_move(world, LIB if "own" in kinds else PATHS))
+        _push_main(world, world.change(_hand_lines(hand)))
+        moves.append(hand)
+    out = world.tmp / "out"
+    assert _cross(world, monkeypatch, "--out", str(out)) == 0
+    report = _report(out)
+    assert report["refused"] == [] and [(c["pr"], c["old"]) for c in report["crossed"]] == [(1, old)], report
+    assert report["moves"] == moves
+    new = report["crossed"][0]["new"]
+    assert _cross(world, monkeypatch, "--push", "--from", str(out)) == 0 and _branch(world, 1) == new
+    world.gh.put(1, new, ready=False)
+    q = _queue(world)
+    at = "lib/new_proto" if len(kinds) == 2 else "new_proto"
+    assert _git(q.workdir, "show", f"{new}:{at}/a.py").endswith("return 3")
+    assert json.loads((out / Q.CROSS_MAPPED).read_text()) == {Q.mapped_key(old, [(m, []) for m in moves]): q.own_change(new)}
+    labels = StoreLabels(world.store, change=q.own_change, moved=q.mapped_change, owners=lambda n: {f"lane-{n}"})
+    assert _kept(labels, 1, new) == (True, [("land", "reviewer")])
+
+
+def _restacked(world: World, head: str) -> str:
+    """``head`` carried across `main`'s moves by `main`'s own `tools/move/restack.py`, with `main`'s `move_lines.toml`."""
+    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
+    r = subprocess.run([sys.executable, "tools/move/restack.py", head, "--main", "origin/main", "--json"], cwd=world.dev,
+                       env=ENV, capture_output=True, text=True)
+    (got,) = json.loads(r.stdout)
+    assert got["status"] == "clean", got
+    _git(world.dev, "push", "-q", "origin", f"{got['result']}:refs/heads/restacked-{head[:8]}")
+    return got["result"]
+
+
+def test_a_move_whose_hand_change_conflicts_with_a_head_refuses_that_carry_naming_the_move_and_the_ticks_go_on(world,
+                                                                                                             monkeypatch):
+    """#1, marked and passed, edits the line a move's hand change edits: its crossing conflicts there, in restack.py's step
+    `hand` and in the carry check's.  In the loop's ticks, with mapping jobs (`work_out_mapped`), the check refuses that carry
+    in its job, logged once with a reason naming the move and the file, and #1's new head takes no label; nothing raises out of
+    a tick, and #2's carry across the same move, in the same ticks, goes through."""
+    monkeypatch.setattr(tempfile, "tempdir", str(world.tmp / "tmp"))
+    _push_main(world, world.change({HAND: "a line\n"}))
+    world.gh.put(1, one := world.change({HAND: "the head's line\n"}), ready=False)
+    world.gh.put(2, two := world.change({"old_proto/a.py": A.replace("return 2", "return 3")}), ready=False)
+    for n, head in ((1, one), (2, two)):
+        _mark(world, n, head)
+    _land(world, move := _hand_move(world, PATHS))
+    _push_main(world, world.change(_hand_lines(move)))
+    world.gh.put(1, new1 := world.change({"g.txt": "g\n"}), ready=False)
+    world.gh.put(2, new2 := _restacked(world, two), ready=False)
+
+    def tick() -> tuple[Q.Queue, list]:
+        q = _queue(world)
+        q.mapped_jobs = 2
+        labels = StoreLabels(world.store, change=q.own_change, moved=q.mapped_change)
+        kept = [_kept(labels, 1, new1), _kept(labels, 2, new2)]
+        q.work_out_mapped()
+        return q, kept
+
+    q, kept = tick()
+    assert kept == [(False, []), (False, [])] and len(_marks(q)) == 2
+    for job in _marks(q).values():
+        wait_exit(job["pid"])
+    assert tick()[1] == [(False, []), (True, [("land", "reviewer")])]
+    assert [s for s in world.logs if "isn't mapped" in s] == [
+        f"research queue: {one[:8]}'s own change isn't mapped across the moves `main` landed since: the move {move[:12]}'s "
+        f"script fails on it: exit 1: its hand changes conflict with the head in {HAND}"]
+    assert tick()[1] == [(False, []), (True, [("land", "reviewer")])]
+    assert len([s for s in world.logs if "isn't mapped" in s]) == 1
 
 
 def test_a_crossing_that_conflicts_is_refused_with_why_and_a_head_with_the_moves_or_no_verdict_is_skipped(world, monkeypatch):
