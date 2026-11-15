@@ -21,9 +21,9 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import mhc_twin as W
-from verity.definitions.registry import boolean_mhc as BM
-from verity.definitions.registry import mhc as M
+from verity_vllm.definitions.numerics import mhc_twin as W
+from verity_vllm.definitions.registry import boolean_mhc as BM
+from verity_vllm.definitions.registry import mhc as M
 
 EPS = 1e-6
 F32_SPECIALS = np.array([0, 0x80000000, 1, 0x80000001, 0x00800000, 0x3F800000, 0xBF800000, 0x3F800001, 0x7F7FFFFF, 0xFF7FFFFF,

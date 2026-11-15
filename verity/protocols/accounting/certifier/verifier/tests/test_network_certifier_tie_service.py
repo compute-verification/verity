@@ -1,13 +1,13 @@
 """The ingress tie through the proof system (`tie_service`): each bucket row of an ingress execution phase of the
 network certifier's
-cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and decided by
+cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the network certifier's root and decided by
 the verifier on its own lanes), and `tie_service.IoTieVerdict` built from the stream's outcomes of record
 alone. An honest link is tied, and `Ties`, the tie, its stream and the release, gives the verdict only on its own link
 and stream; the verifier's registered reads name every port of the statement, as Flock's Lean verifier requires
 (`Registered.checkComplete`, which the stand-in mirrors); a carried field count, a forged advice and the swapped split
 are refused, as are an output 0 or rows under fresh salts, an outcome on another
 advice, in the clear or late, a stream short of the advice's windows, out of order or past them, a profile that frames
-requests otherwise than the warden cuts them, a row that isn't the warden's, a head of another window, an advice whose
+requests otherwise than the network certifier cuts them, a row that isn't the network certifier's, a head of another window, an advice whose
 `received` isn't the release's, and an unpinned size class. Nothing in `verity` but the tie service builds the
 verdict."""
 
@@ -23,17 +23,17 @@ import verity
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.protocols.accounting.certifier.verifier import advice as ADV, head_check as HC, io_request as Q, service as SVC, \
-    tie_service as TS, warden as W, warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import id_request
+    tie_service as TS, network_certifier as W, network_certifier_rows as WR
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
 
 import standin
 
 B = 512
 #: two lanes of r = 2 slots, 4-bucket windows
-PARAMS = W.WardenParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
+PARAMS = W.NetworkCertifierParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
 LINK, RUN = "requests", "r-tie-test"
 SESSION = hashlib.sha512(b"tie-test").digest()
 #: a span: request 1 (40 tokens) takes 2 cells, its DATA in bucket 3 and its END in bucket 4, so it
@@ -74,7 +74,7 @@ SERVED = _serve()
 
 
 class Run:
-    """An ingress link's tie: the network certifier's cells of each window (`warden_rows.Cells`, under fixed salts), the
+    """An ingress link's tie: the network certifier's cells of each window (`network_certifier_rows.Cells`, under fixed salts), the
     challenger's stream on injected coins and clock, and each window decided by the verifier on a stand-in
     proof, the in-the-clear check beside it."""
 
@@ -88,29 +88,29 @@ class Run:
                                   hashlib.sha512(b"wiring %d" % w).digest())
                       for w, rec in enumerate(served.records)]
 
-    def draw(self, w):
+    def sample(self, w):
         reg = self.tie.register(self.stream, self.tie.registration(self.cells[w].head, self.previous))
         self.previous = reg.digest
         return self.stream.select(reg)
 
     def prove(self, w, advice, lanes=OWN_LANES, releases=None, **kw):
-        draw = self.draw(w)
+        sample = self.sample(w)
         releases = self.served.releases if releases is None else releases
         lanes = self.tie.lanes(advice, releases, w) if lanes is OWN_LANES else lanes
-        return draw, standin.prove_tie(self.tie, self.cells[w], draw, lanes,
-                                       self.tmp / f"tie-{draw.registration.order}", **kw)
+        return sample, standin.prove_tie(self.tie, self.cells[w], sample, lanes,
+                                       self.tmp / f"tie-{sample.docket.order}", **kw)
 
-    def decide(self, w, draw, delivered, advice, head=None):
-        return self.tie.outcome(self.stream, draw, delivered, circuit_sha512=standin.circuit_sha512(delivered),
+    def decide(self, w, sample, delivered, advice, head=None):
+        return self.tie.outcome(self.stream, sample, delivered, circuit_sha512=standin.circuit_sha512(delivered),
                                 advice=advice, releases=self.served.releases,
                                 head=self.cells[w].head if head is None else head, opening=self.cells[w])
 
     def round(self, w, advice, lanes=OWN_LANES, **kw) -> S.Outcome:
-        draw, delivered = self.prove(w, advice, lanes, **kw)
-        late = self.stream.deliver(draw, delivered.sessions())
+        sample, delivered = self.prove(w, advice, lanes, **kw)
+        late = self.stream.deliver(sample, delivered.sessions())
         if late is not None:
             return late
-        outcome = self.decide(w, draw, delivered, advice)
+        outcome = self.decide(w, sample, delivered, advice)
         verdict = self.stream.records[-1]["audit"]["verdicts"][TS.VERIFIER]
         assert verdict["decided_by"] == "proof" and verdict["accepted"] == outcome.accepted
         if lanes is OWN_LANES and not kw:
@@ -137,13 +137,13 @@ def test_an_honest_link_is_tied(tmp_path):
 
 
 def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_path):
-    """C-Flock's Lean verifier rejects every session of a statement with a port its `--registered` file doesn't name
-    (`Registered.checkComplete`), which the stand-in mirrors: the verifier's own file names ``wit`` at the warden's
+    """Flock's Lean verifier rejects every session of a statement with a port its `--registered` file doesn't name
+    (`Registered.checkComplete`), which the stand-in mirrors: the verifier's own file names ``wit`` at the network certifier's
     root and ``pub`` and ``o0`` at known content, its own lanes of each bucket and the output word 1 under public
     salts, so an honest window's proof is proved and accepted, where a file naming ``wit`` alone rejects it at
     ``pub``."""
     run, advice = Run(tmp_path), _advice(SPAN)
-    draw, delivered = run.prove(0, advice)
+    sample, delivered = run.prove(0, advice)
     head, lanes = run.cells[0].head, run.tie.lanes(advice, SERVED.releases, 0)
     reads = run.tie.registered(head, lanes)
     assert sorted(reads["ports"]) == sorted(TS.PORTS) and TS.KNOWN_KEY not in reads["ports"][TS.REGISTERED]
@@ -160,13 +160,13 @@ def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_
     findings, refused = standin.lean(delivered.proof, registered=wit_only, **kw)
     assert refused is None and findings and not any(f.accepted for f in findings)
     assert "port pub is no port of the verifier's registered reads" in findings[0].why
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert run.decide(0, draw, delivered, advice).accepted
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert run.decide(0, sample, delivered, advice).accepted
 
 
 def test_an_output_0_or_rows_under_fresh_salts_fail_the_registered_reads(tmp_path, monkeypatch):
     """The ``o0`` row is read off the verifier's known root of output words 1, and the ``pub`` row off its known root
-    of its own lanes under their public salts: the forged advice's proof of window 0, on the warden's rows and the
+    of its own lanes under their public salts: the forged advice's proof of window 0, on the network certifier's rows and the
     verifier's own lanes, fails ``o0``'s read at the bucket IoTieRequest refuses, whatever word it delivers, and a
     proof whose ``pub`` and ``o0`` rows are committed under fresh salts fails ``pub``'s."""
     forged, advice = _advice((5, 45, 5)), _advice(SPAN)
@@ -184,12 +184,12 @@ def test_an_output_0_or_rows_under_fresh_salts_fail_the_registered_reads(tmp_pat
     monkeypatch.setattr(TS.IngressTie, "known_tree", lambda self, head, port, rows: G.Registered.commit(
         (t := known_tree(self, head, port, rows)).program, t.value, t.rows, None, t.word_bits, t.schema,
         window=t.window))
-    draw, delivered = run.prove(0, advice)
+    sample, delivered = run.prove(0, advice)
     monkeypatch.setattr(TS.IngressTie, "known_tree", known_tree)
     findings, refused = standin.lean(delivered.proof, registered=run.tie.registered(run.cells[0].head, lanes), **kw)
     assert refused is None and not findings[0].accepted and "port pub: table row" in findings[0].why
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert not run.decide(0, draw, delivered, advice).accepted
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert not run.decide(0, sample, delivered, advice).accepted
 
 
 def test_the_tie_source_gives_the_verdict_only_on_its_own_link_and_stream(tmp_path):
@@ -220,10 +220,10 @@ def test_a_proof_on_an_added_carried_field_count_is_refused(tmp_path, delta):
     assert (ln.q, ln.left, ln.fields, ln.left_out, ln.fields_out) == (2, 310, 12, 0, 40)
     added = ((ln._replace(fields=ln.fields + delta, fields_out=ln.fields_out + delta),) + lanes[0][1:],) + lanes[1:]
     assert run.round(0, advice).accepted
-    draw, delivered = run.prove(1, advice, added)
+    sample, delivered = run.prove(1, advice, added)
     assert delivered.outputs == {u: 1 for u in range(4)}, "IoTieRequest accepts each row on the added lanes"
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert not run.decide(1, draw, delivered, advice).accepted
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert not run.decide(1, sample, delivered, advice).accepted
     assert run.stream.records[-1]["audit"]["verdicts"][TS.VERIFIER]["clear"]["accepted"]
     assert run.verdict(advice).accepted == (True, False)
 
@@ -270,21 +270,21 @@ def test_an_outcome_on_another_advice_in_the_clear_or_late_is_refused(tmp_path):
 
     run = Run(tmp_path / "clear")
     assert run.round(0, advice).accepted
-    draw, delivered = run.prove(1, advice)
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    verdict = run.tie.verify(draw, delivered, circuit_sha512=standin.circuit_sha512(delivered), advice=advice,
+    sample, delivered = run.prove(1, advice)
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    verdict = run.tie.verify(sample, delivered, circuit_sha512=standin.circuit_sha512(delivered), advice=advice,
                              releases=SERVED.releases, head=run.cells[1].head)
     assert verdict["accepted"]
-    outcome = run.stream.outcome(draw, {TS.VERIFIER: {**verdict, "decided_by": "clear"}}, run.tie.statement(draw),
-                                 session_roots={TS.VALUE: draw.registration.record["roots"][0]["root"]})
+    outcome = run.stream.outcome(sample, {TS.VERIFIER: {**verdict, "decided_by": "clear"}}, run.tie.statement(sample),
+                                 session_roots={TS.VALUE: sample.docket.record["roots"][0]["root"]})
     assert outcome.accepted
     assert run.verdict(advice).accepted == (True, False)
 
     run = Run(tmp_path / "late")
     assert run.round(0, advice).accepted
-    draw, delivered = run.prove(1, advice)
+    sample, delivered = run.prove(1, advice)
     run.now[0] = 61.0
-    late = run.stream.deliver(draw, delivered.sessions())
+    late = run.stream.deliver(sample, delivered.sessions())
     assert late is not None and not late.accepted
     assert run.verdict(advice).accepted == (True, False)
 
@@ -312,9 +312,9 @@ def test_a_short_stream_one_out_of_order_or_one_past_the_advice_refuses_every_wi
 @pytest.mark.parametrize("profile", [TS.AdvisedProfile(2, tuple(n + 1 for n in FRAMING), 0),
                                      TS.AdvisedProfile(2, FRAMING[:39], 0), TS.AdvisedProfile(2, FRAMING, 1)],
                          ids=["framing", "short-framing", "own"])
-def test_a_profile_that_frames_requests_otherwise_than_the_warden_refuses_every_window(tmp_path, profile):
-    """The tie reads the profile's framing: under one that isn't the warden's cut at B for the advice's prompt
-    lengths, or that names an own frame, which the warden's ingress has none of, every window is refused."""
+def test_a_profile_that_frames_requests_otherwise_than_the_network_certifier_refuses_every_window(tmp_path, profile):
+    """The tie reads the profile's framing: under one that isn't the network certifier's cut at B for the advice's prompt
+    lengths, or that names an own frame, which the network certifier's ingress has none of, every window is refused."""
     run, advice = Run(tmp_path), _advice(SPAN)
     assert run.link(advice) == [True, True]
     assert run.verdict(advice, profile).accepted == (False, False)
@@ -329,9 +329,9 @@ def test_an_advice_whose_received_isnt_the_release_refuses_every_window(tmp_path
     assert run.verdict(moved).accepted == (False, False)
 
 
-def test_a_row_that_isnt_the_wardens_is_refused(tmp_path):
+def test_a_row_that_isnt_the_network_certifiers_is_refused(tmp_path):
     """Each proof block's witness row is read off the network certifier's root at its own bucket
-    (`warden_rows.bucket_port`): a proof on another row (window 1's bucket 1, which IoTieRequest accepts on its own
+    (`network_certifier_rows.bucket_port`): a proof on another row (window 1's bucket 1, which IoTieRequest accepts on its own
     lanes) or on the window's rows read by swapped proof blocks fails the registered read, and so do its sessions."""
     advice = _advice(SPAN)
     run = Run(tmp_path / "row")
@@ -344,21 +344,21 @@ def test_a_row_that_isnt_the_wardens_is_refused(tmp_path):
                          rows=rows).accepted
 
     run = Run(tmp_path / "swapped")
-    draw, delivered = run.prove(0, advice, units=[1, 0, 2, 3])
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert not run.decide(0, draw, delivered, advice).accepted
+    sample, delivered = run.prove(0, advice, units=[1, 0, 2, 3])
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert not run.decide(0, sample, delivered, advice).accepted
 
 
 def test_a_head_of_another_window_is_refused(tmp_path):
     """The verifier reads the registered root's head: a head of window 1 on window 0's sample, or a head of another
     session's domain, refuses it."""
     run, advice = Run(tmp_path), _advice(SPAN)
-    draw, delivered = run.prove(0, advice)
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert not run.decide(0, draw, delivered, advice, head=run.cells[1].head).accepted
+    sample, delivered = run.prove(0, advice)
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert not run.decide(0, sample, delivered, advice, head=run.cells[1].head).accepted
     other = WR.Cells.commit(LINK, Direction.INGRESS, 0, run.cells[0].rows, run.cells[0].wiring, PARAMS,
                             hashlib.sha512(b"another session").digest(), run.cells[0].salts)
-    assert not run.tie.verify(draw, delivered, circuit_sha512=standin.circuit_sha512(delivered), advice=advice,
+    assert not run.tie.verify(sample, delivered, circuit_sha512=standin.circuit_sha512(delivered), advice=advice,
                               releases=SERVED.releases, head=other.head)["accepted"]
 
 
@@ -382,14 +382,14 @@ def test_the_tie_gate_names_its_pinned_circuit_digest():
 def test_an_unpinned_size_class_is_refused(tmp_path):
     """IoTieRequest at L = 3 has no pinned circuit digest, so its gate names none and no proof of its proof block is
     accepted, even one Lean accepts."""
-    params = W.WardenParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1)
+    params = W.NetworkCertifierParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1)
     served = _serve(params=params, windows=2)
     run, advice = Run(tmp_path, params=params, served=served), _advice(SPAN)
     assert not HC.pinned(run.tie.gates()[0])
-    draw, delivered = run.prove(0, advice)
+    sample, delivered = run.prove(0, advice)
     assert delivered.outputs == {u: 1 for u in range(4)}
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert not run.decide(0, draw, delivered, advice).accepted
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert not run.decide(0, sample, delivered, advice).accepted
 
 
 def test_only_the_tie_service_builds_an_ingress_tie_verdict():

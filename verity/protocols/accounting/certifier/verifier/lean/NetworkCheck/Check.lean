@@ -318,7 +318,7 @@ def inSyncSet (ss : NetworkCertifier.SyncSet) (s : ClockSync) : Bool := decide (
 def manifestSet (ss : NetworkCertifier.SyncSet) : NetworkCheck.SyncSet :=
   ⟨ss.deltas.toArray.map Int.ofNat, ss.rhos.toArray.map fun ρ => (ρ.num, ρ.den)⟩
 
-/-- `CertifiedRecord.verify` under `LmsKey` in the parameters' session: the certificate names the head's link-window,
+/-- `CertifiedRecord.verify` under `LmsKey` in the parameters' session: the certificate names the head's execution phase,
 signs the head's digest salted by the record's salt (`certificateDigest`), and is the key's and verifies in that session
 (`Certificate.signs`). -/
 def verifies (p : Params) (r : Certified) : Bool :=
@@ -360,7 +360,7 @@ def found (c : Commitment) (d : Direction) (l : String) (w : Nat) : Array Certif
 /-- The spatial unit's clock in window `w`: the sync the first egress link declares. -/
 def unitSync (e : Evidence) (w : Nat) : ClockSync := ((e.links[0]?).map (·.syncs.getD w noSync)).getD noSync
 
-/-- An egress link-window's violation (`check_link`), none when it is accepted. -/
+/-- An egress execution phase's violation (`check_link`), none when it is accepted. -/
 def egressVerdict (p : Params) (c : Commitment) (e : Evidence) (egressDigest : ByteArray) (l : String) (link : LinkOpening)
     (w : Nat) : Option String :=
   match screen p (found c .egress l w) with

@@ -249,7 +249,7 @@ theorem opens_coinPass (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (hbit : k.getD 255 0 &&& 0x80 = 0) :
     L.opens x (ν, t) [(m₀, CoinPass.ansOf (CoinLayer.nb ν) (CoinLayer.place nr x 0) b k),
         (m₁, CoinPass.openMsg (CoinLayer.place nr x 0) b)] = true ∧
-      ∀ {m : _root_.Flock.Firewall.Frame.Masker},
+      ∀ {m : _root_.Flock.ZkServer.Frame.Masker},
       L.answered x (ν, t) [(m₀, CoinPass.ansOf (CoinLayer.nb ν) (CoinLayer.place nr x 0) b k)] = .ok m →
       L.answered x (ν, t) [(m₀, CoinPass.ansOf (CoinLayer.nb ν) (CoinLayer.place nr x 0) b k),
           (m₁, CoinPass.openMsg (CoinLayer.place nr x 0) b)] =

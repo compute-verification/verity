@@ -37,7 +37,7 @@ def test_a_unit_past_the_range_is_refused_before_it_is_lowered(monkeypatch):
     d = wide(FC.K_MAX - 1)
     assert FC.unit_witness(d) == {"ands": (1 << FC.K_MAX) - 1, "port_bits": 3, "k": FC.K_MAX + 1, "k_max": FC.K_MAX}
     with pytest.raises(ValueError, match=r"^unit/wide: the unit needs a slot of 2\^28 witness bits \(134,217,727 ANDs and 3 port "
-                                         r"bits, read off its Definition\); C-Flock's proved range is 2\^27 \(Flock/Statement\.lean "
+                                         r"bits, read off its Definition\); Flock's proved range is 2\^27 \(Flock/Statement\.lean "
                                          r"Stmt\.InRange\): split the unit \(e\.g\. PoUW's lanes form, "
                                          r"verity/protocols/accounting/pouw/verifier/leaf_lanes\.py\) or extend the proved range \(proofs\)$"):
         CS.UnitStager(d, "unit/wide", [("x", V2, 2, ["x"])], [(V2, (0,))])
@@ -78,7 +78,7 @@ def test_a_piece_lowered_only_on_a_constant_operand_is_counted_by_its_stated_and
 def test_a_unit_holding_the_top_p_keep_word_is_sized_by_its_composition():
     """The top-p keep word has no piece but counts its composition (`topp_word.ands`), so a unit holding it is sized off its
     Definition: in range at V = 16, and at V = 256 refused by name, before anything lowers it."""
-    from verity.definitions.registry import sampling as SM
+    from verity_vllm.definitions.registry import sampling as SM
     from verity_flock import topp_word as TW
 
     w = FC.unit_witness(SM.topp_mask_word(16))
@@ -88,7 +88,7 @@ def test_a_unit_holding_the_top_p_keep_word_is_sized_by_its_composition():
 
 
 def test_the_block_read_off_a_definition_is_composes():
-    """Staged on its own rows (a bit row per parameter, one per return field, as `verity.commitments.windows.interface.unit_rows`
+    """Staged on its own rows (a bit row per parameter, one per return field, as `verity.commitments.periods.interface.unit_rows`
     gives them), a unit's block is the one `circuit.unit_block` reads off its Definition: the cells its lowering lays out,
     its slot, its sha512x3 and hm96 slots, and its k_log, which compose raises only by packing more units (up to 2^22)."""
     d = bind(definition("UnitRangeOwnRows", 1, lambda C, a, w: [C.AND(w[i], a[i % 32]) for i in range(1, 2048)],

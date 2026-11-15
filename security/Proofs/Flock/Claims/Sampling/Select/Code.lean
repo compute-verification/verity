@@ -17,7 +17,7 @@ and `SessionRuns`, `SessionOpens` and `InnerNumbers` are one statement about the
 * `innerNumbers_code_iff`: `InnerNumbers` is Flock's numbers at the one session's statement.
 
 And of `Spot.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"step", "codes"}` object) passed
-the population and R1–R8 (`Registration.check`) under the sampling design of the rule over the population (`Select.Rule.over`)
+the population and R1–R8 (`Docket.check`) under the sampling design of the rule over the population (`Select.Rule.over`)
 and the work table it expands (`Select.Rule.tableOver`), ran
 the sample of record (`Select.select`, under `Select.resolve`'s rule) on the challenger's bytes (`source`) and held it to
 the registration (`Draw.checkDraw`), and its `draw` and `read` are that sample's (under a two-stage rule, the first
@@ -118,17 +118,17 @@ theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
 set_option maxHeartbeats 4000000 in
 /-- **A decided run passed its registration and ran the sample of record**: `run` either refuses at a step or passed the
 population, R1–R7 under the sampling design of the rule over it and the program's strata (`Rule.over`, `strataSizes`, a
-rate law's `subset:K`) and the work table it expands (`Rule.tableOver`, a work rate law's), and the sample's own check,
+rate sampling design's `subset:K`) and the work table it expands (`Rule.tableOver`, a work rate sampling design's), and the sample's own check,
 with its `draw` and `read` those of `Select.select` under `Select.resolve`'s rule on the challenger's bytes. -/
 theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
-    ∃ n rule law workTable, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over n
+    ∃ n rule samplingDesign workTable, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over n
         (Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
-      rule.lawOver n = .ok law ∧
+      rule.samplingDesignOver n = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
-      ¬(!(Registration.check i.record { i.params.verifier with law, workTable }).isEmpty) = true ∧
-      ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query law workTable = .ok derived ∧
+      ¬(!(Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
+      ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧
         ∃ resolved, Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
         ∃ draw rest read, Select.select resolved i.params.verifier.program i.params.verifier.query
             workTable i.closure i.source = .ok (draw, rest, read) ∧

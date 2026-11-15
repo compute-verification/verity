@@ -17,7 +17,7 @@ OPTS = CK.Options()
 def _toy():
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.types import Array, Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     return bind(CompositeDefinition("CircuitCheckBlock", 1, (), lambda S: ((("x", Array(2, Value(32))),), Value(32)),
                                     lambda B, S, x: B.call(P.F32Add, x[0], x[1]), register=False))
@@ -41,6 +41,31 @@ def test_a_unit_past_c_flocks_range_is_a_block_failure(monkeypatch):
     assert (f["ands"], f["k_log"], f["sha512x3"]) == (b["ands"], b["k_log"], b["sha512x3"])
     F = CK.Findings()
     assert not CK.block_range(fn, F, applies=False)["applies"] and not F.failures
+
+
+def test_a_unit_past_c_flocks_range_fails_block_however_its_partition_reads(monkeypatch):
+    """Over the cost target the partition is a warning (``partition/over-cost-target``), a Call or not, and ``block`` still
+    fails a Definition checked whole past Flock's range: the cost target bounds no proof, and ``block`` is the check that
+    does."""
+    from verity_flock import circuit as FC
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array, Value
+    from verity_vllm.definitions.registry import prims as P
+    from circuit_check import targets as TG
+
+    fn = bind(CompositeDefinition("CircuitCheckBlockOver", 1, (), lambda S: ((("x", Array(2, Value(32))),), Value(32)),
+                                  lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), x[1]), register=False))
+    monkeypatch.setattr(TG, "is_call", lambda fam: fam == TG.family(fn))
+    k_log = CK.check_definition(fn, OPTS, as_call=False)["block"]["k_log"]
+    monkeypatch.setattr(FC, "K_MAX", k_log - 1)
+    for opts in (OPTS, CK.Options(partition_max_gates=1)):
+        for as_call in (False, True):
+            e = CK.check_definition(fn, opts, as_call=as_call)
+            over = [w["code"] for w in e["warnings"] if w["check"] == "partition"]
+            assert over == (["over-cost-target"] if opts.partition_max_gates == 1 else [])
+            assert not [f for f in e["failures"] if f["check"] == "partition"]
+            assert [f["code"] for f in e["failures"] if f["check"] == "block"] == ["past-range"]
+            assert e["block"]["k_log"] == k_log > FC.K_MAX
 
 
 def _rows():
@@ -161,7 +186,7 @@ def test_sparse_mla_is_held_to_the_block_by_its_head_chain():
     """GLM-5.3's `SparseMla_v1` at its circuit-check binding (T = 65, the served heads and widths) is past the block whole
     (2^30 bits) and cut by `sparse_mla.CUTS` into each head's blocks and end, whose largest, a full block, fits."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import sparse_mla as M
+    from verity_vllm.definitions.registry import sparse_mla as M
 
     F = CK.Findings()
     b = CK.block_range(bind(M.SparseMla, T=65, **M.SPARSE_MLA_GLM53), F)
@@ -175,7 +200,7 @@ GREEDY_SERVED = """
 import json
 from circuit_check import checks as CK
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 F = CK.Findings()
 b = CK.block_range(bind(b1.TokenSelect, V=154880), F)
@@ -203,7 +228,7 @@ def test_sparse_mla_split_is_held_to_the_block_by_its_split_chain():
     `sparse_mla_split.CUTS` into each split's blocks, its ends in column blocks and each column block's combine, whose
     largest, a full block, fits."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import sparse_mla as M, sparse_mla_split as W
+    from verity_vllm.definitions.registry import sparse_mla as M, sparse_mla_split as W
 
     F = CK.Findings()
     b = CK.block_range(bind(W.SparseMlaSplit, T=130, NS=2, **M.SPARSE_MLA_GLM53), F)

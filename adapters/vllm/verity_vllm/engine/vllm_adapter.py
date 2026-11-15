@@ -2,8 +2,7 @@
 
 The engine is built in `engine.build`, the run's profile manifest and versions in `engine.run_facts`, and code identity in
 `engine.code_identity`; the stages reach all of them through this module's names.  The capture and its run header are
-`observe.capture`'s, above the engine, and its callers import them from there.  `load_workload` and what it calls stay in this
-file: tests execute them from its source, without importing torch.
+`observe.capture`'s, above the engine, and its callers import them from there.
 """
 
 from __future__ import annotations
@@ -129,7 +128,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
     if per_request:
         sampling["per_request"] = per_request
     if samp.get("ignore_eos"):
-        sampling["ignore_eos"] = True           # the static schedule (engine.static_schedule): every request runs its cap
+        sampling["ignore_eos"] = True           # the static schedule (engine.static_schedule): every request runs to its max_tokens
     return {"requests": reqs, "sampling": sampling, "source": str(path), "model": doc.get("model"), "revision": eng.revision, "case": doc.get("case"),
             "accepted": accepted,
             # declared scheduler knobs the workload cannot run without (`engine.args`, e.g. max_num_batched_tokens for an

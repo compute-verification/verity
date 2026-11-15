@@ -36,21 +36,21 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from verity.definitions.numerics import dense_rows as DRW
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import fa2_split_twins as FT
-from verity.definitions.numerics import inductor_rows as TW
-from verity.definitions.numerics.act_rows import silu_mul_expf_rows
-from verity.definitions.numerics.moe_router_rows import moe_router_topk
-from verity.definitions.numerics.rows import token_select_first_max
+from verity_vllm.definitions.numerics import dense_rows as DRW
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import fa2_split_twins as FT
+from verity_vllm.definitions.numerics import inductor_rows as TW
+from verity_vllm.definitions.numerics.act_rows import silu_mul_expf_rows
+from verity_vllm.definitions.numerics.moe_router_rows import moe_router_topk
+from verity_vllm.definitions.numerics.rows import token_select_first_max
 from verity.circuits.ops.prims import AmpereBF16TcDot16
-from verity.definitions.registry import act, b1, cublas_bf16, cublas_gemv
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import fa2_split as W2
-from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import inductor as IR
-from verity.definitions.registry import moe as MOE
+from verity_vllm.definitions.registry import act, b1, cublas_bf16, cublas_gemv
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import fa2_split as W2
+from verity_vllm.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.registry import inductor as IR
+from verity_vllm.definitions.registry import moe as MOE
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.query.manifest.bind import split_name
@@ -192,7 +192,7 @@ class ServedCheck:
         req = {r["request_id"]: r for r in plan["requests"]}
         spans = [(r, lo, hi) for r, lo, hi in st.rows]
         every = np.arange(n)
-        local = {r: self._draw(hi - lo) for r, lo, hi in spans}
+        local = {r: self._sample_rows(hi - lo) for r, lo, hi in spans}
         self.picks[st.step] = {r: [int(i) for i in v] for r, v in local.items()}
         some = np.concatenate([lo + local[r] for r, lo, _hi in spans]) if spans else every
         self._inputs(out, V, spans, req)
@@ -229,7 +229,7 @@ class ServedCheck:
             self.log(f"step {st.step} {plan['mode']} n={n}: {len(out) - len(bad)}/{len(out)} exact" + (f", FAIL {bad[:6]}" if bad else ""))
         return out
 
-    def _draw(self, n: int) -> np.ndarray:
+    def _sample_rows(self, n: int) -> np.ndarray:
         if self.rng is None or n <= self.k:
             return sample(n, self.k)
         return np.sort(self.rng.choice(n, self.k, replace=False))
@@ -425,13 +425,15 @@ def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int]) 
     reached: Counter = Counter()
     outside, disagree, seen = [], [], set()
     for s, notes in rep["steps"].items():
-        noted = notes["batch"].get("rows")                                       # a step in no step plan of the Build notes none
-        batch = noted if noted else {}
+        noted = notes.get("batch")                                               # a step in no step plan of the Build notes none
+        rows_of = noted.get("rows") if noted else None
+        batch = rows_of if rows_of else {}
         for name, v in notes.items():
             if name in ("batch", "coverage"):
                 continue
             op, member = split_name(name)
-            for r in (v["requests"] if name == IDS else batch):
+            listed = v.get("requests") if name == IDS else batch                 # an ids note that lists no request compared none
+            for r in (listed if listed else []):
                 at = {"request_id": r, "step": int(s), "op_path": op, "member": member}
                 i = want.get(key := (int(s), r, op, member))
                 if i is None:

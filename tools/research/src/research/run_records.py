@@ -20,7 +20,7 @@ from pathlib import Path
 
 #: a run directory's name
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}$")
-#: slot.py's line when what it waits behind changes (tools/verity/check/slot.py)
+#: slot.py's line when what it waits behind changes (tools/check/slot.py)
 WAITS = re.compile(r"^slot: (.+); retrying every \d+ s$", re.M)
 #: how much of stderr.log is read for it (slot.py writes there before the job does)
 STDERR_HEAD = 1 << 18
@@ -29,7 +29,7 @@ KINDS = ("quick suites", "Lean records", "check shards", "GPU jobs", "other")
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/([A-Za-z0-9_-]+)/slots")
 OWN_POOL, NO_POOL = "check", "-"
 #: the check's directory either way a tree spells it (research.pods.nebius.slot_only.CHECK_DIRS; this file is sent alone)
-CHECK_DIRS = ("tools/verity/check/", "tools/check/")
+CHECK_DIRS = ("tools/check/", "tools/verity/check/")
 
 
 def _check_file(name: str) -> re.Pattern[str]:

@@ -7,11 +7,11 @@ import Proofs.Flock.Soundness.Game
 /-!
 # The end-to-end theorem on a program of units, carried to its Boolean circuit (verified-lowering phase 1, S4d)
 
-`flock_e2e_count` and `flock_e2e_drawn` (`E2E.lean`) on a program of units (`Types.Program`):
+`flock_e2e_count` and `flock_e2e_sampled` (`E2E.lean`) on a program of units (`Types.Program`):
 - the committed circuit is the program's rows circuit, `p.C`, where those theorems measure "wrong"; these forms measure it
   on its Boolean circuit, `p.CB`, read off the rows through `p.mapG`;
-- `UProg.rowsL1` (proved) carries one to the other: at values 1 on the constant's gate `one`, a unit wrong on the Boolean
-  circuit is wrong on its rows. The committed values are 1 on `one` and the plurality elsewhere (`Xpub`), and `hConst`
+- `UProg.rowsL1` (proved) carries one to the other: at values 1 on the constant's gate `one`, a unit incorrect on the Boolean
+  circuit is incorrect on its rows. The committed values are 1 on `one` and the plurality elsewhere (`Xpub`), and `hConst`
   says that only a unit's constant column sits on `one`.
 
 The other gaps stay named, as in `E2E.lean`: `hExec`, `dp` and `vb`. The `_classes` forms build `dp` from each sampled
@@ -51,11 +51,11 @@ variable {kIn one : ℕ} (hone : one < kIn) {outs : List ℕ} (p : FlockSoundnes
   [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin p.n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin p.n)) → (R : Reg) → Fin p.n → Fin (plan S R).length)
-  {L : Law p.n}
+  {L : SamplingDesign p.n}
 
 /-- **The end-to-end count curve on a program of units.** `flock_e2e_count`, carried by `UProg.rowsL1`:
-if `execAccept` holds, the probability that at least `K` units are wrong on the program's Boolean circuit, at the
-committed values read through `mapG`, is at most `miss_L(K) + ε_ks(σ) + δ_link`, when only a unit's constant column sits
+if `execAccept` holds, the probability that at least `K` units are incorrect on the program's Boolean circuit, at the
+committed values read through `mapG`, is at most `miss_L(K) + ε_ks(σ) + ε_bind`, when only a unit's constant column sits
 on the constant's gate. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_count
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
@@ -68,7 +68,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.PB hone).wrong
+        K ≤ ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
@@ -77,10 +77,10 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count
     ((p.P hone).flock_e2e_count H E plan tab hExec dp {p.oneOf hone} hConst ∅
       (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht K σ hCR)
 
-/-- **The end-to-end drawn-unit bound on a program of units.** `flock_e2e_drawn`, carried by
-`UProg.rowsL1`: if `execAccept` holds, the probability that a sampled proof block is wrong on the program's Boolean circuit is at
-most `ε_ks(σ) + δ_link`, when only a unit's constant column sits on the constant's gate. -/
-theorem _root_.FlockSoundness.UProg.flock_e2e_drawn
+/-- **The end-to-end drawn-unit bound on a program of units.** `flock_e2e_sampled`, carried by
+`UProg.rowsL1`: if `execAccept` holds, the probability that a sampled proof block is incorrect on the program's Boolean circuit is at
+most `ε_ks(σ) + ε_bind`, when only a unit's constant column sits on the constant's gate. -/
+theorem _root_.FlockSoundness.UProg.flock_e2e_sampled
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin p.n → FlockSoundness.Rows} (dp : (p.P hone).DerivedPlaces plan tab unitRows)
     (hConst : (p.P hone).ConstCols plan tab dp.place {p.oneOf hone})
@@ -91,13 +91,13 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint ((p.PB hone).wrong
+        ¬ Disjoint ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (prob_mono (fun _ h => ⟨h.1, fun hd => h.2 (Finset.disjoint_of_subset_left
     (p.rowsL1 hone _ fun _ hg => Xpub_of_mem_ones hg) hd)⟩) _ σ).trans
-    ((p.P hone).flock_e2e_drawn H E plan tab hExec dp {p.oneOf hone} hConst ∅
+    ((p.P hone).flock_e2e_sampled H E plan tab hExec dp {p.oneOf hone} hConst ∅
       (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht σ hCR)
 
 /-- **Only a unit's constant column sits on `one`**, at the places built from the tables' classes: each unit's instance
@@ -182,16 +182,16 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.PB hone).wrong
+        K ≤ ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   UProg.flock_e2e_count hone p H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
     (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) vb hk hRw hM hρ hr ht K σ hCR
 
-/-- **The end-to-end drawn-unit bound on a program of units, from its tables' classes.** `UProg.flock_e2e_drawn` with
+/-- **The end-to-end drawn-unit bound on a program of units, from its tables' classes.** `UProg.flock_e2e_sampled` with
 `dp` built from each sampled proof block's table class, as in `UProg.flock_e2e_count_classes`. -/
-theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes
+theorem _root_.FlockSoundness.UProg.flock_e2e_sampled_classes
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (tabOf plan tab S R u).S)
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
@@ -206,11 +206,11 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint ((p.PB hone).wrong
+        ¬ Disjoint ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  UProg.flock_e2e_drawn hone p H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
+  UProg.flock_e2e_sampled hone p H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
     (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) vb hk hRw hM hρ hr ht σ hCR
 
 /-- **The end-to-end count curve on a program of units, from its tables' classes, with its zero public.**
@@ -235,7 +235,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes_zero
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.PB hone).wrong (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
+        K ≤ ((p.PB hone).incorrect (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
           ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
@@ -246,8 +246,8 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes_zero
       (p.zeroCols_of_classes hone plan tab cls slot blk hrd hcp hzk hz1 hzr) vb hk hRw hM hρ hr ht K σ hCR)
 
 /-- **The end-to-end drawn-unit bound on a program of units, from its tables' classes, with its zero public.**
-`UProg.flock_e2e_drawn_classes` with the program input `zer` public at 0, as in `UProg.flock_e2e_count_classes_zero`. -/
-theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes_zero
+`UProg.flock_e2e_sampled_classes` with the program input `zer` public at 0, as in `UProg.flock_e2e_count_classes_zero`. -/
+theorem _root_.FlockSoundness.UProg.flock_e2e_sampled_classes_zero
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (tabOf plan tab S R u).S)
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
@@ -265,13 +265,13 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes_zero
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint ((p.PB hone).wrong (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
+        ¬ Disjoint ((p.PB hone).incorrect (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
           ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (prob_mono (fun _ h => ⟨h.1, fun hd => h.2 (Finset.disjoint_of_subset_left
     (p.rowsL1 hone _ fun _ hg => Xpub_of_mem_ones hg) hd)⟩) _ σ).trans
-    ((p.P hone).flock_e2e_drawn H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
+    ((p.P hone).flock_e2e_sampled H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
       {p.oneOf hone} (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) _
       (p.zeroCols_of_classes hone plan tab cls slot blk hrd hcp hzk hz1 hzr) vb hk hRw hM hρ hr ht σ hCR)
 

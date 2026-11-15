@@ -214,7 +214,7 @@ def test_the_hidden_source_is_built_for_the_engine_s_attention_and_its_bounded_t
     assert (got.required_classes, got.hidden_required) == (CLASSES, True)
     assert said() == [
         f"INFO [delta] hidden source attached: {TAP} -> committer stub (BoundedSource, engine FA2)",
-        ("INFO [delta] fa2 tap bound: cap 64 MiB (ONE bounded device buffer; launches above it are split into sequence groups); telemetry "
+        ("INFO [delta] fa2 tap bound: 64 MiB (ONE bounded device buffer; launches above it are split into sequence groups); telemetry "
          f"{tmp_path / 'fa2_tap_windows.jsonl'}"), NO_RECORD, NO_PLAN]
 
 
@@ -228,7 +228,7 @@ def test_the_hidden_source_takes_the_committer_s_own_classes_and_the_namespace_g
                                                            "fa3_cls": "the native FA3 source", "manifest": None})]
     assert com.sources[0].telemetry_path == "unset", "with no out dir the telemetry path is left as built"
     assert said() == [f"INFO [delta] hidden source attached: {TAP} -> committer stub (UnboundedSource, engine FA3)",
-                      "INFO [delta] fa2 tap bound: cap 0 MiB (OFF: unbounded per-geometry buffers); telemetry unset", NO_PLAN]
+                      "INFO [delta] fa2 tap bound: 0 MiB (OFF: unbounded per-geometry buffers); telemetry unset", NO_PLAN]
 
 
 def test_without_a_manifest_and_without_given_classes_or_a_hidden_family_no_hidden_source_is_built(

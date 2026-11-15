@@ -13,7 +13,6 @@ _spec = importlib.util.spec_from_file_location("status_export", Path(__file__).p
 se = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(se)
 
-ART = "art:" + "a" * 64
 
 
 def _repo(root: Path, files: dict[str, object]) -> Path:
@@ -108,14 +107,6 @@ def test_without_facts_no_guarantee_is_proved(tmp_path):
     doc, _ = se.export(_repo(tmp_path, {"Sec/lean-audit.json": LOCK}))
     assert {s for s, _, read in _status(doc).values()} == {"assumes", "unknown"}
     assert not any(read for _, _, read in _status(doc).values())
-
-
-def test_results_of_record_come_from_a_demos_evidence_and_run_ids_are_only_counted(tmp_path):
-    demo = f'[evidence]\nruns = ["{ART}", "r20260101-000000-abcd"]\n[evidence.premises]\nbandwidth = "art:{"b" * 64}"\n'
-    doc, runs = se.export(_repo(tmp_path, {"Sec/lean-audit.json": LOCK, "demos/toy/demo.toml": demo}))
-    assert doc["results"] == [{"art": ART, "kind": None, "what": "the toy demo's run of record", "table": None},
-                              {"art": "art:" + "b" * 64, "kind": None, "what": "bandwidth, measured for the toy demo", "table": None}]
-    assert runs == 1
 
 
 def test_the_document_is_written_as_canonical_json_of_the_commit_it_read(tmp_path):

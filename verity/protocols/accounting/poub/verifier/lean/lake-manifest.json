@@ -3,6 +3,13 @@
  "packages":
  [{"type": "path",
    "scope": "",
+   "name": "core_spot",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../../../proofs/spot/verifier/lean",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
    "name": "core_protocol",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
@@ -87,6 +94,6 @@
    "dir":
    "../../../../../commitments/lms/lean",
    "configFile": "lakefile.toml"}],
- "name": "remote_audit",
+ "name": "poub",
  "lakeDir": ".lake",
  "fixedToolchain": false}

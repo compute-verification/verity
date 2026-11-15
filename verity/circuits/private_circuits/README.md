@@ -6,7 +6,7 @@ private circuit's description as an input beside the data, so its own structure 
 how a private circuit is hidden: circuit hiding is recursion (Flock's `--hide`). The terms and the front doors are
 [`verity.circuits`](../README.md)'s.
 
-- `Netlist`: a private circuit in SSA form, each gate an XOR, AND, XNOR or NAND of two wires before its own, and any
+- `PrivateCircuit`: a private circuit in SSA form, each gate an XOR, AND, XNOR or NAND of two wires before its own, and any
   other index reads 0. So every bit string describes a private circuit, the Definition is total and no description has a
   cycle.
 - `interpret`: the private circuit run gate by gate, the reference the Definition agrees with; `pad` fits a smaller private
@@ -18,5 +18,5 @@ The module's docstring gives the design and its cost, and the unit's binding fil
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/circuits/private_circuits`), and
+`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits/private_circuits`), and
 `benchmarks/private_circuit/` measures the unit.

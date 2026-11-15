@@ -349,7 +349,7 @@ theorem pair_requestsCover (form : Form) :
   simp only [pairPoint, List.getElem?_cons_zero, Option.some.injEq] at hc
   subst hc
   exact ⟨(card_le_univ _).trans (by simp),
-    fun ⟨⟩ _ => ⟨(by decide : servedBits (fun _ : Fin pairStmt.prog.outs.length => ()) () = 2), pair_readsCover⟩⟩
+    fun ⟨⟩ _ => ⟨(by decide : servedBits (fun _ : Fin pairStmt.prog.outs.length => ()) () ≤ 2), pair_readsCover⟩⟩
 
 theorem pair_servedCover (form : Form) :
     ServedCover pairStmt pairPart pairDesign (fun _ => ()) (pairPoint form) fun _ => 0 := by

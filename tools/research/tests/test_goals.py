@@ -145,6 +145,16 @@ def test_a_site_key_reads_the_page_without_an_identity_and_writes_nothing(monkey
     assert e.value.status == 401
 
 
+def test_a_saved_write_prints_the_sites_warnings_and_a_read_prints_none(monkeypatch, capsys):
+    warned = 'written, with warnings: this goal was saved\ndemos/both:\n  - [step] "The verdicts come back.": a run. Fix: name the outcome'
+    monkeypatch.setattr(goals, "http_json", lambda *a, **k: {"goals": [GOAL], "message": warned})
+    route = goals.Route()
+    monkeypatch.setattr(route._oidc, "send", lambda fn: fn("t"))
+    assert route.call({"set": GOAL}) == [GOAL]
+    assert capsys.readouterr().err == f"research goals: {warned}\n"
+    assert route.call() == [GOAL] and capsys.readouterr().err == ""
+
+
 @pytest.mark.parametrize("argv", [["set", "x", "--status", "maybe"], ["set", "x", "--wait", "goal:a", "--no-wait"],
                                   ["set", "x", "--tier", "2", "--no-tier"], ["set", "x", "--tier", "12"]])
 def test_the_command_line_refuses_what_the_site_would(argv):

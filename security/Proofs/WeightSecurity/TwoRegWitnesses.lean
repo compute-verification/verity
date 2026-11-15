@@ -10,14 +10,14 @@ import Proofs.Flock.Claims.Witnesses.SamplingTwoRegMiss
 /-!
 # The two-stage period's statements say something
 
-`CompilerPeriodTwoReg`'s premises hold together, and `PeriodTwoReg` fails where they don't.
+`CompilerMonitoringPeriodTwoReg`'s premises hold together, and `MonitoringPeriodTwoReg` fails where they don't.
 
-* `periodTwoReg_honest`: at `twoLTwo`'s windows every window meets `CompilerKSTwo`'s premises (`compilerKSTwo_honest`),
+* `monitoringPeriodTwoReg_honest`: at `twoLTwo`'s windows every window meets `CompilerKSTwo`'s premises (`compilerKSTwo_honest`),
   and the design `twoTwo` catches each replay block at rate `1` and samples each cell at rate `1` (`twoTwo_firstRate`,
   `twoTwo_secondRate`).
-* `periodTwoReg_nontrivial`: at `sksLTwo`'s windows, which accept after one round and sample nothing, `PeriodTwoReg`
+* `monitoringPeriodTwoReg_nontrivial`: at `sksLTwo`'s windows, which accept after one round and sample nothing, `MonitoringPeriodTwoReg`
   fails at both rates `1`. One window, played by `twoStrat` at the silent prover, leaves its replay block, wrong at the
-  committed boundary (`toy_wrongAtBoundaryAt`), undetected surely, while the bound is `0`: `ε_reg,2` is `0` at every
+  committed boundary (`toy_incorrectAtBoundaryAt`), undetected surely, while the bound is `0`: `ε_reg,2` is `0` at every
   prover.
 -/
 
@@ -47,10 +47,10 @@ theorem twoRegRun_twoStrat (H : Msg → Msg) (L : CompiledTwo Coin A) (m : (O �
       .coin (Fin (L.V.k x) → Coin) fun r => .ret [twoRegRec H L (regCount H L x P) (m, ⟨x, P, r⟩)] :=
   rfl
 
-/-- **`CompilerPeriodTwoReg`'s premises hold together** at `twoLTwo`'s windows and both rates `1`: `twoA` is knowledge
+/-- **`CompilerMonitoringPeriodTwoReg`'s premises hold together** at `twoLTwo`'s windows and both rates `1`: `twoA` is knowledge
 sound, each window's commitment binds and its sessions meet the two-stage contract (`compilerKSTwo_honest`), and its
 one statement's design is `twoTwo`, whose stages catch each replay block and sample each cell surely. -/
-theorem periodTwoReg_honest :
+theorem monitoringPeriodTwoReg_honest :
     (twoA Bool).KS FlockDeploy.sha512 ∧
       (∀ _t : ℕ, (twoLTwo Bool).commit.Binds FlockDeploy.sha512 ∧ (twoLTwo Bool).Sessions FlockDeploy.sha512) ∧
       (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧ (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧
@@ -64,10 +64,10 @@ theorem periodTwoReg_honest :
   exact ⟨twoTwo_firstRate, twoTwo_secondRate⟩
 
 open Classical in
-/-- **`PeriodTwoReg` fails** at `sksLTwo`'s windows and both rates `1`: one window, at the empty statement and the
+/-- **`MonitoringPeriodTwoReg` fails** at `sksLTwo`'s windows and both rates `1`: one window, at the empty statement and the
 silent prover, leaves its replay block wrong at the committed boundary undetected surely, while the bound is `0`. -/
-theorem periodTwoReg_nontrivial :
-    ¬ PeriodTwoReg (O := Unit) (V := Unit) (Tick := Unit) (Adv := Unit) FlockDeploy.sha512 (fun _ => sksLTwo Bool)
+theorem monitoringPeriodTwoReg_nontrivial :
+    ¬ MonitoringPeriodTwoReg (O := Unit) (V := Unit) (Tick := Unit) (Adv := Unit) FlockDeploy.sha512 (fun _ => sksLTwo Bool)
       1 1 := by
   intro h
   let m : (Unit → Unit) × Unit × Unit := (fun _ => (), (), ())
@@ -83,11 +83,11 @@ theorem periodTwoReg_nontrivial :
     exact h1
   have hcnt : 1 ≤ regCount FlockDeploy.sha512 (sksLTwo Bool) [] silentP := by
     have hval : regCount FlockDeploy.sha512 (sksLTwo Bool) [] silentP =
-        (wrongAtBoundaryAt toyStmt toyPart toyTwo.part
+        (incorrectAtBoundaryAt toyStmt toyPart toyTwo.part
           ((sksLTwo Bool).regVal FlockDeploy.sha512 silentP [] ())).card :=
       ite_eq_left inScopeTwo_toy
     rw [hval]
-    exact Finset.card_pos.2 ⟨0, toy_wrongAtBoundaryAt (val := (sksLTwo Bool).regVal FlockDeploy.sha512 silentP [] ())
+    exact Finset.card_pos.2 ⟨0, toy_incorrectAtBoundaryAt (val := (sksLTwo Bool).regVal FlockDeploy.sha512 silentP [] ())
       (sksL_regVal _ silentP [] () 0)⟩
   have hund : ∀ w : Served Unit Unit Unit Unit, ¬ w.sampledIncorrect → 1 ≤ w.incorrect →
       Served.Undetected 1 [w] :=

@@ -181,7 +181,7 @@ def _llama():
 def test_llama_linears_are_one_cards_and_all_in_the_domain():
     """Llama-3.2-1B at TP 1: qkv (32 + 2 · 8 heads of 64), o, the merged gate and up, down; every one in the sm_90a kernels'
     domain, with γ at both FADD readings (the data sheet's above the record's) by glm53's formula, and the decode M
-    demos/vllm serves at (8) among DECODE_M."""
+    the vLLM served run serves at (8) among DECODE_M."""
     L = _llama()
     rows = {r["name"]: r for r in L.table()}
     assert {x: (r["n"], r["k"]) for x, r in rows.items()} == {
@@ -491,7 +491,7 @@ def test_whole_served_arm_captures_as_the_served_arm_does_on_this_kernel():
     `whole_options` takes but the pass end's and pearl_c_sm120's B̃ prefetch, so a new served option fails here."""
     import inspect
 
-    from verity_vllm.protocols.pouw.pearl_c.lanes import whole_options
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes import whole_options
     spec = importlib.util.spec_from_file_location("pearl_c_vllm_bench_arm", HERE.parent / "pearl_c_vllm" / "bench_arm.py")
     B = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(B)
@@ -570,7 +570,8 @@ def retained(tmp_path_factory):
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/prover/clear"))
     import clear_work as CW
     from clear_audit import Prover
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     from verity.protocols.accounting.pouw.verifier import core_check as CC
     from verity.protocols.accounting.pouw.verifier.audit import (
@@ -595,15 +596,30 @@ def retained(tmp_path_factory):
     scheme = "pearl-c-h100-v1-h3"
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
     rng, k = np.random.default_rng(11), 128
-    words = lambda r: (rng.standard_normal((r, k)).astype(np.float32)).view(np.uint32) & 0xFFFF0000
-    rows = lambda x: [r.tobytes() for r in x]
-    bf16 = lambda x: b"".join((np.frombuffer(r, "<u4") >> 16).astype("<u2").tobytes() for r in rows(x))
-    laid = lambda d, leaves: b"".join(b"".join(level) for level in tree_levels(d, leaves))
+
+    def words(r):
+        return (rng.standard_normal((r, k)).astype(np.float32)).view(np.uint32) & 0xFFFF0000
+
+    def rows(x):
+        return [r.tobytes() for r in x]
+
+    def bf16(x):
+        return b"".join((np.frombuffer(r, "<u4") >> 16).astype("<u2").tobytes() for r in rows(x))
+
+    def laid(d, leaves):
+        return b"".join(b"".join(level) for level in tree_levels(d, leaves))
+
+    def inv(alpha):
+        return np.float32(1) / np.array(alpha, np.uint32).view(np.float32)
+
     wrows, acts = {0: words(16), 1: words(32)}, {0: words(32), 1: words(16)}
     acts[0][20:] = 0
     work = Workload((Matmul(0, Shape(32, k, 16), 0), Matmul(1, Shape(16, k, 32), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=bytes([1]) * 32)
-    salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)
+
+    def salted(v, nonce, i):
+        return v + hm96_salt(prover.salt_key, nonce, i)
+
     ch = Challenger(0, random.Random(7).randbytes)
     coins = ch.commitment, ch.open("salt", weights_root(prover.weight_roots))
     epoch = Epoch.start(work, prover.weight_roots, *coins)
@@ -619,8 +635,8 @@ def retained(tmp_path_factory):
     for w, x in wrows.items():
         dom = rows_domain(weight_binding(w), -2, len(x), s.commitment_hash)
         weights[str(w)] = {"n": len(x), "k": k, "root": prover.weight_roots[w].hex(), "excluded_b": list(records[w].excluded_b),
-                           "rows": PPD._write(d / "weights" / f"{w}.rows.bf16", bf16(x), digest=False),
-                           "tree": PPD._write(d / "weights" / f"{w}.tree",
+                           "rows": PPDR._write(d / "weights" / f"{w}.rows.bf16", bf16(x), digest=False),
+                           "tree": PPDR._write(d / "weights" / f"{w}.tree",
                                               laid(dom, [dom.leaf(j, j, ROW_SCHEMA, salted(r, HM96_WEIGHTS + w, j))
                                                          for j, r in enumerate(rows(x))]))}
     matmuls, y_words = [], 0
@@ -629,14 +645,13 @@ def retained(tmp_path_factory):
         dom = rows_domain(activation_binding(epoch.salt, u.index), u.index, m, s.commitment_hash)
         matmuls.append({"index": u.index, "m": m, "k": k, "n": n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
-                        "rows": PPD._write(d / "calls" / f"{u.index}.rows.bf16", bf16(acts[u.index]), digest=False),
-                        "tree": PPD._write(d / "calls" / f"{u.index}.tree",
+                        "rows": PPDR._write(d / "calls" / f"{u.index}.rows.bf16", bf16(acts[u.index]), digest=False),
+                        "tree": PPDR._write(d / "calls" / f"{u.index}.tree",
                                            laid(dom, [dom.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(x)]))})
         ctx = Context(epoch.salt, u, root, epoch.weight_roots[u.weight])
         noise = s.noise(ctx)
         ops = s.encode(ctx, noise, x, rows(wrows[u.weight]), Tile(tuple(range(m)), tuple(range(n))))
         uu = np.array(s.checked(ctx, ops).u, np.uint32)[:rec.real_rows].view(np.float32)
-        inv = lambda alpha: np.float32(1) / np.array(alpha, np.uint32).view(np.float32)
         y = torch.from_numpy((uu * inv(ops.a.alpha)[:rec.real_rows, None]) * inv(ops.b.alpha)[None, :]).to(torch.bfloat16)
         (d / "y" / f"{u.index}.bf16").write_bytes(y.view(torch.int16).numpy().tobytes())
         y_words += y.numel()
@@ -646,11 +661,11 @@ def retained(tmp_path_factory):
     head = {"schema": CC.MANIFEST_SCHEMA, "run": "r20261023-120000-test", "entry": f"pouw:{scheme}", "scheme": scheme,
             "instance": {"k_min": 32, "tile": [16, 16]}, "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(),
             "salt": epoch.salt.hex(), "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
-            "commitment": {"root": tr.commitment.root.hex(), "count": count}, "leaves": PPD._write(d / "leaves", b"".join(leaves)),
-            "tree_t": PPD._write(d / "tree_t", laid(dt, [dt.leaf(i, i, TILE_SCHEMA, salted(v, HM96_TRANSCRIPT, i))
+            "commitment": {"root": tr.commitment.root.hex(), "count": count}, "leaves": PPDR._write(d / "leaves", b"".join(leaves)),
+            "tree_t": PPDR._write(d / "tree_t", laid(dt, [dt.leaf(i, i, TILE_SCHEMA, salted(v, HM96_TRANSCRIPT, i))
                                                        for i, v in enumerate(leaves)])),
             "hm96_salt_key": prover.salt_key.hex()}
-    PPD.write_manifest(d, head, weights, matmuls)
+    PPDR.write_manifest(d, head, weights, matmuls)
     (base / "coins.json").write_text(json.dumps(coins[0].to_json()) + "\n")
     for name in GP.FULL:
         shutil.copytree(d, base / name)
@@ -701,7 +716,7 @@ def test_full_fails_on_one_served_y_word_or_one_activation_row_and_names_it(reta
     assert not res["ok"]
 
 
-def test_volunteer_leaves_each_pass_no_tile_over_a_cap_and_its_transcript_as_captured(retained, tmp_path):
+def test_volunteer_leaves_each_pass_no_tile_over_an_inert_bound_and_its_transcript_as_captured(retained, tmp_path):
     """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over a
     debit cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
     verifier's check under it."""

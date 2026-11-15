@@ -39,20 +39,20 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # `Claims.Recursion.ScopeMatches` at the compiled verifier's parser and scope check
 
-The compiled verifier (`flock-verify verify --rec-inner`) reads, of a recursion statement, the inner statement's bytes,
+The compiled verifier (`verity-verify-proof verify --rec-inner`) reads, of a recursion statement, the inner statement's bytes,
 the inner statement's files where it holds them (`RecCoins.Source`), its own inner shape (`RecVStar.Inner`,
 `--rec-inner`) and each V* session's record (`Read`). Its setup refuses an inner shape whose V* list
 `RecVStar.statements` refuses, at candidate 3's sparse shape one whose inner statement `RecCoins.checkAtC3`
 refuses (`checkInnerRange`), and where it holds the inner statement's files one that is not the inner statement's, or an
 inner statement set up otherwise than its files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`); every V*
-statement carries those files (`RecCoins.filesInput` refuses them in part). Its verdict refuses a V* session whose record holds no sample (`ProvedScope.drawLaw`) or
-whose sample is not every unit of its population (`RecSetup.fullDraw`), and a session over an inner session whose
-record holds no sample (`RecSetup.innerDrawn`), and a holo or sparse inner shape (`RecSetup.denseOnly`); the compiled
+statement carries those files (`RecCoins.filesInput` refuses them in part). Its verdict refuses a V* session whose record holds no sample (`ProvedScope.sampleDesign`) or
+whose sample is not every unit of its population (`RecSetup.fullSample`), and a session over an inner session whose
+record holds no sample (`RecSetup.innerSampled`), and a holo or sparse inner shape (`RecSetup.denseOnly`); the compiled
 statement's reader refuses an inner statement without a sample (`RecDeploy.innerOk`). There is no other recursion-level refusal.
 
 * `parseOf`: the deployed parser, what the verifier reads where its setup accepts the inner shape, readable (`toStmt`);
-* `scopeCheckOf`: the parser accepts, the inner scope check takes the inner statement, `RecSetup.fullDraw` takes
-  every V* session's sample at the verifier's inner shape (`fullDrawOk`), and `RecSetup.denseOnly` takes the inner shape
+* `scopeCheckOf`: the parser accepts, the inner scope check takes the inner statement, `RecSetup.fullSample` takes
+  every V* session's sample at the verifier's inner shape (`fullSampleOk`), and `RecSetup.denseOnly` takes the inner shape
   (`dense`: the verdict's refusal of the holo and sparse forms, which `RecursiveKS` doesn't cover);
 * `inScope_iff`: at a statement the parser accepts, `InScope` holds exactly when every V* session's sample is full and the
   inner shape is dense, the setup's checks giving every other condition on the inner shape (`statements_ok`,
@@ -94,9 +94,9 @@ def rangeOk (sp : RecSparse.Shape) (st : Stmt) : Bool :=
       (Array.replicate (st.c.kLog - 6) (0 : F128)) rng).isOk
   | .error _ => false
 
-/-- A sample, readable: its `subset` law's `k`, population, units and closure. -/
-def drawOf (D : Draw.UnitDraw) : Claims.Recursion.DrawRecord where
-  subset := match D.law with
+/-- A sample, readable: its `subset` sampling design's `k`, population, units and closure. -/
+def drawOf (D : Draw.UnitSample) : Claims.Recursion.DrawRecord where
+  subset := match D.samplingDesign with
     | .subset k => some k
     | _ => none
   population := D.population
@@ -105,8 +105,8 @@ def drawOf (D : Draw.UnitDraw) : Claims.Recursion.DrawRecord where
 
 /-- A V* session's sample as its record holds it, readable; `none` where the record holds none, or one that doesn't
 read. -/
-def recordDrawOf (record : String) : Option Claims.Recursion.DrawRecord :=
-  (Witness.recordDraw record).bind fun d => match Draw.UnitDraw.ofJson d with
+def recordSampleOf (record : String) : Option Claims.Recursion.DrawRecord :=
+  (Witness.recordDraw record).bind fun d => match Draw.UnitSample.ofJson d with
     | .ok D => some (drawOf D)
     | .error _ => none
 
@@ -125,7 +125,7 @@ def toStmt (r : Read) : Claims.Recursion.CompiledStatement where
       unitRangeInBlock := match r.shape.sparse, innerStmt r.src with
         | some sp, some st => rangeOk sp st
         | _, _ => false }
-  draws := r.records.map recordDrawOf
+  draws := r.records.map recordSampleOf
   links := r.links.map fun l => (l.1.data.toList, l.2)
 
 /-- **The verifier's setup accepts the inner shape**: V*'s list at it (`RecVStar.statements`), candidate 3's checks
@@ -145,17 +145,17 @@ def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Clai
   (parseBytes decode x).map toStmt
 
 /-- **A V* session's sample passes the verdict's refusals** under the verifier's inner shape `i`: its record holds a sample
-(`ProvedScope.drawLaw` refuses a session without one), and `RecSetup.fullDraw` takes it, as `verify` calls it in a
-recursive session (under an inner shape its `rec` flag changes nothing, `fullDraw_some`). -/
-def fullDrawOk (i : RecVStar.Inner) (record : String) : Bool :=
+(`ProvedScope.sampleDesign` refuses a session without one), and `RecSetup.fullSample` takes it, as `verify` calls it in a
+recursive session (under an inner shape its `rec` flag changes nothing, `fullSample_some`). -/
+def fullSampleOk (i : RecVStar.Inner) (record : String) : Bool :=
   match Witness.recordDraw record with
-  | some d => (RecSetup.fullDraw (some i) true (some d) record).isOk
+  | some d => (RecSetup.fullSample (some i) true (some d) record).isOk
   | none => false
 
-/-- Under an inner shape, `RecSetup.fullDraw`'s `noInner` refusal never fires, so its `rec` flag changes nothing. -/
-theorem fullDraw_some (i : RecVStar.Inner) (rec rec' : Bool) (draw : Option Lean.Json) (record : String) :
-    RecSetup.fullDraw (some i) rec draw record = RecSetup.fullDraw (some i) rec' draw record := by
-  simp [RecSetup.fullDraw]
+/-- Under an inner shape, `RecSetup.fullSample`'s `noInner` refusal never fires, so its `rec` flag changes nothing. -/
+theorem fullSample_some (i : RecVStar.Inner) (rec rec' : Bool) (draw : Option Lean.Json) (record : String) :
+    RecSetup.fullSample (some i) rec draw record = RecSetup.fullSample (some i) rec' draw record := by
+  simp [RecSetup.fullSample]
 
 /-- **The verifier's inner shape is dense**: the verdict's `RecSetup.denseOnly` takes it, so it is neither holo nor
 sparse. -/
@@ -172,7 +172,7 @@ V* session's sample passes, and the verifier's inner shape is dense (`RecSetup.d
 forms `RecursiveKS` doesn't cover). -/
 def scopeCheckOf (ivScope : Claims.Msg → Bool) (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Bool :=
   match parseBytes decode x with
-  | some r => ivScope r.inner && r.records.all (fullDrawOk r.shape) && dense r.shape
+  | some r => ivScope r.inner && r.records.all (fullSampleOk r.shape) && dense r.shape
   | none => false
 
 /-! ## The shape the setup accepts -/
@@ -287,25 +287,25 @@ theorem checkAtC3_ok {i : RecVStar.Inner} {src : Option RecCoins.Source} {sp : R
 
 /-! ## The full sample -/
 
-/-- Under an inner shape, `RecSetup.fullDraw` doesn't read whether the session is recursive: its `noInner` refusal is of
+/-- Under an inner shape, `RecSetup.fullSample` doesn't read whether the session is recursive: its `noInner` refusal is of
 a recursive session without one. -/
-theorem fullDraw_some_rec (i : RecVStar.Inner) (b : Bool) (d : Option Lean.Json) (record : String) :
-    RecSetup.fullDraw (some i) b d record = RecSetup.fullDraw (some i) true d record := by
-  simp [RecSetup.fullDraw]
+theorem fullSample_some_rec (i : RecVStar.Inner) (b : Bool) (d : Option Lean.Json) (record : String) :
+    RecSetup.fullSample (some i) b d record = RecSetup.fullSample (some i) true d record := by
+  simp [RecSetup.fullSample]
 
-theorem fullDrawOk_iff (i : RecVStar.Inner) (record : String) :
-    fullDrawOk i record = true ↔ ∃ e, recordDrawOf record = some e ∧ e.Full := by
-  unfold fullDrawOk recordDrawOf RecSetup.fullDraw
+theorem fullSampleOk_iff (i : RecVStar.Inner) (record : String) :
+    fullSampleOk i record = true ↔ ∃ e, recordSampleOf record = some e ∧ e.Full := by
+  unfold fullSampleOk recordSampleOf RecSetup.fullSample
   simp only [Option.isNone_some, Bool.and_false, Bool.false_eq_true, ↓reduceIte]
   rcases hd : Witness.recordDraw record with _ | d
   · simp
-  rcases hD : Draw.UnitDraw.ofJson d with e | D
+  rcases hD : Draw.UnitSample.ofJson d with e | D
   · simp [hD, bind, Except.bind, Except.isOk, Except.toBool]
   simp only [hD, Option.bind_some, Option.some.injEq, exists_eq_left', bind, Except.bind]
-  unfold Witness.fullDraw
+  unfold Witness.fullSample
   simp only [hd, hD, bind, Except.bind]
   unfold Claims.Recursion.DrawRecord.Full drawOf
-  rcases hl : D.law with k | _ | _ | _
+  rcases hl : D.samplingDesign with k | _ | _ | _
   · simp only [Option.some.injEq, true_and]
     rw [← Array.toList_range, Array.toList_inj, Array.toList_eq_nil_iff]
     by_cases hc : k = D.population ∧ D.units = Array.range D.population ∧ D.closure = #[]
@@ -321,7 +321,7 @@ inner shape is dense: the setup's checks give every other condition on the inner
 3's list has no R (`candidate3_ok`). -/
 theorem inScope_iff {r : Read} (hr : accepts r = true) :
     Claims.Recursion.InScope (toStmt r) ↔
-      r.records.all (fullDrawOk r.shape) = true ∧ dense r.shape = true := by
+      r.records.all (fullSampleOk r.shape) = true ∧ dense r.shape = true := by
   unfold accepts at hr
   simp only [Bool.and_eq_true, isOk_iff] at hr
   obtain ⟨⟨⟨⟨ss, hs⟩, -⟩, -⟩, -⟩ := hr
@@ -339,14 +339,14 @@ theorem inScope_iff {r : Read} (hr : accepts r = true) :
     refine ⟨?_, (dense_iff r.shape).2 ⟨?_, ?_⟩⟩
     · rw [List.all_eq_true]
       intro rec hrec
-      exact (fullDrawOk_iff r.shape rec).2 (hd _ (List.mem_map_of_mem hrec))
+      exact (fullSampleOk_iff r.shape rec).2 (hd _ (List.mem_map_of_mem hrec))
     · simpa [toStmt] using hh
     · simpa [toStmt] using hsp
   · rintro ⟨hall, hdn⟩
     refine ⟨rfl, h1, h2, h3, h4, hshape hdn, ?_⟩
     intro d hd
     obtain ⟨rec, hrec, rfl⟩ := List.mem_map.1 hd
-    exact (fullDrawOk_iff r.shape rec).1 (List.all_eq_true.1 hall rec hrec)
+    exact (fullSampleOk_iff r.shape rec).1 (List.all_eq_true.1 hall rec hrec)
 
 /-- **The readable scope at the verifier's parser**: the setup accepts what the verifier reads, the inner statement is
 in the inner scope, every V* session's sample passes, and the verifier's inner shape is dense. -/
@@ -354,7 +354,7 @@ theorem scope_iff {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin
     (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W) (decode : Claims.Msg → Option Read)
     (hparse : D.parse = parseOf decode) (x : Claims.Msg) :
     Claims.Recursion.Scope D I x ↔
-      ∃ r, parseBytes decode x = some r ∧ I.Scope r.inner ∧ r.records.all (fullDrawOk r.shape) = true ∧
+      ∃ r, parseBytes decode x = some r ∧ I.Scope r.inner ∧ r.records.all (fullSampleOk r.shape) = true ∧
         dense r.shape = true := by
   unfold Claims.Recursion.Scope
   rw [hparse]

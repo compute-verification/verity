@@ -68,8 +68,8 @@ theorem Zero.get {rounds : Array (Array F128)} (hz : Zero rounds) {k : Nat} {r :
   exact hz k hk
 
 theorem ofRounds_get? {rounds : Array (Array F128)} (hne : NoEmpty rounds) {k n : Nat} {v : Array F128}
-    (h : (CoinSource.ofRounds rounds).round k n = .ok v) : rounds[k]? = some v ∧ v.size = n := by
-  simp only [CoinSource.ofRounds, filter_noEmpty hne] at h
+    (h : (RoundCoins.ofRounds rounds).round k n = .ok v) : rounds[k]? = some v ∧ v.size = n := by
+  simp only [RoundCoins.ofRounds, filter_noEmpty hne] at h
   cases hr : rounds[k]? with
   | none => rw [hr] at h; cases h
   | some r =>
@@ -86,15 +86,15 @@ theorem ofRounds_get? {rounds : Array (Array F128)} (hne : NoEmpty rounds) {k n 
 more, and wherever it succeeds at a record of zero coins it returns alike, having sampled rounds of the sizes `ns`; both
 at records with no round of no coins (`NoEmpty`). -/
 def Z {A : Type} (t : Nat) (x : CM A) : Prop :=
-  ∀ k a j, x k CoinSource.zeros = .ok (a, j) → ∃ ns : List Nat, j = k + ns.length ∧ (∀ n ∈ ns, n ≠ 0) ∧
+  ∀ k a j, x k RoundCoins.zeros = .ok (a, j) → ∃ ns : List Nat, j = k + ns.length ∧ (∀ n ∈ ns, n ≠ 0) ∧
     (∀ rounds, NoEmpty rounds → Fits0 rounds k ns → rounds.size = j + t →
-      x k (CoinSource.ofRounds rounds) = .ok (a, j)) ∧
-    ∀ rounds b j', NoEmpty rounds → Zero rounds → x k (CoinSource.ofRounds rounds) = .ok (b, j') →
+      x k (RoundCoins.ofRounds rounds) = .ok (a, j)) ∧
+    ∀ rounds b j', NoEmpty rounds → Zero rounds → x k (RoundCoins.ofRounds rounds) = .ok (b, j') →
       b = a ∧ j' = j ∧ FitsSz rounds k ns
 
 /-- `x` flips no coin and reads no source. -/
 def NZ {A : Type} (x : CM A) : Prop :=
-  ∀ k a j, x k CoinSource.zeros = .ok (a, j) → j = k ∧ ∀ src, x k src = .ok (a, j)
+  ∀ k a j, x k RoundCoins.zeros = .ok (a, j) → j = k ∧ ∀ src, x k src = .ok (a, j)
 
 namespace NZ
 
@@ -165,14 +165,14 @@ theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → ND x₁) 
 
 end ND
 
-theorem guard_eq {A : Type} {err : String} {rest : CM A} (k : Nat) (src : CoinSource) :
-    (read >>= fun s : CoinSource => get >>= fun k : Nat =>
-      if (!s.drawnAll k) = true then (throw err : CM A) else rest) k src =
-      (if (!src.drawnAll k) = true then (throw err : CM A) else rest) k src := rfl
+theorem guard_eq {A : Type} {err : String} {rest : CM A} (k : Nat) (src : RoundCoins) :
+    (read >>= fun s : RoundCoins => get >>= fun k : Nat =>
+      if (!s.sampledAll k) = true then (throw err : CM A) else rest) k src =
+      (if (!src.sampledAll k) = true then (throw err : CM A) else rest) k src := rfl
 
 /-- Whenever `x` succeeds at a record with no round of no coins, it has sampled every round of the record. -/
 def E {A : Type} (x : CM A) : Prop :=
-  ∀ rounds k b j, NoEmpty rounds → x k (CoinSource.ofRounds rounds) = .ok (b, j) → rounds.size = j
+  ∀ rounds k b j, NoEmpty rounds → x k (RoundCoins.ofRounds rounds) = .ok (b, j) → rounds.size = j
 
 namespace E
 
@@ -200,16 +200,16 @@ theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → E x₁) (
   · rename_i hc; exact h₂ hc
 
 /-- The check that every recorded round was sampled (RecAlgebra.lean:513), before a tail that samples nothing. -/
-theorem guardDrawn {err : String} {rest : CM A} (h : ND rest) :
-    E (read >>= fun s : CoinSource => get >>= fun k : Nat =>
-      if (!s.drawnAll k) = true then (throw err : CM A) else rest) := by
+theorem guardSampled {err : String} {rest : CM A} (h : ND rest) :
+    E (read >>= fun s : RoundCoins => get >>= fun k : Nat =>
+      if (!s.sampledAll k) = true then (throw err : CM A) else rest) := by
   intro rounds k b j hne hx
   rw [guard_eq] at hx
   split at hx
   · cases hx
   · rename_i hc
     rw [h _ _ _ _ hx]
-    have e : (CoinSource.ofRounds rounds).drawnAll k = (k == rounds.size) := by
+    have e : (RoundCoins.ofRounds rounds).sampledAll k = (k == rounds.size) := by
       show (k == (rounds.filter (·.size ≠ 0)).size) = _
       rw [filter_noEmpty hne]
     rw [e] at hc
@@ -274,19 +274,19 @@ theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → Z t x₁)
   · rename_i hc; exact h₂ hc
 
 /-- The check that every recorded round was sampled (RecAlgebra.lean:513), before a tail that samples nothing. -/
-theorem guardDrawn {err : String} {rest : CM A} (h : NZ rest) :
-    Z 0 (read >>= fun s : CoinSource => get >>= fun k : Nat =>
-      if (!s.drawnAll k) = true then (throw err : CM A) else rest) := by
+theorem guardSampled {err : String} {rest : CM A} (h : NZ rest) :
+    Z 0 (read >>= fun s : RoundCoins => get >>= fun k : Nat =>
+      if (!s.sampledAll k) = true then (throw err : CM A) else rest) := by
   intro k a j hx
   rw [guard_eq] at hx
-  have hz : CoinSource.zeros.drawnAll k = true := rfl
+  have hz : RoundCoins.zeros.sampledAll k = true := rfl
   rw [hz] at hx
   simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at hx
   obtain ⟨hj, H⟩ := h k a j hx
   subst j
   refine ⟨[], rfl, (fun _ h => by simp at h), fun rounds hne _ hs => ?_, fun rounds b j' _ _ h' => ?_⟩
   · rw [guard_eq]
-    have hd : (CoinSource.ofRounds rounds).drawnAll k = true := by
+    have hd : (RoundCoins.ofRounds rounds).sampledAll k = true := by
       show (k == (rounds.filter (·.size ≠ 0)).size) = true
       rw [filter_noEmpty hne, hs]
       simp
@@ -314,7 +314,7 @@ theorem coinVec_z {t : Nat} (n : Nat) : Z t (coinVec n) := by
       fun rounds hne hr _ => coinVec_of hn ?_, fun rounds b j' hne hz h' => ?_⟩
     · have := hr 0 (by simp)
       simp only [Nat.add_zero, List.getElem_cons_zero] at this
-      simp only [CoinSource.ofRounds, filter_noEmpty hne]
+      simp only [RoundCoins.ofRounds, filter_noEmpty hne]
       rw [this]
       simp
     · rcases coinVec_ok h' with ⟨hn', -, -⟩ | ⟨-, hb, rfl⟩
@@ -472,7 +472,7 @@ theorem ligeritoRun_z (sch : Schedule) : ZL t (ligeritoRun sch M) := by
 
 theorem ligerito_z (sch : Schedule) (tIn : Lin) (sws : Array Switched) : Z 0 (ligerito sch M tIn sws) := by
   unfold ligerito
-  refine Z.bind (ligeritoRun_z sch _) fun ⟨⟨initCh, levels, ext⟩, st⟩ => Z.guardDrawn ?_
+  refine Z.bind (ligeritoRun_z sch _) fun ⟨⟨initCh, levels, ext⟩, st⟩ => Z.guardSampled ?_
   exact NZ.ite' (fun _ => NZ.throw' _) fun _ => NZ.bind NZ.liftE' fun _ =>
     NZ.ite' (fun _ => NZ.throw' _) fun _ => NZ.pure'
 
@@ -485,7 +485,7 @@ theorem run_z (sh : Shape) (extras : Array Claim) : Z 0 (run sh M extras) := by
 
 theorem ligerito_e (sch : Schedule) (tIn : Lin) (sws : Array Switched) : E (ligerito sch M tIn sws) := by
   unfold ligerito
-  exact E.bind fun ⟨⟨initCh, levels, ext⟩, st⟩ => E.guardDrawn (ND.ite' (fun _ => ND.throw' _) fun _ =>
+  exact E.bind fun ⟨⟨initCh, levels, ext⟩, st⟩ => E.guardSampled (ND.ite' (fun _ => ND.throw' _) fun _ =>
     ND.bind ND.liftE' fun _ => ND.ite' (fun _ => ND.throw' _) fun _ => ND.pure')
 
 theorem run_e (sh : Shape) (extras : Array Claim) : E (run sh M extras) := by
@@ -496,7 +496,7 @@ theorem run_e (sh : Shape) (extras : Array Claim) : E (run sh M extras) := by
 
 end Run
 
-theorem run_claims {sh : Shape} {M : Messages Lin} {extras : Array Claim} {k : Nat} {src : CoinSource}
+theorem run_claims {sh : Shape} {M : Messages Lin} {extras : Array Claim} {k : Nat} {src : RoundCoins}
     {p : Array Lin × Info Lin} {j : Nat} (h : run sh M extras k src = .ok (p, j)) : sh.claims = 2 + extras.size := by
   unfold run at h
   split at h
@@ -525,7 +525,7 @@ theorem eq_of_fitsSz {L ns : List Nat} (hF : FitsSz (zeroRounds L) 0 ns) (hs : (
   rw [e] at this
   simpa using this
 
-theorem residualLins_of_run {sh : Shape} {src : CoinSource} {extras : Array Claim} {p : Array Lin × Info Lin} {j : Nat}
+theorem residualLins_of_run {sh : Shape} {src : RoundCoins} {extras : Array Claim} {p : Array Lin × Info Lin} {j : Nat}
     (h : run sh (symbolic sh) extras 0 src = .ok (p, j)) : residualLins sh src extras = .ok p := by
   unfold residualLins
   change (Prod.fst <$> run sh (symbolic sh) extras 0 src) = _
@@ -552,7 +552,7 @@ theorem sizes_filter_ne {rounds : Array (Array F128)} :
 
 /-- **The rounds `verifierRows` returns at** (RecAlgebra.lean:824–829, 915–921): whenever `structureOf` does, there is
 one list `ns` of round sizes, none of them 0, those `run` samples at the zero coins, such that `verifierRows` returns at a
-record, extra claims and comb exactly when the record's rounds of some coins have the sizes `ns` (`CoinSource.ofRounds`
+record, extra claims and comb exactly when the record's rounds of some coins have the sizes `ns` (`RoundCoins.ofRounds`
 skips a round of none) and the extra claims are the statement's number. -/
 theorem verifierRows_schedule {sh : Shape} {S : GfS} (hS : structureOf sh = .ok S) :
     ∃ ns : List Nat, (∀ n ∈ ns, n ≠ 0) ∧ ∀ (rounds : Array (Array F128)) (extras : Array Claim) (comb : Array F128),
@@ -560,7 +560,7 @@ theorem verifierRows_schedule {sh : Shape} {S : GfS} (hS : structureOf sh = .ok 
         (rounds.filter (·.size ≠ 0)).toList.map Array.size = ns ∧ sh.claims = 2 + extras.size := by
   have hS' := hS
   unfold structureOf at hS'
-  cases hz : residualLins sh CoinSource.zeros (extrasLike sh) with
+  cases hz : residualLins sh RoundCoins.zeros (extrasLike sh) with
   | error e => rw [hz] at hS'; cases hS'
   | ok p =>
     obtain ⟨j, hj⟩ := residualLins_run hz

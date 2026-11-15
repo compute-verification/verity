@@ -6,14 +6,16 @@
 # the settings that clock highest, and puts the node's settings back on exit. From a pushed commit:
 #
 #   research run --on MACHINE --project verity --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/clock_ceiling.sh
+#     --env GPU_LEASE_WHO=LANE --env CLOCK_RELOCK_MEM_MHZ=MHZ -- bash benchmarks/pouw/opcode_probe/clock_ceiling.sh
 #
 # $OUT gets trials.jsonl (each knob's command, rc and output), states.jsonl (clocks.py state after each), calib.jsonl,
 # sustain.jsonl, smi_trace.csv, the nvidia-smi -q snapshots, restored.txt and ceiling.txt (eps1.py ceiling and clock).
-# CLOCK_SECS (20) is each sustained kernel's time; CLOCK_RELOCK_MHZ and CLOCK_RELOCK_MEM_MHZ (2100, 12481: vm_setup.sh's
-# vy-clocks lock) are put back on exit, with the power limit, vboost, CUDA-clock mode and offsets as found.
+# CLOCK_SECS (20) is each sustained kernel's time; CLOCK_RELOCK_MHZ (2100) and CLOCK_RELOCK_MEM_MHZ (required: the RTX
+# PRO 6000 card's clock.memory), vm_setup.sh's vy-clocks lock, are put back on exit, with the power limit, vboost,
+# CUDA-clock mode and offsets as found.
 set -uo pipefail
 OUT=${OUT:?run under research run}
+: "${CLOCK_RELOCK_MEM_MHZ:?set the memory clock to relock in MHz, clock.memory of the RTX PRO 6000 card}"
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export PYTHONDONTWRITEBYTECODE=1
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}

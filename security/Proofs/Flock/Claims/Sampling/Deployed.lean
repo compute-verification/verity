@@ -201,7 +201,7 @@ noncomputable def deployOf {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin 
   commit := commit c
   universal := universalProg
   flock := F
-  stage2 := c.stage2
+  secondStage := c.secondStage
   checked := c.checked
   rounds := c.rounds
   session := c.session

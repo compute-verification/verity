@@ -4,8 +4,8 @@
 stand-in on a host of its own, in place of the side `--challenger-command` starts on `--challenger`, its key trusted
 only when it is the one `--trusted-sha512` pins (period.json's `wipe.trusted_sha512`), as demo.sh has it. The
 challenger period.json names is `Side.of`'s, written to `$OUT/party.json` before the stand-in replaces it;
-the arguments and the lease it ran under go to `$OUT/demo-argv.json`. The Python judges alone: a `--wipe-protocol` is
-only recorded.
+the arguments and the lease it ran under go to `$OUT/demo-argv.json`. The `--wipe-protocol` the wrapper always gives is
+the period's Lean judge, stood in by one that answers each case as the Python answered it.
 `python served_wipe_demo.py OUT LEASE [DEMO_OPTIONS]`: the test's shim passes `$OUT` and `$GPU_LEASE_UUID`."""
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from verity.protocols.accounting.pous.prover import wipe_run
 from verity.runtime.stream import Side
-from verity.protocols.accounting.pous.verifier import wipe_period as W
 
 SIDE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "wipe_side.py"
 
@@ -30,13 +30,14 @@ def main(argv: list[str]) -> int:
     for o in ("--node", "--challenger", "--challenger-address", "--challenger-command", "--trusted-sha512", "--reads",
               "--wipe-protocol"):
         ap.add_argument(o)
-    ap.add_argument("--no-lean", action="store_true")
     a = ap.parse_args(argv)
     out = Path(out)
     (out / "demo-argv.json").write_text(json.dumps({"argv": argv, "lease": lease or None}))
-    doc = {"tools": {}, "challenger_host": a.challenger,
+    judge = a.wipe_protocol
+    doc = {"tools": {} if judge is None else {"wipe-protocol": judge}, "challenger_host": a.challenger,
            "challenger": {"wipe": {"command": shlex.split(a.challenger_command), "address": a.challenger_address}},
            "wipe": {"store": "host", "reads": int(a.reads), "trusted_sha512": a.trusted_sha512}}
+
     def stand_in(period, node, key, local, what=None):
         assert (key, what) == ("wipe", "the wipe"), "the wipe's side is period.json's challenger.wipe"
         named = Side.of(period, node, key, local, what)
@@ -44,6 +45,17 @@ def main(argv: list[str]) -> int:
                                                     "address": named.address}))
         return Side(named.host, (sys.executable, str(SIDE), local[local.index("--device") + 1]))
 
+    wipes, run = [], wipe_run.run
+
+    def ran(*args, **kw):
+        wipes.append(run(*args, **kw))
+        return wipes[-1]
+
+    def judged(exe, cases):
+        assert exe == judge and list(cases) == [wipes[-1].case]
+        return [wipes[-1].answer]
+
+    wipe_run.run, wipe_run.serve = ran, judged
     with tempfile.TemporaryDirectory() as t:
         period = Path(t) / "periods" / "p0"
         period.mkdir(parents=True)
@@ -51,7 +63,7 @@ def main(argv: list[str]) -> int:
         (out / "period.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
         (Path(t) / "periods" / "wipe-challenger").mkdir()
         with open(out / "summary.json", "w") as f, contextlib.redirect_stdout(f):
-            return W.main(["--period", str(period), "--out", str(out), "--node", a.node], side_of=stand_in)
+            return wipe_run.main(["--period", str(period), "--out", str(out), "--node", a.node], side_of=stand_in)
 
 
 if __name__ == "__main__":

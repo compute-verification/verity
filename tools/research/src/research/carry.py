@@ -230,7 +230,7 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
     moves: list[str] = []
     if moved and not any(own.values()):
         with tempfile.TemporaryDirectory(prefix="research-carry-", ignore_cleanup_errors=True) as d:
-            tools = Q.write_scripts(repo, Q.scripts_at(repo, restack, [Q.RESTACK]), Path(d)) / Q.MOVE_DIR
+            tools = Q.write_scripts(repo, Q.restack_files(repo, restack), Path(d)) / Q.MOVE_DIR
             for c, p in reversed(moved):
                 tree, why = moved_tree(repo, p, reruns[c], tools)
                 mine, gen = _judged(repo, tree, c, _differ(repo, tree, c), pins) if tree else (_differ(repo, p, c), [])

@@ -2,7 +2,7 @@ module
 
 public import Properties.NetworkScan.Assumptions
 public import NetworkCheck.Period
-public import Definitions.NetworkCertifier.SampledAudit
+public import Definitions.Certifier.SampledAudit
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,28 +38,28 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope
 
-The sampled audit's scope at a link-window's statement (`NetTiming.ScopeAcc`) has two halves: the sampling scope
-(`Claims.SamplingGeneric.Compiled.Scope`, the compiled sampled verifier's own, which `Claims.ScopeMatches` equates with
-its scope check), and the statement's layout fitting its program over its horizon (`NetTiming.BoundaryGates.Fits`).
-The network check reads the second off the scan's Program (`scanOf`, the generator form); the first it doesn't read.
+The sampled audit's scope at an execution phase's statement (`NetTiming.ScopeAcc`) has two halves: the sampling scope
+(`Claims.SamplingGeneric.Compiled.Scope`, the compiled sampled verifier's own), and the statement's layout fitting its
+program over its horizon (`NetTiming.BoundaryGates.Fits`). The network check reads the second off the scan's Program
+(`scanOf`, the generator form); the first it doesn't read, so `ScanScopeAcc` speaks of the statements in it.
 
 **The layout** (`scanLayout`) is the generator form's, at the schedule's `S = lanes · slots` slots of `B` bytes and
 `T` buckets, over one egress link: at step `t`, slot `σ`'s presence gate is bit 0 of egress member `t`'s verdict (its
 return's leaf 0), and its frame's bits are the return's leaves `16 + 8σB … 16 + 8(σ + 1)B − 1` (the row after the u16,
-row bit `8k + i` bit `i` of byte `k`); step `t`'s ingress is bucket `t`'s `row` parameter, in bit order: bucket 0's
-first-template member, bucket `t ≥ 1`'s later-template member `t − 1`, the templates being the root's nodes that call a
-composite (`NetworkCheck.Period.templateNodes`, as `scanOf` reads them). Gates are `Flock.Program.resolve`'s (§6), the
+row bit `8k + i` bit `i` of byte `k`); step `t`'s ingress is bucket `t`'s `row` parameter, in bit order: member `t` of
+the ingress template, the second of the root's nodes that call a composite (`NetworkCheck.Period.templateNodes`, as
+`scanOf` reads them), after the start unit's. Gates are `Flock.Program.resolve`'s (§6), the
 canonical layout's. A statement's layout is its descriptor's (`layOf`), at horizon `T`.
 
 **The flattening** (`Flattens`, in `Properties.NetworkScan.Flattens`): the sampling statement's gates
 (`Claims.Sampling.AuditStatement.prog`, "the descriptor flattened") are its descriptor's canonical layout, gate for gate.
-The compiled sampled verifier's premises are named `Prop`s of `Properties.NetworkScan.Assumptions`: `StmtFlattens` says
-it of every statement the verifier parses, and `ScopeMatches` that its scope check is its sampling scope.
+The compiled sampled verifier's premise is a named `Prop` of `Properties.NetworkScan.Assumptions`: `StmtFlattens` says
+it of every statement the verifier parses.
 
 * `ScanFits`: an accepted scan's layout fits every flattening of its Program over `T` steps.
 * `ScanScopeAcc`: given an accepted scan, at every compiled sampled verifier whose statements are their descriptors
-  flattened and whose scope check is its scope, a statement the scope check takes, whose descriptor is the scan's
-  canonical bytes, is in the sampled audit's scope at `layOf` and `T` (`ScopeAcc`).
+  flattened, a statement in its sampling scope, whose descriptor is the scan's canonical bytes, is in the sampled
+  audit's scope at `layOf` and `T` (`ScopeAcc`).
 
 `Proofs.Properties.NetworkScan` proves both (`scanFits`, and `scanScopeAcc` from it).
 -/
@@ -87,8 +87,7 @@ def scanLayout (P : Flock.Program.Prog) (s : Schedule) : NetTiming.BoundaryGates
       let leaf := fun j => gateAt P P.rootScope ⟨false, ke, t * le + j⟩
       (leaf 0, (List.range bits).map fun b => leaf (outBits + σ.val * bits + b))
     ingress := fun t =>
-      let km := if t = 0 then (ts.headD 0, 0) else (ts.getD 1 0, t - 1)
-      (List.range (s.allocation * bits)).map fun j => gateAt P (P.child P.rootScope km.1 km.2) ⟨true, 0, j⟩ }
+      (List.range (s.allocation * bits)).map fun j => gateAt P (P.child P.rootScope (ts.getD 1 0) t) ⟨true, 0, j⟩ }
 
 /-- A statement's layout at the schedule `s`: its descriptor's scan layout, none where the descriptor doesn't decode. -/
 def layOf (s : Schedule) (x : Claims.Sampling.AuditStatement) : NetTiming.BoundaryGates 1 s.allocation :=
@@ -108,15 +107,14 @@ def ScanFits : Prop :=
 
 /-- **An accepted scan's statements are in the sampled audit's scope.** If `scanOf` accepts the scan `j` at the
 schedule `s` and its canonical text is `c`, then at every compiled sampled verifier `D` whose statements are their
-descriptors flattened (`StmtFlattens`) and whose scope check is its sampling scope (`ScopeMatches`), a statement `x` the
-scope check takes, every parse of which has `c`'s bytes as its descriptor, is in `ScopeAcc` at the layout `layOf s` and
-the horizon `T`. -/
+descriptors flattened (`StmtFlattens`), a statement `x` in its sampling scope (`Claims.SamplingGeneric.Compiled.Scope`),
+every parse of which has `c`'s bytes as its descriptor, is in `ScopeAcc` at the layout `layOf s` and the horizon `T`. -/
 def ScanScopeAcc : Prop :=
   ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String),
     scanOf j program s = .ok sc → Flock.canon j = .ok c →
     ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Claims.SamplingGeneric.Arg Coin}
       (D : Claims.SamplingGeneric.Compiled Coin A) (x : Claims.Msg),
-      StmtFlattens D → ScopeMatches D → D.scopeCheck x = true →
+      StmtFlattens D → D.Scope x →
       (∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8) →
       NetTiming.ScopeAcc D (layOf s) (fun _ => s.window) x
 

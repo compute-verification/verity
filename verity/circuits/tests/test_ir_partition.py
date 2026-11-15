@@ -1000,8 +1000,8 @@ def test_within_partitions_a_subset_of_gates(gemm):
     assert v.status == "exact" and v.codes == () and v.detail["within"] == 24 and v.detail["path"] == "sweep"
     as_gateset = validate_partition(gemm, StubFamily(coords), within=IntervalSet(((224, 236), (236, 248))))
     assert as_gateset.status == "exact"
-    gap = validate_partition(gemm, StubFamily(coords[1:]), within=[(224, 248)])
-    assert gap.status == "gap" and gap.detail["gaps"] == [{"gates": [224, 228]}]
+    uncovered = validate_partition(gemm, StubFamily(coords[1:]), within=[(224, 248)])
+    assert uncovered.status == "gap" and uncovered.detail["gaps"] == [{"gates": [224, 228]}]
     out = validate_partition(gemm, StubFamily(vu), within=[(224, 248)])
     assert out.status == "outside" and out.codes == ("sweep-outside",)
     assert out.detail["outside"] == [{"gates": [0, 224]}] and out.detail["outside_count"] == 1
