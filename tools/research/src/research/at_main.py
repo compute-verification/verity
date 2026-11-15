@@ -376,7 +376,12 @@ def checkout_of(d: Path) -> Path | None:
     return next((p for p in (d, *d.parents) if (p / ".git").exists()), None)
 
 
-def pythonpath_notice(cache: Path, here: Path | None = None, marks: Path | None = None) -> str | None:
+def caches() -> Path:
+    """The at-main cache: under $XDG_CACHE_HOME, else ~/.cache (RuntimeError where no home can be found)."""
+    return Path(settings.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "research-at-main"
+
+
+def pythonpath_notice(cache: Path | None = None, here: Path | None = None, marks: Path | None = None) -> str | None:
     """One line on stderr, once an agent's session, when an entry of PYTHONPATH put the `research` package that runs
     (`here`) ahead of the checkout the command is for and of origin/main's: a startup file that exports one does so on
     every command, through no command a shell hook reads. What was printed, or None.
@@ -393,7 +398,8 @@ def pythonpath_notice(cache: Path, here: Path | None = None, marks: Path | None 
     root, agent = here.parents[3], (settings.get("CURSOR_CONVERSATION_ID") or "").strip()
     entries = [Path(p) for p in (settings.get("PYTHONPATH") or "").split(os.pathsep) if p]
     if (settings.get("PYTEST_CURRENT_TEST") or not AGENT_ID.fullmatch(agent) or not (root / ".git").exists()
-            or not any((p / "research").resolve() == here for p in entries) or here.is_relative_to(cache.resolve())):
+            or not any((p / "research").resolve() == here for p in entries)
+            or here.is_relative_to((cache or caches()).resolve())):
         return None
     owned = {Path(sys.prefix).resolve().parent}
     if shim := settings.get("RESEARCH_CHECKOUT"):
@@ -419,16 +425,20 @@ def reexec(argv: list[str], repo: Path | None = None, cache: Path | None = None,
     one line on stderr when origin/main's should run and couldn't be set up. First, as `research`'s own module (not the
     shim's script, whose `research` comes here again), it says once a session when no shell hook runs on this agent's VM
     (`guard_notice`), and when PYTHONPATH runs a third tree's research (`pythonpath_notice`): the other ways a VM runs
-    research other than main's without a word."""
-    cache = cache or Path(settings.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "research-at-main"
+    research other than main's without a word. A notice that raises OSError or RuntimeError is one line on stderr, and
+    the command goes on."""
     if __package__:
         from .guard_notice import notice
 
-        notice(os.environ)
-        pythonpath_notice(cache)
+        for name, say in (("guard_notice", lambda: notice(os.environ)), ("pythonpath_notice", lambda: pythonpath_notice(cache))):
+            try:
+                say()
+            except (OSError, RuntimeError) as e:
+                print(f"research: {name} could not run, and the command goes on: {' '.join(str(e).split())}", file=sys.stderr)
     repo = repo or Path(__file__).resolve().parents[4]
     if settings.get(OPT_OUT) or not (repo / ".git").exists():
         return
+    cache = cache or caches()
     end = clock() + SETUP_S
     try:
         found = behind(repo, end)
