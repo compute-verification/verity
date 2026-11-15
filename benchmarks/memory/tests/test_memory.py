@@ -1,8 +1,9 @@
 """`verity bench memory` (`run.py`): the number is the γ at the specification's rate that an accepted session's
 verifier recorded, printed as text and as one line of JSON; a session that wasn't accepted, or a run with no verifier's
 record, prints no number and exits 1. The number is printed with its error, the ledger's declared one, and a session
-whose error is 1 or more prints "no bound at this period" with it and no number. The three ways in share that printer: a recorded run, the loopback (which says
-it certifies nothing) and the node run (a gate run of one honest session, read from its fire run). The two references
+whose error is 1 or more prints "no bound at this period" with it and no number. The four ways in share that printer: a recorded run, the loopback (which says
+it certifies nothing), the node run (a gate run of one honest session, read from its fire run) and `--local` (a served
+session on this machine, which says it is a measurement and not an audit). The two references
 are read from their runs, and one that can't be read never takes the number down. Under a research run an accepted
 session's amounts are also written through the harness kit's writer, and what is printed stays the same to the byte.
 
