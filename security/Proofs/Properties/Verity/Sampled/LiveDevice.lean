@@ -371,8 +371,6 @@ noncomputable def base (H : Host) (δ : ℝ≥0∞) : Vocab Verity.Idle.device U
     world := fun _ _ _ _ _ => Verity.Idle.world
     world_window := fun _ _ _ _ _ => rfl
     world_capacity := fun _ _ _ _ _ => rfl
-    theta := fun _ _ => ∅
-    theta_input := fun _ _ _ h => absurd h (Finset.notMem_empty _)
     schedule := fun θ F => Instance.Honest.blocks (readOf H.tableFiles θ F).circuit
     wipe := fun θ F => Instance.Honest.wipe (readOf H.tableFiles θ F).circuit
     wipeRun := fun θ F c _ =>
