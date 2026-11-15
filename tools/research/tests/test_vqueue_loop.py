@@ -642,6 +642,9 @@ def test_a_pr_the_low_risk_rule_builds_on_its_mark_alone_is_the_chain_s_top_unti
     env.put(2, {"b.txt": "2\n"})
     assert [r for r in loop.tick() if r["action"] == "build"] == []
     assert [(x.number, x.verdict) for x in loop.world.ready(main)] == [(1, False), (2, True)]
+    env.put(1, {"a.txt": "1 again\n"})                          # a new head, with a land verdict: in flight, #1 has none
+    assert [r for r in loop.tick() if r["action"] == "build"] == []
+    assert loop.world.land_verdict(1, one) is False
     verdicts[1, one] = [Lab("reviewer", "land", "2026-01-01T00:00:00Z")]
     (on,) = [r for r in loop.tick() if r["action"] == "build"]
     assert (on["members"], on["base"]) == ([2], built["sha"]), on

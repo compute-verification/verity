@@ -1266,7 +1266,7 @@ class World:
                       lean_input=vqueue.meets(chosen[n][0], inputs), verdict=why[n] is None or n in carried)
                 for i, n in enumerate(placed)]
 
-    def verdict(self, n: int, head: str) -> bool:
+    def land_verdict(self, n: int, head: str) -> bool:
         """Whether #``n`` has a land verdict at ``head`` (`vqueue.Ready.verdict`), for a member in flight at a head it isn't ready
         at; True once it is closed, as no reader reviews it then."""
         p = self.open().get(n)
@@ -2804,7 +2804,7 @@ class Loop:
                         flying=tuple(Ready(m, h, (f := frozenset() if h in gone else w._changed(main, h)),
                                            lean=h not in gone and w._judge(main, h)[0],
                                            move=bool(getattr(w.open().get(m), "move", "")),
-                                           scripts=vqueue.meets(f, MOVE_SCRIPTS), verdict=w.verdict(m, h))
+                                           scripts=vqueue.meets(f, MOVE_SCRIPTS), verdict=w.land_verdict(m, h))
                                 for m, h in sorted(flying)),
                         records=self.records is not None, lean_stages=self.lean_stages)
         steps.lap("chain")
