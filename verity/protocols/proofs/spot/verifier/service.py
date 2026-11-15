@@ -10,7 +10,7 @@ dockets, samples from its own randomness and keeps the record (this module); the
 verifier, verifies offline, and reads coins only from the challenger's log.
 
 **The public-items rule.** Everything the auditor observes is a function of the Spec's public items. A docket is
-one-stage's record (`one_stage.registration`, v1 or v2), and `check_public` holds each of its observable items to the
+one-stage's record (`one_stage.docket`, v1 or v2), and `check_public` holds each of its observable items to the
 rule: it is the service's own, a salted root of a declared Value, or an item the Spec declares in `public`.
 
 * The service's own: `format`, `protocol` and `previous` (one-stage's tags and the log's chain), `scheme` (`SCHEME`: hm96
@@ -1107,18 +1107,18 @@ def _names_place(window: Any) -> bool:
     return True
 
 
-def _registration_token(r: WindowCommitmentRecord) -> str:
+def _docket_token(r: WindowCommitmentRecord) -> str:
     """The token `_Control` and `Spot.Stream` know a docket by: equal exactly when the dockets are."""
     return _sha512({"record": dict(r.record), "receipt": dict(r.receipt), "digest": r.digest, "order": r.order,
                     "salted_at": r.salted_at, "received_at": r.received_at})
 
 
 def _draw_token(d: Draw) -> str:
-    return _sha512({"registration": _registration_token(d.registration), "law": dict(d.law), "draw": dict(d.draw)})
+    return _sha512({"registration": _docket_token(d.registration), "law": dict(d.law), "draw": dict(d.draw)})
 
 
 def _covered(d: Draw) -> list[Any]:
-    return [_order(d.registration), _registration_token(d.registration), _draw_token(d)]
+    return [_order(d.registration), _docket_token(d.registration), _draw_token(d)]
 
 
 def _session_digests(sessions: Any) -> list[str | None] | None:
@@ -2032,7 +2032,7 @@ class Stream:
             salted_at = None if deadline is None else self._salted_at
             got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"),
                                                      v.fanout, v.rests_on_period_check, self._returned(got["program"]))
-            op["registration"] = _registration_token(got["registration"])
+            op["registration"] = _docket_token(got["registration"])
             return None
         d = self._decide(op, {"received_at": received, "checks": checks})
         if d.get("refused") == ["late-registration"]:
@@ -2191,7 +2191,7 @@ class Stream:
             if not v.ok:
                 return list(v.codes)
             got["registration"] = self._registration(record, first.registration.order, fanout=v.fanout)
-            op["interior"] = _registration_token(got["registration"])
+            op["interior"] = _docket_token(got["registration"])
             return None
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
         reg, earlier = got["registration"], got["earlier"]
@@ -2221,7 +2221,7 @@ class Stream:
         """What an op names a sample by: its docket's order and token and its token; for a two-stage design's
         second stage, the first stage's, with `second`, its own token."""
         first = draw.replay_sample or draw
-        op = {"order": _order(first.registration), "registration": _registration_token(first.registration),
+        op = {"order": _order(first.registration), "registration": _docket_token(first.registration),
               "draw": _draw_token(first)}
         if draw.replay_sample is not None:
             op["second"] = _draw_token(draw)
@@ -2248,7 +2248,7 @@ class Stream:
                 and self._entries[o].interior == registration:
             return self._select_second(self._entries[o])
         op: dict[str, Any] = {"op": "select", "order": _order(registration),
-                              "registration": _registration_token(registration)}
+                              "registration": _docket_token(registration)}
         got: dict[str, Any] = {}
 
         def checks() -> list[str] | None:
@@ -2317,7 +2317,7 @@ class Stream:
     def _select_second(self, e: _Entry) -> Draw:
         first, reg = e.draw, e.interior
         assert first is not None and reg is not None and isinstance(self.spec.selection, TwoStage)
-        op: dict[str, Any] = {"op": "second", **self._drawn_op(first), "interior": _registration_token(reg)}
+        op: dict[str, Any] = {"op": "second", **self._drawn_op(first), "interior": _docket_token(reg)}
         ns, ks, got = self.cells, self.counts, {}
 
         def checks() -> list[str] | None:
