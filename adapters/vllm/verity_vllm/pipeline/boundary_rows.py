@@ -13,7 +13,7 @@ program, partition, port, schema, N leaves, run); a u32 is two u16 words, low fi
 | value | row |
 |---|---|
 | `b.ingress` | `INGRESS` (the prompt's length, the sampling inputs, the seed as a u64), then P ids, zero past the prompt |
-| `b.egress` | the ids served n, the finish (`FINISH`), then O ids, zero past n |
+| `b.egress` | the ids served n, the finish (`boundary_words.FINISH`), then O ids, zero past n |
 
 The step shapes are no value: they choose the Programs, and the window's advice commits them. Each leaf's salt is fresh
 from the OS (`commit`).
@@ -24,7 +24,7 @@ twice, and the ids served n is no number the serve states:
 
 | value | row |
 |---|---|
-| `b.request` | `b.ingress`'s fields before its ids (`FIELDS`), the prompt's length and ``max_tokens`` the first two |
+| `b.request` | `b.ingress`'s fields before its ids (`boundary_words.FIELDS`), the prompt's length and ``max_tokens`` the first two |
 | `b.prompt` | P prompt ids, zero past lp |
 | `b.egress` | O ids, zero past n: no n and no finish |
 | `b.stop` | one u16, n + finish * 8192 (1 a stop id, 2 ``max_tokens``, 3 the model's length): a stop class's alone |
@@ -57,7 +57,7 @@ record, after `PORTS` or, under a stop rule, after `PARTS`.
 
 * **Verdicts** (`Layout.verdict_rows`): each bit a one, what the block returns where its check passes, so the serve
   writes them without a replay.
-* **Ids** (`id_rows`): O rows a span, row j the id of output j as the check returns it, two u16 words, the low one
+* **Ids** (`boundary_words.id_rows`): O rows a span, row j the id of output j as the check returns it, two u16 words, the low one
   first. The ids are the ones `b.egress` holds; nothing ties the two values to each other while the replay block is a
   stand-in that reads neither (below).
 
@@ -65,10 +65,10 @@ record, after `PORTS` or, under a stop rule, after `PARTS`.
 inlined: the logits each served id was selected from, as the sampler took them, so the select's inputs are fixed before
 any coin, as its return is. Its rows are the ones round 2's links at the select's units read (`Layout.logit_rows`): a
 span's tokens in order, each token's units in the select's order, row k of a token the slice of its logits unit k reads
-(bf16 bits, u16 words), past the ids served the last token's rows again, as `id_rows` repeats its id. Rank 0 holds the
-logits, so it commits them as the window closes and keeps their rows and salts (`boundary_logits`), and the class waits
-for the root, as it does for the tables'. Named as the return is (`return_port`: ``logits``, or ``<replay block's
-id>/logits``), it is listed after the return, under the row values' window domain.
+(bf16 bits, u16 words), past the ids served the last token's rows again, as `boundary_words.id_rows` repeats its id.
+Rank 0 holds the logits, so it commits them as the window closes and keeps their rows and salts (`boundary_logits`), and
+the class waits for the root, as it does for the tables'. Named as the return is (`return_port`: ``logits``, or
+``<replay block's id>/logits``), it is listed after the return, under the row values' window domain.
 
 **The replay block** (`Layout.replay`) is a stand-in until the class's request Definition lands: `per_prompt * P +
 per_output * O` instances of one check template (`population`), so a window committed under it is audited with that one
@@ -165,9 +165,9 @@ def class_size(v: Any) -> bool:
 
 @dataclass(frozen=True)
 class Span:
-    """One request as the engine core served it: its engine id, prompt ids, sampling inputs (`SAMPLING`), the ids it was
-    served, how it finished (a `FINISH` name, None while running) and, where the serve knows it, its release: the
-    network certifier's run and the request's index N in that run's release order."""
+    """One request as the engine core served it: its engine id, prompt ids, sampling inputs (`boundary_words.SAMPLING`),
+    the ids it was served, how it finished (a `boundary_words.FINISH` name, None while running) and, where the serve knows
+    it, its release: the network certifier's run and the request's index N in that run's release order."""
 
     engine_id: str
     prompt: tuple[int, ...]
@@ -208,8 +208,8 @@ def return_port(block: str, ports: Iterable[str]) -> str:
 
 def row_type(value: str, ids: int = 0) -> Array:
     """A span's row of `b.request`, `b.prompt` or, under a stop rule, `b.egress`, as a Definition reads or returns it,
-    each u32 a `U32` (`port_rows`' words): `b.request`'s `HEAD_U32`, or an ids row's ``ids``, P prompt ids or O ids zero
-    past n."""
+    each u32 a `U32` (`port_rows`' words): `b.request`'s `boundary_words.HEAD_U32`, or an ids row's ``ids``, P prompt ids
+    or O ids zero past n."""
     if value not in PARTS:
         raise ValueError(f"a Definition reads or returns a row of {', '.join(PARTS)}, not {value!r}")
     return Array(HEAD_U32 if value == REQUEST else ids, U32)
@@ -564,9 +564,9 @@ def port_rows(spans: Sequence[Span], layout: Layout) -> dict[str, np.ndarray]:
     row as its fields and its prompt ids, and the ids served alone; in a stop class, whose spans are at the rule's T
     whatever they were served, also the stop block's output on those rows, the rule's word. Where the class commits its
     replay block's return, its rows too: of verdicts (`Layout.verdicts`), every bit a one, low bit first in its words,
-    as the block returns it where its check passes; of ids (`Layout.ids`), each span's (`id_rows`). ValueError for a
-    span of a stop class the rule doesn't end as it was served (`boundary_stop.Stop.word`): the block's output on its
-    rows is not its end."""
+    as the block returns it where its check passes; of ids (`Layout.ids`), each span's (`boundary_words.id_rows`).
+    ValueError for a span of a stop class the rule doesn't end as it was served (`boundary_stop.Stop.word`): the block's
+    output on its rows is not its end."""
     L = layout
     if len(spans) != L.spans or any((s.shape[0], L.outputs if L.stopped else s.shape[1]) != (L.prompt, L.outputs)
                                     for s in spans):
@@ -767,8 +767,7 @@ def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None =
     return c
 
 
-__all__ = ["COMMIT", "EGRESS", "FORMAT", "INDEX", "INGRESS", "LOGITS", "MIN_CAP", "PARAMS",
-           "PARTS", "PORTS", "PROMPT", "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "U32", "Committed", "Layout",
-           "Span", "cap", "check_template", "class_signature", "class_size", "commit", "ends",
-           "inlined", "layout_of", "linked", "port_rows", "record", "reopen", "return_port", "row_type",
-           "run_root", "window_domain", "write"]
+__all__ = ["COMMIT", "EGRESS", "FORMAT", "INDEX", "INGRESS", "LOGITS", "MIN_CAP", "PARAMS", "PARTS", "PORTS", "PROMPT",
+           "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "U32", "Committed", "Layout", "Span", "cap", "check_template",
+           "class_signature", "class_size", "commit", "ends", "inlined", "layout_of", "linked", "port_rows", "record",
+           "reopen", "return_port", "row_type", "run_root", "window_domain", "write"]
