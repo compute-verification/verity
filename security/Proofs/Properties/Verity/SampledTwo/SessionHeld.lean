@@ -18,7 +18,7 @@ The sessions' coins take two facts about a play the two-stage form accepts as pr
   (`treesOf`), the interior's release log's lines (`linesOf`) and `membersTreesHeld` on them.
 * **What `membersTreesHeld` named** (`Named`, `named_exact`): for the statements' sessions in order, each session's
   record as `Verity.Sampled.recordOn` reads it, the SHA-512 of its evidence (`sessionEvidence`), in hex, and its
-  tables, one entry at the circuit statement's table (`rootBTables_one`); and `Spot.Challenger.membersTreeReason`
+  tables, one entry at the circuit statement's table (`ownRootBTables_one`); and `Spot.Challenger.membersTreeReason`
   accepted them. So the records it named are the sessions' records, in order (`named_records`).
 * **The statements and their members** (`HeldSize`, `zip_sessions`): `membersTreesHeld` runs over the statements paired
   with their members, which are all the statements where `membersHeld` returns a member for each. That it does is
@@ -91,9 +91,17 @@ theorem rootBTables_one (p : Spot.OneStageZk.Own) (bs : Core.Blobs) (record : St
   simp only [Spot.OneStageZk.rootBTables, sessionTables_circuit, Array.mapIdx_singleton]
   exact ⟨_, rfl⟩
 
+/-- **A member's session's tables are one entry, at the circuit statement's table**: `ownRootBTables`, which
+`membersTreesHeld` names, pairs the statement's one table with a length, as `rootBTables` does. -/
+theorem ownRootBTables_one (p : Spot.OneStageZk.Own) (bs : Core.Blobs) (record : String) :
+    ∃ n?, Spot.OneStageZk.ownRootBTables p bs record = #[(Flock.Tags.circuit.table, n?)] := by
+  unfold Spot.OneStageZk.ownRootBTables Spot.OneStageZk.rootBTablesAt
+  simp only [sessionTables_circuit, Array.mapIdx_singleton]
+  exact ⟨_, rfl⟩
+
 /-- **A session as `membersTreesHeld` names it**: the entry's record is the session's on the blobs
 (`Verity.Sampled.recordOn`), its digest is the SHA-512 of the session's evidence (`sessionEvidence`), in hex, and its
-tables are one entry, at the circuit statement's table (`rootBTables_one`). -/
+tables are one entry, at the circuit statement's table (`ownRootBTables_one`). -/
 def Named (bs : Core.Blobs) (s : Spot.OneStageZk.RunFiles)
     (x : String × Array (String × Option ℕ) × Json × String) : Prop :=
   Verity.Sampled.recordOn bs s = some x.2.2.1 ∧
@@ -111,10 +119,10 @@ theorem named_step {bs : Core.Blobs} {l pre : List Spot.OneStageZk.RunFiles}
     (hu : String.fromUTF8? b = some t) (hg : bs.get s.record s!"session {s.name}'s record" = .ok b)
     (hev : Spot.OneStageZk.sessionEvidence bs s = .ok ev) :
     List.Forall₂ (Named bs) (l ++ (pre ++ [s]))
-      (acc.push (s.name, Spot.OneStageZk.rootBTables p bs t,
+      (acc.push (s.name, Spot.OneStageZk.ownRootBTables p bs t,
         (Flock.JsonParse.parse t).toOption.getD Json.null, Spot.sha512Hex ev)).toList := by
   rw [← List.append_assoc, Array.toList_push]
-  refine List.rel_append hI (List.Forall₂.cons ⟨?_, ⟨ev, hev, rfl⟩, rootBTables_one p bs t⟩ .nil)
+  refine List.rel_append hI (List.Forall₂.cons ⟨?_, ⟨ev, hev, rfl⟩, ownRootBTables_one p bs t⟩ .nil)
   simp [Verity.Sampled.recordOn, hg, hu, Except.toOption]
 
 theorem reason_none {α : Type} {o x : Option α} (hx : o = x) (h : ∀ a, x = some a → False) : o = none := by

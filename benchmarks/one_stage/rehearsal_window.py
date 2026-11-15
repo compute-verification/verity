@@ -35,7 +35,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT / "adapters/vllm"), str(HERE)]
+sys.path[:0] = [str(ROOT), str(ROOT / "adapters/vllm"), str(ROOT / "adapters/torch"), str(HERE)]
 
 VERDICTS = ("ROW-DIR", "SERVED-ROWS", "CUT")
 #: a made-up root and salt: 64 bytes each, which W's writer reads as hex

@@ -32,7 +32,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT / "adapters/vllm"), str(HERE)]
+sys.path[:0] = [str(ROOT), str(ROOT / "adapters/vllm"), str(ROOT / "adapters/torch"), str(HERE)]
 
 
 def held(slots: int, k: int, gamma: int, refused: type[Exception]) -> dict:
