@@ -361,7 +361,7 @@
     {"file": "adapters/vllm/verity_vllm/pipeline/vu_export.py", "count": 5},
     {"file": "adapters/vllm/verity_vllm/pipeline/vu_store.py", "count": 12},
     {"file": "adapters/vllm/verity_vllm/pipeline/window_sampling_design.py", "count": 10},
-    {"file": "adapters/vllm/verity_vllm/pipeline/workload.py", "count": 39},
+    {"file": "adapters/vllm/verity_vllm/pipeline/workload.py", "count": 37},
     {"file": "adapters/vllm/verity_vllm/program/frontend/export_compat.py", "count": 4},
     {"file": "adapters/vllm/verity_vllm/program/frontend/stop_rule.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/program/frontend/target_profile.py", "count": 3},
