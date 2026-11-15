@@ -60,8 +60,9 @@ What the number is of, and the verifier that decides it. Change any of these and
   `verity/protocols/accounting/pouw/verifier/lean/pearlplus/`, `PouwCheck.PearlPlus`'s `check`) and its Python twin
   `benchmarks/pouw/pearl_c_vllm/verify_run.py`, which must agree. The number needs the Lean verdict.
 - **The scheme**: `pearl-c-h100-v1-h3` alone (`schemeOf` refuses the RTX PRO 6000's schemes by name), with 64 × 64
-  tiles and a matrix depth k of at least 1,024 (`TILE`, `K_MIN`), or 256 for the census depth the scheme admits
-  (`censusKs`), and at most 2^16 (`K_MAX`), and m and n at most 2^24 (`domainReason`). Its words follow the H100's FP8
+  tiles and a matrix depth k (the length of the products' dot products) of at least 1,024 (`TILE`, `K_MIN`) or
+  exactly 256, the one smaller depth the scheme also admits (`censusKs`), and at most 2^16 (`K_MAX`), and m and n at
+  most 2^24 (`domainReason`). Its words follow the H100's FP8
   tensor core bit for bit (`hopperE4m3K32`), so the card is an H100 or H200.
 - **The record's format**: the manifest schema (`manifestSchema`), the records root (`recordsRoot`), the coin record
   (`CoinRecord`) and the version of W (`wVersion`). W is the window record: the run's registration of each matrix
@@ -99,7 +100,8 @@ coins that didn't come live from the auditor's challenger (`ofRecordReason`). Wi
 one.
 
 **Choosing the sample.** Tiles are sampled by a key of the coin's source and the run's commitment (`drawKey`). A coin
-record of another commitment is `after-coin`; a verdict of record refuses the node's own sample (`of-record`). One
+record of another commitment is `after-coin`; a verdict of record refuses a sample the serving machine drew itself
+(`of-record`). One
 sampling session a root, ever, is the challenger's own rule, in Python on the auditor's device (`open_refusal` in
 `verity/protocols/compose/device/live_challenger/auditor.py`), not in Lean. On your own machine nothing refuses a
 retried sample.
@@ -119,7 +121,7 @@ Inert work below the bound, and any other skip, is what TT_OUT rev1 bounds.
 `call-range`; `workloadReason` refuses repeated matmul indices.
 
 **A smaller instance, or another scheme.** The verifier refuses a matrix multiplication outside the scheme's domain
-(`domainReason`: k under 1,024 other than the census's 256, k past 2^16, m or n past 2^24) and passes at a k_min or
+(`domainReason`: k under 1,024 other than 256, k past 2^16, m or n past 2^24) and passes at a k_min or
 tile other than the served instance's, except as a test instance, which credits nothing (`testCredit`) and which
 `verity bench compute` refuses; `schemeOf` refuses other schemes.
 
@@ -157,8 +159,8 @@ directory with a `pyproject.toml` of its own, as this one has for its tests, mak
 of the workspace's.
 `tests/fixtures/record/` is a record directory written by hand: its shapes are the served model's and its totals add
 up, but no verifier wrote it and no card served it, and the output's fourth line says so. So it writes no
-`result.json`, below. `--per-call` also prints
-where the MACs the credit leaves out went, by cause and by matrix multiplication call (the top N, 10 by default).
+`result.json`, below. `--per-call` also prints where the MACs the credit leaves out went, by cause and by matrix
+multiplication call (the top N, 10 by default).
 
 The first lines of the output, on the fixture:
 
@@ -169,9 +171,12 @@ a measurement, not an audit
 ~~~
 
 The second line says who drew the coins (`local challenger`, a challenger you run as its own process; or `in-process`,
-the run's own process), and that the sample size and δ are development ones.
-The fixture's are the node's own: it is a development run. ε_s and δ_s in the output are sampling's: the credit misses
-more than the share ε_s of the work with probability at most δ_s.
+the run's own process), and that the sample size and δ are development ones. The fixture's sample was drawn by the
+serving machine itself: it is a development run. The lines after name the run and say that the Pearl+ verifier's answer
+accepts at ε_s and δ_s and the Lean verifier agrees: ε_s and δ_s are sampling's, the credit misses more than the share
+ε_s of the work with probability at most δ_s. Then one line says what the credit rests on, and one gives PoUW's verdict
+in the run's record of verdicts (`out/record/verdicts.json`, every protocol's verdict on the run): on your own card it
+is not an accept, so PoUW credits nothing of the run, and the number is the Pearl+ verifier's answer alone.
 
 To keep what it prints as files too (`compute.json` and, for a run's record, `result.json`, below), set `OUT` to a
 directory: `OUT=/tmp/compute uv run verity bench compute --from benchmarks/compute/tests/fixtures/record`.
@@ -182,15 +187,20 @@ The tests: `cd benchmarks/compute && uv run --project ../.. pytest tests`.
 
 A record is the directory a served run writes: the Pearl+ verifier's answer and the Lean verifier's verdict on it,
 the run's policy, and the rest listed below. Making one is not yet one command in this clone: serve.sh, which serves the
-load on one card under Pearl+ and verifies it into a record directory, is on a branch. Until it lands, records come from
-runs on our machines. Once it lands it runs as bash benchmarks/compute/serve.sh from the clone's root, and needs:
+load on one card under Pearl+ and verifies it into a record directory, is on the branch
+`cursor/pouw-serve-1b-from-main-1de3` of this repository, not yet merged. Until it is, records come from runs on our
+machines. Once it is, it runs as bash benchmarks/compute/serve.sh from the clone's root, and needs:
 
 - one H100 or H200 (the scheme follows the H100's FP8 tensor core);
-- nvcc from CUDA 13.0 (12.8 or newer; `build.sh` looks in /usr/local/cuda-13.0 unless `CUDA` names another);
-- vLLM at commit d9105ea80 with torch 2.13.0+cu129, which only `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`
-  installs;
+- nvcc from CUDA 13.0 (12.8 or newer) at /usr/local/cuda-13.0, or wherever `CUDA_HOME` names: the kernel is built by
+  `benchmarks/harness/setup/pearl_c_sm90.sh`, which hands `build.sh` that toolkit;
+- vLLM at commit d9105ea80 with torch 2.13.0+cu129 and the checkpoint `unsloth/Llama-3.2-1B` at the revision
+  `load.toml` pins (about 2.5 GB from Hugging Face), both installed by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`.
+  It puts them under the directory `WORK` names, `/workspace` unless set, so set `WORK` to a directory of yours for it
+  and for serve.sh, which looks there too. From the clone's root:
+  `cd adapters/vllm && WORK=$HOME/verity-work bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B --gpu`, then
+  back at the root, WORK=$HOME/verity-work bash benchmarks/compute/serve.sh;
 - Lean v4.34.0, through [elan](https://github.com/leanprover/elan), to build the Lean verifier;
-- the checkpoint `unsloth/Llama-3.2-1B` at the revision `load.toml` pins, about 2.5 GB from Hugging Face;
 - about 2 GB of disk for the run's passes, besides the checkpoint and the vLLM environment.
 
 How long a run takes is not yet measured.
@@ -241,7 +251,10 @@ the number.
 - `h200_share.py`: a modeled share of an H200's capacity (below).
 
 **What it prints:** the number as text and as one line of JSON (`value`, `unit`, `commit`, `run`), beside its target.
-The first line says the number is what the Pearl+ verifier's own answer credits, not PoUW's row in the composed record.
+The first line says the number is what the Pearl+ verifier's own answer credits, not PoUW's verdict in the run's
+record of verdicts (`out/record/verdicts.json`, every protocol's verdict on the run), which a line further down
+prints. Under the answer's verdict a line says the credit rests on Pearl's conjecture TT_OUT rev1, which this
+repository's red-team rates refuted.
 The second and third are the harness kit's (`benchmarks/harness/README.md`): the coins and parameters the record states
 (`ran_with` in the JSON), and `a measurement, not an audit`, always (`audit` is false, in `compute.json` and in each
 entry of `result.json`). Where the record doesn't say whose challenger drew a challenger's coins, the second line is
