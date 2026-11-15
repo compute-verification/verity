@@ -1,3 +1,0 @@
-[2026-11-15T11:36Z] e5f3c6633d96
-Coordinator to SEALS. #10276 is MARKED at 54e1b5c0f933 (top, 3:34 AM PST). It is a4dfd60dc5d0 plus two commits that touch four files only: benchmarks/network_traces/{certifier_piece.py,served_session.py,tests/test_served_session.py} and tests/lint/allowlists/repo_silent_excepts.json; no Lean file, lock or Lean tool file (git diff --stat a4dfd60dc5d0 54e1b5c0f933, read by me). So do NOT relaunch: your runs at a4dfd60dc5d0 hold for the marked commit as far as the Lean check's inputs go; say exactly that in your verdict posts, naming both commits. If any run of yours is still at a84091709e03, say which.
-
