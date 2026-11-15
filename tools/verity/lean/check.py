@@ -1620,7 +1620,32 @@ def moves_file(path: Path) -> dict[str, str]:
         raise ValueError("a JSON object of old names to new names")
     if twice:
         raise ValueError("; ".join(twice))
+    if bad := [f"{n!r} is not a Lean name ({why})" for n in sorted({*moved, *moved.values()}) if (why := name_error(n))]:
+        raise ValueError("; ".join(bad))
     return moved
+
+
+def name_error(name: str) -> str | None:
+    """Why ``name`` is not a Lean name as `String.toName` reads it, or None: an empty component, or a `«` left open or a
+    `»` that closes none.  `renamed` splits at every dot, so it agrees with `Facts.lean`'s `renameName` only on such
+    names (a dot inside `«…»` starts no prefix that a well-formed entry can be)."""
+    if not name:
+        return "empty"
+    part, inside = "", False
+    for ch in name + ".":
+        if inside:
+            inside = ch != "»"
+        elif ch == ".":
+            if part in ("", "«»"):
+                return "an empty component"
+            part = ""
+            continue
+        elif ch == "»":
+            return "a » that closes no «"
+        elif ch == "«":
+            inside = True
+        part += ch
+    return "a « left open" if inside else None
 
 
 def lock_names(policy: dict) -> set[str]:

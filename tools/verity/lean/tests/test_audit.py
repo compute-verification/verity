@@ -3605,6 +3605,42 @@ def test_a_moves_file_that_gives_one_name_two_new_names_is_refused(tmp_path):
         A.moves_file(f)
 
 
+def test_a_moves_file_whose_names_are_not_lean_names_is_refused(tmp_path):
+    """`renamed` splits at every dot and `Facts.lean` reads names as `String.toName` does; they agree on a moves file
+    whose every old and new name is a Lean name, so any other is refused, by name, before a lock is read."""
+    f = tmp_path / "moves.json"
+    for bad, why in (("A.", "an empty component"), ("A..b", "an empty component"), ("", "empty"),
+                     ("A.«b", "a « left open"), ("A.b»", "a » that closes no «"), ("A.«»", "an empty component")):
+        for moves in ({bad: "Q"}, {"Q": bad}):
+            f.write_text(json.dumps(moves))
+            with pytest.raises(ValueError) as e:
+                A.moves_file(f)
+            assert str(e.value) == f"{bad!r} is not a Lean name ({why})", moves
+    f.write_text(json.dumps(moves := {"A.«b.c»": "Z", "Y.«d»": "Y.«e.f».g"}))
+    assert A.moves_file(f) == moves and A.renamed("A.«b.c».d", moves) == "Z.d" and A.renamed("A.«b.x»", moves) == "A.«b.x»"
+
+
+def test_moves_refused_against_a_lock_are_refused_before_anything_is_written(tmp_path, capsys):
+    """`--update --moved` checks the lock as loaded at startup: names that land together, a name that does not come back
+    and a name that is not a Lean name each stop it before the build is read or a file written, so a refused moves file
+    leaves no re-keyed lock that a plain `--update` would then pass without review."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    A.dump(pkg, unclaimed(A.load(pkg)) | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.A.t", "Control.X.t",
+                                                                                            "Control.Y.z.t")}})
+    before, f = (pkg / A.POLICY).read_text(), tmp_path / "moves.json"
+    for moves, said in (({"Control.A": "Control.X"}, "Control.A.t, Control.X.t all land on Control.X.t"),
+                        ({"Control.Y": "Control.Q", "Control.B": "Control.Q.z"},
+                         "Control.Y.z.t moves to Control.Q.z.t, which maps back to Control.B.t: give Control.Y.z.t an "
+                         "entry of its own"),
+                        ({"Control.A..t": "Control.Q"}, "'Control.A..t' is not a Lean name (an empty component)")):
+        f.write_text(json.dumps(moves))
+        with pytest.raises(SystemExit):
+            A.main([str(pkg), "--update", "--moved", str(f), "--no-runs", "--out", str(tmp_path / "out"), "--repo", str(tmp_path)])
+        assert said in capsys.readouterr().err, moves
+        assert (pkg / A.POLICY).read_text() == before and not (tmp_path / "out").exists(), moves
+
+
 def test_the_lock_names_a_moves_file_must_bring_back_are_those_the_move_renames():
     lock = {"guarantees": {"P.t": {}}, "deployed": ["P.t"], "open": {"P.Hyp": {}},
             "witnesses": {"P.t": {"honest": ["P.t_h"], "nontrivial": "P.t_n"}}, "unwitnessed": {"P.u": "00"},
