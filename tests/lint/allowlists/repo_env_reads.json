@@ -122,7 +122,7 @@
     {"file": "tools/research/src/research/pods/nebius/check.py", "count": 4},
     {"file": "tools/research/src/research/pods/nebius/dispatch.py", "count": 30},
     {"file": "tools/research/src/research/pods/nebius/fill_runner.py", "count": 32},
-    {"file": "tools/research/src/research/pods/nebius/fleet.py", "count": 8},
+    {"file": "tools/research/src/research/pods/nebius/fleet.py", "count": 6},
     {"file": "tools/research/src/research/pods/nebius/gpu_adopt.py", "count": 4},
     {"file": "tools/research/src/research/pods/nebius/gpu_stray.py", "count": 3},
     {"file": "tools/research/src/research/pods/nebius/gpu_util_sampler.py", "count": 3},
