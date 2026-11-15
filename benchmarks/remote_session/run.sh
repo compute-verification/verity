@@ -213,6 +213,7 @@ if [ -z "${CUDA_HOME:-}" ] && [ -n "$SERVED" ]; then
 fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PATH=$CUDA_HOME/bin:$(dirname "$PY"):$PATH
+[ -n "$SERVED" ] && . adapters/vllm/verity_vllm/ops/cuda_headers.sh && cuda_headers "$VPY"
 [ -x "$HOME/.elan/bin/lake" ] && export PATH="$HOME/.elan/bin:$PATH"
 B=$(mktemp -d "${TMPDIR:-/tmp}/remote-session.XXXXXX") || exit 3
 SV= # ROLE=both's verifier of a served session, a process group of its own

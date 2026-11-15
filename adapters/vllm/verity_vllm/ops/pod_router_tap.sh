@@ -17,6 +17,7 @@ REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}
 if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
+. "$REPO/verity_vllm/ops/cuda_headers.sh" && cuda_headers "$VENV/bin/python"
 RT=${RT:-/workspace/cp/router_tap}
 PIN=d9105ea8001e0a6d77a96327d17515bb5791fb36
 SRC=$REPO/verity_vllm/acquire/router_tap_src
