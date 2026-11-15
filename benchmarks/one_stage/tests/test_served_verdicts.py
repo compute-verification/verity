@@ -2786,7 +2786,7 @@ def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tupl
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "benchmarks" / "prove_path", bin_, venv, tmp_path / "serve"):
         d.mkdir(parents=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_PROVE_PATH)
     (tree / "answers.json").write_text(json.dumps(answers))
     (tmp_path / "serve" / "weights_registration.json").write_text("{}")
@@ -2824,7 +2824,7 @@ def _weights(tmp_path: Path, **extra: str) -> tuple[int, list[str]]:
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     for d in (tree / "benchmarks" / "prove_path", venv, tmp_path / "serve"):
         d.mkdir(parents=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_WEIGHTS)
     (venv / "python").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
     (venv / "python").chmod(0o755)
@@ -3108,7 +3108,7 @@ RULE, TIED_RULE = "rate:1/3481648", "stratified-rate:1/3481648"
 #: the toy tree's `window_commit.py`: the tree's own prove_path.py, run under the name served_verdicts.sh's calls record
 WINDOW_COMMIT = '''import runpy, sys
 from pathlib import Path
-sys.argv[0] = str(Path(__file__).parents[2] / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py")
+sys.argv[0] = str(Path(__file__).parents[2] / "benchmarks" / "prove_path" / "prove_path.py")
 runpy.run_path(sys.argv[0], run_name="__main__")
 '''
 
@@ -3211,7 +3211,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
               tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True, exist_ok=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
     (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(records_audit)
     _one_stage(tree, linked=False)
@@ -3334,7 +3334,7 @@ def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, lis
     cmd = argv[argv.index("--h1-window-commit") + 1]
     tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
     (tree / "benchmarks" / "prove_path").mkdir(parents=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
     _one_stage(tree)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)
@@ -3961,7 +3961,7 @@ def _pearl_tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProces
     tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
     for p in (tree / "benchmarks" / "prove_path", tree / "adapters" / "vllm", tmp_path / "piece"):
         p.mkdir(parents=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
     _one_stage(tree)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)

@@ -62,6 +62,7 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "verity/protocols/proofs/spot/verifier/tests/test_pearltie.py" = "benchmarks/prove_path/tests/test_pearltie.py"
 "verity/protocols/proofs/spot/verifier/tests/test_remotetie.py" = "benchmarks/prove_path/tests/test_remotetie.py"
 "verity/protocols/proofs/spot/verifier/tests/settings.py" = "benchmarks/prove_path/tests/settings.py"
+"verity/protocols/proofs/spot/verifier/tests/window_tie.py" = "benchmarks/prove_path/tests/window_tie.py"
 "adapters/vllm/tests/pipeline/test_two_stage_driver.py" = "benchmarks/one_stage/tests/test_two_stage_driver.py"
 
 [retired]
@@ -132,3 +133,4 @@ include = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
 "verity.protocols.proofs.spot.verifier.tests.test_pearltie" = "benchmarks.prove_path.tests.test_pearltie"
 "verity.protocols.proofs.spot.verifier.tests.test_remotetie" = "benchmarks.prove_path.tests.test_remotetie"
 "verity.protocols.proofs.spot.verifier.tests.test_verdict_record" = "benchmarks.one_stage.tests.test_verdict_record"
+"verity.protocols.proofs.spot.verifier.tests.window_tie" = "benchmarks.prove_path.tests.window_tie"
