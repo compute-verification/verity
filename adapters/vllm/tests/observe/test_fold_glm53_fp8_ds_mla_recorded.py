@@ -38,6 +38,7 @@ from verity_vllm.config import WORKLOADS, RowEngine, workload_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.patterns import dsa as D
+from verity_vllm.observe.fold.patterns import dsa_flashmla as F
 from verity_vllm.observe.fold.resolve_log import load_profile
 from verity_vllm.observe.fold.resolver import Compute, Group, spec_label
 from verity_vllm.observe.log import read_log
@@ -124,7 +125,8 @@ def test_the_bf16_cache_s_launches_fold_as_before():
     ctx.header = dataclasses.replace(ctx.header, profile={"gpu": {"multi_processor_count": 132}})
     made = [D.DsaNormRope().match(B._norm(), ctx), D.DsaQ().match(B._q(), ctx), D.DsaIndexShare().match(B._share(), ctx),
             D.DsaSparseMla().match(B._mla(**B.MLA_DEFAULT, **B._halves())[0], ctx), D.DsaNormRope().match(B._norm(indexer=False), ctx)]
-    others = [p for p in D.dsa_patterns() if type(p).__module__ == D.__name__ and not isinstance(p, (D.DsaNormRope, D.DsaIndexShare, D.DsaSparseMla))]
+    others = [p for p in D.dsa_patterns() if type(p).__module__ in (D.__name__, F.__name__)
+              and not isinstance(p, (D.DsaNormRope, D.DsaIndexShare, D.DsaSparseMla))]
     made += [r for p in others for node in (B._norm(), B._share(), B._mla(**B.MLA_DEFAULT, **B._halves())[0]) if (r := p.match(node, ctx))]
     state = {k: repr(v) for k, v in sorted(D._state(ctx)["modules"][B.LAYER].items())}
     blob = repr(([_canon(r) for r in made], state, D._state(ctx)["topk"])).encode()
