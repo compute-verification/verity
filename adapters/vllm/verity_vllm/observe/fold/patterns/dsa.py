@@ -3,7 +3,11 @@
 The patterns in this module are deliberately the recorded vLLM d9105ea80,
 cc 9.0 specialisations.  They turn the two Triton fusion kernels, DeepGEMM's
 unobserved MQA launch, the short-row top-k and FA3 sparse MLA into the same
-Definitions used by the export frontend.
+Definitions used by the export frontend; over an FP8 KV cache (`fp8_ds_mla`,
+`--kv-cache-dtype fp8`) the fused norm/RoPE launch's cache row, the q concat,
+the 128-column request-index conversion and FlashMLA's sparse fp8 decode in
+their place.  Which cache a launch serves is read from its constexprs and
+pointers alone.
 """
 
 from __future__ import annotations
@@ -42,7 +46,7 @@ from verity_vllm.observe.fold.patterns.ops import (
 )
 from verity_vllm.observe.fold.patterns.resolutions import unsupported
 from verity_vllm.observe.fold.patterns.rotary import step_positions
-from verity_vllm.observe.fold.patterns.target import target_of
+from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
 from verity_vllm.observe.fold.resolver import (
     Compute,
     Const,
@@ -50,13 +54,21 @@ from verity_vllm.observe.fold.resolver import (
     GatherMany,
     Group,
     PerRow,
+    Pieces,
     Resolution,
     Shared,
     StepContext,
     Transparent,
     Unsupported,
+    scratch_view,
 )
 from verity_vllm.observe.fold.tree import TreeNode
+from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import (
+    DS_MLA_TILE,
+    FLASHMLA_FP8_GEOMETRY,
+    FP8_PADDED_HEADS,
+    decode_splits,
+)
 
 NORM_KERNEL = "_fused_norm_rope_kernel"
 Q_KERNEL = "_fused_q_kernel"
@@ -65,6 +77,8 @@ TOPK_PREFILL = "top_k_per_row_prefill"
 TOPK_DECODE = "cooperative_topk"
 INDEX_SHARE_KERNEL = "vllm.v1.attention.backends.mla.sparse_utils.ConvertReqIndexToGlobalIndexKernel.kernel"
 FA3_OP = "fwd"
+CONCAT_Q_OP = "concat_mla_q"
+FLASHMLA_OP = "sparse_decode_fwd"
 
 NORM_SRC_SHA = "2dcf56892eb2b61c0f0249965013fc1f63968c00e473b3df35cb186d42c650de"
 Q_SRC_SHA = "7380a1385db787ceded52869fe395160e859d22710ca46f20d1d0fdef2f41043"
@@ -150,6 +164,43 @@ def _index_cache(k: ViewDesc, s: ViewDesc, block_size: Any, stride: Any, D: int)
                       BS, BS * W // D, SW)
 
 
+@dataclass(frozen=True)
+class DsMlaCache:
+    """The `fp8_ds_mla` latent cache as `_fused_norm_rope_kernel` writes it under ``MLA_CACHE_DS_MLA`` (vLLM d9105ea80
+    deepseek_v32/common/kernels.py): slot s's entry of W bytes holds its KVL e4m3 NoPE bytes, then its KVL / TILE f32 scales, then its
+    R bf16 RoPE words.  ``nope``, ``scale`` and ``rope`` are the three as one row a slot, over the kernel's ``mla_cache_ptr`` and its
+    f32 and bf16 views of the same bytes; FlashMLA reads the entries as ``kv`` [blocks, BS, 1, W] bytes."""
+
+    nope: ViewDesc
+    scale: ViewDesc
+    rope: ViewDesc
+    blocks: int
+    BS: int
+    W: int
+
+    @property
+    def slots(self) -> int:
+        return self.nope.shape[0]
+
+
+def _ds_mla_cache(m: ViewDesc, s: ViewDesc, r: ViewDesc, KVL: int, tiles: int, R: int) -> DsMlaCache:
+    """`DsMlaCache` of the kernel's ``mla_cache_ptr`` (e4m3 [blocks, BS, W]), ``mla_cache_ds_scale_ptr`` (the same bytes as f32) and
+    ``mla_cache_ds_rope_ptr`` (as bf16)."""
+    if m.rank != 3 or m.dtype != "float8_e4m3fn" or m.strides != (m.shape[1] * m.shape[2], m.shape[2], 1):
+        raise GeometryError(f"fp8_ds_mla cache is not a row-major e4m3 [blocks, block, entry]: {m!r}")
+    nb, BS, W = m.shape
+    if W != KVL + 4 * tiles + 2 * R or m.offset % 4:
+        raise GeometryError(f"fp8_ds_mla entry of {W} bytes is not {KVL} NoPE bytes, {tiles} f32 scales and {R} bf16 RoPE words: {m!r}")
+    for v, dtype, size in ((s, "float32", 4), (r, "bfloat16", 2)):
+        if v.alloc != m.alloc or v.dtype != dtype or size * v.offset != m.offset or v.shape != (nb, BS, W // size) \
+                or v.strides != (BS * W // size, W // size, 1):
+            raise GeometryError(f"fp8_ds_mla {dtype} view {v!r} is not the cache {m!r} as {dtype}")
+    n = nb * BS
+    return DsMlaCache(ViewDesc(m.alloc, m.offset, (n, KVL), (W, 1), m.dtype, m.device),
+                      ViewDesc(s.alloc, s.offset + KVL // 4, (n, tiles), (W // 4, 1), s.dtype, s.device),
+                      ViewDesc(r.alloc, r.offset + (KVL + 4 * tiles) // 2, (n, R), (W // 2, 1), r.dtype, r.device), nb, BS, W)
+
+
 def _slots(node: TreeNode, ctx: StepContext, rows: int, limit: int) -> tuple[int, ...] | Unsupported:
     if len(ctx.start.slot_mapping) < rows:
         return unsupported(node, "StepStart slot_mapping does not cover the kernel rows", rows=rows, slots=len(ctx.start.slot_mapping))
@@ -197,9 +248,22 @@ def _indexer_launches(ctx: StepContext) -> list:
     return [[rows[0] for _req, rows in reqs[:k]], reqs[k:]]
 
 
+#: `_fused_norm_rope_kernel`'s constexprs as GLM-5.3 launches it over a bf16 latent cache of 576-word rows, and (by
+#: ``MLA_CACHE_DS_MLA``) over an `fp8_ds_mla` one of four 128-value tiles an entry
+NORM_PINS = {
+    False: {"Q_DIM": 2048, "Q_BLOCK_SIZE": 2048, "KV_DIM": 512, "KPE_HALF_ROT_DIM": 32,
+            "MLA_CACHE_BLOCK_SIZE": 64, "MLA_CACHE_FP8": False, "MLA_CACHE_DS_MLA": False,
+            "MLA_NUM_TILES": 1, "MLA_TILE_DIM": 1, "TOPK": 2048, "TOPK_BLOCK_SIZE": 1024,
+            "INDEX_ROPE_INTERLEAVE": True},
+}
+NORM_PINS[True] = {**NORM_PINS[False], "MLA_CACHE_DS_MLA": True, "MLA_NUM_TILES": 512 // DS_MLA_TILE, "MLA_TILE_DIM": DS_MLA_TILE}
+
+
 @dataclass
 class DsaNormRope:
-    """The recorded ``_fused_norm_rope_kernel`` as four per-token computations."""
+    """The recorded ``_fused_norm_rope_kernel`` as four per-token computations; under ``MLA_CACHE_DS_MLA`` its kv norm and k rotation
+    are one `DsaLatentRowDsMla_v1` a token, whose bf16 row is the launch's kv and k_pe outputs and, with its NoPE bytes and scales, the
+    token's `fp8_ds_mla` cache entry."""
 
     name = "dsa.fused_norm_rope"
 
@@ -210,13 +274,8 @@ class DsaNormRope:
         if node.enter.src_sha != NORM_SRC_SHA or node.enter.num_warps != 4 or node.enter.num_stages != 3:
             return unsupported(node, "fused norm/RoPE source or launch geometry differs from the recorded GLM-5.3 pin",
                                src_sha=node.enter.src_sha, num_warps=node.enter.num_warps, num_stages=node.enter.num_stages)
-        pins = {
-            "Q_DIM": 2048, "Q_BLOCK_SIZE": 2048, "KV_DIM": 512, "KPE_HALF_ROT_DIM": 32,
-            "MLA_CACHE_BLOCK_SIZE": 64, "MLA_CACHE_FP8": False, "MLA_CACHE_DS_MLA": False,
-            "MLA_NUM_TILES": 1, "MLA_TILE_DIM": 1, "TOPK": 2048, "TOPK_BLOCK_SIZE": 1024,
-            "INDEX_ROPE_INTERLEAVE": True,
-        }
-        bad = {k: (c.get(k), v) for k, v in pins.items() if c.get(k) != v}
+        ds = c.get("MLA_CACHE_DS_MLA") is True
+        bad = {k: (c.get(k), v) for k, v in NORM_PINS[ds].items() if c.get(k) != v}
         if bad:
             return unsupported(node, "fused norm/RoPE constexprs differ from the recorded GLM-5.3 pin", mismatches=bad)
         q, qo, qw = a.get("q_c_ptr"), a.get("q_c_out_ptr"), a.get("q_rms_norm_w_ptr")
@@ -232,36 +291,53 @@ class DsaNormRope:
         if len(ctx.start.rows) != M or q.shape != (M, 2048) or qo.shape != (M, 2048) or kv.shape != (M, 512) or kpe.shape != (M, 64):
             return unsupported(node, "fused norm/RoPE rows or GLM-5.3 dimensions differ", q=repr(q), q_out=repr(qo), kv=repr(kv), kpe=repr(kpe),
                                step_rows=len(ctx.start.rows))
-        if not (q.dtype == qo.dtype == qw.dtype == kv.dtype == kvw.dtype == kpe.dtype == cs.dtype == latent.dtype == "bfloat16"):
+        if ds:
+            if not (q.dtype == qo.dtype == qw.dtype == kv.dtype == kvw.dtype == kpe.dtype == cs.dtype == "bfloat16") \
+                    or latent.dtype != "float8_e4m3fn":
+                return unsupported(node, "fused norm/RoPE is not bf16 over an e4m3 fp8_ds_mla cache", latent=repr(latent))
+        elif not (q.dtype == qo.dtype == qw.dtype == kv.dtype == kvw.dtype == kpe.dtype == cs.dtype == latent.dtype == "bfloat16"):
             return unsupported(node, "fused norm/RoPE is not entirely bf16")
         if qw.shape != (2048,) or kvw.shape != (512,) or cs.rank != 2 or cs.shape[1] != 64 or not is_row_major(cs):
             return unsupported(node, "norm weights or GPT-J rotary table have the wrong shape", qw=repr(qw), kvw=repr(kvw), cs=repr(cs))
         if any(p < 0 or p >= cs.shape[0] for p in pos):
             return unsupported(node, "a position is outside the GPT-J rotary table", positions=pos[:8], table_rows=cs.shape[0])
-        try:
-            latent_rows = _slot_rows(latent, 576)
-        except GeometryError as e:
-            return unsupported(node, str(e))
-        slots = _slots(node, ctx, M, latent_rows.shape[0])
-        if isinstance(slots, Unsupported):
-            return slots
-        kv_cache = ViewDesc(latent_rows.alloc, latent_rows.offset, (latent_rows.shape[0], 512), (576, 1), "bfloat16", latent_rows.device)
-        kpe_cache = ViewDesc(latent_rows.alloc, latent_rows.offset + 512, (latent_rows.shape[0], 64), (576, 1), "bfloat16", latent_rows.device)
         qeps, kveps = as_float(a.get("q_rms_eps")), as_float(a.get("kv_rms_eps"))
-        if qeps is None or kveps is None:
-            return unsupported(node, "norm epsilons are not static floats", q_eps=repr(a.get("q_rms_eps")), kv_eps=repr(a.get("kv_rms_eps")))
-        parts: list[Compute] = [
-            Compute(bind(DsaRMSNorm, N=2048, EPS=qeps), M, (PerRow(q), Shared(qw)), (PerRow(qo),), (node.id,),
-                    hint=f"{_module(node)}/q_a_layernorm", kernels=(NORM_KERNEL,), attribution=tuple(ctx.start.rows), pattern=self.name,
-                    roots=(None, _root(ctx, qw))),
-            Compute(bind(DsaRMSNorm, N=512, EPS=kveps), M, (PerRow(kv), Shared(kvw)), (Gather(kv_cache, slots),), (),
-                    hint=f"{_module(node)}/kv_a_layernorm", pattern=self.name, roots=(None, _root(ctx, kvw))),
-            Compute(bind(RoPEHeadGptJV2, D=64), M, (PerRow(kpe), Gather(cs, pos)), (Gather(kpe_cache, slots),), (),
-                    hint=f"{_module(node)}/k_pe", pattern=self.name, roots=(None, _root(ctx, cs))),
-        ]
+        q_norm = Compute(bind(DsaRMSNorm, N=2048, EPS=qeps), M, (PerRow(q), Shared(qw)), (PerRow(qo),), (node.id,),
+                         hint=f"{_module(node)}/q_a_layernorm", kernels=(NORM_KERNEL,), attribution=tuple(ctx.start.rows),
+                         pattern=self.name, roots=(None, _root(ctx, qw))) if qeps is not None else None
+        if ds:
+            made = self._ds_mla(node, ctx, a, M, pos, kveps)
+            if isinstance(made, Unsupported):
+                return made
+            if q_norm is None:
+                return unsupported(node, "norm epsilons are not static floats", q_eps=repr(a.get("q_rms_eps")), kv_eps=repr(a.get("kv_rms_eps")))
+            cache_parts, cache, slots = made
+            parts: list[Compute | Transparent] = [q_norm, *cache_parts]
+            ms = _module_state(ctx, node)
+            ms.update({"ds_mla": cache, "slots": slots})
+        else:
+            try:
+                latent_rows = _slot_rows(latent, 576)
+            except GeometryError as e:
+                return unsupported(node, str(e))
+            slots = _slots(node, ctx, M, latent_rows.shape[0])
+            if isinstance(slots, Unsupported):
+                return slots
+            kv_cache = ViewDesc(latent_rows.alloc, latent_rows.offset, (latent_rows.shape[0], 512), (576, 1), "bfloat16", latent_rows.device)
+            kpe_cache = ViewDesc(latent_rows.alloc, latent_rows.offset + 512, (latent_rows.shape[0], 64), (576, 1), "bfloat16",
+                                 latent_rows.device)
+            if q_norm is None or kveps is None:
+                return unsupported(node, "norm epsilons are not static floats", q_eps=repr(a.get("q_rms_eps")), kv_eps=repr(a.get("kv_rms_eps")))
+            parts = [
+                q_norm,
+                Compute(bind(DsaRMSNorm, N=512, EPS=kveps), M, (PerRow(kv), Shared(kvw)), (Gather(kv_cache, slots),), (),
+                        hint=f"{_module(node)}/kv_a_layernorm", pattern=self.name, roots=(None, _root(ctx, kvw))),
+                Compute(bind(RoPEHeadGptJV2, D=64), M, (PerRow(kpe), Gather(cs, pos)), (Gather(kpe_cache, slots),), (),
+                        hint=f"{_module(node)}/k_pe", pattern=self.name, roots=(None, _root(ctx, cs))),
+            ]
+            ms = _module_state(ctx, node)
+            ms.update({"latent": latent_rows, "kv": kv_cache, "kpe": kpe_cache, "slots": slots})
         has = c.get("HAS_INDEXER") is True
-        ms = _module_state(ctx, node)
-        ms.update({"latent": latent_rows, "kv": kv_cache, "kpe": kpe_cache, "slots": slots})
         if has:
             ik, iw, ib, ics = (a.get(k) for k in ("index_k_ptr", "index_k_layer_norm_w_ptr", "index_k_layer_norm_bias_ptr",
                                                    "index_k_rope_cos_sin_cache_ptr"))
@@ -295,6 +371,46 @@ class DsaNormRope:
         if bad_topk is not None:
             return bad_topk
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=_module(node), pattern=self.name)
+
+    def _ds_mla(self, node: TreeNode, ctx: StepContext, a: dict, M: int, pos: tuple[int, ...], eps: float | None
+                ) -> tuple[list[Compute | Transparent], DsMlaCache, tuple[int, ...]] | Unsupported:
+        """The token's `DsaLatentRowDsMla_v1` over its kv and k_pe words, which lie adjacent in the qkv_a row, into a fold-private
+        bf16 row whose two parts are copied to kv_out and kpe_out; its NoPE bytes and scales, and the row's k_pe, are the token's
+        cache entry (`DsMlaCache`)."""
+        kv, kvw, kpe, cs = a.get("kv_ptr"), a.get("kv_rms_norm_w_ptr"), a.get("kpe_ptr"), a.get("kpe_rope_cos_sin_cache_ptr")
+        kvo, kpo = a.get("kv_out_ptr"), a.get("kpe_out_ptr")
+        m, s, r = a.get("mla_cache_ptr"), a.get("mla_cache_ds_scale_ptr"), a.get("mla_cache_ds_rope_ptr")
+        if not all(isinstance(v, ViewDesc) for v in (kvo, kpo, s, r)):
+            return unsupported(node, "fp8_ds_mla norm/RoPE output or cache pointers are not bound",
+                               kv_out=repr(kvo), kpe_out=repr(kpo), ds_scale=repr(s), ds_rope=repr(r))
+        KVL, R, TILE = 512, 64, DS_MLA_TILE
+        if kpe.alloc != kv.alloc or kpe.offset != kv.offset + KVL or kpe.strides != kv.strides or kv.strides[1] != 1:
+            return unsupported(node, "kv and k_pe are not adjacent words of one row", kv=repr(kv), kpe=repr(kpe))
+        if kvo.shape != (M, KVL) or kpo.shape != (M, R) or kvo.dtype != "bfloat16" or kpo.dtype != "bfloat16":
+            return unsupported(node, "fp8_ds_mla kv and k_pe outputs are not bf16 [M,512] and [M,64]", kv_out=repr(kvo), kpe_out=repr(kpo))
+        try:
+            cache = _ds_mla_cache(m, s, r, KVL, KVL // TILE, R)
+        except GeometryError as e:
+            return unsupported(node, str(e))
+        if (a.get("mla_cache_block_stride"), a.get("mla_cache_entry_stride")) != (cache.BS * cache.W, cache.W):
+            return unsupported(node, "fp8_ds_mla block and entry strides are not the cache's", block_stride=a.get("mla_cache_block_stride"),
+                               entry_stride=a.get("mla_cache_entry_stride"), cache=repr(m))
+        slots = _slots(node, ctx, M, cache.slots)
+        if isinstance(slots, Unsupported):
+            return slots
+        if eps is None:
+            return unsupported(node, "norm epsilons are not static floats", q_eps=repr(a.get("q_rms_eps")), kv_eps=repr(a.get("kv_rms_eps")))
+        mod = _module(node)
+        row = ViewDesc(scratch_view(kv, node.id, 0, 1).alloc, 0, (M, KVL + R), (KVL + R, 1), "bfloat16", kv.device)
+        lo, hi = (ViewDesc(row.alloc, o, (M, w), row.strides, row.dtype, row.device) for o, w in ((0, KVL), (KVL, R)))
+        latent = Compute(vocab_kind(ctx, "dsa_latent_row_ds_mla", KVL=KVL, R=R, TILE=TILE, EPS=eps), M,
+                         (PerRow(ViewDesc(kv.alloc, kv.offset, (M, KVL + R), kv.strides, kv.dtype, kv.device)), Shared(kvw), Gather(cs, pos)),
+                         (PerRow(row), Gather(cache.nope, slots), Gather(cache.scale, slots)), (), hint=f"{mod}/kv_a_layernorm",
+                         pattern=self.name, roots=(None, _root(ctx, kvw), _root(ctx, cs)))
+        moves = [Transparent("move", (), src=PerRow(lo), dst=PerRow(kvo), rows=M, hint=f"{mod}/kv_c_out", pattern=self.name),
+                 Transparent("move", (), src=PerRow(hi), dst=PerRow(kpo), rows=M, hint=f"{mod}/k_pe_out", pattern=self.name),
+                 Transparent("move", (), src=PerRow(hi), dst=Gather(cache.rope, slots), rows=M, hint=f"{mod}/k_pe cache", pattern=self.name)]
+        return [latent, *moves], cache, slots
 
 
 @dataclass
@@ -479,6 +595,18 @@ class DsaTopK:
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=_module(node), pattern=self.name)
 
 
+#: the request-index conversion's constexprs and warps by ``COUNT_VALID``: FA3's over the bf16 cache counts each row's valid slots
+#: and compacts them in one 2048-column tile; FlashMLA's over `fp8_ds_mla` converts 128 columns a program and counts none
+INDEX_SHARE_PINS = {
+    True: ({"BLOCK_SIZE": 64, "BLOCK_STRIDE_ROWS": 64, "BLOCK_N": 2048, "HAS_PREFILL": False,
+            "COUNT_VALID": True, "SINGLE_TILE": True, "COMPACT_TO_FRONT": True,
+            "DCP_SIZE": 1, "DCP_RANK": 0, "DCP_INTERLEAVE": 1}, 8),
+    False: ({"BLOCK_SIZE": 64, "BLOCK_STRIDE_ROWS": 64, "BLOCK_N": 128, "HAS_PREFILL": False,
+             "COUNT_VALID": False, "SINGLE_TILE": False, "COMPACT_TO_FRONT": False,
+             "DCP_SIZE": 1, "DCP_RANK": 0, "DCP_INTERLEAVE": 1}, 4),
+}
+
+
 @dataclass
 class DsaIndexShare:
     """The pinned request-index to physical-slot copy between top-k and sparse FA3.
@@ -494,13 +622,10 @@ class DsaIndexShare:
         if not isinstance(node.enter, TritonLaunch) or node.enter.fn != INDEX_SHARE_KERNEL:
             return None
         a, c = bound_args(node), node.enter.constexprs
-        pins = {
-            "BLOCK_SIZE": 64, "BLOCK_STRIDE_ROWS": 64, "BLOCK_N": 2048, "HAS_PREFILL": False,
-            "COUNT_VALID": True, "SINGLE_TILE": True, "COMPACT_TO_FRONT": True,
-            "DCP_SIZE": 1, "DCP_RANK": 0, "DCP_INTERLEAVE": 1,
-        }
+        counted = c.get("COUNT_VALID") is not False
+        pins, warps = INDEX_SHARE_PINS[counted]
         bad = {k: (c.get(k), v) for k, v in pins.items() if c.get(k) != v}
-        if node.enter.src_sha != INDEX_SHARE_SRC_SHA or node.enter.num_warps != 8 or node.enter.num_stages != 3 or bad:
+        if node.enter.src_sha != INDEX_SHARE_SRC_SHA or node.enter.num_warps != warps or node.enter.num_stages != 3 or bad:
             return unsupported(node, "IndexShare conversion source or launch geometry differs from the recorded GLM-5.3 pin",
                                src_sha=node.enter.src_sha, num_warps=node.enter.num_warps, num_stages=node.enter.num_stages,
                                mismatches=bad)
@@ -508,11 +633,11 @@ class DsaIndexShare:
                                            ("req_id_ptr", "block_table_ptr", "token_indices_ptr", "out_ptr", "valid_count_ptr"))
         M = len(ctx.start.rows)
         if not (isinstance(req, ViewDesc) and isinstance(blocks, ViewDesc) and isinstance(source, ViewDesc) and isinstance(out, ViewDesc)
-                and isinstance(valid, ViewDesc)):
+                and (isinstance(valid, ViewDesc) if counted else valid is None)):
             return unsupported(node, "IndexShare conversion pointers are not bound")
         if req.shape != (M,) or req.dtype != "int32" or blocks.dtype != "int32" or blocks.rank != 2 \
                 or source.shape != out.shape or source.shape != (M, 2048) or source.dtype != out.dtype or source.dtype != "int32" \
-                or valid.shape != (M,) or valid.dtype != "int32" or not is_row_major(source) or not is_row_major(out):
+                or (counted and (valid.shape != (M,) or valid.dtype != "int32")) or not is_row_major(source) or not is_row_major(out):
             return unsupported(node, "IndexShare conversion views differ from the pinned i32 layouts",
                                req=repr(req), block_table=repr(blocks), source=repr(source), out=repr(out), valid=repr(valid))
         established = _state(ctx).get("topk")
@@ -594,14 +719,118 @@ class DsaSparseMla:
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=_module(node), pattern=self.name)
 
 
+@dataclass
+class DsaConcatQ:
+    """``_C_cache_ops.concat_mla_q`` (FlashMLA's query over an `fp8_ds_mla` cache): each head's absorbed NoPE row, then its rotated
+    q_pe, as one row [NH, 512 + 64]; a copy of both into the output's halves."""
+
+    name = "dsa.concat_mla_q"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or op_name(node.op) != CONCAT_Q_OP or not node.op.startswith("_C_cache_ops."):
+            return None
+        a = bound_args(node)
+        nope, pe, out = a.get("ql_nope"), a.get("q_pe"), a.get("q_out")
+        if not (isinstance(nope, ViewDesc) and isinstance(pe, ViewDesc) and isinstance(out, ViewDesc)):
+            return unsupported(node, "concat_mla_q pointers are not bound", ql_nope=repr(nope), q_pe=repr(pe), q_out=repr(out))
+        M = len(ctx.start.rows)
+        if nope.shape != (M, 8, 512) or pe.shape != (M, 8, 64) or out.shape != (M, 8, 576) or not nope.dtype == pe.dtype == out.dtype == "bfloat16" \
+                or nope.strides[2] != 1 or pe.strides[2] != 1 or not is_row_major(out):
+            return unsupported(node, "concat_mla_q views differ from bf16 [M,8,512] and [M,8,64] into a row-major [M,8,576]",
+                               ql_nope=repr(nope), q_pe=repr(pe), q_out=repr(out), step_rows=M)
+        halves = [ViewDesc(out.alloc, out.offset + o, (M, 8, w), out.strides, out.dtype, out.device) for o, w in ((0, 512), (512, 64))]
+        mod = _module(node)
+        return Group((Transparent("move", (node.id,), src=PerRow(nope), dst=PerRow(halves[0]), rows=M, hint=f"{mod}/q_nope",
+                                  kernels=(CONCAT_Q_OP,), pattern=self.name),
+                      Transparent("move", (), src=PerRow(pe), dst=PerRow(halves[1]), rows=M, hint=f"{mod}/q_pe", pattern=self.name)),
+                     tuple(sorted(node.ids())), hint=mod, pattern=self.name)
+
+
+@dataclass
+class DsaFlashMlaDecode:
+    """FlashMLA's sparse fp8 decode over the `fp8_ds_mla` cache (``_flashmla_C.sparse_decode_fwd``, vLLM's
+    ``FlashMLASparseImpl._forward_fp8_kv_mixed_batch``): every row of the step in one call at `FP8_PADDED_HEADS` padded heads, so the
+    planner gives all of them one SPLITS (`decode_splits`).  Row i of n keys is `FlashMlaV32Decode_v1` over its live heads' query and
+    TOPK cache entries, its request's n slots in key order and then slot 0's under index -1, which the kernel zeroes: the short-row
+    top-k's selection, which `DsaTopK` folds without reading its values."""
+
+    name = "dsa.flashmla_sparse_decode"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or op_name(node.op) != FLASHMLA_OP or not node.op.startswith("_flashmla_C."):
+            return None
+        a, outs = bound_args(node), node.output_views()
+        q, kv, idx = a.get("q"), a.get("kv"), a.get("indices")
+        if not (isinstance(q, ViewDesc) and isinstance(kv, ViewDesc) and isinstance(idx, ViewDesc)) or not outs:
+            return unsupported(node, "FlashMLA sparse decode q/kv/indices/out pointers are not bound")
+        out, M, (DR, DN), TOPK = outs[0], len(ctx.start.rows), next(iter(FLASHMLA_FP8_GEOMETRY)), 2048
+        G, NH, NHP = FLASHMLA_FP8_GEOMETRY[(DR, DN)], 8, FP8_PADDED_HEADS
+        if q.shape != (1, M, NHP, DN + DR) or out.shape != (1, M, NHP, DN) or q.dtype != "bfloat16" or out.dtype != "bfloat16" \
+                or q.strides[3] != 1 or out.strides[3] != 1 or idx.shape != (1, M, TOPK) or idx.dtype != "int32":
+            return unsupported(node, "FlashMLA sparse decode views differ from bf16 [1,M,64,576] into [1,M,64,512] over i32 [1,M,2048]",
+                               q=repr(q), out=repr(out), indices=repr(idx), step_rows=M)
+        # the step's first call plans the split schedule and returns it beside out and lse; every later layer passes that plan back
+        state = _state(ctx)
+        plan = state.get("flashmla_plan")
+        pins = {"topk_length": None, "attn_sink": None, "tile_scheduler_metadata": None if plan is None else plan[0],
+                "num_splits": None if plan is None else plan[1], "extra_kv": None, "extra_indices": None, "extra_topk_length": None,
+                "d_v": DN, "sm_scale": 0.0625, "out_": None}
+        bad = {key: (a.get(key), val) for key, val in pins.items() if a.get(key) != val}
+        if bad:
+            return unsupported(node, "FlashMLA sparse decode arguments differ from GLM-5.3's fp8 mixed batch: the step's first call plans "
+                               "the splits, each later one passes that plan", mismatches=bad)
+        if plan is None and len(outs) != 4:
+            return unsupported(node, "the step's first FlashMLA sparse decode does not return its split plan", outputs=[repr(o) for o in outs])
+        ms = _module_state(ctx, node)
+        cache = ms.get("ds_mla")
+        if not isinstance(cache, DsMlaCache) or (kv.alloc, kv.offset, kv.shape, kv.strides) != (
+                cache.nope.alloc, cache.nope.offset, (cache.blocks, cache.BS, 1, cache.W), (cache.BS * cache.W, cache.W, cache.W, 1)):
+            return unsupported(node, "FlashMLA does not read the fp8_ds_mla cache fused_norm_rope wrote", kv=repr(kv),
+                               established=repr(cache.nope) if isinstance(cache, DsMlaCache) else None)
+        page = (idx.alloc, idx.offset, idx.shape[2], idx.strides[1:])
+        if page != ms.get("page_table"):
+            return unsupported(node, "FlashMLA indices are not its layer's request-index conversion", indices=page,
+                               established=ms.get("page_table"))
+        tp = target_of(ctx)[0]
+        if int(tp.num_sms) != RECORD_SMS:
+            return unsupported(node, "GLM-5.3 FlashMLA split plan is pinned to the record target's 132-SM launch", num_sms=tp.num_sms)
+        entries, consts = [], []
+        for req, position in ctx.start.rows:
+            n = int(position) + 1
+            if n > TOPK:
+                return unsupported(node, "a FlashMLA row of more keys than TOPK reads the rows its top-k selects, which no Definition routes",
+                                   position=position, keys=n, TOPK=TOPK)
+            try:
+                slots = kv_slots(ctx, req, n, layer=_module(node))
+            except GeometryError as e:
+                return unsupported(node, str(e), request=req, T=n)
+            if any(s >= cache.slots for s in slots):
+                return unsupported(node, "a selected cache slot is outside the fp8_ds_mla cache", T=n, cache_slots=cache.slots)
+            entries.append((*slots, *(slots[0],) * (TOPK - n)))
+            consts.append(tuple(Const(32, bits, "idx", shared=True, count=k) for bits, k in ((0, n), (0xFFFFFFFF, TOPK - n)) if k))
+        spec = vocab_kind(ctx, "flashmla_v32_decode", NH=NH, SPLITS=decode_splits(M, TOPK, int(tp.num_sms), G["BN"]), DN=DN, DR=DR,
+                          QT=G["QT"], BN=G["BN"], DOT=G["DOT"], SCALE=0.0625)
+        qv, ov = (ViewDesc(v.alloc, v.offset, (M, NH, v.shape[3]), (v.strides[1], v.strides[2], 1), v.dtype, v.device) for v in (q, out))
+        if plan is None:
+            state["flashmla_plan"] = (outs[2], outs[3])
+        return Compute(spec, M, (PerRow(qv), GatherMany(cache.nope, tuple(entries)), GatherMany(cache.scale, tuple(entries)),
+                                 GatherMany(cache.rope, tuple(entries)), Pieces(tuple(consts))),
+                       (PerRow(ov),), tuple(sorted(node.ids())), hint=f"{_module(node)}/flashmla", kernels=(FLASHMLA_OP,),
+                       attribution=tuple(ctx.start.rows), pattern=self.name)
+
+
 def dsa_patterns() -> list:
     """Patterns in dependency order, before generic transparent handlers; with them vLLM's default Hopper block-FP8 linear op
     (`fp8.DynamicDeepGemmFp8Linear`), which GLM-5.3's attention and dense projections run."""
-    return [DsaNormRope(), DsaQ(), DsaMqaGather(), DsaMqaAllocation(), DsaTopK(), DsaIndexShare(), DsaSparseMla(), DynamicDeepGemmFp8Linear(),
-            TpFusedAllReduceRmsNorm(world=8), CudaRmsNorm(), CudaFusedAddRmsNorm(), CublasLinear(), MlaAbsorbBmm()]
+    return [DsaNormRope(), DsaQ(), DsaMqaGather(), DsaMqaAllocation(), DsaTopK(), DsaIndexShare(), DsaSparseMla(), DsaConcatQ(),
+            DsaFlashMlaDecode(), DynamicDeepGemmFp8Linear(), TpFusedAllReduceRmsNorm(world=8), CudaRmsNorm(), CudaFusedAddRmsNorm(),
+            CublasLinear(), MlaAbsorbBmm()]
 
 
 __all__ = [
+    "DsMlaCache",
+    "DsaConcatQ",
+    "DsaFlashMlaDecode",
     "DsaMqaAllocation",
     "DsaMqaGather",
     "DsaNormRope",
