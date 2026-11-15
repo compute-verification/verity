@@ -7792,11 +7792,10 @@ def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_onc
     for p in pkgs.values():
         shutil.copytree(HERE / "fixtures" / "control", p, ignore=shutil.ignore_patterns(".lake"))
     a = pkgs["a"]
-    (a / "Control.lean").write_text((a / "Control.lean").read_text() + "import Control.A\n")
-    (a / "Control" / "A.lean").write_text("namespace Control.A\ntheorem t : 1 + 1 = 2 := rfl\nend Control.A\n")
+    thms = a / "Control" / "Thms.lean"
+    thms.write_text(thms.read_text().replace("end Control", "theorem A.t (n : Nat) : double n = double n := rfl\n\nend Control"))
     pol = unclaimed(A.load(a))
-    A.dump(a, pol | {"layers": pol["layers"] | {"Control.A": {"imports": []}},
-                     "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.A.t")},
+    A.dump(a, pol | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.A.t")},
                      "shape": pol["shape"] | {"properties": pol["shape"]["properties"] | {
                          "Control.A.t": {"function": "Control.double", "outcome": "none"}}}})
     for p in pkgs.values():
@@ -7834,7 +7833,7 @@ def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_onc
     code, reps, said = run(["b"], "--update", "--moved", str(moves))
     assert code == 0 and f"audit: {pkgs['b'] / A.POLICY}: written" in said, said
     assert (pkgs["b"] / A.POLICY).read_bytes() == recorded["b"]
-    (a / "Control" / "A.lean").write_text("namespace Control.Z\ntheorem t : 1 + 1 = 2 := rfl\nend Control.Z\n")
+    thms.write_text(thms.read_text().replace("theorem A.t", "theorem Z.t"))
     pol = A.load(a)
     A.dump(a, pol | {"shape": pol["shape"] | {"properties": {
         "Control.Z.t" if n == "Control.A.t" else n: e for n, e in pol["shape"]["properties"].items()}}})
