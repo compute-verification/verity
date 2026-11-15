@@ -48,13 +48,15 @@
                      beside it (`q_call`: proof blocks, committed bits, values computed in two proof blocks; or why it refuses,
                      a warning).
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned,
-                     nor is one over ``partition_max_gates`` gates not cut member by member, or cut so down to a member
-                     over the budget that isn't (`uncut`); such a Call is
+                     nor is one over ``partition_max_gates`` gates (the cost target) not cut member by member, or cut so down
+                     to a member over it that isn't (`uncut`); such a Call is
                      partitioned by its callees where each is a Call (`by_callees`: each callee's partition checked as a
-                     Call's, failing by its name), and otherwise fails by its own name, ``partition/unpartitioned``, with why
-                     its callees can't partition it (`callee_gap`: one is no Call, or is a primitive over the budget): every
-                     gate of a served Call sits in a Call whose partition is checked.  A Definition that is no Call is
-                     partitioned inside the Call that contains it, so over the budget it is a warning, ``partition/unchecked``
+                     Call's, failing by its name).  Otherwise a Call over the leaf budget fails by its own name,
+                     ``partition/unpartitioned``, with why its callees can't partition it (`callee_gap`: one is no Call, or
+                     is a primitive over a budget).  Over the cost target, a Call or not, the partition is unchecked and a
+                     warning, ``partition/over-cost-target``, prints its gates: the cost target bounds no proof, whose
+                     proof block is held to Flock's range by ``block``.  A Definition that is no Call over the leaf budget
+                     is a warning, ``partition/unchecked``
     lowering pins    a lowering's AND/XOR/NOT counts and its circuit's digest (``type``, `lowering_type`) against its pin, which
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
@@ -111,7 +113,8 @@ class Options:
     """``vectors`` input vectors per correspondence check (the all-edge ones first), fewer when the reference would spend more
     than ``reference_budget`` gate evaluations on them (never fewer than ``min_vectors``); ``X`` / ``W`` / ``extras`` the word
     query; the word view samples 16 times the vectors within 16 times the budget (`_word_vectors`); Definitions over
-    ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
+    ``partition_max_gates`` gates (the cost target, a warning: ``partition/over-cost-target``) or ``partition_max_leaves``
+    parameter leaves are not partitioned, over
     ``lower_max_gates`` gates or about ``lower_max_ands`` ANDs (the piece pins' estimate) not lowered whole; ``input_budget``
     bounds vectors x input leaves, ``lane_budget`` vectors x proof blocks when a template's proof blocks are evaluated;
     a composite of at most ``struct_max_gates`` gates is realized by its structural lowering too (`struct_lowering`; 0, the
@@ -138,6 +141,10 @@ class Options:
     struct_max_gates: int = 0
 
 DEFAULTS = Options()
+
+#: the tail of ``partition/over-cost-target``: the cost target (``partition_max_gates``) bounds no proof, whose limit is the
+#: block Flock proves in, which ``block`` (`block_range`, `cut_of`) checks whatever the partition reads
+OVER_COST_TARGET = "partition unchecked; its proof blocks are held to Flock's range (`block`)"
 
 
 @dataclass
@@ -536,15 +543,15 @@ def _bounds(rs: Sequence, full: Callable) -> list:
     return [(lo, hi, p.bound, w) for lo, hi, p, w in rs if p.bound is not None and not full(p.bound, w)]
 
 
-def _folded(arrays: list, params: Sequence, pt: Any, n: int, draw: Sequence[tuple[int, int] | None] = ()) -> list:
-    """`arrays` with each parameter's leaves folded into its sampled interval (`draw[j]`), else each leaf of a bounded parameter
+def _folded(arrays: list, params: Sequence, pt: Any, n: int, sample: Sequence[tuple[int, int] | None] = ()) -> list:
+    """`arrays` with each parameter's leaves folded into its sampled interval (`sample[j]`), else each leaf of a bounded parameter
     into its bound: an interval's two ends first, then the vectors' values within it."""
     from verity.circuits import ports as P
 
     out = list(arrays)
     for j, rs in enumerate(pt.params):
         a = np.array(out[j]).reshape(n, -1)
-        iv = draw[j] if j < len(draw) else None
+        iv = sample[j] if j < len(sample) else None
         runs = [(0, a.shape[1], iv, _one_width(params[j]))] if iv is not None else _bounds(rs, P.full)
         for lo, hi, (b0, b1), w in runs:
             for i in range(n):
@@ -579,34 +586,34 @@ def port_intervals(t: Any, opts: Options, F: Findings) -> dict | None:
         rec = {"vectors": n, "intervals": [[lo, hi, list(iv)] for lo, hi, iv, _w in outs], "outside": len(outside)}
     if pt.transfer is not None:
         r, w_ret = random.Random(opts.seed), _one_width(ret)
-        drawn = outside_t = 0
+        sampled = outside_t = 0
         for d in range(TRANSFER_DRAWS):
-            draw: list[tuple[int, int] | None] = []
+            sample: list[tuple[int, int] | None] = []
             for pty, rs in zip(params, pt.params):
                 w, bs = _one_width(pty), _bounds(rs, P.full)
                 whole = bs[0][2] if len(bs) == 1 and bs[0][:2] == (0, pty.leaves) else None
                 if w is None or (bs and whole is None) or (not bs and r.random() < 0.25):
-                    draw.append(None)
+                    sample.append(None)
                     continue
                 lo, hi = whole or ((-(1 << (w - 1)), (1 << (w - 1)) - 1) if r.random() < 0.5 else (0, (1 << w) - 1))
                 x = r.randint(lo, hi)
                 y = r.randint(lo, hi) if r.random() < 0.5 else min(hi, x + r.randint(0, 255))
-                draw.append((min(x, y), max(x, y)))
-            iv = pt.transfer(*draw)
+                sample.append((min(x, y), max(x, y)))
+            iv = pt.transfer(*sample)
             if iv is None:
                 continue
-            drawn += 1
+            sampled += 1
             if not (isinstance(iv, (tuple, list)) and len(iv) == 2 and iv[0] <= iv[1] and P.reading(tuple(iv), w_ret) == tuple(iv)):
-                F.fail("ports", "transfer", t.id, f"its transfer gives {iv!r} on {draw}, no interval of a Value<{w_ret}>")
+                F.fail("ports", "transfer", t.id, f"its transfer gives {iv!r} on {sample}, no interval of a Value<{w_ret}>")
                 continue
-            ref, _raised = reference_outputs(t, params, _folded(vectors(params, n, opts.seed + 1 + d), params, pt, n, draw))
-            bad = [{"instance": i, "operands": draw, "value": out[0], "interval": list(iv)}
+            ref, _raised = reference_outputs(t, params, _folded(vectors(params, n, opts.seed + 1 + d), params, pt, n, sample))
+            bad = [{"instance": i, "operands": sample, "value": out[0], "interval": list(iv)}
                    for i, out in enumerate(ref) if out is not None and not P.holds(iv, w_ret, out[0])]
             outside_t += len(bad)
             if bad:
-                F.fail("ports", "transfer", t.id, f"{len(bad)} of {n} returns outside the interval its transfer gives on {draw}",
+                F.fail("ports", "transfer", t.id, f"{len(bad)} of {n} returns outside the interval its transfer gives on {sample}",
                        examples=bad[:_EXAMPLES])
-        rec["transfer"] = {"draws": TRANSFER_DRAWS, "vectors": n, "intervals": drawn, "outside": outside_t}
+        rec["transfer"] = {"draws": TRANSFER_DRAWS, "vectors": n, "intervals": sampled, "outside": outside_t}
     return rec
 
 
@@ -985,7 +992,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     red, _by = redundant_ands(C)
     rec["redundant_ands"] = red
     if red:
-        F.warn("redundant-gates", "boolean", t.id, red, "ANDs on identical operands in its C-Flock lowering")
+        F.warn("redundant-gates", "boolean", t.id, red, "ANDs on identical operands in its Flock lowering")
     if isinstance(t, PrimitiveDefinition):
         rec["pin"] = _counts_against_pin("pieces", t.id, {"and": counts["ands"], "type": lowering_type(C)}, pins, F, t.id)
     elif is_boolean(t):
@@ -1104,12 +1111,12 @@ def dead_gates(fn: Any, opts: Options, F: Findings) -> dict:
 
 def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = True, q_word: int = 1) -> tuple[dict, dict]:
     """`Q_word_v1` on one Call of ``fn`` (its record and `word.unit_rule`).  Where the invariant applies (``fn`` is a Call of a
-    served Program) every violation fails by name, a member over the budget that `word.unit_rule` leaves whole too
-    (``partition/unpartitioned``); elsewhere the cut of ``fn`` alone is recorded (``isolated``), since its gates
-    are partitioned inside the Call that contains it.  With ``q_word=2`` (a Boolean Call: `Q_word` v2) a value computed in two
-    proof blocks is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else
-    `word.unit_rule`'s count;
-    None when ``fn`` is over the partition budget and unchecked), and every other code fails as under v1."""
+    served Program) every violation fails by name; elsewhere the cut of ``fn`` alone is recorded (``isolated``), since its gates
+    are partitioned inside the Call that contains it.  A member over the cost target that `word.unit_rule` leaves whole is
+    unchecked either way, a warning in ``F`` (``partition/over-cost-target``, `OVER_COST_TARGET`).  With ``q_word=2`` (a
+    Boolean Call: `Q_word` v2) a value computed in two proof blocks is no failure: ``recomputed_across`` records how many gates
+    are (the whole cut's v2 view, else `word.unit_rule`'s count;
+    None when ``fn`` is over the cost target and unchecked), and every other code fails as under v1."""
     from verity.circuits import word as W
 
     P = F if applies else Findings()
@@ -1132,11 +1139,8 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
                        gates=det.get("gates") if isinstance(det, dict) else det)
         elif v["class"] == "too-large":
             rec["checked"] = False
-            rec["reason"] = f"{v['gates']} gates: over the partition budget {v['limit']}"
-            if applies:
-                P.fail("partition", "unpartitioned", d, f"{rec['reason']}, and not cut member by member")
-            else:
-                P.warn("partition", "unchecked", d, 1, rec["reason"])
+            rec["reason"] = f"{v['gates']:,} gates: over the cost target {v['limit']:,}"
+            F.warn("partition", "over-cost-target", d, 1, f"{rec['reason']}; {OVER_COST_TARGET}")
         else:
             P.fail("partition", "width", d, f"{v['class']}: |out(S)| = {v['out_bits']} b over {v['out_gates']} gate(s), limit "
                    f"{v['limit'][0]} b or one gate of {v['limit'][1]} b", unit_class=v["class"], units=v.get("units"))
@@ -1200,9 +1204,9 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
 
 def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
     """Why `partition` can't check a Call of ``fn`` itself, or None: its parameters' leaves are over ``partition_max_leaves`` (the
-    word query and `Q_call` resolve every leaf), or it is a composite over its gate budget (``partition_max_gates``,
+    word query and `Q_call` resolve every leaf), or it is a composite over its cost target (``partition_max_gates``,
     `word.gate_limit`) whose body `word.unit_rule` doesn't cut member by member (`cut.separable`), or cuts so down to a member
-    over its own budget that it doesn't (``too-large``)."""
+    over its own cost target that it doesn't (``too-large``)."""
     from verity.circuits.cut import separable
     from verity.circuits import word as W
 
@@ -1219,8 +1223,8 @@ def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
             continue
         seen.add(u.id)
         if (sep := separable(u)) is None:
-            return (f"{fn.gates} gates: over the partition budget {limit}" if u is fn else
-                    f"its member {u.id}'s {u.gates} gates are over the partition budget {limit}, and not cut member by member")
+            return (f"{fn.gates:,} gates: over the cost target {limit:,}" if u is fn else
+                    f"its member {u.id}'s {u.gates:,} gates: over the cost target {limit:,}, and not cut member by member")
         todo += [c for c, _m in sep]
     return None
 
@@ -1397,7 +1401,10 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
                 part = by_callees(t, opts, F, memo, why)
         if part is None:
             gap = callee_gap(t, opts, memo.setdefault("callee_gap", {}))
-            F.fail("partition", "unpartitioned", t.id, f"{why}; {gap}")
+            if sum(pt.leaves for pt in params) > opts.partition_max_leaves:
+                F.fail("partition", "unpartitioned", t.id, f"{why}; {gap}")
+            else:
+                F.warn("partition", "over-cost-target", t.id, 1, f"{why}; {gap}; {OVER_COST_TARGET}")
             part = {"applies": True, "checked": False, "q_word": 2 if is_boolean(t) else 1, "reason": why, "callee_gap": gap}
     if part is not None:
         entry["partition"] = part
@@ -1586,14 +1593,14 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         dot = next((p for p in steps if p in IL.TC_STEPS), None)
         if dot is None:
             return {"lowered": False, "reason": f"{sub.id}: its tensor-core step {', '.join(steps) or '(a silicon reference)'} is not one "
-                    f"C-Flock lowers ({', '.join(sorted(IL.TC_STEPS))})"}
+                    f"Flock lowers ({', '.join(sorted(IL.TC_STEPS))})"}
         name = f"gemm-coordinate/{dot}/tc-step"
         low = IL.lowering(d, name, unit_fn=lambda t: IL.tc_units(t, dot))
     elif mod is None or not callable(getattr(mod, "lowering", None)):
-        return {"lowered": False, "reason": reg.supports(sub, "frame-v3/blake3-keyed") or f"{tid}: its C-Flock module has no lowering"}
+        return {"lowered": False, "reason": reg.supports(sub, "frame-v3/blake3-keyed") or f"{tid}: its Flock module has no lowering"}
     else:
         if hasattr(mod, "width") and mod.width(int(sub.params["N"])) is None:
-            return {"lowered": False, "reason": f"{sub.id}: the kernel's warps differ at N = {sub.params['N']}, so no single C-Flock unit"}
+            return {"lowered": False, "reason": f"{sub.id}: the kernel's warps differ at N = {sub.params['N']}, so no single Flock unit"}
         low = mod.lowering(sub, **st) if st else mod.lowering(sub)
         name = getattr(mod, "UNIT", low.name)
     rec: dict[str, Any] = {"lowered": True, "via": f"c-flock:{name}", "units_per_instance": low.units.n,

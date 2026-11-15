@@ -944,7 +944,7 @@ def test_the_challengers_list_is_not_made_until_the_register_holds_its_hosts_pri
 def test_the_verifiers_file_is_held_while_its_template_gives_no_peer_its_addresses():
     """The verifier's gate admits a party only from one of a peer's `addresses` in its verifier.json (live_verifier/host.py's
     `node_of`): an install of a template that gives a peer none would shut that peer's parties out, so the entry is held, on
-    both auditor hosts, until the template gives every peer its addresses."""
+    both auditor devices, until the template gives every peer its addresses."""
     src = "tools/research/src/research/pods/nebius/verifier/verifier.json"
     peers = json.loads((deploy.SRC / src).read_text())["peers"]
     entries = [e for n in ("vy-auditor-1", "vy-auditor-2") for e in deploy.load()[n].entries if e.path == "/etc/vy/verifier.json"]

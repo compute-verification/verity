@@ -20,7 +20,7 @@ CIRCUIT_PINS = {1536: "861aaba839ead11166bd84e3f028a39988fc033022aab8f85494838a1
 
 
 def definition(subcircuit):
-    import verity.definitions.registry.boolean_silu  # noqa: F401  (registers SiluMulBf16_v4, the unit's builder)
+    import verity_vllm.definitions.registry.boolean_silu  # noqa: F401  (registers SiluMulBf16_v4, the unit's builder)
 
     return subcircuit.definition()
 
@@ -55,7 +55,7 @@ def frame_lowering(subcircuit):
 def supports(subcircuit, scheme):
     if scheme in FRAME_SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3); binding its rows under "
+    return (f"Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3); binding its rows under "
             f"{scheme} is not wired yet")
 
 

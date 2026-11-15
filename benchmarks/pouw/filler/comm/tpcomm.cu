@@ -34,7 +34,7 @@
 #define PFILL_BITS
 #define PFill DcapPFill
 #define main dcap_main
-#include "../dcap.cu"
+#include "../../../../verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu"
 #undef main
 #undef PFill
 

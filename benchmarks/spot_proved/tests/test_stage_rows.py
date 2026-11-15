@@ -61,8 +61,8 @@ def test_the_long_rows_are_read_off_the_indexers_top_k_and_every_population_is_c
     pairs = list(cap.cells("x", (0, 0), 12, 2, slots=2))
     assert sorted({p[0] for p in pairs}) == [2, 3, 6, 7, 10, 11] and len(pairs) == 12
     cap.per_call = 3
-    drawn = list(cap.cells("x", (0, 0), 12, 2, slots=2))
-    assert len(drawn) == 3 and all(p[0] in (2, 3, 6, 7, 10, 11) for p in drawn)
+    sampled = list(cap.cells("x", (0, 0), 12, 2, slots=2))
+    assert len(sampled) == 3 and all(p[0] in (2, 3, 6, 7, 10, 11) for p in sampled)
     assert [i[2][2] for i in stage.fused_add_rms_norm_instances(cap)] == [1, 3, 5]
     cap.only = None
     assert [i[2][2] for i in stage.fused_add_rms_norm_instances(cap)] == list(range(6))

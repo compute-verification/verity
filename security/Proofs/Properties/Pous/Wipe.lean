@@ -61,7 +61,7 @@ theorem value_draw {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) [Decidab
   by_cases hx : p x <;> simp [hx]
 
 /-- The value of a sample with no prover move is the probability of its event. -/
-theorem value_draw_pr {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) :
+theorem value_sample_pr {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) :
     Game.value p (Game.draw X) = Pous.pr p := by
   classical
   rw [value_draw, Pous.pr_def]
@@ -218,7 +218,7 @@ theorem survivorBound_of_observed {ι : Type} {d : Accounting.Device ι} {C : Ci
       (Pous.Bits S × Accounting.Wipe.Reads n k) × Pous.Bits κ :=
     ⟨fun x => ((x.1, x.2.2), x.2.1), fun y => (y.1.1, y.2, y.1.2), fun _ => rfl, fun _ => rfl⟩
   beta_reduce
-  rw [value_draw_pr]
+  rw [value_sample_pr]
   unfold Accounting.Wipe.Strategy.deltaNet
   calc _ ≤ Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n k =>
           τ.distinguisher acc A hold keep ((x.1, x.2.2), prf x.2.1)) +
@@ -447,7 +447,7 @@ theorem not_survivorBound_cheat {ι : Type} (d : Accounting.Device ι) {C : Circ
       (cheat d s b n k carry).deltaNet (fun _ _ _ => True) prf Finset.univ (storeHold d (S := F + d.chip)) = ε₀ := by
     rw [hadv, hdelta, add_zero, add_zero]
   beta_reduce at h
-  rw [value_draw_pr, Pous.pr_eq_one] at h
+  rw [value_sample_pr, Pous.pr_eq_one] at h
   · exact absurd (h.trans_eq key) (not_le.mpr hε)
   · exact fun x => ⟨trivial, storeKeep_hold hF _ _ _⟩
 

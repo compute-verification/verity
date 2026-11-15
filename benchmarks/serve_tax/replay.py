@@ -23,7 +23,8 @@ too, under the arm's environment (`served_under`), and ``--private`` is where th
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
 that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
 differing requests (each one's lengths and first differing position), the replay's wall time beside the served window's
-(first arrival to last step) and the value settings in force in its engine's environment (``settings``, as the served
+(first arrival to last step), the cards its engine held (``gpus``, the tensor-parallel width ``--tp``) and the value
+settings in force in its engine's environment (``settings``, as the served
 arm's meta.json has its server's: `serve_tax.value_settings`); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
 later replay's with, to tell a replay that differs from serving from one that differs from itself. ``--capture`` takes the
 named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into OUT/capture, a
@@ -343,6 +344,18 @@ def write_tokens(replay_dir: Path, tokens: dict[str, list[int]]) -> None:
             f.write(json.dumps({"request": rid, "tokens": tokens[rid]}, separators=(",", ":")) + "\n")
 
 
+def capture_template(meta: dict, given: str | None = None) -> str:
+    """The token select a capture's rows are units of: ``given``, else the check the served arm's boundary commitment was
+    made under (its meta.json's ``boundary_rows``), else its model's (`serve_tax.Model.check`). The second stage reads a
+    capture only as the class's own check's (`two_stage.spans_of`), so a replay takes the serve's unless told otherwise."""
+    model = S.MODELS.get(str(meta.get("model_id")))
+    t = given or (meta.get("boundary_rows") or {}).get("check") or (model.check if model else None)
+    if not t:
+        raise SystemExit("the served arm made no boundary commitment and its model names no check template: "
+                         "--capture-template T")
+    return t
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--arm-dir", type=Path, required=True)
@@ -356,7 +369,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tp", type=int, default=1, help="the tensor-parallel width the window was served at")
     ap.add_argument("--capture", help="engine ids: take their logits rows and ids at the sampler (`sampler_capture`) into "
                                       "OUT/capture, each a span of --capture-template's units")
-    ap.add_argument("--capture-template", default="TokenSelect_v4{V=154880}")
+    ap.add_argument("--capture-template", help="the token select the captured rows are units of (default: the check the "
+                                               "served arm committed under, `capture_template`)")
     ap.add_argument("--private", type=Path, help="a directory outside every run's, for what the served arm's other "
                                                  "plugins keep on the node (the canonical top-k's counters)")
     ap.add_argument("--out", type=Path, required=True)
@@ -380,6 +394,7 @@ def main(argv: list[str] | None = None) -> int:
     checkpoint = a.checkpoint or Path(meta["checkpoint"])
     w = window(a.arm_dir, a.load, a.rep)
     capture = (a.capture.split(","), a.out / "capture" / "ranks") if a.capture else None
+    template = capture_template(meta, a.capture_template) if capture else None
     got = replay(w, checkpoint, a.eager, a.logprobs, a.tp, capture)
     out = {"schema": "verity-bench/serve-tax/replay/v0", "arm_dir": str(a.arm_dir), "served_run_id": meta.get("run_id"),
            "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
@@ -388,7 +403,7 @@ def main(argv: list[str] | None = None) -> int:
            "settings": settings,
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
            "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
-           "engine_ready_s": got["ready_s"], **compare(w, got)}
+           "engine_ready_s": got["ready_s"], "gpus": a.tp, **compare(w, got)}
     if a.against:
         d = token_diff(read_tokens(a.against), got["tokens"])
         out["against"] = {"replay": str(a.against), "requests_tokens_differing": len(d), "requests_differing": d[:DIFFERING_MAX]}
@@ -397,7 +412,7 @@ def main(argv: list[str] | None = None) -> int:
     if capture:
         from verity_vllm.engine import sampler_capture as SC
         spans = SC.spans(got["takes"], got["steps"])
-        SC.write(a.out / "capture", a.capture_template, spans)
+        SC.write(a.out / "capture", template, spans)
         served = {r["engine_id"]: r["served"] for r in w["requests"]}
         out["capture"] = {rid: {"tokens": len(s["tokens"]), "as_served": s["tokens"] == served[rid], "program": s["program"]}
                           for rid, s in spans.items()}

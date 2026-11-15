@@ -13,7 +13,7 @@ The directory is scripts run by their paths, and no package. Seven are imported 
 bare names: `checked_strip.py`, `cpw_sass_count.py`, `fold_kernel_check.py`, `fold_opt_fx.py`, `fold_root_sweep.py`,
 `fold_routes.py` and `narrow_u.py`. Each one's `__all__` lists what its readers and the tests take, and every other
 name is the script's own. Outside the directory and its own tests (`../tests/test_theory_*.py`) only
-`checked_strip.py` is read: the references of `../edited_gemm/` load it by file (`cgemm_ref.py`) and
+`checked_strip.py` is read: the references of `../../../verity/protocols/accounting/pouw/prover/kernels/edited_gemm/` load it by file (`cgemm_ref.py`) and
 `../tests/test_segment_h1.py` imports it. No Python here touches a GPU: the sm_120 probes are the `*.sh` jobs. A script
 starts only `gcc` and the C program it built, and `run.py` the checks; each writes only in a temporary directory and
 where its command says (`--verdict`, `--json`, `--out`).
@@ -43,7 +43,7 @@ where its command says (`--verdict`, `--json`, `--out`).
 - **An sm_120 probe** (`*.sh` beside its `*.cu`) runs from a pushed commit through `research run` on an RTX PRO 6000.
   Its header has the command; the `*_count.py` beside it counts the SASS and sets the device's timings beside the count.
 - **The tests** are `tests/test_theory_*.py`, in the `verity-pouw-benchmarks` suite:
-  `uv run tools/verity/check/suites.py` runs them when their inputs change.
+  `uv run tools/check/suites.py` runs them when their inputs change.
 
 ## The scripts
 

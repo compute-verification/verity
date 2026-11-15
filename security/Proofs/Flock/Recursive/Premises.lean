@@ -22,7 +22,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # The premises the recursive audit's property takes
 
 The named premises a property of the recursive audit may take: `shape.premises` in
-`Security/lean-audit.json` names this module, so the shape check reads a hypothesis whose head is one of these as a
+`security/lean-audit.json` names this module, so the shape check reads a hypothesis whose head is one of these as a
 premise and refuses every other. Each but `CompiledForkSound`, a proved lemma's conclusion, is the named assumption it
 abbreviates, unchanged.
 
@@ -37,7 +37,7 @@ abbreviates, unchanged.
   conclusion. That lemma is proved, and discharges this premise at a class whose schedule is `fast100`'s and whose
   layout holds (`Recursion.compiledForkSound_of_fast100`).
 * `UniformRandomBytes` (A3, `uniform/os-random`): the bytes the verifier's operating system returns are uniform, at
-  each of V*'s laws (one premise over `Vs`, so the shape check reads its head).
+  each of V*'s sampling designs (one premise over `Vs`, so the shape check reads its head).
 * `HashDerivedKeyHm96` (`hash-derived-key`): hm96's salt hash keys its hiding at `2^-193`.
 * `RecordCustody` (`live-verifier`, `Assumptions.Zk.RecordCustodyZKJ`): the record and the sample file each of V*'s
   sessions reads are the challenger's of the live session of its statement's `J` tables and the verifier's own sample, at every history (one premise
@@ -51,7 +51,7 @@ abbreviates, unchanged.
   and session record the challenger's live-coin part writes at each history hold that history's commitments and coins where a map of
   the rounds says they go (one premise over the writer `wr`, as the verifier holds what it writes).
 
-The list belongs in `Security/Definitions/`, whose modules import only Mathlib and the spec; Flock's
+The list belongs in `security/Definitions/`, whose modules import only Mathlib and the spec; Flock's
 definitions, which these read, are still in the proofs package, so the list is here until they are extracted.
 -/
 
@@ -64,7 +64,7 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 
 /-- **VBridge**: `Flock.Assumptions.VBridge`. -/
-abbrev VBridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+abbrev VBridge {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type} (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
@@ -74,7 +74,7 @@ abbrev VBridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : �
   Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg
 
 /-- **VBridge at the committed rounds**: `Flock.Assumptions.VBridgeC`. -/
-abbrev VBridgeC {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+abbrev VBridgeC {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type} (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
@@ -84,8 +84,10 @@ abbrev VBridgeC {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : 
   Flock.Assumptions.VBridgeC zs dg N k Rw x wmsg Sk cmt msg
 
 /-- **VBridge at the committed rounds, off `Bad`**: `Flock.Assumptions.VBridgeCOff`. -/
-abbrev VBridgeCOff {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
-    {Reg' Reg₂ : Type} (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop)
+abbrev VBridgeCOff {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type}
+    (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
+      ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × FlockSoundness.Discharge.Exec.Transcript) → Prop)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
@@ -104,9 +106,9 @@ def CompiledForkSound {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [
     (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain cls regs sch)
     (ENNReal.ofReal (Accounting.tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩))
 
-/-- **A3** at every one of V*'s laws: `Assumptions.UniformRandomBytes` at each sampling design's lengths and source. -/
+/-- **A3** at every one of V*'s sampling designs: `Assumptions.UniformRandomBytes` at each sampling design's lengths and source. -/
 abbrev UniformRandomBytes {S : ℕ} (Vs : Fin S → VStmt) : Prop :=
-  ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src
+  ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).samplingDesign.Lb (Vs j).samplingDesign.src
 
 /-- **hash-derived-key**: `Assumptions.Zk.HashDerivedKeyHm96`. -/
 abbrev HashDerivedKeyHm96 : Prop := FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96

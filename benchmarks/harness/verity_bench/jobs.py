@@ -411,7 +411,7 @@ def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign
         *env,
         "--",
         *(["taskset", "-c", cores] if cores else []),
-        "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
+        "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/check/slot.py", "--by", "benchmarks",
         "--wait-max", f"{wait_s:g}", "--run-max", f"{run_s:g}",
         "--",
         *job,

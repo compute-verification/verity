@@ -5,18 +5,20 @@ windows and refuses tampered history by name."""
 from __future__ import annotations
 
 import pytest
-
-from tests.program.test_workload_program import _edge_wl, _groups
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.partition_object import calls
 from verity.circuits.types import Array, Value, field_starts, field_types
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+
+from tests.program.test_workload_program import _edge_wl, _groups
 from verity_vllm.pipeline import edge as E
 from verity_vllm.program import workload as W
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
-LAW = {"law": "subset", "k": 2}
+DESIGN = {"law": "subset", "k": 2}
 SERVED = {"kind": "served", "run": "r-edge"}
 OPEN = ("a1" * 64, "b2" * 64)                    # each window's open root, from the challenger's signed open
 WORDS = {p: 1 for p in ("edge.kv", "edge.ik", "edge.iks", "edge.last")}    # the toy's rows: one leaf each
@@ -59,11 +61,11 @@ def two():
     own0, own1 = _own_ports(w0, OPEN[0]), _own_ports(w1, OPEN[1])
     com = E.commit(w0.program, _served(w0, [[1, 2, 3, 4], [10, 11, 12], [20, 21, 22], [30, 31, 32]]), WORDS, OPEN[0])
     ports0 = {**own0, **E.out_ports(w0.program, PORTS, WORDS, OPEN[0])}
-    rec0 = R.record(w0.program, _query(w0), LAW, SCHEME, [{"port": p, "root": "ab" * 64, **own0[p]} for p in own0] + E.roots(com),
+    rec0 = R.record(w0.program, _query(w0), DESIGN, SCHEME, [{"port": p, "root": "ab" * 64, **own0[p]} for p in own0] + E.roots(com),
                     {**SERVED, "row": 0})
     roots1 = [{"port": p, "root": "cd" * 64, **own1[p]} for p in own1]
-    rec1 = R.record(w1.program, _query(w1), LAW, SCHEME, roots1, {**SERVED, "row": 1}, previous=R.digest(rec0), registered=E.entries(com))
-    kw = {"law": LAW, "scheme": SCHEME, "ports": own1, "window_root": OPEN[1], **E.history(w1.ports, WORDS)}
+    rec1 = R.record(w1.program, _query(w1), DESIGN, SCHEME, roots1, {**SERVED, "row": 1}, previous=R.digest(rec0), registered=E.entries(com))
+    kw = {"sampling_design": DESIGN, "scheme": SCHEME, "ports": own1, "window_root": OPEN[1], **E.history(w1.ports, WORDS)}
     return {"w0": w0, "w1": w1, "com": com, "ports0": ports0, "rec0": rec0, "rec1": rec1, "roots1": roots1, "kw": kw}
 
 
@@ -80,7 +82,7 @@ def test_an_honest_two_window_serve_registers_and_verifies_its_history(two):
     assert w1.ports == PORTS
     assert [p for p, _, _, _ in W.edge_ports(w0.edge.static()["out"])] == list(PORTS)
     assert E.history(w1.ports, WORDS)["outputs"] == {p: {"port": p} for p in PORTS}
-    assert R.check(t["rec0"], w0.program, _query(w0), LAW, SCHEME, ports=t["ports0"]).ok
+    assert R.check(t["rec0"], w0.program, _query(w0), DESIGN, SCHEME, ports=t["ports0"]).ok
     v = _check1(t, t["rec1"], [t["rec0"]])
     assert v.ok, v.codes
     held = {e["value"]: e for e in t["rec1"]["registered"]}
@@ -102,7 +104,7 @@ def test_window_ws_verifier_refuses_an_edge_port_under_another_domain(two):
         other = E.roots({"edge.last": REG.Registered.commit(t["com"]["edge.last"].program, "edge.last", t["com"]["edge.last"].rows,
                                                             word_bits=16, window=window)})
         roots = [r if r["port"] != "edge.last" else other[0] for r in t["rec0"]["roots"]]
-        assert R.check({**t["rec0"], "roots": roots}, t["w0"].program, _query(t["w0"]), LAW, SCHEME, ports=t["ports0"]).codes == ("R3-domain",)
+        assert R.check({**t["rec0"], "roots": roots}, t["w0"].program, _query(t["w0"]), DESIGN, SCHEME, ports=t["ports0"]).codes == ("R3-domain",)
 
 
 def _with(t: dict, port: str, entry: dict) -> dict:

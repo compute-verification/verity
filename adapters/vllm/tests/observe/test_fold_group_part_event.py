@@ -11,7 +11,7 @@ pre-existing pattern still stamps `root.id` — checked here on the toy profile 
 from __future__ import annotations
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from tests.observe import test_fold_synthetic as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401  (the real memory model, or the stub while it is a skeleton)

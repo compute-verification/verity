@@ -12,11 +12,11 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import torch
 from verity.circuits.refs import Coll
-from verity.definitions.registry import bf16_gemm_check
+from verity_vllm.definitions.registry import bf16_gemm_check
 
 from verity_vllm.program.frontend import targets
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.rules.base import OpRule, RuleInfo
+from verity_torch.frontend.rules.common import (
     from_rows,
     known,
     rows_of,
@@ -26,7 +26,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_tokens_of,
 )
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import (
+from verity_torch.frontend.rules.bindings.operands import (
     _strides,
     _untransposed,
 )
@@ -88,7 +88,7 @@ class CublasLinearRule(OpRule):
         from verity_vllm.program.frontend import targets
 
         x, w = node.args[:2]
-        N, K = shape(ctx, w)
+        N, K = known(shape(ctx, w))
         rows, lead = rows_of(ctx.coll(x))
         M = launch_tokens_of(node, len(rows))
         kernel, statics = bf16_gemm_check.default_cublas_route("linear", M, K, N)
@@ -149,8 +149,8 @@ class LlBf16GemmRule(OpRule):
         from verity_vllm.program.frontend import targets
 
         x, w = node.args
-        rows_n, K = shape(ctx, x)
-        M, N = launch_tokens_of(node, rows_n), shape(ctx, w)[0]
+        rows_n, K = known(shape(ctx, x))
+        M, N = launch_tokens_of(node, rows_n), known(shape(ctx, w))[0]
         kernel, statics = bf16_gemm_check.dispatch_sm90(M, K, N)
         if kernel == "dotprod":
             fn = ctx.kind(

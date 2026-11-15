@@ -41,7 +41,7 @@ def test_reconciled_rank_passes_and_states_the_scope():
 
 
 @pytest.mark.parametrize("rank", [0, 1])
-def test_the_int2_row_of_record_shape_fails_by_name_on_every_rank(rank):
+def test_the_int2_workload_of_record_shape_fails_by_name_on_every_rank(rank):
     """960 VUs outside Q(P) + 960 required identities without rows, result True / grade complete -- the exact int-2 TP2 B1 record."""
     block, fail = query_population_gate(_sr(rank, ok=False, outside=960, without_rows=960), rank=rank, required=True)
     assert fail is not None and fail.startswith(f"C2 population (rank {rank})")

@@ -988,7 +988,7 @@ def test_run_launches_each_point_without_a_passing_run_through_a_gpu_slot_of_the
         assert [flags[i + 1] for i, token in enumerate(flags) if token == "--env"] == [
             "RUST_MIN_STACK=1073741824", f"VERITY_BENCH_SETUP={SETUP}"]
         assert through_slot(workload) and "gpu-lease" not in command
-        assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py"]
+        assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/check/slot.py"]
         assert workload[workload.index("--wait-max") + 1] == f"{jobs.DIRECT_WAIT_S}"
         assert workload[workload.index("--run-max") + 1] == "5400"
         assert workload[workload.index("--", 4) + 1:] == [
@@ -1057,7 +1057,7 @@ def test_a_point_on_a_booked_card_is_launched_through_the_booked_slot_and_names_
     for command, item in zip(ran, plan.points, strict=True):
         workload = command[command.index("--") + 1:]
         assert workload[:7] == ["taskset", "-c", "34-43", "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3",
-                                "tools/verity/check/slot.py"]
+                                "tools/check/slot.py"]
         assert workload[workload.index("--", 7) + 1:] == [
             "bash", "benchmarks/harness/steady_point.sh", "--spec", path, "--point", item.point.id,
             "--identity", item.identity, "--card", "3"]
@@ -1254,7 +1254,7 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     monkeypatch.setattr(N, "_write", lambda path, doc: (written.append(path.name), write(path, doc))[1])
     monkeypatch.setattr(kit.Writer, "_open", lambda self: (written.append("appended"), append(self))[1])
     assert node.point() == 0
-    assert written.count("result.json") == 1 and "appended" not in written, "the result is written once and whole"
+    assert "result.json" not in written and "appended" in written, "the result is the kit's writer's"
 
     stager, lease_argv, timer = node.ran
     scratch = Path(lease_argv[-1])

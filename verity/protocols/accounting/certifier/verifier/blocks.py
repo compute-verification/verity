@@ -10,7 +10,7 @@ inference blocks alone, the window interface's `Blocks.of`), and nothing here pi
 host sends another.
 
 Two values cross the uplink into a host's units: its loads, the registration's values, each committed by the network
-certifier as it crosses once a session (`transfer_rows`, `benchmarks/network_traces/load_relay.py`), and the scan's state,
+certifier as it crosses once a session (`transfer_rows`, `verity/protocols/accounting/certifier/device/load_relay.py`), and the scan's state,
 which the verifier pins at the root of the scan's rows the window reads (`ingress_scan.window_state`), never here.
 
 **The check** (`check`), over the record before any coin, the work per declaration and never per unit:

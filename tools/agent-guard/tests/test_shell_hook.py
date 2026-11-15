@@ -243,7 +243,7 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "printenv PATH | tr : '\\n'",
     "set -euo pipefail",
     "set -x; make",
-    "export PYTHONPATH=/tmp/x",
+    "export UV_CACHE_DIR=/tmp/x",
     "export -n FOO",
     "declare -f my_function",
     "declare -A table",
@@ -398,7 +398,7 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
     always = ("uv run pytest -q tests/", "cd tools/research && python -m pytest -x", "lake build Security", "cargo test --release",
               "uv run circuit-check --all", "nvcc -O3 k.cu", "timeout 600 /workspace/.venv/bin/python -m pytest")
     light = ("uv run pytest -q tests/test_x.py", "python -m pytest tests/test_x.py::test_y", "pytest -k mem tools/research/tests",
-             "uv run tools/verity/check/suites.py --quick", "uv run --extra torch-cpu verity check",
+             "uv run tools/check/suites.py --quick", "uv run --extra torch-cpu verity check",
              "cd Security && lake env lean X.lean")
     passes = ("research run --on auto -- uv run pytest -q", "uv run research run --on m --source . -- lake build",
               "ssh n1 'cd /w && pytest'", "git status", "AGENT_GUARD_LOCAL_OK=1 uv run pytest -q tests/", "rg pytest tools/", "ls")
@@ -479,7 +479,7 @@ def test_a_command_that_plainly_blocks_past_twenty_minutes_is_refused(command):
     "tail --pid=4242 -f /dev/null", "while kill -0 4242; do sleep 30; done", "research run --on auto --wait -- sleep 5000",
     "research run --on auto --wait --wait-max 600 -- true", "tmux send-keys -t s:0.0 'sleep 3000' C-m", "rg 'sleep 3000' tools/",
 ])
-def test_a_wait_within_the_cap_or_off_this_shell_passes(command):
+def test_a_wait_within_the_limit_or_off_this_shell_passes(command):
     assert verdict(command) == "allow", command
 
 
@@ -2094,6 +2094,60 @@ def test_a_name_exported_for_throwaway_commits_is_stopped_before_a_later_merge_i
     assert clones(commit, "verity") == {"permission": "allow"} and clones(merge, "verity") == {"permission": "allow"}
     ahead = "GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x GIT_COMMITTER_NAME=x GIT_COMMITTER_EMAIL=x@x GIT_AUTHOR_DATE=@0 GIT_COMMITTER_DATE=@0"
     assert clones(f"{ahead} {commit}", "verity") == {"permission": "allow"}
+
+
+#: commands that leave PYTHONPATH or RESEARCH_AT_CHECKOUT set in the agent's own shell: the forms the identity rule reads
+#: (`shell_keeps`), in a body, an `eval`, after a comment, beside a subshell or a command substitution that ends first
+CODE_SET_IN_THE_SHELL = [
+    "export PYTHONPATH=/x", "export PYTHONPATH=/x RESEARCH_AT_CHECKOUT=1", "export RESEARCH_AT_CHECKOUT=1",
+    "cd /x && export PYTHONPATH=$HERE/src && pytest tests/test_x.py", "declare -x PYTHONPATH=/x", "typeset -x RESEARCH_AT_CHECKOUT=1",
+    "export PYTHONPATH", "PYTHONPATH=/x", "X=1 RESEARCH_AT_CHECKOUT=1", "PYTHONPATH=/x; export PYTHONPATH", "readonly PYTHONPATH=/x",
+    "set -a; PYTHONPATH=/x; set +a", "command export PYTHONPATH=/x", "export PYTHONPATH=$(pwd)/src", "export PYTHONPATH=`pwd`/src",
+    'export PYTHONPATH="$(pwd)/src:$PYTHONPATH"', "if true; then export PYTHONPATH=/x; fi", "for d in a b; do export PYTHONPATH=$d; done",
+    "f() { export PYTHONPATH=/x; }; f", "{ export PYTHONPATH=/x; }", "eval 'export PYTHONPATH=/x'", "# scratch\nexport PYTHONPATH=/x",
+    "export PYTHONPATH=/x # scratch", "( cd /y ) && export PYTHONPATH=/x", "echo $(date); export RESEARCH_AT_CHECKOUT=1",
+    "export PYTHONPATH=/tmp/scratch-worktree/tools/research/src",
+]
+#: and commands that leave neither there: the names ahead of one command, an `unset`, a read, and every shell that dies with
+#: the command (a carrier's, a subshell's, a pipeline member's, a command substitution's, a script's), and a text the hook
+#: can't split
+CODE_NOT_SET_IN_THE_SHELL = [
+    "PYTHONPATH=/x RESEARCH_AT_CHECKOUT=1 python3 -m research queue ready", "env PYTHONPATH=/x python3 -c pass",
+    "PYTHONPATH=$(pwd)/src python3 -c pass", "PYTHONPATH=`pwd`/src python3 -c pass", "PYTHONPATH=/x \\\n  python3 -c pass",
+    "unset PYTHONPATH RESEARCH_AT_CHECKOUT", 'echo "$PYTHONPATH"', "declare -p PYTHONPATH", "export PYTHONPATH_X=1",
+    "bash -c 'export PYTHONPATH=/x; python3 -c pass'", "bash -lc 'export PYTHONPATH=/x RESEARCH_AT_CHECKOUT=1; research status'",
+    "research run --on auto -- bash -lc 'export PYTHONPATH=.:x; pytest'", "ssh n1 'export PYTHONPATH=/x; pytest'",
+    "( export PYTHONPATH=/x; python3 -c pass )", "cd /x && (export PYTHONPATH=$HERE/src; pytest tests/test_x.py)",
+    "export PYTHONPATH=/x | cat", "export PYTHONPATH=/x &", "echo $(export PYTHONPATH=/x)", "./export_and_run.sh",
+    "tmux send-keys 'export PYTHONPATH=/x' C-m", "bash <<'EOF'\nexport PYTHONPATH=/x\nEOF", 'rg -n "export PYTHONPATH" tools/',
+    "export PYTHONPATH=/x 'unclosed",
+]
+#: what its refusal says to do instead
+CODE_FIX = {"PYTHONPATH": "Put it on the one command instead, `PYTHONPATH=DIR python3 ...`, or run it in a subshell",
+            "RESEARCH_AT_CHECKOUT": "Put it on the one command instead, `RESEARCH_AT_CHECKOUT=1 research ...`, or run it in a subshell"}
+CODE_WHY_AND_UNSET = ("changes which code every later command of this shell runs", "`unset PYTHONPATH RESEARCH_AT_CHECKOUT` clears it")
+
+
+@pytest.mark.parametrize("form", CODE_SET_IN_THE_SHELL)
+def test_a_command_that_leaves_pythonpath_or_research_at_checkout_set_in_the_shell_is_refused(form):
+    """A shell hands both to every later command: an exported PYTHONPATH made a later `research` import a scratch tree's code
+    and, once that tree was gone, an older installed copy, and RESEARCH_AT_CHECKOUT kept it off origin/main's code."""
+    out = answer(form)
+    assert out["permission"] == "deny" and "set in the shell itself" in out["agent_message"], (form, out)
+
+
+@pytest.mark.parametrize("form", CODE_NOT_SET_IN_THE_SHELL)
+def test_naming_pythonpath_on_one_command_unsetting_reading_or_exporting_it_in_a_shell_that_dies_passes(form):
+    """Unlike the identity rule, this one never refuses in doubt: the harm is only in the shell that persists, and carriers,
+    subshells and scripts export PYTHONPATH in their own process as honest work."""
+    assert answer(form) == {"permission": "allow"}, form
+
+
+def test_the_refusal_for_a_code_variable_names_the_fix_and_the_form_it_gives_passes():
+    for name, fix in CODE_FIX.items():
+        message = answer(f"export {name}=1")["agent_message"]
+        assert all(s in message for s in (fix, *CODE_WHY_AND_UNSET, f"`( export {name}=...; cmd )`")), message
+    assert answer("unset PYTHONPATH RESEARCH_AT_CHECKOUT") == answer("PYTHONPATH=/x python3 -c pass") == {"permission": "allow"}
 
 
 def test_a_merge_on_a_vm_that_never_ran_boot_sh_first_gets_the_record_merge_drivers(tmp_path):

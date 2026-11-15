@@ -1,5 +1,5 @@
 """`engine.int8_fused`'s GEMM configs: per GPU architecture (`int8_fused.arch`, from the device's compute capability) and
-(N, K), (m_max, config) rows, `benchmarks/hash/exactlin/ksweep.py`'s gated winners where they beat vLLM's tiles; a call
+(N, K), (m_max, config) rows, `benchmarks/kernels/exactlin/ksweep.py`'s gated winners where they beat vLLM's tiles; a call
 takes the first row with M <= m_max, else vLLM's tiles (`int8_fused.pick`).  A config is `int8_fused.Cfg`'s text: tile
 BMxBNxBK, warps, stages, split-K and the TMA mode.  The config never changes a value (int32 sums and a per-element
 epilogue), only the time."""

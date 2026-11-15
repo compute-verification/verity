@@ -25,7 +25,12 @@ from typing import TYPE_CHECKING, Any
 
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
 from verity_vllm.program.frontend.compilations import COMPILATIONS
-from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
+from verity_vllm.program.frontend.kernel_readback import (  # noqa: F401
+    applied_kernels,
+    fp8_block_gemm_kernel_of,
+    int8_exact_of,
+    moe_experts_class_of,
+)
 
 if TYPE_CHECKING:
     from verity_vllm.program.frontend.gemm_targets import GemmTarget
@@ -75,8 +80,8 @@ class TargetProfile:
                            declaration).  `emulate_precision_casts` (Inductor's own switch) makes every fused Triton kernel perform the bf16
                            roundings the Program specifies at each op boundary; default Inductor carries fp32 through a fused region, so the
                            Program's intermediate values do not exist in that execution and any observation of them changes it
-                           (instrumented != production).  With the emulation the collection boundary is invisible by
-                           construction (measured: production vs instrumented top-8 logprobs bit-identical over 32 steps).
+                           (instrumented != served).  With the emulation the collection boundary is invisible by
+                           construction (measured: served vs instrumented top-8 logprobs bit-identical over 32 steps).
                            The Program itself is DERIVED eagerly by construction (`engine_args(execution=False)` omits the compile knobs);
                            what the declaration claims for the compiled execution is stated in `modelled_engine()` (boundary-level
                            conformance on committed bytes; fused region == composed relations NOT established).
@@ -118,7 +123,7 @@ class TargetProfile:
                            None) = MOE-01 with the router stated in its selection order over one committed softmax
                            (`MoeRouterTopKOrdered_v1`).  `"padded"` = the
                            fixed-slot construction: ONE `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` call per token over ALL E experts on their own
-                           weights, the TOPK slot outputs selected by the router ids (`verity.definitions.registry.moe_pad`; its lift of record is the
+                           weights, the TOPK slot outputs selected by the router ids (`verity_vllm.definitions.registry.moe_pad`; its lift of record is the
                            hand-authored `LMoeFfnL_v1` with the unselected slots DISABLED by the enable vector `a_{r,t,e}`).  Two Programs
                            of the same trace differ in digest by construction; GP-01 refuses a workload whose components were derived under
                            another construction than the declared one, and labels the workload (`moe_construction` block) so the row's
@@ -145,14 +150,14 @@ class TargetProfile:
                            `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.  Omitted
                            from `to_json()` when None.
     protocols           -> the protocol set the run executes (`verity_vllm.protocols`; grammar `config.parse_protocols`).  None =
-                           sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
-                           whole set in its one spelling, sampled proofs included (a profile is the target of SPOT's Program);
+                           SPOT alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
+                           whole set in its one spelling, SPOT included (a profile is the target of SPOT's Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
                            committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
     ir                  -> the circuit profile the Program is written in (a Program static, declared-and-bound, never attested).  None = word
                            (every Call of the Definition its derive rule binds, on w-bit values).  `"boolean"` = the same Calls,
-                           each of the Boolean version of that Definition, on bits (`verity_vllm.program.frontend.boolean.derived`); the
+                           each of the Boolean version of that Definition, on bits (`verity_torch.frontend.boolean.derived`); the
                            Build refuses by name every Definition with no Boolean version.  Declaring `"word"` is refused (declare None).
                            Omitted from `to_json()` when None.
     registered_values   -> where the Program's values live (a Program static, declared-and-bound, never attested).  None = in the
@@ -194,7 +199,7 @@ class TargetProfile:
 
     #: the blockwise FP8 GEMM's scale-product construction (None = "shared-per-block"; see the doc); never attested
     fp8_scale_construction: str | None = None
-    #: the protocol set the run executes (None = sampled proofs alone; see the doc); declared, never attested
+    #: the protocol set the run executes (None = SPOT alone; see the doc); declared, never attested
     protocols: tuple[str, ...] | None = None
     #: the circuit profile the Program is written in (None = word; see the doc); declared, never attested
     ir: str | None = None
@@ -490,7 +495,7 @@ class TargetProfile:
         if d.get("fp8_scale_construction") is None:
             d.pop("fp8_scale_construction", None)  # absent = shared-per-block; every earlier profile digest unchanged
         if d.get("protocols") is None:
-            d.pop("protocols", None)               # absent = sampled proofs alone; every earlier profile digest unchanged
+            d.pop("protocols", None)               # absent = SPOT alone; every earlier profile digest unchanged
         else:
             d["protocols"] = list(d["protocols"])
         if d.get("ir") is None:

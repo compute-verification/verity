@@ -18,8 +18,8 @@ from circuit_check import sidecars as SC
 from circuit_check import targets as TG
 
 GF2K = TG.REPO / "verity" / "circuits" / "ops" / "boolean" / "gf2k.circuit-check.py"
-#: the C++ models' sources, one library each (`verity.definitions.numerics._jit`)
-CPP = TG.REPO / "verity" / "definitions" / "numerics" / "cpp"
+#: the C++ models' sources, one library each (`verity_vllm.definitions.numerics._jit`)
+CPP = TG.REPO / "adapters" / "vllm" / "verity_vllm" / "definitions" / "numerics" / "cpp"
 #: a catalog target whose check runs fa2's C++ model (its twin kernel)
 ATTENTION = "Attention_v3{T=5,NH=2,KVH=1,D=16,BN=128}"
 

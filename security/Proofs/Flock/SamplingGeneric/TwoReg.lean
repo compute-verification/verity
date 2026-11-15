@@ -77,8 +77,8 @@ end Claims.Sampling
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Opening Partition InScopeTwo cell replayOf forkOn wrongInAt
-  gateBlock gateBlock_of_mem correct_refIn_congr val_assemble ιOf ιOf_eq wrongAllAt wrongAllAt_subset)
+open Claims.Sampling (AuditStatement Opening Partition InScopeTwo cell replayOf forkOn incorrectInAt
+  gateBlock gateBlock_of_mem correct_refIn_congr val_assemble ιOf ιOf_eq incorrectAllAt incorrectAllAt_subset)
 
 namespace Compiled
 
@@ -91,12 +91,12 @@ theorem pr_unfound_le_at (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω :
     (P : Prover Ω) (β : Ω → (Fin (L.V.k x) → Coin) → ℝ) (hβ0 : ∀ ω r, 0 ≤ β ω r)
     (hβ : Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x)
     (sel : Ω → (Fin (L.V.k x) → Coin) → List ℕ → Option (Fin (L.nPU x)))
-    (hsel : ∀ ω r e, sel ω (forkOn (L.stage2 x) r e) = sel ω r)
+    (hsel : ∀ ω r e, sel ω (forkOn (L.secondStage x) r e) = sel ω r)
     (hκ : ∀ ω r (sl : List ℕ → Option (Fin (L.nPU x))), Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-        ∃ i, sl (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-          ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-            ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤
+      (run H P L.V x ω (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+        ∃ i, sl (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.secondStage x) r p.1) (p.2 i u)) ≤
         L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r)) :
     Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧ ∃ i, sel ω rc.1 (L.checked x rc.1) = some i ∧
@@ -109,7 +109,7 @@ theorem pr_unfound_le_at (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω :
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u))
       ≤ Ex (fun ω : Ω => L.κs x + Ex fun r => Real.sqrt (L.V.k x * L.γs x * β ω r)) :=
-        Ex_mono fun ω => (Pr_forkOn_prod (L.stage2 x) (fun (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+        Ex_mono fun ω => (Pr_forkOn_prod (L.secondStage x) (fun (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
             (run H P L.V x ω r).out = .acc ∧ ∃ i, sel ω r (L.checked x r) = some i ∧
               ∃ u : Fin (L.nPU x), (L.checked x r)[i.val]? = some u.val ∧
                 ¬ L.Found H x (run H P L.V x ω) u r (c i u))).trans_le
@@ -178,7 +178,7 @@ theorem iopensAt_of_mem {H : Msg → Msg} {L : CompiledTwo Coin A} {Ω : Type} {
 interior roots of the replay block of `Pρ` that holds it; `none` at a gate no replay block holds. -/
 noncomputable def iop (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Pρ : Partition) (r : Fin (L.V.k x) → Coin) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : ℕ) : Option Bool :=
-  (gateBlock Pρ g).bind fun ρ => L.iopensAt H P x ω (forkOn (L.stage2 x) r ec.1) ec.2 ρ g
+  (gateBlock Pρ g).bind fun ρ => L.iopensAt H P x ω (forkOn (L.secondStage x) r ec.1) ec.2 ρ g
 
 /-- `iop` on the program's gates, as the rewinding lemma's table. -/
 noncomputable def iopTable (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
@@ -210,7 +210,7 @@ open a gate of the program off the committed interior with probability at most `
 gates (`FlockSoundness.Rewinding.prBad_le`, the committed interior being the second stages' openings' plurality). -/
 theorem pr_offIreg_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Pρ : Partition) (r : Fin (L.V.k x) → Coin) :
-    Pr (fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω Pρ (forkOn (L.stage2 x) r ec.1) ec.2) ≤
+    Pr (fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω Pρ (forkOn (L.secondStage x) r ec.1) ec.2) ≤
       L.nG x * Real.sqrt (Pr fun ee : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
         ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.IConflict H P x ω Pρ r ee) := by
   classical
@@ -234,7 +234,7 @@ theorem pr_offIreg_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P 
       | some ρ =>
         simp only [iop, iplur, hgb, Option.bind_some, Option.map_some, Option.getD_some]
         exact le_plur (fun b => Pr fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-          L.iopensAt H P x ω (forkOn (L.stage2 x) r ec.1) ec.2 ρ g = some b) v
+          L.iopensAt H P x ω (forkOn (L.secondStage x) r ec.1) ec.2 ρ g = some b) v
     have h' : (#(FlockSoundness.Rewinding.openedTo (L.iopTable H P x ω Pρ r) g v) : ℝ) ≤
         #(FlockSoundness.Rewinding.openedTo (L.iopTable H P x ω Pρ r) g (L.iplur H P x ω Pρ r g)) := by
       rw [hcnt, hcnt]
@@ -244,11 +244,11 @@ theorem pr_offIreg_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P 
     (fun g => L.iplur H P x ω Pρ r g) hpl (L.nG x)
     fun ec => (card_filter_le _ _).trans (card_univ.trans (Fintype.card_fin _)).le
   have hoff : Pr (fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      L.OffIreg H P x ω Pρ (forkOn (L.stage2 x) r ec.1) ec.2) ≤
+      L.OffIreg H P x ω Pρ (forkOn (L.secondStage x) r ec.1) ec.2) ≤
       (#(FlockSoundness.Rewinding.bad (L.iopTable H P x ω Pρ r) fun g => L.iplur H P x ω Pρ r g) : ℝ) /
         Fintype.card ((Fin (L.V.k x) → Coin) × L.SlotEC x) := by
     calc Pr (fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-          L.OffIreg H P x ω Pρ (forkOn (L.stage2 x) r ec.1) ec.2)
+          L.OffIreg H P x ω Pρ (forkOn (L.secondStage x) r ec.1) ec.2)
         ≤ Pr (fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x => ∃ g,
             FlockSoundness.Rewinding.Off (L.iopTable H P x ω Pρ r) (fun g => L.iplur H P x ω Pρ r g) ec g) :=
           Pr_mono fun ec hec => by
@@ -274,7 +274,7 @@ theorem pr_offIreg_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P 
         fun ee => by simp only [FlockSoundness.Rewinding.conflict, mem_filter, mem_univ, true_and]; exact Iff.rfl,
       Fintype.card_prod ((Fin (L.V.k x) → Coin) × L.SlotEC x) ((Fin (L.V.k x) → Coin) × L.SlotEC x),
       Nat.cast_mul, sq]
-  calc Pr (fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω Pρ (forkOn (L.stage2 x) r ec.1) ec.2)
+  calc Pr (fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω Pρ (forkOn (L.secondStage x) r ec.1) ec.2)
       ≤ _ := hoff
     _ ≤ _ := hbad
     _ = L.nG x * Real.sqrt (Pr fun ee : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
@@ -291,10 +291,10 @@ theorem le_bconfTwo (H : Msg → Msg) (L : CompiledTwo Coin A) {x : Msg} {s : Au
     {Q : Ω × (Fin (L.V.k x) → Coin) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
       ((Fin (L.V.k x) → Coin) × L.SlotEC x) → Prop}
     (hQ : ∀ q, Q q → ∃ u v,
-      findColl (Sampling.ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)
-          (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2) ++
-        Sampling.ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)
-          (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2)) = some (u, v) ∧
+      findColl (Sampling.ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)
+          (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2) ++
+        Sampling.ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)
+          (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2)) = some (u, v) ∧
         Collision H u v) :
     Pr Q ≤ (BconfTwo H L Ω P x).Pr H := by
   simp only [BconfTwo, hs]
@@ -328,8 +328,8 @@ theorem pr_iconflict_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.co
   obtain ⟨a', ha', ha1', ha2', ha3', -⟩ := iopensAt_some hs hb2'
   have hroots : a.1 = a'.1 := by
     rw [ha1, ha1', hS.interior x Ω P q.1 q.2.1 q.2.2.1.1 ρ, hS.interior x Ω P q.1 q.2.1 q.2.2.2.1 ρ]
-  exact Compiled.bconf_of_disagree hbind s P q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1, q.2.2.1.2)
-    (forkOn (L.stage2 x) q.2.1 q.2.2.2.1, q.2.2.2.2) (Or.inl ha) (Or.inr ha') hroots (ha2.trans ha2'.symm)
+  exact Compiled.bconf_of_disagree hbind s P q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.1.1, q.2.2.1.2)
+    (forkOn (L.secondStage x) q.2.1 q.2.2.2.1, q.2.2.2.2) (Or.inl ha) (Or.inr ha') hroots (ha2.trans ha2'.symm)
     (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
 
 /-- **The rewinding lemma at the committed interior, averaged over the tape and the first stage**: at most
@@ -343,7 +343,7 @@ theorem ex_offIreg_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.comm
       ≤ Ex (fun ω : Ω => Ex fun r : Fin (L.V.k x) → Coin => L.nG x * Real.sqrt (Pr fun ee :
           ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
             L.IConflict H P x ω Pρ r ee)) :=
-        Ex_mono fun ω => (Pr_forkOn_prod (L.stage2 x) (fun (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+        Ex_mono fun ω => (Pr_forkOn_prod (L.secondStage x) (fun (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
           L.OffIreg H P x ω Pρ r c)).trans_le (Ex_mono fun r => L.pr_offIreg_le H P x ω Pρ r)
     _ = Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => L.nG x * Real.sqrt (Pr fun ee :
           ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
@@ -362,20 +362,20 @@ theorem ex_offIreg_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.comm
 
 set_option synthInstance.maxSize 1024 in
 /-- **The deterministic half, at a boundary trace**: at an accepted run whose sample holds, at slot `i`, a proof block
-`u` incorrect at the boundary trace `tr` and its replay block's committed interior (`wrongAllAt`), the session of `i`
+`u` incorrect at the boundary trace `tr` and its replay block's committed interior (`incorrectAllAt`), the session of `i`
 is not extracted at its first slot `i₀`'s coins, or the run's extractions disagree with themselves, or open a gate off
 `tr` or off a replay block's committed interior. Otherwise the boundary values that are `tr` on the program's gates and
 the kept openings elsewhere, and the interior values that are `u`'s replay block's committed interior on its gates and
 the kept openings elsewhere, agree with every opening the session's witness reveals at `u` that passes, so they make
 `u` correct (`Sessions.opens`); and `tr` and the committed interior agree with them where `u`'s correctness reads
-(`correct_refIn_congr`), so `u` is correct at them, which `u ∈ wrongAllAt` denies. The boundary trace is the reader's:
+(`correct_refIn_congr`), so `u` is correct at them, which `u ∈ incorrectAllAt` denies. The boundary trace is the reader's:
 the committed trace at the run's tape (`FregTwo_eq`), or one read at the statement. -/
 theorem regTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
     {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
     (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) (hacc : (run H P L.V x ω r).out = .acc) (i u : Fin (L.nPU x))
     (hiu : (L.checked x r)[i.val]? = some u.val) (tr : ℕ → Option Bool)
-    (hF : u.val ∈ wrongAllAt s Pt d.part tr (L.iregVal H P x ω r)) (i₀ u₀ : Fin (L.nPU x))
+    (hF : u.val ∈ incorrectAllAt s Pt d.part tr (L.iregVal H P x ω r)) (i₀ u₀ : Fin (L.nPU x))
     (hlead : L.leadOf x (L.checked x r) i = some i₀) (hu₀ : (L.checked x r)[i₀.val]? = some u₀.val) :
     ¬ L.Found H x (run H P L.V x ω) u₀ r (c i₀ u₀) ∨ L.InConf H P x s ω r c ∨
       (∃ g < L.nG x, ∃ b, L.opensAt H P x ω r c g = some b ∧ tr g ≠ some b) ∨
@@ -409,9 +409,9 @@ theorem regTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions
     rw [Compiled.sessBlocks, hc]
     exact List.mem_filterMap.2 ⟨i.val, Compiled.self_mem_sessSlots hiu u.isLt, hiu⟩
   obtain ⟨b, ρ, rb, hb, hρ, hrb, hcor⟩ := hS.opens x s Pt d Ω P ω r u xS vS w hs hPt hd hin hacc hu hsu hR
-  simp only [wrongAllAt, mem_biUnion, mem_product, mem_range] at hF
+  simp only [incorrectAllAt, mem_biUnion, mem_product, mem_range] at hF
   obtain ⟨⟨ρ', t⟩, -, hwr⟩ := hF
-  simp only [wrongInAt, mem_filter] at hwr
+  simp only [incorrectInAt, mem_filter] at hwr
   obtain ⟨hcell, hnot⟩ := hwr
   have hρ' : ρ' = ρ := by
     simp only [cell, mem_filter] at hcell
@@ -457,9 +457,9 @@ theorem eventTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessio
     {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
     (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω) (ω : Ω) (tr : ℕ → Option Bool) :
     Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-      ∃ u ∈ L.checked x r, u ∈ wrongAllAt s Pt d.part tr (L.iregVal H P x ω r)) ≤
+      ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt d.part tr (L.iregVal H P x ω r)) ≤
       Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part tr (L.iregVal H P x ω rc.1)))
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part tr (L.iregVal H P x ω rc.1)))
             (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
@@ -477,11 +477,11 @@ theorem eventTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessio
           ∃ g < L.nG x, ∃ b, L.opensAt H P x ω rc.1 rc.2 g = some b ∧ tr g ≠ some b)
         (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω d.part rc.1 rc.2)))
   refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-    ∃ u ∈ L.checked x r, u ∈ wrongAllAt s Pt d.part tr (L.iregVal H P x ω r))).symm.trans_le
+    ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt d.part tr (L.iregVal H P x ω r))).symm.trans_le
       (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
   obtain ⟨hacc, v, hvl, hvF⟩ := hrc
   obtain ⟨i, hi, u, hiu, huF⟩ := L.selOf_some x (hS.slots x rc.1)
-    (fun w hw => by rw [Compiled.nPU_eq hs hPt]; exact mem_range.1 (wrongAllAt_subset s Pt d.part _ _ hw)) hvl hvF
+    (fun w hw => by rw [Compiled.nPU_eq hs hPt]; exact mem_range.1 (incorrectAllAt_subset s Pt d.part _ _ hw)) hvl hvF
   obtain ⟨i₀, u₀, hlead, hu₀⟩ := Compiled.leadOf_some hiu u.isLt
   rcases regTwo_split hS hs hPt hd hin P ω rc.1 rc.2 hacc i u hiu tr huF i₀ u₀ hlead hu₀ with h | h | h | h
   · exact Or.inl ⟨hacc, i₀, by rw [Compiled.leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
@@ -506,13 +506,13 @@ theorem eventTwo_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hb
   obtain ⟨β, hβ0, hβ, hκ⟩ := hSK x Ω P
   have hT : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (L.regVal H P x ω) (L.iregVal H P x ω rc.1)))
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (L.regVal H P x ω) (L.iregVal H P x ω rc.1)))
             (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) ≤
       L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) :=
     Compiled.pr_unfound_le_at H L.toCompiled P β hβ0 hβ
-      (fun ω r => L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (L.regVal H P x ω) (L.iregVal H P x ω r))))
+      (fun ω r => L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (L.regVal H P x ω) (L.iregVal H P x ω r))))
       (fun ω r e => by simp only [iregVal_forkOn]) fun ω r sl => hκ ω r sl
   have hI := Compiled.pr_inConf_le hbind hs P
   have hO : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>

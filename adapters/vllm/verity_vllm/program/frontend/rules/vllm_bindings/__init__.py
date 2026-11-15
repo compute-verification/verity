@@ -72,7 +72,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.int8 import (
     Int8UnifiedAttentionRule,
 )
 from verity_vllm.program.frontend.rules.vllm_bindings.kv_prefix import KvPrefixRule
-from verity_vllm.program.frontend.rules.vllm_bindings.layer_norm import (
+from verity_torch.frontend.rules.bindings.layer_norm import (
     LayerNormAtenRule,
 )
 from verity_vllm.program.frontend.rules.vllm_bindings.norm_chain import (
@@ -113,7 +113,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import (
     TritonGemmRule,
     TritonRmsNormRule,
 )
-from verity_vllm.program.frontend.rules.vllm_bindings.views import (
+from verity_torch.frontend.rules.bindings.views import (
     AllocViewRule,
     IntIdWidenRule,
 )
@@ -140,7 +140,7 @@ def vllm_ruleset():
     `aten.argmax`, views/allocs). The default `FusedAddRmsNorm[vllm]` is REPLACED by `FusedAddRmsNorm[vllm-bi]`, which derives the
     kernel dispatch from the export instead of assuming it."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
-    from verity_vllm.program.frontend.rules.base import RuleSet
+    from verity_torch.frontend.rules.base import RuleSet
     base = [r for r in DEFAULT_RULES.rules if type(r) is not _FusedAddRmsNormRule]
     from verity_vllm.program.frontend.rules.vllm_dsa import (
         VLLM_DSA_RULES,  # DeepSeek sparse attention's leaves (dsa_leaves.dsa_leaves)
