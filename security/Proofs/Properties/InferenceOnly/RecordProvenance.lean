@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.InferenceOnly.RecordForm
 public import Proofs.Properties.InferenceOnly.RecordRoles
 public import Proofs.Properties.InferenceOnly.RecordTemplates
+import Proofs.Properties.InferenceOnly.DigestDecodeReads
 
 /-!
 # Every row the record check holds is registered, for the record check's own form
@@ -28,6 +29,8 @@ type alone (`layoutOf_reads`).
 
 `form_pinnedOpens` (`Properties.Record.PinnedOpens`): the reader of an opening the check holds under a pin is the pinned
 Definition, for the form, from the closure digest's pin (`Properties.Record.DigestPins`, by `pinnedOpens_of`).
+`form_pinnedOpens_digestPins`: the same with no hypothesis, the pin being `digestPins`
+(`Proofs.Properties.InferenceOnly.DigestDecodeReads`).
 -/
 
 @[expose] public section
@@ -108,5 +111,9 @@ theorem form_provenance : Provenance form := by
 digest's pin. -/
 theorem form_pinnedOpens (hpins : DigestPins) : PinnedOpens form :=
   pinnedOpens_of hpins form_provenance form_layoutReads
+
+/-- **The reader of a held opening is the pinned Definition**, for the record check's own form. -/
+theorem form_pinnedOpens_digestPins : PinnedOpens form :=
+  form_pinnedOpens digestPins
 
 end InferenceOnlyCheck.Properties.Record.SecurityProofs
