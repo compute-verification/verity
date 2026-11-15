@@ -17,8 +17,8 @@ from typing import Any
 
 from verity.circuits.defs import bind
 from verity.circuits.refs import runs
-from verity.definitions.registry import linear_cut as LC
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
+from verity_vllm.definitions.registry import linear_cut as LC
 
 from .build import Unexpressible
 from .window_builder import Row
@@ -36,7 +36,7 @@ class Linears:
 
 def _hands_on(N: int, W: int, rows: int, provable: bool) -> bool:
     """Whether `LinearOut_v1{N, W}` is within ``rows`` rows and, unless not ``provable``, a proof block Flock proves."""
-    if N // W + 1 > rows:
+    if rows < N // W + 1:
         return False
     if provable:
         try:
@@ -75,7 +75,7 @@ def linears(fn: Any, words: int, rows: int, provable: bool = True) -> Linears:
         calls.append((K, N, W))
     if bad := sorted({(K, N) for K, N, W in calls if N % W}):
         raise Unexpressible(f"{fn.id}: linears (K, N) {bad}, whose y no rows of Pearl+'s {words} words doubled hand on in "
-                            f"one unit within {rows} rows" + (" that C-Flock proves" if provable else ""))
+                            f"one unit within {rows} rows" + (" that Flock proves" if provable else ""))
     return Linears(heads, tuple(calls))
 
 

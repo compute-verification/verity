@@ -514,10 +514,10 @@ theorem pr_unfound_le (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Ty
     (hβ : Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x)
     (sel : Ω → List ℕ → Option (Fin (L.nPU x)))
     (hκ : ∀ ω r, Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-        ∃ i, sel ω (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-          ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-            ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤
+      (run H P L.V x ω (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+        ∃ i, sel ω (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.secondStage x) r p.1) (p.2 i u)) ≤
         L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r)) :
     Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧ ∃ i, sel ω (L.checked x rc.1) = some i ∧
@@ -530,7 +530,7 @@ theorem pr_unfound_le (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Ty
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u))
       ≤ Ex (fun ω : Ω => L.κs x + Ex fun r => Real.sqrt (L.V.k x * L.γs x * β ω r)) :=
-        Ex_mono fun ω => (Pr_forkOn_prod (L.stage2 x) (fun (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+        Ex_mono fun ω => (Pr_forkOn_prod (L.secondStage x) (fun (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
             (run H P L.V x ω r).out = .acc ∧ ∃ i, sel ω (L.checked x r) = some i ∧
               ∃ u : Fin (L.nPU x), (L.checked x r)[i.val]? = some u.val ∧
                 ¬ L.Found H x (run H P L.V x ω) u r (c i u))).trans_le
@@ -562,7 +562,7 @@ theorem pr_miss_le {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {
     calc Pr (fun r : Fin (L.V.k x) → Coin => F ∉ s.design.M (L.part s) δ ∧ ∀ u ∈ L.checked x r, u ∉ F)
         ≤ Pr (fun r : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x r, u ∉ F) := Pr_mono fun _ h => h.2
       _ = Ex fun r => Pr fun d : Fin (L.V.k x) → Coin =>
-            ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ F := Pr_forkOn (L.stage2 x) _
+            ∀ u ∈ L.checked x (forkOn (L.secondStage x) r d), u ∉ F := Pr_forkOn (L.secondStage x) _
       _ ≤ Ex esc := Ex_mono hesc
       _ ≤ δ := hEesc.trans (not_lt.1 hM')
 

@@ -1,4 +1,4 @@
-"""The challenger's record in its own format, held to Lean's total reader (`Flock.RecRecord`, `flock-verify
+"""The challenger's record in its own format, held to Lean's total reader (`Flock.RecRecord`, `verity-verify-proof
 rec-record`), which `Proofs.Flock.Claims.Recursion.RecRecord` proves reads back what `recordW` writes. The record's writer is Python
 (`rec_live.record_bytes`), so these tests are what ties the proof to the deployed record: on the honest records of the
 plain session and of `rec-c3-inner`'s candidate-3 session, and on one with every escape a stream name can need, `recordW` writes
@@ -53,7 +53,7 @@ def _escapes() -> dict:
 
 @pytest.mark.parametrize("record", [lambda: _record(PLAIN), lambda: _record(C3), _escapes],
                          ids=["plain", "c3", "escapes"])
-def test_the_lean_writer_writes_the_coin_servers_record_and_its_reader_reads_it(tmp_path, record):
+def test_the_lean_writer_writes_the_live_coin_parts_record_and_its_reader_reads_it(tmp_path, record):
     """`recordW` at the rounds `readRecord` read is `record_bytes`' bytes up to the rounds' end (``writes``), and each
     round reads as the record holds it: stream, index, tops, level-0 count, commit strings, coin count and coins."""
     r = record()
@@ -67,7 +67,7 @@ def test_the_lean_writer_writes_the_coin_servers_record_and_its_reader_reads_it(
                          ids=["compact", "rounds-not-first"])
 def test_a_record_in_another_layout_is_refused(tmp_path, dump):
     rc, out, err = _read(tmp_path, dump(_record(PLAIN)))
-    assert (rc, out, err.strip()) == (1, None, "rec-record: not the coin server's record format")
+    assert (rc, out, err.strip()) == (1, None, "rec-record: not the challenger's live-coin part's record format")
 
 
 def _shown(r: dict) -> list[dict]:
@@ -81,7 +81,7 @@ def _shown(r: dict) -> list[dict]:
 
 
 @pytest.mark.parametrize("record", [lambda: _record(PLAIN), lambda: _record(C3)], ids=["plain", "c3"])
-def test_the_transcript_model_shows_the_coin_servers_rounds(tmp_path, record):
+def test_the_transcript_model_shows_the_live_coin_parts_rounds(tmp_path, record):
     """`recordFullW` at the record `readFull` read is `record_bytes`' bytes up to the link points, and the rounds it shows
     are the challenger's: round 0 from the link, each later one from its recorded round."""
     r = record()

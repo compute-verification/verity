@@ -17,9 +17,9 @@
 //! its own keyed-BLAKE3 row digests (parent compressions natively) and the public output words against its own words,
 //! before any coin. Flock's coins are live (flock-128-r2: Fast100, two reps on one root, R1–R8 of flock-live).
 //!
-//!   flock-pure serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256
-//!   flock-pure prove    --verifier ADDR --instances FILE --netlist FILE [--runs N] [--warm W]
-//!   flock-pure selftest --instances FILE --netlist FILE [--netlist-other FILE]
+//!   flock-pure serve    --listen ADDR --out DIR --instances FILE --circuit-description FILE --pin SHA256
+//!   flock-pure prove    --verifier ADDR --instances FILE --circuit-description FILE [--runs N] [--warm W]
+//!   flock-pure selftest --instances FILE --circuit-description FILE [--circuit-description-other FILE]
 //!
 //! Output lines are `LIVE\t{json}` / `NEG\t{json}` / `SELFTEST\t{json}` / `SESSION\t{json}`.
 
@@ -351,7 +351,7 @@ impl Pure {
     }
 
     fn for_instances(inst: &Instances, net: Arc<UnitNet>) -> Self {
-        assert_eq!(net.relation, inst.relation, "the netlist lowers another relation than the instance set's");
+        assert_eq!(net.relation, inst.relation, "the circuit description lowers another relation than the instance set's");
         assert_eq!(net.out_cols.len() == 2, inst.header["epilogue"].as_bool().unwrap());
         Self::new(inst.vus, inst.units, inst.row_bytes, net)
     }
@@ -935,19 +935,19 @@ fn main() {
     flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let inst = Instances::load(&arg("--instances", "instances.bin"));
-    let net = Arc::new(UnitNet::load(&arg("--netlist", "net.txt")));
+    let net = Arc::new(UnitNet::load(&arg("--circuit-description", "net.txt")));
     let pin = arg("--pin", "");
     if !pin.is_empty() && pin != hex(&net.sha256) {
-        eprintln!("the netlist {} is not the pinned lowering {pin}", hex(&net.sha256));
+        eprintln!("the circuit description {} is not the pinned lowering {pin}", hex(&net.sha256));
         std::process::exit(2);
     }
     let tb = Instant::now();
     let p = Arc::new(Pure::for_instances(&inst, net));
-    eprintln!("statement {} vus={} units={} blake3={} nu={} m={} netlist={} built in {:.2}s", inst.relation, p.vus, p.units, p.n_b3, p.nu,
+    eprintln!("statement {} vus={} units={} blake3={} nu={} m={} circuit_description={} built in {:.2}s", inst.relation, p.vus, p.units, p.n_b3, p.nu,
               p.params(LigeritoProfile::Fast100).m, hex(&p.net.sha256), tb.elapsed().as_secs_f64());
     match cmd.as_str() {
         "selftest" => {
-            let other = std::env::args().any(|a| a == "--netlist-other").then(|| Arc::new(UnitNet::load(&arg("--netlist-other", ""))));
+            let other = std::env::args().any(|a| a == "--circuit-description-other").then(|| Arc::new(UnitNet::load(&arg("--circuit-description-other", ""))));
             selftest(p, inst, other)
         }
         "serve" => {
@@ -1001,7 +1001,7 @@ fn main() {
                 }
             }
         }
-        _ => eprintln!("usage: flock-pure serve|prove|selftest --instances FILE --netlist FILE ..."),
+        _ => eprintln!("usage: flock-pure serve|prove|selftest --instances FILE --circuit-description FILE ..."),
     }
 }
 

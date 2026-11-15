@@ -1,3 +1,5 @@
+# A copy of tools/check/policy.toml, which main's verified queue reads at a candidate at this path (`research.policy.at`):
+# without it a candidate's every job gates. It goes once the architecture branch lands; keep it equal to tools/check/policy.toml.
 # The verified queue's policy over what the runners (suites.py, circuit-check, check.py's steps) report: what of it gates and
 # what may stay red (`research.policy` reads it). The loop reads its allowances at a candidate's base, so no candidate's own
 # allowance covers its own failure; `research merge` reads `off_gate` at the commit it merges; the quick tier's judge reads it

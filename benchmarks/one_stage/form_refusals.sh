@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The fixture of verify --zk's form refusals (form_refusals.py), on a CPU machine, on hidden_zk's builds (its job.sh,
-# sourced: Flock's flock-circuit, the Lean flock-verify and the prover's flock-tmpl-unit, cached under $FP_CACHE). From a
+# sourced: Flock's flock-circuit, the Lean verity-verify-proof and the prover's flock-tmpl-unit, cached under $FP_CACHE). From a
 # clone:
 #   FP_CACHE=/workspace/research/cache/pouw-hidden-zk bash benchmarks/one_stage/form_refusals.sh
 #   (a job run from a clone of the tree, 8 CPUs, 32 GB)
@@ -10,7 +10,7 @@ set -uo pipefail
 export HZ_CONFIGS=form-refusals HZ_MEM_GB=${FP_MEM_GB:-32}
 [ -n "${FP_CACHE:-}" ] && export HZ_CACHE=$FP_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
 TU=$(cached tmplunit "$(lean_key "$SRC/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean")" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
 [ -x "$TU" ] || { log "flock-tmpl-unit build FAILED: $(tail -20 "$OUT/build-tmplunit.log")"; exit 1; }

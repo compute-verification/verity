@@ -53,7 +53,7 @@ def _world(tmp_path: Path):
     repo.mkdir()
     (repo / "mytools").mkdir()
     (repo / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
-    (repo / "tools" / "verity" / "check").mkdir(parents=True)
+    (repo / "tools" / "check").mkdir(parents=True)
     for rel, text in CHECK_FILES.items():
         (repo / rel).write_text(text)
     (repo / ".gitignore").write_text("__pycache__/\n")

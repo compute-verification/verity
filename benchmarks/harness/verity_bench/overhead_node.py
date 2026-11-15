@@ -31,12 +31,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
+import importlib.util
 import json
 import os
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 from verity_bench import kit, nsys
 from verity_bench import overhead as O
@@ -95,20 +97,23 @@ def _write(path: Path, doc: dict) -> None:
 
 def write_result(run_dir: Path, run_id: str, out: Path, record: str, ok: bool, detail: str, fingerprint: dict,
                  measurements: Sequence[dict] = (), *, measured: Sequence[dict] = ()) -> None:
-    """The run's `result.json`: its validation, then each of `measured` (the kit writer's arguments) through the kit's
-    writer, which stamps it with the run, the commit and the host. `measurements` are entries a caller wrote whole, held
-    as given: serving cost's (`benchmarks/serve_tax`), until it writes them through the kit's writer."""
+    """The run's `result.json`, started afresh and written by the kit's writer, which stamps each measurement with the
+    run, the commit and the host: what ran (`fingerprint`), `record` as its measurement file, each of `measured` (the kit
+    writer's arguments), and last the validation, with `record` as its evidence. `measurements` are entries a caller
+    wrote whole, held as given ahead of the writer's: serving cost's (`benchmarks/serve_tax`), until it writes them
+    through the kit's writer."""
 
     rel = os.path.relpath(out / record, run_dir)
-    _write(run_dir / kit.RESULT, {
-        "schema": kit.RESULT_SCHEMA, "run_id": run_id, "workload_fingerprint": fingerprint,
-        "validation": {"status": "passed" if ok else "failed", "checker": "verity bench overhead", "detail": detail,
-                       "evidence": [rel]},
-        "measurements": list(measurements), "measurement_files": [rel], "artifacts": []})
-    if measured:
-        writer = kit.Writer(run_dir, run_id, kit.host_stamp())
-        for m in measured:
-            writer.measurement(**m, inputs=[rel], mark="measured")
+    (run_dir / kit.RESULT).unlink(missing_ok=True)
+    if measurements:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        _write(run_dir / kit.RESULT, {"schema": kit.RESULT_SCHEMA, "run_id": run_id, "measurements": list(measurements)})
+    writer = kit.Writer(run_dir, run_id, kit.host_stamp() if measured else {})
+    writer.fingerprint(**fingerprint)
+    writer.measurement_file(rel)
+    for m in measured:
+        writer.measurement(**m, inputs=[rel], mark="measured")
+    writer.validation("passed" if ok else "failed", "verity bench overhead", detail, [rel])
 
 
 # ---- points ------------------------------------------------------------------------------------------------------------------
@@ -170,6 +175,27 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
 # ---- run ---------------------------------------------------------------------------------------------------------------------
 
 
+def _arm_module(arm_path: str | None, name: str) -> Any:
+    """The module `name` of a scheme's `arm_path`, a directory that is no package, loaded by its file's path (as `bench.py
+    --arm-path` takes it); an importable module where the scheme gives no path."""
+
+    if not arm_path:
+        return importlib.import_module(name)
+    if (held := sys.modules.get(name)) is not None and Path(getattr(held, "__file__", "")) == Path(arm_path) / f"{name}.py":
+        return held
+    spec = importlib.util.spec_from_file_location(name, Path(arm_path) / f"{name}.py")
+    if spec is None or spec.loader is None:
+        raise ImportError(f"no module {name} in {arm_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        del sys.modules[name]
+        raise
+    return module
+
+
 def epsilon_at(sch: O.Scheme, card: O.Gpu, m: int, model: str) -> dict:
     """The scheme's ε at each linear of the layer at m on the card, from its own function; or why there is none."""
 
@@ -177,9 +203,7 @@ def epsilon_at(sch: O.Scheme, card: O.Gpu, m: int, model: str) -> dict:
         return {"why": f"{sch.id} has no ε: it is the A/A control"}
     mod, _, name = sch.epsilon.partition(":")
     try:
-        if sch.arm_path and sch.arm_path not in sys.path:
-            sys.path.insert(0, sch.arm_path)
-        fn = getattr(importlib.import_module(mod), name)
+        fn = getattr(_arm_module(sch.arm_path, mod), name)
         return {linear: fn(m, n, k, card.gpu) for linear, (n, k) in O.MODELS[model].items()}
     except Exception as ex:  # noqa: BLE001 - recorded beside γ: a missing ε is shown, never invented
         return {"why": f"{sch.epsilon}: {type(ex).__name__}: {ex}"}

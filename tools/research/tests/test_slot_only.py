@@ -20,24 +20,26 @@ from research.pods.nebius import slot_only as S
 
 NEBIUS = Path(S.__file__).resolve().parent
 REPO = NEBIUS.parents[5]
+#: the slot.py path a machine's own copy sits below: main's tree's, where every machine has it, not the tree's own
+INSTALLED = "tools/verity/check/slot.py"
 
 
 def test_only_a_command_that_runs_cmd_in_a_check_slot_counts():
-    assert S.through_slot(["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"])
-    assert S.through_slot(["python3", "tools/verity/check/slot.py", "--priority", "--by", "x", "--", "true"])
-    for c in (["python3", "tools/verity/check/slot.py", "--status"], ["python3", "tools/verity/check/slot.py", "--by", "x", "--"],
-              ["uv", "run", "circuit-check", "--all"], ["bash", "-c", "python3 tools/verity/check/slot.py -- true"],
-              ["python", "tools/verity/check/slot.py", "--", "true"], ["python3", "/elsewhere/slot.py", "--", "true"], None, "python3"):
+    assert S.through_slot(["python3", "tools/check/slot.py", "--", "uv", "run", "python", "tools/check/check.py"])
+    assert S.through_slot(["python3", "tools/check/slot.py", "--priority", "--by", "x", "--", "true"])
+    for c in (["python3", "tools/check/slot.py", "--status"], ["python3", "tools/check/slot.py", "--by", "x", "--"],
+              ["uv", "run", "circuit-check", "--all"], ["bash", "-c", "python3 tools/check/slot.py -- true"],
+              ["python", "tools/check/slot.py", "--", "true"], ["python3", "/elsewhere/slot.py", "--", "true"], None, "python3"):
         assert not S.through_slot(c), c
 
 
 def test_a_run_may_name_a_pool_of_its_own_under_the_locks_directory_and_nothing_else():
     pool = ["env", "CHECK_SLOTS=/workspace/research/locks/proofs/slots"]
-    assert S.through_slot([*pool, "python3", "tools/verity/check/slot.py", "--by", "proofs", "--", "nice", "-n", "19", "bash", "j.sh"])
+    assert S.through_slot([*pool, "python3", "tools/check/slot.py", "--by", "proofs", "--", "nice", "-n", "19", "bash", "j.sh"])
     for env in (["env", "CHECK_SLOTS=/tmp/slots"], ["env", "CHECK_SLOTS=/workspace/research/locks/../x/slots"],
                 ["env", "CHECK_SLOTS=/workspace/research/locks/proofs/slots", "X=1"], ["env", "LEASE_DIR=/x"]):
-        assert not S.through_slot([*env, "python3", "tools/verity/check/slot.py", "--", "true"]), env
-    assert not S.through_slot([*pool, "python3", "tools/verity/check/slot.py", "--status"])
+        assert not S.through_slot([*env, "python3", "tools/check/slot.py", "--", "true"]), env
+    assert not S.through_slot([*pool, "python3", "tools/check/slot.py", "--status"])
 
 
 def test_the_refusal_names_the_pools_this_machine_has(tmp_path):
@@ -51,7 +53,7 @@ def test_the_refusal_names_the_pools_this_machine_has(tmp_path):
 def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_accepts(capsys):
     """A lane's run on cpu-1 takes the `research` pool with one flag, not a five-layer command line."""
     c = S.in_pool("research", "compute-accounting", ["python3", "search.py", "--n", "4"])
-    assert c == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by",
+    assert c == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/check/slot.py", "--by",
                  "compute-accounting", "--", "nice", "-n", "19", "python3", "search.py", "--n", "4"]
     assert S.through_slot(c) and all(S.through_slot(S.in_pool(p, "x", ["true"])) for p in S.POOLS)
     leanrec = S.in_pool("leanrec", "lean", ["true"])
@@ -129,14 +131,15 @@ def test_a_command_that_names_a_pool_and_the_trees_slot_py_names_the_machines_ow
     assert S.through_slot(own) and S.node_copy(own) is None, "already the machine's"
     by_hand = ["env", f"CHECK_SLOTS={S.POOLS['proofs']}", "python3", S.SLOT_PATHS[0], "--wait-max", "60", "--", "sh", "-c", "x"]
     assert S.node_copy(by_hand)[3] == S.NODE_SLOT
-    for other in (["python3", S.SLOT_PATHS[0], "--", "uv", "run", "python", "tools/verity/check/check.py"],
+    for other in (["python3", S.SLOT_PATHS[0], "--", "uv", "run", "python", "tools/check/check.py"],
                   ["python3", S.SLOT_PATHS[0], "--priority", "--rank", "3", "--", "true"],
                   ["env", f"CHECK_SLOTS={S.POOLS['research']}", "python3", S.SLOT_PATHS[0], "--status"],
                   ["env", "CHECK_SLOTS=/tmp/slots", "python3", S.SLOT_PATHS[0], "--", "true"],
                   ["env", f"CHECK_SLOTS={S.POOLS['research']}", "python3", "elsewhere/slot.py", "--", "true"], ["true"], []):
         assert S.node_copy(other) is None, other
     assert S.through_slot(["python3", S.NODE_SLOT, "--", "true"]) and not S.through_slot(["python3", S.NODE_SLOT, "--status"])
-    assert S.NODE_SLOT.startswith("/") and S.NODE_SLOT.endswith("/" + S.SLOT_PATHS[0]), "below slot.py's path in the repository"
+    assert S.NODE_SLOT == "/usr/local/lib/vy-monitoring/check-slot/" + INSTALLED and INSTALLED in S.TREE_SLOTS, (
+        "where every machine has its copy, below a slot.py path every reader knows")
     assert run_records.pool(own) == "research" and run_records.pool(["python3", S.NODE_SLOT, "--", "true"]) == run_records.OWN_POOL
 
 
@@ -322,7 +325,7 @@ def test_a_pool_run_is_sent_by_the_machines_own_slot_py_where_it_has_one_and_say
     node.rules.unlink()
     node.marker.unlink()
 
-    check = ["python3", S.SLOT_PATHS[0], "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    check = ["python3", S.SLOT_PATHS[0], "--", "uv", "run", "python", "tools/check/check.py"]
     request, rec = _launch(tmp_path, monkeypatch, check, ssh=lambda *a, **kw: pytest.fail("a command that names no pool asks nothing"))
     assert request["command"] == check == rec["command"] and "slot_copy" not in rec and capsys.readouterr().err == ""
 
@@ -336,8 +339,8 @@ def test_deploy_installs_slot_py_whole_as_each_pool_machines_own_copy_where_slot
     manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
     rows = [e for e in manifest["file"] if e.get("src") == S.SLOT_PATHS[0]]
     assert [e["path"] for e in rows] == [S.NODE_SLOT], "one copy a machine"
-    beside = S.NODE_SLOT.rsplit("/", 4)[0] + "/"               # .../check-slot/, which holds the copy below its repository path
-    assert beside.endswith("/check-slot/") and S.NODE_SLOT == beside + S.SLOT_PATHS[0]
+    beside = S.NODE_SLOT.rsplit("/", INSTALLED.count("/") + 1)[0] + "/"   # .../check-slot/, which holds the copy below INSTALLED
+    assert beside.endswith("/check-slot/") and S.NODE_SLOT == beside + INSTALLED
     assert [e["path"] for e in [*manifest["file"], *manifest.get("tree", [])]
             if e["path"].startswith(beside) or beside.startswith(e["path"].rstrip("/") + "/")] == [S.NODE_SLOT], "and nothing beside it"
     (row,) = rows
@@ -378,7 +381,7 @@ def _proc(proc, pid, pgid, run_dir=None):
 
 def test_it_stops_every_process_of_a_live_run_outside_the_slots_but_its_runner(tmp_path, monkeypatch, capsys):
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "runs-via-slot", tmp_path / "slot-only.jsonl"
-    slot = ["python3", "tools/verity/check/slot.py", "--", "true"]
+    slot = ["python3", "tools/check/slot.py", "--", "true"]
     gate = _run(runs, "r-gate", "running", slot, pgid=10, runner=9)
     off = _run(runs, "r-off", "running", ["uv", "run", "circuit-check", "--all"], pgid=20, runner=19)
     _run(runs, "r-done", "done", ["true"], pgid=30)
@@ -408,7 +411,7 @@ def test_renice_moves_a_direct_runs_processes_to_nice_19_once_and_leaves_slot_ru
     """On node 1 lanes' direct runs must not take the cores the train checks need. `--renice 19` stops nothing: it renices every
     process of a live run outside the slots, its runner too, and logs a run only while it moved a process."""
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "direct-runs-nice", tmp_path / "direct-nice.jsonl"
-    gate = _run(runs, "r-gate", "running", ["python3", "tools/verity/check/slot.py", "--", "true"], pgid=10, runner=9)
+    gate = _run(runs, "r-gate", "running", ["python3", "tools/check/slot.py", "--", "true"], pgid=10, runner=9)
     off = _run(runs, "r-off", "running", ["uv", "run", "pytest", "-x"], pgid=20, runner=19)
     for pid, run in ((10, gate), (19, off), (20, off), (21, off)):
         _proc(proc, pid, pid, run)
@@ -431,7 +434,7 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
     is exactly a line of /etc/vy/auditor; slot.py's runs get no pass there."""
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "auditor", tmp_path / "auditor-only.jsonl"
     ok = _run(runs, "r-ok", "running", ["bash", "verity/protocols/compose/device/live_challenger/run.sh"], pgid=10, runner=9)
-    slot = _run(runs, "r-slot", "running", ["python3", "tools/verity/check/slot.py", "--", "true"], pgid=20, runner=19)
+    slot = _run(runs, "r-slot", "running", ["python3", "tools/check/slot.py", "--", "true"], pgid=20, runner=19)
     extra = _run(runs, "r-extra", "running", ["bash", "verity/protocols/compose/device/live_challenger/run.sh", "x"], pgid=30, runner=29)
     for pid, run in ((10, ok), (20, slot), (30, extra)):
         _proc(proc, pid, pid, run)
@@ -444,7 +447,7 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
                                                                                        why=why))
     assert S.main(["--runs", str(runs), "--marker", str(marker), "--log", str(log), "--auditor"]) == 0
     assert sent == [30, 20]
-    assert {json.loads(ln)["why"] for ln in log.read_text().splitlines()} == {f"not a command of the auditor host's {marker}"}
+    assert {json.loads(ln)["why"] for ln in log.read_text().splitlines()} == {f"not a command of the auditor device's {marker}"}
     marker.write_text("")
     assert S.auditor_commands(marker) == [] and not S.auditor_allows(["bash", "verity/protocols/compose/device/live_challenger/run.sh"], marker)
     assert S.auditor_commands(tmp_path / "absent") == []
@@ -452,10 +455,10 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
 
 def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_no_research_run():
     """The deployed marker lists no command (the challenger runs only through vy-challenger-gate, the verifier through
-    vy-verifier-gate) and goes, with the timer that enforces it, to the auditor hosts only, each host's gate to it alone (the
+    vy-verifier-gate) and goes, with the timer that enforces it, to the auditor devices only, each host's gate to it alone (the
     challenger's and certifier's units also go to vy-auditor-2, which runs a certifier); vy-admin's sshd drop-in goes to them and
     to each CPU node that carries the lock-out, whose sshd lets only research log in without it; the nodes' shared peers file and
-    the cluster's description name no auditor host."""
+    the cluster's description name no auditor device."""
     import tomllib
     from pathlib import Path
 

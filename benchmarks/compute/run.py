@@ -106,8 +106,8 @@ from verity_bench import kit
 from verity_config.settings import SHARED
 
 __all__ = ["ABSENT", "ANSWER", "DELTA_S", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "POLICY", "RECORDS",
-           "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable", "amounts",
-           "capacity", "from_run", "main", "model_macs"]
+           "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
+           "amounts", "capacity", "from_run", "main", "model_macs", "uncredited_words"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
 #: the number's id in metrics.toml beside this file, the name result.json records it under
@@ -534,8 +534,8 @@ def _m(v: str | int | Fraction) -> str:
 
 def per_call_text(got: dict, model_macs: int) -> list[str]:
     """The printed lines of a document's `per_call`: its give-up by cause, then its top calls."""
-    lines = [f"  per call: the model gives up {got['give_up']:,} of its MACs ({100 * got['give_up'] / model_macs:.2f}%); "
-             f"by cause, from the verifier's split of its {got['calls']} calls ({got['source']}):"]
+    lines = [(f"  per call: the model gives up {got['give_up']:,} of its MACs ({100 * got['give_up'] / model_macs:.2f}%); "
+              f"by cause, from the verifier's split of its {got['calls']} calls ({got['source']}):")]
     width = max(len(CAUSES[c["cause"]]) for c in got["causes"])
     lines += [f"    {CAUSES[c['cause']]:<{width}}  {_m(c['macs']):>17} MACs  {100 * c['share']:6.2f}%" for c in got["causes"]]
     lines.append("  ε's deduction is the run's, at its sample: the verifier takes it off the records whose cells hold the most "
@@ -551,9 +551,9 @@ def per_call_text(got: dict, model_macs: int) -> list[str]:
 def text(doc: dict) -> str:
     """The printed lines of a document: the number, what accepted it, and what it is made of."""
     macs, cls, tokens, record = doc["macs"], doc["class"], doc["tokens"], doc["record"]
-    lines = [f"compute: {100 * doc['value']:.2f}% of the served model's MACs are credited by Pearl+ "
-             f"({doc['credited_macs']:,} of {doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the "
-             f"{100 * doc['target']:g}% target"]
+    lines = [(f"compute: {100 * doc['value']:.2f}% of the served model's MACs are credited by Pearl+ "
+              f"({doc['credited_macs']:,} of {doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the "
+              f"{100 * doc['target']:g}% target")]
     at = ", ".join(f"{k} {doc[name]}" for k, name in (("ε_s", "epsilon_s"), ("δ_s", "delta_s")) if doc[name] is not None)
     lines.append(f"  {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: Pearl+'s answer accepts"
                  + (f" (scheme {doc['scheme']})" if doc["scheme"] else "")

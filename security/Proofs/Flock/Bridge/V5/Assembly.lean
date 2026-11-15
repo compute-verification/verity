@@ -8,11 +8,11 @@ public import Proofs.Flock.Bridge.Count
 # V5's assembly (`Bridge.AssemblyTargetV5`, proved)
 
 `Assembly.lean` at the verifier's public inputs, under the sampling design the verifier samples under from the registration, which
-`PopMatches` puts on the registration's strata (`Bridge.lawOn_drawsUnder`): outside `RelS` at `δ` the faulty population
+`PopMatches` puts on the registration's strata (`Bridge.samplingDesignOn_samplesUnder`): outside `RelS` at `δ` the faulty population
 slots' `P_a` is at most `δ` (`pa_partOf_window`), and `EndToEndHiddenV5` at those proof blocks bounds the event, since
 each is a proof block faulty on the registration with canonical openings, so wrong, as a proof block right in that sense
 is not faulty (`FaultyRightTargetC`, with its transport from `TransportsLiveV5` at the wires `constsOfP` doesn't fix).
-Inside `RelS` the event is empty. No count of faulty slots enters, so the bound holds at every sampling design `Bridge.LawOn`
+Inside `RelS` the event is empty. No count of faulty slots enters, so the bound holds at every sampling design `Bridge.SamplingDesignOn`
 admits.
 
 `constsOfP_isInput`: `constsOfP` fixes only input gates, the constant, the zero and the public gates, each below
@@ -57,12 +57,12 @@ theorem _root_.Flock.Bridge.constsOfP_isInput {c : Flock.Circuit} {hU : Built c.
 
 /-- **V5's assembly** (`Bridge.AssemblyTargetV5`). -/
 theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
-  intro hT hF hE n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb law kd hlaw hb hdiv dj
+  intro hT hF hE n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb samplingDesign kd hlaw hb hdiv dj
     S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows
     roots Cd κ r ns δ hTab hLink
   classical
   have hns : ns.sum = n := Bridge.nsOf_sum hpop
-  have hon : Bridge.LawOn law ns kd := Bridge.lawOn_drawsUnder hpop hlaw hb
+  have hon : Bridge.SamplingDesignOn samplingDesign ns kd := Bridge.samplingDesignOn_samplesUnder hpop hlaw hb
   by_cases hrel : Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots)
       (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)
   · exact (FlockSoundness.Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hrel) _ τ).trans
@@ -79,11 +79,11 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
     · rintro ⟨u, hu, rfl⟩; exact ⟨hu, u.isLt⟩
     · rintro ⟨hv, hlt⟩; exact ⟨⟨v, hlt⟩, hv, rfl⟩
   rw [Bridge.pa_partOf_window P hns, Bridge.window_zero_filter, ← hW] at hle
-  have hTu := hT n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots law kd hdiv dj S₀ d₀ y₀ wr dg N L hTags
-    hCust (Bridge.lawSized_size (Bridge.lawSized_drawsUnder hlaw hb) hCust.2) τ
+  have hTu := hT n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots samplingDesign kd hdiv dj S₀ d₀ y₀ wr dg N L hTags
+    hCust (Bridge.samplingDesignSized_size (Bridge.samplingDesignSized_samplesUnder hlaw hb) hCust.2) τ
   have hκin : ∀ g b, κ g = some b → (Cc.op g).isInput = true := fun g b h =>
     Bridge.constsOfP_isInput (Discharge.Layout.outsOfP D.unroll hU n pi) h
-  have hsub : (Finset.univ.filter fun u : Fin n => u.val ∈ F) ⊆ wrongRegZc execArith P (planZHJP dj y₀)
+  have hsub : (Finset.univ.filter fun u : Fin n => u.val ∈ F) ⊆ incorrectRegZc execArith P (planZHJP dj y₀)
       (tabZHJP dj y₀) vb (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ) Xr := by
     intro u hu
     have hv : u.val ∈ Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P κ r desc q roots)
@@ -91,7 +91,7 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
       rw [hFe]
       exact (Finset.mem_filter.1 hu).2
     by_contra hu'
-    obtain ⟨-, op, hop⟩ := not_not.1 (mt (mem_wrongRegZc _ _ _ _ _ _).2 hu')
+    obtain ⟨-, op, hop⟩ := not_not.1 (mt (mem_incorrectRegZc _ _ _ _ _ _).2 hu')
     refine hF P vb.pos (fun o g => vb.bit (vb.val o) g) id vb.com (vb.cs (reg σ))
       (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
       Claims.Sampling.sha512Msg Cd roots Xr κ u hκin ⟨op, hop⟩
@@ -99,7 +99,7 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
     intro g hg b hb
     obtain ⟨-, hbit, hcan⟩ := hop g hg
     exact hbit.symm.trans (hcan.1 b hb)
-  have hE' := hE n Reg I own ht D hD hU pi hpi pub hpub hscope law kd ns hns hon hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3
+  have hE' := hE n Reg I own ht D hD hU pi hpi pub hpub hscope samplingDesign kd ns hns hon hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3
     hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' (Finset.univ.filter fun u : Fin n => u.val ∈ F) τ qF qS hTab hLink
   refine le_trans (FlockSoundness.Game.prob_mono ?_ _ τ) (hE'.trans ?_)
   · exact fun o ho => ⟨ho.1, hsub⟩

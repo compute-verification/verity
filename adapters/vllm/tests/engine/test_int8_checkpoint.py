@@ -1,7 +1,7 @@
 """`engine.int8_checkpoint`: the offline int8 recipe (`verity-int8-channel127/v1`) on `fp8_checkpoint`'s container.
 
 The row rule is checked against its definition (|q| <= 127, every nonzero row reaching 127, within half a step) and against
-`benchmarks/ppl/steps.py`'s own `quant_rows(w.float(), 127)` (`ppl_oracle.int8_weights`), and the recipe's bytes are pinned by
+the registered Definition's row quantizer (`ppl_oracle.int8_weights`), and the recipe's bytes are pinned by
 a golden vector on the fp8 test's synthetic two-shard checkpoint: a change to the rule or the container changes it, and needs a
 new recipe id."""
 from __future__ import annotations
@@ -24,7 +24,7 @@ from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
 from verity_vllm.program import model as M
 
-FLOOR = np.float32(np.float32(1e-30) / np.float32(127))                          # an all-zero row's scale (steps.py's clamp)
+FLOOR = np.float32(np.float32(1e-30) / np.float32(127))                          # an all-zero row's scale (the Definition's floor)
 
 
 def _rows(n: int, k: int, seed: int) -> np.ndarray:
@@ -56,7 +56,7 @@ def test_ties_round_to_even():
 
 
 @pytest.mark.parametrize("scale", [1e-6, 0.05, 40.0])
-def test_the_recipe_is_steps_py_quant_rows(scale):
+def test_the_recipe_is_the_definitions_row_quantizer(scale):
     w = _rows(128, 256, 11) * np.float32(scale / 0.05)
     w[0] = 0
     w[1, :8] = np.float32(1e-30)

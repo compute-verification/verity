@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-__all__ = ["DECLARED", "get"]
+__all__ = ["DECLARED", "get", "given"]
 
 #: name -> (the value an unset variable takes, what it is)
 DECLARED: dict[str, tuple[str, str]] = {
@@ -20,3 +20,10 @@ def get(name: str) -> str:
     """The value of the declared variable `name`: the environment's, or its default."""
     default, _ = DECLARED[name]
     return os.environ.get(name, default)
+
+
+def given(name: str) -> str | None:
+    """The environment's value of the declared variable `name`, or None where it is unset: for a flag whose unset
+    default is another source's, not the declared one."""
+    DECLARED[name]
+    return os.environ.get(name)

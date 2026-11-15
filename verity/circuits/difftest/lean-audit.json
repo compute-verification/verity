@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["Difftest", "DifftestExample", "AnnotDifftest", "FlockJsonDifftest"],
  "exempt": {
   "AnnotDifftestMain": "the annot-difftest executable's entry point, one line: Difftest.serve AnnotDifftest.table, audited under AnnotDifftest; a root of its own would put a second `main` beside DifftestExample's",

@@ -48,7 +48,7 @@ open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness
 open FlockVBridge.Decode
 
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
 /-- **A copy registering w holds w's elements in the filled layer** (`copyVal_regBit`): at copy `j` of unit `u`, opening
 part `p` of the groups `gs` with its row ports w's where they are read (`OpeningZeroAtL`), the layer filled at its
@@ -174,7 +174,7 @@ theorem openTie_of_layer {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fi
 end Sessions
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 

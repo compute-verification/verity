@@ -51,7 +51,7 @@ import Mathlib.Topology.Sheaves.Init
 
   `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads all three, beside the network certifier's count
   (`Definitions.Pouw.Assumptions.Dither.CertifierSeesImports`).
-* `PeriodInventory`, the period's devices are its inventory. It is stated and held: no guarantee reads it
+* `MonitoringPeriodInventory`, the period's devices are its inventory. It is stated and held: no guarantee reads it
   until it is decided whether the node's host CPUs and DPUs are devices of the period (the recommendation) or the
   protocol binds hashing to the cards instead. The fleet's transfer from the model to the devices reads it beside
   `Assumptions.CardWithinAccel`.
@@ -119,7 +119,7 @@ over PCIe or NVLink-C2C, DPUs) is a device of the period (`Devices`: the cards, 
 what those processors together compute within `t` seconds (`can F t`, on any code), some program of `G` computes on
 every input within `t` seconds, exchanging nothing. With `Assumptions.CardWithinAccel` for the cards, it is what
 carries the headline from the model's provers to the fleet's. -/
-def PeriodInventory (G : Accel) (can : ∀ {I O : Type}, (I → O) → ℝ → Prop) : Prop :=
+def MonitoringPeriodInventory (G : Accel) (can : ∀ {I O : Type}, (I → O) → ℝ → Prop) : Prop :=
   ∀ {I O : Type} (F : I → O) (t : ℝ), can F t →
     ∃ f : G.Mc.Alg I O, ∀ i, G.Mc.eval f i = F i ∧ G.wall f i ≤ t ∧ G.ext f i = 0
 

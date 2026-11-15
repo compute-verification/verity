@@ -1,8 +1,8 @@
-"""Sampled proofs' parties on the deployment layer (`parties`), every party here on stand-in capabilities: an honest
-run's verifier audits each block once its registration, the ZK server's pin and the challenger's address are in, in
-order, and its composite (remote, over sampled proofs, PoUW and the inference-only policy) accepts; a listed
+"""SPOT's parties on the deployment layer (`parties`), every party here on stand-in capabilities: an honest
+run's verifier audits each block once its docket, the ZK server's pin and the challenger's address are in, in
+order, and its composite (remote, over SPOT, PoUW and the inference-only policy) accepts; a listed
 subprotocol with no answer is absent and the composite never accepts over it; an accepting audit of another
-registration rejects; an audit that is `Unavailable` is its block's error, and one that raises anything else fails the
+docket rejects; an audit that is `Unavailable` is its block's error, and one that raises anything else fails the
 run (``party-died``, its error recorded); workers that can't serve leave the verifier refused ``closed`` with nothing
 audited; parameters out of their
 range, a list of subprotocols that is no composite's among them, are refused by every party; the challenger's host
@@ -18,23 +18,23 @@ import pytest
 from verity.protocol import place, site_of
 from verity.runtime.runner import run
 from verity.protocols.proofs.spot.verifier import parties as P
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.channel import Refused
 
 SP, WORK = P.SUBPROTOCOLS["verity/remote/v1"]["sampled-proofs"], P.SUBPROTOCOLS["verity/remote/v1"]["pearl-plus"]
 POUW = P.SUBPROTOCOLS["verity/onsite/v0"]["pouw"]
 CERT = P.IDS["certifier"]
-NCI = P.IDS["inference-only"]
+POLICY = P.IDS["inference-only"]
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
-ROLES = [P.CHALLENGER, P.FIREWALL, P.VERIFIER, P.WORKERS]
+ROLES = [P.CHALLENGER, P.ZK_SERVER, P.VERIFIER, P.WORKERS]
 SHA = "5a" * 64
 CASE = {"commitment": "01", "evidence": "02", "params": {"k": 8}}
 #: another listed subprotocol's accepting answer and its case
 OTHER = ({"verdict": "accept", "commitment": "cd" * 64}, {"commitment": "03", "evidence": "04", "params": {}})
 
 
-def registration(i: int) -> bytes:
+def docket(i: int) -> bytes:
     return json.dumps({"block": i, "root": "ab" * 64}, sort_keys=True).encode()
 
 
@@ -63,14 +63,14 @@ class Machine:
         self.calls.append(("serve", i))
         if self.serve_raises:
             raise P.Unavailable("no GPU")
-        return registration(i)
+        return docket(i)
 
     def pin(self) -> dict:
         self.calls.append(("pin",))
         return {"sha512": SHA, "sessions": 1}
 
-    def audit(self, i, raw, challenger, firewall):
-        self.calls.append(("audit", i, raw, challenger["address"], firewall["sha512"]))
+    def audit(self, i, raw, challenger, zk_server):
+        self.calls.append(("audit", i, raw, challenger["address"], zk_server["sha512"]))
         if self.audit_raises:
             raise self.audit_raises
         digest = self.commitment or R.digest(json.loads(raw))
@@ -90,7 +90,7 @@ class Machine:
                 "reason": "; ".join(f"{i} reject" for i in bad) or None}
 
     def caps(self) -> dict:
-        return {P.CHALLENGER: {"host": self.host}, P.FIREWALL: {"pin": self.pin}, P.WORKERS: {"serve": self.serve},
+        return {P.CHALLENGER: {"host": self.host}, P.ZK_SERVER: {"pin": self.pin}, P.WORKERS: {"serve": self.serve},
                 P.VERIFIER: {"audit": self.audit, "component": self.component, "product": self.product}}
 
 
@@ -109,12 +109,12 @@ def test_an_honest_run_audits_each_block_in_order_and_accepts():
     assert [x["block"] for x in lines] == [0, 1]
     assert lines[0] == {"block": 0, "coins": "simulated", "components": dict.fromkeys(REMOTE, "accept"),
                         "product": "verity/remote/v1", "reason": None,
-                        "registration": R.digest(json.loads(registration(0))), "verdict": "accept"}
+                        "registration": R.digest(json.loads(docket(0))), "verdict": "accept"}
     audits = [c for c in m.calls if c[0] == "audit"]
-    assert audits == [("audit", i, registration(i), "127.0.0.1:4242", SHA) for i in (0, 1)]
+    assert audits == [("audit", i, docket(i), "127.0.0.1:4242", SHA) for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "product"][0][1:] == (
-        [SP, WORK, NCI], {SP: CASE, WORK: OTHER[1], NCI: OTHER[1]},
-        {SP: lines[0]["registration"], WORK: OTHER[0]["commitment"], NCI: OTHER[0]["commitment"]})
+        [SP, WORK, POLICY], {SP: CASE, WORK: OTHER[1], POLICY: OTHER[1]},
+        {SP: lines[0]["registration"], WORK: OTHER[0]["commitment"], POLICY: OTHER[0]["commitment"]})
     assert m.host.events == ["start", "stop"]
     outputs = [json.loads(e.data) for e in r.transcripts[P.VERIFIER] if e.dir == "record" and e.kind == "output"]
     assert outputs == lines
@@ -125,9 +125,9 @@ def test_a_listed_subprotocol_with_no_answer_is_absent_and_the_composite_rejects
     r = go(m)
     (line,) = r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
     assert line["components"] == {"sampled-proofs": "accept", "pearl-plus": P.ABSENT, "inference-only": P.ABSENT}
-    assert line["verdict"] == "reject" and line["reason"] == f"{WORK} reject; {NCI} reject"
+    assert line["verdict"] == "reject" and line["reason"] == f"{WORK} reject; {POLICY} reject"
     _, ids, cases, digests = next(c for c in m.calls if c[0] == "product")
-    assert ids == [SP, WORK, NCI] and cases[WORK] == P.NO_CASE and digests[WORK] == ""
+    assert ids == [SP, WORK, POLICY] and cases[WORK] == P.NO_CASE and digests[WORK] == ""
 
 
 def test_onsites_subprotocols_answers_and_cases_reach_the_composite():
@@ -218,7 +218,7 @@ def test_the_placement_holds_each_party_to_its_principals_machine():
     site = site_of([{"name": "prover-1", "owner": "developer", "provides": every},
                     {"name": "auditor-1", "owner": "auditor", "provides": every}],
                    [{"ends": ["prover-1", "auditor-1"], "latency_ms": 1}])
-    bound = {P.WORKERS: "prover-1", P.FIREWALL: "prover-1", P.CHALLENGER: "auditor-1", P.VERIFIER: "auditor-1"}
+    bound = {P.WORKERS: "prover-1", P.ZK_SERVER: "prover-1", P.CHALLENGER: "auditor-1", P.VERIFIER: "auditor-1"}
     assert place(P.MANIFEST, site, bound).mode == "placed"
     with pytest.raises(Refused) as e:
         place(P.MANIFEST, site, {**bound, P.CHALLENGER: "prover-1"})

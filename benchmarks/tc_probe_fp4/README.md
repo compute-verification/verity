@@ -44,7 +44,7 @@ uv run python benchmarks/tc_probe_fp4/w1_price.py --out DIR --expect-uuid GPU-UU
 uv run python benchmarks/tc_probe_fp4/w1_price.py --out DIR --fake-silicon                 # CPU dry run
 uv run python benchmarks/tc_probe_fp4/f1_rates.py build --out DIR                          # ptxas, the timed library, SASS gates
 OUT=DIR bash benchmarks/tc_probe_fp4/f8_sm100.sh                                           # on a B200
-uv run tools/verity/check/suites.py benchmarks/tc_probe_fp4                                # the CPU suite
+uv run tools/check/suites.py benchmarks/tc_probe_fp4                                # the CPU suite
 ~~~
 
 ## Interface

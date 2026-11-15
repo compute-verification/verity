@@ -33,7 +33,7 @@ def family(spec, units=(), *, steps=None, gates=10, **row):
 
 @pytest.mark.parametrize("e, why", [
     ({"error": "does not bind"}, "does not bind"),
-    (unit("X_v1{}", unpieced=["Erf_v1"]), "C-Flock has no piece for Erf_v1"),
+    (unit("X_v1{}", unpieced=["Erf_v1"]), "Flock has no piece for Erf_v1"),
     (unit("X_v1{}", rows_log=28, est_log=28), "its rows alone need a 2^28 block"),
     (unit("X_v1{}", est_log=28, ands=2**27), "a 2^28 block at 134,217,728 ANDs"),
     (unit("X_v1{}", out=(262_144, 16)), "262,160 output bits, past the widest size class"),
@@ -44,7 +44,7 @@ def test_a_unit_fits_or_says_why_not(e, why):
 
 def test_a_unit_holding_the_top_p_keep_word_names_the_word_gate_form():
     why = B.misfit(unit("GumbelTopPTokenSelectSharedGreedy_v1{V=154880}", unpieced=["TopPMaskWordx154880_v1"]))
-    assert why.startswith("C-Flock has no piece for TopPMaskWordx154880_v1: ") and "TopPKeepWord_v2{V,S}" in why
+    assert why.startswith("Flock has no piece for TopPMaskWordx154880_v1: ") and "TopPKeepWord_v2{V,S}" in why
 
 
 def test_a_parts_rows_slots_are_its_parts_each_whole_then_finer():

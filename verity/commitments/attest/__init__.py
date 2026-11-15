@@ -15,7 +15,7 @@ commits every execution phase's records, each a byte string, as the leaves of on
 record, "block ``w`` of the period was certified" with no content (`lms.liveness_message`): the party's one public
 message per execution phase, which the verifier checks in the clear (`lms.verify_liveness`). `Period.close` signs
 the root once
-(`lms.period_root_message`, binding the deployment's hash, the party, the attachment id the challenger drew, the link,
+(`lms.period_root_message`, binding the deployment's hash, the party, the attachment id the challenger sampled, the link,
 the period's index and the record count) and returns the `SignedPeriod`, which goes to the prover only, as witness. The
 party's lower key and the identity's certificate of it are public: every liveness record shows them in the clear. The
 prover opens the records a proof reads (`SignedPeriod.read`); the verifier checks the certificate in the clear

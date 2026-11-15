@@ -13,7 +13,7 @@ The hm96 leaves keep every unopened coin statistically hidden (``hm96/PROTOCOL.m
 resistance.  The challenger opens a coin only once the verifier has recorded what the coin must follow (`CoinOpening.after`:
 the weights' root for the salt coin, the transcript's commitment for the sampling coin), and never twice, so a retry never
 resamples.  These are a seeded execution phase's coins; a live execution phase's salt coin follows its own open root instead
-(`salt.window_open_root`, `core_check.salt`), since the weights' root is the same in every execution phase of a model.
+(`salt.window_open_root`, `core_check.salt_of_record`), since the weights' root is the same in every execution phase of a model.
 `coin_reason` is the verifier's check of an opening: the execution phase, the label, the record it followed, and the opening against
 the published root.  A coin that doesn't open against the execution phase's commitment is refused.
 

@@ -1,4 +1,4 @@
-"""benchmarks/prove_path's tests' settings registry (`tests/lint/test_repo_env_reads.py`): each variable a test reads, declared
+"""The prove path's tests' settings registry (`tests/lint/test_repo_env_reads.py`): each variable a test reads, declared
 once here, where a test's new read goes."""
 
 from __future__ import annotations

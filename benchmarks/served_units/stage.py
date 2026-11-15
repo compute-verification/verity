@@ -117,9 +117,9 @@ from verity.circuits.ops.boolean import gemm as BG
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry import dsa_topk_reads
-from verity.definitions.registry import boolean_fp8 as BF
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.registry import dsa_topk_reads
+from verity_vllm.definitions.registry import boolean_fp8 as BF
 
 
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): a ``full`` statement holds the most
@@ -484,7 +484,7 @@ def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float, bind:
     from verity.commitments.gates import embedding as E
     from verity.commitments.indexed import RangeIndexedDomain
     from verity.commitments.merkle import CommitmentDomain
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     from verity_vllm.pipeline.chunk_rows import READ_LAYOUT
 
     V, H, L = S["V"], S["H"], S["L"]

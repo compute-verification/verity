@@ -40,8 +40,8 @@ preflight() {  # name bin rel leaf gpu
   for n in $SELF; do
     f=$W/inst-$rel-$leaf-$n.bin
     [ -f $f ] || python3 -m verity_flock.instances $rel $n $f --procs $TH --leaf $leaf > /dev/null
-    python3 -c "from verity_flock import lowering; open('$W/net-$rel.txt','w').write(lowering.netlist('$rel'))"
-    $bin selftest ${g:+--gpu} --instances $f --netlist $W/net-$rel.txt > $O/selftest-$name-$n.txt 2>&1
+    python3 -c "from verity_flock import lowering; open('$W/net-$rel.txt','w').write(lowering.circuit_description('$rel'))"
+    $bin selftest ${g:+--gpu} --instances $f --circuit-description $W/net-$rel.txt > $O/selftest-$name-$n.txt 2>&1
     s=$(grep -h '^SELFTEST' $O/selftest-$name-$n.txt | tail -1)
     np=$(grep -c '"pass":true' $O/selftest-$name-$n.txt); nf=$(grep -c '"pass":false' $O/selftest-$name-$n.txt)
     echo "PREFLIGHT	$name	n=$n	pass=$np	fail=$nf	${s:0:160}" | tee -a $O/preflight.tsv

@@ -1,10 +1,11 @@
-"""`serve.py` as its own process, with the Lean verifier's coins stubbed: a test doesn't build `sampled-proofs-verifier`, so
-`one_stage.verifier.coins` answers seeded bytes and appends each request's size to $COINS_LOG, or refuses as a Lean that
-can't answer when $COINS_REFUSE is set.  The stub stands in for the Lean, so it carries the Lean's claim instance
-(`one_stage.verifier.CLAIM`), unless $COINS_UNNAMED is set.  `--max-hellos N` lowers the cap on a session's refused
-hellos (`challenger.MAX_HELLOS`, which `remote.log_hello` reads) to N, so a test reaches it in a few connections.
+"""`serve.py` as its own process, with the Lean verifier's coins stubbed: a test doesn't build `spot-verifier`, so
+`one_stage.verifier.coins` answers seeded bytes and appends each request's size to `--coins-log PATH` (else $COINS_LOG),
+or refuses as a Lean that can't answer when $COINS_REFUSE is set.  The stub stands in for the Lean, so it carries the
+Lean's claim instance (`one_stage.verifier.CLAIM`), unless $COINS_UNNAMED is set.  `--max-hellos N` lowers the cap on a
+session's refused hellos (`challenger.MAX_HELLOS`, which `remote.log_hello` reads) to N, so a test reaches it in a few
+connections.
 
-    python stub_serve.py [--max-hellos N] SERVE_PY [serve.py's arguments]
+    python stub_serve.py [--max-hellos N] [--coins-log PATH] SERVE_PY [serve.py's arguments]
 """
 import os
 import random
@@ -12,9 +13,13 @@ import runpy
 import sys
 from pathlib import Path
 
-args, max_hellos = sys.argv[1:], None
-if args[:1] == ["--max-hellos"]:
-    max_hellos, args = int(args[1]), args[2:]
+args, max_hellos, coins_log = sys.argv[1:], None, None
+while args[:1] in (["--max-hellos"], ["--coins-log"]):
+    if args[0] == "--max-hellos":
+        max_hellos = int(args[1])
+    else:
+        coins_log = args[1]
+    args = args[2:]
 serve = Path(args[0]).resolve()
 sys.path.insert(0, str(serve.parents[2]))
 
@@ -27,7 +32,7 @@ rng = random.Random(" ".join(args[1:]))
 def coins(n: int) -> bytes:
     if os.environ.get("COINS_REFUSE"):
         raise V.LeanError(f"{V.EXE} refused {n} coin bytes")
-    with open(os.environ["COINS_LOG"], "a") as f:
+    with open(coins_log or os.environ["COINS_LOG"], "a") as f:
         f.write(f"{n}\n")
     return rng.randbytes(n)
 
