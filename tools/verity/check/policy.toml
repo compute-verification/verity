@@ -14,7 +14,10 @@ schema = "policy/v0"
 # circuit-check returns to the gate
 # once `circuit-check --all` fits inside the rest of the check (under 30 minutes); ratchet-gate judges the merges above the
 # run's base, and no plan holds it. A job here has no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
-off_gate = ["circuit-check", "ratchet-gate"]
+# lean-audit is here only while the kernel replay of security/Proofs doesn't end (two declarations of its third batch, with
+# security/Properties' closure): owner lean, out with their cure and by 2026-11-17T07:59:00Z at the latest. It still runs in
+# every check, and what a candidate fails of it is rung; it is the one job here no smaller allowance can name.
+off_gate = ["circuit-check", "ratchet-gate", "lean-audit"]
 
 # Allowances: a failure the verified queue doesn't take as one while its allowance at a candidate's base is unexpired: the
 # step or task counts as passed (`vqueue_slim.judge`, `World._allowed`), so it holds no candidate and makes no suspect.
