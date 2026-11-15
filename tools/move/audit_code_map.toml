@@ -49,7 +49,7 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "benchmarks/one_stage/tests/test_a5_coins.py" = "verity/protocols/proofs/spot/device/tests/test_challenger_session.py"
 "benchmarks/one_stage/tests/test_a5_reserve.py" = "verity/protocols/proofs/spot/device/tests/test_challenger_session_reserve.py"
 "benchmarks/one_stage/tests/test_challenger_party.py" = "verity/protocols/proofs/spot/device/tests/test_challenger_party.py"
-"benchmarks/one_stage/tests/test_two_stage_driver.py" = "verity/protocols/proofs/spot/device/tests/test_two_stage_driver.py"
+"benchmarks/one_stage/tests/test_two_stage_driver.py" = "adapters/vllm/tests/pipeline/test_two_stage_driver.py"
 
 # the commands that run an audit
 "benchmarks/one_stage/a0.py" = "verity/protocols/proofs/spot/prover/audit/template_audit.py"
@@ -156,7 +156,7 @@ include = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
 "benchmarks.one_stage.tests.test_member_trees" = "verity.protocols.proofs.spot.verifier.tests.test_one_stage_member_trees"
 "benchmarks.one_stage.tests.test_prove_bundle" = "verity.protocols.proofs.spot.prover.tests.test_prove_bundle"
 "benchmarks.one_stage.tests.test_r2_population" = "verity.protocols.proofs.spot.verifier.tests.test_other_population"
-"benchmarks.one_stage.tests.test_two_stage_driver" = "verity.protocols.proofs.spot.device.tests.test_two_stage_driver"
+"benchmarks.one_stage.tests.test_two_stage_driver" = "adapters.vllm.tests.pipeline.test_two_stage_driver"
 "benchmarks.one_stage.tests.test_verdict_record" = "verity.protocols.proofs.spot.verifier.tests.test_verdict_record"
 "benchmarks.one_stage.two_stage" = "verity.protocols.proofs.spot.device.two_stage"
 "benchmarks.one_stage.verdict_record" = "verity.protocols.proofs.spot.verifier.one_stage.verdict_record"
