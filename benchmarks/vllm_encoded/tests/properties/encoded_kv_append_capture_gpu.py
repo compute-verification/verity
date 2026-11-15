@@ -45,8 +45,8 @@ VE = HERE.parents[1]                         # benchmarks/vllm_encoded
 sys.path.insert(0, str(VE.parent / "word_codec"))
 sys.path.insert(0, str((VE.parents[1] / "verity/protocols/accounting/poub/prover/word_codec/kv.py").parent))
 
-import kv as KV            # noqa: E402  the codec's byte-exact CPU reference
-import kv_bench as KB      # noqa: E402  the stack's key derivation (SEED, lib_key)
+import kv as KV  # noqa: E402  the codec's byte-exact CPU reference
+import kv_bench as KB  # noqa: E402  the stack's key derivation (SEED, lib_key)
 
 from verity.circuits.ops.kv_cache import kv_cache_append_e4m3_word  # noqa: E402
 
@@ -261,9 +261,10 @@ def main() -> int:
 
     import serve as VS  # vllm_encoded's
     import vllm
+    from vllm import LLM, SamplingParams
+
     from verity_vllm.engine import handle
     from verity_vllm.engine.hooks import Hooks
-    from vllm import LLM, SamplingParams
 
     args = argparse.Namespace(arm="stack", k=a.k, wt_lib=a.wt_lib, reader_lib=a.reader_lib, paged_lib=a.paged_lib,
                               select_trials=a.select_trials, kv_receipts=False)
@@ -283,7 +284,7 @@ def main() -> int:
     )
     st = install.stack
     att = st.attention
-    import stack as S   # the module Install imported
+    import stack as S  # the module Install imported
 
     capture = Capture(a.out, att, (0, att.nl - 1), torch)
     runner = handle.model_runner(llm)

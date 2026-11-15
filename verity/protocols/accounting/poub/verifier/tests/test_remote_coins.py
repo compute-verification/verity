@@ -24,8 +24,8 @@ from test_poub import SCHEDULE, Entropy, drive, finish, params, store  # noqa: F
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.poub.verifier import coins
 from verity.protocols.proofs.spot.device import challenger as C
-from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier
 from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier
 
 KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 """The challenger key: sixteen leaves, enough for a period's open and two sessions' opens, records, closes and ends."""

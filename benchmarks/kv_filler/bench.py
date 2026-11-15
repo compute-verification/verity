@@ -39,6 +39,7 @@ sys.path.append(str(ROOT))
 
 import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402
+
 from verity.device import load_card  # noqa: E402
 
 SMS = load_card("rtx-pro-6000-server")["sm"]["count"]["value"]

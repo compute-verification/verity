@@ -10,6 +10,11 @@ import random
 import pytest
 from pous_fakes import Clock
 
+from verity.protocols.accounting.pous.device.continuous import (
+    ContinuousMemoryChallenger,
+    Reply,
+    run_continuous,
+)
 from verity.protocols.accounting.pous.verifier import band, dense
 from verity.protocols.accounting.pous.verifier.audit import (
     AUDIT_CAP,
@@ -20,11 +25,6 @@ from verity.protocols.accounting.pous.verifier.audit import (
     run_timed,
 )
 from verity.protocols.accounting.pous.verifier.codec import encode_segments
-from verity.protocols.accounting.pous.device.continuous import (
-    ContinuousMemoryChallenger,
-    Reply,
-    run_continuous,
-)
 from verity.protocols.accounting.pous.verifier.verifier import MerkleTree, VerifierKey
 
 PARAMS = band.BandParams(16, 64, 12, 2)

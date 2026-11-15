@@ -196,7 +196,6 @@ class Backend:
 
 def gpu(lib_dir: str, build_dir: str) -> Backend:
     import torch
-
     from band_gpu import native
 
     sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py").parents[1]))

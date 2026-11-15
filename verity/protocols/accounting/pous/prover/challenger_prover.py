@@ -14,9 +14,9 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.protocol import ProtocolDef, Start
-from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message
+from verity.party import Finish, Identity, Received, Send
+from verity.protocol import ProtocolDef, Start
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.device.challenger_session import (
     CHALLENGER,

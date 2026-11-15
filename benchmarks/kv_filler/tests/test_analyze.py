@@ -7,8 +7,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import analyze  # noqa: E402
-import lag  # noqa: E402
+import analyze
+import lag
 
 TB = lag.KV_TOKEN_BYTES
 

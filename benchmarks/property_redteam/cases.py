@@ -28,15 +28,16 @@ from typing import Any
 
 import verity.protocols.accounting.pouw.prover.circuit.words  # noqa: F401  (PouwNoiseByte)
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
-from verity.circuits.program import Program
-from verity.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.circuits.types import Array, Value
-from verity.circuits.types import Tuple as TupleT
 from verity.circuits.ops import (
     prims,
     s8,
     scalar,  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
 )
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.silicon.integer import S32_MAX, s32_word
+from verity.circuits.types import Array, Value
+from verity.circuits.types import Tuple as TupleT
 from verity_vllm.definitions.registry import (  # noqa: F401
     dsa,
     dsv4_qnorm_insert,
@@ -45,7 +46,6 @@ from verity_vllm.definitions.registry import (  # noqa: F401
     topp_word_gates,
 )
 from verity_vllm.definitions.registry.ref_prims import gather_f32
-from verity.circuits.silicon.integer import S32_MAX, s32_word
 
 CLASSES = ("roundings", "compare_select", "gathers", "products", "other")
 NEEDS_FAMILY = "verity.circuits.ops.s8"

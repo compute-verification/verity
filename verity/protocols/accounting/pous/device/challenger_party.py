@@ -62,9 +62,9 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.protocol import ProtocolDef, Start
-from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message, Phase, Refused
+from verity.party import Finish, Identity, Received, Send
+from verity.protocol import ProtocolDef, Start
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.device import onsite
 from verity.protocols.accounting.pous.device.challenger_session import (

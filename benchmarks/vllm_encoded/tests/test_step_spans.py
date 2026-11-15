@@ -137,9 +137,8 @@ def test_the_accumulator_layout_and_the_reference_arithmetic():
 def test_pg_span_on_the_gpu_telescopes_and_counts_its_captured_marks():
     """pg_span is `account` on the device: its parts sum to its stream's time between marks to the nanosecond, and
     marks captured into a CUDA graph count once a replay. Reads the global timer only through the marks."""
-    import torch
-
     import paged
+    import torch
 
     spans = SS.Spans(paged.PagedLib("p1024", os.environ["VERITY_VLLM_BENCH_PAGED_LIB"]), torch)
     x = torch.randn(1 << 22, device="cuda")

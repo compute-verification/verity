@@ -48,12 +48,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.protocols.accounting.poub.verifier import audit, ledger  # noqa: E402
-from verity.protocols.proofs.spot.prover import costfit  # noqa: E402
-
-from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
-
 import sheets  # noqa: E402
+
+from verity.protocols.accounting.poub.verifier import audit, ledger  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.proofs.spot.prover import costfit  # noqa: E402
 
 FIGURES = sheets.figures()
 """The node's figures, from its data sheets (`sheets.figures`)."""
@@ -552,8 +551,8 @@ def main() -> None:
     md.append(table(head + ["receipt trees held to the coin"],
                     [coin_row(x) + ([""] if x.get("infeasible") else [f"{x['tree_bytes'] / 1e9:.2f} GB"])
                      for x in coin_plans]))
-    md.append(f"\n## The same at g = 1's pass rate, one draw a coin: the openings g saves, and what the line gives "
-              f"for them\n")
+    md.append("\n## The same at g = 1's pass rate, one draw a coin: the openings g saves, and what the line gives "
+              "for them\n")
     md.append(table(head, [coin_row(x) for x in coin_fixed]))
 
     md.append(f"\n## Pass rate at each point's 1% openings rate (the line rule's, else ε only's), pooled over "

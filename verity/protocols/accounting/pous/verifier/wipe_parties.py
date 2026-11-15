@@ -20,8 +20,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from verity.protocol import Channel, Manifest, Role
 from verity.channel import Body, Int, List, Schema
+from verity.protocol import Channel, Manifest, Role
 from verity.protocols.accounting.pous.device.challenger_session import ONSITE_GOAL
 
 from . import streamed_wipe as sw

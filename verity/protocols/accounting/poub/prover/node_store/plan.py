@@ -11,6 +11,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 import numpy as np
+
 from verity.protocols.accounting.poub.verifier import receipts as rb
 from verity.protocols.accounting.poub.verifier.receipts import PER_LEAF, Plan
 

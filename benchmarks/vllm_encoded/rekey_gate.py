@@ -49,8 +49,9 @@ sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prov
 sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "tests")]
 
 import paged as P  # noqa: E402
-from paged import K, KB  # noqa: E402
 import poub_vectors as RV  # noqa: E402
+from paged import KB, K  # noqa: E402
+
 from verity.protocols.accounting.poub.verifier import codec as RC  # noqa: E402
 
 BLOCKS, BS, LAYERS = 96, 16, 2

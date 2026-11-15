@@ -310,6 +310,7 @@ def gate_coin(lib: Lib, torch, log) -> dict | None:
         if p not in sys.path:
             sys.path.append(p)
     import poub_vectors as RV
+
     from verity.protocols.accounting.poub.verifier import codec as RC
 
     rc, f = RC.DEFAULT, lib.field

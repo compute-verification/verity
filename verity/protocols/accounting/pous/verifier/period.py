@@ -45,7 +45,6 @@ from pathlib import Path
 from typing import Any
 
 from verity.commitments.identity import canonical_json_bytes
-
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 
 from . import protocol as pous_protocol

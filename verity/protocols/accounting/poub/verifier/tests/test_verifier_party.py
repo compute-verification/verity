@@ -14,11 +14,11 @@ import threading
 import pytest
 from poub_fakes import Clock, Entropy
 
-from verity.runtime.stream import Side
 from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.prover import period_prover as PP
 from verity.protocols.accounting.poub.verifier import audit, codec, verifier_party
 from verity.protocols.accounting.poub.verifier import period as P
+from verity.runtime.stream import Side
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(3 * 4032 - 17)
 COINS = hashlib.sha512(b"the period's live coins").digest()

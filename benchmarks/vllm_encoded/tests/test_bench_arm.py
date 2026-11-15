@@ -155,7 +155,7 @@ def test_lm_head_captures_mid_serve_without_emptying_the_allocator_cache():
 def test_the_ablations_run_under_ids_of_their_own_and_the_defaults_are_the_credited_lines(monkeypatch):
     for name in SETTINGS:
         monkeypatch.delenv(name, raising=False)
-    assert bench_arm.CREDITED == (bench_arm.PLAIN.id, bench_arm.AUDIT.id)
+    assert (bench_arm.PLAIN.id, bench_arm.AUDIT.id) == bench_arm.CREDITED
     want = {
         "PLAIN": ("bandwidth-plain", None, False, True, False),
         "AUDIT": ("bandwidth-audit", "bandwidth-plain", True, True, False),
@@ -299,7 +299,7 @@ def test_spans_reach_the_harness_per_step_and_sum_to_its_steps():
     assert extras["span.main_ms"] == pytest.approx(10 * extras["span_per_step.graph.step_ms"])
     assert extras["span.topup_busy_ms"] == 4.0
     assert extras["span.topup_busy_share"] == pytest.approx(4.0 / extras["span.main_ms"])
-    assert OLD_EXTRAS <= extras.keys()
+    assert extras.keys() >= OLD_EXTRAS
 
 
 def test_with_spans_off_the_stack_launches_no_mark():

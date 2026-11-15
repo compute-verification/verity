@@ -8,9 +8,9 @@ import cases as C
 import products_pass as T
 import pytest
 
-from verity.circuits.refs import array_of
 from verity.circuits import stacking as P
 from verity.circuits.ops import prims
+from verity.circuits.refs import array_of
 
 BITS, BYTE = (0, 1), (-128, 127)
 
