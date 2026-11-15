@@ -264,11 +264,6 @@
    "digest": "f69a3a26e13d8ac165c17941578ca9c2c915efcd067566986f55affd6e9d363d",
    "why": "The declaration's count verdict, the only premise the day's bound takes on its circuit: at most n proof blocks of a (c, k)-partition, what a published complies of the count gives (InferenceOnlyCheck.Properties.DescCountsCK)."
   },
-  "Nci.Cut.ReadsOn": {
-   "owner": "@training",
-   "digest": "ac338d8619c91ca188425f3651a449aa956fc0aed68320475a7dea1263fe423b",
-   "why": "The blocks the count is over: each block of G reads at most k gates outside θ, all the blocks at most T between them, and the squares of what G's blocks read sum to at most S."
-  },
   "NetTiming.CarriedRoots": {
    "owner": "@proofs",
    "digest": "1362beed271090aca1df516c3ce8b3249db6fd63f98026aeea88b482a2533264",
@@ -4953,11 +4948,6 @@
     "NetTiming.Witness.MonitoringPeriodLeakCharged_nontrivial",
     "NetTiming.Witness.MonitoringPeriodLeakCharged_kraft_exclusion"
    ]
-  },
-  "Nci.Cut.SecurityProofs.HECharged": {
-   "honest": ["Nci.Cut.SecurityProofs.HECharged_honest"],
-   "nontrivial": "Nci.Cut.SecurityProofs.HECharged_nontrivial",
-   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -19304,45 +19294,6 @@
    "type_hash": "13c91de0d54a4ae64acda04816087d6fb71cdf51978a4bb0a7d42911c4c8b51b",
    "unfolded_hash": "760f5bc81274da3f9967128685763dc37e22c277862794586886dd104b3931d0"
   },
-  "Nci.Cut.SecurityProofs.HECharged": {
-   "owner": "@training",
-   "signature": ["Nci.Cut.SecurityProofs.HECharged : Nci.Cut.Guarantees.HECharged"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": ["Nci.Cut.Assumptions.Exports", "Nci.Cut.Assumptions.Hardness"],
-    "domain": ["Nci.Cut.NoSharedPair", "Nci.Cut.ReadsOn", "Nci.Cut.ValuesInjective"],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "ec7bb2245b82e18b2419724d6a531648c426a191887c9eeee30c886e903a5254",
-   "unfolded_hash": "fde9e7ab5e2d6b0d4951f4035daea2f844d0695c135094e83f8cb9770223eff5"
-  },
-  "Nci.Cut.SecurityProofs.HECharged_honest": {
-   "owner": "@training",
-   "signature": ["Nci.Cut.SecurityProofs.HECharged_honest : Nci.Cut.Guarantees.HECharged_honest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": ["Nci.Cut.Assumptions.Exports", "Nci.Cut.Assumptions.Hardness"]
-   },
-   "type_hash": "a319bbc4054b8c823f5aede00ff66433b7f59d3b6b425e2b0f1a6487d3213471",
-   "unfolded_hash": "45d97fd705171ef5804114f841ab8f683a05b0bf635a4b548ef8c358a163d1cd"
-  },
-  "Nci.Cut.SecurityProofs.HECharged_nontrivial": {
-   "owner": "@training",
-   "signature": ["Nci.Cut.SecurityProofs.HECharged_nontrivial : Nci.Cut.Guarantees.HECharged_nontrivial"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": ["Nci.Cut.Assumptions.Exports", "Nci.Cut.Assumptions.Hardness"]
-   },
-   "type_hash": "2b6b5bfa70e63731edfe684533f6ebdb04a3d019bc045c88d4c51a91636deda0",
-   "unfolded_hash": "361518e550fdd1c9561db3ce2766c84719435e4a01ca2dfede464f77028b6a25"
-  },
   "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe"],
@@ -28250,8 +28201,7 @@
    "Accounting.Guarantees.B4UnderId": "unstated: stated in the spec and proved by Accounting.SecurityProofs.B4UnderId in Proofs.Accounting.Actual.LinkEnds, listed as a guarantee after the landing, NET-450, Wed 18 Nov",
    "Accounting.Guarantees.B4Via": "unstated: stated in the spec, no theorem proves it yet; Proofs.Accounting.Actual.LinkEnds derives it from B4 only at a Site whose every place is its own link end (b4Via_of_ownLinkEnds), NET-450, Wed 18 Nov",
    "Pous.Guarantees.StreamedWipeMeets96GiB": "unstated: the streamed-label wipe bound at the 96 GiB device, whose guarantee Pous.SecurityProofs.StreamedWipeMeets96GiB left the lock by name because it takes its size premises inline; it is listed again once they are named (owner @memory-accounting).",
-   "Accounting.Guarantees.LeakPartsRegistered": "unstated: the registered site's leak bound, whose guarantee Accounting.SecurityProofs.LeakPartsRegistered left the lock by name until its honest lemma concludes RatedOn; it is listed again with that lemma (owner @network-accounting).",
-   "Nci.Cut.SecurityProofs.HECharged": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry (ValuesInjective, NoSharedPair), under the named (H) and (E) (security/Definitions/Assumptions.lean), with the fresh-input budget k on a set G of a partition's blocks only: the blocks outside G are charged whole, at the MACs each holds whole, and what all the blocks read outside θ is a total T. It is not about the code of the inference-only policy's check; nothing joins it to a verdict yet."
+   "Accounting.Guarantees.LeakPartsRegistered": "unstated: the registered site's leak bound, whose guarantee Accounting.SecurityProofs.LeakPartsRegistered left the lock by name until its honest lemma concludes RatedOn; it is listed again with that lemma (owner @network-accounting)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -28886,8 +28836,8 @@
     "Real.instLT.lt 0 H.fH": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (Real.exp (-1)) p": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLT.lt 0 (instHSub.hSub δ (instHMul.hMul S.cast (instHAdd.hAdd δbind (instHMul.hMul nπ.cast δzk))))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (u : V), Real.instLE.le (w u) (instHMul.hMul r (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (u : V), Real.instLE.le (w u) (instHMul.hMul r (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.TS.DIdeal": {
     "Real.instLT.lt 0 H.CH": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28968,8 +28918,8 @@
     "Real.instLT.lt 0 H.fH": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (Real.exp (-1)) p": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLT.lt 0 (instHSub.hSub δ (instHMul.hMul S.cast (instHAdd.hAdd δbind (instHMul.hMul nπ.cast δzk))))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (u : V), Real.instLE.le (w u) (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (u : V), Real.instLE.le (w u) (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.TS.TensorSlotCount": {
     "Function.Injective slot": "an injectivity, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -29229,8 +29179,8 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (instHMod.hMod (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -29688,13 +29638,13 @@
     "Eq (Verity.Advice.Committed.root H F A r) root": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.Compose": {
-    "SetLike.instMembership.mem P.committed g": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (P.incorrect X) Finset.instEmptyCollection.emptyCollection": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (P.incorrect X) Finset.instEmptyCollection.emptyCollection": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "SetLike.instMembership.mem P.committed g": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.ComposeCone": {
+    "Disjoint (P.incorrect X) (P.cone T)": "Disjoint taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "SetLike.instMembership.mem T t": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "SetLike.instMembership.mem P.committed t": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Disjoint (P.incorrect X) (P.cone T)": "Disjoint taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "SetLike.instMembership.mem P.committed t": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.ContainsImplements": {
     "∀ (g : Fin t.D.N), Eq (t.D.isInput g) Bool.true → SetLike.instMembership.mem d.θ (M.emb g) → SetLike.instMembership.mem t.θ g": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -35529,22 +35479,6 @@
    "digest": "49558ce31112203b014a05dd889ba46dad0ae2c8b6679ac89520b73060cf53d3",
    "definitions": {
     "InferenceOnly.readsIn": "b2792d48bded9bfaaf5b1891bd6026bbe89a557aefafa0f4a6282839106e8be4"
-   }
-  },
-  "Definitions.Nci.Cut": {
-   "digest": "3fc4776630ec96a605ecdeb11ff318dc5d9a536e404da6436d690b89c01ae0b8",
-   "definitions": {
-    "Nci.Cut.ReadsOn": "ac338d8619c91ca188425f3651a449aa956fc0aed68320475a7dea1263fe423b",
-    "Nci.Cut.Work.inside": "6223bf210ee003c89b3da36480f2276d349639f15b5fbcf78bfad5ba4153fa06",
-    "Nci.Cut.workHEOn": "714f2f8ee20fa930eebc1327c8b8b020cc92e7f590cae3a05e21c5faa3f68bc8"
-   }
-  },
-  "Definitions.Nci.Guarantees.Cut": {
-   "digest": "337010f60937a53e19520e5e4b2ea80b9dd27a852c8c372ee58c90117ac65a44",
-   "definitions": {
-    "Nci.Cut.Guarantees.HECharged": "16caae876a59853d8e5dcacc30cb6ccf4edba35bb98d3ac69b82b7fc62e85940",
-    "Nci.Cut.Guarantees.HECharged_honest": "f7738011b772a5e925a403e26533fb2414f5df7d30510347113b6da0ac2d701b",
-    "Nci.Cut.Guarantees.HECharged_nontrivial": "c9199806cd5abd862ec1d3cb66dee7cf99e493a3d89dc0aedd3c27325bad1e7d"
    }
   },
   "Definitions.Poub.Assumptions.RateAudit": {
