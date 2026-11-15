@@ -1899,10 +1899,16 @@ TIMED_NOT_PASSED = [
     ({"card_node": 1}, "fail: `one_numa_node` (fail): its card is on NUMA node 1, and its CPUs on NUMA node 0"),
     ({"card_node": None}, ("cannot tell: `one_numa_node` (cannot tell): its node didn't say which NUMA node its card is "
                            "on (its row's `card_numa_node` is null)")),
-    # a status that ran and named no card says nothing of the row's card
+    # a status that ran and named no card, or other cards and not the row's, or the row's as unreadable, says nothing of it
     ({"answers": {"gpu-lease status": ""}},
      ("cannot tell: `card_clear_start_end` (cannot tell): `out/cotenants-k2-start.txt` has no list of other runs' leases: "
-      "gpu-lease status gave no answer (no card's line in its output)")),
+      "gpu-lease status gave no answer (no line of card 3 in its output)")),
+    ({"answers": {"gpu-lease status": "0 free\n1 free\n13 held 1m pid=5 run=r-x who=x cmd=y\nforeign 3 pid=9 who=k8s\n"}},
+     ("cannot tell: `card_clear_start_end` (cannot tell): `out/cotenants-k2-start.txt` has no list of other runs' leases: "
+      "gpu-lease status gave no answer (no line of card 3 in its output)")),
+    ({"answers": {"gpu-lease status": "0 free\n1 free\n3 unreadable\n"}},
+     ("cannot tell: `card_clear_start_end` (cannot tell): `out/cotenants-k2-start.txt` has no list of other runs' leases: "
+      "gpu-lease status gave no answer (card 3 reads `unreadable` in its output)")),
 ]
 
 

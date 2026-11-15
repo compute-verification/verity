@@ -88,17 +88,20 @@ def booked(card: int, near: Mapping[str, Any]) -> int:
     return card
 
 
-def snapshot(path: Path, run_id: str, ask: Asker, now: Callable[[], float]) -> None:
+def snapshot(path: Path, run_id: str, card: str, ask: Asker, now: Callable[[], float]) -> None:
     """What else is on the node now, as `steady.card_file` says a run keeps it: each card another run's lease holds and
     each compute process on a card, or a line saying which of the two the node gave no answer on (a `gpu-lease status`
-    that names no card is no answer: it doesn't say that no other lease holds the row's)."""
+    without a `free` or `held` line of the row's card, `card`, is no answer: it doesn't say that no other lease holds
+    it)."""
 
     lines = [f"epoch {int(now())}"]
     rc, text = ask(["gpu-lease", "status"])
+    said = [line.split()[1:2] for line in text.splitlines() if line.split()[:1] == [card]] if rc == 0 else []
     if rc != 0:
         lines.append(f"gpu-lease status gave no answer (exit {rc})")
-    elif not any(re.match(r"\d+ (free|held|unreadable)\b", line) for line in text.splitlines()):
-        lines.append("gpu-lease status gave no answer (no card's line in its output)")
+    elif not any(state in (["free"], ["held"]) for state in said):
+        why = f"card {card} reads `{' '.join(said[0]) or 'nothing'}`" if said else f"no line of card {card}"
+        lines.append(f"gpu-lease status gave no answer ({why} in its output)")
     for line in text.splitlines() if rc == 0 else ():
         if re.match(r"\d+ held\b", line) and f" run={run_id} " not in f"{line} ":
             lines.append("lease " + line.split(" cmd=")[0][:200])

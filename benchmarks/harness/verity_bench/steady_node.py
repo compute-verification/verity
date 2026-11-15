@@ -416,12 +416,12 @@ def timed(spec: steady_spec.SteadySpec, item: steady_spec.SteadyPoint, scratch: 
                           "`driver` and `cuda_toolkit` to the node's, which times its rows again there")
         row = {"provers": item.provers}
         (out / "rate").mkdir(parents=True, exist_ok=True)
-        steady_cards.snapshot(run_dir / steady.card_file(row, "start"), settings.RESEARCH_RUN_ID, ask, now)
+        steady_cards.snapshot(run_dir / steady.card_file(row, "start"), settings.RESEARCH_RUN_ID, device, ask, now)
         rc = run([sys.executable, steady_spec.TIMER, "--bin", prover()["path"], "--staged", str(scratch / "z"),
                   "--types", item.row.name, "--provers", str(item.provers), "--out", str(scratch / "rate"),
                   "--device", device, "--sessions", str(item.sessions), "--warm", str(item.row.warm),
                   "--ahead", str(spec.ahead)], out / "rate" / "server-rate.log")
-        steady_cards.snapshot(run_dir / steady.card_file(row, "end"), settings.RESEARCH_RUN_ID, ask, now)
+        steady_cards.snapshot(run_dir / steady.card_file(row, "end"), settings.RESEARCH_RUN_ID, device, ask, now)
         record |= {"exit": rc, "rows": keep(scratch / "rate", out / "rate", item, read, record[steady.CARD_NUMA])}
         step = f"{item.row.name}-k{item.provers}"
         record["kept_session"] = keep_session(scratch / "rate" / step, out / "rate" / step, item.row.pin)
