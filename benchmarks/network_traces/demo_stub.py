@@ -12,10 +12,10 @@ connection, each answered and the connection closed:
 
 - ``GET /v1/models``: its one model, ``demo-stub/p{prompt_ids}-g{tokens}-v{vocab}``, which the rehearsal names in
   every request (`runner_parts.served_model`).
-- **A network attester's id request of the class** (`network_certifier_request`): the network attester's copy of the client's
+- **A network attester's id request of the class** (`network_attester_request`): the network attester's copy of the client's
   bytes, its release headers right after the request line (`release.with_release`: ``x-verity-release: N`` and
   ``x-verity-release-run: HEX``), around exactly `id_form.id_request` of its own fields in the scan's B = P + 9-byte
-  cells from their first byte (``offset`` 0), as `network_certifier_serve.py rehearse --ids` sends one. The class (`refusal`): the
+  cells from their first byte (``offset`` 0), as `network_attester_serve.py rehearse --ids` sends one. The class (`refusal`): the
   model above, greedy (temperature 0, top_p 1), a prompt of exactly ``--prompt-ids`` ids each below ``--vocab`` (the
   prompt's bytes), and ``max_tokens`` exactly ``--tokens``. It is answered id-form with no HTTP head (`answer`): each
   generated id (`outputs`, below ``--vocab``) as an `io_tie.id_event` of P = ``--id-payload`` bytes, then
@@ -102,7 +102,7 @@ def prompts(count: int, shape: Shape = Shape()) -> list[list[int]]:
             for j in range(count)]
 
 
-def network_certifier_request(request: bytes, payload: int = ID_PAYLOAD) -> dict | None:
+def network_attester_request(request: bytes, payload: int = ID_PAYLOAD) -> dict | None:
     """A network attester's id request's fields (`request`: its head and body as the server reads them), or None:
     exactly `id_form.id_request` of its own fields in B = `payload` + 9-byte cells from their first byte, with the
     release headers the network attester puts on the server's copy when it has them (`release.release_of`,
@@ -183,7 +183,7 @@ class Endpoint:
             return None, None, http(200, {"object": "list", "data": [{"id": self.shape.name, "object": "model"}]})
         n = re.search(rb"(?im)^content-length:\s*(\d+)", head)
         raw = await reader.readexactly(int(n.group(1))) if n else b""
-        fields = network_certifier_request(head + raw, self.shape.payload) if head.startswith(b"POST /v1/completions ") else None
+        fields = network_attester_request(head + raw, self.shape.payload) if head.startswith(b"POST /v1/completions ") else None
         why = (f"a network certifier's id request (id_form.id_request in {self.shape.payload + 9}-byte cells from their first "
                "byte) to POST /v1/completions") if fields is None else refusal(fields, self.shape)
         if why is not None:

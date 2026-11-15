@@ -1,5 +1,5 @@
 """Network-certifier-form id requests and their responses served through the network attester's own ingress and egress,
-both links' rows and the scan of the ingress rows: the joint scan's traffic (`test_network_certifier_ingress_scan.py`'s
+both links' rows and the scan of the ingress rows: the joint scan's traffic (`test_network_attester_ingress_scan.py`'s
 cross-check of the network attester, and `verity/protocols/resource_accounting/network/prover/scan_zk.py`'s). It imports no test framework, so a
 node's bare venv runs it."""
 
@@ -11,8 +11,8 @@ from types import SimpleNamespace
 from typing import Sequence
 
 from verity.protocols.resource_accounting.network.prover import egress as EG, ingress_scan as IS
-from verity.protocols.resource_accounting.network.verifier import io_tie as IT, network_certifier as W
-from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT, network_attester as W
+from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.grid import Certifier, BlockGrid
 
 
@@ -35,7 +35,7 @@ class Served:
         return {k + 1: xs for k, xs in enumerate(self.responses)}
 
     def rows(self) -> tuple[list[bytes], list[bytes]]:
-        """The network attester's registered ingress and egress rows, bucket by bucket (`network_certifier_rows.window_rows`)."""
+        """The network attester's registered ingress and egress rows, bucket by bucket (`network_attester_rows.window_rows`)."""
         return tuple([x for rec in recs for x in WR.window_rows(rec, self.params)]  # type: ignore[return-value]
                      for recs in (self.ingress, self.egress))
 
@@ -56,7 +56,7 @@ def serve(params: W.NetworkCertifierParams, requests: Sequence[bytes], arrivals:
         fails.append(frame)
         failed.enqueue(frame)
 
-    network_certifier = SimpleNamespace(params=params, requests_released=0, run_id=None, fails=SimpleNamespace(enqueue=fail))
+    network_attester = SimpleNamespace(params=params, requests_released=0, run_id=None, fails=SimpleNamespace(enqueue=fail))
     conns = []
     for k, (a, xs) in enumerate(zip(arrivals, responses, strict=True)):
         c = W._Connection(ordinal=k + 1, reader=None, writer=None, done=None, arrived=a)
@@ -78,9 +78,9 @@ def serve(params: W.NetworkCertifierParams, requests: Sequence[bytes], arrivals:
             c.ingress += requests[k][c.bytes_in:sent]
             c.bytes_in, c.ingress_ended = sent, sent == len(requests[k])
             if c.ingress_end is None and c.failed is None:
-                for frame in W.NetworkCertifier._ingress(network_certifier, c, t):
+                for frame in W.NetworkCertifier._ingress(network_attester, c, t):
                     grids[0].enqueue(frame)
-            for frame in W.NetworkCertifier._egress(network_certifier, c, t):
+            for frame in W.NetworkCertifier._egress(network_attester, c, t):
                 grids[1].enqueue(frame)
         active = [c for c in active if c.ended is None]
         for grid in grids:

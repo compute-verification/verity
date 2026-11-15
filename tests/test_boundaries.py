@@ -363,7 +363,7 @@ def _spot_python_offenders() -> list[str]:
     return out
 
 
-def test_spot_never_imports_the_network_certifier_in_python() -> None:
+def test_spot_never_imports_the_network_attester_in_python() -> None:
     """SPOT[Flock]'s Python imports none of the network attester.  The listing puts the certifier's row
     (``CERTIFIER_ROW``) after SPOT's (``SPOT_ROW``) and lists no tie out of the rows up to SPOT's into
     a later one, so nothing SPOT's Python loads, directly or through another file, is the certifier's; and no
@@ -438,7 +438,7 @@ def _load_tool(name: str, path: Path) -> Any:
     return module
 
 
-def test_spot_never_imports_the_network_certifier_in_lean() -> None:
+def test_spot_never_imports_the_network_attester_in_lean() -> None:
     """SPOT[Flock]'s Lean imports none of the network attester's (``CERTIFIER_LEAN``): its packages (``SPOT_LEAN``)
     require no certifier package by path, directly or through another, and no module of those packages or of its analysis
     (``SPOT_SECURITY``) imports a certifier module, directly or through any other module."""

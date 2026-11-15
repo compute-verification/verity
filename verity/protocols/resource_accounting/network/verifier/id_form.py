@@ -78,7 +78,7 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
     At 4096-byte frames every field but the prompt's is in the first frame. `offset` is the request's first byte's
     place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the network attester's
     cells, which carry the bytes alone. The workload's declaration (`certifier.prover.workload.id_request`) writes the
-    same bytes at offset 0, held equal by `tests/test_network_certifier_id_request_writers.py`."""
+    same bytes at offset 0, held equal by `tests/test_network_attester_id_request_writers.py`."""
     if offset not in (0, LENGTH.size):
         raise ValueError(f"an id request starts its first frame's payload at 0 or {LENGTH.size}, not {offset!r}")
     if not prompt or isinstance(prompt, (str, bytes)):

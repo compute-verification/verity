@@ -4,11 +4,11 @@ egress view, its outputs beside an ok bit (the generator form); the scan's start
 bucket its S_{−1}. Every switch is computed from the state and the rows; none is witness. Nothing here is in a
 Spec.
 
-**The row** is `network_certifier_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
+**The row** is `network_attester_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
-are the network attester's (`network_certifier.read_cell`): `DATA` of P = B − 9 bytes, `END` with the request's last 1 … P bytes,
+are the network attester's (`network_attester.read_cell`): `DATA` of P = B − 9 bytes, `END` with the request's last 1 … P bytes,
 `PAD` of none, each on the connection's ordinal q. A connection's ingress is one network-certifier-form id request
-(`id_form.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `network_certifier.cells`, so
+(`id_form.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `network_attester.cells`, so
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
 **Fixed slots a timestep.** A timestep is EVERY buckets,
@@ -22,7 +22,7 @@ s + D + 1 > EVERY buckets, so the requests anchored at one boundary are in disti
 request the network attester admits. Only EVERY and SLOTS are public: whether a slot carries a request, which, its
 arrival bucket and its prompt's length are values. Traffic past the slots is the network attester's to refuse: a
 connection that finds every lane and queue place taken gets `REFUSED`, and the network attester certifies no record of
-that window, so the period check refuses it (`network_certifier`'s "Admission").
+that window, so the period check refuses it (`network_attester`'s "Admission").
 
 **The state** (`layout`) is `now` (u32, the buckets the scan has taken), `phase` (`now` mod EVERY, u32) and `last`
 (u32, the last ordinal admitted), then NR = lanes request slots, each `live`, `done` (its request's `END` is in), `q`,
@@ -117,7 +117,7 @@ from one bucket's ingress to a later bucket's gates: each step reads the state t
 arrivals and the prompt lengths, which stay private.
 
 **Where it runs.** `row`, `sin` and each `prog<j>` are a registered read, an input port `Registered.checkPort` accepts:
-`row` the network attester's signed row t (`network_certifier_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>`
+`row` the network attester's signed row t (`network_attester_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>`
 the slot-entries row of slot j at t's boundary. o1 and o2 are gates, never inputs: the unit's statement commits o1 as
 the scan's state row t and o2 as its view row t, each registered as a read of its row (`checkPort` accepts a
 hidden-output statement's output row, the verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's
@@ -156,7 +156,7 @@ from verity.protocols.resource_accounting.network.prover import io_ids as II
 from verity.protocols.resource_accounting.network.verifier import io_request as Q
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES
-from verity.protocols.resource_accounting.network.verifier.network_certifier import END, NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkCertifierParams
 
 BIT, BYTE = HC.BIT, HC.BYTE
 #: the state's head: `now`, `phase`, `last`

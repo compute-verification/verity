@@ -45,7 +45,7 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
 - `CompileSlice_v1` accepts it with the seal's rows in ``srv`` (0x3F; 27 bits from the session's carry), at 117,164
   ANDs; 8eb1 serves without prefix caching, so the slice makes no cache call and ``cache`` is 1. The circuit is its
   reference on it and on its negatives ([compile-slice.md](compile-slice.md))
-  (`adapters/vllm/tests/compiler/test_network_certifier_compile_slice_w212.py`).
+  (`adapters/vllm/tests/compiler/test_network_attester_compile_slice_w212.py`).
 - `ReplayStep_v1` at AS = 1 is w212's served scheduler on all 22 of its async units, circuit and reference
   (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
 - At 8eb1's engine class, its AsyncScheduler included (AS = 1, the trace's: `--slice 212 --served SEAL --R 8 --W 1
@@ -143,7 +143,7 @@ decisions `[1, 1, 1]`, 38 steps; its sync replay diverges from the trace at step
     position in the runner's batch, and at w1 that isn't the scheduler's running slot at two proof blocks: at proof
     block 0 the batch is requests 4, 6, 5, 7, and at proof block 5 request 5 holds slot 0 while its last output is in
     flight, so request 6, in slot 1, is the batch's first row. The rows are the replay's at every proof block as
-    (request, kind, start, n) (`adapters/vllm/tests/compiler/test_network_certifier_compile_slice_w1.py`). At AS = 1
+    (request, kind, start, n) (`adapters/vllm/tests/compiler/test_network_attester_compile_slice_w1.py`). At AS = 1
     ``wit`` carries ``map``, R × R bits a step, and ``rows`` holds served row b to the slot its map row names: at most
     one 1 in each map row and column, a slot's column set iff the slot has a row, and the served row equal to that
     slot's (an empty map row's served row zero). The map is then unique, the identity when the batch is in slot order,
