@@ -70,11 +70,11 @@ from verity_torch.pouw.pearl_c import run_device as PPDR
 torch = pytest.importorskip("torch")
 
 # the work sampling design and the clear audit are a reference tool's (verity/protocols/resource_accounting/compute/pouw/prover/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
 import clear_work as CW  # noqa: E402
 from clear_audit import Prover, Verifier  # noqa: E402
 
-KERNEL = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
+KERNEL = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 POUW = Path(__file__).resolve().parents[1]
 SCHEME = "pearl-c-sm120-v1-h3"
 SEED = bytes(range(32))
