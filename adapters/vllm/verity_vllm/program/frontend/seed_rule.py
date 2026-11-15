@@ -46,7 +46,7 @@ from verity.circuits.types import Array, Value
 from verity.commitments.gates import sha512 as H
 from verity.commitments.gates.lms import Sha512Compress
 from verity.circuits.ops.prims import const
-from verity.definitions.registry.sampling import bit_at
+from verity_vllm.definitions.registry.sampling import bit_at
 
 from verity_vllm.engine import served_seed
 
@@ -235,7 +235,7 @@ def in_derive(ctx: Any, at: Any) -> None:
     """Where the traced source takes `PARAMS` (a stochastic request wrapper, `vllm_meta.StochasticRequest`), `check` of its
     ``seed`` and them as the Program's next Call and check (`Ctx.check`), which no fx node lowers; one it can't take refuses at fx
     node ``at``."""
-    from verity_vllm.program.frontend.outcomes import refuse
+    from verity_torch.frontend.outcomes import refuse
     have = [n for n in PARAMS if n in ctx.user_inputs]
     if not have:
         return

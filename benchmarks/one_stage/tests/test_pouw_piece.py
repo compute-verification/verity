@@ -137,7 +137,7 @@ def test_a_period_with_no_lean_executable_is_missing_not_the_python_references(t
 
 
 def test_a_period_piece_takes_no_device(tmp_path):
-    """The period names no device, so the piece takes no registration head or place."""
+    """The period names no device, so the piece takes no docket head or place."""
     with pytest.raises(SystemExit):
         P.main(["period", "--out", str(tmp_path / "p"), "--head", "ab" * 64, "--place", "gpu0"])
 
@@ -150,7 +150,7 @@ def _period_args(tmp_path: Path, d: dict, windows: list[dict]) -> list[str]:
             "--windows", str(_json(tmp_path / "w.json", windows))]
 
 
-def test_a_period_of_statements_is_put_in_the_lean_form_by_the_verifier_of_record(tmp_path, statements, period_exe,
+def test_a_period_of_statements_is_put_in_the_lean_form_by_the_verifier(tmp_path, statements, period_exe,
                                                                                    capsys):
     """The kit's windows are over PouwH1Tile_v1, whose per-unit noise the period's guarantee doesn't cover, so the
     case credit accepts is refused at its form, as a served window over h1zy's default tile is."""

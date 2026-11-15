@@ -16,8 +16,8 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions.registry import stop_rule as X
-from verity.definitions.registry.boolean_stop_rule import StopRuleV2
+from verity_vllm.definitions.registry import stop_rule as X
+from verity_vllm.definitions.registry.boolean_stop_rule import StopRuleV2
 
 
 def _derived():

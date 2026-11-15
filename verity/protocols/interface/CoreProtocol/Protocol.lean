@@ -1,5 +1,5 @@
 /-
-The interface every core protocol implements (PoUW, PoUS, the network certificate check, sampled proofs' one-stage
+The interface every core protocol implements (PoUW, PoUS, the network certificate check, SPOT's one-stage
 audit, the composition).
 
 * `params`: the protocol's public parameters (k, Δ, the sampling design, ...), canonical JSON;
@@ -27,7 +27,7 @@ namespace Core
 open Lean (Json)
 open Flock (V)
 
-/-- `undecided` does not reject the prover. The evidence doesn't settle the question (a link-window with no
+/-- `undecided` does not reject the prover. The evidence doesn't settle the question (an execution phase with no
 certificate yet), and nothing is made public. -/
 inductive Verdict where
   | accept
@@ -67,7 +67,7 @@ structure Protocol where
   publicJson : Public → Json
   profileJson : Profile → Json
 
-/-- The check accepts: the predicate a protocol's properties (`Security/Properties/<protocol>.lean`) are stated over. -/
+/-- The check accepts: the predicate a protocol's properties (`security/Properties/<protocol>.lean`) are stated over. -/
 def Protocol.Accepts (P : Protocol) (p : P.Params) (c : P.Commitment) (e : P.Evidence) : Prop :=
   ∃ pub prof, P.check p c e = .accept pub prof
 
@@ -83,8 +83,12 @@ structure Answer where
 
 /-- Canonical JSON: text that `Flock.canon` writes back byte for byte. `canon` escapes every character outside printable
 ASCII, so a canonical text has no byte at or above `0x7f`, and one holding one is refused before it is parsed. The
-text is read with the total parser (`Flock.JsonParse.parse`), which proofs read through. The parameters must be
-canonical, and a protocol whose commitment or evidence is JSON reads it with this too. -/
+parameters must be canonical, and a protocol whose commitment or evidence is JSON reads it with this too. The text is
+read by `Flock.JsonParse.parse`, a total function the kernel can unfold, so a proof can show that a text is canonical. It
+mirrors `Lean.Json.parse`, which this read before; that the two agree is held by tests, not by a proof: on the texts of
+`CoreProtocol.CanonicalJsonDifftest`'s `#guard`s (`TEXTS`, `ADVERSARIAL`) and on every JSON text the verifiers' test fixtures hold
+(`tools/difftest/tests/test_flock_json_port.py`, `test_verifier_fixture_texts`), they give the same `Json` and the same
+refusal, and this the same answer. -/
 def canonicalJson (b : ByteArray) : V Json := do
   unless b.data.all (· < 0x7f) do throw "not ASCII without DEL (a byte at or above 0x7f)"
   let some s := String.fromUTF8? b | throw "not UTF-8"

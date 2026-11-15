@@ -2,10 +2,10 @@
 challenger's path runs its Lean and its Python reference on one input:
 
 * ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered_twin`);
-* ``registration``: one-stage's R1-R8 against the challenger's own copies (`sampled-proofs-difftest registration`,
+* ``registration``: one-stage's R1-R8 against the challenger's own copies (`spot-difftest registration`,
   `registration.check`), with the fan-out and tied values its verdict publishes (`registration_answer`); a PoUW window
   registers no values;
-* ``public``: the service's public-items rule over the Stream's Spec (`sampled-proofs-difftest check_public`,
+* ``public``: the service's public-items rule over the Stream's Spec (`spot-difftest check_public`,
   `service.check_public`);
 * ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch_twin`);
 * ``draw``: the sampled proof blocks are the sampling coin's, under the challenger key the window's parameters pin when it is
@@ -20,6 +20,10 @@ A disagreement raises `Disagree`, which the challenger turns into the refusal ``
 is visible and nothing retries it. `Record()` takes the side of record from `verifier.RECORD_VERDICT`; with it ``"python"``,
 or with `Record(lean=False)`, the references run alone (the witness then holds no Lean verdict), which is how the switch is
 undone.
+
+Verity imports neither Lean's executables nor the canonical JSON the two sides are compared in (`verity_difftest`): a
+`Record`'s `canonical` and `start` raise here, and `benchmarks/pouw/served_zk/of_record_lean.py`'s `Record` supplies
+them.
 """
 from __future__ import annotations
 
@@ -30,8 +34,6 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-import verity_difftest as D
-
 from verity.circuits import codec
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import verifier as V
@@ -39,8 +41,13 @@ from verity.protocols.accounting.pouw.verifier import verifier as V
 REPO = Path(__file__).resolve().parents[7]
 POUW = REPO / "verity/protocols/accounting/pouw/verifier/lean/check"
 PIECES = REPO / "verity/protocols/proofs/spot/verifier/lean"
+CALLER = REPO / "verity/protocols/proofs/spot_flock/verifier/lean"
 DISAGREE = "lean-python-disagree"
-CHECKS = ("registered", "registration", "public", "pass", "draw", "opening", "prelude", "answer")
+NEEDS_DIFFTEST = ("Record.{} needs verity_difftest, which verity does not import (compute-accounting/pouw-package-holds-kernels): "
+                  "benchmarks/pouw/served_zk/of_record_lean.py's Record supplies it")
+#: a check's outcome on one input: ``("output", its canonical JSON)`` or ``("reject", why)``
+Outcome = tuple[str, str]
+CHECKS = ("registered", "registration", "caller", "public", "pass", "draw", "opening", "prelude", "answer")
 
 
 class Disagree(Exception):
@@ -53,22 +60,11 @@ class Disagree(Exception):
         return f"{DISAGREE}: {self.check}"
 
 
-def hexed(j: Any) -> str:
-    return D.canonical(j).encode().hex()
-
-
-def _python(f: Callable[[Any], Any], x: Any) -> D.Outcome:
-    try:
-        return "output", D.canonical(f(copy.deepcopy(x)))
-    except (ValueError, TypeError, KeyError) as e:
-        return "reject", f"{type(e).__name__}: {e}"
-
-
-def _same(lean: D.Outcome, py: D.Outcome) -> bool:
+def _same(lean: Outcome, py: Outcome) -> bool:
     return lean == py if lean[0] == "output" else py[0] == "reject"
 
 
-def _value(o: D.Outcome) -> Any:
+def _value(o: Outcome) -> Any:
     return json.loads(o[1]) if o[0] == "output" else {"refused": o[1]}
 
 
@@ -81,11 +77,11 @@ def core_params(params: Mapping[str, Any], check: Mapping[str, Any], query: str)
             "range": list(params["range"])}
 
 
-def registration_params(program: Any, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
+def registration_params(program: Any, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str,
                         ports: Mapping[str, Any], log: list[dict], delta: str) -> dict:
-    """`sampled-proofs-difftest registration`'s parameters for `Stream.register`'s `registration.check`: no leaf layer,
+    """`spot-difftest registration`'s parameters for `Stream.register`'s `registration.check`: no leaf layer,
     anchors, partition, work table or registered values, which a PoUW window registers none of."""
-    return {"anchors": [], "delta": delta, "law": dict(law), "leaf_layer": None, "log": [dict(r) for r in log],
+    return {"anchors": [], "delta": delta, "law": dict(sampling_design), "leaf_layer": None, "log": [dict(r) for r in log],
             "partition": None, "ports": {p: dict(v) for p, v in ports.items()},
             "program": json.loads(codec.canonical_json(codec.encode_program(program))), "query": dict(query),
             "registered": None, "scheme": scheme, "work_table": None}
@@ -100,7 +96,7 @@ def registration_answer(v: Any) -> dict:
 
 
 def public_params(spec: Any, record: Mapping[str, Any], scheme: str) -> dict:
-    """`sampled-proofs-difftest check_public`'s input for `service.check_public(spec, record)`: the record, the service's
+    """`spot-difftest check_public`'s input for `service.check_public(spec, record)`: the record, the service's
     scheme, the check's query, the Spec's values (each its name and whether it is registered) and its declared items."""
     return {"record": dict(record), "scheme": scheme, "query": dict(spec.check.query),
             "values": [{"name": v.name, "registered": v.registered} for v in spec.values],
@@ -153,18 +149,37 @@ def py_draw(x: dict) -> dict | None:
 class Record:
     """Both verdicts of each check, Lean's of record. `lean` False runs the references alone; by default it is whether
     `verifier.RECORD_VERDICT` is ``"lean"``. The servers start at their first check and build their executables (`lake
-    build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``sampled-proofs-difftest``)."""
+    build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``spot-difftest``,
+    ``spot-flock-caller``)."""
 
     def __init__(self, lean: bool | None = None, exes: Mapping[str, str | Path] | None = None) -> None:
         self.lean = V.RECORD_VERDICT == "lean" if lean is None else lean
         self.exes = dict(exes or {})
         self.witness: list[dict] = []
-        self._servers: dict[str, D.Server] = {}
+        self._servers: dict[str, Any] = {}
 
-    def _server(self, exe: str, package: Path, *args: str) -> D.Server:
+    def canonical(self, j: Any) -> str:
+        """The canonical JSON text of `j` (`verity_difftest.canonical`, as `Flock.canon` writes it); `TypeError` outside
+        its domain."""
+        raise NotImplementedError(NEEDS_DIFFTEST.format("canonical"))
+
+    def start(self, exe: str, package: Path, *args: str) -> Any:
+        """A server of Lean's executable `exe` in the Lake package `package`, with `args` (`verity_difftest.Server` on
+        `self.exes`' path for it, or its `build`)."""
+        raise NotImplementedError(NEEDS_DIFFTEST.format("start"))
+
+    def hexed(self, j: Any) -> str:
+        return self.canonical(j).encode().hex()
+
+    def _python(self, f: Callable[[Any], Any], x: Any) -> Outcome:
+        try:
+            return "output", self.canonical(f(copy.deepcopy(x)))
+        except (ValueError, TypeError, KeyError) as e:
+            return "reject", f"{type(e).__name__}: {e}"
+
+    def _server(self, exe: str, package: Path, *args: str) -> Any:
         if exe not in self._servers:
-            path = self.exes.get(exe) or D.build(package, exe)
-            self._servers[exe] = D.Server([str(path), *args])
+            self._servers[exe] = self.start(exe, package, *args)
         return self._servers[exe]
 
     def close(self) -> None:
@@ -178,7 +193,7 @@ class Record:
 
     def _piece(self, check: str, exe: str, package: Path, fn: str, x: Any, reference: Callable[[Any], Any]) -> Any:
         """Lean's output on `x` (`{"refused": why}` for an input it refuses), once Python's agrees."""
-        py = _python(reference, x)
+        py = self._python(reference, x)
         if not self.lean:
             self._note(check, _value(py), None, None)
             return _value(py)
@@ -196,14 +211,21 @@ class Record:
     def registration(self, params: dict, record: Any, python: Callable[[], Any]) -> list[str]:
         """R1-R8's codes for `record` against `params` (`registration_params`); `python` is the reference's call, its
         `Verdict`, whose fan-out and tied values are held to Lean's with its codes (`registration_answer`)."""
-        out = self._piece("registration", "sampled-proofs-difftest", PIECES, "registration",
+        out = self._piece("registration", "spot-difftest", PIECES, "registration",
                           {"params": params, "record": record}, lambda _: registration_answer(python()))
         return out.get("codes", ["registration"])
+
+    def caller(self, params: dict, record: Any, python: Callable[[], Any]) -> list[str]:
+        """The caller's codes (`VStar.Recursive.Caller.check`) for `record` against `params`, the registration's;
+        `python` is the reference's call (`caller.check`), its `Verdict`."""
+        out = self._piece("caller", "spot-flock-caller", CALLER, "caller", {"params": params, "record": record},
+                          lambda _: {"codes": list(python().codes)})
+        return out.get("codes", ["caller"])
 
     def public(self, x: dict, python: Callable[[], dict]) -> dict:
         """The service's public-items rule's ``{"ok", "codes", "detail"}`` on `x` (`public_params`), or ``{"refused"}``
         for an input it can't read; `python` is the reference's call (`service.check_public(...).to_json()`)."""
-        return self._piece("public", "sampled-proofs-difftest", PIECES, "check_public", x, lambda _: python())
+        return self._piece("public", "spot-difftest", PIECES, "check_public", x, lambda _: python())
 
     def prelude(self, python: str | None, lean: str | None) -> str | None:
         """`served_commit.check`'s own reading of the registration before a unit's opening (`python`: its level in the
@@ -232,12 +254,12 @@ class Record:
             self._note("answer", py, None, None)
             return py
         lean = self._server("pouw-check", POUW, "serve").exchange(case)
-        same = D.canonical(lean) == D.canonical(py)
+        same = self.canonical(lean) == self.canonical(py)
         self._note("answer", py, lean, same)
         if not same:
             raise Disagree("answer", lean, py)
         return lean
 
 
-__all__ = ["CHECKS", "DISAGREE", "Disagree", "Record", "core_params", "hexed", "public_params", "registration_params",
+__all__ = ["CHECKS", "DISAGREE", "Disagree", "Outcome", "Record", "core_params", "public_params", "registration_params",
            "service_answer"]

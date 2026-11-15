@@ -18,7 +18,9 @@
 # Stays under `benchmarks/`: `sampling_plan/inputs.py` and its JSON inputs, `one_stage/zk_cost.py` and `a8_cost.py`
 # (the measured costs), the demo's orchestration (`one_stage/served_verdicts.py` and `.sh`, which the demo's
 # configuration takes) and `one_stage/interfaces/`. The imports that name a moved script as a bare module off
-# `sys.path` (`import a5 as A5`) are no module `layout.py` derives, and a hand commit after the move rewrites them.
+# `sys.path` (`import a5 as A5`) are no module `layout.py` derives, and a hand commit after the move rewrites them,
+# but never in a directory that holds its own module of that name: `benchmarks/pouw/pearl_c_sm90/`'s `import glm53` is
+# its sibling `glm53.py`, not SPOT's cost model, and `[rewrite]` excludes that directory.
 
 [roots]
 old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
@@ -80,6 +82,9 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "benchmarks/prove_path/tests/test_prove_path.py" = "verity/protocols/proofs/spot/prover/tests/test_prove_path.py"
 "benchmarks/prove_path/tests/test_kept_scan.py" = "verity/protocols/proofs/spot/prover/tests/test_kept_scan.py"
 "benchmarks/prove_path/tests/test_class_size.py" = "verity/protocols/proofs/spot/prover/tests/test_class_size.py"
+"benchmarks/prove_path/tests/test_run_keep.py" = "verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_keep.py"
+"benchmarks/prove_path/tests/test_run_request_values.py" = "verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_request_values.py"
+"benchmarks/prove_path/tests/test_run_rules.py" = "verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_rules.py"
 
 # the cost model
 "benchmarks/sampling_plan/transformer.py" = "verity/protocols/proofs/spot/prover/cost/transformer.py"
@@ -116,8 +121,10 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
            "adapters/vllm/tools/migrate/superseded_quarantine.py",
            "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "**/lakefile.toml",
-           "tests/tree.toml", "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
+           "tests/tree.toml", "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c",
+           "benchmarks/pouw/pearl_c_sm90/**"]
 include = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
+
 
 [modules]
 "benchmarks.one_stage.a0" = "verity.protocols.proofs.spot.prover.audit.template_audit"
@@ -168,6 +175,9 @@ include = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
 "benchmarks.prove_path.tests.test_prove_path" = "verity.protocols.proofs.spot.prover.tests.test_prove_path"
 "benchmarks.prove_path.tests.test_records_audit" = "verity.protocols.proofs.spot.verifier.tests.test_records_audit"
 "benchmarks.prove_path.tests.test_remotetie" = "verity.protocols.proofs.spot.verifier.tests.test_remotetie"
+"benchmarks.prove_path.tests.test_run_keep" = "verity.protocols.proofs.spot.prover.tests.test_prove_path_sh_keep"
+"benchmarks.prove_path.tests.test_run_request_values" = "verity.protocols.proofs.spot.prover.tests.test_prove_path_sh_request_values"
+"benchmarks.prove_path.tests.test_run_rules" = "verity.protocols.proofs.spot.prover.tests.test_prove_path_sh_rules"
 "benchmarks.prove_path.tests.test_window_cost" = "verity.protocols.proofs.spot.prover.tests.test_window_cost"
 "benchmarks.prove_path.window_cost" = "verity.protocols.proofs.spot.prover.cost.window_cost"
 "benchmarks.sampling_plan.cpu_budget" = "verity.protocols.proofs.spot.prover.cost.cpu_budget"

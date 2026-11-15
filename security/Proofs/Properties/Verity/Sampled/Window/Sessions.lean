@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Stops
 public import Proofs.Properties.Verity.Sampled.Layout
 
 /-!
-# Sampled proofs' coupling over a window: the readings, a session at a time
+# SPOT's coupling over a window: the readings, a session at a time
 
 A window's play holds one session for each member with a proof block in the sample, each on its own coin tree, held
 one after another. The readings here say which opening of the device's log is which session's round, by the order
@@ -23,11 +23,11 @@ the trees are first opened in: the members' statements share their tags, so a tr
   (`sessionRound_once`).
 * **A session's slots** (`slotOf`): at `per` rounds a session, the closing round's at the last place and the layout's
   (`slotAt`) before it: the link's first, then the rep rounds'.
-* **The window's readings** (`windowReadingAt`): round `j` is the slot `slotOf (j % per)` of session `j / per`, at
+* **The window's readings** (`executionPhaseReadingAt`): round `j` is the slot `slotOf (j % per)` of session `j / per`, at
   `per` rounds a session, with what the play reveals for a session's slot a parameter. Each round picks only
-  openings the device serves (`windowReadingAt_picks`, `windowReadingAt_served`), no two rounds pick one frame
-  (`windowReadingAt_unique`), and each picks at most one release of a log whose trees each name their streams
-  distinctly (`picksOnce_windowReadingAt`).
+  openings the device serves (`executionPhaseReadingAt_picks`, `executionPhaseReadingAt_served`), no two rounds pick one frame
+  (`executionPhaseReadingAt_unique`), and each picks at most one release of a log whose trees each name their streams
+  distinctly (`picksOnce_executionPhaseReadingAt`).
 -/
 
 @[expose] public section
@@ -386,7 +386,7 @@ theorem slotOf_inj {T per i i' : ℕ} (hT : 0 < T) (hi : i < per) (hi' : i' < pe
 /-- **The readings of a window, a session at a time**, at `per` rounds a session: round `j` is the slot
 `slotOf (j % per)` of session `j / per` (`sessionRound`), what the play reveals for it is `reveal` at that session
 and slot, with the record the play's output reveals (`record`) and the record's digest (`recordDigest`). -/
-def windowReadingAt {R : ℕ} (tables : Array String) (per : ℕ) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
+def executionPhaseReadingAt {R : ℕ} (tables : Array String) (per : ℕ) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) : Reading R where
   round j := sessionRound tables (j.val / per) (slotOf tables.size per (j.val % per))
   reveal j := reveal (j.val / per) (slotOf tables.size per (j.val % per))
@@ -394,38 +394,38 @@ def windowReadingAt {R : ℕ} (tables : Array String) (per : ℕ) (reveal : ℕ 
   recordDigest := recordDigest
 
 /-- **Each round of a window's readings picks only openings.** -/
-theorem windowReadingAt_picks {R : ℕ} (tables : Array String) (per : ℕ)
+theorem executionPhaseReadingAt_picks {R : ℕ} (tables : Array String) (per : ℕ)
     (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) :
-    ∀ (j : Fin R) pre fr, (windowReadingAt tables per reveal record recordDigest).round j pre fr →
+    ∀ (j : Fin R) pre fr, (executionPhaseReadingAt tables per reveal record recordDigest).round j pre fr →
       ∃ i s n, fr = .opening i s n :=
   fun _ _ _ h => sessionRound_opening h
 
 /-- **Each round of a window's readings picks only openings the device serves.** -/
-theorem windowReadingAt_served {R : ℕ} (tables : Array String) (per : ℕ)
+theorem executionPhaseReadingAt_served {R : ℕ} (tables : Array String) (per : ℕ)
     (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) :
-    ∀ (j : Fin R) pre i s n, (windowReadingAt tables per reveal record recordDigest).round j pre (.opening i s n) →
+    ∀ (j : Fin R) pre i s n, (executionPhaseReadingAt tables per reveal record recordDigest).round j pre (.opening i s n) →
       Served pre i s n :=
   fun _ _ _ _ _ h => sessionRound_served h
 
 /-- **No two rounds of a window's readings pick one frame** after one log, where the tables are distinct and there
 is one (`sessionRound_unique`, `slotOf_inj`). -/
-theorem windowReadingAt_unique {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup) (hT : 0 < tables.size)
+theorem executionPhaseReadingAt_unique {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup) (hT : 0 < tables.size)
     {per : ℕ} (hper : 0 < per) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {j j' : Fin R} {pre : List Release}
-    {fr : Frame} (h : (windowReadingAt tables per reveal record recordDigest).round j pre fr)
-    (h' : (windowReadingAt tables per reveal record recordDigest).round j' pre fr) : j = j' := by
+    {fr : Frame} (h : (executionPhaseReadingAt tables per reveal record recordDigest).round j pre fr)
+    (h' : (executionPhaseReadingAt tables per reveal record recordDigest).round j' pre fr) : j = j' := by
   obtain ⟨hu, hs⟩ := sessionRound_unique ht h h'
   have hm := slotOf_inj hT (Nat.mod_lt _ hper) (Nat.mod_lt _ hper) hs
   exact Fin.ext (by rw [← Nat.div_add_mod j.val per, ← Nat.div_add_mod j'.val per, hu, hm])
 
 /-- **Each round of a window's readings picks at most one release of a log** whose trees each name their streams
 distinctly (`sessionRound_once`). -/
-theorem picksOnce_windowReadingAt {R : ℕ} (tables : Array String) (per : ℕ)
+theorem picksOnce_executionPhaseReadingAt {R : ℕ} (tables : Array String) (per : ℕ)
     (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) {Lg : List Release} (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) :
-    PicksOnce (windowReadingAt (R := R) tables per reveal record recordDigest).round Lg :=
+    PicksOnce (executionPhaseReadingAt (R := R) tables per reveal record recordDigest).round Lg :=
   picksOnce_of_once fun _ _ _ _ _ _ he hp hp' => sessionRound_once hn he hp hp'
 
 end Verity.Sampled

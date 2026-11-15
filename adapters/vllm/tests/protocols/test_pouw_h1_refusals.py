@@ -33,7 +33,7 @@ kernels (`pouw_h1_tables_device.flush`, `pouw_h1_registered.commit`, `public_sal
 kernels that don't build and a library off `ZyArgs` (`pouw_h1_registered_device.available`, `zy_host_lib`). Beside
 it, a pull that holds two engine steps and a rank call with no rows or off the Program's order
 (`pouw_h1_ranks.Holder.pull`, `ingest`, `pouw_h1_served.Served.commit`), a leaf's committed files, its staged table
-and its record's root (`drawn.leaf_stagers`, `FileStager.stage`, `stage_leaves`), and a saved window's Program
+and its record's root (`drawn.leaf_stagers`, `prover.lowering.stagers`' `FileStager.stage`, `stage_leaves`), and a saved window's Program
 (`pouw_h1_handoff.resume`).
 
 And what a call's receipts are with no card: each lane's words, J10-R's from the call's one stream, a dead tile's
@@ -76,8 +76,30 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
+import verity.protocols.accounting.pouw.prover.serving.h1.answers as AN
+import verity.protocols.accounting.pouw.prover.serving.h1.challenger as PHC
+import verity.protocols.accounting.pouw.prover.serving.h1.commit as CT
+import verity.protocols.accounting.pouw.prover.serving.h1.sample as PHD
+import verity.protocols.accounting.pouw.prover.serving.h1.sampled as DN
+import verity.protocols.accounting.pouw.prover.serving.h1.sampled_rows as DR
+import verity.protocols.accounting.pouw.prover.serving.h1.handoff as HO
+import verity.protocols.accounting.pouw.prover.serving.h1.kept as KP
+import verity.protocols.accounting.pouw.prover.serving.h1.live as LV
+import verity.protocols.accounting.pouw.prover.serving.h1.model_key as MK
+import verity.protocols.accounting.pouw.prover.serving.h1.prover as PV
+import verity.protocols.accounting.pouw.prover.serving.h1.registered as NR
+import verity.protocols.accounting.pouw.prover.serving.h1.requests as RQ
+import verity.protocols.accounting.pouw.prover.serving.h1.served as SV
+import verity.protocols.accounting.pouw.prover.serving.h1.served_files as SF
+import verity.protocols.accounting.pouw.prover.serving.h1.static as ST
+import verity.protocols.accounting.pouw.prover.serving.h1.window as PHW
+import verity.protocols.accounting.pouw.prover.serving.h1.words as W
+import verity_torch.pouw.h1.receipts as RC
+import verity_torch.pouw.h1.registered_device as RGD
+import verity_torch.pouw.h1.tables_device as TBD
 from verity.circuits.codec import canonical_json
 from verity.circuits.refs import Affine, Strided
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 from verity.protocols.accounting.pouw.verifier import salt as PS
@@ -93,30 +115,10 @@ from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device import remote as R
 from verity.protocols.proofs.spot.device.challenger import CoinError, LiveRecord
 
-import verity.protocols.accounting.pouw.prover.serving.h1.answers as AN
-import verity.protocols.accounting.pouw.prover.serving.h1.challenger as PHC
-import verity.protocols.accounting.pouw.prover.serving.h1.commit as CT
-import verity.protocols.accounting.pouw.prover.serving.h1.draw as PHD
-import verity.protocols.accounting.pouw.prover.serving.h1.drawn as DN
-import verity.protocols.accounting.pouw.prover.serving.h1.drawn_rows as DR
-import verity.protocols.accounting.pouw.prover.serving.h1.handoff as HO
 import verity_vllm.protocols.pouw.h1_hooks as PHK
-import verity.protocols.accounting.pouw.prover.serving.h1.kept as KP
-import verity.protocols.accounting.pouw.prover.serving.h1.live as LV
-import verity.protocols.accounting.pouw.prover.serving.h1.model_key as MK
-import verity.protocols.accounting.pouw.prover.serving.h1.prover as PV
 import verity_vllm.protocols.pouw.h1_ranks as PHR
-import verity.protocols.accounting.pouw.prover.serving.h1.receipts as RC
-import verity.protocols.accounting.pouw.prover.serving.h1.registered as NR
-import verity.protocols.accounting.pouw.prover.serving.h1.registered_device as RGD
-import verity.protocols.accounting.pouw.prover.serving.h1.requests as RQ
-import verity.protocols.accounting.pouw.prover.serving.h1.served as SV
-import verity.protocols.accounting.pouw.prover.serving.h1.served_files as SF
-import verity.protocols.accounting.pouw.prover.serving.h1.static as ST
-import verity.protocols.accounting.pouw.prover.serving.h1.tables_device as TBD
-import verity.protocols.accounting.pouw.prover.serving.h1.window as PHW
-import verity.protocols.accounting.pouw.prover.serving.h1.words as W
 from tests.protocols import challenger_host as CH
+from tests.protocols import pouw_h1_circuits as PC
 from tests.protocols import test_pouw_h1_commit as TC
 from tests.protocols import test_pouw_h1_handoff as TH
 from tests.protocols import test_pouw_h1_ranks as TR
@@ -146,7 +148,6 @@ from tests.protocols.test_pouw_h1 import (
 from verity_vllm import protocols as PO
 from verity_vllm.errors import Refused
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 
 #: what `LiveOpening.from_json` says of a coin that is no opening
 NO_OPENING = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, lowercase hex and "
@@ -336,12 +337,11 @@ def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
     other = {"pouw": {"coins": Challenger(0, CH.entropy(0))}}
     period = {"period": "p1", "lane": "vllm"}
     for entry, settings in ((_entry(), _settings()), ("pouw:ncp-v1", other)):
-        scheme = entry.partition(":")[2]
         assert refused(entry, settings) == ()
-        no_window = (f"{entry}: {scheme}: the pouw setting 'draw_session' is the draw session of H1's window "
+        no_window = (f"{entry}: the pouw setting 'draw_session' is the draw session of H1's window "
                      f"({PH.SCHEME}) on the challenger at 'challenger'")
         assert refused(entry, {"pouw": {**settings["pouw"], "draw_session": {"session": CH.session_id(0xd)}}}) == (no_window,)
-        no_install = (f"{entry}: {scheme}: the pouw setting 'period' is the lane's open period that a Pearl-C install's "
+        no_install = (f"{entry}: the pouw setting 'period' is the lane's open period that a Pearl-C install's "
                       "reserved session joins, so it goes with 'challenger' and 'session', for pearl-c-sm120-v1-h3, "
                       "pearl-c-sm120-unpromoted-v1-h3, pearl-c-h100-v1-h3 only")
         assert refused(entry, {"pouw": {**settings["pouw"], "period": period}}) == (no_install,)
@@ -688,9 +688,10 @@ def test_a_sample_session_of_another_layout_is_refused(tmp_path, monkeypatch, fa
                                        "live window's draw session's: its draw coin alone")
 
 
-def test_the_sample_sessions_files_are_none_where_the_ledger_pins_no_session_on_its_root(served, tmp_path):
+def test_the_sample_sessions_files_are_the_ledgers_refusal_where_it_pins_no_session_on_its_root(served, tmp_path):
     """`draw_files` fetches the session the ledger opens on the window's sample root, pinned; where the ledger opens none
-    on that root, or holds no pins log, it fetches nothing and gives None, which `draw_session_reason` refuses."""
+    on that root, or holds no pins log, it fetches nothing and gives the ledger's `CoinError`, which `draw_session_reason`
+    refuses naming it; no files at all (None) it refuses as `NO_DRAW_SESSION`."""
     host, honest, _record = served
     (tmp_path / "tree").mkdir()
     (tmp_path / "tree" / "out").symlink_to(host.draw.directory, target_is_directory=True)
@@ -704,10 +705,13 @@ def test_the_sample_sessions_files_are_none_where_the_ledger_pins_no_session_on_
     assert files is not None and asked == [host.draw.session_id]
     assert PHD.draw_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), files,
                                    PHC.lms_verify) is None
-    assert PHD.draw_files({"draw": {"root": "ab" * 64}}, ledger, fetch, PHC.lms_verify) is None
+    assert isinstance(PHD.draw_files({"draw": {"root": "ab" * 64}}, ledger, fetch, PHC.lms_verify), CoinError)
     unpinned = PHC.Ledger.load([host.ledger.path], host.key, main=CH.MAIN)
-    assert PHD.draw_files(honest, unpinned, fetch, PHC.lms_verify) is None
-    assert asked == [host.draw.session_id]
+    refused = PHD.draw_files(honest, unpinned, fetch, PHC.lms_verify)
+    assert isinstance(refused, CoinError) and asked == [host.draw.session_id]
+    assert PHD.draw_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), refused,
+                                   PHC.lms_verify) == ("the window's draw session is not one the ledger opens on its draw "
+                                                       f"root: {refused}")
     assert PHD.draw_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), None,
                                    PHC.lms_verify) == PHD.NO_DRAW_SESSION
 
@@ -832,7 +836,7 @@ def test_only_a_window_on_the_auditor_hosts_coins_hands_off_and_only_a_saved_win
     `resume` refuses a file that isn't a saved window's before it reads the stream's descriptor."""
     run = _driven()
     for refuse in (lambda: HO.client_of(run), lambda: HO.suspend(run, tmp_path / "saved")):
-        with pytest.raises(ValueError, match="^t: only a window whose coins are the auditor host's session hands off$"):
+        with pytest.raises(ValueError, match="^t: only a window whose coins are the auditor device's session hands off$"):
             refuse()
     assert not (tmp_path / "saved").exists()
     (tmp_path / HO.FILE).write_bytes(pickle.dumps({"schema": "another/v1"}))
@@ -842,7 +846,7 @@ def test_only_a_window_on_the_auditor_hosts_coins_hands_off_and_only_a_saved_win
 
 
 def test_a_window_with_the_commit_in_its_engine_does_not_hand_off(tmp_path, monkeypatch):
-    """`client_of`, and so `suspend`, refuses an open, unclosed window on the auditor host's session whose served trees
+    """`client_of`, and so `suspend`, refuses an open, unclosed window on the auditor device's session whose served trees
     hold the Commit's tap, asked here inside its first forward: the tap holds the engine's committer, which no other
     process resumes, so the window closes where it served, nothing is saved, and it closes as it would have."""
     monkeypatch.setattr(pouw, "linear_types", lambda: (TC.Linear,))
@@ -2010,7 +2014,7 @@ def test_h1_hashes_with_numpy_and_says_why_where_cuda_is_there_and_its_kernels_d
     why = ("H1's registered values hash with NumPy: the GPU path doesn't build here "
            "(RuntimeError: no nvcc (pouw_device.TOOLCHAIN, or on the path))")
     assert [str(w.message) for w in said] == [why]
-    monkeypatch.setattr(RGD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
+    monkeypatch.setattr(RGD.RTL.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
     assert RGD.available.__wrapped__() is True and built == [(0, RGD.device_lib, "rr_midstates")]
 
 
@@ -2086,7 +2090,7 @@ def test_a_leafs_committed_files_are_held_to_the_manifest_and_a_staged_table_to_
 
     def refusal(manifest):
         with pytest.raises(Refused) as refused:
-            DN.leaf_stagers(k, PH.TILE, tmp_path, manifest)
+            DN.leaf_stagers(k, PH.TILE, tmp_path, manifest, PC.stagers().FileStager)
         return str(refused.value)
     absent = f"--circuits has no {name} file, leaf Program and template id: build them (pouw_h1_circuits --lanes {k})"
     assert refusal({}) == refusal(manifest) == absent
@@ -2100,7 +2104,7 @@ def test_a_leafs_committed_files_are_held_to_the_manifest_and_a_staged_table_to_
     program.write_bytes(b"a leaf Program")
     assert refusal(manifest) == (f"{name}'s circuit (SHA-512 {hashlib.sha512(text).hexdigest()[:16]}...) is not "
                                  f"--circuits' {name} file ({'00' * 8}...), the one the period-open committed")
-    stager = DN.FileStager(circuit, "a template", [("p", 0, 0, ())], DR.LEAF_OUT_ROWS)
+    stager = PC.stagers().FileStager(circuit, "a template", [("p", 0, 0, ())], DR.LEAF_OUT_ROWS)
     with pytest.raises(ValueError, match="^port p's table rows at the instances' refs are not their rows$"):
         stager.stage({"p": [[1, 2]]}, tmp_path / "staged", KEY, {}, [0], "a set", {"p": [[1, 2], [3, 4]]}, {"p": [1]}, {})
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted([circuit.name, program.name])
@@ -2157,6 +2161,8 @@ def test_a_saved_window_whose_program_declared_again_is_another_is_refused_at_it
             HO.resume(tmp_path / "changed", mine.detach())
         assert str(refused.value) == (f"{run.entry}: the window Program declared again is not the one its tables were "
                                       "registered under")
+        theirs.setblocking(False)
+        assert theirs.recv(1) == b"", "the refused resume closed the stream it was handed"
     finally:
         mine.close()
         theirs.close()
@@ -2522,7 +2528,7 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     assert [str(w.message) for w in said] == [("H1's call z tables hash apart from their zy@<c> values: zy_commit.cu "
                                                "doesn't build here (RuntimeError: no nvcc (pouw_device.TOOLCHAIN, or on "
                                                "the path))")]
-    monkeypatch.setattr(TBD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
+    monkeypatch.setattr(TBD.RTL.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
     assert TBD.available.__wrapped__() is True and built == [(0, TBD.device_lib, "rt_midstates", TBD.STREAMS)]
     asked: list[tuple] = []
 
@@ -2534,7 +2540,7 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     monkeypatch.setattr(torch.cuda, "get_device_capability", {0: (12, 0)}.__getitem__)
     with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(RuntimeError: no nvcc "):
         assert RGD.zy_available.__wrapped__() is False
-    monkeypatch.setattr("verity_vllm.protocols.pouw.device.nvcc", lambda: "/a/toolchain/nvcc")
+    monkeypatch.setattr("verity.protocols.accounting.pouw.prover.serving.device.nvcc", lambda: "/a/toolchain/nvcc")
     with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(OSError: the stand-in builds nothing\)"):
         assert RGD.zy_available.__wrapped__() is False
     assert built[1:] == [(0, RGD.device_lib, "rr_midstates")] * 2

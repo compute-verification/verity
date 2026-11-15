@@ -163,12 +163,12 @@ PROTOCOL.md; `--train --send FILE` ships what such a step needs. It may also nam
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
-`research queue` is the merge queue. Its loop, the verified queue (`research queue vqueue`, ci's: `vqueue_loop.py`, whose
-policy is `vqueue.py`), merges the PRs ready to land onto `main` as candidates (`queue/<sha12>`, one `Queue: #N` merge each),
-checks each (graph2's tasks by default), and fast-forwards `main` only to a candidate with no new failure. A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
+`research queue` is the merge queue. Its loop, the verified queue (`research queue vqueue`, ci's: `vqueue_loop.py`,
+policy `vqueue.py`), merges the PRs ready to land onto `main` as candidates (`queue/<sha12>`, one `Queue: #N` merge each),
+checks each (graph2's tasks by default), and fast-forwards `main` to one with no new failure (`--gate verdict`: AGENTS.md). A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
 its Cursor agent id), has no hold label, is marked ready at its head by that owner (`research queue ready PR --mark --by
 LANE`, or `--on auto` to run the quick tier first, or a `ready` label on `pr:{n}@{head}`), and has a reviewer's land verdict
-there (`research queue review`), or changes nothing drive.toml's `lowrisk_excludes` names, or is a move's PR whose move
+there (`research queue review`), or changes nothing drive.toml's `lowrisk_excludes` names, or is a move's PR
 the loop certifies. The mark's preflight refuses a lock merge dropping an entry the merged tree's statements need
 (`lock_drops`). `research queue status` says what each PR waits for.
 
@@ -221,6 +221,8 @@ each with its repository file and owner (a Slack handle), and goes there only th
 [PATH ...] --apply` (else a dry run) from a pushed commit (`main`, or a PR's head for a hotfix). Each loop is a systemd unit
 (`units/` beside the manifest, settings in `env/`), never tmux; `install` restarts a running service whose unit, env file
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
+A file of machines' addresses (`/etc/vy/peers`) is a template the register of machines fills at install time (`register =
+true`; `infra/ops/verity_ops/deploy.py`), and `research deploy roll PATH --by WHO [--apply]` puts it on every node, one at a time.
 `research deploy drift` (`ops deploy`) reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process running a file replaced since it started (`restart`, unless its entry says `no_restart`),
 and every file in a managed directory that no entry lists (`stray`); the monitors relay's hourly `drift` monitor opens
@@ -280,9 +282,11 @@ runner and the workload get the tree's `PYTHONPATH` derived from its root
 `pyproject.toml` workspace members and each member's build config
 (`src/`, `python/`, flat), with a user `--env PYTHONPATH` appended; job.json
 records it (`run.remote.pythonpath`). `research env --source TREE` prints the
-same line for a local checkout. The machine claims the run directory by run id and
+same line for a local checkout. The launcher stages its request in a directory it
+makes by run id, never one another launch staged; the machine claims the run directory by run id and
 starts the runner detached; re-delivering a launch after an ssh drop finds
-the claim and reports state. The runner's argv carries the workload's command, so a
+the claim its own request made and reports state. A run directory another launch's request
+claimed is refused, and a launch that picked its id picks a new one. The runner's argv carries the workload's command, so a
 `pkill -f` aimed at the workload matches it too: it logs SIGTERM/SIGHUP to
 launcher.log and keeps supervising, so the run still records its end and
 publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
@@ -499,10 +503,18 @@ Policy `default` (`default/v0`) acts only over `--high-pct` of blocks or inodes,
 the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct`, at most `--max-paths` paths a pass. A
 path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable (or an
 unpreserved run's, or a launcher's copy's), it holds no nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a
-`--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
-now under it at its size, and its stored copy `verified`, `expired` or `withdrawn` on the remote; one that can't be asked about
+`--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every regular file
+now under it at its size (but for the uncovered run below), and its stored copy `verified`, `expired` or `withdrawn` on the remote; one that can't be asked about
 fails the pass (`retention.STORED`). A preserved run's marker must still vouch for the run dir (the store README's §10.1). Without
 `--apply` gc deletes nothing and reads no remote; it prints every deletion and skip with its reason.
+
+A symlink or other entry that isn't a regular file holds no bytes, so the artifact need not hold it (custody never stores one).
+A preserved run whose run record lacks files custody did not store (it trimmed them past its limit: `uncovered`) holds their only
+copy, as a never-stored run does: gc deletes it, under `--unpreserved-runs`, 7 days after custody verified the run (the marker's
+`verified_utc`; never the last write, which the store eviction moves), once the remote holds the rest, and lists it with that date
+until then, with how to keep it: `research keep RUNDIR --owner @LANE --expires DATE --priority P`, or a custody that declares the
+files (`--declared-output`); a run with a keep record never goes this way. Each deleted run's line says how much of it was
+stored nowhere else, and the pass's summary counts these runs apart from the never-stored and the covered ones.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the

@@ -24,7 +24,7 @@ from verity.runtime import runner as runtime
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
 from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
@@ -59,27 +59,27 @@ def _work_design(design: str, params: Mapping[str, Any]) -> None:
 
 
 def _certifier_params(params: Mapping[str, Any]) -> dict[str, Any]:
-    """The network certifier's parameters: `WardenParams`' fields, and ``tie``, which is true. A field that is unset
+    """The network certifier's parameters: `NetworkCertifierParams`' fields, and ``tie``, which is true. A field that is unset
     by default (``max_tokens_cap``, ``lengths``, ``content``, ``request_words``) stays out of the table while unset
-    (`CERTIFIER_DEFAULTS`), as it stays out of `WardenParams.digest`, so a configuration that sets none has the form
+    (`CERTIFIER_DEFAULTS`), as it stays out of `NetworkCertifierParams.digest`, so a configuration that sets none has the form
     and hash it had before any was a parameter."""
-    names = [f.name for f in fields(WardenParams)]
+    names = [f.name for f in fields(NetworkCertifierParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
-        raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: WardenParams' "
+        raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: NetworkCertifierParams' "
                                      f"{', '.join(names)}, and tie)")
     if params.get("tie") is not True:
         raise Refused("tie", "tie = true: the network certifier ties the workers' outputs to the ones it relayed")
     given = {k: params[k] for k in names if k in params}
     try:
-        WardenParams(**given)
+        NetworkCertifierParams(**given)
     except (TypeError, ValueError) as e:
         raise Refused("params", f"verity/certifier/v0: {e}") from None
     return {**given, "tie": True}
 
 
-#: The network certifier's defaults: `WardenParams`' but the fields unset by default (the response's token bound, the lengths
+#: The network certifier's defaults: `NetworkCertifierParams`' but the fields unset by default (the response's token bound, the lengths
 #: rows' form, the content rows' classes, the request words), and ``tie``.
-CERTIFIER_DEFAULTS = {**{k: v for k, v in asdict(WardenParams()).items() if v is not None}, "tie": True}
+CERTIFIER_DEFAULTS = {**{k: v for k, v in asdict(NetworkCertifierParams()).items() if v is not None}, "tie": True}
 
 
 def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -108,7 +108,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("verifier", "workers", ("draw",), after=("coins",)),
                         Channel("workers", "firewall", ("witness",), after=("draw",)),
                         Channel("firewall", "verifier", ("proof",), after=("draw",))),
-              needs=frozenset({"windows"}), law=_design, default_law="subset:8"),
+              needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="subset:8"),
     Component("pouw", SP.IDS["pouw"], parties=_VERIFIER, needs=frozenset({"windows", "noise"})),
     Component("pearl-plus", SP.IDS["pearl-plus"], parties=_VERIFIER, needs=frozenset({"windows"})),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
@@ -117,7 +117,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("certifier", SP.IDS["certifier"], parties=_CERTIFIER, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_certifier_params,
-              default_params=CERTIFIER_DEFAULTS, law=_work_design, default_law="work:64"),
+              default_params=CERTIFIER_DEFAULTS, sampling_design=_work_design, default_sampling_design="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay", "noise", "store", "receipts"}), (Role("workers", "developer"),),

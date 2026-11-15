@@ -14,9 +14,9 @@ A session has four steps:
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
    retried, and no index is resampled.
-3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records root)`: the header is
-   the commitment's fields and how the session ended, and the records root is the frame-v3-sha512 root of the round
-   records.  The records are witness: the prover proves things about them, and they never reach the auditor in the
+3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records digest)`: the header is
+   the commitment's fields and how the session ended, and the records digest is the `sha512/row/v2` digest of the round
+   records as one stream.  The records are witness: the prover proves things about them, and they never reach the auditor in the
    clear.
 4. **Release.** Once the session is signed the memory challenger releases its commitment (`commitment`: the coin
    tree's root and hm96 key, the session's id and parameters, and the root the setup published for the `C*` it audits,
@@ -45,9 +45,10 @@ bound, `k · 2^-256` under the fresh key, and no guarantee reads it: the root le
 last answer.  The domain's 32-byte binding is the first 32 bytes of
 `SHA-512(tag ‖ session)`, since a frame-v3 binding is 32 bytes until the identity re-baseline.
 
-**Round records** (`RECORDS_TREE`): record `j` is `u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)` (92
-bytes), the value of frame leaf `(rank j, position j, RECORD_SCHEMA)`, in a frame-v3-sha512 tree over the session's
-rounds (binding(RECORD_BINDING, session), owner -1).  `H(block)` is the block's `sha512/row/v2` digest
+**Round records** (`RECORDS`): record `j` is `u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)`
+(`RECORD_BYTES`, 92 bytes).  The session's `k` records, in round order, are one stream, and its digest is the stream's
+`sha512/row/v2` digest, `SHA-512(P(8 · 92k) ‖ record_0 ‖ … ‖ record_{k-1})` (`records_digest`): the header binds the
+session and the number of rounds, so the stream needs no binding of its own.  `H(block)` is the block's `sha512/row/v2` digest
 `SHA-512(P(8N) ‖ block)` for an N-byte block (`verity.commitments.rowleaf.sha512_row_v2_digest`), the inner
 digest of C's `hm96-sha512/row/v2` leaf: `answer_circuit.PousAnswerOpens_v1` proves it equal to `h` and opens it against
 C's leaf with no second hash of the block.  The digest costs the same 17 compressions as a plain SHA-512 of the block,
@@ -59,6 +60,13 @@ LMS/LM-OTS over SHA-512 at `lms.DEPLOYED` (`verity.commitments.crypto.lms`, clai
 the memory challenger role's digest `lms.memory_challenger_message(I, session, record)`; `LmsSigner` is its signer.  A
 test signer's scheme starts with `TEST_PREFIX`; `register` never adds one, so a test-signed record is refused outside
 tests, as is an unsigned one.
+
+**Setup record.** With the key and under the session id it signs a session's record with, the memory challenger's
+device signs the setup's published outputs it was given (`sign_setup_record`): a `SetupRecord`, the blocks, commitment,
+salt and root the session's answers are checked against, never that setup's check passed (the device sees no store and
+runs no check at setup), as raw bytes under `SETUP_RECORD_TAG` (`SetupRecord.value`), never 64 bytes long, so never a
+session's record or the wipe's.  `setup_record_ok` checks one against a session's scheme, key and id.  The Lean
+`MemoryChallenger.SetupRecord` is the definition, held to these by difftest.
 
 Times are the challenger's monotonic clock in ns (`time.perf_counter_ns`, Linux's CLOCK_MONOTONIC); the challenger
 refuses a clock coarser than a microsecond (`CLOCK_RESOLUTION_NS`).
@@ -74,7 +82,8 @@ import logging
 import os
 import re
 import time
-from collections.abc import Callable, Iterator, Mapping, Sequence
+import tomllib
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -100,18 +109,18 @@ from verity.protocols.accounting.pous.verifier.verifier import DIGEST_BYTES
 
 log = logging.getLogger(__name__)
 
-PROTOCOL = "verity-pous/memory-challenger/v1"
+PROTOCOL = "verity-pous/memory-challenger/v2"
 COIN_DOMAIN = "verity/pous/memory-challenger-coins/v1"
 COIN_TREE = "verity-pous/coin-tree/hm96-sha512/v1"
-RECORDS_TREE = "verity-pous/round-records/frame-v3-sha512/v1"
+RECORDS = "sha512/row/v2"
 COIN_TAG = b"verity-pous/memory-challenger/coin/v1\0"
 COIN_BINDING = b"verity-pous/memory-challenger/coin-tree/v1\0"
-RECORD_BINDING = b"verity-pous/memory-challenger/round-records/v1\0"
 SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
+SETUP_RECORD_TAG = b"verity-pous/memory-challenger/setup-record/v1\0"
 SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
 SALT_LOG = "verity-pous/memory-challenger/salt-log/v1"
 COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
-RECORD_SCHEMA = "pous/round-record/v2"
+RECORD_BYTES = 92
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
 """The coarsest clock the memory challenger runs on: a microsecond (the certifier's 100 ms buckets are far too coarse)."""
@@ -134,11 +143,6 @@ def block_digest(block: bytes) -> bytes:
 
 def _domain(tag: bytes, session: bytes, count: int) -> CommitmentDomain:
     return CommitmentDomain(_sha512(tag, session)[:32], -1, RangeIndexedDomain(0, count), hash="sha512")
-
-
-def _root(domain: CommitmentDomain, leaves: Sequence[bytes]) -> bytes:
-    levels = tree_levels(domain, leaves)
-    return levels[-1][0] if levels else domain.empty_root()
 
 
 def _path(levels: tuple[tuple[bytes, ...], ...], rank: int) -> tuple[bytes, ...]:
@@ -238,7 +242,7 @@ class SessionCommitment:
     binding: bytes
 
     def header(self) -> dict[str, Any]:
-        return {"protocol": PROTOCOL, "coin_tree": COIN_TREE, "records_tree": RECORDS_TREE, "session": self.session.hex(),
+        return {"protocol": PROTOCOL, "coin_tree": COIN_TREE, "records": RECORDS, "session": self.session.hex(),
                 "coin_root": self.coin_root.hex(), "coin_key_sha512": _sha512(self.coin_key).hex(), "blocks": self.blocks,
                 "k": self.k, "limit_ns": self.limit_ns, "block_bytes": self.block_bytes, "binding": self.binding.hex(),
                 "clock": "CLOCK_MONOTONIC ns"}
@@ -269,6 +273,9 @@ class Round:
         return self.receipt_ns - self.send_ns
 
     def value(self) -> bytes:
+        """The record's `RECORD_BYTES` bytes; a digest of another length is refused, so the stream splits one way."""
+        if len(self.digest) != DIGEST_BYTES:
+            raise ValueError(f"a round's digest is {DIGEST_BYTES} bytes")
         return (self.j.to_bytes(4, "big") + self.index.to_bytes(8, "big") + self.send_ns.to_bytes(8, "big")
                 + self.receipt_ns.to_bytes(8, "big") + self.digest)
 
@@ -281,17 +288,16 @@ class Round:
         return cls(int(doc["j"]), int(doc["index"]), int(doc["send_ns"]), int(doc["receipt_ns"]), bytes.fromhex(doc["digest"]))
 
 
-def records_root(session: bytes, rounds: Sequence[Round]) -> bytes:
-    """The frame-v3-sha512 root over the round records (module docstring)."""
-    domain = _domain(RECORD_BINDING, session, len(rounds))
-    return _root(domain, [domain.leaf(r, r, RECORD_SCHEMA, x.value()) for r, x in enumerate(rounds)])
+def records_digest(rounds: Sequence[Round]) -> bytes:
+    """The round records' stream digest, `block_digest` of their values in round order (module docstring)."""
+    return block_digest(b"".join(r.value() for r in rounds))
 
 
 def message(commitment: SessionCommitment, ended: str, rounds: Sequence[Round]) -> bytes:
-    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`."""
+    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`."""
     head = json.dumps({**commitment.header(), "ended": ended, "rounds": len(rounds)}, sort_keys=True,
                       separators=(",", ":")).encode()
-    return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_root(commitment.session, rounds))
+    return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_digest(rounds))
 
 
 class Signer(Protocol):
@@ -339,6 +345,30 @@ class LmsSigner:
             return lms.sign(self.key, state, lms.memory_challenger_message(self.key.I, session, record)).encode()
 
 
+SEED_BYTES = lms.DEPLOYED.N
+"""The length of an S1 key's seed at `lms.DEPLOYED`."""
+
+
+def deployed_key(seed: bytes, tree: bytes | None = None, *, workers: int = 1) -> lms.PrivateKey:
+    """S1's key at `lms.DEPLOYED` from its `seed`: its tree computed in `workers` processes, or read back from `tree`,
+    the bytes `key_tree` gave of it."""
+    p = lms.DEPLOYED
+    if tree is None:
+        return lms.keygen(p, seed, workers)
+    nodes = (b"", *(tree[p.N * r:p.N * (r + 1)] for r in range(2 ** (p.H + 1) - 1)))
+    return lms.PrivateKey(p, hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16], seed, nodes)
+
+
+def key_tree(key: lms.PrivateKey) -> bytes:
+    """`key`'s tree as `deployed_key` reads it back."""
+    return b"".join(key.tree[1:])
+
+
+def create_leaf_state(path: str | os.PathLike, key: lms.PrivateKey) -> None:
+    """`key`'s leaf state at `path`, every leaf unused (`lms.LeafState`)."""
+    lms.LeafState.create(path, lms.public_key(key), key.params.H)
+
+
 _SCHEMES: dict[str, Verify] = {LMS: lms_verify(lms.DEPLOYED)}
 SCHEMES: Mapping[str, Verify] = MappingProxyType(_SCHEMES)
 """The signature schemes a session is accepted under: S1's (`LMS`) and nothing else."""
@@ -349,6 +379,53 @@ def register(scheme: str, verify: Verify) -> None:
     if scheme.startswith(TEST_PREFIX):
         raise ValueError(f"{scheme} is a test signer's scheme: it is accepted only by a test's own mapping")
     _SCHEMES[scheme] = verify
+
+
+PREMISE = "trusted-device"
+#: `PREMISE`'s key in a placement recorded before the assumption's id was renamed, which `premise` reads after it
+PREMISE_BEFORE = "trusted-host"
+REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
+UNCOMMITTED = "rehearsal, no bound: the configuration is not a committed one"
+COMMITTED = Path(__file__).resolve().parents[5] / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
+"""The committed configurations' hashes, each demo's configuration by its path: the only configurations under which
+`trusted_device` says `PREMISE` holds."""
+
+
+def committed(path: Path = COMMITTED) -> frozenset[str]:
+    """The hashes `path` (`COMMITTED`) commits, as `verity config hash` prints them."""
+    return frozenset(tomllib.loads(path.read_text()).values())
+
+
+def pinned(pins: Sequence[Mapping[str, str]], party: str, protocol: str) -> frozenset[str]:
+    """The keys' SHA-512s a configuration's pins (its checked `[[pin]]` entries) give `party` for `protocol`'s sessions."""
+    return frozenset(p["key-sha512"] for p in pins if p["party"] == party and p["protocol"] == protocol)
+
+
+def trusted_device(pins: Sequence[Mapping[str, str]], party: str, protocol: str, key_sha512: str | None, names: str, *,
+                   configuration: str | None, committed: Collection[str]) -> str:
+    """`PREMISE` for a session of `protocol` signed under the key whose SHA-512 is `key_sha512`, its device the
+    configuration's party `party`: that the device ran on a machine the developer doesn't control. It holds only under a
+    configuration whose hash `configuration` is one of `committed`, and only when the key is one the configuration's
+    `pins` give that party for that protocol. Under any other configuration it reads `UNCOMMITTED`, and under any other
+    key `REHEARSAL`, a run's own pin included, whatever the names say. `names` is what the run's names say of where each
+    party ran, a label and never the reason. Every protocol whose device signs its sessions reads its premise here,
+    with the same pins."""
+    under = f"configuration {configuration}" if configuration else "no configuration"
+    if configuration is None or configuration not in committed:
+        return f"{UNCOMMITTED} ({under}); {names}"
+    if key_sha512 is not None and key_sha512 in pinned(pins, party, protocol):
+        return f"holds: the session is signed under the key {under} pins for {party}'s {protocol} sessions; {names}"
+    return f"{REHEARSAL} ({under}); {names}"
+
+
+def premise(where: Mapping[str, Any]) -> str:
+    """A placement's premise: under `PREMISE`, or under `PREMISE_BEFORE` in a placement recorded before the rename."""
+    return where[PREMISE] if PREMISE in where else where[PREMISE_BEFORE]
+
+
+def holds(where: Mapping[str, Any]) -> bool:
+    """Whether a placement's `PREMISE` holds (`trusted_device`)."""
+    return premise(where).startswith("holds: ")
 
 
 @dataclass(frozen=True, slots=True)
@@ -373,6 +450,93 @@ class SignedSession:
     def from_json(cls, doc: Mapping[str, Any]) -> SignedSession:
         return cls(SessionCommitment.from_json(doc["commitment"]), doc["ended"], tuple(Round.from_json(r) for r in doc["rounds"]),
                    doc["scheme"], bytes.fromhex(doc["public_key"]), bytes.fromhex(doc["signature"]))
+
+
+def _field(b: bytes) -> bytes:
+    return len(b).to_bytes(8, "big") + b
+
+
+@dataclass(frozen=True, slots=True)
+class SetupRecord:
+    """What the memory challenger's device signs at setup: the setup's published outputs it was given, its blocks,
+    commitment to `W`, salt and root.  `value()` is the record's bytes, never a digest:
+    `SETUP_RECORD_TAG ‖ u64 blocks ‖ [commitment] ‖ [salt] ‖ [root]`, each `[·]` a u64 big-endian length then the
+    bytes.  It is at least 78 bytes long, so never a session's record or the wipe's, which are 64-byte digests."""
+
+    blocks: int
+    commitment: bytes
+    salt: bytes
+    root: bytes
+
+    def value(self) -> bytes:
+        return (SETUP_RECORD_TAG + self.blocks.to_bytes(8, "big") + _field(self.commitment) + _field(self.salt) +
+                _field(self.root))
+
+
+def setup_record_message(ident: bytes, session: bytes, record: SetupRecord) -> bytes:
+    """The role's message the setup record is signed as under the key whose identifier is `ident`:
+    `lms.memory_challenger_message(ident, session, record.value())`."""
+    return lms.memory_challenger_message(ident, session, record.value())
+
+
+_SETUP_KEYS = frozenset({"blocks", "commitment", "public_key", "root", "salt", "scheme", "signature"})
+
+
+def _hex(doc: Mapping[str, Any], key: str) -> bytes:
+    v = doc[key]
+    if not isinstance(v, str) or not re.fullmatch(r"(?:[0-9a-f]{2})*", v):
+        raise ValueError(f"setup.{key} is not lowercase hex")
+    return bytes.fromhex(v)
+
+
+@dataclass(frozen=True, slots=True)
+class SignedSetupRecord:
+    """A setup record with the scheme, public key and signature it is signed with."""
+
+    record: SetupRecord
+    scheme: str
+    public_key: bytes
+    signature: bytes
+
+    def to_json(self) -> dict[str, Any]:
+        r = self.record
+        return {"blocks": r.blocks, "commitment": r.commitment.hex(), "public_key": self.public_key.hex(), "root": r.root.hex(), "salt": r.salt.hex(), "scheme": self.scheme,
+                "signature": self.signature.hex()}
+
+    @classmethod
+    def from_json(cls, doc: Mapping[str, Any]) -> SignedSetupRecord:
+        """Exactly `to_json()`'s object."""
+        if not isinstance(doc, Mapping) or set(doc) != _SETUP_KEYS:
+            raise ValueError(f"setup holds the keys {sorted(_SETUP_KEYS)} and no others")
+        blocks, scheme = doc["blocks"], doc["scheme"]
+        if type(blocks) is not int or blocks < 0:
+            raise ValueError(f"setup.blocks: {blocks!r} is not a natural number")
+        if not isinstance(scheme, str):
+            raise ValueError("setup.scheme is not a string")
+        record = SetupRecord(blocks, _hex(doc, "commitment"), _hex(doc, "salt"), _hex(doc, "root"))
+        return cls(record, scheme, _hex(doc, "public_key"), _hex(doc, "signature"))
+
+
+def sign_setup_record(signer: Signer, session: bytes, *, blocks: int, commitment: bytes, salt: bytes,
+                      root: bytes) -> SignedSetupRecord:
+    """The device's signature over the setup's published outputs it was given, under the session's id."""
+    record = SetupRecord(blocks, commitment, salt, root)
+    return SignedSetupRecord(record, signer.scheme, signer.public_key, signer.sign(session, record.value()))
+
+
+def setup_record_ok(signed: SignedSetupRecord, *, scheme: str, public_key: bytes, session: bytes,
+                    schemes: Mapping[str, Verify] = SCHEMES) -> bool:
+    """`signed` is under `scheme`, which `schemes` accepts, and `public_key`, and its signature verifies on its record's
+    bytes under `session`."""
+    if signed.scheme != scheme or signed.public_key != public_key:
+        return False
+    verify = schemes.get(signed.scheme)
+    if verify is None:
+        return False
+    try:
+        return bool(verify(signed.public_key, session, signed.record.value(), signed.signature))
+    except (ValueError, TypeError, OverflowError):
+        return False
 
 
 def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> CapacityBound:
@@ -404,7 +568,8 @@ class SessionLog:
     One session an id rests on the host keeping this file as written: it is never restored from a snapshot, a backup or
     another older copy, and the memory challenger is never restarted onto host-held state older than the sessions it
     has run.  A file can see neither.  The claim that the host does neither is `trusted-device`
-    (`verity.claims`): its host never restores an earlier copy of the state the device keeps there."""
+    (Lean's `Verity.Assumptions.TrustedDevice` states its part about one run): its host never restores an earlier copy
+    of the state the device keeps there."""
 
     def __init__(self, path: str | os.PathLike) -> None:
         self.path = Path(path)
@@ -644,7 +809,7 @@ class MemoryChallenger:
 @contextmanager
 def collector_paused() -> Iterator[None]:
     """Python's cyclic garbage collector off inside, and as it was after. A timed round can't absorb a collection: the
-    first full one after `period.challenger` loads the deployed key, whose tree is 2^21 objects, stalls the process
+    first full one after `onsite.device_key` loads the deployed key, whose tree is 2^21 objects, stalls the process
     for about 35 ms, 40 times Δ + RTT at the certified point, and where it falls is set by the allocation count."""
     was = gc.isenabled()
     gc.disable()
@@ -711,10 +876,12 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 
-__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMPLETE", "HM96", "LATE", "LMS", "PROTOCOL",
-           "RECORDS_TREE", "RECORD_SCHEMA", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "TEST_PREFIX", "CoinOpening",
-           "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog", "SessionCommitment", "SessionLog",
-           "SessionLogError", "SignedSession", "Signer",
-           "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "collector_paused",
-           "covering_certificate", "lms_verify", "message", "records_root", "register", "resolution_of", "verdict",
-           "verify_coin"]
+__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "PREMISE",
+           "PREMISE_BEFORE", "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
+           "deployed_key", "holds", "key_tree", "pinned", "premise", "trusted_device",
+           "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
+           "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog",
+           "SessionCommitment", "SessionLog", "SessionLogError", "SetupRecord", "SignedSession", "SignedSetupRecord",
+           "Signer", "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "collector_paused",
+           "covering_certificate", "lms_verify", "message", "records_digest", "register", "resolution_of",
+           "setup_record_message", "setup_record_ok", "sign_setup_record", "verdict", "verify_coin"]

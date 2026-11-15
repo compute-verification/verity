@@ -64,12 +64,10 @@ record, a `measurement`). Every number in a card file is an entry `{value, unit,
 measured value, so only a lower bound on the ceiling), `premise` (no page and no run bounds the number; it is assumed
 under the premise its source states, of whom it names. A row that uses it prints the premise for its device's host, and
 no figure of record uses it) or `placeholder` (none of these: open). `source` names a data sheet, a document or an
-`art:` id (a run's record), and a node by its kind, never its host name. The Lean card tables
-(`security/Definitions/Core/Accel`) are held to the GPU cards that name one (`lean`), number by number
-(`verity/hardware/tests/test_lean.py`). `rate` is the one calculator of a GPU's peak rates, Lean's `card.ρ`: a reader
-that needs the tensor peak at some clock calls it rather than multiplying the card's numbers itself. `readings` is the
-tensor peak under each reading of its clock the card states (`READINGS`): a reader that quotes a figure under every
-reading iterates it rather than naming a clock itself.
+`art:` id (a run's record), and a node by its kind, never its host name. `rate` is the one calculator of a GPU's peak
+rates, Lean's `card.ρ`: a reader that needs the tensor peak at some clock calls it rather than multiplying the card's
+numbers itself. `readings` is the tensor peak under each reading of its clock the card states (`READINGS`): a reader
+that quotes a figure under every reading iterates it rather than naming a clock itself.
 
 ~~~python
 from verity.device import load_card, number, rate, readings, skus
@@ -93,11 +91,11 @@ node carries (`device.sku`, `device.count`), the host card (`host.sku`), the hos
 `B/s`, a ceiling), and the node's ways out: the interfaces that carry traffic off the node, one table each
 (`interface.NAME`: its `rate`, the line rate each way in `bit/s`, or, where the interface reads none, its `driver` and
 the `source` of that read, and no rate), and the storage path, once (`storage`, below). A card's own memory is its
-card's `store.dram`, whole, and no clock or peak of a card is here: those are the cards'. Every number is an entry
-`{value, unit, mark, source}` under the cards' rules, so what is not a number is not written as one, and a leaf or an
-interface with no read on record has no table. A kind is the card and its count, never a host's name, and a file names
-no machine, no address and no provider: whoever registers a node gives its host's id (`Registration.node_entry`, which
-gives no entry of a file with no `dram` or no `disk` leaf, and none of a file with no interface).
+card's `store.dram_installed`, whole, and no clock or peak of a card is here: those are the cards'. Every number is an
+entry `{value, unit, mark, source}` under the cards' rules, so what is not a number is not written as one, and a leaf or
+an interface with no read on record has no table. A kind is the card and its count, never a host's name, and a file
+names no machine, no address and no provider: whoever registers a node gives its host's id (`Registration.node_entry`,
+which gives no entry of a file with no `dram` or no `disk` leaf, and none of a file with no interface).
 
 **A leaf's rate** is the tightest bound on record that holds whatever the node runs. The DRAM leaf's is the host
 card's `memory.bandwidth_max`, the server's channels. A disk's is its own interface's where the disk states one (a
@@ -186,7 +184,7 @@ SCHEMES = ("lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0"
 """The signature schemes a registered key may be of: one LMS key that signs, and a root LMS key that certifies the
 keys that sign."""
 OPERAND_CLASSES = ("uniform-s8", "uniform-s2", "uniform-u2", "uniform-u4", "zero")
-"""The operand classes of a tensor-core MAC (`OperandClass`, in kebab case): int8 operands drawn uniformly over
+"""The operand classes of a tensor-core MAC (`OperandClass`, in kebab case): int8 operands sampled uniformly over
 [-128, 127], [-2, 1], [0, 3] and [0, 15], and the one value 0."""
 REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "sheet-digest", "figures", "capacity", "owner",
             "inventory", "uncertified", "challenger-reach")
@@ -609,13 +607,18 @@ class Sheet:
         reading (`clock.default`, one of `READINGS`) in Hz, and as every operand class's peak rate the tensor's peak at
         that reading, `readings(card)[card["clock"]["default"]]` (every class is int8, `rate.tensor`'s unit). Its memory
         figures as `Accel.Card.toDevice` reads the card: the bandwidth in bits a second, a ceiling rounded up, and the
-        stores' sizes exact."""
+        stores' sizes exact. Device memory is `store.dram_installed`, the memory on the board: a sheet's `mem` bounds what
+        a device holds from above, so of the card's two readings it takes the larger, and a card file with no such entry is
+        refused."""
         def v(entry: Mapping[str, Any]) -> Fraction:
             return Fraction(str(entry["value"]))
 
         sms, store = v(card["sm"]["count"]), card["store"]
         chip = (32 * sms * (v(store["reg"]) + v(store["reg_extra"])) + 8 * (sms * v(store["smem"]) + v(store["l2"])))
-        mem = v(store["dram"])
+        if "dram_installed" not in store:
+            raise Malformed(f"card {card['sku']}: its store has no dram_installed, the memory on the board, which a "
+                            "sheet's mem reads; state it in the card file, at or above store.dram")
+        mem = v(store["dram_installed"])
         if chip.denominator != 1 or mem.denominator != 1:
             raise Malformed(f"card {card['sku']}: its stores' bits and device memory's bytes are whole")
         default = card["clock"]["default"]
@@ -905,8 +908,8 @@ class Registration:
         front of the node without splitting its interface (a process on another machine, say). It adds the certifier
         and the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
         stay. The storage path's rate is not in that sum and no certifier is linked to the path: a certifier's links
-        say nothing of it. A certifier on a node none of whose interfaces has a rate is refused, since its links would
-        have none. A certifier splits one host's way out, so each node names its own, and the key and scheme are the
+        say nothing of it. A certifier on a node any of whose interfaces has no rate is refused, by its id, since its
+        links' rate would be below what it splits (a missing rate is never read as 0, nor left out of a sum). A certifier splits one host's way out, so each node names its own, and the key and scheme are the
         ones the auditor holds for the id or `owner` refuses the entry. None of the auditor's other devices is added.
 
         `certifier_host` is the auditor's device the certifier runs in (`auditor_host`'s location, which states its
@@ -927,10 +930,12 @@ class Registration:
                 raise Malformed(f"`certifier_host` is an auditor's device at site {site} (`auditor_host`'s location), "
                                 f"not {certifier_host!r}")
         rates = [bw for _, bw, split in n.ways if split and bw is not None]
-        if certifier is not None and not rates:
-            raise Malformed(f"no interface the node file states has a rate ({[i for i, _, split in n.ways if split]})"
-                            ", so a network certifier's links would have none: an interface that reads no line rate "
-                            "takes no certifier. Register the node without one")
+        unrated = [i for i, bw, split in n.ways if split and bw is None]
+        if certifier is not None and unrated:
+            name = certifier[0] if isinstance(certifier, (tuple, list)) and certifier else certifier
+            raise Malformed(f"network certifier {name!r}: the interfaces {unrated} the node file states have no rate, "
+                            "so its links' rate, the interfaces' summed, would be below what it splits: an interface "
+                            "that reads no line rate takes no certifier. Register the node without one")
         sheet = Sheet.of_file(card)
         if sheet.sku != n.sku:
             raise Malformed(f"the node's devices are {n.sku!r}, and the card given is {sheet.sku!r}'s")
@@ -1598,8 +1603,7 @@ def rate(card: dict, resource: str = "tensor", *, fmt: str | None = None, mhz: f
     """Lean's ``card.ρ resource``: the units a second of ``resource`` on the whole GPU, ``sm.count × rate.<resource> ×``
     its clock in Hz (for the tensor ``clock.tensor`` where the card has one and ``clock.sm`` where it doesn't, for the
     rest ``clock.sm``, unless ``mhz`` names the clock), and for device memory (``dram``) ``memory.bandwidth`` in 32-bit
-    words. With ``fmt``, the tensor rate in MACs of that operand format (tensor units over ``weight.<fmt>``).
-    ``verity/hardware/tests/test_lean.py`` holds it to every Lean table's arms."""
+    words. With ``fmt``, the tensor rate in MACs of that operand format (tensor units over ``weight.<fmt>``)."""
     if card["kind"] != "gpu":
         raise ValueError(f"{card['sku']} is a {card['kind']} card; rate is a GPU's")
     if resource == "dram":

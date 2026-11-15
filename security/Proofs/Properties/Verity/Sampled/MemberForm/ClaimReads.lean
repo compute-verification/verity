@@ -7,11 +7,11 @@ public import Proofs.Properties.Verity.Sampled.Window.Instance
 /-!
 # What the claim reads at the per-member form's windows
 
-The claim's transfer at a window reads the committed files member by member (`WindowInstance.ClaimReads`,
+The claim's transfer at a window reads the committed files member by member (`ExecutionPhaseInstance.ClaimReads`,
 `Flock.Guarantees.ReadsWith`): each member's files pass the verifier's files check, the vocabulary's read is the
 member's, the vocabulary's openings hold wherever the member's deployed commitment opens and at its files'
 constants, and the extracted transcript is, at the member's gates, the member's transcript. This module proves it
-of the windows the verifier sets up at the per-member form (`WindowInstance.windows`, `MemberForm.MembersSetUp`):
+of the windows the verifier sets up at the per-member form (`ExecutionPhaseInstance.executionPhases`, `MemberForm.MembersSetUp`):
 
 * **The seats' traces side by side are each seat's own** (`traceLeft_beside`, `traceRight_beside`,
   `seat_trace_heq`): the first's at the first member's gates and the rest's at theirs, and a seat's trace at its
@@ -119,20 +119,20 @@ theorem seats_members (w : JointAuditV5) [Nonempty w.EndΩ] (τ : FlockSoundness
   rw [List.map_ofFn]
   exact List.ofFn_get w.ms
 
-/-- **What the claim reads at the deployment's windows, at the per-member form** (`WindowInstance.ClaimReads`):
+/-- **What the claim reads at the deployment's windows, at the per-member form** (`ExecutionPhaseInstance.ClaimReads`):
 each window the verifier sets up is laid out, with the published share and the committed files' units its own
 (`MembersSetUp`); and at every strategy the committed files are read at the claim at the projected strategy, by
-the window's members in order (`WindowOn.reads_toV5`), each `Checked` (`MembersSetUp.checked`), under the
+the window's members in order (`ExecutionPhaseOn.reads_toV5`), each `Checked` (`MembersSetUp.checked`), under the
 vocabulary's openings, which hold wherever each member's deployed commitment opens (`MembersSetUp.opensWith`, at
 the instance's places) and at each member's constants (`constsWith_read`), at the seats' traces side by side. -/
-theorem claimReads (I : WindowInstance d α) (K : WindowConstructions I.base) : I.ClaimReads K where
-  laid θ F W hW := (show MembersSetUp I.base θ F W from (I.windows_some hW).2).laid
-  share θ F W hW := (show MembersSetUp I.base θ F W from (I.windows_some hW).2).toWindowOn.share
-  units θ F W hW := (show MembersSetUp I.base θ F W from (I.windows_some hW).2).toWindowOn.units
+theorem claimReads (I : ExecutionPhaseInstance d α) (K : ExecutionPhaseConstructions I.base) : I.ClaimReads K where
+  laid θ F W hW := (show MembersSetUp I.base I.pinned θ F W from (I.executionPhases_some hW).2).laid
+  share θ F W hW := (show MembersSetUp I.base I.pinned θ F W from (I.executionPhases_some hW).2).toExecutionPhaseOn.share
+  units θ F W hW := (show MembersSetUp I.base I.pinned θ F W from (I.executionPhases_some hW).2).toExecutionPhaseOn.units
   reads θ F W hW hfix c σ _ := by
-    have h : MembersSetUp I.base θ F W := (I.windows_some hW).2
+    have h : MembersSetUp I.base I.pinned θ F W := (I.executionPhases_some hW).2
     exact readsWith_members (I.base.read θ F).first (I.base.read θ F).rest (I.base.Opens θ F c) _
-      (seats_members _ _) (h.toWindowOn.reads_toV5 _) (fun _ hM => h.checked hfix _ hM)
+      (seats_members _ _) (h.toExecutionPhaseOn.reads_toV5 _) (fun _ hM => h.checked hfix _ hM)
       (h.opensWith c (I.place θ F c) _) (constsWith_read I.base θ c F)
 
 end Verity.Sampled.MemberForm

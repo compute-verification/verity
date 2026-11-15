@@ -19,7 +19,7 @@ also refuses the recursive inner's two: the comb (`.folded`) in a file that sets
 file (`Stmt.setupTables innerTags …`), which `partialRangesT` folds row by row since a flat file carries no template, and
 V*'s circuit text emitted outside V*'s namespace (`VStar.emitCircuitOf`), the whole unit laid out again. The fix is in the
 scan's failure message: summarize once per specialized Definition and multiply through batch members and scan
-iterations, as `NciCheck.Desc` does (its docstring), so a Definition's summary serves every activation of it.
+iterations, as `InferenceOnlyCheck.Desc` does (its docstring), so a Definition's summary serves every activation of it.
 
 What may stay is listed in ``ALLOWED``, one line of reason each: the gate-by-gate references a description-sized
 verifier is difftested against, and the walks still open. An entry that no longer matches anything fails too.
@@ -40,15 +40,15 @@ ALLOWED: dict[str, str] = {
     "verity/circuits/evaluate/Evaluate/Walk.lean":
         "Evaluate.walk, the evaluator: a Program's values gate by gate, every member of every node, by definition; no "
         "verifier imports it",
-    "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Desc.lean":
-        "NciCheck.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
+    "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Desc.lean":
+        "InferenceOnlyCheck.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
         "which refuses past its limit",
-    "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/DescFuzz.lean":
-        "NciCheck.DescFuzz, the desc fuzzer the Lean audit runs (NciCheck.DescFuzzMain): it visits every member of every "
+    "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/DescFuzz.lean":
+        "InferenceOnlyCheck.DescFuzz, the desc fuzzer the Lean audit runs (InferenceOnlyCheck.DescFuzzMain): it visits every member of every "
         "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
-    "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Check.lean":
-        "NciCheck.check, the gate-by-gate reference NciCheck.Desc is difftested against (runs NciCheck.DescDifftestMain); "
-        "`nci-check` runs it only with --unrolled",
+    "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Check.lean":
+        "InferenceOnlyCheck.check, the gate-by-gate reference InferenceOnlyCheck.Desc is difftested against (runs InferenceOnlyCheck.DescDifftestMain); "
+        "`inference-only-check` runs it only with --unrolled",
     "verity/circuits/lean/Circuits/AnnotExpand.lean":
         "Annot.sets, expand and reference, an annotation laid out gate by gate: the reference Annot.check is held to "
         "(Flock.Test.Annot, annot-difftest's annot.reference, Properties.Annot.CheckAgrees); no verifier runs it",
@@ -112,9 +112,9 @@ ALLOWED: dict[str, str] = {
         "for SpotFlock.code; replaced as security/Proofs/Flock/SpotFlock/Code.lean's entry says",
 }
 
-FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "
+FIX = ("a verifier does work proportional to the description, never to the unrolled circuit (AGENTS.md "
        "\"Design rules\"): summarize once per specialized Definition and multiply through batch members and scan "
-       "iterations, as NciCheck.Desc does; a gate-by-gate reference a difftest holds the verifier to goes in ALLOWED "
+       "iterations, as InferenceOnlyCheck.Desc does; a gate-by-gate reference a difftest holds the verifier to goes in ALLOWED "
        "with its reason")
 
 #: `/- … -/` and `-- …`, blanked so that line numbers stay
@@ -202,7 +202,7 @@ def _scanned() -> list[str]:
     return sorted({p for p in tracked if p.startswith("verity/") and not p.startswith("verity/protocols/proofs/flock/prover/") and p.endswith(".lean")} | _security_code(tracked))
 
 
-def test_no_verifier_of_record_walks_the_unrolled_circuit():
+def test_no_verifier_walks_the_unrolled_circuit():
     found = {p: offenses((ROOT / p).read_text(), test="/Test/" in p) for p in _scanned()}
     bad = [f"{p}:{line}: {what}" for p, hits in found.items() if p not in ALLOWED for line, what in hits]
     assert not bad, f"{FIX}:\n" + "\n".join(bad)

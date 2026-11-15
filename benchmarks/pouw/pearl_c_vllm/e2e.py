@@ -65,7 +65,6 @@ import argparse
 import contextlib
 import json
 import multiprocessing as mp
-import os
 import random
 import statistics
 import subprocess
@@ -247,6 +246,7 @@ def install(model, args, coins):
     from verity_vllm.protocols.linear import vllm_site
     from verity_vllm.protocols.linear.api import Stack
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     sites = vllm_site.discover(model)
     weights = {site.weight_id: layer.weight.data for site, layer in sites}
@@ -256,10 +256,10 @@ def install(model, args, coins):
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
     salt_key = PPD.new_salt_key(scheme)
-    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
+    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
     tiles, rows = pass_capacity(kernel.run.TILE, [t.shape[0] for t in weights.values()])
     opening = coins.open("salt", weights_root(roots))
-    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, coins.commitment, opening, time_gemm=True,
+    run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, coins.commitment, opening, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
                               whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, salt_key=salt_key,
                               whole_defer_a=getattr(args, "whole_defer_a", False),
@@ -267,11 +267,11 @@ def install(model, args, coins):
                               whole_tree_sm=getattr(args, "whole_tree_sm", False))
     if getattr(args, "statement", None):
         import importlib.util
-        spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parents[2] / "verity/protocols/accounting/pouw/prover/kernels/served_zk" / "statement.py")
+        spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement_torch.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         run.statement = mod.Statement(run, args.statement)
-    stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
+    stack = Stack([site for site, _ in sites], PPDR.PearlCExecutor(run))
     bad = stack.refusals()
     if bad:
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
@@ -284,7 +284,7 @@ def whole_step(llm, run, stack):
     engine's in-process model runner."""
     from verity_vllm.engine import handle
     from verity_vllm.engine.hooks import Hooks
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c.whole import WholeStep
+    from verity_torch.pouw.pearl_c.whole import WholeStep
     return WholeStep(run, stack, handle.model_runner(llm), Hooks(tag=f"{run.entry}:whole-step"))
 
 
@@ -491,7 +491,7 @@ def graphs_check(run, weights: dict) -> list[dict]:
     fresh pass on poisoned outputs, must give the same A roots, tile root, screen flags and y, bit for bit.  And the screen
     of an m = 8,192 call read from its BF16 x must give the flags it gives from A's FP32 words."""
     import torch
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
     out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20261001)
     for w, W in weights.items():
@@ -522,8 +522,8 @@ def graphs_check(run, weights: dict) -> list[dict]:
     run.gemm(w, x, W, None)
     sh = run.shapes[(PREFILL, W.shape[0], W.shape[1])]
     a, b = torch.zeros((PREFILL, 2), dtype=torch.uint8, device=W.device), torch.zeros((PREFILL, 2), dtype=torch.uint8, device=W.device)
-    PPD.screen_into(a, x, sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
-    PPD.screen_into(b, sh.xa[:PREFILL], sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
+    PPDR.screen_into(a, x, sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
+    PPDR.screen_into(b, sh.xa[:PREFILL], sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
     run.end()
     same = bool(torch.equal(a, b))
     out.append({"check": "screen_bf16", "rows": PREFILL, "k": W.shape[1], "flagged": int(a.sum()), "flags_equal": same, "ok": same})
@@ -535,7 +535,7 @@ def screen_check(run, weights: dict) -> dict:
     entries, one over the noise floor's bound, the rest ordinary) whose flags, from the run's screen, must be the torch
     screen's on the same rows and the kernel's own α and ρ."""
     import torch
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
     w, W = next(iter(weights.items()))
     k = W.shape[1]
     gen = torch.Generator(device=W.device).manual_seed(20260931)
@@ -550,8 +550,8 @@ def screen_check(run, weights: dict) -> dict:
     sh = run.shapes[(16, W.shape[0], k)]
     got = run.flag_buf[:16].clone()
     ref = torch.zeros_like(got)
-    PPD.screen_into(ref, sh.xa[:16], sh.b["alpha_a"], sh.b["aux_a"], fused=False)
-    same = PPD.excluded(got[:, 0].bool(), got[:, 1].bool(), sh.xa[:16]) == PPD.excluded(ref[:, 0].bool(), ref[:, 1].bool(), sh.xa[:16])
+    PPDR.screen_into(ref, sh.xa[:16], sh.b["alpha_a"], sh.b["aux_a"], fused=False)
+    same = PPDR.excluded(got[:, 0].bool(), got[:, 1].bool(), sh.xa[:16]) == PPDR.excluded(ref[:, 0].bool(), ref[:, 1].bool(), sh.xa[:16])
     run.end()
     return {"check": "screen", "screen": run.details["host"]["screen"], "flags_equal": bool(torch.equal(got, ref)),
             "excluded_equal": same, "ok": same}
@@ -904,26 +904,10 @@ def split(results: dict) -> dict:
 
 
 def state_entropy(path: str):
-    """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
-    verifier's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
-    and for the challenger process that later samples the execution phase's units (`served_commit.py challenger --state`), so named
-    by the Lean's claim instance (`verifier.CLAIM`)."""
-    from verity.protocols.accounting.pouw.verifier import verifier
-    from verity.protocols.accounting.pouw.verifier.coins import COIN_BYTES, HM96, LABELS
-    p = Path(path)
-    if not p.exists():
-        entropy = verifier.coins(len(LABELS) * (COIN_BYTES + HM96.salt_bytes))
-        p.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(entropy)
-    data, at = p.read_bytes(), [0]
-
-    def take(n: int) -> bytes:
-        at[0] += n
-        return data[at[0] - n:at[0]]
-    take.claim = verifier.CLAIM
-    return take
+    """The challenger's entropy held in the file `path`: served_zk's `served_commit.state_entropy`, which the challenger
+    process reads it with too."""
+    from verity.protocols.accounting.pouw.prover.kernels.served_zk.served_commit import state_entropy as entropy_of
+    return entropy_of(path)
 
 
 def epoch_coins(args, epoch: int) -> Coins:
@@ -1087,6 +1071,7 @@ def agree(a, b) -> float:
 def main() -> None:
     from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
     ap.add_argument("--revision")
@@ -1135,9 +1120,9 @@ def main() -> None:
     if args.batch < 1 or args.prompt < 1 or args.prefill < 1:
         ap.error("--batch, --prompt and --prefill are positive")
     for size in (args.batch, *(args.capture or ())) if args.whole_step else ():
-        if not 0 < -(-size // PPD.ROW_ALIGN) * PPD.ROW_ALIGN <= PPD.GRAPH_ROWS:
+        if not 0 < -(-size // PPD.ROW_ALIGN) * PPD.ROW_ALIGN <= PPDR.GRAPH_ROWS:
             ap.error(f"--whole-step captures the decode batch whole: a batch of {size}'s calls, filler rows to a multiple of "
-                     f"{PPD.ROW_ALIGN} included, are not 1 to {PPD.GRAPH_ROWS} rows (pouw_pearl_c_whole)")
+                     f"{PPD.ROW_ALIGN} included, are not 1 to {PPDR.GRAPH_ROWS} rows (pouw_pearl_c_whole)")
     if args.capture and not args.whole_step:
         ap.error("--capture sets the whole-step arm's graph sizes: it needs --whole-step")
     configure(args)

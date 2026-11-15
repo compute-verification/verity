@@ -16,6 +16,7 @@ import pytest
 # the replay is imported by name so that its forkserver workers find it
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "experimental" / "pearl_c4" / "tests"))
 import pearl_c4_vectors as V
 import replay as R
 import test_pouw_pearl_c4 as T
@@ -23,7 +24,7 @@ from clear_audit import Prover
 import clear_work as CW
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 
 K = T.K

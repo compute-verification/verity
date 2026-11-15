@@ -7,7 +7,7 @@ public meta import Lean
 /-!
 # Walking a registration check's `do` block
 
-`Registration.check` and `checkRegistered` are each one `do` block whose `if`s and `match`es each leave a join point, a
+`Docket.check` and `checkRegistered` are each one `do` block whose `if`s and `match`es each leave a join point, a
 function of the codes so far, for the rest of the block. `jp_mono` proves once per join point, deepest first, that it
 keeps a nonempty code list nonempty (`jp_body`: down the join point's spine, an `if` or a `match` split, a jump the
 proof of the join point jumped to, a loop by a step that keeps a nonempty list nonempty); `jp_walk` then follows the one
@@ -20,7 +20,7 @@ block into both arms of each branch doubles at every one.
 namespace SpotFlock.RecordNames
 
 open Lean (Json)
-open Spot.Registration
+open Spot.Docket
 
 /-! ## Code lists -/
 
@@ -400,8 +400,9 @@ theorem isEmpty_checkRegistered (c : Array String) (got : Json) (mine : Flock.V 
 theorem isEmpty_checkOutputs (c : Array String) (got : Json) (mine : Flock.V (Array Spot.Registered.Entry))
     (held : Array (String × String)) (supplied : Array (String × Spot.Supplied.Rows))
     (rootOf : String → Spot.Supplied.Rows → Spot.Registered.Entry → Flock.V String)
-    (outputs : Array (String × String × Earlier)) (log : Array Json) (hc : c.isEmpty = false) :
-    (checkOutputs c got mine held supplied rootOf outputs log).isEmpty = false := by
+    (outputs : Array (String × String × Earlier)) (log : Array Json)
+    (certified : Array Spot.Registered.Entry) (hc : c.isEmpty = false) :
+    (checkOutputs c got mine held supplied rootOf outputs log certified).isEmpty = false := by
   unfold checkOutputs
   split
   · exact isEmpty_addCode _ _

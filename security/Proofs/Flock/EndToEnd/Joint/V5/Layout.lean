@@ -18,15 +18,15 @@ file states the layout that fixes those places before the sample and proves what
   proof block `v` is the population's `base k + v`. Both sides are fixed by the registration, before any coin;
 * under it the members partition the population (`Laid.exists_member`, `Laid.member_unique`, `Laid.mem_iff`), a sample
   is its members' parts and nothing else (`Laid.parts`, an equivalence; `Laid.card_parts`), and member `k`'s part of the
-  window's sample is read off it by the layout alone (`Laid.mem_design_draw`, `Laid.mem_draw_iff`;
-  `Laid.design_draw_ok` on the sampled list the verifier's bytes give);
+  window's sample is read off it by the layout alone (`Laid.mem_design_sample`, `Laid.mem_sample_iff`;
+  `Laid.design_sample_ok` on the sampled list the verifier's bytes give);
 * **the members' sampling designs are the window's marginals**: an event of member `k`'s sample has, under `design k`
-  and under `memberLaw τ k` (the design its session is played alone at), the probability the window's one sample gives
-  the event at its part (`prCoin_design`, `prCoin_memberLaw`); the members' samples together are the window's
+  and under `memberSamplingDesign τ k` (the design its session is played alone at), the probability the window's one sample gives
+  the event at its part (`prCoin_design`, `prCoin_memberDistribution`); the members' samples together are the window's
   (`Laid.prCoin_parts`); and member `k`'s design misses a set of its proof blocks, or samples one, exactly when the
-  window's misses or samples their places in the population (`design_escape`, `memberLaw_escape`, `design_incl`), so at
+  window's misses or samples their places in the population (`design_escape`, `memberSamplingDesign_escape`, `design_incl`), so at
   most `P_a` of those places under A3 (`design_escape_le`);
-* the window's incorrect proof blocks are its members' (`Laid.part_wrongSet`).
+* the window's incorrect proof blocks are its members' (`Laid.part_incorrectSet`).
 -/
 
 @[expose] public section
@@ -254,18 +254,18 @@ theorem disjoint_part_iff (k : Fin w.ms.length) (S : Finset (Fin w.nJ)) (B : Fin
 
 variable (w)
 
-/-- **The window's sample on the verifier's bytes**: where `drawUnits` samples the list `r.1`, the units of that
+/-- **The window's sample on the verifier's bytes**: where `sampleUnits` samples the list `r.1`, the units of that
 list. -/
 theorem draw_ok (ω : w.L.Ω) {r : Array ℕ × ℕ}
-    (hr : _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r) (u : Fin w.nJ) :
+    (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r) (u : Fin w.nJ) :
     u ∈ w.L.draw ω ↔ u.val ∈ r.1 := by
   dsimp only [JointAuditV5.L, Bridge.execSel]
   rw [hr]
   simp only [Finset.mem_filter, Finset.mem_univ, true_and]
 
 /-- **The window's sample where the verifier's bytes run out**: every unit. -/
-theorem draw_error (ω : w.L.Ω) {e : String}
-    (hr : _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e)
+theorem sample_error (ω : w.L.Ω) {e : String}
+    (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e)
     (u : Fin w.nJ) :
     u ∈ w.L.draw ω := by
   dsimp only [JointAuditV5.L, Bridge.execSel]
@@ -278,42 +278,42 @@ namespace Laid
 
 /-- **Member `k`'s sample is the window's at its place**: its proof block `v` is sampled exactly when the population's
 `base k + v` is. -/
-theorem mem_design_draw (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) (v : Fin (w.ms.get k).n) (u : Fin w.nJ)
+theorem mem_design_sample (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) (v : Fin (w.ms.get k).n) (u : Fin w.nJ)
     (hu : u.val = w.base k + v.val) : v ∈ (w.design k).draw ω ↔ u ∈ w.L.draw ω := by
   have e : (w.ms.get k).emb v = u := Fin.ext ((h.emb k v).trans hu.symm)
   rw [← e]
   exact w.mem_part k _ v
 
 /-- **A sampled proof block `u` belongs to the member with `base ≤ u < base + n`**, as its proof block `u - base`. -/
-theorem mem_draw_iff (h : w.Laid) (ω : w.L.Ω) (u : Fin w.nJ) :
+theorem mem_sample_iff (h : w.Laid) (ω : w.L.Ω) (u : Fin w.nJ) :
     u ∈ w.L.draw ω ↔ ∃ k v, u.val = w.base k + v.val ∧ v ∈ (w.design k).draw ω := by
   constructor
   · intro hu
     obtain ⟨k, v, rfl⟩ := h.exists_emb u
     exact ⟨k, v, h.emb k v, (w.mem_part k _ v).2 hu⟩
   · rintro ⟨k, v, hu, hv⟩
-    exact (h.mem_design_draw k ω v u hu).1 hv
+    exact (h.mem_design_sample k ω v u hu).1 hv
 
-/-- **Member `k`'s sample on the verifier's bytes**: where `drawUnits` samples the list `r.1` over the window's
+/-- **Member `k`'s sample on the verifier's bytes**: where `sampleUnits` samples the list `r.1` over the window's
 population, member `k`'s sample is its part of that list (`MemberLayout.memberUnits`): the members' samples are read
 off the one sampled list in order, by the registered bases and counts. -/
-theorem design_draw_ok (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {r : Array ℕ × ℕ}
-    (hr : _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r)
+theorem design_sample_ok (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {r : Array ℕ × ℕ}
+    (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r)
     (v : Fin (w.ms.get k).n) :
     v ∈ (w.design k).draw ω ↔ v.val ∈ MemberLayout.memberUnits w.counts k.1 (w.ms.get k).n r.1.toList := by
   have hlt : w.base k + v.val < w.nJ := by
     have := ((h.mem_iff k _).1 ⟨v, rfl⟩).2
     rw [← h.emb k v]
     exact ((w.ms.get k).emb v).2
-  rw [h.mem_design_draw k ω v ⟨w.base k + v.val, hlt⟩ rfl, w.draw_ok ω hr, MemberLayout.mem_memberUnits,
+  rw [h.mem_design_sample k ω v ⟨w.base k + v.val, hlt⟩ rfl, w.draw_ok ω hr, MemberLayout.mem_memberUnits,
     Array.mem_toList_iff]
   exact ⟨fun hu => ⟨v.2, hu⟩, fun hu => hu.2⟩
 
 /-- **Member `k`'s sample where the verifier's bytes run out**: every one of its proof blocks. -/
-theorem design_draw_error (k : Fin w.ms.length) (ω : w.L.Ω) {e : String}
-    (hr : _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e) :
+theorem design_sample_error (k : Fin w.ms.length) (ω : w.L.Ω) {e : String}
+    (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e) :
     (w.design k).draw ω = Finset.univ :=
-  Finset.eq_univ_iff_forall.2 fun v => (w.mem_part k _ v).2 (w.draw_error ω hr _)
+  Finset.eq_univ_iff_forall.2 fun v => (w.mem_part k _ v).2 (w.sample_error ω hr _)
 
 end Laid
 
@@ -331,7 +331,7 @@ theorem prCoin_design (k : Fin w.ms.length) (E : Finset (Fin (w.ms.get k).n) →
 /-- **Member `k`'s design misses a set of its proof blocks** exactly when the window's sample misses their places in
 the population. -/
 theorem design_escape (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
-    (w.design k).escape B = w.L.escape (B.image (w.ms.get k).emb) :=
+    (w.design k).missProb B = w.L.missProb (B.image (w.ms.get k).emb) :=
   congrArg (fun p : w.L.Ω → Prop => prCoin p) (funext fun ω => propext (w.disjoint_part_iff k (w.L.draw ω) B))
 
 /-- **Member `k`'s design samples its proof block `v`** exactly when the window's samples its place. -/
@@ -357,16 +357,16 @@ variable [Nonempty w.EndΩ]
 /-- **The design member `k`'s session is played alone at is the window's marginal where the sample ended**: the earlier
 sessions' coins it samples with the window's don't move its sample, so the ended share of an event's probability at it
 is at most the probability the window's one sample gives the event at member `k`'s part. -/
-theorem prCoin_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) (E : Finset (Fin (w.ms.get k).n) → Prop) :
-    w.endShare * prCoin (fun x : (w.memberLaw τ k).Ω => E ((w.memberLaw τ k).draw x)) ≤
+theorem prCoin_memberDistribution (τ : Strategy w.game) (k : Fin w.ms.length) (E : Finset (Fin (w.ms.get k).n) → Prop) :
+    w.endShare * prCoin (fun x : (w.memberSamplingDesign τ k).Ω => E ((w.memberSamplingDesign τ k).draw x)) ≤
       prCoin (fun ω : w.L.Ω => E ((w.ms.get k).part (w.L.draw ω))) :=
   w.endShare_mul_avg_le τ k fun S => if E S then 1 else 0
 
 /-- The ended share of the probability that member `k`'s design played alone misses a set of its proof blocks is at most
 the probability that the window's sample misses their places in the population. -/
-theorem memberLaw_escape (τ : Strategy w.game) (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
-    w.endShare * (w.memberLaw τ k).escape B ≤ w.L.escape (B.image (w.ms.get k).emb) :=
-  (w.prCoin_memberLaw τ k fun S => Disjoint S B).trans_eq (w.design_escape k B)
+theorem memberSamplingDesign_escape (τ : Strategy w.game) (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
+    w.endShare * (w.memberSamplingDesign τ k).missProb B ≤ w.L.missProb (B.image (w.ms.get k).emb) :=
+  (w.prCoin_memberDistribution τ k fun S => Disjoint S B).trans_eq (w.design_escape k B)
 
 end Ended
 
@@ -374,7 +374,7 @@ end Ended
 own miss `P_a` of their places in the population, under A3. -/
 theorem design_escape_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (k : Fin w.ms.length)
     (B : Finset (Fin (w.ms.get k).n)) :
-    (w.design k).escape B ≤ ENNReal.ofReal (w.pa (B.image (w.ms.get k).emb)) :=
+    (w.design k).missProb B ≤ ENNReal.ofReal (w.pa (B.image (w.ms.get k).emb)) :=
   (w.design_escape k B).trans_le (Bridge.execSel_escape_le w.src hA3 w.hlaw w.hns _)
 
 section Ended
@@ -383,32 +383,32 @@ variable [Nonempty w.EndΩ]
 
 /-! ### The window's incorrect proof blocks are its members' -/
 
-theorem wrongSet_eq_join (τ : Strategy w.game) : w.wrongSet τ = w.join (w.memberWrong τ) := by
+theorem incorrectSet_eq_join (τ : Strategy w.game) : w.incorrectSet τ = w.join (w.memberIncorrect τ) := by
   ext u
-  rw [w.wrongSet_eq τ]
+  rw [w.incorrectSet_eq τ]
   simp only [JointAuditV5.join, Finset.mem_biUnion, Finset.mem_univ, true_and,
     Finset.mem_image]
 
 variable {w}
 
 /-- **Member `k`'s part of the window's incorrect proof blocks is its own incorrect proof blocks.** -/
-theorem Laid.part_wrongSet (h : w.Laid) (τ : Strategy w.game) (k : Fin w.ms.length) :
-    (w.ms.get k).part (w.wrongSet τ) = w.memberWrong τ k := by
-  rw [w.wrongSet_eq_join τ]
-  exact h.part_join (w.memberWrong τ) k
+theorem Laid.part_incorrectSet (h : w.Laid) (τ : Strategy w.game) (k : Fin w.ms.length) :
+    (w.ms.get k).part (w.incorrectSet τ) = w.memberIncorrect τ k := by
+  rw [w.incorrectSet_eq_join τ]
+  exact h.part_join (w.memberIncorrect τ) k
 
 /-- **A population unit is incorrect** exactly when it is an incorrect proof block of the member it belongs to. -/
-theorem Laid.mem_wrongSet (h : w.Laid) (τ : Strategy w.game) (u : Fin w.nJ) :
-    u ∈ w.wrongSet τ ↔ ∃ k v, u.val = w.base k + v.val ∧ v ∈ w.memberWrong τ k := by
+theorem Laid.mem_incorrectSet (h : w.Laid) (τ : Strategy w.game) (u : Fin w.nJ) :
+    u ∈ w.incorrectSet τ ↔ ∃ k v, u.val = w.base k + v.val ∧ v ∈ w.memberIncorrect τ k := by
   constructor
   · intro hu
     obtain ⟨k, v, rfl⟩ := h.exists_emb u
     refine ⟨k, v, h.emb k v, ?_⟩
-    rw [← h.part_wrongSet τ k]
+    rw [← h.part_incorrectSet τ k]
     exact (w.mem_part k _ v).2 hu
   · rintro ⟨k, v, hu, hv⟩
     have e : (w.ms.get k).emb v = u := Fin.ext ((h.emb k v).trans hu.symm)
-    rw [← e, ← w.mem_part k, h.part_wrongSet τ k]
+    rw [← e, ← w.mem_part k, h.part_incorrectSet τ k]
     exact hv
 
 end Ended

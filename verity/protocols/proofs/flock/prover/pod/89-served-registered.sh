@@ -10,19 +10,21 @@
 # stage.json, statement.txt, serve.log, prove.txt and prove.err, live.json (the LIVE record), challenger/ (its record,
 # releases.jsonl, hellos.jsonl and audit.json), lean-honest.log and lean-root.log (each its VERDICT line), fixture.txt.
 # ZK=0 is the plain session instead (no --zk anywhere): a stratified sample of K units, Lean's (`verity-verify-proof sample
-# --stratified K` on the stage's program and partition, on DRAW_COINS=FILE, the challenger's bytes: the verifier has none
-# of its own, so ZK=0 without DRAW_COINS refuses), served from its file and verified with `--stratified K --coins tree`
+# --stratified K` on the stage's program and partition, on SAMPLE_COINS=FILE, the challenger's bytes: the verifier has none
+# of its own, so ZK=0 without SAMPLE_COINS refuses), served from its file and verified with `--stratified K --coins tree`
 # (FC_COINS=tree: its coins the challenger's tree's, as --zk's); Lean also verifies it without --registered (lean-none.log,
 # refused). Its fixture adds vectors/: honest, root and none, each the session with its case.json (the live server's
 # verdict, from serve's index.jsonl) and a registered.json for the two negatives (agree.py's per-session reads;
 # vectors.json's live set).
 # Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
-# env: CPUS=16  K=16 (the sample's units, of the stage's 32)  ZK=1  DRAW_COINS=FILE (ZK=0's)  SCHEMA=v1 (the tree's row
+# env: CPUS=16  K=16 (the sample's units, of the stage's 32)  ZK=1  SAMPLE_COINS=FILE (ZK=0's)  SCHEMA=v1 (the tree's row
 #      format: v1, v2 or seg, served_registered.py's --schema)  FLOCK_WORK=/workspace, or where /workspace isn't writable
 #      /workspace/jobs/pc-read-gadget (node 1, shared as 76-read-gadget.sh's) else /workspace/cache/served-registered (the
 #      prover build and its venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+for o in DRAW_COINS:SAMPLE_COINS; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "served-registered: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 if [ -z "${SR_PINNED:-}" ]; then
   if mkdir -p "${SLICE_LOCKS:-/workspace/jobs/slices}" 2>/dev/null; then
     . verity/protocols/proofs/flock/prover/pod/cpu-slices.sh
@@ -82,7 +84,7 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
 RESEARCH=$(command -v research || true)
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 
 D=$S/stage; N=32; K=${K:-16}
 if [ "${ZK:-1}" = 0 ]; then ZF=(); else ZF=(--zk); fi
@@ -91,9 +93,9 @@ PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
 $B statement "${ZF[@]}" --circuit $D/circuit.txt --instances $D/pub-$N.bin --tables $D/tables > $O/statement.txt 2>&1
 if [ "${ZK:-1}" = 0 ]; then
   # the plain claims sample by the stratified sampling design: Lean's sample on the challenger's bytes, served from its file
-  [ -s "${DRAW_COINS:-}" ] || { echo "ZK=0 draws on the challenger's coins: give DRAW_COINS=FILE (the verifier has none of its own)" >&2; exit 2; }
+  [ -s "${SAMPLE_COINS:-}" ] || { echo "ZK=0 draws on the challenger's coins: give SAMPLE_COINS=FILE (the verifier has none of its own)" >&2; exit 2; }
   wait $LP; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
-  $LEAN_BIN draw --program $D/program.json --partition $D/partition.json --stratified $K --stream-file $DRAW_COINS > $O/draw.log 2>&1 || { cat $O/draw.log; exit 1; }
+  $LEAN_BIN draw --program $D/program.json --partition $D/partition.json --stratified $K --stream-file $SAMPLE_COINS > $O/draw.log 2>&1 || { cat $O/draw.log; exit 1; }
   grep -h '^DRAW ' $O/draw.log | head -1 | cut -d' ' -f2- > $D/draw.json
   DRAW=(--draw-file $D/draw.json); VFLAGS=(--stratified $K --coins tree)
 else

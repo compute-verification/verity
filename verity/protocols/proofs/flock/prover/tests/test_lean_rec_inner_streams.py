@@ -167,7 +167,7 @@ def test_a_stream_missing_is_refused(tmp_path, change, why):
     assert (rc, line, err) == (1, None, f"rec inner transcript: {why}")
 
 
-def test_the_sparse_streams_and_rs_are_the_coin_servers_alone(tmp_path):
+def test_the_sparse_streams_and_rs_are_the_live_coin_parts_alone(tmp_path):
     """The prover's record holds the reps only, so whether the session committed R is the challenger's record's to say,
     held to the registration: a transcript with R's stream gone from its rounds and its declarations is read as a session
     without R when no registration names R, and refused as a downgrade when the one META binds does."""
@@ -641,7 +641,7 @@ def _moved(stream: str, j: int, k: int):
 
 def test_each_reps_stream_holds_its_schedules_rounds(tmp_path):
     """`RecVStar.checkCommitRounds` first holds every stream but the sparse phases' and R's to the rep's schedule at the
-    verifier's inner shape, round for round (`RepsDrawn`'s second half): `rec-c3-inner`'s reps split z_partial's round, as private
+    verifier's inner shape, round for round (`RepsSampled`'s second half): `rec-c3-inner`'s reps split z_partial's round, as private
     circuits' do (`holo_rounds`, 95 rounds), so under a shape whose circuits are public (`rep_rounds`, 94) they are
     refused for their rounds."""
     assert _covers(tmp_path, _shape(tmp_path, holo=False)) == (
@@ -678,7 +678,7 @@ def test_the_circuit_tables_tops_sit_at_its_schedule(tmp_path, change, why):
     assert _covers(tmp_path, _shape(tmp_path), _changed(tmp_path, change)) == (1, f"rec inner transcript: {why}")
 
 
-POINTS_WHY = ("rec inner transcript: the inner session's record's link points are not the ones the coin server drew "
+POINTS_WHY = ("rec inner transcript: the inner session's record's link points are not the ones the challenger's live-coin part drew "
               "(link.points): check 5 would take the extra claims at points the prover chose")
 
 
@@ -687,7 +687,7 @@ def _bit_off(h: str) -> str:
 
 
 @pytest.mark.parametrize("d", [C3, PLAIN], ids=["c3", "plain"])
-def test_the_records_link_points_are_the_coin_servers(tmp_path, d):
+def test_the_records_link_points_are_the_live_coin_parts(tmp_path, d):
     """`RecVStar.innerLink`: check 5 takes the extra claims at the inner session record's link points (the prover's record),
     so they must be the ones the challenger's live-coin part drew after `root_B` (the transcript's `link.points`, `points × m` coins in
     point order). `rec-c3-inner`'s and rec-coins' sessions pass; a transcript whose first link coin is one bit off is refused, and so
@@ -763,7 +763,7 @@ def test_the_recursions_statement_version_before_sha512_salts_is_refused(tmp_pat
         "verity/rec-inner/v2's under SHA-512"), p
     p = run("verity/rec-inner/v2")
     assert p.returncode == 0 and p.stdout.startswith("RECVSTAR "), p
-OFF = ("rec inner transcript: the coin server's record is off the schedule of the verifier's inner shape (m {m}, k_log "
+OFF = ("rec inner transcript: the challenger's live-coin part's record is off the schedule of the verifier's inner shape (m {m}, k_log "
        "{k_log}, claims {claims}): ")
 
 
@@ -821,7 +821,7 @@ def test_the_honest_records_are_on_the_verifiers_schedule(tmp_path):
     assert _covers(tmp_path, _shape(tmp_path)) == (0, "")
 
 
-NOT_OWN_FORMAT = ("rec inner transcript: the coin server's record does not read in its own format (RecRecord.readFull: "
+NOT_OWN_FORMAT = ("rec inner transcript: the challenger's live-coin part's record does not read in its own format (RecRecord.readFull: "
                   "rec_live.record_bytes, its rounds first, then its kind, tops, Hello in its keys' order and the "
                   "link's roots and points, at json.dumps' indent=1)")
 
@@ -831,7 +831,7 @@ NOT_OWN_FORMAT = ("rec inner transcript: the coin server's record does not read 
     lambda t: json.dumps({"rounds": t["rounds"], **t}, indent=2),
     lambda t: json.dumps({"rounds": t["rounds"], **t, "hello": dict(reversed(t["hello"].items()))}, indent=1),
 ], ids=["compact", "indent-2", "hello-reordered"])
-def test_a_record_not_in_the_coin_servers_format_is_refused(tmp_path, write):
+def test_a_record_not_in_the_live_coin_parts_format_is_refused(tmp_path, write):
     """`RecSetup.checkReads`: the recursion's transcript model reads the challenger's record in its own format
     (`RecRecord.readFull`), so the verifier reads it so too. The plain session's record with its values unchanged,
     written compactly, at another indent or with Hello's keys in another order, passes every check of the transcript
@@ -946,7 +946,7 @@ def test_rec_inner_refuses_r_without_the_sparse_shape():
 
 
 STOPPED = "rec inner transcript: the inner session ended stop, not finish: a stopped session is no inner proof"
-NO_END = "rec inner transcript: the coin server's record names no end; only a finished session is read"
+NO_END = "rec inner transcript: the challenger's live-coin part's record names no end; only a finished session is read"
 
 
 @pytest.mark.parametrize("d", [C3, PLAIN], ids=["c3", "plain"])

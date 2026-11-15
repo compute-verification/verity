@@ -5,7 +5,7 @@ of a read sources leaf ``base + sum(d[k] * step[k])`` over ``i``'s mixed-radix d
 the ``row`` leaves from there. A read is dense when it has a leaf, no digit of radix 0 or a negative step but at radix 1,
 and its leaves are a run from the least, each once; the field is written when every read is dense and their leaves
 together are ``[0, leaves)``, each once (the reference is copied here rather than imported from
-`verity.commitments.windows.boundary`: a verifier's tests import no prover code)."""
+`verity.commitments.periods.boundary`: a verifier's tests import no prover code)."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 
 PACKAGE = Path(__file__).resolve().parents[1]
-PIECES = "sampled-proofs-difftest"
+PIECES = "spot-difftest"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 
@@ -72,8 +72,9 @@ def reference(j):
                         for r in reads]}
 
 
-JUNK = st.one_of(st.none(), st.booleans(), st.floats(allow_nan=False, allow_infinity=False, width=16),
-                 st.text(max_size=3), st.integers(-3, 3), st.lists(st.integers(-2, 3), max_size=2))
+#: canonical JSON only, as `verity_difftest` sends a port nothing else: no float
+JUNK = st.one_of(st.none(), st.booleans(), st.text(max_size=3), st.integers(-3, 3),
+                 st.lists(st.integers(-2, 3), max_size=2))
 
 
 @st.composite

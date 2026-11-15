@@ -12,7 +12,7 @@ or its Lean mirror (`VStar.In`, `core_vstar`) needs `lean-suites` passed, whose 
 `research run --on` refuses a machine that fails `preflight.py` (the pod setup, the Lean dependencies, a store read, AVX-512
 when needed, free disk) before the run is claimed.  Once `research merge --push`
 has pushed a landing, it starts `post_train.py` on it, detached (`after_land`): the vLLM reference regression's manifest rebuilds,
-which check leaves out, and the fast rows of record's neutrality, and their label on the attempt.  Nothing here imports anything but `research.store.tool`.
+which check leaves out, and the fast workloads of record's neutrality, and their label on the attempt.  Nothing here imports anything but `research.store.tool`.
 """
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--all
                                              "verity/protocols/proofs/flock/prover/python/verity_flock/rec_cap.py",
                                              "verity/protocols/proofs/flock/prover/python/verity_flock/circuit.py",
                                              "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
-                                             "verity/protocols/proofs/flock/verifier/VStar/In.lean", "verity/protocols/proofs/recursion/verifier/vstar_cli/", "verity/protocols/proofs/spot_flock/verifier/lean/"]},
+                                             "verity/protocols/proofs/flock/verifier/VStar/In.lean", "verity/protocols/proofs/recursion/verifier/vstar_cli/", "verity/protocols/proofs/spot_flock/verifier/lean/",
+                                             "verity/protocols/proofs/spot_flock_recursion/verifier/lean/"]},
              preflight=["tools/check/preflight.py"],
              after_land=["uv", "run", "-q", "python", "tools/check/post_train.py"])

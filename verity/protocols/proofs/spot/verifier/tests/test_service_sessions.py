@@ -1,4 +1,4 @@
-"""One proof session over several rounds (`Stream.session`): a stream of `rounds` R holds up to R registrations open, a
+"""One proof session over several rounds (`Stream.session`): a stream of `rounds` R holds up to R dockets open, a
 session opens once after its last covered sample, the first covered round's proof deadline spans it, every covered sample's
 outcome binds the same delivered session, and each round's audit record reads only its own proof blocks and roots."""
 
@@ -17,7 +17,7 @@ N = 6
 def _units(*draws):
     """A sampler that samples `draws[i]` at its i-th call: each round its own proof blocks."""
     it = iter(draws)
-    return lambda law, n: next(it)
+    return lambda sampling_design, n: next(it)
 
 
 def _stream(rounds=2, budget=4, clock=None, sampler=None, spec=None) -> S.Stream:
@@ -39,7 +39,7 @@ def _record(row: int, previous: str | None) -> dict:
 
 def _register(stream: S.Stream) -> S.WindowCommitmentRecord:
     row = len(stream._entries)
-    previous = stream._entries[-1].registration.digest if stream._entries else None
+    previous = stream._entries[-1].docket.digest if stream._entries else None
     return stream.register(_record(row, previous), _ports(N))
 
 
@@ -51,7 +51,7 @@ def _drawn(stream: S.Stream, k: int) -> list[S.Draw]:
 
 
 def _outcome(stream: S.Stream, draw: S.Draw, roots_of: int | None = None, units=None) -> S.Outcome:
-    row = draw.registration.order if roots_of is None else roots_of
+    row = draw.docket.order if roots_of is None else roots_of
     return stream.outcome(draw, _lean(), {"statement": "stub", "table": row}, proved_units=units,
                           session_roots=_roots(row))
 
@@ -69,15 +69,15 @@ def test_a_two_round_session_is_accepted():
     assert stream.deliver(session, [SESSION]) is None
     outs = [_outcome(stream, d) for d in (d0, d1)]
     assert all(o.accepted for o in outs) and stream.symbols == ("accept", "accept") and stream.failures == 0
-    rounds = [{"order": d.registration.order, "registration": d.registration.digest, "draw": S._sha512(dict(d.draw))}
+    rounds = [{"order": d.docket.order, "registration": d.docket.digest, "draw": S._sha512(dict(d.draw))}
               for d in (d0, d1)]
     for body, d in zip(stream.records, (d0, d1)):
         assert body["sessions"] == [SESSION] and body["session"] == {"rounds": rounds}
         audit = body["audit"]
         assert audit["draw"] == d.draw and audit["proved_units"] == d.units and audit["accepted"]
-        assert audit["registration_digest"] == d.registration.digest
+        assert audit["registration_digest"] == d.docket.digest
         assert audit["integrity_profile"]["evidence"]["sessions"] == [SESSION]
-    assert stream.register(_record(2, d1.registration.digest), _ports(N)).order == 2
+    assert stream.register(_record(2, d1.docket.digest), _ports(N)).order == 2
 
 
 def test_each_rounds_audit_record_reads_only_its_own_units_and_roots():
@@ -150,7 +150,7 @@ def test_an_undelivered_session_ends_late_at_its_first_rounds_deadline():
 
 
 def test_open_registrations_are_bounded_by_rounds_and_the_budget():
-    """Never more than `rounds` registrations open, nor more than the budget's failures left, so a failed session
+    """Never more than `rounds` dockets open, nor more than the budget's failures left, so a failed session
     never takes a stream past its budget."""
     stream = _stream(rounds=2, budget=4)
     _drawn(stream, 2)

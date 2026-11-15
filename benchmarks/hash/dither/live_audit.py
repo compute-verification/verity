@@ -146,7 +146,7 @@ def core_check(a: argparse.Namespace) -> int:
     rounds = CC.rounds(key.to_json(), ledger, pins, R.main_lines(a.main), window, R.session_files(a.session_dir),
                        re_["rounds"], [r["opening"] for r in m["rounds"]], CC.lms_verify)
     salt = Ch.LiveOpening.from_json(m["salt_coin"])
-    draw = Ch.LiveOpening.from_json(m["draw_coin"])
+    sample = Ch.LiveOpening.from_json(m["draw_coin"])
     checks = {
         "trusted_session": True,
         "commitment_is_the_manifests": Ch.LiveCommitment.from_json(m["commitment"]) == commitment,
@@ -155,7 +155,7 @@ def core_check(a: argparse.Namespace) -> int:
         "salt_after_window_root": received.get(Wd.SALT) == (root,)
         and Ch.live_reason(commitment, salt, Wd.SALT, 0, root) is None,
         "draw_after_manifest_root": received.get(Wd.DRAW) == (mroot,)
-        and Ch.live_reason(commitment, draw, Wd.DRAW, 0, mroot) is None,
+        and Ch.live_reason(commitment, sample, Wd.DRAW, 0, mroot) is None,
         "period": audited.period == a.period,
         "end_complete": bool(entries.get("end", {}).get("body", {}).get("complete")),
     }

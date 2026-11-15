@@ -8,7 +8,9 @@ parses a command line: it builds the parser from the dataclass fields, takes the
 (`option(env=...)`), and reports a `config.UsageError`, the command's or an option type's, as a usage error with its message
 (exit 2).  A process it starts refuses a `VERITY_*`
 variable nothing in the tree reads (`settings.validate_environ`), naming it, also exit 2.  `python -m verity_vllm.pipeline.cli`
-is the same program, for interpreters without the `verity-vllm` launcher.
+is the same program, for interpreters without the `verity-vllm` launcher.  A command prints what it says to its reader (a
+record, a card, a plan) with `write` (`verity_vllm.log`'s, which every layer may load), on stdout; its diagnostics go to
+its logger, on stderr.
 """
 
 from __future__ import annotations
@@ -23,8 +25,9 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import UsageError
+from verity_vllm.log import write
 
-__all__ = ["main", "parse"]
+__all__ = ["main", "parse", "write"]
 
 PROG = "verity-vllm"
 
@@ -44,7 +47,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
     "coverage-workloads": ("verity_vllm.pipeline.coverage_workloads", "coverage campaign workloads"),
     "epoch": ("verity_vllm.pipeline.epoch", "the re-baseline epoch's row job (job, resolve, row-state, word-check, digests, ...)"),
+    "fa2-tap-apply": ("verity_vllm.acquire.fa2_tap_src.apply_fa2_tap", "patch a pinned vllm-flash-attn tree into the FA2 tapped tree"),
     "fa2-tap-build": ("verity_vllm.acquire.fa2_tap_src.build_ext", "build one FA2 forward variant extension"),
+    "fa3-tap-apply": ("verity_vllm.acquire.fa3_tap_src.apply_fa3_tap", "patch a pinned vllm-flash-attn tree into the FA3 tapped tree"),
     "fa3-tap-build": ("verity_vllm.acquire.fa3_tap_src.build_fa3_ext", "build the FA3 forward extension"),
     "fold-compare": ("verity_vllm.check.fold_compare", "folded observation log vs evidence"),
     "fp8-checkpoint": ("verity_vllm.engine.fp8_checkpoint", "make or re-make a block-FP8 checkpoint from a BF16 pin"),
@@ -56,12 +61,11 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "glue": ("verity_vllm.glue", "per model, the code its `__models__` markers tie to it and the hours from staged checkpoint to record"),
     "ids-front": ("verity_vllm.pipeline.ids_front", "the network certifier's id form in front of vLLM's own OpenAI server"),
     "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
-    "m1-capture": ("verity_vllm.pipeline.m1_capture", "capture the observation log under the observer"),
+    "m1-capture": ("verity_vllm.pipeline.match_capture", "capture the observation log under the observer"),
     "manifest": ("verity_vllm.pipeline.manifest", "the required-value manifest (build, build-global, compare)"),
     "manifest-verify": ("verity_vllm.pipeline.manifest_verify", "is manifest.json the manifest of record"),
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
     "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),
-    "mla-capture": ("verity_vllm.program.mla_capture", "MLA kernel captures (produce), against their numpy models (check) and Booleans (check-bits)"),
     "neutrality": ("verity_vllm.pipeline.neutrality", "rebuild the rows of record's Programs; fail if a Program digest moved"),
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "predict": ("verity_vllm.program.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
@@ -71,7 +75,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "serve-openai": ("verity_vllm.pipeline.serve_openai", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
     "program-dag": ("verity_vllm.check.match.program_dag", "a derived Program and a fold: live-cone DAG multisets equal"),
-    "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
     "records": ("verity_vllm.pipeline.circuit_db",
                 ("the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
                  "switch), and a checkpoint's staging (staged)")),

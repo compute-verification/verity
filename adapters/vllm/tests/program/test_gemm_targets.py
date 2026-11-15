@@ -7,20 +7,20 @@ import json
 import sys
 
 import pytest
-from verity.circuits.silicon.instructions import INSTRUCTIONS
-from verity.circuits.silicon.models import (
-    HOPPER_BF16_M16N8K16,
-    HOPPER_BF16_WGMMA_K16,
-)
-from verity.definitions.registry import b1
-
-from tests import fake_vllm
+from verity_vllm.definitions.registry import b1
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import (
     DEFAULT_TARGET,
     TargetProfile,
     profile_mismatches,
+)
+
+from tests import fake_vllm
+from verity.circuits.silicon.instructions import INSTRUCTIONS
+from verity.circuits.silicon.models import (
+    HOPPER_BF16_M16N8K16,
+    HOPPER_BF16_WGMMA_K16,
 )
 
 AMPERE_TP = TargetProfile(compute_capability=(8, 0), num_sms=108)
@@ -259,8 +259,9 @@ def test_a_vllm_without_its_tuned_gemm_module_is_read_back_as_no_family_with_the
 # -- Bet A: the GEMM rule's pins follow the registry (needs torch) ----------------------------------------------------------
 
 torch = pytest.importorskip("torch")
-from tests.program.test_vllm_bindings_pins import _gemm_meta  # noqa: E402
 from verity_vllm.program.frontend.rules import vllm_bindings as VB  # noqa: E402
+
+from tests.program.test_vllm_bindings_pins import _gemm_meta  # noqa: E402
 
 
 @pytest.fixture

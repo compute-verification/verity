@@ -44,7 +44,7 @@ every window, every window's audit accepts while the monitoring period holds at 
 probability at most `(1 - q)^F` plus the windows' soundness errors `ε i`, whatever the number of windows. At
 `F ≥ ln (1/δ) / q` that is at most `δ + Σ_i ε_i`.
 
-The statement is a fact of probability over every sample, acceptance event and error: the sample's law and each window's
+The statement is a fact of probability over every sample, acceptance event and error: the sample's sampling design and each window's
 soundness are its hypotheses. A deployment's instances of them (A3 for the sample, `Claims.SamplingGeneric.Compiled.KS`
 for each window) come in where it is applied to the sampled verifier.
 -/
@@ -67,7 +67,11 @@ most `ε i`: for `0 ≤ q ≤ 1` with `q · n i ≤ k i` in every window,
 * every window's audit accepts and the monitoring period holds at least `F` incorrect blocks with probability at most
   `(1 - q)^F + Σ_i ε i`;
 * `(1 - q)^F ≤ δ` once `ln (1/δ) ≤ q · F`, so at most `ln (1/δ) / q` incorrect blocks pass the whole monitoring period
-  except with probability `δ + Σ_i ε i`. -/
+  except with probability `δ + Σ_i ε i`.
+
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets `q · n i ≤ k i` at `q = NUM/DEN` over
+whatever `n i` a window registers (`NetTiming.pooledIncorrectBlocks_rate` is this statement at that rate), while under
+a fixed count the largest `q` that holds falls as the prover pads `n i`. -/
 def PooledIncorrectBlocksLe : Prop :=
   ∀ {m : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] (n k : Fin m → ℕ) (draw : (i : Fin m) → Ω → Finset (Fin (n i)))
     (hcard : ∀ i x, (draw i x).card = k i)

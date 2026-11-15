@@ -17,12 +17,13 @@ import pytest
 HERE = Path(__file__).resolve().parent
 PKG_ROOT = HERE.parent / "src"          # tools/research/src (research is installed; kept for the subprocess PYTHONPATH below)
 
+from research import settings  # noqa: E402
 from research.telemetry import CLASSIFIER_VERSION, events, job, policy  # noqa: E402
 from research.telemetry.classify import classify  # noqa: E402
 from waits import Gate  # noqa: E402
 
 # The r17 campaign's RULES.md seed lives in veritor and keeps moving; compare against it only when asked to.
-SEED = Path(os.environ["RESEARCH_SEED_RULES"]) if os.environ.get("RESEARCH_SEED_RULES") else None
+SEED = Path(settings.need("RESEARCH_SEED_RULES")) if settings.get("RESEARCH_SEED_RULES") else None
 
 
 # ---- (b) the append helper ------------------------------------------------------------------------------------------------------------------
@@ -1228,7 +1229,7 @@ def _vllm_world(tmp_path, **kw):
     beside it another run's process and a system daemon."""
     rd = str(tmp_path / RID)
     py = ["python3", "-c", "..."]
-    procs = {B + 2: (1, B + 2, B + 2, f"/user.slice/user-1001.slice/user@1001.service/init.scope", None, ["systemd", "--user"]),
+    procs = {B + 2: (1, B + 2, B + 2, "/user.slice/user-1001.slice/user@1001.service/init.scope", None, ["systemd", "--user"]),
              B + 50: (B + 2, B + 50, B + 50, QUEUE, rd, ["python3", "-m", "research", "run", "--runs-dir", "x", "--id", RID]),
              B + 51: (B + 50, B + 51, B + 51, QUEUE, rd, ["python3", "-m", "research.telemetry", "sample"]),
              B + 100: (B + 50, B + 100, B + 100, QUEUE, rd, ["bash", "/usr/local/bin/gpu-lease", "8", "--wait", "--", "vllm"]),
@@ -1475,6 +1476,17 @@ def test_a_cancel_after_the_runner_closed_control_cancel_ends_the_run_itself(tmp
     assert sc["why"] == "the runner had recorded the workload's exit before the cancel" and sc["empty"] is True
     assert sc["status_json"] == "not written: its runner is live and writes status.json"
     assert "scope_end" not in json.loads((Path(rd) / "status.json").read_text())
+
+
+def test_a_cancel_request_that_does_not_parse_is_none_and_says_so_but_no_request_is_quiet(tmp_path, capsys):
+    from research.telemetry import scope
+
+    assert scope.cancel_request(tmp_path) is None
+    assert capsys.readouterr().err == ""
+    (tmp_path / scope.CONTROL_CANCEL).parent.mkdir()
+    (tmp_path / scope.CONTROL_CANCEL).write_text('{"grace_s": "soon"}')
+    assert scope.cancel_request(tmp_path) is None
+    assert "is no cancel request (ValueError" in capsys.readouterr().err
 
 
 # ---- the real-kernel fixtures (fixtures/run_fixtures.sh), which a person runs in a pod of its own --------------------------------------------

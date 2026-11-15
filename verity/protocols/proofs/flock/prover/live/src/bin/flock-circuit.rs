@@ -3,6 +3,7 @@
 //!
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
 //!                          [--rec-run FILE --rec-part J]   (--zk: each Hello answered logged in a recursive run's record, `run_record`)
+//!                          [--known-trees LIST]   (the verifier's list of the statement's known trees, after the sample in Register's answer, `serve_on`)
 //!   flock-circuit serve    --queue FILE|- --listen ADDR --out DIR --circuit FILE --pin SHA256 [--tree-from HOST:PORT]   (a long-lived verifier, `serve_queue`)
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!                          [--salt-refs REFS]   (--zk: the ZK server's salts in place of INST's, `value_salts`)
@@ -62,8 +63,8 @@ static ALLOC: flock_live::huge_pages::HugePages = flock_live::huge_pages::HugePa
 const TABLE: &str = "circuit";
 /// The most tables in one session (`--session-tables`); their names sort in table order (`circuit-00` to `circuit-63`).
 const MAX_TABLES: usize = 64;
-/// The Lean verifier's `Draw.TABLES_LAW`: several tables split one sample of fixed count, a subset or a stratified one.
-const TABLES_LAW: &str = "tables: several tables need a subset or stratified draw, whose unit count is fixed (a Bernoulli \
+/// The Lean verifier's `Draw.TABLES_SAMPLING_DESIGN`: several tables split one sample of fixed count, a subset or a stratified one.
+const TABLES_SAMPLING_DESIGN: &str = "tables: several tables need a subset or stratified draw, whose unit count is fixed (a Bernoulli \
                           draw's count is random, so the tables could not split it evenly, and a work draw's closure is not split)";
 
 fn arg(k: &str, d: &str) -> String {
@@ -106,7 +107,7 @@ fn domain_of(c: &Composite, tables: usize, table: &str, rep: usize) -> Vec<u8> {
     rep_domain(domain_tag(c), tables, table, rep)
 }
 
-/// The Merkle hash of every Ligerito level: hm96-sha512/v1 leaves under SHA-512 nodes in a production build (feature `sha512`,
+/// The Merkle hash of every Ligerito level: hm96-sha512/v1 leaves under SHA-512 nodes in the prover's build (feature `sha512`,
 /// verity's Flock patch).
 #[cfg(feature = "sha512")]
 const MERKLE: HashKind = HashKind::Hm96Sha512;
@@ -548,7 +549,7 @@ fn stmt_cache_seen(side: Side) -> Value {
 
 fn side_tables(side: Side, st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
     if count <= 1 {
-        let (st, inst) = match draw { Some(d) => side_drawn(side, st, inst, d)?, None => (st.clone(), inst.clone()) };
+        let (st, inst) = match draw { Some(d) => side_sampled(side, st, inst, d)?, None => (st.clone(), inst.clone()) };
         if draw.is_some() && is_zk(&st) {
             zk_shape_ok(&st)?;
         }
@@ -559,7 +560,7 @@ fn side_tables(side: Side, st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&
     }
     let units = match draw {
         Some(d) if d["population"].as_u64() != Some(inst.n as u64) => return Err("U: the draw's population is not this registered population".into()),
-        Some(d) if d["law"] != "subset" && d["law"] != "stratified" => return Err(TABLES_LAW.into()),
+        Some(d) if d["law"] != "subset" && d["law"] != "stratified" => return Err(TABLES_SAMPLING_DESIGN.into()),
         Some(d) => flock_live::unit_draw::check(d)?,
         None => (0..inst.n).collect(),
     };
@@ -815,10 +816,10 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
 
 /// The sampled proof blocks' statement over a registered population (both sides derive it from the population file and the sample).
 fn drawn(st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
-    side_drawn(Side::Fresh, st, inst, draw)
+    side_sampled(Side::Fresh, st, inst, draw)
 }
 
-fn side_drawn(side: Side, st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
+fn side_sampled(side: Side, st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
     let di = inst.drawn(&st.c, draw)?;
     check_public(&st.c, &di)?;
     let ds = side_stmt(side, st, di.n, st.identity.clone())?;
@@ -891,17 +892,17 @@ fn server(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Server {
     server_tables(st, inst, 1)
 }
 
-/// The verifier's server for sessions of `count` tables. With a sample (`--draw`, `--draw-law`, `--draw-file`) the tables are the drawn
+/// The verifier's server for sessions of `count` tables. With a sample (`--draw`, `--sample-design`, `--draw-file`) the tables are the drawn
 /// units' (until `Register`, the population's one-table statement stands in); without, the population's.
 fn server_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
     server_of(&serving(st, inst, count), st, inst, count)
 }
 
-/// What every session of a server serves: the verifier's own sample (`--draw-file`) or its sampling design (`--draw`, `--draw-law`), and
+/// What every session of a server serves: the verifier's own sample (`--draw-file`) or its sampling design (`--draw`, `--sample-design`), and
 /// without either the population's tables. Built once, when the server starts.
 struct Serving {
     given: Option<Value>,
-    law: Option<flock_live::unit_draw::Law>,
+    sampling_design: Option<flock_live::unit_draw::SamplingDesign>,
     tabs: Tables,
     /// `serve --tree-from`: the challenger every session's coin tree is sampled by
     tree_from: Option<Arc<TreeFrom>>,
@@ -949,14 +950,14 @@ fn tree_from_arg(tabs: &Tables, queue: bool) -> Option<Arc<TreeFrom>> {
 }
 
 fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
-    use flock_live::unit_draw::Law;
-    let (file, law, law_file) = (arg("--draw-file", ""), arg("--draw", ""), arg("--draw-law", ""));
+    use flock_live::unit_draw::SamplingDesign;
+    let (file, sampling_design, sampling_design_file) = (arg("--draw-file", ""), arg("--draw", ""), arg("--sample-design", ""));
     let read = |flag: &str, path: &str| -> Value {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap_or_else(|e| refuse(format!("{flag}: {e}"))))
             .unwrap_or_else(|e| refuse(format!("{flag}: {e}")))
     };
-    if [&file, &law, &law_file].iter().filter(|s| !s.is_empty()).count() > 1 {
-        refuse("one of --draw-file, --draw and --draw-law".into());
+    if [&file, &sampling_design, &sampling_design_file].iter().filter(|s| !s.is_empty()).count() > 1 {
+        refuse("one of --draw-file, --draw and --sample-design".into());
     }
     // the verifier's own sample, made outside this server: served at Register as it is (checked there, U2, and against the
     // registered population when the sampled statement is built)
@@ -965,25 +966,25 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
         flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
         draw
     });
-    // `--draw-law`: a sampling design object, a stratified one the verifier's own expansion over its program and query, sampled afresh at
+    // `--sample-design`: a sampling design object, a stratified one the verifier's own expansion over its program and query, sampled afresh at
     // each session's Register over this registered population
-    let law = if !law_file.is_empty() {
-        let law = Law::of_json(&read("--draw-law", &law_file)).unwrap_or_else(|e| refuse(format!("--draw-law: {e}")));
-        if let Law::Stratified { k, strata } = &law {
+    let sampling_design = if !sampling_design_file.is_empty() {
+        let sampling_design = SamplingDesign::of_json(&read("--sample-design", &sampling_design_file)).unwrap_or_else(|e| refuse(format!("--sample-design: {e}")));
+        if let SamplingDesign::Stratified { k, strata } = &sampling_design {
             if let Some(why) = flock_live::unit_draw::strata_problem(*k, strata, inst.n as u64) {
-                refuse(format!("--draw-law over the {} registered units: {why}", inst.n));
+                refuse(format!("--sample-design over the {} registered units: {why}", inst.n));
             }
         }
-        Some(law)
+        Some(sampling_design)
     } else {
-        (!law.is_empty()).then(|| Law::parse(&law).unwrap_or_else(|e| refuse(e)))
+        (!sampling_design.is_empty()).then(|| SamplingDesign::parse(&sampling_design).unwrap_or_else(|e| refuse(e)))
     };
     // several tables are refused here, before any session, for a sample they cannot split or whose tables `--zk` cannot prove. A
     // subset or stratified sampling design's table shapes depend on its counts alone, so a sample of the first units stands for every sample.
     if count > 1 {
-        let probe = match (&given, &law) {
+        let probe = match (&given, &sampling_design) {
             (Some(d), _) => Some(d.clone()),
-            (None, Some(Law::Bernoulli { .. })) => refuse(TABLES_LAW.into()),
+            (None, Some(SamplingDesign::Bernoulli { .. })) => refuse(TABLES_SAMPLING_DESIGN.into()),
             (None, Some(l)) => l.first(inst.n as u64),
             (None, None) => None,
         };
@@ -991,7 +992,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
             session_tables(st, inst, Some(&d), count).unwrap_or_else(|e| refuse(e));
         }
     }
-    let tabs = if count > 1 && given.is_none() && law.is_none() {
+    let tabs = if count > 1 && given.is_none() && sampling_design.is_none() {
         session_tables(st, inst, None, count).unwrap_or_else(|e| refuse(e))
     } else {
         Tables::one(st, inst)
@@ -999,7 +1000,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     // each session's server is built after its accept (`server_of`): a configuration it would refuse is refused here instead
     config_of(&tabs).check().unwrap_or_else(|e| refuse(e));
     let tree_from = tree_from_arg(&tabs, false);
-    Serving { given, law, tabs, tree_from }
+    Serving { given, sampling_design, tabs, tree_from }
 }
 
 /// One session's server.
@@ -1010,23 +1011,23 @@ fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) 
         None => s,
     };
     if let Some(draw) = &sv.given {
-        let mut s = with_draw(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, count);
-        s.cfg.draw_law = None;
-        s.cfg.draw_given = Some(draw.clone());
+        let mut s = with_sample(s, st, inst, flock_live::unit_draw::SamplingDesign::Subset { k: 0 }, count);
+        s.cfg.sample_design = None;
+        s.cfg.sample_given = Some(draw.clone());
         return s;
     }
-    match &sv.law {
-        Some(l) => with_draw(s, st, inst, l.clone(), count),
+    match &sv.sampling_design {
+        Some(l) => with_sample(s, st, inst, l.clone(), count),
         None => s,
     }
 }
 
-/// A server that samples `law` over the registered population at `Register` and serves the sampled proof blocks' statement, in `count`
+/// A server that samples `sampling_design` over the registered population at `Register` and serves the sampled proof blocks' statement, in `count`
 /// tables.
-fn with_draw(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, law: flock_live::unit_draw::Law, count: usize) -> Server {
-    s.cfg.draw_law = Some((law, inst.n as u64));
+fn with_sample(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, sampling_design: flock_live::unit_draw::SamplingDesign, count: usize) -> Server {
+    s.cfg.sample_design = Some((sampling_design, inst.n as u64));
     let (st, inst) = (st.clone(), inst.clone());
-    s.with_draw(Box::new(move |draw: &Value| {
+    s.with_sample(Box::new(move |draw: &Value| {
         let tabs = side_tables(Side::Verifier, &st, &inst, Some(draw), count)?;
         Ok((config_of(&tabs), Box::new(CircuitVerifier::new(tabs)) as Box<dyn StatementVerifier>))
     }))
@@ -1959,7 +1960,7 @@ impl ZkServer {
         let fin_root = finish.lock().unwrap_or_else(PoisonError::into_inner).level0(table, &root)?;
         let (t_recheck, cpu_recheck) = (t0.elapsed().as_secs_f64(), flock_live::zk_server::cpu_seconds() - c0);
         let short = |r: &[u8]| hex(&r[..r.len().min(8)]);
-        eprintln!("ZK_SERVER\t{}", json!({"recheck_root": hex(&root), "m": st.m, "t.zk_server_recheck": t_recheck, "cpu.zk_server_recheck": cpu_recheck}));
+        eprintln!("FIREWALL\t{}", json!({"recheck_root": hex(&root), "m": st.m, "t.zk_server_recheck": t_recheck, "cpu.zk_server_recheck": cpu_recheck}));
         if fin_root != root {
             return Err(refused(format!("level-0 recheck: the Lean finish's root {} is not the loop's {}", short(&fin_root), short(&root))));
         }
@@ -2253,9 +2254,9 @@ impl ZkServer {
             table: self.table, rep: r.rep, vals: vals.clone(), extras: r.extras.clone().unwrap_or_default(),
             rounds: std::mem::take(&mut r.rounds), dump: self.dump.clone(),
         };
-        // zk_server_device_rounds: the table's device rounds the ZK server was handed so far (FC_ZK_SERVER_CUT_AT counts them)
-        let mut v = json!({"zk_server_failed": r.failed,
-                           "zk_server_device_rounds": self.seen.load(std::sync::atomic::Ordering::SeqCst)});
+        // firewall_device_rounds: the table's device rounds the ZK server was handed so far (FC_ZK_SERVER_CUT_AT counts them)
+        let mut v = json!({"firewall_failed": r.failed,
+                           "firewall_device_rounds": self.seen.load(std::sync::atomic::Ordering::SeqCst)});
         if r.rep == 0 {
             v["t.zk_server_recheck"] = json!(self.t_recheck);
             v["cpu.zk_server_recheck"] = json!(self.cpu_recheck);
@@ -2318,7 +2319,7 @@ fn zk_served_end<C: flock_transcript::challenger::Challenger>(g: &Arc<Mutex<ZkSe
         Ok((proof, cm, bk)) => (Some((proof, cm)), bk),
         Err(why) => {
             lock().fail(flock_live::zk_server::refused(format!("the device failed: {why}")));
-            (None, json!({"zk_server_device_failed": why}))
+            (None, json!({"firewall_device_failed": why}))
         }
     };
     if !lock().committed() {
@@ -3779,7 +3780,7 @@ struct Plan {
     /// the cheating path: send rep 1 even when its level-0 root is not rep 0's (the verifier's R1 refuses it)
     skip_level0_check: bool,
     /// prove the registered population's statement whatever units the verifier sampled
-    ignore_draw: bool,
+    ignore_sample: bool,
     fast: bool,
     /// send each rep's proof with one byte of its first opened hm96 salt flipped
     salt_flip: bool,
@@ -4099,11 +4100,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     // registration done: the verifier samples the units (or none), and the statement is the sampled proof blocks', in the session's tables
     let reg = call(&t, Req::Register);
     let draw = match &reg {
-        Ok(Resp::Draw(d)) if !plan.ignore_draw => d.clone(),
+        Ok(Resp::Draw(d)) if !plan.ignore_sample => d.clone(),
         _ => "null".to_string(),
     };
     let tabs = match reg {
-        Ok(Resp::Draw(d)) if d == "null" || plan.ignore_draw => match &plan.split {
+        Ok(Resp::Draw(d)) if d == "null" || plan.ignore_sample => match &plan.split {
             Some(s) if s.names() == names => Ok(s.clone()),
             _ => session_tables(st, inst, None, names.len()),
         },
@@ -5469,7 +5470,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             return tables_randomness_case(&tabs);
         }
         if name == "tables_unsplittable_draw_refused" {
-            // both sides refuse, before Hello, a sample two tables cannot split: a Bernoulli law's (its count is random), and an
+            // both sides refuse, before Hello, a sample two tables cannot split: a Bernoulli sampling design's (its count is random), and an
             // odd count, subset or stratified; the server also refuses them at configuration (`server_tables`)
             let n = inst.n as u64;
             let units = |k: u64| (0..k).collect::<Vec<_>>();
@@ -5481,7 +5482,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             let every = session_tables(st, inst, Some(&json!({"law": "subset", "population": n, "k": n, "units": units(n)})), 2).err();
             let stratified = (n >= 2).then(|| session_tables(st, inst, Some(&strat(2)), 2).err());
             let splits_not = |e: &Option<Option<String>>| e.as_ref().is_none_or(|e| e.as_deref().is_some_and(|w| w.contains("do not split")));
-            let pass = bern.as_deref() == Some(TABLES_LAW) && splits_not(&odd) && splits_not(&odd_strat) && every.is_none()
+            let pass = bern.as_deref() == Some(TABLES_SAMPLING_DESIGN) && splits_not(&odd) && splits_not(&odd_strat) && every.is_none()
                 && stratified.as_ref().is_none_or(|e| e.is_none());
             return json!({"case": name, "expect": "a Bernoulli draw and an odd count refused; a subset draw of every unit and an even stratified draw split",
                           "bernoulli": bern, "odd": odd, "odd_stratified": odd_strat, "every_unit": every, "stratified": stratified, "pass": pass});
@@ -5587,9 +5588,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "unit_draw_from_file" {
         // the verifier's own sample (units 0 and the last), served at Register: the session proves exactly those units
         let draw = json!({"law": "subset", "population": inst.n, "k": 2.min(inst.n), "units": if inst.n > 1 { json!([0, inst.n - 1]) } else { json!([0]) }});
-        let mut srv = with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, 1);
-        srv.cfg.draw_law = None;
-        srv.cfg.draw_given = Some(draw.clone());
+        let mut srv = with_sample(server(st, inst), st, inst, flock_live::unit_draw::SamplingDesign::Subset { k: 0 }, 1);
+        srv.cfg.sample_design = None;
+        srv.cfg.sample_given = Some(draw.clone());
         let s = Arc::new(Mutex::new(srv));
         let (v, _) = session(st, inst, shared(InProc(s.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
         let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
@@ -5599,8 +5600,8 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "unit_draw_session" || name == "unit_draw_ignored_refused" {
         // the verifier samples one unit of the registered population after Register; the prover proves the sampled statement
         // (or, ignoring the sample, the population's, whose Σ is not the verifier's)
-        let s = Arc::new(Mutex::new(with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 1 }, 1)));
-        let plan = Plan { gpu, ignore_draw: name.ends_with("refused"), ..Plan::default() };
+        let s = Arc::new(Mutex::new(with_sample(server(st, inst), st, inst, flock_live::unit_draw::SamplingDesign::Subset { k: 1 }, 1)));
+        let plan = Plan { gpu, ignore_sample: name.ends_with("refused"), ..Plan::default() };
         let (v, proofs) = session(st, inst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
         let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         let acc = verified(&v);
@@ -6107,7 +6108,7 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let t = if wire.is_empty() { shared(tcp) } else { shared(Wire { inner: tcp, mode: wire, refused: refused.clone() }) };
     let (v, _) = session(st, inst, t, &plan, ProverSeed::from_os());
     let seen = std::mem::take(&mut *log.lock().unwrap_or_else(PoisonError::into_inner));
-    let device_rounds = v["buckets"].as_array().and_then(|b| b.iter().filter_map(|x| x["zk_server_device_rounds"].as_u64()).max());
+    let device_rounds = v["buckets"].as_array().and_then(|b| b.iter().filter_map(|x| x["firewall_device_rounds"].as_u64()).max());
     let refused = refused.lock().unwrap_or_else(PoisonError::into_inner).clone();
     let load = |b: &std::sync::atomic::AtomicBool| b.load(std::sync::atomic::Ordering::SeqCst);
     json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "device_rounds": device_rounds, "seen": seen,
@@ -6148,7 +6149,7 @@ fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, Strin
         cmd.env_remove("FC_HOST_WITNESS").env_remove("FC_HOST_UNITS").env_remove("FC_UNIT_WALK");
     }
     // the verifier's sample, as this process's server has it ([`serving`])
-    for flag in ["--draw", "--draw-law", "--draw-file"] {
+    for flag in ["--draw", "--sample-design", "--draw-file"] {
         let v = arg(flag, "");
         if !v.is_empty() {
             cmd.args([flag, &v]);
@@ -6458,8 +6459,8 @@ fn worker_pads_case(gpu: bool) -> Value {
 ///   is served without a second admission, and the auditor rejects the session at its opening, where the value
 ///   commitments' claims are checked;
 /// * `own`: the staged file as the stack committed it, under salts of its own: none of its roots is a table of a
-///   registration on the record, so the loop refuses the session at its admission, its recursive session's stop, and
-///   nothing of it reaches the auditor.
+///   registration on the record, so the loop refuses the session at the auditor's answer to its `Register`, its
+///   recursive session's stop, and of it only `Register` reaches the auditor.
 ///
 /// And the service itself refuses a commit whose body carries a salt beside each digest, a short refs file and a refs file
 /// with a forged tag; the salts it answers open every one of its commitments; the record is number 0, counts one session
@@ -6616,7 +6617,7 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
                  "accepted": kept["accepted"], "proofs": proofs(&kept),
                  "prover_stopped": kept["prover_stopped"].as_str().unwrap_or("").chars().take(200).collect::<String>(),
                  "why": kept["why"].as_str().unwrap_or("").chars().take(200).collect::<String>(), "error": kept["error"]},
-        "own": {"ok": own["accepted"] == false && own["error"].is_null() && seen(&own).is_empty()
+        "own": {"ok": own["accepted"] == false && own["error"].is_null() && seen(&own) == [json!(["register"])]
                     && own_why.contains("no value commitment of the ZK server's")
                     && own_stop.as_str().is_some_and(|w| w.contains("no value commitment of the ZK server's")),
                 "why": own_why.chars().take(400).collect::<String>(), "stop": own_stop, "error": own["error"]},
@@ -6625,7 +6626,7 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
     let pass = service["ok"] == true && ["overwritten", "kept", "own", "admitted"].iter().all(|k| sessions[k]["ok"] == true);
     Ok(json!({"case": "zk_value_salts", "expect": "the server's salts overwrite the stack's, registration 0 is admitted and the session \
                                                  accepted; the stack's kept, registration 0 served again unadmitted, rejected at the opening; \
-                                                 the stack's own commitments refused at admission, its recursive session's stop; a salt in a \
+                                                 the stack's own commitments refused once Register is answered, its recursive session's stop; a salt in a \
                                                  commit, a short refs file and a forged tag refused by the service; registrations numbered \
                                                  0 and 1 on the record, each counting its epoch's one session, a second commit in an epoch \
                                                  refused, each session registered once and in its own epoch",
@@ -6634,7 +6635,7 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
 
 /// `zk_worker_cut_MODE` (PROTOCOL.md §10.1): a worker that fails in one way (`FC_ZK_SERVER_TAMPER=cut-MODE`) at its table's device
 /// round `k` never chooses where the session ends. Beside an honest ZK server session, one session per `k` (early, half way and
-/// the last of the honest session's `zk_server_device_rounds`; `cut-tree` samples its trees in the opening phases, so it takes the
+/// the last of the honest session's `firewall_device_rounds`; `cut-tree` samples its trees in the opening phases, so it takes the
 /// first and the half-way round), each a CPU
 /// session in a process of its own: the verifier gets the honest session's every request up to its `Finish`, in its order and
 /// at its sizes (the rounds, the Commit, the Link: the same bytes and public bytes), no proof, then `Finish`, which reports the
@@ -6698,7 +6699,7 @@ fn worker_cut_case(name: &str, mode: &str, gpu: bool) -> Value {
 /// control) shares none either. Under an injected seed (the test harness's) the control repeats every word: the per-rep
 /// indexing alone would give the second table every word of the first, which would reveal the difference of their masked values.
 fn tables_randomness_case(tabs: &Tables) -> Value {
-    let os = tables_draws(tabs, ProverSeed::from_os());
+    let os = tables_samples(tabs, ProverSeed::from_os());
     let pass = |d: &Value, control: bool| {
         let n = |k: &str| d[k].as_u64().unwrap_or(u64::MAX);
         let (a, b) = (&d["words"][0], &d["words"][1]);
@@ -6707,7 +6708,7 @@ fn tables_randomness_case(tabs: &Tables) -> Value {
                else { n("control_words_equal") == 0 && n("control_salt_words_shared") == 0 }
     };
     #[cfg(feature = "seed-injection")]
-    let injected = tables_draws(tabs, ProverSeed::injected([3; 32]));
+    let injected = tables_samples(tabs, ProverSeed::injected([3; 32]));
     #[cfg(not(feature = "seed-injection"))]
     let injected = json!({"skipped": "built without the test harness's seed-injection feature"});
     let injected_ok = injected.get("skipped").is_some() || pass(&injected, true);
@@ -6718,7 +6719,7 @@ fn tables_randomness_case(tabs: &Tables) -> Value {
 
 /// [`tables_randomness_case`]'s samples under `seed`: the words the two tables share, and those the second table sampled at the first's
 /// addresses (the control) shares with the first.
-fn tables_draws(tabs: &Tables, seed: ProverSeed) -> Value {
+fn tables_samples(tabs: &Tables, seed: ProverSeed) -> Value {
     let salts = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
     // (the prover's stream words, the leaf salts)
     let draws = |tb: &Table, at: u64| -> (Vec<[u8; 16]>, Vec<[u8; 16]>) {
@@ -7418,11 +7419,19 @@ fn serve_loop<B: FnOnce() -> Server + Send>(log: Option<&RunLog>, make: impl Fn(
 /// thread once it is accepted; each session's record, proofs and verifier file under `out/<session>`, its line, with the
 /// fields `make` gave beside its build, in `out/index.jsonl` and on stdout (`out`: the directory those fields name as
 /// `out`, else the server's). With a run's record (`log`), each session's Hello answered with coins is logged there first.
+/// With `--known-trees FILE`, the verifier's list of the statement's known trees (`verity-verify-proof known-trees`), its bytes
+/// follow the sample in each session's answer to `Register`: the ZK server's release side reads the list there and hands
+/// the prover the sample alone, and a prover that reaches this server itself reads the sample and no further. The list is
+/// one statement's, so `serve --queue`, whose sessions each take their own, refuses the flag.
 fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize,
                                           listen: &str, log: Option<&RunLog>, make: impl Fn() -> Option<(B, Value)>) {
     use std::io::{BufReader, BufWriter, Write};
     std::fs::create_dir_all(out).unwrap();
     let index = Mutex::new(());
+    let known = match arg("--known-trees", "").as_str() {
+        "" => Vec::new(),
+        f => std::fs::read(f).unwrap_or_else(|e| refuse(format!("--known-trees {f}: {e}"))),
+    };
     let one = |i: usize, conn: std::net::TcpStream, mut s: Server, tag: Value| {
         conn.set_nodelay(true).unwrap();
         let mut r = BufReader::new(conn.try_clone().unwrap());
@@ -7430,13 +7439,15 @@ fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::
         let id = format!("l{:04}-{}", i, std::process::id());
         loop {
             let Ok(b) = read_frame(&mut r) else { break };
-            let resp = match (Req::decode(&b), log) {
+            let req = Req::decode(&b);
+            let register = matches!(req, Ok(Req::Register));
+            let resp = match (req, log) {
                 (Ok(req), Some(log)) => log.handle(&mut s, &id, req),
                 (Ok(req), None) => s.handle(req),
                 (Err(e), _) => Resp::Refused(e),
             };
             let done = matches!(resp, Resp::Verdict(_));
-            if write_frame(&mut w, &resp.encode()).is_err() || done {
+            if write_frame(&mut w, &resp.frame_with_known(register, &known)).is_err() || done {
                 break;
             }
         }
@@ -7645,10 +7656,10 @@ fn zk_self_check() -> zkv::SelfCheck {
 /// statement is built once, the sample is served at Register as `--draw-file`'s is, and the session's line carries its
 /// label. With `--tree-from`, every session's coin tree comes from one challenger session, opened at the first line and
 /// closed when the queue ends. A templated statement's circuit is loaded with its unit (`--tmpl-unit`), as `serve` loads it.
-/// No `--instances`, `--draw*`, `--links`, `--rec-run` or session tables.
+/// No `--instances`, `--draw*`, `--links`, `--rec-run`, `--known-trees` (a list is one statement's) or session tables.
 fn serve_queue(c: Composite, path: &str) {
     use std::io::BufRead;
-    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run"]
+    let given = ["--instances", "--draw", "--sample-design", "--draw-file", "--links", "--rec-run", "--known-trees"]
         .into_iter().filter(|f| !arg(f, "").is_empty()).collect::<Vec<_>>();
     if !given.is_empty() || tables_arg() > 1 {
         refuse(format!("--queue: each session's population and sample come from its line, so no {given:?} or --session-tables"));
@@ -7714,7 +7725,7 @@ fn serve_queue(c: Composite, path: &str) {
         let tabs = Tables::one(&st, &inst);
         config_of(&tabs).check().unwrap_or_else(|e| refuse(e));
         let tree_from = tree_from.get_or_insert_with(|| tree_from_arg(&tabs, true)).clone();
-        let sv = Serving { given: Some(draw), law: None, tabs, tree_from };
+        let sv = Serving { given: Some(draw), sampling_design: None, tabs, tree_from };
         let mut tag = json!({"label": j["label"]});
         if let Some(out) = j["out"].as_str() {
             tag["out"] = json!(out);
@@ -7833,6 +7844,15 @@ fn prove_stream(path: &str) {
 }
 
 fn main() {
+    let names: Vec<String> = std::env::vars_os().map(|(k, _)| k.to_string_lossy().into_owned()).collect();
+    if let Some(why) = flock_live::zk_server::retired_env(names.iter().map(String::as_str)) {
+        refuse(why);
+    }
+    for (old, new) in [("--firewall-state", "--zk-server-state"), ("--draw-law", "--sample-design")] {
+        if flag(old) {
+            refuse(format!("{old} is not read: its name is {new}; pass {new} instead"));
+        }
+    }
     let cmd = std::env::args().nth(1).unwrap_or_default();
     // unit-walk times the device witness's host units, so it runs on the device prover's pages unless --huge-pages asks
     flock_live::huge_pages::set(!(flag("--gpu") || (cmd == "unit-walk" && !flag("--huge-pages"))));

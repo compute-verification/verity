@@ -157,7 +157,7 @@ def _log(profile, crossed: bool = False) -> list:
 
 class _Rank:
     """The served and the crossed ("crossed": layer 1 reads layer 0's W_UV) folds, each persisted per stored form and loaded as
-    tp-fold-match's compare leg loads it (compact for progressions, runs for the record form), built on first use: session-wide, since
+    tp-fold-match's compare step loads it (compact for progressions, runs for the record form), built on first use: session-wide, since
     `--dist worksteal` interleaves this module's tests with others' and a module fixture would rebuild per test."""
 
     def __init__(self, tmp):
@@ -239,7 +239,7 @@ def test_the_progressions_compare_reaches_the_runs_verdict(rank):
 
 def test_the_progressions_compare_never_expands_a_strided_weight_read(rank, monkeypatch):
     """[8c01ad3dc, 04f0af376] The compact compare hashes and canons a W_UV read as its progressions: neither `_canonical_hash` nor the
-    weight map's per-run fallback (an overlapping map) expands its 131,072 runs (the record-form leg held ~1e6 run tuples a read)."""
+    weight map's per-run fallback (an overlapping map) expands its 131,072 runs (the record-form path held ~1e6 run tuples a read)."""
     P = rank.prog("served", "progressions")
     expanded, expand_into = [0], K._expand_into
 

@@ -88,6 +88,30 @@ def test_a_second_run_on_the_moved_tree_changes_nothing(moved):
     assert len(json.loads((moved / "tools/research/src/research/store/moves.json").read_text())["moves"]) == 1
 
 
+def test_only_rewrites_the_files_it_lists_and_those_it_moves(tmp_path):
+    """A carry reruns a map on the merge of a later main, over the files the merge brought (`--only FILE`): a file it
+    lists, and one main added at an old path, which moves, are rewritten as the whole move rewrites them; any other file
+    is left as it was, unread."""
+    r = tmp_path / "repo"
+    files = {"census/hardware.json": "{}\n", "census/added.json": "{}\n", "listed.py": 'P = "census/hardware.json"\n',
+             "other.py": 'P = "census/hardware.json"\n', "census/README.md": "see census/hardware.json\n",
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(LIMIT_MAP)
+    (tmp_path / "only.txt").write_text("listed.py\n")
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock",
+                    "--only", str(tmp_path / "only.txt")], check=True, capture_output=True)
+    assert (r / "listed.py").read_text() == 'P = "catalog/census/hardware.json"\n'
+    assert (r / "catalog/census/README.md").read_text() == "see catalog/census/hardware.json\n", "a moved file is rewritten"
+    assert (r / "catalog/census/added.json").exists() and not (r / "census").exists()
+    assert (r / "other.py").read_text() == files["other.py"]
+
+
 def test_a_string_literal_in_rust_or_lean_keeps_its_text_and_only_a_path_in_one_moves(moved):
     rs = (moved / "prover.rs").read_text()
     assert 'const TAG: &str = "sha256 (verity.randomness)";' in rs, "a domain tag is protocol text"
@@ -938,6 +962,18 @@ def test_an_emptied_packages_init_of_comments_alone_is_deleted_and_certified(tmp
     assert cert["rules"]["emptied"] == ["verity/hardware/cards/__init__.py", "verity/hardware/nodes/__init__.py"]
 
 
+def test_a_relative_path_to_a_file_that_moves_beside_it_stays_relative_and_is_certified(tmp_path):
+    """`../../device/two_stage.sh` in `prover/audit/README.md` names a file the map moves into the README's own directory:
+    it is written `./two_stage.sh`, a path still read as relative, and `move_check.py` certifies the commit."""
+    r, p = _run(tmp_path, {"spot/device/two_stage.sh": "echo two\n", "spot/prover/audit/README.md": "The stage (`../../device/two_stage.sh`).\n"},
+                '[roots]\nold = {}\nnew = {}\n\n[paths]\n"spot/device/two_stage.sh" = "spot/prover/audit/two_stage.sh"\n')
+    assert p.returncode == 0, p.stderr
+    assert (r / "spot/prover/audit/README.md").read_text() == "The stage (`./two_stage.sh`).\n"
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+
+
 @pytest.mark.parametrize("held", ['"""The data sheets, one a GPU."""\n', CODE, b"# caf\xe9\n"])
 @pytest.mark.parametrize("dry", [False, True])
 def test_an_emptied_packages_init_that_holds_more_stops_the_move_naming_it_and_the_fix(tmp_path, held, dry):
@@ -1078,6 +1114,26 @@ def test_a_workspaces_members_and_a_directory_beside_its_own_parts_follow_the_to
     assert (r / "pyproject.toml").read_text() == (
         '[tool.uv.workspace]\nmembers = ["verity/flock/prover", "other"]\n\n[tool.uv.sources]\nother = { workspace = true }\n\n'
         '[tool.gate]\nkeyed = ["verity/flock", "other"]\nlevels = ["verity/flock/prover", "verity/flock/agreement"]\n')
+
+
+@pytest.mark.parametrize("stays", [{}, {"bench/slots/bench.py": "Y = 1\n"}])
+def test_a_workspace_member_whose_files_move_by_file_rows_follows_its_pyproject(tmp_path, stays):
+    """`bench/slots/`'s files move by rows of their own, with no row for the directory, and its bench may stay: the
+    workspace's `members` names the directory its `pyproject.toml` went to, rather than losing the distribution, and
+    `move_check.py` certifies the commit."""
+    r, p = _run(tmp_path, {
+        **stays, "bench/slots/slots.py": "X = 1\n", "bench/slots/tests/test_slots.py": "def test():\n    pass\n",
+        "bench/slots/pyproject.toml": '[project]\nname = "slots"\n', "other/pyproject.toml": '[project]\nname = "other"\n',
+        "pyproject.toml": ('[project]\nname = "root"\n\n[tool.uv.workspace]\nmembers = ["other", "bench/slots"]\n\n'
+                           '[tool.uv.sources]\nother = { workspace = true }\n'),
+    }, '[roots]\nold = {}\nnew = {}\n\n[paths]\n"bench/slots/slots.py" = "lib/cuda/slots/slots.py"\n'
+       '"bench/slots/pyproject.toml" = "lib/cuda/slots/pyproject.toml"\n"bench/slots/tests/" = "lib/cuda/slots/tests/"\n\n'
+       '[modules]\n"bench.slots.slots" = "lib.cuda.slots.slots"\n"bench.slots.tests" = "lib.cuda.slots.tests"\n')
+    assert p.returncode == 0, p.stderr
+    assert 'members = ["other", "lib/cuda/slots"]\n' in (r / "pyproject.toml").read_text()
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
 
 
 NAMES = {**BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n", "other/x.py": "X = 1\n",

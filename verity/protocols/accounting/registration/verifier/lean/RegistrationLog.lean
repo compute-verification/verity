@@ -3,10 +3,12 @@ module
 public import CoreProtocol.Protocol
 public import CoreProtocol.Site
 public import CoreProtocol.SiteExample
+public import RegistrationLog.SiteCheck
 public import Base.Hash
 meta import CoreProtocol.Protocol
 meta import CoreProtocol.Site
 meta import CoreProtocol.SiteExample
+meta import RegistrationLog.SiteCheck
 meta import Base.Hash
 
 /-!
@@ -22,7 +24,9 @@ names the whole log. An entry is one of three kinds, each under its own versione
   θ, each registered value (weights, initial state, tables) by its committed root, and the registered compiler `B` that compiles
   advice into the circuit (its digest, its advice's format and its public cap `ℓ` on one declaration's advice, in
   bits). Registration registers the site, θ and `B`, not the circuit `B` builds; a subprotocol's Program and
-  parameters, and the proof system, are that protocol's public verifier parameters, not registration.
+  parameters, and the proof system, are that protocol's public verifier parameters, not registration. An item may also
+  name a run's configuration by its SHA-512 (`configuration`, its `digest`); the log has no coin and no run to hold
+  it before, so the check refuses it (`configuration-unordered`).
 * **declaration** (`verity/registration/declaration/v1`): a day's circuit (`Declared`, the spec's
   `Verity.Registration.Declared`): the day, by its index among the monitoring period's days, its program's digest, and
   its block Definitions by descriptor key. The prover declares one circuit a day, before the day's first coin, so a
@@ -35,7 +39,7 @@ character, as itself or escaped, is refused (`ascii`, in `Core.canonicalJson`'s 
 
 The check (`check`) holds each entry to the log before it, and refuses the first entry that fails by the first check it
 fails: a site entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), an information
-entry by `previous` and then `duplicate-information`, no item registered twice, and a declaration by `previous` and then
+entry by `previous`, then `configuration-unordered`, then `duplicate-information`, no item registered twice, and a declaration by `previous` and then
 `duplicate-declaration`, no day declared twice. A site entry's checks hold of an information entry or a declaration
 whenever they held of the log before it, which it adds no hardware to.
 
@@ -81,15 +85,21 @@ structure Builder where
   cap : Nat
   deriving DecidableEq, Repr
 
+/-- An item of an information entry: one of θ's values, the registered compiler, or a run's configuration by its
+SHA-512 as hex (`digest`). The log has no coin and no run to order a configuration item against, so the check refuses
+every one (`configuration-unordered`). -/
 inductive Item
   | theta (t : Theta)
   | builder (b : Builder)
+  | configuration (digest : String)
   deriving DecidableEq, Repr
 
-/-- What an item registers, which the log registers once: each θ value by its name, and one registered compiler. -/
+/-- What an item registers, which the log registers once: each θ value by its name, one registered compiler, and one
+configuration. -/
 def Item.key : Item → String
   | .theta t => "theta " ++ t.value
   | .builder _ => "builder"
+  | .configuration _ => "configuration"
 
 /-- A day's registered circuit: the day, by its index among the monitoring period's days, the digest of the circuit's
 program as hex, and its block Definitions by descriptor key. -/
@@ -125,6 +135,7 @@ def Item.toJson : Item → Json
       [("words", Lean.toJson t.words)])
   | .builder b => Json.mkObj [("advice", .str b.advice), ("cap", Lean.toJson b.cap), ("digest", .str b.digest),
       ("kind", .str "builder")]
+  | .configuration d => Json.mkObj [("digest", .str d), ("kind", .str "configuration")]
 
 def Declared.toJson (d : Declared) : Json :=
   Json.mkObj [("blocks", .arr (d.blocks.map Json.str).toArray), ("day", Lean.toJson d.day), ("program", .str d.program)]
@@ -199,7 +210,10 @@ def Item.ofJson (j : Json) : V Item := do
     exactly j ["advice", "cap", "digest", "kind"] "a builder item"
     pure (.builder { digest := ← hex64 (← Flock.J.get j "digest" "the builder") "the builder's digest",
                      advice := ← Flock.J.str j "advice" "the builder", cap := ← Flock.J.nat j "cap" "the builder" })
-  | k => throw s!"an item: kind {k} is not one of [theta, builder]"
+  | "configuration" =>
+    exactly j ["digest", "kind"] "a configuration item"
+    pure (.configuration (← hex64 (← Flock.J.get j "digest" "the configuration") "the configuration's digest"))
+  | k => throw s!"an item: kind {k} is not one of [theta, builder, configuration]"
 
 def Entry.ofJson (j : Json) : V Entry := do
   let format ← Flock.J.str j "format" "an entry"
@@ -232,24 +246,28 @@ def Committed.ofJson (j : Json) : V Committed := do
 
 /-! ## The check -/
 
-/-- A refusal: a site entry's, by the Site's check that fails, `duplicate-information` or `duplicate-declaration`. -/
+/-- A refusal: a site entry's, by the Site's check that fails, `duplicate-information`, `duplicate-declaration`, or
+`configuration-unordered`, an information entry that registers a configuration, which the log has no coin or run to
+order against. -/
 inductive Refusal
   | site (r : Site.Registration.Refusal)
   | duplicateInformation
   | duplicateDeclaration
+  | configurationUnordered
   deriving DecidableEq, Repr
 
 def Refusal.name : Refusal → String
   | .site r => r.name
   | .duplicateInformation => "duplicate-information"
   | .duplicateDeclaration => "duplicate-declaration"
+  | .configurationUnordered => "configuration-unordered"
 
 def nodup : List String → Bool
   | [] => true
   | x :: xs => !xs.contains x && nodup xs
 
-/-- The log so far, folded: its Site, its information items in order, its declarations in order, its head and its
-length. -/
+/-- The log so far, folded: its Site, its information items in order, its declarations in order, its head, its
+length, and the head of each of its prefixes with the prefix's length, shortest first. -/
 structure State where
   site : Site
   items : List Item
@@ -257,8 +275,10 @@ structure State where
   head : String
   first : Option String := none
   entries : Nat
+  heads : List (Nat × String)
 
-def State.empty (c : Composite) : State := { site := ⟨[], [], []⟩, items := [], head := genesis c, entries := 0 }
+def State.empty (c : Composite) : State :=
+  { site := ⟨[], [], []⟩, items := [], head := genesis c, entries := 0, heads := [(0, genesis c)] }
 
 /-- The first check the entry `e` fails against the log folded to `s`, or `none`: a site entry's the Site's, under its
 deployed digests. -/
@@ -266,13 +286,15 @@ def Entry.refusal (A : Auditor) (c : Composite) (s : State) : Entry → Option R
   | .site e => (e.refusal Site.Registration.sha512 A c s.site s.head).map .site
   | .information p items =>
     if p ≠ s.head then some (.site .previous)
+    else if items.any (fun | .configuration _ => true | _ => false) then some .configurationUnordered
     else if nodup ((s.items ++ items).map Item.key) then none else some .duplicateInformation
   | .declaration p d =>
     if p ≠ s.head then some (.site .previous)
     else if s.declared.any (·.day == d.day) then some .duplicateDeclaration else none
 
 def State.add (s : State) (e : Entry) : State :=
-  let s : State := { s with head := e.digest, first := s.first.orElse fun _ => some e.digest, entries := s.entries + 1 }
+  let s : State := { s with head := e.digest, first := s.first.orElse fun _ => some e.digest, entries := s.entries + 1,
+                            heads := s.heads ++ [(s.entries + 1, e.digest)] }
   match e with
   | .site x => { s with site := s.site.add x.added }
   | .information _ items => { s with items := s.items ++ items }
@@ -290,9 +312,10 @@ def check (A : Auditor) (c : Composite) (log : Log) : Except (Nat × Refusal) St
 /-! ## Views: what a subprotocol reads of the log -/
 
 /-- What a subprotocol reads of an accepted log, at its head: the Site, θ's registered values in order, the registered
-compiler, the days' registered circuits in order, the head, and `first`, the head after the log's first entry: the
-log only appends, so every later head of this log has the same one, and a value bound to it is bound to this log
-whatever is registered after. None for an empty log. -/
+compiler, the days' registered circuits in order, the head, `first`, the head after the log's first entry (none for
+an empty log): the log only appends, so every later head of this log has the same one, and a value bound to it is bound
+to this log whatever is registered after; and the head of each prefix of the log with the prefix's length (`heads`,
+shortest first), the heads an answer may name. -/
 structure View where
   site : Site
   theta : List Theta
@@ -300,12 +323,13 @@ structure View where
   declarations : List Declared := []
   head : String
   first : Option String := none
+  heads : List (Nat × String) := []
 
 def State.view (s : State) : View :=
   { site := s.site, head := s.head, first := s.first,
     theta := s.items.filterMap fun | .theta t => some t | _ => none,
     builder := s.items.findSome? fun | .builder b => some b | _ => none,
-    declarations := s.declared }
+    declarations := s.declared, heads := s.heads }
 
 /-- θ's registered value named `value`. -/
 def View.value? (v : View) (value : String) : Option Theta := v.theta.find? (·.value == value)
@@ -317,8 +341,9 @@ def View.declared? (v : View) (day : Nat) : Option Declared := v.declarations.fi
 def View.toJson (v : View) : Json :=
   Json.mkObj [("builder", match v.builder with | some b => Item.toJson (.builder b) | none => .null),
     ("declarations", .arr (v.declarations.map Declared.toJson).toArray),
-    ("first", match v.first with | some h => .str h | none => .null), ("head", .str v.head), ("site", v.site.toJson),
-    ("theta", .arr (v.theta.map (Item.toJson ∘ .theta)).toArray)]
+    ("first", match v.first with | some h => .str h | none => .null), ("head", .str v.head),
+    ("heads", .arr (v.heads.map fun (n, h) => Json.mkObj [("entries", Lean.toJson n), ("head", .str h)]).toArray),
+    ("site", v.site.toJson), ("theta", .arr (v.theta.map (Item.toJson ∘ .theta)).toArray)]
 
 /-! ## The core protocol -/
 
@@ -364,7 +389,8 @@ def checkLog (p : Params) (c : Commitment) (_ : Unit) : Outcome Json Json :=
 /-- **The registration log's check** as a core protocol, `verity/registration/log/v1`: the parameters are the auditor's
 (`{"auditor": AUDITOR, "composite"}`, the auditor as `Core.Site.Registration.Auditor.ofJson` reads it), the commitment
 is the log (`{"composite", "entries": [ENTRY]}`) with its head as digest, the evidence is `{}`. It accepts a log the
-check passes, making public its view (`View.toJson`: its site, θ, registered compiler (`builder`), declarations and head) and keeping its
+check passes, making public its view (`View.toJson`: its site, θ, registered compiler (`builder`), declarations, head and its
+prefixes' heads, each `{"entries", "head"}`) and keeping its
 length, and rejects the first entry the check refuses as `entry I: REFUSAL`, and a log or parameters outside ASCII
 without DEL as not ASCII. It is never undecided. -/
 def protocol : Protocol where
@@ -525,6 +551,11 @@ private def eth0 (β : Option Nat) (why : Option String := some "no certifier sp
 #guard refusal .onsite (entries ++ [information (items.take 1)]) == some (3, .duplicateInformation)
 #guard refusal .onsite (entries ++ [information (items.drop 2)]) == some (3, .duplicateInformation)
 #guard refusal .onsite (entries ++ [information [.theta { weights with value := "tables" }]]) == none
+-- a configuration item is read, and refused by name wherever it stands, alone or beside other items
+#guard (Item.ofJson (Item.configuration (hex '9')).toJson).toOption == some (.configuration (hex '9'))
+#guard refusal .onsite (entries ++ [information [.configuration (hex '9')]]) == some (3, .configurationUnordered)
+#guard refusal .onsite [information (.configuration (hex '9') :: items)] == some (0, .configurationUnordered)
+#guard Refusal.configurationUnordered.name == "configuration-unordered"
 -- day 0 declared twice, even with the same circuit; day 1 is a new day; the view reads each day's circuit
 #guard refusal .onsite (entries ++ [declaration { day0 with program := hex '2' }]) == some (3, .duplicateDeclaration)
 #guard refusal .onsite (entries ++ [declaration day0]) == some (3, .duplicateDeclaration)

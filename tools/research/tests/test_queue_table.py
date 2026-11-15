@@ -94,7 +94,8 @@ def test_the_reading_an_hour_back_is_the_nearest_to_an_hour():
 
 
 def decisions() -> list[dict]:
-    """Candidate A (#1, #2) goes green; B (#3, #4) on top of it is red on a test, C on top of B falls with it; D rebuilds #4."""
+    """The first candidate (#1, #2) goes green; the second (#3, #4), on top of it, is red on a test, the third, on top of the second,
+    falls with it; the fourth rebuilds #4."""
     def row(action, hhmm, sha, **kw):
         return {"action": action, "at": at(hhmm), "sha": sha * 40, "shadow": False, "done": True, "why": "", "failed": [], "ids": [],
                 "verdict": None, **kw}

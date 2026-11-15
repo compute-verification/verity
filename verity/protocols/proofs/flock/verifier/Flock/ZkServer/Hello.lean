@@ -59,10 +59,10 @@ def nonceOf (hex : String) : Except String ByteArray :=
   if CoinTree.isHex (2 * NONCE_BYTES) hex then unhex hex
   else .error s!"a nonce `{hex}` that is not {2 * NONCE_BYTES} lowercase hex digits"
 
-/-- The verifier's own draw-law inputs, as `verity-verify-proof verify` reads them: `--work K` with `--work-table F`
+/-- The verifier's own sampling design inputs, as `verity-verify-proof verify` reads them: `--work K` with `--work-table F`
 (`Draw.workTableOfJson`), `--stratified K` and `--closure F` (`Draw.closureMapOfJson`), each optional. A stratified or work
 sample sets up only on them (`Stmt.setupTables`, U2), so they are the session's statement's as much as its files are. -/
-def lawOf (args : List String) :
+def samplingDesignOf (args : List String) :
     IO (Except String (Option (Nat × Array (String × Nat × Nat)) × Option Nat × Option (Std.HashMap Nat (Array Nat)))) := do
   let nat : String → Except String (Option Nat) := fun flag => match Witness.argOf args flag with
     | none => .ok none
@@ -84,7 +84,7 @@ def lawOf (args : List String) :
     pure (work, ← nat "--stratified", ← closure)
 
 /-- A zk_served statement's `Hello` inputs, read once: `verity-verify-proof verify --zk`'s statement of its files
-(`Witness.Inputs`) and the sampling design's inputs (`lawOf`). -/
+(`Witness.Inputs`) and the sampling design's inputs (`samplingDesignOf`). -/
 structure Setup where
   I : Witness.Inputs
   work : Option (Nat × Array (String × Nat × Nat))
@@ -107,7 +107,7 @@ def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup
   let (partition, program) ← match ← Witness.bindingsOf args with
     | .ok b => pure b
     | .error e => return .error e
-  let (work, stratified, closure) ← match ← lawOf args with
+  let (work, stratified, closure) ← match ← samplingDesignOf args with
     | .ok l => pure l
     | .error e => return .error s!"hello: {e}"
   let circuitFile ← IO.FS.readBinFile cf

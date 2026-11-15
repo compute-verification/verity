@@ -18,14 +18,14 @@ indices of the instances its session sampled (`unit_draw`), read only off a sess
 
 `ks_form_why` mirrors `verify --zk`'s refusal of a circuit outside the unit's form the sampled audit's knowledge
 soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file) covers, on the circuit file's head
-(`Flock.KsScope.filesWhy`, which `verity-verify-proof ks-form` runs alone). A session Lean accepts whose files it refuses is a
+(`Flock.KsScope.filesWhy`, which `verity-verify-proof ks-form` runs first). A session Lean accepts whose files it refuses is a
 ``form`` refusal, so the mirror can only refuse more.
 
 `fits_why` and `draw_fits_why` mirror v2's refusal of a length a session's statement can't hold, since it writes each in
-an 8-byte word (`OneStageZk.fitsWhy`, `drawFitsWhy`, at `WORD`): a file, a lookup table, the program, or the partition
+an 8-byte word (`OneStageZk.fitsWhy`, `sampleFitsWhy`, at `WORD`): a file, a lookup table, the program, or the partition
 object, the registered reads or a session's sample as `printed` prints them, at ``2^64`` bytes or more.
 
-`population_why` mirrors the v2 audit's check that the public file's units are the registration's population in order
+`population_why` mirrors the v2 audit's check that the public file's units are the docket's population in order
 (`Spot.FilePart.why`), which `verify` applies to the one-stage audit's statement when handed its strata.
 
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
@@ -47,7 +47,7 @@ statement for each member with a session in the evidence), which the audit's che
 and decides by `OneStageZk.checkMembersAt` (`members.check`). `members_parsed` is what its parsers read of a case's
 parameters and evidence, with no check and no verdict.
 
-Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
+Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `spot-verifier`
 too, and two builds at once would rewrite one module's C under each other.
 """
 from __future__ import annotations
@@ -81,7 +81,7 @@ VERIFIER_ENV = {"MIMALLOC_PURGE_DELAY": "-1"}
 #: the statement every sampled proof block's session proves
 STATEMENT = "verity/flock-circuit"
 _DIGEST = re.compile(r"[0-9a-f]{128}")
-#: an input bound at registration (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
+#: an input bound at docket (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
 _REGISTERED_INPUT = re.compile(r"RegisteredInput[1-9][0-9]*_v1")
 _CHUNK = 1 << 24
 #: `Flock.KsScope.SCOPE_WHY` (`ks_form_why`) and `TABLES_WHY`, the head of `verify --zk`'s refusals of a shared-row file
@@ -92,8 +92,8 @@ TABLES_WHY = "a shared-row public file (header shared_rows) under --zk"
 NO_ROW_WHY = "the circuit's units_per_vu is 0: a template instance of no unit, a proof block of no gate"
 WIDE_WHY = ("a template instance returns more than 262144 bits (16 per output leaf of its units_per_vu units): past "
             "the widest size class")
-#: `OneStageZk.UNIT_CLASS_MAX`: the widest public size class of a proof block's outputs, in bits
-UNIT_CLASS_MAX = 262144
+#: `OneStageZk.SIZE_CLASS_MAX`: the widest public size class of a proof block's outputs, in bits
+SIZE_CLASS_MAX = 262144
 #: `Flock.MUFU_TABLES`' SHA-512s, in its order: the digests the v2 audit finds a pinned lookup table under among its blobs
 #: (`OneStageZk.tablesOf`)
 MUFU_SHA512 = {t.name: t.sha512 for t in TABLES if t.name in ("rsq", "sqrt", "rcp", "ex2")}
@@ -203,7 +203,8 @@ def ks_form_why(circuit: Path, public: Path) -> str | None:
     unit); None when it applies or the circuit file's head is not in that form. A shared-row public file (header
     ``shared_rows``) is Lean's alone to refuse (`KsScope.sharedWhy`, outside the form `SampledKSLiveV5` covers), since
     its check loads the whole file and computes every port's root. `verify` refuses a session Lean accepts that it
-    refuses, so it can only refuse more; `verity-verify-proof ks-form` is the Lean it mirrors."""
+    refuses, so it can only refuse more; `verity-verify-proof ks-form`'s form check is the Lean it mirrors, and that
+    command's check of the public file's header and rows after it (`Flock.PortRoots.headerOf`) has no mirror here."""
     del public
     head = _unit_head(circuit)
     if head is not None:
@@ -216,7 +217,7 @@ def ks_form_why(circuit: Path, public: Path) -> str | None:
 
 def template_why(circuit: Path) -> str | None:
     """`OneStageZk.templateOk`'s refusals on the circuit file's head, with its reasons: a template instance of no unit
-    (META's ``units_per_vu`` is 0), else one returning more than `UNIT_CLASS_MAX` bits (16 per entry of META's
+    (META's ``units_per_vu`` is 0), else one returning more than `SIZE_CLASS_MAX` bits (16 per entry of META's
     ``leaves_out`` over its ``units_per_vu`` units); None when neither applies or the head is not in that form. v2
     refuses each session of such a circuit with that reason, so `verify` turns a session Lean accepts into one rejected
     with it."""
@@ -230,7 +231,7 @@ def template_why(circuit: Path) -> str | None:
     if upv == 0:
         return NO_ROW_WHY
     if 16 * sum(len(leaves[u]) if u < len(leaves) and isinstance(leaves[u], list) else 0 for u in range(upv)) \
-            > UNIT_CLASS_MAX:
+            > SIZE_CLASS_MAX:
         return WIDE_WHY
     return None
 
@@ -240,7 +241,7 @@ def _refusal(why: str) -> str:
 
 
 def reads_registered(program: bytes) -> bool:
-    """Whether the program descriptor `program` has an input bound at registration (a `RegisteredInput<w>_v1` among its
+    """Whether the program descriptor `program` has an input bound at docket (a `RegisteredInput<w>_v1` among its
     `definitions`), or has no `definitions` object to tell: True unless it names none."""
     try:
         defs = json.loads(program)["definitions"]
@@ -337,16 +338,16 @@ def fits_why(limit: int, circuit: bytes, public: bytes, tables: Sequence[tuple[s
 
 
 def draw_fits_why(limit: int, draw: Any) -> str | None:
-    """`OneStageZk.drawFitsWhy`: ``"the draw"`` when a session's statement would hold its record's sample ``draw`` (None
+    """`OneStageZk.sampleFitsWhy`: ``"the draw"`` when a session's statement would hold its record's sample ``draw`` (None
     for none) at ``limit`` bytes or more."""
     return "the draw" if draw is not None and limit <= printed_size(draw) else None
 
 
 def population_why(indices: Sequence[int], strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> str | None:
-    """`Spot.FilePart.why`: why the registration's population is not the public file's units in order, None
-    when it is. `strata` is the registration's over the verifier's program and query (`partition.strata`), read stratum
+    """`Spot.FilePart.why`: why the docket's population is not the public file's units in order, None
+    when it is. `strata` is the docket's over the verifier's program and query (`partition.strata`), read stratum
     by stratum, and must be its proof blocks ``0, 1, …`` in order; `indices` (the public file's ``units.indices``) must be
-    exactly those, so the file's unit ``u`` is the registration's proof block ``u``."""
+    exactly those, so the file's unit ``u`` is the docket's proof block ``u``."""
     at = 0
     for _t, rs in strata:
         for lo, hi in rs:
@@ -416,7 +417,7 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 def units_exactly(units: Sequence[Sequence[int]], indices: Sequence[int]) -> bool:
     """Whether a public file's ``units.indices`` are exactly the units of the ``[lo, hi)`` ranges `units`, ascending, so
     slot ``i`` of its table is the ``i``-th of them (`PublicUnits.exactly`): the per-member form holds each statement's
-    file to its member's units, and ``[[0, n]]`` is a registration's population in order."""
+    file to its member's units, and ``[[0, n]]`` is a docket's population in order."""
     return list(indices) == [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
 
 
@@ -434,7 +435,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     the verifier rejects is a finding, not a refusal, and so is one it accepts on a circuit `template_why` refuses,
     rejected with that reason as v2 rejects it.
 
-    With `strata`, the registration's over `program` and the partition's query (`partition.strata`), the statement is
+    With `strata`, the docket's over `program` and the partition's query (`partition.strata`), the statement is
     the one-stage audit's, whose public file holds the whole population: a session the verifier accepts on a circuit
     `template_why` passes is rejected with `population_why`'s reason where the public file's units are not that
     population in order, as the v2 audit's own run rejects it, last (`Spot.FilePart.check`). Without it (a
@@ -502,12 +503,12 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
 
 #: the one-stage audit on the proofs themselves (`Spot.OneStageZk`), which runs `verify`'s verifier on blobs
 V2 = "verity/sampled-proofs/one-stage/v2"
-V2_EXE = "sampled-proofs-one-stage-zk"
+V2_EXE = "spot-one-stage-zk"
 
 
 @functools.cache
 def v2_executable() -> Path:
-    """`lake build sampled-proofs-one-stage-zk`, once per process, under `BUILD_LOCK`; the executable's path."""
+    """`lake build spot-one-stage-zk`, once per process, under `BUILD_LOCK`; the executable's path."""
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -524,7 +525,7 @@ def order_why(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Ma
     """`OneStageZk.orderHeld`'s refusal, with its reason: the challenger session's release log in v1's `evidence`
     (``coins``' ``session``'s ``log``), after its head, not the sample, then the link, then the other rounds
     (`challenger.sample_link_first`) at the parameters' challenger family (`params`' ``challenger``'s ``label``) and the
-    registration `record`'s digest; None when it is. `check_v2` answers it under ``proofs:`` before any session's record
+    docket `record`'s digest; None when it is. `check_v2` answers it under ``proofs:`` before any session's record
     is read, once the log's coin trees parse (`challenger.coin_trees_of`), which it refuses first."""
     log = evidence["coins"]["session"]["log"]
     if sample_link_first(params["challenger"]["label"], bytes.fromhex(registration_digest(record)), log[1:]):
@@ -578,7 +579,7 @@ PARSED = "parsed, not checked"
 class Member:
     """One member of a window in v2's per-member form (`OneStageZk.membersOf`): its name, its statement's files (`Proof`,
     with no session for a member the sample missed), the SHA-512s the auditor committed for its circuit and public files
-    before any coin, the verifier's registered file for it, its units' ranges ``[lo, hi)`` of the registration's
+    before any coin, the verifier's registered file for it, its units' ranges ``[lo, hi)`` of the docket's
     population, ascending, and its circuit's ``vus_per_block``."""
     name: str
     proof: Proof
@@ -645,7 +646,7 @@ def members_parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tu
 def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any], partition: Mapping[str, Any],
                 registered: Mapping[str, Any] | None = None, tables: Sequence[Path] = ()) -> tuple[list[Finding] | None, str | None]:
     """`verify`, by the v2 audit's own run of the verifier on `proof`'s files as blobs
-    (`sampled-proofs-one-stage-zk verdicts`): the findings in session order (``session`` the directory's name) and None,
+    (`spot-one-stage-zk verdicts`): the findings in session order (``session`` the directory's name) and None,
     or None and Lean's refusal. `program` is the descriptor as JSON; `tables`, the MUFU tables a statement with lookups
     reads, blobs beside the files (`OneStageZk.tablesOf` finds them by SHA-512)."""
     pr, blobs = evidence_v2(proof)
@@ -670,9 +671,9 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
 
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
              circuit_sha512: str, public_sha512: str, registered: Mapping[str, Any] | None) -> dict:
-    """The one-stage audit on `proof` itself (`sampled-proofs-one-stage-zk check`): v1's `params` with ``proofs``, the
+    """The one-stage audit on `proof` itself (`spot-one-stage-zk check`): v1's `params` with ``proofs``, the
     auditor's circuit and public files' digests, committed before any coin, and the verifier's registered file, the
-    registration `record`, and v1's `evidence` with its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`,
+    docket `record`, and v1's `evidence` with its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`,
     under the evidence's ``sessions``); the outcome line. `params` must name the auditor's challenger and its window
     (``challenger``, ``window_root``), whose signed release in the evidence's ``coins`` the sample reads: v2 refuses
     parameters naming none. The evidence names one session (v2 refuses none or several). That release log must release
@@ -680,8 +681,9 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     record must be on the one coin tree it shows the challenger sampled and opened, its link opened after the roots of
     exactly `STATEMENT`'s one table, its ``root_B`` of the length the statement fixes (`challenger.sessions_tree_reason`,
     `challenger.LINK_ROOT_LEN`), the program's proof blocks must be `record`'s population in order (`partition.in_order`), and the public file's header
-    must be `record`'s (`registration.matches_public`), its ``units.indices`` the population's units in order, before
-    the session is verified."""
+    must be `record`'s (`registration.matches_public` at `registration.public_ports`: a window of one member's roots
+    read bare, several members' refused), its ``units.indices`` the population's units in order, before the session is
+    verified."""
     pr, blobs = evidence_v2(proof, evidence["sessions"])
     p2 = {**params, "proofs": {"circuit": circuit_sha512, "public": public_sha512, "registered": registered}}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
@@ -698,7 +700,7 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 
 __all__ = ["EXE", "FITS", "MUFU_SHA512", "NO_ROW_WHY", "NO_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY",
-           "UNIT_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "check_v2",
+           "SIZE_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "check_v2",
            "circuit_lookups", "draw_fits_why", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why",
            "lookups_of", "order_why", "own_tables", "population_why", "printed", "printed_size", "proved_units",
            "reads_registered", "statements_v2", "tables_match_why", "tables_why", "template_why", "units_exactly",

@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.accounting.pouw.prover.serving.tensors import dtype_name, tensors
 
 #: an input-ids slot past the step's rows: no token id is 2^32 - 1
 EMPTY_ID = 0xFFFFFFFF
@@ -92,10 +93,8 @@ def zy_words(records: Any, rows: int, n: int, slots: int, tile: tuple[int, int])
     place)."""
     if tuple(tile) == ZR.UNIT and rows == slots:
         shape = ((rows // tile[0]) * (n // tile[1]), ZR.ZY_BYTES)
-        if getattr(records, "is_cuda", False) and str(records.dtype) == "torch.uint8" and tuple(records.shape) == shape:
-            import torch
-
-            return records.contiguous().view(torch.uint16)
+        if getattr(records, "is_cuda", False) and dtype_name(records) == "uint8" and tuple(records.shape) == shape:
+            return tensors().view(records.contiguous(), "uint16")
         r = ZR.host(records)
         if r.dtype == np.uint8 and r.shape == shape:
             return r.view("<u2")

@@ -3,6 +3,8 @@
 
     python3 tools/move/rename.py --map MAP              rename and move, then stage it all; prints what it changed
     python3 tools/move/rename.py --map MAP --dry-run    print what it would change, and change nothing
+    python3 tools/move/rename.py --map MAP --only FILE  rename only in the files FILE lists, one path a line, and those it
+                                                        moves: a carry of a merge (every file still moves)
     python3 tools/move/rename.py --map MAP --moves      print the declaration renames that the Lean locks' records need
                                                         ({old: new}), the map `tools/verity/lean/check.py --update --moved`
                                                         takes; run it on the tree you re-record, since a branch's records
@@ -481,8 +483,7 @@ class Words:
             starts.append(s)
             far = max(far, e)
             reach.append(far)
-        held_in = [*self.keep_in.items(), *(() if protect else self.keep_paths.items())]
-        skip = {w for g, ws in held_in if path and _match(path, g) for w in ws}
+        skip = self.held(path, protect)
 
         def one(m: re.Match) -> str:
             w = m.group(0)
@@ -497,6 +498,11 @@ class Words:
                 counts[re.sub(GAP, " ", w), new[m.lastindex - 1]] += 1
             return to
         return pattern.sub(one, text)
+
+    def held(self, path: str, protect: bool = True) -> set[str]:
+        """The words [keep_in] (and, without ``protect``, [keep_paths]) lists for `path`, which stand there as they are."""
+        held_in = [*self.keep_in.items(), *(() if protect else self.keep_paths.items())]
+        return {w for g, ws in held_in if path and _match(path, g) for w in ws}
 
     def path(self, p: str) -> str:
         return p if self.scope else self.sub(p, p, protect=False)
@@ -868,6 +874,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--allow-dirty", action="store_true")
     ap.add_argument("--jobs", type=int, default=min(JOBS, len(os.sched_getaffinity(0))),
                     help=f"the processes that rewrite files (default: the cores this process may use, at most {JOBS})")
+    ap.add_argument("--only", type=Path, metavar="FILE",
+                    help="rename only in the files FILE names, one path a line, and those the run moves: a rerun over what a "
+                         "merge brought (every file still moves, and the rest of the tree is not rewritten)")
     a = ap.parse_args(argv)
     root = (a.root or Path(L.git(HERE, "rev-parse", "--show-toplevel").strip())).resolve()
     words = Words(tomllib.loads(a.map.read_text()))
@@ -895,6 +904,9 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("paths that would differ only in case:\n  " + "\n  ".join(fold[:50]))
 
     todo = [p for p in present if not (words.excluded(p) or os.path.islink(root / p) or p in fixed)]
+    if a.only:
+        only = L.only_paths(a.only)
+        todo = [p for p in todo if p in only or p in dest]
     L.refuse_unread({p: os.path.getsize(root / p) for p in todo if L.oversize(root / p)})
     texts, counts, kept = rewrite(root, words, run, todo, a.jobs)
     pins = {p: t for p in present if posixpath.basename(p) == PINS and (t := repin(root, words, p, texts, dest)) is not None}

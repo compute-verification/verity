@@ -1,4 +1,4 @@
-"""The registration record (README "The registration record"): what a window is committed to, fixed before the verifier samples.
+"""The docket (README "The registration record"): what a window is committed to, fixed before the verifier samples.
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
@@ -10,31 +10,27 @@
 
 * **Digest.** `SHA-512("verity/registration/v1\\0" || canon(record))`.
 * **Rule.** Everything a sampled proof block's statement can depend on is fixed by the record, or by objects the verifier already
-  holds, before the sample. The verifier checks R1-R8 (`check`) against its own copies, writes a `receipt` with its own
-  clock, and only then samples.
+  holds, before the sample. The verifier checks R1-R8 (`check`) against its own copies, then, where they pass, the
+  caller's check (`caller.check`: Declared day, Binding, Seed salt, Registered compiler, and the pool's marks and chain,
+  which `check` reads only to parse), writes a `receipt` with its own clock, and only then samples.
 * **The checks** (`check`): the record has exactly these keys, and
   - R1: the format and protocol are these, the sampling design is the verifier's own expanded over its program and query
     (`draw.derive`, with its own work table for `work`) as canonical bytes, and `window.kind` is `served` or `stand-in`;
   - R2: the program, query and partition digests and the population are the verifier's own (an explicit partition
-    object must be over the verifier's program), and for a verifier that reads the registration log's declarations
-    (Declared day), the program is the one circuit the log declares for the window's day;
+    object must be over the verifier's program);
   - R3: the scheme is the verifier's, and the roots are exactly the ports its layout derives, each exactly
-    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain; a port the layout wires to
-    another port's tree (`"wired"`) has that port's root (`R3-wired`);
+    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain;
   - R4: the leaf layer is the digest of the verifier's copy, so a null one is refused when the verifier holds one;
   - R5: the anchors are the verifier's;
-  - R6: `previous` is the digest of this prover's last record (null for the first), no earlier record has the same
-    window, for a bound verifier the window names its stream and prover (Binding), the window names the seed salt
-    the verifier read from its challenger, or none when it read none (Seed salt), and it names the reset serving
-    chose for its pool, its week and whether the week's reset is spent, as the verifier holds them, at most one reset
-    a week, or none of them for a verifier with no pool (Pool chain);
+  - R6: `previous` is the digest of this prover's last record (null for the first), and no earlier record has the same
+    window;
   - R8, under a template query: each run Input node's leaves, other than a parameter's the verifier expects registered,
     are read by one proof block alone, never broadcast to a batch or read by two (`partition.shared_inputs`,
     `R8-shared-input`), so a served port reaches a proof block only as
     its own leaves and a value several read comes as a registered value; and the verdict publishes the query's fan-out F
     on the verifier's program (`partition.fanout`, `Verdict.fanout`), the N at which the capped two-stage form charges a
     replay block (`plancheck.two`'s `fanout`). A run Input a parameter the verifier names `tied` holds is let through:
-    the network period check ties its rows to the registrations that computed them, which this check doesn't, so the
+    the network period check ties its rows to the dockets that computed them, which this check doesn't, so the
     verdict publishes each tied name it let through (`Verdict.rests_on_period_check`), and with any its acceptance is
     none on its own; it refuses a tied name that isn't a run Input of the program's own, or that it expects registered
     or holds (`R8-tied`).
@@ -74,26 +70,26 @@
   the window's day and the declarations it holds when it samples (its view's `declarations`: `{"day", "program",
   "blocks"}` each): of record, the UTC day of the window open's `started_utc` and the declarations its lane signed
   before that open, both from the challenger's ledger checked under the auditor's key (`challenger.declared_day`), so a
-  window that opens before UTC midnight and closes after is a window of its open's day. R2 refuses a day with no
+  window that opens before UTC midnight and closes after is a window of its open's day. The caller's check (`caller.check`) refuses a day with no
   declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as
-  `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as R2's Lean does
-  (`VStar.Recursive.Caller.declaredCode`, the caller's check), which `verifier.check` runs beside it.
+  `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as its Lean does
+  (`VStar.Recursive.Caller.declaredCode`).
 * **Binding** (`binding`: `{"stream", "prover"}`, the verifier's stream digest and the identity it registered the prover
-  under): R6 also holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
+  under): the caller's check holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
   so a tile seeded for one prover's stream is refused in any other's, in the same window or not.
 * **Seed salt** (`seed_salt`): the window's seed salt, the one coin of the challenger's seed-salt family released after
   the window's open root, before the window serves (`coins.draw_seed_salt`), which the verifier reads from the
   challenger's log (`coins.seed_salt_of`), never from the record: lowercase hex of 64 bytes, read on the window's
   session, so only beside `window_root`. The record's window names it (`SEED_SALT`), a certified input the window's
-  circuits read, and R6 refuses a window that names another or none, or names one where the verifier read none
+  circuits read, and the caller's check refuses a window that names another or none, or names one where the verifier read none
   (`R6-seed-salt`), so a salt the server chose is refused by name.
 * **Registered compiler** (`compiler`): the registration log's registered compiler as its view publishes it
-  (`verity.hardware.registration`): its item, with its digest and the public length ℓ of the advice it reads, or None
-  when the log registers none. R6 holds the record's window to name that compiler by its digest
+  (`verity.protocols.accounting.registration.verifier.registration`): its item, with its digest and the public length ℓ of the advice it reads, or None
+  when the log registers none. The caller's check holds the record's window to name that compiler by its digest
   (`window.compiler.digest`; `R6-compiler`) and advice of at most ℓ bits (`window.advice.bits`; `R6-advice-length`),
   and, where the log registers none, to name neither a compiler nor advice (`R6-compiler`), so advice no registered
-  compiler reads is refused by name. A verifier that reads no log's compiler passes `UNREAD`, the default, and R6 holds
-  the window to nothing here.
+  compiler reads is refused by name. A verifier that reads no log's compiler passes `UNREAD`, the default, and the
+  caller's check holds the window to nothing here.
 * **Output values**: a registered value that is an output of an earlier run (`outputs`: `{value: {"record": D, "port":
   P}}`; never the inference-only check's θ, which holds registered public data only) reuses that output's commitment instead of
   committing it afresh: its entry takes port P's domain and root from the `roots` of the log's record with digest D, and
@@ -115,7 +111,7 @@
   it: `pin` is then a reused value, the previous record's `pout` in `pout`'s row format (`pool_values`), so its entry
   takes that entry's domain and root, whatever the verifier made of that window. The chain restarts from the empty
   pool, `pin` a supplied value filled from `genesis`, the empty pool's root, so its root is fixed:
-  - by the public rule, which takes no advice: at a registration's first window, at a registration boundary (the log's
+  - by the public rule, which takes no advice: at a docket's first window, at a docket boundary (the log's
     last record registered another program), and after the verifier refused the window `lag` windows of record before
     this one (`pool_refused`), `lag` the fixed public lag at which serving learns a verdict. Whether it did is read
     from the verifier's own verdict log (`verdicts`: each earlier record's digest and whether its run accepted), so
@@ -125,16 +121,22 @@
     (`POOL_WEEK`, its index among the monitoring period's weeks on the verifier's clock, `week`; `R6-pool-week`) and
     whether the week's reset is spent at it (`POOL_SPENT`; `R6-pool-spent`): that it resets, or that the previous
     record, of the same week, named it spent (`pool_spent_before`), so a week's windows from its reset on all name it
-    spent, and the next week starts unspent. R6 refuses a reset where the week's is spent before it
+    spent, and the next week starts unspent. The caller's check refuses a reset where the week's is spent before it
     (`R6-pool-reset-week`). Serving chooses the resets, so they are advice: the records name, of a week's n windows,
     the one serving reset at or none, log2(n + 1) bits a week (log2 1009, 9.98 bits, for 600-second windows), which
     leakage charges. The rest of the chain, the spent marks and the weeks included, is a function of the resets, the
     verdicts and the verifier's clock, and public.
-  R7 refuses a record whose entry for `pin` is not the pool its window opens (`pool_open`) by name (`R7-pool-chain`),
+  The caller's check refuses a v2 record whose entry for `pin` is not the pool its window opens (`pool_open`) by name
+  (`R7-pool-chain`),
   beside the R7 codes the reuse or the fill gives it. The pool's root is all the chain carries. What a window takes up
   that the one before left open at its edge is part of its certified input, which the verifier pins at the root the
   network certifier signed for the window, so a root the certifier didn't sign is `R7-held`, whether the window
   carries the pool or restarts it.
+* **Verdicts** (`verdicts`, the pool's form): a verifier may give its verdict log, and the caller's check
+  (`caller.check`) then refuses a record with an output value that reads a port of an earlier record the log names
+  refused (`R7-output-refused`, after `R7-pool-chain`), so a window carries no start past a window whose run the
+  verifier refused. A record the log doesn't name passes, as the pool's lag rule reads it, and a reused registered
+  value (`value`, the pool's `pin` among them) is not held to it.
 """
 from __future__ import annotations
 
@@ -164,7 +166,8 @@ POOL_RESET = "pool_reset"
 POOL_WEEK = "pool_week"
 #: the window's field naming whether its week's one reset is spent at it (Pool chain)
 POOL_SPENT = "pool_spent"
-#: `compiler` when the verifier reads no registration log's compiler (Registered compiler): R6 holds the window to nothing
+#: `compiler` when the verifier reads no registration log's compiler (Registered compiler): the caller's check holds the
+#: window to nothing
 UNREAD: Any = object()
 TIED_WHY = ("a tied value is a run Input of the program whose rows a later check ties to the registrations that computed "
             "them: a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes")
@@ -180,18 +183,18 @@ def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
 
 
-def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
+def record(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
            window: Mapping[str, Any], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
            previous: str | None = None, partition: Mapping[str, Any] | None = None,
            work_table: Mapping[str, Any] | None = None, registered: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`).
-    `law` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
+    `sampling_design` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
     `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`Registered.entry`),
     which make the record v2."""
     part = dict(partition) if partition is not None else P.partition(program, query)
     rec = {"format": FORMAT_V2 if registered else FORMAT, "protocol": PROTOCOL, "program": part["program"],
            "query": query_digest(part["query"]), "partition": P.digest(part), "population": P.units(program, query),
-           "law": D.derive(program, query, law, work_table), "scheme": scheme,
+           "law": D.derive(program, query, sampling_design, work_table), "scheme": scheme,
            "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
            "leaf_layer": leaf_layer, "anchors": list(anchors), "window": dict(window), "previous": previous}
     if registered:
@@ -201,7 +204,7 @@ def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], s
 
 
 def record_digest(tag: str, canon: bytes) -> bytes:
-    """The one registration digest, `SHA-512(tag || 0 || canon)`, over a record's canonical bytes: `digest`'s, and PoUW's
+    """The one docket digest, `SHA-512(tag || 0 || canon)`, over a record's canonical bytes: `digest`'s, and PoUW's
     over the bytes it was handed (`pouw.core_check.digest`)."""
     return hashlib.sha512(tag.encode() + b"\0" + canon).digest()
 
@@ -214,7 +217,7 @@ def digest(rec: Mapping[str, Any]) -> str:
 
 def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
     """`{(value, domain): root}` for every value an earlier record of the log registered, the root of its first
-    registration under that domain: R7 holds a value to the root registered under the domain it takes now, so a
+    docket under that domain: R7 holds a value to the root registered under the domain it takes now, so a
     per-window value, whose domain binds its window, is held to none of another window's."""
     held: dict[tuple[str, str], str] = {}
     for rec in log:
@@ -238,7 +241,7 @@ class HistoryRefused(ValueError):
 
 
 def resolved(supplied: Any, history: Mapping[str, Any] | None) -> Any:
-    """``supplied`` as `check` read it under the history tables ``history``, for a registration `check` accepted: each
+    """``supplied`` as `check` read it under the history tables ``history``, for a docket `check` accepted: each
     source ``{"history": "H/root"}`` or ``{"history": "H/domain"}`` the bytes of table ``H``'s root or domain id
     (`history.resolve`), as the Lean's params hold them. It computes no table's root: `check` held each registered
     root to its table (`history.roots_of`), so the root is the registered one and the domain id the table's own."""
@@ -250,7 +253,23 @@ def resolved(supplied: Any, history: Mapping[str, Any] | None) -> Any:
     return HT.resolve(roots, supplied)
 
 
-def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
+def with_history(supplied: Any, history: Mapping[str, Any] | None, leaf_layer: str | None) -> Any:
+    """``supplied`` with each ``history`` source the bytes of the root or domain id `history.roots_of` computes for its
+    table from the members' public bodies `leaf_layer` binds; `HistoryRefused` where it can't."""
+    if history is None:
+        return supplied
+    if not isinstance(history, Mapping) or set(history) != {"digests", "held", "registered", "tables"}:
+        raise HistoryRefused("the keys of the history tables are not digests, held, registered, tables")
+    if leaf_layer is None:
+        raise HistoryRefused("history tables are read from members' public bodies the leaf layer binds: the verifier "
+                             "names no leaf_layer")
+    try:
+        return HT.resolve(HT.roots_of(leaf_layer, history), supplied)
+    except ValueError as e:
+        raise HistoryRefused(str(e)) from e
+
+
+def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
@@ -262,11 +281,10 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, compiler: Any = UNREAD,
-          certified: Mapping[str, Mapping[str, Any]] | None = None) -> Verdict:
+          certified: Mapping[str, Mapping[str, Any]] | None = None,
+          verdicts: Mapping[str, bool] | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
-    (`{port: {"leaves", "domain"}}`, a port whose rows are the leaves of another port's tree naming that port too,
-    `"wired"`: R3 refuses a record whose roots under the two names differ, `R3-wired`), the digest of its copy of the
-    leaf layer, its anchors, its log of this prover's
+    (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
@@ -274,7 +292,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     {"record", "port" | "value"}}`, or `{parameter: {"port"}}`, that port of the log's last record); and
     those whose rows are not `row/v1` rows (`schemas`: `{parameter: schema}`, `registered.SCHEMAS`), whose rows R7 counts in
     that format (`registered_entries`), and a supplied one's it commits in it (`registered.supplied_root`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
-    (`{"stream", "prover"}`, `_binding`), which R6 holds the window to name and a window salt binds.  `partition`: the
+    (`{"stream", "prover"}`, `_binding`), which the caller's check holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered sampling design to the verifier's own
     sampling design expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
@@ -289,33 +307,34 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     (`registered.domain`).  So a per-window value registered in one window is held to nothing in the next, and a root of
     another window's opens under no domain R7 takes.  Without `window_root`, a value it doesn't hold across windows that
     the log registered under the domain it takes now is a ValueError (`unwindowed`).  `day` and `declarations`: the
-    window's day and the registration log's declarations (Declared day), both or neither; R2 holds the record's program
-    to the day's one declaration (`_declared`).  `seed_salt`: the window's seed salt the verifier read from its
-    challenger (Seed salt), which R6 holds the window to name; ValueError in another form or without `window_root`.
+    window's day and the registration log's declarations (Declared day), both or neither, which the caller's check reads (`caller.check`).  `seed_salt`: the window's seed salt the verifier read from its
+    challenger (Seed salt), which the caller's check holds the window to name; ValueError in another form or without `window_root`.
     `compiler`: the registration log's registered compiler, its item or None when it registers none (Registered
-    compiler, `_registered_compiler`), whose digest R6 holds the window's compiler to and whose length ℓ its advice's
+    compiler, `_registered_compiler`), whose digest the caller's check holds the window's compiler to and whose length ℓ its advice's
     bits; `UNREAD` holds the window to nothing; ValueError in another form.
     `pool`: the values a window opens and leaves its pool in, the empty pool's root, whether the verifier refused the
-    window the public lag back, the window's own reset, which R6 holds it to name, and whether its week's one reset is
-    spent (Pool chain, `_pool`), whose `pin` it adds to `outputs` or `supplied` (`pool_values`) and R7 holds to the
-    chain (`R7-pool-chain`).  `history`: the history tables the program reads (``{"digests", "held", "registered",
+    window the public lag back, the window's own reset, which the caller's check holds it to name, and whether its week's one reset is
+    spent (Pool chain, `_pool`), whose `pin` it adds to `outputs` or `supplied` (`pool_values`) and the caller's check holds to
+    the chain (`R7-pool-chain`).  `history`: the history tables the program reads (``{"digests", "held", "registered",
     "tables"}``, `history.roots_of`), each table's root computed from its writers' public bodies the leaf layer binds
     and held to the root the window registers for it, which needs `leaf_layer`; a supplied value's source
     ``{"history": "H/root"}`` or ``{"history": "H/domain"}`` is then the bytes of the root or domain id it computed for
     table ``H`` (`history.resolve`).  History tables it can't read or hold to their roots raise `HistoryRefused`, which
     the verifier reports as `HISTORY` where its Lean refuses them too.  `certified`: the entries the verifier built from
-    registrations it read under the deployment's key, of values that are none of its program's parameters (the
+    dockets it read under the deployment's key, of values that are none of its program's parameters (the
     certified rows of a link), ``{value: {"root", "leaves", "words", "domain"}}``, with `word_bits` when its leaves
     are not 16 bits (`_certified`).  With any, it expects a v2 record though it expects no parameter registered, R7
     holds the record's registered values to be the ones it expects registered and the certified ones, each once, a
     certified value's entry to the verifier's leaves, words, word bits and domain as its own values', and its root to
     the verifier's (`R7-certified`): a certified value is never supplied, pinned, held or an output, and a record that
-    names one the verifier holds no entry for is refused as before (`R7-values`).  R3
+    names one the verifier holds no entry for is refused as before (`R7-values`).  `verdicts`: the verifier's verdict
+    log, in the pool's form (`_verdicts`), which the caller's check holds each output value's earlier port to
+    (`caller.check`, `R7-output-refused`).  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
     reads them.  Under a template query R8 refuses a run Input node the proof blocks don't each read alone, unless it
     is a parameter's that `registered` names (`partition.shared_inputs`) or one of `tied`'s, and the verdict carries the
     fan-out F of `query` on `program` (`partition.fanout`), which it publishes whatever its codes; under any other query it
-    carries none.  `tied`: parameters, run Inputs, whose rows a later check ties to the registrations that computed them
+    carries none.  `tied`: parameters, run Inputs, whose rows a later check ties to the dockets that computed them
     (the scan's slot entries, which the network period check ties to the blocks that registered them), which R8 lets
     through though several proof blocks read them, on that later check alone: the verdict publishes the ones it let
     through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
@@ -325,20 +344,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     that ends misses a member, its fewest none (`link_points.refused`), no sample under the sampling design ends
     (`link_points.NEVER_ENDS`), or the members or the sampling design are not well formed over the population."""
     c = _Collect()
-    days = _declarations(day, declarations)
+    _declarations(day, declarations)
     log = list(log)
     pool = _pool(pool, registered or {}, supplied, pinned, outputs, schemas)
+    if verdicts is not None:
+        _verdicts(verdicts)
     supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
-    if history is not None:
-        if not isinstance(history, Mapping) or set(history) != {"digests", "held", "registered", "tables"}:
-            raise HistoryRefused("the keys of the history tables are not digests, held, registered, tables")
-        if leaf_layer is None:
-            raise HistoryRefused("history tables are read from members' public bodies the leaf layer binds: the verifier "
-                                 "names no leaf_layer")
-        try:
-            supplied = HT.resolve(HT.roots_of(leaf_layer, history), supplied)
-        except ValueError as e:
-            raise HistoryRefused(str(e)) from e
+    supplied = with_history(supplied, history, leaf_layer)
     sup = G.sources(supplied if supplied is not None else {})
     if supplied is not None and not registered:
         raise ValueError("supplied values are registered values: the verifier expects none registered")
@@ -349,8 +361,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     formats = _schemas(schemas, registered or {})
     bound = _binding(binding)
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
-    salt = _seed_salt(seed_salt, window)
-    reads = _registered_compiler(compiler)
+    _seed_salt(seed_salt, window)
+    _registered_compiler(compiler)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
     fan, shared, through, bad = _readers(program, query, registered or {}, held or (), tied or ())
     keys = _KEYS | {"registered"} if v2 else _KEYS
@@ -361,9 +373,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if (rec["format"], rec["protocol"]) != (FORMAT_V2 if v2 else FORMAT, PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
     try:
-        mine = D.derive(program, query, law, work_table)
+        mine = D.derive(program, query, sampling_design, work_table)
     except (P.QueryRefused, ValueError) as e:
-        c.fail("R1-law", {"registered": rec["law"], "verifier": f"{dict(law)} does not apply: {e}"})
+        c.fail("R1-law", {"registered": rec["law"], "verifier": f"{dict(sampling_design)} does not apply: {e}"})
     else:
         if not D.same_design(rec["law"], mine):
             c.fail("R1-law", {"registered": rec["law"], "verifier": mine})
@@ -388,8 +400,6 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     else:
         if rec["population"] != population:
             c.fail("R2-population", {"registered": rec["population"], "verifier": population})
-    if days is not None:
-        _declared(c, rec["program"], *days)
     # R3
     if rec["scheme"] != scheme:
         c.fail("R3-scheme", {"registered": rec["scheme"], "verifier": scheme})
@@ -410,13 +420,6 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                 c.fail("R3-leaves", {"port": p, "registered": r["leaves"], "verifier": want["leaves"]})
             if r["domain"] != want["domain"]:
                 c.fail("R3-domain", {"port": p, "registered": r["domain"], "verifier": want["domain"]})
-        # one tree at two names: a port its layout wires to another's tree has that port's root. Only as good as the
-        # layout's `wired` entries: a second check of what the second stage holds each session's read of a wired port to
-        for p, want in sorted(ports.items()):
-            q = want.get("wired")
-            if isinstance(q, str) and not (p in got and q in got and isinstance(got[p]["root"], str)
-                                           and got[p]["root"] == got[q]["root"]):
-                c.fail("R3-wired", {"port": p, "wired": q})
     # R4: when the verifier holds the leaf layer, the record must name it (a null leaf layer is refused)
     if rec["leaf_layer"] != leaf_layer:
         c.fail("R4-leaf-layer", {"registered": rec["leaf_layer"], "verifier": leaf_layer})
@@ -429,34 +432,10 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R6-previous", rec["previous"])
     if any(e.get("window") == rec["window"] for e in earlier):
         c.fail("R6-window", rec["window"])
-    w = rec["window"] if isinstance(rec["window"], Mapping) else {}
-    if bound is not None:
-        for k in ("stream", "prover"):
-            if w.get(k) != bound[k]:
-                c.fail(f"R6-{k}", {"registered": w.get(k), "verifier": bound[k]})
-    if w.get(SEED_SALT) != salt:
-        c.fail("R6-seed-salt", {"registered": w.get(SEED_SALT), "verifier": salt})
-    reset = pool["reset"] if pool is not None else None
-    if w.get(POOL_RESET) is not reset:
-        c.fail("R6-pool-reset", {"registered": w.get(POOL_RESET), "verifier": reset})
-    week = pool["week"] if pool is not None else None
-    if not _names(w.get(POOL_WEEK), week):
-        c.fail("R6-pool-week", {"registered": w.get(POOL_WEEK), "verifier": week})
-    before = pool is not None and pool_spent_before(pool, earlier)
-    spent = (pool["reset"] or before) if pool is not None else None
-    if w.get(POOL_SPENT) is not spent:
-        c.fail("R6-pool-spent", {"registered": w.get(POOL_SPENT), "verifier": spent})
-    if pool is not None and pool["reset"] and before:
-        c.fail("R6-pool-reset-week", {"registered": True, "verifier": "the week's reset is spent before this window"})
-    if reads is not UNREAD:
-        _compiler(c, w, reads)
     # R7
     if v2:
         _check_registered(c, rec["registered"], program, registered or {}, pins, rec, sup, earlier, bound, outs, formats,
                           window, fixed, cert)
-        if pool is not None:
-            _pool_chain(c, rec, pool, pool_open(pool, rec, program, registered, formats, window, fixed, sup, earlier,
-                                                bound))
         _certified_held(c, rec, cert)
     # R8
     if bad:
@@ -465,7 +444,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
     if members:
         try:
-            refused = LP.refused(*LP.law_of(program, query, law, work_table), members)
+            refused = LP.refused(*LP.sampling_design_of(program, query, sampling_design, work_table), members)
         except (P.QueryRefused, ValueError) as e:
             c.fail("link-points", str(e))
         else:
@@ -499,7 +478,7 @@ def _tied(program: Program, tied: Sequence[str], registered: Sequence[str], held
     """Each of `tied`'s Input gates where R8 may let it through, else None: a parameter of the program that the verifier
     neither expects registered nor holds, whose gates are one non-empty interval (`registered.held_gates`) of run Input
     nodes (`partition.run_inputs`). A tied Input is never a registered value: R7 holds nothing of it. The Lean's
-    `Registration.tiedGate` is this."""
+    `Docket.tiedGate` is this."""
     fixed = {*registered, *held}
     out: list[range | None] = []
     for t in tied:
@@ -548,7 +527,7 @@ def refuse_unwindowed(again: Sequence[str]) -> None:
 
 def last_digest(log: Sequence[Mapping[str, Any]]) -> str:
     """The previous record's digest, the one R6 holds `previous` to: the log's last record's, and empty, which names no
-    record, when the log is empty (`Registration.lastDigest`)."""
+    record, when the log is empty (`Docket.lastDigest`)."""
     if not log:
         return ""
     try:
@@ -691,17 +670,6 @@ def _declarations(day: int | None, declarations: Sequence[Mapping[str, Any]] | N
     return day, list(declarations)
 
 
-def _declared(c: _Collect, program: Any, day: int, declarations: Sequence[Mapping[str, Any]]) -> None:
-    """R2's declared day: the window's day has exactly one declaration, and the record's program is its program."""
-    mine = [d for d in declarations if d["day"] == day]
-    if not mine:
-        c.fail("R2-undeclared", {"day": day})
-    elif len(mine) > 1:
-        c.fail("R2-declared-twice", {"day": day, "programs": [d["program"] for d in mine]})
-    elif program != mine[0]["program"]:
-        c.fail("R2-declared", {"day": day, "registered": program, "declared": mine[0]["program"]})
-
-
 def _binding(binding: Mapping[str, str] | None) -> dict[str, str] | None:
     """The verifier's binding: exactly `stream`, its stream's digest (lowercase hex of 64 bytes), and `prover`, the identity
     it registered the prover under (lowercase hex of whole bytes); ValueError otherwise, which the Lean verifier refuses
@@ -732,7 +700,7 @@ def _seed_salt(seed_salt: str | None, window: str | None) -> str | None:
 
 def _registered_compiler(item: Any) -> Any:
     """The registered compiler the verifier read (Registered compiler): `UNREAD`; None, a log that registers none; or the
-    log's item as its view publishes it (`verity.hardware.registration`), its digest lowercase hex of 64 bytes, its
+    log's item as its view publishes it (`verity.protocols.accounting.registration.verifier.registration`), its digest lowercase hex of 64 bytes, its
     advice format a string and its length ℓ a natural, as `(digest, ℓ)`; ValueError otherwise, which the Lean verifier
     refuses too (`OneStage.paramsOfJson`)."""
     if item is UNREAD or item is None:
@@ -746,23 +714,6 @@ def _registered_compiler(item: Any) -> Any:
     if not (len(item["digest"]) == 128 and _HEX.fullmatch(item["digest"])):
         raise ValueError(f"the registered compiler's digest is not lowercase hex of 64 bytes: {item['digest']!r}")
     return item["digest"], cap_bits
-
-
-def _compiler(c: _Collect, w: Mapping[str, Any], reads: tuple[str, int] | None) -> None:
-    """R6's registered compiler: the window names the log's compiler by its digest (`R6-compiler`) and advice of at most
-    its length ℓ in bits (`R6-advice-length`), and names neither where the log registers none (`R6-compiler`), as R6's
-    Lean does (`Spot.Registration.compilerOk`, `adviceOk`)."""
-    named, advice = w.get("compiler"), w.get("advice")
-    if reads is None:
-        if named is not None or advice is not None:
-            c.fail("R6-compiler", {"registered": {"compiler": named, "advice": advice}, "verifier": None})
-        return
-    digest, cap_bits = reads
-    if not (isinstance(named, Mapping) and named.get("digest") == digest):
-        c.fail("R6-compiler", {"registered": named, "verifier": digest})
-    bits = advice.get("bits") if isinstance(advice, Mapping) else None
-    if not (type(bits) is int and 0 <= bits <= cap_bits):
-        c.fail("R6-advice-length", {"registered": bits, "verifier": cap_bits})
 
 
 #: a pool's fields (Pool chain)
@@ -804,18 +755,29 @@ def _pool(pool: Mapping[str, Any] | None, registered: Mapping[str, int], supplie
         raise ValueError(f"the pool's lag is a positive integer: {pool['lag']!r}")
     if not (type(pool["week"]) is int and pool["week"] >= 0):
         raise ValueError(f"the pool's week is a natural: {pool['week']!r}")
-    verdicts = pool["verdicts"]
+    _verdicts(pool["verdicts"], "the pool's verdicts")
+    return dict(pool)
+
+
+def _verdicts(verdicts: Any, what: str = "the verdicts") -> dict[str, bool]:
+    """A verdict log: an object of record digests (lowercase hex of 64 bytes) to whether the verifier's run on that record
+    accepted; ValueError otherwise, which the Lean verifier refuses too (`OneStage.verdictsOf`)."""
     if not (isinstance(verdicts, Mapping) and all(isinstance(d, str) and len(d) == 128 and _HEX.fullmatch(d)
                                                   and type(a) is bool for d, a in verdicts.items())):
-        raise ValueError(f"the pool's verdicts are an object of record digests (lowercase hex of 64 bytes) to bools: "
-                         f"{verdicts!r}")
-    return dict(pool)
+        raise ValueError(f"{what} are an object of record digests (lowercase hex of 64 bytes) to bools: {verdicts!r}")
+    return dict(verdicts)
+
+
+def refused(verdicts: Mapping[str, bool], d: str) -> bool:
+    """Whether the verdict log names the verifier's run on record `d` refused; a record it holds no verdict for is not
+    refused (`Docket.refusedIn`)."""
+    return verdicts.get(d) is False
 
 
 def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
     """Whether the verifier refused the window `lag` windows of record before this one (Pool chain): its verdict log
     (`verdicts`) names its run on that record of the log refused. A log shorter than the lag, or a record it holds no
-    verdict for, is not refused, so where every run accepted the chain never restarts (`Registration.Pool.refused`)."""
+    verdict for, is not refused, so where every run accepted the chain never restarts (`Docket.Pool.refused`)."""
     lag = pool["lag"]
     if len(log) < lag:
         return False
@@ -823,13 +785,13 @@ def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> b
         d = digest(log[len(log) - lag])
     except (TypeError, ValueError):
         return False
-    return pool["verdicts"].get(d) is False
+    return refused(pool["verdicts"], d)
 
 
 def pool_spent_before(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
     """Whether the week's one reset is spent before this window (Pool chain): the log's last record, the previous window
     of record, names it spent (`POOL_SPENT`) in the verifier's week (`POOL_WEEK`), so a week starts unspent
-    (`Registration.Pool.spentBefore`)."""
+    (`Docket.Pool.spentBefore`)."""
     last = log[-1] if log else None
     w = last.get("window") if isinstance(last, Mapping) else None
     return isinstance(w, Mapping) and w.get(POOL_SPENT) is True and _names(w.get(POOL_WEEK), pool["week"])
@@ -838,7 +800,7 @@ def pool_spent_before(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]])
 def pool_chains(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]], program: Program) -> bool:
     """Whether the window carries the previous window's pool (Pool chain): neither the verifier refused the window the
     public lag back (`pool_refused`) nor serving reset it (`reset`), and the log's last record, the previous window of
-    record, registered its program (`Registration.Pool.chains`). Otherwise it opens the empty pool."""
+    record, registered its program (`Docket.Pool.chains`). Otherwise it opens the empty pool."""
     last = log[-1] if log else None
     return (not pool["reset"] and not pool_refused(pool, log) and isinstance(last, Mapping)
             and last.get("program") == P.program_digest(program))
@@ -872,7 +834,7 @@ def pool_open(pool: Mapping[str, Any], rec: Mapping[str, Any], program: Program,
     """The domain and root of the pool the record's window opens (Pool chain): the previous record's entry for `pout` (its
     last naming it) when the window carries the previous window's pool (`pool_chains`), else the empty pool's: the
     domain the verifier gives `pin` (`registered_entries`) and the root R7 recomputes for it filled from `genesis`
-    (`registered.supplied_root`); where there is none, why (`Registration.poolOpen`, none there)."""
+    (`registered.supplied_root`); where there is none, why (`Docket.poolOpen`, none there)."""
     if pool_chains(pool, log, program):
         es = log[-1].get("registered")
         hits = [e for e in es if isinstance(e, Mapping) and e.get("value") == pool["pout"]] if isinstance(es, list) else []
@@ -888,16 +850,6 @@ def pool_open(pool: Mapping[str, Any], rec: Mapping[str, Any], program: Program,
                                                sorted(supplied), log, None, binding)
     except ValueError as e:
         return f"the empty pool fills no {pool['pin']!r}: {e}"
-
-
-def _pool_chain(c: _Collect, rec: Mapping[str, Any], pool: Mapping[str, Any], want: tuple[str, str] | str) -> None:
-    """R7's pool chain: the record's entry for `pin` (its last naming it) has the domain and root of the pool its window
-    opens (`want`, `pool_open`, or why there is none), else `R7-pool-chain`."""
-    got = rec["registered"]
-    hits = [e for e in got if isinstance(e, Mapping) and e.get("value") == pool["pin"]] if isinstance(got, list) else []
-    mine = (hits[-1].get("domain"), hits[-1].get("root")) if hits else None
-    if mine != want:
-        c.fail("R7-pool-chain", {"value": pool["pin"], "registered": mine, "verifier": want})
 
 
 def _certified_held(c: _Collect, rec: Mapping[str, Any], certified: Mapping[str, Mapping[str, Any]]) -> None:
@@ -951,7 +903,7 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
         if not (isinstance(e["root"], str) and len(e["root"]) == 128 and _HEX.fullmatch(e["root"])):
             c.fail("R7-root", v)
         # a count is an int, never a float or bool equal to it, and 16 is named by leaving word_bits out: one record
-        # digest per registration
+        # digest per docket
         for k in ("leaves", "words", "domain"):
             if e[k] != want[k] or (k != "domain" and type(e[k]) is not int):
                 c.fail(f"R7-{k}", {"value": v, "registered": e[k], "verifier": want[k]})
@@ -978,11 +930,50 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             c.fail("R7-supplied", {"value": v, "registered": e["root"], "verifier": root})
 
 
+#: `OneStageZk.TABLE_PORT`, the port a docket names a window's row tables' root at
+TABLE_PORT = "row-table"
+#: `OneStageZk.ROW_TABLES`
+ROW_TABLES = ("roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member "
+              "form is refused on a window with row tables until its guarantee covers a root every member reads")
+#: `OneStageZk.NOT_ONE_MEMBER`
+NOT_ONE_MEMBER = ("public file: the registration's roots are not one member's: the one statement's public file is held to "
+                  "a registration whose ports are bare, or are all one window member's, <member>/<port>")
+
+
+def public_ports(rec: Mapping[str, Any]) -> dict[str, Any]:
+    """`OneStageZk.publicPorts`: the record's roots by port as v2's one statement's public file names them (bare): its
+    own where no root's port holds a ``/``; else, where every root's port is ``<member>/<port>`` of one member, whose own
+    port names hold no ``/``, that member's roots with its name and the ``/`` taken off. Raises `ValueError` with v2's
+    refusal where the roots are two members' or more, or bare and a member's (`NOT_ONE_MEMBER`), or one is a row tables'
+    (`ROW_TABLES`) or names no port."""
+    roots = rec["roots"]
+    ports = [r["port"] for r in roots if isinstance(r.get("port"), str)]
+    if all("/" not in p for p in ports):
+        return {r["port"]: r for r in roots if isinstance(r.get("port"), str)}
+    names = {p.rsplit("/", 1)[0] if "/" in p else None for p in ports}
+    if None in names or len(names) != 1:
+        raise ValueError(NOT_ONE_MEMBER)
+    name, = names
+    out: dict[str, Any] = {}
+    for r in roots:
+        port = r.get("port")
+        if not isinstance(port, str):
+            raise ValueError("roots: a root of the registration names no port")
+        if port == TABLE_PORT:
+            raise ValueError(ROW_TABLES)
+        bare = port[len(name) + 1:]
+        out.pop(bare, None)
+        out[bare] = {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": bare, "root": r.get("root")}
+    return out
+
+
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],
-                   population: int) -> Verdict:
-    """The verifier's own public file (its scheme, roots, their domains and its instance count) against the record."""
+                   population: int, reg: Mapping[str, Any] | None = None) -> Verdict:
+    """The verifier's own public file (its scheme, roots, their domains and its instance count) against the record, at
+    the record's roots by port ``reg`` (`Record.matchesPublicBy`; the record's own by default, `Record.matchesPublic`,
+    or v2's one statement's, `public_ports`)."""
     c = _Collect()
-    reg = {r["port"]: r for r in rec["roots"]}
+    reg = {r["port"]: r for r in rec["roots"]} if reg is None else reg
     if scheme != rec["scheme"]:
         c.fail("scheme", {"registered": rec["scheme"], "public": scheme})
     if {p: r["root"] for p, r in reg.items()} != dict(roots):
@@ -996,7 +987,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "POOL_KEYS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest",
-           "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused", "pool_spent_before",
-           "pool_values", "query_digest", "receipt", "record", "record_digest", "refuse_unwindowed",
-           "registered_entries", "unwindowed", "window_domain"]
+__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "NOT_ONE_MEMBER", "POOL_KEYS", "PROTOCOL", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
+           "WINDOW_DOMAIN", "check", "digest", "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused",
+           "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt", "record", "record_digest",
+           "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "window_domain"]

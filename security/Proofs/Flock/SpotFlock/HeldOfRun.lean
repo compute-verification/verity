@@ -258,7 +258,7 @@ theorem firstOf_program {i : Spot.Run.Input} {first : Reg} (hf : firstOf i = som
     first.program = i.params.verifier.program ∧ first.query = i.params.verifier.query := by
   unfold firstOf at hf
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf
-  obtain ⟨n, hn, rule, hrule, law, hlaw, workTable, hwt, resolved, hres, rfl⟩ := hf
+  obtain ⟨n, hn, rule, hrule, samplingDesign, hlaw, workTable, hwt, resolved, hres, rfl⟩ := hf
   exact ⟨rfl, rfl⟩
 
 /-- **The design evaluates** (RUNCOINS's `TwoHolds`) at a held copy `heldOf` builds, where the run's population check

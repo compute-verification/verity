@@ -125,11 +125,13 @@ theorem flat_layer_pos (d c : ℕ) (lf : ℕ → ByteArray) (hc : c < d) :
 
 /-- **A level 0 the `--zk` schedule samples has a root**: at `25 ≤ m ≤ 35` the level's root sits strictly below its
 depth, so the root holds at least one digest. -/
-theorem root_size_pos {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {g : Array _root_.Flock.F128} {d : ByteArray}
-    {l : _root_.Flock.ZkServer.Level0.Level0} (h : _root_.Flock.ZkServer.Level0.ofDraws m g d = .ok l) :
+theorem root_size_pos {wide : Bool} {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {g : Array _root_.Flock.F128}
+    {d : ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
+    (h : _root_.Flock.ZkServer.Level0.ofSamples wide m g d = .ok l) :
     0 < l.root.size := by
-  obtain ⟨hm, -, ⟨s, hz, hlv⟩, -, -, hroot⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok h
-  have hz' : _root_.Flock.Zk.schedule l.m = .ok (s, l.tPad) := by rw [hm]; exact hz
+  obtain ⟨hm, -, ⟨s, hz, hlv⟩, -, -, hroot⟩ := _root_.Flock.ZkServer.Level0.ofSamples_ok h
+  have hw : l.wideLeaf = wide := _root_.Flock.ZkServer.Level0.ofSamples_wideLeaf h
+  have hz' : _root_.Flock.Zk.schedule l.wideLeaf l.m = .ok (s, l.tPad) := by rw [hm, hw]; exact hz
   have hlt : l.lv.cap < l.lv.d := by
     rw [hlv]
     exact FlockComplete.JsonRT.zkSchedule_cap0_lt h25 h35 hz
@@ -140,7 +142,8 @@ theorem root_size_pos {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {g : Array _ro
 theorem built_of_level0Of {R : Type}
     {src : Msg → Flock.Wit → R → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
     {x : Msg} {w : Flock.Wit} {ρ : R} {sts : Array _root_.Flock.Stmt} {j : ℕ} {l : _root_.Flock.ZkServer.Level0.Level0}
-    (h : level0Of src x w ρ sts j = .ok l) : ∃ g d, _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.m g d = .ok l := by
+    (h : level0Of src x w ρ sts j = .ok l) :
+    ∃ g d, _root_.Flock.ZkServer.Level0.ofSamples sts[j]!.wideLeaf sts[j]!.m g d = .ok l := by
   unfold level0Of at h
   cases hsrc : src x w ρ (2 * j) with
   | error e => rw [hsrc] at h; cases h

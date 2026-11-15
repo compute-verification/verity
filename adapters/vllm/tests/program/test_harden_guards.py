@@ -32,13 +32,13 @@ import subprocess
 import sys
 
 import pytest
-import verity.circuits
-
 from verity_vllm.program.frontend.target_profile import (
     ArtifactIdentity,
     TargetProfile,
     reuse_mismatches,
 )
+
+import verity.circuits
 
 INTEGRATION = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # adapters/vllm
 #: the directory `verity` was imported from, unresolved: the repository's root, or the one directory the tree's declared path puts first
@@ -93,7 +93,7 @@ def test_G4c_no_capability_or_sm_literal_outside_target_profile():
 def test_G6_program_digest_carries_input_shape_and_dtype():
     torch = pytest.importorskip("torch")
     from verity_vllm.program.frontend import derive_examples as ex
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_vllm.program.frontend.vllm_derive import derive_report
     torch.manual_seed(0)
     m = ex.MLP2(8, 16, 8)
     r3 = derive_report(m, (torch.empty(3, 8),), mode="reference", name="MLP2")

@@ -181,7 +181,7 @@ def _llama():
 def test_llama_linears_are_one_cards_and_all_in_the_domain():
     """Llama-3.2-1B at TP 1: qkv (32 + 2 · 8 heads of 64), o, the merged gate and up, down; every one in the sm_90a kernels'
     domain, with γ at both FADD readings (the data sheet's above the record's) by glm53's formula, and the decode M
-    demos/vllm serves at (8) among DECODE_M."""
+    the vLLM served run serves at (8) among DECODE_M."""
     L = _llama()
     rows = {r["name"]: r for r in L.table()}
     assert {x: (r["n"], r["k"]) for x, r in rows.items()} == {
@@ -571,6 +571,7 @@ def retained(tmp_path_factory):
     import clear_work as CW
     from clear_audit import Prover
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     from verity.protocols.accounting.pouw.verifier import core_check as CC
     from verity.protocols.accounting.pouw.verifier.audit import (
@@ -634,8 +635,8 @@ def retained(tmp_path_factory):
     for w, x in wrows.items():
         dom = rows_domain(weight_binding(w), -2, len(x), s.commitment_hash)
         weights[str(w)] = {"n": len(x), "k": k, "root": prover.weight_roots[w].hex(), "excluded_b": list(records[w].excluded_b),
-                           "rows": PPD._write(d / "weights" / f"{w}.rows.bf16", bf16(x), digest=False),
-                           "tree": PPD._write(d / "weights" / f"{w}.tree",
+                           "rows": PPDR._write(d / "weights" / f"{w}.rows.bf16", bf16(x), digest=False),
+                           "tree": PPDR._write(d / "weights" / f"{w}.tree",
                                               laid(dom, [dom.leaf(j, j, ROW_SCHEMA, salted(r, HM96_WEIGHTS + w, j))
                                                          for j, r in enumerate(rows(x))]))}
     matmuls, y_words = [], 0
@@ -644,8 +645,8 @@ def retained(tmp_path_factory):
         dom = rows_domain(activation_binding(epoch.salt, u.index), u.index, m, s.commitment_hash)
         matmuls.append({"index": u.index, "m": m, "k": k, "n": n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
-                        "rows": PPD._write(d / "calls" / f"{u.index}.rows.bf16", bf16(acts[u.index]), digest=False),
-                        "tree": PPD._write(d / "calls" / f"{u.index}.tree",
+                        "rows": PPDR._write(d / "calls" / f"{u.index}.rows.bf16", bf16(acts[u.index]), digest=False),
+                        "tree": PPDR._write(d / "calls" / f"{u.index}.tree",
                                            laid(dom, [dom.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(x)]))})
         ctx = Context(epoch.salt, u, root, epoch.weight_roots[u.weight])
         noise = s.noise(ctx)
@@ -660,11 +661,11 @@ def retained(tmp_path_factory):
     head = {"schema": CC.MANIFEST_SCHEMA, "run": "r20261023-120000-test", "entry": f"pouw:{scheme}", "scheme": scheme,
             "instance": {"k_min": 32, "tile": [16, 16]}, "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(),
             "salt": epoch.salt.hex(), "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
-            "commitment": {"root": tr.commitment.root.hex(), "count": count}, "leaves": PPD._write(d / "leaves", b"".join(leaves)),
-            "tree_t": PPD._write(d / "tree_t", laid(dt, [dt.leaf(i, i, TILE_SCHEMA, salted(v, HM96_TRANSCRIPT, i))
+            "commitment": {"root": tr.commitment.root.hex(), "count": count}, "leaves": PPDR._write(d / "leaves", b"".join(leaves)),
+            "tree_t": PPDR._write(d / "tree_t", laid(dt, [dt.leaf(i, i, TILE_SCHEMA, salted(v, HM96_TRANSCRIPT, i))
                                                        for i, v in enumerate(leaves)])),
             "hm96_salt_key": prover.salt_key.hex()}
-    PPD.write_manifest(d, head, weights, matmuls)
+    PPDR.write_manifest(d, head, weights, matmuls)
     (base / "coins.json").write_text(json.dumps(coins[0].to_json()) + "\n")
     for name in GP.FULL:
         shutil.copytree(d, base / name)
@@ -715,7 +716,7 @@ def test_full_fails_on_one_served_y_word_or_one_activation_row_and_names_it(reta
     assert not res["ok"]
 
 
-def test_volunteer_leaves_each_pass_no_tile_over_a_cap_and_its_transcript_as_captured(retained, tmp_path):
+def test_volunteer_leaves_each_pass_no_tile_over_an_inert_bound_and_its_transcript_as_captured(retained, tmp_path):
     """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over a
     debit cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
     verifier's check under it."""

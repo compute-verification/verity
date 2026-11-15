@@ -32,7 +32,7 @@ what it holds.
   private `profiles.dense_generic._sha256`, and the adapter's `tools/wgbench/wgbench.py`, which times the int8
   kernels by name, reads `int8_wgmma`, which states no `__all__`, and names of `int8_fused` that its `__all__`
   does not list.
-- **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `properties`, `check`
+- **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `check`
   and `commit` packages, its `llm` and `glue`; three of the adapter's `tools`; and the benchmarks that build,
   serve or time the engine (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`, `benchmarks/torch_gpu`,
   `benchmarks/vllm_encoded` and a dozen more directories).
@@ -40,4 +40,4 @@ what it holds.
   `settings`, `errors`, `log`, `target_family`, `records.schema_ids`, `records.logits_capture`, `program.frontend`
   (the target profile, the kernel read-back and, in `meta_inventory`, the model on the meta device and the
   export's compatibility and tensor-parallel ops) and, in `vllm_adapter`, `program.prefix_plan` and `commit`;
-  `verity.definitions.registry`, `verity.commitments`, `verity.circuits.codec` and `verity_config`.
+  `verity_vllm.definitions.registry`, `verity.commitments`, `verity.circuits.codec` and `verity_config`.

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Challenger.Window
-import Proofs.Properties.Nci.RecordJson
+import Proofs.Properties.InferenceOnly.RecordJson
 
 /-!
 # Each line of a ledger `checked` accepts is numbered by its place and is the device's own, or a break
@@ -50,7 +50,7 @@ theorem lines_arr {ls : Array Json} {es : Array LedgerEntry}
 -- the closers must not unfold `verifyLedger` or the key's hash while they search the context
 set_option maxHeartbeats 1000000 in
 /-- `checked` reads a list of lines, each an entry, and runs `verifyLedger` on the entries in the lines' order. -/
-theorem checked_lines {ledger : Json} {key : ChallengerKey} {r : Array Win × Array MonitoringPeriod}
+theorem checked_lines {ledger : Json} {key : ChallengerKey} {r : Array Win × Array PeriodRecord}
     (h : checked ledger key = .ok r) :
     ∃ (lines : Array Json) (es : Array LedgerEntry), ledger = .arr lines ∧
       lines.toList.map ledgerEntry? = es.toList.map some ∧ verifyLedger es key = .ok r := by
@@ -102,7 +102,7 @@ theorem seq_step {pre : List LedgerEntry} {e : LedgerEntry} (hI : SeqInv pre) (h
 -- `mvcgen` splits `verifyLedger`'s loop body into one goal per path through its checks
 set_option maxHeartbeats 4000000 in
 /-- **`verifyLedger` checked every entry's number**: entry `i` is numbered `i`. -/
-theorem verifyLedger_seq {es : Array LedgerEntry} {key : ChallengerKey} {r : Array Win × Array MonitoringPeriod}
+theorem verifyLedger_seq {es : Array LedgerEntry} {key : ChallengerKey} {r : Array Win × Array PeriodRecord}
     (h : verifyLedger es key = .ok r) : SeqInv es.toList := by
   unfold verifyLedger at h
   rw [bind_ok] at h
@@ -166,7 +166,7 @@ theorem seq_of_text {line line' : Json} {e e' : LedgerEntry} (he : ledgerEntry? 
 
 theorem getD_ledger (ledger : Json) : getD (Json.mkObj [("ledger", ledger)]) "ledger" = ledger := by
   have h : (Json.mkObj [("ledger", ledger)]).getObjVal? "ledger" = .ok ledger :=
-    (NciCheck.Record.SecurityProofs.Json.getObjVal?_mkObj (by simp) "ledger" ledger).2 (by simp)
+    (InferenceOnlyCheck.Record.SecurityProofs.Json.getObjVal?_mkObj (by simp) "ledger" ledger).2 (by simp)
   simp only [getD, field?, h, Except.toOption, Option.getD_some]
 
 /-- **A presented line is an entry under its place's number that says what a line of the device's own ledger

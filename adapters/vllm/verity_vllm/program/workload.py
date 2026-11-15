@@ -294,9 +294,10 @@ class WorkloadRequest:
 # `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape); a stochastic
 # wrapper's `seed` and its seed rule's inputs (`seed_rule.PARAMS`, the window's salt each request's own copy) are its request's
 # own, like the prompt, and so are a warm request's cached `prefix` (on the sparse-attention decoder with its index-K slots
-# `prefix_ik` and scales `prefix_iks`), and a resumed request's `last_token`
-_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "seeded", "body_seed", "seed_salt", "user", "prefix", "prefix_ik", "prefix_iks",
-                         "last_token")
+# `prefix_ik` and scales `prefix_iks`, and over an fp8_ds_mla cache its rows' scales `prefix_scale` and k_pe `prefix_rope`), and a
+# resumed request's `last_token`
+_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "seeded", "body_seed", "seed_salt", "user", "prefix", "prefix_scale", "prefix_rope",
+                         "prefix_ik", "prefix_iks", "last_token")
 _REQUEST_LOCAL_PREFIXES = ("peers",)
 
 
@@ -321,10 +322,13 @@ def _shared_positions(S) -> list[tuple[int, ...]]:
     return [tuple(int(j) for j in sh)] * len(S.requests)
 
 
-#: a Commit window's edge values (`Edge`) and the history group each holds, member by member: every layer's latent rows, the
-#: indexer layers' index-K slots and their scales (`predict.dsa.Net.prefix_params`), and the last kept token
-EDGE_PORTS = (("edge.kv", "prefix"), ("edge.ik", "prefix_ik"), ("edge.iks", "prefix_iks"), ("edge.last", "last_token"))
-_ROWS = ("prefix", "prefix_ik", "prefix_iks")   # an edge request Program's returns after its outputs (`build_program(edge=)`)
+#: a Commit window's edge values (`Edge`) and the history group each holds, member by member: every layer's latent rows (over an
+#: fp8_ds_mla cache its rows' e4m3 NoPE bytes, then their scales and k_pe), the indexer layers' index-K slots and their scales
+#: (`predict.dsa.Net.prefix_params`), and the last kept token
+EDGE_PORTS = (("edge.kv", "prefix"), ("edge.scale", "prefix_scale"), ("edge.rope", "prefix_rope"), ("edge.ik", "prefix_ik"),
+              ("edge.iks", "prefix_iks"), ("edge.last", "last_token"))
+#: an edge request Program's returns after its outputs (`build_program(edge=)`), the latent rows first, in this order
+_ROWS = ("prefix", "prefix_scale", "prefix_rope", "prefix_ik", "prefix_iks")
 
 
 @dataclass(frozen=True)
@@ -371,7 +375,8 @@ def _check_edge(edge: Edge, comps: dict[int, RequestComponent]) -> None:
             elif side == "out":
                 ret = comps[i].fn.signature()[1]
                 rows = [g for g in types if g != "last_token"]
-                if (not isinstance(ret, TupleT) or rows != list(_ROWS[:len(rows)]) or _outputs(ret, gs)[0] not in (1, 2)
+                if (not isinstance(ret, TupleT) or rows[:1] != ["prefix"] or rows != [g for g in _ROWS if g in rows]
+                        or _outputs(ret, gs)[0] not in (1, 2)
                         or [t.leaves for t in field_types(ret)[_outputs(ret, gs)[0]:]] != [types[g].leaves for g in rows]
                         or "last_token" in types and not field_types(ret)[0].leaves):
                     raise ValueError(f"edge: request {i}'s Program doesn't return its samples (and checks), then its rows {gs}")
@@ -443,7 +448,8 @@ def _workload_body(B, S, *args):
                 samples = _field(called[i], 0)
                 parts.append(Coll(ft, samples.refs.slice(samples.type.leaves - 1, samples.type.leaves)))
             else:
-                parts.append(Coll(ft, _field(called[i], _outputs(called[i].type, leaving[i])[0] + _ROWS.index(g)).refs))
+                rows = [h for h, _, _ in leaving[i] if h != "last_token"]
+                parts.append(Coll(ft, _field(called[i], _outputs(called[i].type, leaving[i])[0] + rows.index(g)).refs))
         outs.append(coll_concat(t, parts))
     _, ret = _workload_signature(S)
     return coll_concat(ret, outs)
@@ -505,7 +511,7 @@ class WorkloadProgram:
     def __init__(self, requests: list[WorkloadRequest], shared: str = "weights", manifest_digest: str | None = None,
                  ordering: str = "manifest", *, lag: int, theta_registered: bool = False, edge: Edge | None = None) -> None:
         """`theta_registered`: bind the model's weights (`theta`) at registration, as `RegisteredInput<w>_v1`, whatever the
-        components bind them as. The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`). Off, the
+        components bind them as. The inference-only check reads only registered inputs as θ (its `theta-not-registered` finding). Off, the
         weights are bound as the components bind them, so every workload digest built before it stands. `edge`: a Commit window's
         (`Edge`), the Program then `WORKLOAD_EDGE`'s; None, `WORKLOAD`'s."""
         if not requests:
@@ -663,7 +669,7 @@ class WorkloadProgram:
                                                             "prefix cache, never recomputed); the prefill computes rows..prompt_len-1"}}
                             if r.prefix else {})})
         last = max(r.arrive_step + r.cap - 1 for r in self.requests)
-        # the programmed instance set of every engine step: the union over the requests programmed for it of their step-s
+        # the programmed segments of every engine step: the union over the requests programmed for it of their step-s
         # segment (component node range + global gate range) — well-defined from the declaration alone, no observation read
         body = self.program.root.body
         engine_steps = []

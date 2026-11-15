@@ -19,6 +19,7 @@ PINS = 'PINS = (Pin("pins/TRUSTED.sha256", None, "src"),)\n'
 ROOT = Path(__file__).resolve().parents[3]
 MOVE_SCRIPTS = ("tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py")
 MAP = "tools/move/demo_map.toml"
+OTHER = "tools/move/demo_other_map.toml"
 PROTO = "import old_proto.a\n\nX = old_proto.a.f()\n"
 
 
@@ -100,6 +101,38 @@ def moved(tmp_path: Path) -> Path:
     git(repo, "add", "-A")
     git(repo, "commit", "-qm", f"Move old_proto to new_proto\n\nMove: {MAP}\n")
     commit(repo, {"c.py": "c2\n"}, "landed after the move")
+    return repo
+
+
+@pytest.fixture
+def corrected(tmp_path: Path) -> Path:
+    """`moved`, but the move's commit records a map it didn't run (`OTHER`, which renames a word no file holds), a commit after
+    it quotes a move line and is no move, and `main` then adds `tools/move/move_lines.toml`, which corrects the move's record
+    to `MAP` and says the other is no move (`move = false`); `pr` is crossed across the moves `main` has by `main`'s
+    `restack.py` with that table beside it, as `crossed`."""
+    repo = tmp_path / "corrected"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    commit(repo, {**{p: (ROOT / p).read_text() for p in MOVE_SCRIPTS}, "tools/check/pins.py": "PINS = ()\n",
+                  "tools/research/src/research/store/moves.json": '{"moves": []}\n',
+                  MAP: '[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
+                       '[words]\n"old_proto" = "new_proto"\n',
+                  OTHER: '[rewrite]\nexclude = ["tools/move/**"]\n\n[words]\n"no_such_word" = "none"\n',
+                  "old_proto/__init__.py": "", "old_proto/a.py": "def f():\n    return 1\n", "b.py": PROTO, "c.py": "c\n"},
+           "base")
+    branch(repo, "pr")
+    commit(repo, {"b.py": PROTO + "Y = old_proto.a.f()\n"}, "the PR")
+    git(repo, "checkout", "-q", "main")
+    script(repo, "tools/move/rename.py", "--map", MAP)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", f"Move old_proto to new_proto\n\nMove: {OTHER}\n")
+    move = git(repo, "rev-parse", "HEAD")
+    note = commit(repo, {"d.py": "d\n"}, f"A note\n\nMove: {OTHER}\n")
+    commit(repo, {"tools/move/move_lines.toml": f'["{move}"]\nline = "Move: {MAP}"\nreason = "It ran {MAP}."\n\n'
+                                                f'["{note}"]\nmove = false\nreason = "No script wrote it."\n'}, "corrected")
+    [r] = json.loads(script(repo, "tools/move/restack.py", "pr", "--main", "main", "--json", "--no-pins"))
+    assert r["status"] == "clean", r
+    git(repo, "branch", "crossed", r["result"])
     return repo
 
 
@@ -306,6 +339,20 @@ def test_a_restack_commit_that_changes_more_than_the_moves_script_is_the_prs_own
     new = git(moved, "commit-tree", tree, "-p", sneaked, "-p", main, "-m", "Merge main (the layout move), restacked")
     d = carry.delta(moved, old, new, landed(moved), restack=main)
     assert (d.kind, d.moves) == ("authored", ()) and d.why == f"{sneaked[:12]} changes b.py beyond the move {move[:12]}'s script"
+
+
+def test_a_crossing_over_a_corrected_move_carries_by_the_restack_py_whose_commit_has_the_table_and_not_by_one_without(
+        corrected: Path):
+    """Carry reruns the move with the landed commit's `restack.py` and the corrections that commit has beside it: with
+    `main`'s, the rerun runs `MAP` and the crossing carries; with the move's own commit, which has no table, it runs the
+    recorded `OTHER`, which moves nothing, so the restack's commit holds the whole move beyond what that writes."""
+    old, new, move, main = (git(corrected, "rev-parse", r) for r in ("pr", "crossed", "main~2", "main"))
+    d = carry.delta(corrected, old, new, landed(corrected), restack=main)
+    assert (d.kind, d.parents, d.moves) == ("merge-only", (main,), (move,)), d
+    d = carry.delta(corrected, old, new, landed(corrected), restack=move)
+    assert (d.kind, d.moves) == ("authored", ()), d
+    assert d.why == (f"{git(corrected, 'rev-parse', 'crossed^1')[:12]} changes b.py, new_proto/__init__.py, new_proto/a.py, "
+                     f"old_proto/__init__.py, old_proto/a.py ... beyond the move {move[:12]}'s script")
 
 
 #: what reaches the store (`research.store`: its key pair, bucket, root and config, the export's key pair, the API token that

@@ -227,18 +227,21 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
 #: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both. Lake builds a
 #: package's path requirements in their own `.lake`, so most packages' builds write the verifier's beside lean-build (main
-#: 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while two suites built sampled-proofs-verifier from the pytest
+#: 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while two suites built spot-verifier from the pytest
 #: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity/tests", "verity-core-evaluate", "verity-core-zk-server",
               "verity/protocols/proofs/recursion/verifier/vstar_cli", "verity/protocols/proofs/flock/verifier/sigma", "verity-core-sampled-proofs",
               "verity/protocols/accounting/registration/verifier/lean",
-              "verity/protocols/accounting/poub/verifier/lean",
+              "verity/protocols/accounting/poub/verifier/lean", "verity/protocols/accounting/poub/verifier",
+              "verity/protocols/accounting/poub",
               "verity/protocols/accounting/certifier/verifier/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/protocols/accounting/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
               "memory-challenger-lean", "benchmarks/pous",
-              "verity/protocols/proofs/spot/verifier", "verity/protocols/accounting/certifier/verifier", "verity-pouw-benchmarks",
+              "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/device", "verity/protocols/proofs/spot/prover",
+              "verity/protocols/accounting/certifier/verifier", "verity-pouw-benchmarks",
+              "verity/protocols/accounting/certifier/prover",
               "verity/circuits/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
               "verity-network-e2e",
               "verity/protocols/accounting/poub/device/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
@@ -310,7 +313,7 @@ def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None =
 THREAD_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 #: every test process's oneDNN is held off AMX, unless the environment already names the variable. On a CPU with AMX (the flags
 #: `amx_bf16 amx_tile`) oneDNN's AMX kernel now and then returns wrong values for a bf16 matrix product whose process is
-#: preempted, so a test that compares one with torch fails by chance on a loaded machine. Under this cap oneDNN runs the
+#: preempted, so a test that compares one with torch fails by chance on a loaded machine. Under this limit oneDNN runs the
 #: AVX-512 bf16 kernels instead, the ones a CPU with `avx512_bf16` and no AMX runs anyway. oneDNN reads the variable once, at
 #: the process's first primitive, so it is in the environment the process starts with, where no import order can miss it.
 #: `research run` gives every job the same (research.result's ONEDNN_ISA).
@@ -2343,13 +2346,13 @@ SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 STOP_GRACE_S = 30.0
 
 
-#: the memory `research run --mem-gb` reserved for the run (remote.py), which on a CPU node is no cgroup cap
+#: the memory `research run --mem-gb` reserved for the run (remote.py), which on a CPU node is no cgroup limit
 RUN_MEM_ENV = "RESEARCH_RUN_MEM_GB"
 
 
 def slot_mem_gb() -> float | None:
-    """The memory this run may use: its check slot's, else its `research run --mem-gb` reservation's, else its cgroup's cap: a
-    suite sized to the whole node outgrows a slot or a reservation that nothing else caps."""
+    """The memory this run may use: its check slot's, else its `research run --mem-gb` reservation's, else its cgroup's limit: a
+    suite sized to the whole node outgrows a slot or a reservation that nothing else bounds."""
     for env in (SLOT_MEM_ENV, RUN_MEM_ENV):
         v = SETTINGS.get(env) or ""
         if v.replace(".", "", 1).isdigit():
@@ -2520,6 +2523,20 @@ def _first_sigterm_stops(signum: int, frame: object) -> None:
         raise KeyboardInterrupt
 
 
+def scratch_tmp(environ: dict[str, str] | None = None) -> str | None:
+    """Why ``TMPDIR`` may not hold the tests' temporary files, else None: it lies in the shared scratch beside the runs root of
+    this `research run` (`clone.py`'s `<runs root>/../scratch`), a directory other users can change, which the custody tests
+    refuse, and whose deep paths put a Unix socket's path past its 107 bytes."""
+    tmp, run_dir = SETTINGS.get("TMPDIR", environ), SETTINGS.get("RESEARCH_RUN_DIR", environ)
+    if not tmp or not run_dir:
+        return None
+    scratch = Path(run_dir).resolve().parent.parent / "scratch"
+    if not Path(tmp).resolve().is_relative_to(scratch):
+        return None
+    return (f"TMPDIR={tmp} is inside {scratch}, the runs' shared scratch, where tests that refuse a directory another user can "
+            f"change, or bind a Unix socket under it, fail: unset TMPDIR, or point it at a directory outside {scratch}")
+
+
 def main(argv: list[str] | None = None) -> int:
     # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
     # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check's can hold tens of GB)
@@ -2584,6 +2601,9 @@ def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(line_buffering=True)
     if why := SETTINGS.refusals(of_record=False):
         print("\n".join(f"suites: {w}" for w in why), file=sys.stderr)
+        return 2
+    if not (a.list or a.explain) and (why := scratch_tmp()):
+        print(f"suites: {why}", file=sys.stderr)
         return 2
     if not in_git():
         print(f"suites: {ROOT} is not a git checkout, and suites are keyed from git's view of the tree: run them in a checkout "

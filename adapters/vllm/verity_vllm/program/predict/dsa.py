@@ -35,7 +35,10 @@ row's history is the row before's plus one part in the descriptor.  In class G's
 blocks (`vllm_dsa.long_row_blocks`), each row read at its block's keys and selecting among its own (DsaTopKMaskCounted), each
 op over a block's rows in turn, and a token's latent row is one DsaLatentRow, as the rule writes them; under table reads
 (`Registered.dsa_table_reads`) a long row's selection is DsaTopKIndex's positions and both kinds of layer read their rows at
-them by DsaHistoryReads (`program.dsa_table`).  A fact outside it raises
+them by DsaHistoryReads (`program.dsa_table`).  Over an fp8_ds_mla KV cache (φ's engine `kv_cache_dtype`, `phi.STATED_KV_LAYOUT`)
+a token's latent row is one DsaLatentRowDsMla, which also writes its 656-byte cache row; the sparse rows of a launch take FlashMLA's
+fp8 decode (FlashMlaV32Decode) over INDEX_TOPK rows each, and a dense-MHA prefill's context is each row's Fp8DsMlaUpconvertRow; a
+history read as Inputs and a row past INDEX_TOPK are refused there.  A fact outside it raises
 `Unexpressible`, φ's when the decoder is made and a launch's (a step whose prefills the batch does not fix, more context than one
 chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the launch is written.
 """
@@ -70,6 +73,11 @@ def _refuse(fact: str) -> NoReturn:
     raise Unexpressible(f"vocabulary cannot express: {fact}")
 
 
+#: a layer's latent history groups (`Net.prefix_params`) and the logs of `_Model` each fills: the latent rows, which over an
+#: fp8_ds_mla cache are its rows' NoPE bytes, then their scales and k_pe
+_ROW_GROUPS, _ROW_LOGS = ("prefix", "prefix_scale", "prefix_rope"), ("latent", "scale", "rope")
+
+
 def run_field(layer: int, pos: int) -> str:
     """The `run` field `<layer>/topk_switches[t=P]` of layer `layer`'s Waksman settings for the row at position `pos`, as the
     Commit's run values (`commit.committer.run_values`) and the replay (`check.replay`) name it.  No Program declares a `run` input:
@@ -86,7 +94,7 @@ def run_bits(layout: dict, orders: Mapping[tuple[int, int], Sequence[int]], topk
     wrote for the row at position `pos`, in the order it wrote them (its `topk_indices_buffer` row), each index one of the row's
     own keys, the wrapper's rows pos0..pos (a request's pos0 is 0). Each field is the Waksman settings that route those keys to
     that order (`dsa_topk.waksman_settings`)."""
-    from verity.definitions.registry.dsa_topk import waksman_settings
+    from verity_vllm.definitions.registry.dsa_topk import waksman_settings
     bits: list[int] = []
     for f in layout["fields"]:
         m = _RUN_FIELD.fullmatch(f["name"])
@@ -115,11 +123,11 @@ class Net:
     """One rank's decoder: the configuration, the weights record (`leaves`), the peers a pass reads (`peer_shapes`) and the target's
     selections the forward (`model`) reads."""
 
-    DOMAIN = ((8,), ("eager", "compiled"), ("float8_e4m3fn",))
+    DOMAIN = ((8,), ("eager", "compiled"), ("float8_e4m3fn",), ("fp8_ds_mla",))
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
-        from verity.definitions.registry import dsa
-        from verity.definitions.registry.tp_allreduce import settings_of
+        from verity_vllm.definitions.registry import dsa
+        from verity_vllm.definitions.registry.tp_allreduce import settings_of
 
         from verity_vllm.engine.profiles import family_facts as FF
         from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
@@ -172,6 +180,9 @@ class Net:
             self.dot = TG.tensor_core_dot(self.tp)
         except (ValueError, TG.UnregisteredTarget) as e:
             facts.append(str(e))
+        self.kv_layout = (phi.engine or {}).get("kv_cache_dtype")
+        if self.kv_layout is not None:
+            facts += self._kv_layout_facts()
         if facts:
             _refuse("; ".join(facts))
         env = phi.engine.get("env")   # the switches the engines run under; a φ that states none sets none
@@ -203,6 +214,27 @@ class Net:
             for rest in ff["params"]["buffers"]:
                 add(f"model.layers.{L}.{rest}")
 
+    def _kv_layout_facts(self) -> list[str]:
+        """What of an `fp8_ds_mla` cache (`phi.STATED_KV_LAYOUT`) the calls `_Model.attention` writes over it do not hold: its rows
+        are the DsaLatentRowDsMla split of a latent of 512 and a rope of 64 (`DsaLatentRowDsMla_v1`, `Fp8DsMlaUpconvertRow_v1`), and
+        FlashMLA's sparse fp8 kernel takes every sparse row of a step in one mixed batch below MIN_HEADS_FOR_BF16_PREFILL heads a
+        rank, over whole BN-row blocks of INDEX_TOPK rows (`FlashMlaV32Decode_v1`)."""
+        from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
+        from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import MIN_HEADS_FOR_BF16_PREFILL
+        C, G = self.C, FLASHMLA_GLM53
+        if self.kv_layout != "fp8_ds_mla":
+            return [f"a KV cache in layout {self.kv_layout!r} (the decoder writes fp8_ds_mla's)"]
+        facts = []
+        if (int(C["KV_LORA"]), int(C["QK_ROPE"])) != (G["DN"], G["DR"]):
+            facts.append(f"an fp8_ds_mla cache at latent {C['KV_LORA']} and rope {C['QK_ROPE']} (its row is {G['DN']} e4m3, "
+                         f"{G['DN'] // G['QT']} f32 scales and {G['DR']} bf16)")
+        if int(C["NH"]) >= MIN_HEADS_FOR_BF16_PREFILL:
+            facts.append(f"an fp8_ds_mla cache at {C['NH']} heads a rank (FlashMLA's mixed batch serves fewer than "
+                         f"{MIN_HEADS_FOR_BF16_PREFILL}; from it on, prefills upconvert to bf16)")
+        if int(C["INDEX_TOPK"]) % G["BN"]:
+            facts.append(f"an fp8_ds_mla cache at INDEX_TOPK {C['INDEX_TOPK']} (FlashMLA reads whole {G['BN']}-row blocks)")
+        return facts
+
     def leaves(self) -> list[tuple[str, Type]]:
         return [(name, t) for name, t, _ in self._leaves]
 
@@ -218,16 +250,25 @@ class Net:
     def edge_groups(self, keys: int) -> tuple[str, ...]:
         """The history groups of a request whose rows read up to `keys` keys that some row of it reads, which a Commit window's edge
         carries (`segment.edge_of`): the latent rows, and the indexer's keys and scales where a row reads past INDEX_TOPK (below, its
-        top-k selection keeps every key and reads no logit: `past_topk`)."""
-        return ("prefix", *(("prefix_ik", "prefix_iks") if self.past_topk(keys) else ()))
+        top-k selection keeps every key and reads no logit: `past_topk`); over an fp8_ds_mla cache the latent rows are its cache
+        rows' three parts (`prefix_params`)."""
+        rows = ("prefix", "prefix_scale", "prefix_rope") if self.kv_layout is not None else ("prefix",)
+        return (*rows, *(("prefix_ik", "prefix_iks") if self.past_topk(keys) else ()))
 
     def prefix_params(self, C: int) -> list[tuple[str, Type]]:
         """The Inputs a request's history of its first C positions opens with (`_Model.open_with`), as `vllm_dsa` keeps it: every
         layer's latent rows `prefix` (bf16 [NL, C, KV_LORA + QK_ROPE]: the normed kv_c, then the roped k_pe), and the indexer
-        layers', in layer order, index-K slots `prefix_ik` (e4m3 [NI, C, INDEX_HEAD_DIM]) and their scales `prefix_iks` (f32 [NI, C])."""
-        NI, row = len(self.indexers), int(self.C["KV_LORA"]) + int(self.C["QK_ROPE"])
-        return [("prefix", _arr((self.NL, C, row), 16)), ("prefix_ik", _arr((NI, C, int(self.C["INDEX_HEAD_DIM"])), 8)),
-                ("prefix_iks", _arr((NI, C), 32))]
+        layers', in layer order, index-K slots `prefix_ik` (e4m3 [NI, C, INDEX_HEAD_DIM]) and their scales `prefix_iks` (f32 [NI, C]).
+        Over an fp8_ds_mla cache every layer's latent rows are its cache rows' three parts: `prefix` the e4m3 NoPE bytes
+        [NL, C, KV_LORA], `prefix_scale` their f32 scales [NL, C, KV_LORA / 128] and `prefix_rope` the bf16 k_pe [NL, C, QK_ROPE]."""
+        NI, KVL, R = len(self.indexers), int(self.C["KV_LORA"]), int(self.C["QK_ROPE"])
+        if self.kv_layout is not None:
+            from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
+            rows = [("prefix", _arr((self.NL, C, KVL), 8)), ("prefix_scale", _arr((self.NL, C, KVL // FLASHMLA_GLM53["QT"]), 32)),
+                    ("prefix_rope", _arr((self.NL, C, R), 16))]
+        else:
+            rows = [("prefix", _arr((self.NL, C, KVL + R), 16))]
+        return [*rows, ("prefix_ik", _arr((NI, C, int(self.C["INDEX_HEAD_DIM"])), 8)), ("prefix_iks", _arr((NI, C), 32))]
 
     def model(self, B: Builder, W: Coll, peers: _Peers) -> _Model:
         return _Model(self, B, W, peers)
@@ -236,9 +277,9 @@ class Net:
         """The selections of a dense-MHA prefill of M rows at pos0.. after `context` history rows (`_Model._dense_prefill`), each
         kind `k(role, **statics)`'s, or the refusal."""
         import numpy as np
-        from verity.definitions.numerics import fa3_model
-        from verity.definitions.registry import fa3_split
-        from verity.definitions.registry.merge_attn_states import NEG_INF
+        from verity_vllm.definitions.numerics import fa3_model
+        from verity_vllm.definitions.registry import fa3_split
+        from verity_vllm.definitions.registry.merge_attn_states import NEG_INF
 
         from verity_vllm.program.frontend import targets as TG
         C, tp = self.C, self.tp
@@ -370,7 +411,7 @@ class _Calls:
     def all_reduce(self, rows: list[Refs]) -> list[Refs]:
         """One all-reduce over the rows on the route vLLM takes at the launch's tokens (`tp_allreduce.served_route`), the captured one
         -> each row's sum."""
-        from verity.definitions.registry import tp_allreduce as AR
+        from verity_vllm.definitions.registry import tp_allreduce as AR
 
         from verity_vllm.program.frontend.rules.vllm_bindings.collectives import (
             _ROUTE_KINDS,
@@ -391,7 +432,7 @@ class _Calls:
     def reduce_norm(self, parts: list[Refs], res: list[Refs], w: Coll) -> tuple[list[Refs], list[Refs]]:
         """The all-reduce of the rows' partials, the residual add and the RMSNorm -> (normed rows, residual rows): FlashInfer's fused
         kernel where vLLM fuses (its FlashInfer all-reduce on and M within `fused_max_tokens`), else the all-reduce then the fused norm."""
-        from verity.definitions.registry import tp_allreduce as AR
+        from verity_vllm.definitions.registry import tp_allreduce as AR
         M, N, W, s = self.launch.tokens(len(parts)), parts[0].count, self.net.world, self.net.settings
         if s["flashinfer"] and AR.fused_max_tokens(N, W) >= M:
             setting, _ = AR.served_route(s, M, N)
@@ -420,7 +461,7 @@ class _Calls:
     def cublas(self, xs: list[Refs], w: Coll, f32: bool = False, sampled: bool = False) -> list[Refs]:
         """An unbiased bf16 GEMM on cuBLAS's captured route at the launch's tokens (its sequences for the `sampled` rows): bf16 out
         (`CublasLinearRule`), or f32 (`CublasRouterRule`: the router family's route, or a direct call's where the shape has its own)."""
-        from verity.definitions.registry.bf16_gemm_check import default_cublas_route
+        from verity_vllm.definitions.registry.bf16_gemm_check import default_cublas_route
 
         from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import (
             _f32out_phase,
@@ -437,7 +478,7 @@ class _Calls:
 
     def router(self, xs: list[Refs], w: Coll) -> list[Refs]:
         """`GateLinear`'s f32 logits on the tier vLLM dispatches (`LlBf16GemmRule`, `CublasRouterRule`)."""
-        from verity.definitions.registry.bf16_gemm_check import (
+        from verity_vllm.definitions.registry.bf16_gemm_check import (
             DEFAULT_LL_BF16_FMA,
             dispatch_sm90,
         )
@@ -470,20 +511,25 @@ class _Model(_Calls):
     (`build.build_program`'s `batched`), whose latent rows are one Definition each and whose rows past INDEX_TOPK go in blocks
     (`vllm_dsa.long_row_blocks`), each op over a block's rows in turn, so that `prune.batched_form` batches them.  `table_reads`:
     in that form, those rows by table reads (`build.build_program`'s `table_reads`): `topk` holds a long row's `DsaTopKIndex`
-    positions, and each layer reads its rows at them (`DsaHistoryReads`) in place of the rows network."""
+    positions, and each layer reads its rows at them (`DsaHistoryReads`) in place of the rows network.  Over an fp8_ds_mla cache
+    (`Net.kv_layout`) a layer's history is its cache rows, three logs: `latent` the e4m3 NoPE bytes, `scale` their f32 scales and
+    `rope` the bf16 k_pe."""
 
     net: Net
 
     def open_with(self, prefix: list[Coll], C: int) -> None:
-        """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, then the indexer layers'
-        index-K slots and scales), read and never computed: the request's own rows follow at positions C.."""
-        latent, ik, iks = prefix
+        """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, over an fp8_ds_mla cache
+        as their three parts, then the indexer layers' index-K slots and scales), read and never computed: the request's own rows
+        follow at positions C.."""
+        *rows, ik, iks = prefix
         for L in range(self.net.NL):
-            logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
+            logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog(), "scale": PartLog(),
+                                            "rope": PartLog()})
             if len(logs["latent"]):
                 raise AssertionError(f"layer {L}'s history opens once, before its first call")
-            for j in range(C):
-                logs["latent"].append(latent[L][j].refs)
+            for log, part in zip(_ROW_LOGS, rows):
+                for j in range(C):
+                    logs[log].append(part[L][j].refs)
         for n, L in enumerate(sorted(self.net.indexers)):
             for j in range(C):
                 self.logs[L]["ik"].append(ik[n][j].refs)
@@ -493,7 +539,7 @@ class _Model(_Calls):
         """Every layer's rows so far of each history group in `groups` (`Net.edge_groups`), its history's and its own, as
         `Net.prefix_params` lays out a history of them: wires and no gates."""
         E, net = len(self.logs[0]["latent"]), self.net
-        logs = {"prefix": [self.logs[L]["latent"] for L in range(net.NL)],
+        logs = {**{g: [self.logs[L][h] for L in range(net.NL)] for g, h in zip(_ROW_GROUPS, _ROW_LOGS)},
                 **{g: [self.logs[L][h] for L in sorted(net.indexers)] for g, h in (("prefix_ik", "ik"), ("prefix_iks", "iks"))}}
         if any(len(log) != E for g in groups for log in logs[g]):
             raise AssertionError(f"every layer's history holds the {E} rows of layer 0's")
@@ -518,7 +564,7 @@ class _Model(_Calls):
     def attention(self, L: int, x: list[Refs], pos0: int) -> list[Refs]:
         """One layer's attention over the rows x at positions pos0.. (`DsaNormRopeRule`, `DsaQRule`, `DsaIndexerAttnRule`, op-major
         over the rows) -> the o projection's partials."""
-        from verity.definitions.registry.sparse_mla_split import launch_num_splits
+        from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
 
         from verity_vllm.program.frontend.rules.vllm_dsa import (
             DECODE_THRESHOLD,
@@ -536,14 +582,23 @@ class _Model(_Calls):
         w = lambda f: self.w[(L, f)]  # noqa: E731
         prefills = self.launch.prefills((E, pos0), DECODE_THRESHOLD.get(NH, DECODE_THRESHOLD_DEFAULT))
         dense = prefills if prefills and max(n + p for n, p in prefills) <= TOPK else []
-        logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
+        logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog(), "scale": PartLog(), "rope": PartLog()})
         keys = [len(logs["latent"]) + i + 1 for i in range(M)]
+        fp8 = self.net.kv_layout is not None
+        if fp8 and keys[-1] > TOPK:
+            _refuse(f"a row of {keys[-1]} keys, past INDEX_TOPK ({TOPK}), over an {self.net.kv_layout} cache (FlashMLA's sparse fp8 "
+                    f"decode over the rows its top-k selects)")
         cs = [self.w["cos_sin"].refs.slice((pos0 + i) * R, (pos0 + i + 1) * R) for i in range(M)]
         qkv = self.fp8_linear(x, w("qkv_a_w"), w("qkv_a_ws"))
         wkp: Any = self.cublas(x, w("wk_w")) if indexer else None
         qn = self.k("dsa_rmsnorm", N=QL, EPS=self.EPS)
         qc = [self.call(qn, q.slice(0, QL), w("q_a_ln").refs).refs for q in qkv]
-        if self.batched:
+        if fp8:
+            from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import DS_MLA_TILE
+            lr = self.k("dsa_latent_row_ds_mla", KVL=KVL, R=R, TILE=DS_MLA_TILE, EPS=self.EPS)
+            cache = [self.call(lr, q.slice(QL, QL + KVL + R), w("kv_a_ln").refs, c) for q, c in zip(qkv, cs)]
+            kvc, kpe = [o[0].refs.slice(0, KVL) for o in cache], [o[0].refs.slice(KVL, KVL + R) for o in cache]
+        elif self.batched:
             lr = self.k("dsa_latent_row", KVL=KVL, R=R, EPS=self.EPS)
             lat = [self.call(lr, q.slice(QL, QL + KVL + R), w("kv_a_ln").refs, c).refs for q, c in zip(qkv, cs)]
             kvc, kpe = [r.slice(0, KVL) for r in lat], [r.slice(KVL, KVL + R) for r in lat]
@@ -561,7 +616,12 @@ class _Model(_Calls):
         qpe = [concat([self.call(qr, q.slice(h * D + NOPE, (h + 1) * D), c).refs for h in range(NH)]) for q, c in zip(qb, cs)]
         context = len(logs["latent"])
         for i in range(M):
-            logs["latent"].append(concat([kvc[i], kpe[i]]))
+            if fp8:
+                logs["latent"].append(cache[i][1].refs)
+                logs["scale"].append(cache[i][2].refs)
+                logs["rope"].append(kpe[i])
+            else:
+                logs["latent"].append(concat([kvc[i], kpe[i]]))
         own = (E, pos0) in dense
         mqa = self.launch.keys([] if own else keys, without=dense)
         if indexer:
@@ -602,6 +662,9 @@ class _Model(_Calls):
                     self.topk[pos0 + i] = self.call(fs, m)
         if own:
             return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense, E), w("o_w"), w("o_ws"))
+        if fp8:
+            return self.fp8_linear(self.absorb(self._flashmla_fp8(logs, ql, qpe, keys, len(mqa)), w("w_uv"), NH, KVL, VH),
+                                   w("o_w"), w("o_ws"))
         G = FA3_SPARSE_GEOMETRY[(R, KVL)]
         batch = [min(n, TOPK) for n in mqa]
         by_keys = dict(zip(batch, launch_num_splits(batch, int(self.net.tp.num_sms), TOPK, 0)))
@@ -627,6 +690,35 @@ class _Model(_Calls):
             att.append(self.call(self.k("sparse_mla_split", T=min(n, TOPK), NS=by_keys[min(n, TOPK)], NH=NH, DR=R, DV=KVL, BN=G["BN"],
                                         DOT=G["DOT"], INV=G["INV"], SM_SCALE=float(C["ATTN_SCALE"])), ql[i], qpe[i], kv).refs)
         return self.fp8_linear(self.absorb(att, w("w_uv"), NH, KVL, VH), w("o_w"), w("o_ws"))
+
+    def _flashmla_fp8(self, logs: dict[str, PartLog], ql: list[Refs], qpe: list[Refs], keys: list[int], tokens: int) -> list[Refs]:
+        """The rows' attention over an fp8_ds_mla cache (`FlashMLASparseImpl._forward_fp8_kv_mixed_batch`) -> rows [NH * KV_LORA]: one
+        FlashMLA call over the launch's `tokens` sparse rows, which the planner takes as one request of that many query rows at
+        FP8_PADDED_HEADS heads over INDEX_TOPK cache rows (`vllm_dsa_fp8.decode_splits`), so every row shares its SPLITS.  Row i's
+        query is per head [ql | q_pe]; its INDEX_TOPK cache rows are its keys' (nope, scale, rope) in index order, then row 0's
+        under index -1 (`FlashMlaV32KvRow_v1` zeroes them)."""
+        from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import FLASHMLA_FP8_GEOMETRY, decode_splits
+        C = self.C
+        KVL, R, NH, TOPK = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "NH", "INDEX_TOPK"))
+        G = FLASHMLA_FP8_GEOMETRY[(R, KVL)]
+        fn = self.k("flashmla_v32_decode", NH=NH, SPLITS=decode_splits(tokens, TOPK, int(self.net.tp.num_sms), G["BN"]), DN=KVL, DR=R,
+                    QT=G["QT"], BN=G["BN"], DOT=G["DOT"], SCALE=float(C["ATTN_SCALE"]))
+        valid, pad = (self.call(self.k("const", W=32, BITS=v)).refs for v in (0, 0xFFFFFFFF))
+        out = []
+        for i, n in enumerate(keys):
+            q = concat([p for h in range(NH) for p in (ql[i].slice(h * KVL, (h + 1) * KVL), qpe[i].slice(h * R, (h + 1) * R))])
+            rows = [log.cut(n, [log.parts[0]] * (TOPK - n)) for log in (logs["latent"], logs["scale"], logs["rope"])]
+            out.append(self.call(fn, q, *rows, concat([valid] * n + [pad] * (TOPK - n))).refs)
+        return out
+
+    def _context_rows(self, L: int, context: int) -> list[Refs]:
+        """Layer L's first `context` history rows as bf16 [kv_c | k_pe], what a dense-MHA prefill gathers for its context: the latent
+        rows, or over an fp8_ds_mla cache each row's `Fp8DsMlaUpconvertRow_v1` (`cp_gather_and_upconvert_fp8_kv_cache`)."""
+        logs = self.logs[L]
+        if self.net.kv_layout is None:
+            return logs["latent"].parts[:context]
+        fn = self.k("fp8_ds_mla_upconvert_row", DN=int(self.C["KV_LORA"]), DR=int(self.C["QK_ROPE"]))
+        return [self.call(fn, logs["latent"].parts[j], logs["scale"].parts[j], logs["rope"].parts[j]).refs for j in range(context)]
 
     def _dense_prefill(self, L: int, qb: list[Refs], qpe: list[Refs], kvc: list[Refs], kpe: list[Refs], context: int, pos0: int,
                        dense: list[tuple[int, int]], entry: int) -> list[Refs]:
@@ -673,7 +765,7 @@ class _Model(_Calls):
         if plan.merge is None:
             return [concat([o.refs for o in heads(fn, qs[i], i + 1, sfx)]) for i, fn in enumerate(plan.heads)]
         if context:
-            hist = self.logs[L]["latent"].parts[:context]
+            hist = self._context_rows(L, context)
             ckvb = self.fp8_linear([r.slice(0, KVL) for r in hist], w("kv_b_w"), w("kv_b_ws"), rows=plan.held)
             pre = head_logs(ckvb, [r.slice(KVL, KVL + R) for r in hist])
         else:
@@ -696,7 +788,7 @@ class _Model(_Calls):
         """The MoE block over the rows x (`vllm_moe_router`, `vllm_moe_fp8`, op-major): the router logits, the shared expert, each row's
         top-k, its block-FP8 quantization, then per (token, slot) pair p = t * TOPK + k the w13 GEMM, the activation, its quantization
         and the routed w2 GEMM; each row's sum of its TOPK down rows, plus the shared expert's."""
-        from verity.definitions.registry.moe import router_kernel
+        from verity_vllm.definitions.registry.moe import router_kernel
 
         from verity_vllm.engine.profiles.devices import fused_moe_config
         from verity_vllm.program.frontend import targets as TG

@@ -4,7 +4,7 @@ public import Proofs.Properties.Spot
 public import Proofs.Properties.Spot.Units
 public import Proofs.Core.QSort
 public import Proofs.Properties.Pous.MemoryChallenger.Sort
-public import Proofs.Properties.Accounting.Remote.Sort
+public import Proofs.Properties.Poub.Remote.Sort
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Stmt
 public import Proofs.Flock.SpotFlock.SampleInts
@@ -14,8 +14,8 @@ public import Proofs.Flock.SpotFlock.SampleInts
 
 Where one-stage v2 (`Spot.OneStageZk.checkBlobsAt`) accepts, at the coins `ξ`, evidence it parsed
 (`Spot.OneStageZk.evidenceOf`), the units its one session proves (`Spot.OneStageZk.provedUnits` on the
-session's record) are the units `ξ` samples under the verifier's law as derived, over the registered population
-(`Spot.OneStage.drawnFrom`), ascending (`credited_of_checkBlobsAt`); at the public file's load and the record's
+session's record) are the units `ξ` samples under the verifier's sampling design as derived, over the registered population
+(`Spot.OneStage.sampledFrom`), ascending (`credited_of_checkBlobsAt`); at the public file's load and the record's
 sample, `Units.unitsAt` reads them (`unitsAt_of_checkBlobsAt`).
 
 * **v1 at the coins** (`provedUnits_of_checkAt`): v1's `checkAt` refuses a sample other than the coins' (`coinsWhy`), and
@@ -55,7 +55,7 @@ theorem qsort_qsort (as : Array Nat) : (as.qsort (· < ·)).qsort (· < ·) = as
   have hs : ∀ bs : Array Nat, (bs.qsort (· < ·)).toList.Pairwise (· ≤ ·) := fun bs =>
     Verity.QSort.ByKey.qsort_sorted id bs
   exact Array.toList_inj.1 (List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => Nat.le_antisymm h1 h2) (hs _) (hs _)
-    (Properties.RemoteAudit.qsort_toList_perm _ _))
+    (Properties.Poub.qsort_toList_perm _ _))
 
 /-- Sorting naturals as integers is sorting them. -/
 theorem qsort_cast (as : Array Nat) :
@@ -108,15 +108,15 @@ theorem nonneg_of_ascending {xs : Array Int} (ha : Ascending xs) (h0 : ∀ (h : 
 
 /-! ## v1 at the coins -/
 
-/-- **v1 at the coins `ξ`, on a sample without a closure.** Where `checkAt` accepts, the verifier's law derives (`law`), the
-record names a population `n`, the coins sample `units` under `law` over `n` (`drawnFrom`), and the evidence's
+/-- **v1 at the coins `ξ`, on a sample without a closure.** Where `checkAt` accepts, the verifier's sampling design derives (`samplingDesign`), the
+record names a population `n`, the coins sample `units` under `samplingDesign` over `n` (`sampledFrom`), and the evidence's
 `proved_units` are those units, ascending. -/
 theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStage.Evidence} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : OneStage.checkAt p c (some ξ) e = .accept pub prof) (hcl : field? e.draw "closure" = none) :
-    ∃ law n units read,
-      Draw.derive p.verifier.program p.verifier.query p.verifier.law p.verifier.workTable = .ok law ∧
-      nat? (getD c.record "population") = some n ∧ OneStage.drawnFrom p.verifier law n ξ = .ok (units, read) ∧
+    ∃ samplingDesign n units read,
+      Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable = .ok samplingDesign ∧
+      nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.verifier samplingDesign n ξ = .ok (units, read) ∧
       e.provedUnits = units.qsort (· < ·) := by
   cases hw : OneStage.coinsWhy p c e ξ with
   | some why =>
@@ -124,15 +124,15 @@ theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {
     cases h
   | none =>
     simp only [OneStage.checkAt, Option.bind_some, hw] at h
-    obtain ⟨law, -, n, hreg, hdrawn, hunits, -, -, hn, -, -⟩ := acceptMeans p c e pub prof h
-    have hder : Draw.derive p.verifier.program p.verifier.query p.verifier.law p.verifier.workTable = .ok law :=
+    obtain ⟨samplingDesign, -, n, hreg, hdrawn, hunits, -, -, hn, -, -⟩ := acceptMeans p c e pub prof h
+    have hder : Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable = .ok samplingDesign :=
       hreg.1.2.2.2.1
     obtain ⟨-, -, -, -, -, us, xs, hus, hxs, hasc, h0, -⟩ := hdrawn
     simp only [OneStage.coinsWhy, hder] at hw
     unfold OneStage.coinsReason at hw
     rw [hn] at hw
     dsimp only at hw
-    cases hd : OneStage.drawnFrom p.verifier law n ξ with
+    cases hd : OneStage.sampledFrom p.verifier samplingDesign n ξ with
     | error why => rw [hd] at hw; cases hw
     | ok r =>
       obtain ⟨units, read⟩ := r
@@ -144,7 +144,7 @@ theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {
       · cases hw
       · rename_i hne
         have hu : units = us.filterMap nat? := by simpa only [bne_iff_ne, ne_eq, not_not] using hne
-        refine ⟨law, n, units, read, hder, hn, hd, ?_⟩
+        refine ⟨samplingDesign, n, units, read, hder, hn, hd, ?_⟩
         have hp : Draw.proved e.draw = xs.qsort (· < ·) := by
           have hgc : getD e.draw "closure" = .null := by simp only [getD, hcl, Option.getD_none]
           unfold Draw.proved
@@ -205,17 +205,17 @@ theorem provedUnits_sorted {pubB : ByteArray} {record : String} {us : Array Nat}
 
 /-- **v2 credits its one session with the coins' sample.** Where v2 accepts evidence it parsed at the coins `ξ`: the
 evidence names one session `s`, whose record is on the blobs as UTF-8 (`record`), and the parameters' public file is on
-the blobs (`pubB`); the verifier's law derives (`law`) and the record names a population `n`; and the units the session
-proves (`provedUnits`) are the units `ξ` samples under `law` over `n` (`drawnFrom`), ascending. -/
+the blobs (`pubB`); the verifier's sampling design derives (`samplingDesign`) and the record names a population `n`; and the units the session
+proves (`provedUnits`) are the units `ξ` samples under `samplingDesign` over `n` (`sampledFrom`), ascending. -/
 theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (he : OneStageZk.evidenceOf b = .ok e) (hm : p.members = none)
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    ∃ s pubB B record law n units read, e.sessions = #[s] ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+    ∃ s pubB B record samplingDesign n units read, e.sessions = #[s] ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
-      Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.law p.base.verifier.workTable =
-        .ok law ∧
-      nat? (getD c.record "population") = some n ∧ OneStage.drawnFrom p.base.verifier law n ξ = .ok (units, read) ∧
+      Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable =
+        .ok samplingDesign ∧
+      nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.base.verifier samplingDesign n ξ = .ok (units, read) ∧
       OneStageZk.provedUnits pubB record = .ok (units.qsort (· < ·)) := by
   replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
   unfold OneStageZk.checkOneAt at h
@@ -235,7 +235,7 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
     | _ =>
       simp only [hca] at h
       cases h
-  obtain ⟨law, n, units, read, hder, hn, hd, hpu⟩ := provedUnits_of_checkAt hca (closure_of_evidenceOf he)
+  obtain ⟨samplingDesign, n, units, read, hder, hn, hd, hpu⟩ := provedUnits_of_checkAt hca (closure_of_evidenceOf he)
   have hpu' : e.base.provedUnits = units.qsort (· < ·) := hpu
   obtain ⟨_, h1, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
@@ -293,40 +293,39 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
     split at hstep
     · obtain rfl := Except.ok.inj hstep
       cases hall
-    · split at hstep
-      · cases hstep
-      · obtain ⟨us, hus, hstep⟩ := bind_ok hstep
-        obtain rfl := Except.ok.inj hstep
-        have hus' : OneStageZk.provedUnits pB record = .ok us := hus
-        have hq : (#[] ++ us).qsort (· < ·) = e.base.provedUnits := by
-          unfold OneStageZk.provedHeld at hheld
-          dsimp only at hheld
-          split at hheld
-          · cases hheld
-          · rename_i hne
-            simpa only [bne_iff_ne, ne_eq, not_not] using hne
-        refine ⟨s, pB, B, record, law, n, units, read, hs, hpB, hB, hu, hder, hn, hd, ?_⟩
-        obtain ⟨xs, rfl⟩ := provedUnits_sorted hus'
-        rw [hus', ← hpu', ← hq, Array.empty_append, qsort_qsort]
+    · split_ifs at hstep
+      obtain ⟨us, hus, hstep⟩ := bind_ok hstep
+      obtain rfl := Except.ok.inj hstep
+      have hus' : OneStageZk.provedUnits pB record = .ok us := hus
+      have hq : (#[] ++ us).qsort (· < ·) = e.base.provedUnits := by
+        unfold OneStageZk.provedHeld at hheld
+        dsimp only at hheld
+        split at hheld
+        · cases hheld
+        · rename_i hne
+          simpa only [bne_iff_ne, ne_eq, not_not] using hne
+      refine ⟨s, pB, B, record, samplingDesign, n, units, read, hs, hpB, hB, hu, hder, hn, hd, ?_⟩
+      obtain ⟨xs, rfl⟩ := provedUnits_sorted hus'
+      rw [hus', ← hpu', ← hq, Array.empty_append, qsort_qsort]
 
 /-- **v2's credit, as `Units.unitsAt` reads it**: where v2 accepts evidence it parsed at the coins `ξ`, at any load of
 the parameters' public file and the sample the session's record reads (`Flock.Witness.recordDraw`), `unitsAt` is the units
-`ξ` samples under the verifier's law as derived over the registered population, ascending. -/
+`ξ` samples under the verifier's sampling design as derived over the registered population, ascending. -/
 theorem unitsAt_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (he : OneStageZk.evidenceOf b = .ok e) (hm : p.members = none)
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    ∃ s pubB B record law n units read, e.sessions = #[s] ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+    ∃ s pubB B record samplingDesign n units read, e.sessions = #[s] ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
-      Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.law p.base.verifier.workTable =
-        .ok law ∧
-      nat? (getD c.record "population") = some n ∧ OneStage.drawnFrom p.base.verifier law n ξ = .ok (units, read) ∧
+      Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable =
+        .ok samplingDesign ∧
+      nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.base.verifier samplingDesign n ξ = .ok (units, read) ∧
       ∀ (tags : Flock.Tags) (cc : Flock.Circuit) (pi : Flock.HmIn.Ports) (P : Flock.Public) (D : Json),
         Flock.HmIn.loadPublic tags cc pi pubB = .ok P → Flock.Witness.recordDraw record = some D →
           Units.unitsAt P.header D = some (units.qsort (· < ·)) := by
-  obtain ⟨s, pubB, B, record, law, n, units, read, hs, hp, hB, hr, hder, hn, hd, hc⟩ :=
+  obtain ⟨s, pubB, B, record, samplingDesign, n, units, read, hs, hp, hB, hr, hder, hn, hd, hc⟩ :=
     credited_of_checkBlobsAt he hm h
-  exact ⟨s, pubB, B, record, law, n, units, read, hs, hp, hB, hr, hder, hn, hd,
+  exact ⟨s, pubB, B, record, samplingDesign, n, units, read, hs, hp, hB, hr, hder, hn, hd,
     fun _ _ _ _ _ hl hD => Units.unitsAt_of_provedUnits hl hD hc⟩
 
 /-! ## The registered population -/
@@ -336,9 +335,9 @@ theorem bool_of_not_not {b : Bool} (h : ¬ (!b) = true) : b = true := by
 
 /-- The registration's checks against a public file pass only at the file's population: the last is the registration's
 `population` against the one the file names. -/
-theorem population_of_matchesPublic {rec s r d pop : Json}
-    (h : (Record.matchesPublic rec s r d pop).codes = #[]) : jeq pop (getD rec "population") = true := by
-  unfold Record.matchesPublic at h
+theorem population_of_matchesPublic {reg : Array (String × Json)} {rec s r d pop : Json}
+    (h : (Record.matchesPublicBy reg rec s r d pop).codes = #[]) : jeq pop (getD rec "population") = true := by
+  unfold Record.matchesPublicBy at h
   try dsimp only at h
   repeat' split at h
   all_goals first
@@ -428,6 +427,8 @@ theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitm
     obtain ⟨hd, hhd, hph⟩ := bind_ok hph
     rw [Units.headerOf_loadPublic hl] at hhd
     obtain rfl := Except.ok.inj hhd
+    try dsimp only at hph
+    obtain ⟨_, -, hph⟩ := bind_ok hph
     try dsimp only at hph
     split at hph
     · first

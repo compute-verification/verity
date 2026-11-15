@@ -10,14 +10,14 @@ each template's units the budget certifies.
   proves no instance past k_log `K_MAX`, so a unit past it is sampled whole and proved as its least number of parts
   under it, each its share of the ANDs and of every row's bytes, a template of its own (a row cut where a partial sum
   is committed).
-* **Its cost** comes from `CALIBRATION`: firewalled `--zk` cold sessions on Genoa proofs slots, every one accepted by
+* **Its cost** comes from `CALIBRATION`: zk_served `--zk` cold sessions on Genoa proofs slots, every one accepted by
   the live verifier and by Lean. Prove wall time is scaled to a 42-core slot by thread count, with the peak summed
   over the prover, the live verifier and the ZK server. Lean `verify --zk` (one core) and staging are counted apart.
   Past m = 30 time is extrapolated at 2.2x and memory at 2x per m, and a statement takes as many 120 GB slots as its
   memory needs. No statement is smaller than k_log `PACK_LOG` (m = 25), so a smaller unit costs the m = 25 point.
 * **The plan**: every template samples k = ceil(ln(S/1%)/share), rounded up to fill its last statement and at most n.
   The share is the least whose statements fit `slots` x `hours` of slot time. Each window then has fewer than
-  K0 = ln(S/delta) n/k units incorrect outside delta (`IntegrityPeriodLog`, delta split over the S windows), and its
+  K0 = ln(S/delta) n/k units incorrect outside delta (`IntegrityMonitoringPeriodLog`, delta split over the S windows), and its
   windows over any period fewer than that in all (`IntegrityHorizon`), as in `h200.py`.
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ from math import ceil, log
 from pathlib import Path
 
 from verity import protocol
-from verity.commitments.windows.interface import K_MAX, MAX_ROWS, proof_block_k_log
+from verity.commitments.periods.interface import K_MAX, MAX_ROWS, proof_block_k_log
 
 #: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`verity.protocol`)
 DELTAS = tuple(map(float, protocol.DELTAS))
@@ -54,7 +54,7 @@ def split(t: dict) -> tuple[int, int]:
     """(parts, k_log): the least number of parts ``t``'s unit proves in under 2^`K_MAX` bits, each its share of the ANDs
     and of every row's bytes, and a part's k_log."""
     if len(t["rows"]) > MAX_ROWS:
-        raise ValueError(f"{t['template']}: {len(t['rows'])} rows, past the {MAX_ROWS} a C-Flock block holds: cut its "
+        raise ValueError(f"{t['template']}: {len(t['rows'])} rows, past the {MAX_ROWS} a Flock block holds: cut its "
                          "unit into fewer rows")
     p = 1
     while (k := k_log([-(-b // p) for b in t["rows"]], -(-t["ands"] // p))) > K_MAX:

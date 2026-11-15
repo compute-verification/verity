@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pouw.PearlPlus
-public import Properties.Pouw.PearlPlusDraw
+public import Properties.Pouw.PearlPlusSample
 public import Definitions.Core.Interaction
 public import Flock.Hash
 
@@ -82,7 +82,7 @@ and never multiplied. `Runs.CommittedBeforeCoin` is all the statements need of t
 W, its table) reads no coin of its own phase or of a later phase of its sequence. It may read any coin of another
 sequence, so nothing is assumed between sequences. That each phase's coin is uniform given everything before is
 `Runs.DrawIsTickets` over a uniform coin, which the challenger's log gives a real run
-(`FlockSoundness.Assumptions.UniformRandomBytes`, `Properties.Challenger.CoinsFromLog` and `DrawnByDevice`).
+(`FlockSoundness.Assumptions.UniformRandomBytes`, `Properties.Challenger.CoinsFromLog` and `SampledByDevice`).
 
 The two period statements are separate because their conjunction at one δ is false. A prefix end chosen after the
 coins (`PeriodYAtWIsTheCall`'s ∃) is the maximal inequality's, which bounds a tail and no mean; convex pooling needs a
@@ -250,11 +250,11 @@ def TileTiedAtW (w : Lean.Json) (rounds : Option (List ℕ)) (passes : List Pass
 tiles, then its exclusion tiles), the prover opens each and `checkTile` passes it on its weight's noise, or, under
 `over_cap` `uncredited`, finds it only over its inert-work bound. It is what `AcceptMeans` gives of an accepted
 verdict's tiles. -/
-def TilesAccepted (passes : List Pass) (m : OverCap) (opener : Opener) (drawn : List (ℕ × ℕ)) : Prop :=
+def TilesAccepted (passes : List Pass) (m : OverInertBound) (opener : Opener) (drawn : List (ℕ × ℕ)) : Prop :=
   ∀ (pi tid : ℕ), (pi, tid) ∈ todo passes drawn → ∃ (p : Pass) (o : TileOpening),
     passes[pi]? = some p ∧ opener pi tid = .ok o ∧
     (checkTile p (noiseOf p tid) tid o = .pass ∨
-      m = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overCap why)
+      m = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overInertBound why)
 
 /-- One row of one of W's trees as a tile's opening opens it: W's value, the tree's domain and root as `checkTile`
 reads them from the pass, and the opening. -/
@@ -301,7 +301,7 @@ structure Run where
   w : Lean.Json
   rounds : Option (List ℕ)
   dropped : List ℕ
-  overCap : OverCap
+  overInertBound : OverInertBound
   table : Table
 
 /-- **The run is held to W**: its passes are `load`'s of its manifests under the epoch's coins, and `tieOf` answers
@@ -313,7 +313,7 @@ def Run.HeldToW (R : Run) : Prop :=
 /-- **The run is accepted on the sample `drawn` with the openings `o`**: it is held to W and every tile the verdict
 opens is accepted. -/
 def Run.Accepts (R : Run) (o : Opener) (drawn : List (ℕ × ℕ)) : Prop :=
-  R.HeldToW ∧ TilesAccepted R.passes R.overCap o drawn
+  R.HeldToW ∧ TilesAccepted R.passes R.overInertBound o drawn
 
 /-- **The run's table holds what `o` opens on the sample `drawn`**: for every row of W's trees the openings of the
 verdict's tiles open (`tileRows`), the table holds an opening of that position at that value which opens against the
@@ -353,7 +353,7 @@ def msgPair (xy : ByteArray × ByteArray) : _root_.Claims.Msg × _root_.Claims.M
 /-- The run a verdict's input is, with its loaded passes, the registration record it names and a table. -/
 def runOf (i : Input) (passes : List Pass) (w : Lean.Json) (T : Table) : Run :=
   { coins := i.coins, manifests := i.manifests, passes := passes, w := w, rounds := i.rounds, dropped := i.dropped,
-    overCap := i.overCap, table := T }
+    overInertBound := i.overInertBound, table := T }
 
 /-- **An accepted verdict on an input that names W is a run held to W**: the plan's passes are W's by `tieOf`, the
 verdict answers with that tie, and, where the tie's weights are tied, the run (`runOf`, at any table) is accepted on
@@ -375,14 +375,14 @@ def drawnAt (tk : List ((ℕ × ℕ) × ℕ)) {t : ℕ} (c : TicketDraws tk t) :
 
 open Classical in
 /-- **The run's wrong ticket weight**: the tickets of its tiles that its table does not tie at W's entries. -/
-noncomputable def Run.wrongWeight (R : Run) : ℕ :=
+noncomputable def Run.incorrectWeight (R : Run) : ℕ :=
   ∑ u : Fin (tickets R.passes).length,
     if TileTiedAtW R.w R.rounds R.passes R.table ((tickets R.passes).get u).1 then 0
     else weightsOf (tickets R.passes) u
 
 /-- **The run's wrong share**: its wrong ticket weight over its tickets' total (0 where the run holds no ticket). -/
-noncomputable def Run.wrongShare (R : Run) : ℝ :=
-  (R.wrongWeight : ℝ) / (ticketTotal (tickets R.passes) : ℝ)
+noncomputable def Run.incorrectShare (R : Run) : ℝ :=
+  (R.incorrectWeight : ℝ) / (ticketTotal (tickets R.passes) : ℝ)
 
 /-- **The run's finder**: on the tickets `c`, the first SHA-512 collision (`collisionIn`) among
 the messages checking the opener's rows on `c` and the table's hashes (`Run.hashed`). Its coins are the play's, `t`
@@ -408,7 +408,7 @@ def YAtWIsTheCall : Prop :=
     _root_.Claims.ExpectedCR sha512Msg (R.finder t O q) →
     _root_.Pouw.pr (fun c : TicketDraws (tickets R.passes) t =>
       R.Accepts (O c) (drawnAt (tickets R.passes) c) ∧ R.Holds (O c) (drawnAt (tickets R.passes) c) ∧
-        ε < R.wrongShare) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
+        ε < R.incorrectShare) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
 
 /-! ## The period's statements -/
 
@@ -457,7 +457,7 @@ def Runs.AcceptedUpTo {Ω : Type} {n : ℕ} (P : Runs Ω n) (x : Fin n → Ω) (
 /-- **The tied share of a sequence's prefix**: ∏ (1 − wrong share) over phase `k` and the earlier phases of its
 sequence, each a share of its own run's ticket weight. -/
 noncomputable def Runs.tiedUpTo {Ω : Type} {n : ℕ} (P : Runs Ω n) (x : Fin n → Ω) (k : Fin n) : ℝ :=
-  ∏ w : Fin n, (if P.seq w = P.seq k ∧ w ≤ k then 1 - (P.run x w).wrongShare else 1)
+  ∏ w : Fin n, (if P.seq w = P.seq k ∧ w ≤ k then 1 - (P.run x w).incorrectShare else 1)
 
 /-- The messages a period's play hashes in checking its row openings against its tables (`Run.hashed`), phase by
 phase. -/
@@ -584,7 +584,7 @@ table alone, and it needs no premise that the run is held to W. The tile a credi
 record, whose id is the record's offset plus `x` (`Pass.tile?`'s numbering), and every tile has a width `n > 0`, so
 its ticket is its cells at `cellTicket`. Proved: `untiedCellsAtMost` (`Proofs.Properties.Pouw.PearlPlus.Tie`). -/
 def UntiedCellsAtMost : Prop :=
-  ∀ (R : Run) (ε : ℝ), R.wrongShare ≤ ε → (R.untiedCredited.card : ℝ) ≤ cellsAt R.passes ε
+  ∀ (R : Run) (ε : ℝ), R.incorrectShare ≤ ε → (R.untiedCredited.card : ℝ) ≤ cellsAt R.passes ε
 
 /-- **PoUW's guarantee at W's entries, as cells.** On `YAtWIsTheCall`'s premises: over `t` uniform work-weighted
 tickets, the run is accepted on the tiles they name with openings its table holds while more than n(ε)

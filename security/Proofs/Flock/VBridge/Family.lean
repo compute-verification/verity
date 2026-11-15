@@ -24,7 +24,7 @@ import Proofs.Flock.VBridge.Full
 # VBridge G at V*'s statement family
 
 `vbridge_of_vstar` (`Top.lean`) takes V*'s statements as free objects. `VStarFamily` ties them to V*'s executable Lean
-(`verity/core/service/vstar`):
+(`verity/protocols/proofs/recursion/verifier/vstar_cli`):
 
 * the statements are `VStar.statements` at the inner session's shape (`Stage.lean:56-66`: each Ligerito level's
   `RecOpen{LANES, H}` over `2 q` instances, then each part's `InnerRepCheck{S}` over two), the verifier's shape the one
@@ -84,7 +84,7 @@ def cpO (_ : ℕ) (_ : Fin 2) (_ : ℕ) : ℕ := 0
 
 section reps
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
 variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Flock.Schedule)
 
@@ -172,7 +172,7 @@ section family
 
 variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Flock.Schedule)
-variable {n : ℕ} (L : Law n) (Reg Cm Reg' Reg₂ : Type)
+variable {n : ℕ} (L : SamplingDesign n) (Reg Cm Reg' Reg₂ : Type)
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 

@@ -23,7 +23,7 @@ rows' digests hashed (`PoolColl`). Serving picks the restarts, so their pattern 
 patterns serving may pick where every audit accepts (`Cs`), and a restart a public rule makes after a refused run costs
 nothing. The escape is bounded by `(1 - q)^Fmax` itself, which is at most `δ` at `Fmax ≥ ln(1/δ)/q`.
 
-It is conditional as `PooledLeakAccepted` is: its inputs are named (`MonitoringPeriodChannel`, `MonitoringPeriodAdaptive`, `MonitoringPeriodEscapes`,
+It is conditional as `PooledLeakAccepted` is: its inputs are named (`MonitoringPeriodChannel`, `MonitoringPeriodAdaptive`, `MonitoringPeriodMissProb`,
 `MonitoringPeriodLeaksCarried`), none discharged yet. At rows read off each run's extracted witness (`RLeakCarried`), a collision at
 an opening is one found from two witnesses. At the empty pool, with no opening or closing gate and one pattern that
 restarts no run, it bounds windows that each hold a pool of their own.
@@ -50,7 +50,7 @@ compiled sampled verifier `D` where `Claims.SamplingGeneric.Compiled.KS` holds:
   the witness;
 * on a statement in scope whose check pins `chk` (`CheckedUnique`), at every `ρ` and every opened row `rin`, the
   sequences accepted from `rin` (`AccSeqsCarried`) number at most
-  `2^#(freeInputs \ (reg ∪ chk ∪ prow)) · #faultySets(δ) · 2^β · Dj^k`, `β` the most committed bits of a possible
+  `2^#(freeInputs \ (reg ∪ chk ∪ prow)) · #incorrectSets(δ) · 2^β · Dj^k`, `β` the most committed bits of a possible
   incorrect set. -/
 def SampledLeakCarried : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
@@ -67,7 +67,7 @@ def SampledLeakCarried : Prop :=
           (AccSeqsCarried s.prog P s.design (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) (valid s) (prow s)
               (nrow s) rin δ op Dj).encard ≤
             ((2 ^ (freeInputs s.prog (lay s) (k s) \ (reg s ∪ chk s ∪ (prow s).toFinset)).card *
-              (faultySets s.design P δ).card * 2 ^ ((faultySets s.design P δ).sup (faultyBits s.prog P)) *
+              (incorrectSets s.design P δ).card * 2 ^ ((incorrectSets s.design P δ).sup (faultyBits s.prog P)) *
               Dj ^ k s : ℕ) : ℕ∞)
 
 /-- **The leak through the network certifier over a monitoring period whose runs carry the pool** (conditional on its
@@ -80,7 +80,7 @@ registered finite set `Cs` (`ResetsIn`) and have the runs open the root of the r
 `sha512/row-seg/v1` digest over `G`); with the network certifier running its code by `trusted-device`, its one run giving
 the cells the client receives and its record of them, the runs' observations; a covert sender's channel
 (`MonitoringPeriodChannel`), each run's acceptance and incorrect set reading only the earlier runs' coins (`MonitoringPeriodAdaptive`), the
-conditional escape (`MonitoringPeriodEscapes`), and the leak relation at each run's own incorrect set from its extracted rows `rin`,
+conditional escape (`MonitoringPeriodMissProb`), and the leak relation at each run's own incorrect set from its extracted rows `rin`,
 `rout` (`MonitoringPeriodLeaksCarried`):
 
 * for every secret, every audit accepts and the good event at the picked pattern fails (`PooledGoodCarried`) with
@@ -118,7 +118,7 @@ def PooledLeakCarried : Prop :=
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
     (had : MonitoringPeriodAdaptive n acc W) (rin rout : Z → (Fin m → Ω) → Fin m → Hash.Row) (e e' : Fin m → ℝ)
     (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
-    (hesc : MonitoringPeriodEscapes Zs acc W q e)
+    (hesc : MonitoringPeriodMissProb Zs acc W q e)
     (hleak : MonitoringPeriodLeaksCarried lay k reg valid prow nrow Dj sw Pw ρ op Zs acc W rin rout
       (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e')
     (Fmax : ℕ),

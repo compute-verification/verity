@@ -45,9 +45,9 @@ from typing import Any
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.commitments.windows import interface as I
-from verity.definitions.registry import dead_free as DF
+from verity.commitments.periods import interface as I
 
+from verity_vllm.definitions.registry import dead_free as DF
 from verity_vllm.pipeline.tp import grain as G
 from verity_vllm.program import tp_binding as TB
 
@@ -58,6 +58,8 @@ ALL = -1
 Range = tuple[str, int, int]
 #: a writer row run of a site's output: its leaves [lo, hi), a row's words, the writer's template, output and first unit
 Segment = tuple[int, int, int, str, str, int]
+
+__all__ = ["ALL", "COMBINE", "CONSUMER", "GATHER", "NORM", "OUTPUT", "PRODUCER", "Sites", "sites_circuit"]
 
 
 @dataclass(frozen=True)

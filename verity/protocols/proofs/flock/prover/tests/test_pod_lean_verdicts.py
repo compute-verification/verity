@@ -237,7 +237,7 @@ logs = [x for i, x in enumerate(a[1:], 1) if x not in flags and x not in flags.v
 inner = open(flags["--rec-inner"], "rb").read()
 links = flags.get("--rec-links")
 links = None if links is None else (bytes.fromhex(links.split(":")[0]), int(links.split(":")[1]))
-ok, why = RC.check(json.loads(inner)["n"], RC.digest(open(flags["--rec-rows"], "rb").read()), RC.digest(inner),
+ok, why = RC.check_twin(json.loads(inner)["n"], RC.digest(open(flags["--rec-rows"], "rb").read()), RC.digest(inner),
                    open(flags["--rec-run"]).read(), [(f, open(f).read()) for f in logs], links)
 print("REC-COMPOSE " + json.dumps({"accepted": ok, "why": why, "parts": len(logs)}))
 sys.exit(0 if ok else 1)
@@ -350,7 +350,7 @@ def _challenger(d: Path, opens: list[tuple[str, int]], session: str = "s", close
     return evs
 
 
-def test_a_zk_served_oprove_composes_over_the_record_its_coin_servers_logged(tmp_path, capsys):
+def test_a_zk_served_oprove_composes_over_the_record_its_live_coin_parts_logged(tmp_path, capsys):
     """The run's record is the challenger's ``rec-run.jsonl``, event for event: oprove's staging, each part's open as its
     challenger logged it at the Hello, the close; the parts compose over it."""
     binary, h = _composer(tmp_path, 3)
@@ -453,7 +453,7 @@ def test_a_part_given_other_shared_files_than_the_staged_ones_does_not_compose(t
     assert rc == 1 and capsys.readouterr().out.splitlines()[-2].endswith("<- FAILS")
 
 
-def test_a_forgery_is_composed_over_its_own_coin_servers_opens_in_its_parts_place(tmp_path, capsys):
+def test_a_forgery_is_composed_over_its_own_live_coin_parts_opens_in_its_parts_place(tmp_path, capsys):
     """A forgery's challenger logs into a record of its own, so the honest run's stays one session a part; its
     composition is over the run's record with its part's opens replaced by the forgery's, so it is refused by the
     forgery's own verdict, not by a session the record lacks."""

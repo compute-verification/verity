@@ -36,6 +36,12 @@ EXEMPT = {
     ("tools/research/src/research/queue.py", "tools/verity/lean/headers.py"):
         "the Lean header reader the codemod reads with, which lands with it: `on_modules` reads a tree's roots with it; the "
         "tooling drops this entry",
+    **dict.fromkeys(
+        (("tools/research/src/research/pods/nebius/slot_only.py", "tools/check/"),
+         ("tools/research/src/research/pods/nebius/node_ops.py", "tools/check/"),
+         ("tools/research/src/research/run_records.py", "tools/check/")),
+        "the check's path on the branch `architecture`, which lands on `main` with that branch; recognised so a run from the "
+        "branch is treated as one from `main`"),
 }
 #: the gate tooling whose module-level path constants are checked: what `check`, `research merge`, the queue and the audit read
 TOOLING = ("tools/check/", "tools/verity/lean/", "tools/research/src/research/", "tools/verity/circuit_check/src/")
@@ -398,7 +404,7 @@ def test_each_check_catches_a_dangling_path():
     tool.spec = "elsewhere.gkr.gpu.tool:G"
     assert tool_problems("g", tool, gkr) == ["command runs -m gpu.run, which isn't a module here"]
 
-    text = ('from pathlib import Path\nROOT = Path(__file__).resolve().parents[3]\nA = ROOT / "tools" / "verity" / "check" / "x.py"\n'
+    text = ('from pathlib import Path\nROOT = Path(__file__).resolve().parents[2]\nA = ROOT / "tools" / "check" / "x.py"\n'
             'B = ROOT / "tools" / "verity" / "lean"\nC = "verity/protocols/proofs/flock/prover/live"\nD = ("verity/gone/x.py", "data/a.json")\n'
             'E = Path(__file__).parent / "data" / "b.json"\nF = "origin/main"\n')
     got = dangling_constants(files | {"tools/check/y.py"}, read=lambda f: text if f == "tools/check/y.py" else "")

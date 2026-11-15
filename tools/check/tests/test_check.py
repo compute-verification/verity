@@ -1000,7 +1000,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][2][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
     (pt,), (build, rust, cc), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
-    assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
+    assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, bounds circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/protocols/proofs/flock/prover/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
@@ -1012,7 +1012,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
 
 
 def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
-    """On a VM a run's limit is on its session scope, not the root cgroup (vy-nebius-cpu-1 caps each at 240 GB); in a pod it is
+    """On a VM a run's limit is on its session scope, not the root cgroup (vy-nebius-cpu-1 limits each to 240 GB); in a pod it is
     the namespace's root; MemAvailable bounds both."""
     scope = tmp_path / "sys/fs/cgroup/user.slice/user-1001.slice/session-9.scope"
     scope.mkdir(parents=True)
@@ -1408,21 +1408,12 @@ def test_a_step_is_hung_only_once_its_outputs_have_been_quiet_for_idle_s_and_ove
                                                             CHECK.STEP_BUDGET_S)
 
 
-def test_a_rust_crate_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
-    """flock-circuit-build fails, with cargo's line, only once `slow` is running (the FIFO): under --keep-going `slow` stops."""
-    gate = _gate(tmp_path, monkeypatch)
-    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
-    build = _py("import sys\nopen(sys.argv[1]).read(1)\nprint('error: could not compile `flock-circuit` (lib)')\nsys.exit(101)", gate)
-    _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("flock-circuit-build", build, tmp_path)]])
-    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
-    by = {s["step"]: s for s in done}
-    assert not passed and by["flock-circuit-build"]["status"] == "failed" and by["flock-circuit-build"]["halts"]
-    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: flock-circuit-build failed"
-
-
-def test_a_build_that_fails_without_compiling_does_not_halt(tmp_path, monkeypatch):
-    """A failed clone or toolchain download: no `halts`, so (the Steps test below) the other groups keep their verdicts."""
-    build = _py("print('fatal: unable to access https://github.com/...')\nraise SystemExit(128)")
+@pytest.mark.parametrize("said, rc", [("fatal: unable to access https://github.com/...", 128),
+                                       ("error: could not compile `flock-circuit` (lib)", 101)])
+def test_a_failed_flock_build_does_not_halt(tmp_path, monkeypatch, said, rc):
+    """A failed clone, toolchain download or compile: no `halts`, so (the Steps test below) under --keep-going the other groups
+    run on and keep their verdicts, and one round of the check lists every red."""
+    build = _py(f"print({said!r})\nraise SystemExit({rc})")
     _fake_run(monkeypatch, [[("flock-circuit-build", build, tmp_path)]])
     passed, (rec,) = CHECK.run(tmp_path, 1, keep_going=True)
     assert not passed and rec["status"] == "failed" and "halts" not in rec
@@ -2032,7 +2023,7 @@ def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_
 
 
 def test_the_circuit_check_step_records_its_cache_as_counts(tmp_path):
-    """result.json's steps are its attempt's meta, which the store caps at 256 KiB: a circuit-check cache listing every target
+    """result.json's steps are its attempt's meta, which the store limits to 256 KiB: a circuit-check cache listing every target
     it could not store (each one, once its workers forked) made a passing check's attempt unpublishable. The step keeps counts;
     the lists stay in circuit-check.json, an artifact."""
     import json
@@ -2262,7 +2253,7 @@ def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(
     check.py takes it, and on a commit whose check.py predates it the run launches without it, saying so; with --no-regenerate,
     --shard or without --deferred it is refused before anything launches."""
     git, train, argv = _train_repo(tmp_path)
-    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
+    check = tmp_path / "repo" / "tools" / "check" / "check.py"
     check.parent.mkdir(parents=True)
     check.write_text('BOOKKEEPING = "--bookkeeping-warn"\n')
     git("add", "tools")
@@ -2290,7 +2281,7 @@ def test_train_sh_hands_the_loops_deselect_list_to_a_check_that_takes_it(tmp_pat
     it, and on a commit whose check.py predates it the run launches without it, saying so; without --deferred, by a relative
     path or with --cc-records it is refused before anything launches."""
     git, train, argv = _train_repo(tmp_path)
-    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
+    check = tmp_path / "repo" / "tools" / "check" / "check.py"
     check.parent.mkdir(parents=True)
     check.write_text('DESELECT_FILE = "check-deselect.txt"\n')
     git("add", "tools")

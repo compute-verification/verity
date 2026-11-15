@@ -1,7 +1,7 @@
 """quarantine_lint.py (protected): purity + identity rules on synthetic quarantine modules."""
 from __future__ import annotations
 
-from verity_vllm.properties import quarantine_lint
+from tests.properties import quarantine_lint
 
 GOOD = '''
 from verity.circuits.defs import CompositeDefinition
@@ -20,7 +20,7 @@ def f():
 ADAPTER_OK = '''
 SEMANTIC_ID = "gen-x/Gelu@v1"
 def cases(rng, i): return {}
-def production(statics, inputs):
+def serving(statics, inputs):
     import torch
     return inputs
 def spec(statics): return None

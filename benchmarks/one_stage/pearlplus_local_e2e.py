@@ -1,6 +1,6 @@
 """Pearl+'s live sample end to end on one CPU machine, against infra's own gate code (`verity/protocols/compose/device/live_challenger/auditor.py`)
 on a scratch auditor device: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process whose coins
-are the Lean verifier's (``sampled-proofs-verifier``, built first).
+are the Lean verifier's (``spot-verifier``, built first).
 
     python benchmarks/one_stage/pearlplus_local_e2e.py run --out OUT [--lean build|EXE]
 
@@ -19,13 +19,15 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
    in coin.json. The toy isn't the served instance (k_min 1,024 at 64 x 64 tiles), so its passes are read as a
    test instance's, crediting nothing.
 5. ``served_verdicts.py coin`` and ``served_verdicts.py pearlplus``: the coin published and the piece written, each
-   session fetched through the gate and held to the signed ledger under the scratch key's pin.
+   session fetched through the gate and held to the signed ledger under the scratch key's pin. The Lean verdict is
+   taken between the two, as `served_pearlplus.sh` takes it before the piece, so the piece holds the execution phase
+   as that ledger times it and what each of Pearl+'s two checks cost (OUT/e2e.json's ``piece``).
 6. `served_verdicts.piece_row`: PoUW's row, composed of record when `pearlplus_of_record` holds. A test instance
    credits nothing, so on the toy every condition holds up to its last, the Lean's credit, which the row names
    (`TOY_ROW`).
 
-Stand-ins, named in OUT/e2e.json: the serve (one toy pass, `served.json` written here), sampled proofs' window
-registration and records audit (two files tied to W), and, unless ``--lean`` names a ``pouw-pearlplus``, the Lean
+Stand-ins, named in OUT/e2e.json: the serve (one toy pass, `served.json` written here), SPOT's window
+docket and records audit (two files tied to W), and, unless ``--lean`` names a ``pouw-pearlplus``, the Lean
 ``PouwCheck.PearlPlus`` verdict (``pearlplus-lean.json``, copied from Pearl+'s answer); with it, `served_pearlplus.sh`'s
 Lean step writes that file (``served_passes.py lean``, both verdicts in OUT/e2e.json's ``lean``). Then, as a control, a
 second sample on the same commitment: the gate refuses its open (one session a root, ever), so no second coin exists, and
@@ -282,13 +284,10 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     (doc := scratch / "served-doc.json").write_text(json.dumps({
         "arm": f"pouw:{SCHEME}", "spec": "toy", "run": T.RUN, "served_tokens": 1, "generate_s": 1.0, "prompt_tokens": 1,
         "output_tokens": 1, "ok": True, "over_caps": [],
-        "coins": {"source": S.LIVE_SOURCE, "session": carried, "closed": {"closed": True, "complete": True}},
+        "coins": {"source": S.LIVE_SOURCE, "reserved": reserved, "session": carried,
+                  "closed": {"closed": True, "complete": True}},
         "passes": [{"pass": 0, "timed": True, "units": 2, "macs": work.get("macs"), "manifest": str(path)}]}))
-    _cli(log, "pearlplus", ["benchmarks/one_stage/served_verdicts.py", "pearlplus", str(piece), "--served", str(doc),
-                            "--verify", str(piece / "verify.json"), "--gate", gate_cmd, "--key-sha512", key_sha512,
-                            "--main", str(main), "--coin", str(piece / S.COIN_PUT)])
-
-    # 6. the compose
+    # the Lean verdict before the piece, as the harness takes it, so the piece holds both checks' costs
     tie = ((answer.get("public") or {}).get("tie") or {}).get("record")
     if lean is None:
         (piece / S.PEARLPLUS_LEAN).write_text(json.dumps({
@@ -308,6 +307,11 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
         held = json.loads((piece / "pearlplus-lean-check.json").read_text())
         report["lean"] = {k: held.get(k) for k in ("exe", "exe_sha256", "argv", "rc", "stderr", "differ", "reason")} | {
             "lean": {k: (held.get("lean") or {}).get(k) for k in ("verdict", "reason", "refused", "source", "work")}}
+    _cli(log, "pearlplus", ["benchmarks/one_stage/served_verdicts.py", "pearlplus", str(piece), "--served", str(doc),
+                            "--verify", str(piece / "verify.json"), "--gate", gate_cmd, "--key-sha512", key_sha512,
+                            "--main", str(main), "--coin", str(piece / S.COIN_PUT)])
+
+    # 6. the compose
     audit = out / "sampled-proofs"
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True, exist_ok=True)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({"previous": tie, "registered": [], "stand_in": True}))
@@ -322,7 +326,8 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
 
     dev = json.loads((piece / S.DEVELOPMENT).read_text())
     report["piece"] = {k: dev.get(k) for k in ("verdict", "reasons", "coin_source")} | {
-        "coins": {k: (dev.get("coins") or {}).get(k) for k in ("check", "draw")}, "coin": dev.get("coin")}
+        "coins": {k: (dev.get("coins") or {}).get(k) for k in ("check", "draw")}, "coin": dev.get("coin"),
+        "execution_phase": dev.get("execution_phase"), "checks": dev.get("checks")}
     report["row"] = row()
     print(f"[row] {json.dumps(report['row'])[:1500]}", flush=True)
 

@@ -4,12 +4,12 @@ before a run is read against them, decided on the form's params, its blobs and t
 (`Spot.Run.Input`, its interior `Spot.Run.Interior`), once per template and never per unit, request or bit:
 
 * the first stage: the boundary registration `Run.run` hands `Select.select` (`firstOf`), its replay layout
-  (`Slots.layout`) and the design `Select.select` samples on it (`firstLaw`), well formed on the layout's strata
+  (`Slots.layout`) and the design `Select.select` samples on it (`firstSamplingDesign`), well formed on the layout's strata
   (`designOk`);
 * the second stage's cells and counts, as `Run.run` computes them (`cellsOf`), a count of at least `1` and a cell for
   each template;
 * each template's reference statement: its member's (`memberOf`) circuit and public files on the blobs, the pinned
-  tables, and its partition object and registered reads as `flock-verify verify --zk` reads their text (`refOf`),
+  tables, and its partition object and registered reads as `verity-verify-proof verify --zk` reads their text (`refOf`),
   set up as `verifyCmd` sets a statement up (`setupAt`), in Flock's masked scope (`zkOk`), of a length each field's
   encoding holds (`fits`), reading as a member's (`templateOk`), fitting the two-stage scope (`memberOk`) and in the
   scope of Flock's hidden-output proof (`ProvedScope.scopeOkH`);
@@ -43,7 +43,7 @@ open Flock
 /-- **The boundary registration the first stage samples on**, as `Run.run` hands `Select.select`: the verifier's copies
 with the sampling design and work table the rule expands over the record's population, the resolved rule and the closure map. -/
 structure First where
-  verifier : Spot.Registration.Verifier
+  verifier : Spot.Docket.Verifier
   rule : Spot.Select.Rule
   closure : Option (Array (Int × Array Int))
 
@@ -52,10 +52,10 @@ def firstOf (i : Spot.Run.Input) : Option First := do
   let v := i.params.verifier
   let n ← Spot.nat? (Spot.getD i.record "population")
   let rule ← i.rule.over n (Spot.Select.strataSizes v.program v.query)
-  let law ← (rule.lawOver n).toOption
+  let samplingDesign ← (rule.samplingDesignOver n).toOption
   let workTable ← (i.rule.tableOver v.program v.query v.workTable).toOption
   let resolved ← (Spot.Select.resolve i.rule v.program v.query).toOption
-  pure ⟨{ v with law := law, workTable := workTable }, resolved, i.closure⟩
+  pure ⟨{ v with samplingDesign := samplingDesign, workTable := workTable }, resolved, i.closure⟩
 
 /-- **The second stage's cells and counts**, as `Run.run` computes them: each template's proof blocks in a replay block
 and the two-stage rule's count in each; none under a one-stage rule or where either is refused. -/
@@ -71,21 +71,21 @@ def cellsOf (i : Spot.Run.Input) (it : Spot.Run.Interior) : Option (Array Nat ×
 /-- **The requests of a boundary layout**: its proof blocks that are a unit's. -/
 def requests (l : Spot.Slots.SlotOrder) : Nat := (l.blocks.filter fun b => b.unit.isSome).size
 
-/-- **The first stage's law**, as `Select.select` samples on the boundary registration: none for the `All` rule, else
+/-- **The first stage's sampling design**, as `Select.select` samples on the boundary registration: none for the `All` rule, else
 the sampling design it derives over the program's population, or the one the rule names where it derives none. -/
-def firstLaw (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json) (table : Option Json) :
-    V (Option Draw.Law) := do
+def firstSamplingDesign (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json) (table : Option Json) :
+    V (Option Draw.SamplingDesign) := do
   let n ← Spot.Partition.units d query
-  let named ← rule.lawOver n
-  let derived ← Spot.Draw.deriveLaw d query named table
+  let named ← rule.samplingDesignOver n
+  let derived ← Spot.Draw.deriveSamplingDesign d query named table
   match rule with
   | .all => pure none
   | _ => do
-    let parsed ← Spot.Draw.flockLaw ((derived.map (·.toJson)).getD named) n
+    let parsed ← Spot.Draw.flockSamplingDesign ((derived.map (·.toJson)).getD named) n
     pure (some (derived.getD parsed))
 
 /-- **A sampling design is well formed over strata of sizes `ns`**; `none`, the `All` rule's, always is. -/
-def lawOk (ns : List Nat) : Option Draw.Law → Bool
+def samplingDesignOk (ns : List Nat) : Option Draw.SamplingDesign → Bool
   | none => true
   | some (.subset K) => 1 ≤ K && K ≤ ns.sum
   | some (.bernoulli num den) => 0 < den && num ≤ den
@@ -94,11 +94,11 @@ def lawOk (ns : List Nat) : Option Draw.Law → Bool
       (ws.toList.map (·.floor)).length == ns.length && (ws.toList.map (·.floor)).all (1 ≤ ·) &&
       0 < ((ns.zip (ws.toList.map (·.work))).map fun p => p.1 * p.2).sum && ns.all (1 ≤ ·)
 
-/-- **The first stage's design on the replay layout's strata**: its two rules, the first stage's law and the input
+/-- **The first stage's design on the replay layout's strata**: its two rules, the first stage's sampling design and the input
 class's `All`, one a class of `l`, each well formed over its class's strata sizes in slots. -/
-def designOk (law : Option Draw.Law) (l : Spot.Slots.SlotOrder) : Bool :=
-  [law, none].length == l.classes.size &&
-    ([law, none].zip (l.classes.toList.map fun c => c.toList.map (·.size))).all fun p => lawOk p.2 p.1
+def designOk (samplingDesign : Option Draw.SamplingDesign) (l : Spot.Slots.SlotOrder) : Bool :=
+  [samplingDesign, none].length == l.classes.size &&
+    ([samplingDesign, none].zip (l.classes.toList.map fun c => c.toList.map (·.size))).all fun p => samplingDesignOk p.2 p.1
 
 /-! ## The templates' reference statements -/
 
@@ -107,7 +107,7 @@ template `t`. -/
 def memberOf (p : SampledTwo.Params) (t : Nat) : Option Spot.OneStageZk.Member :=
   (p.circuits[t]?).bind fun c => p.members.find? (·.own.circuit == c.2.1)
 
-/-- A file read as JSON, as `flock-verify verify` reads its inputs: UTF-8, then `JsonParse.parse`. -/
+/-- A file read as JSON, as `verity-verify-proof verify` reads its inputs: UTF-8, then `JsonParse.parse`. -/
 def jsonOf (what : String) (b : ByteArray) : Except String Json :=
   match String.fromUTF8? b with
   | none => .error s!"{what}: not UTF-8"
@@ -157,7 +157,7 @@ structure Ref where
   sts : Array Flock.Stmt
 
 /-- **Template `t`'s reference statement**: its member's statement under `--zk` on the blobs, at no sample, with its
-member's public file and registered reads, read and set up as `flock-verify verify --zk` reads and sets it up. -/
+member's public file and registered reads, read and set up as `verity-verify-proof verify --zk` reads and sets it up. -/
 def refOf (p : SampledTwo.Params) (bs : Core.Blobs) (t : Nat) : V Ref := do
   let some m := memberOf p t | throw s!"template {t}: no member's circuit is the one the params name"
   let circuit ← bs.get m.own.circuit "circuit"
@@ -228,10 +228,10 @@ def unitIns (c : Circuit) : Nat := c.upv * min (c.unit.inWords * WORD) c.unit.co
 def outBits (c : Circuit) : Nat := ((List.range c.upv).map fun k => 16 * (c.leavesOut.getD k #[]).size).sum
 
 /-- **A member fits the two-stage scope**: `unitLog ≤ 32`, an instance a unit at least, and a unit's inputs and
-returned output bits, the most one unit's proof block commits, at most `UNIT_CLASS_MAX`, whatever its count of units. -/
+returned output bits, the most one unit's proof block commits, at most `SIZE_CLASS_MAX`, whatever its count of units. -/
 def memberOk (c : Circuit) : Bool :=
   decide (c.unit.unitLog ≤ 32) && decide (0 < c.upv) &&
-    decide (unitIns c + outBits c ≤ Spot.OneStageZk.UNIT_CLASS_MAX)
+    decide (unitIns c + outBits c ≤ Spot.OneStageZk.SIZE_CLASS_MAX)
 
 /-! ## The registered wiring -/
 
@@ -424,7 +424,7 @@ design's rows, the templates' circuits, the cells, each template's count of unit
 interior registration's verifier `vi`. -/
 def wiringOk (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
     (wires : Option (Array Spot.SecondStage.Wire)) (rows : Array Spot.SecondStage.Rows) (circ : Nat → Circuit)
-    (ns : Array Nat) (units : Nat → Nat) (refReads : Nat → Json) (vi : Spot.Registration.Verifier) : Bool :=
+    (ns : Array Nat) (units : Nat → Nat) (refReads : Nat → Json) (vi : Spot.Docket.Verifier) : Bool :=
   namesOnce T names && writersFirst T names wires && sourceRowsNamed T names links wires circ &&
     wiresMoveRows T names links wires rows circ ns units && wiresAlike T names wires circ &&
     writtenRowsUnwired T names links wires circ && writtenRowsRead T names links wires circ &&
@@ -434,14 +434,14 @@ def wiringOk (T : Nat) (names : List String) (links : Option (Array Spot.SecondS
 /-- **The two-stage descriptor check** (module docstring), at the form's params `p`, its blobs `bs`, and the run of
 record's input `i` and interior `it`. Its bound on a unit (`memberOk`) is stricter than `Spot.Partition`'s, which counts
 a unit's returned output bits alone: this one counts its input bits too, so it refuses a unit whose returned bits fit a
-size class and whose inputs with them pass `UNIT_CLASS_MAX`. A unit of 2,048 input bits returning 48 counts 2,096 here,
+size class and whose inputs with them pass `SIZE_CLASS_MAX`. A unit of 2,048 input bits returning 48 counts 2,096 here,
 and one of 4,096 returning 32 counts 4,128. What it refuses beyond `Spot.Partition` costs completeness alone. -/
 def descOk (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) : Bool :=
   match firstOf i, cellsOf i it, refsOf p bs with
   | some f, some (ns, ks), some rs =>
     match (Spot.Slots.layout f.verifier.program f.verifier.query).toOption,
-        (firstLaw f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption with
-    | some l, some law =>
+        (firstSamplingDesign f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption with
+    | some l, some samplingDesign =>
       let T := it.circuits.size
       let names := (it.circuits.map (·.1)).toList
       let links := Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record
@@ -451,7 +451,7 @@ def descOk (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : 
       let cs := circsOf rs
       p.circuits.size == T && !rs.isEmpty &&
         rs.all (fun r => fits r && zkOk r.spec r.sts && templateOk r && ProvedScope.scopeOkH r.stmt) &&
-        (List.range T).all (fun t => memberOk (circAt cs t)) && designOk law l &&
+        (List.range T).all (fun t => memberOk (circAt cs t)) && designOk samplingDesign l &&
         ks.size == T && ks.toList.all (1 ≤ ·) && ns.size == T &&
         wiringOk T names links wires rows (circAt cs) ns (unitsAt (requests l) ns T) refReads it.params.verifier
     | _, _ => false

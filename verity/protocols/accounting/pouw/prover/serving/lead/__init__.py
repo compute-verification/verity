@@ -69,11 +69,11 @@ class LeadBackend(Protocol):
         [m, N] bf16 in the plain arm's place, the plain arm's y bit for bit (`engine.int8_exact.dequantize` of the exact
         product), whatever the coins. Its export's chunks become the next leaves of the window's words instance under
         ``dom`` (`lead_rows.WindowKeying.words_domain`, one domain for each of a window's calls) at once: added to the
-        `lead_rows.DeviceWords` over ``dom`` that the backend makes at the window's first call, so no export outlives
+        device adapter's `DeviceWords` over ``dom`` that the backend makes at the window's first call, so no export outlives
         its hashing."""
 
     def words(self) -> bytes:
-        """The top of the window's words instance (`lead_rows.DeviceWords.top`), the root's two children or the one
+        """The top of the window's words instance (the device adapter's `DeviceWords.top`), the root's two children or the one
         chunk, once at the window's end, after which the backend holds none of the window."""
 
 

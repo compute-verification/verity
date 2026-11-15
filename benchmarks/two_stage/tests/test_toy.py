@@ -30,7 +30,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program
-from verity.commitments.windows import flock_inputs as FI, wiring as WI
+from verity.commitments.periods import flock_inputs as FI, wiring as WI
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import toy as T
@@ -85,18 +85,16 @@ def test_the_challengers_stream_has_the_toys_cells_and_its_interior_program():
     assert (stream.cells, stream.counts, stream.n_rho) == (T.N_T, (1,) * len(T.N_T), T.N_RHO)
     win = T.interior_window("00" * 64, SAMPLE)
     assert P.program_digest(stream.interior_program(Q)) == P.program_digest(win.program)
-    law = S.second_law(list(SAMPLE), stream.cells, stream.counts)
-    assert [tuple(u) for s in law["strata"] for u in s["units"]] == [
+    sampling_design = S.second_sampling_design(list(SAMPLE), stream.cells, stream.counts)
+    assert [tuple(u) for s in sampling_design["strata"] for u in s["units"]] == [
         (m.base + i * n, m.base + (i + 1) * n) for m, n in zip(win.members, T.N_T) for i in range(Q)]
 
 
 def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run):
     """Each instance's input reads its writer's (`toy.WRITERS`) one output in its span, one wire a port and one writer a
     wire, FLIP_B's two instances a span the same row, and a wired port commits no tree: its rows are its writer's tree's
-    leaves, one tree a value, its table the writer's output rows (their ``b || c``) and each unit's ref its writer's row.
-    The layout names it under its reader too, at its writer's port's leaves and domain: one tree at two ports."""
+    leaves, one tree a value, its table the writer's output rows (their ``b || c``) and each unit's ref its writer's row."""
     win, c = run["it"].window, run["it"].committed
-    lay = T.CS.expected_ports(win)
     assert [m.base for m in win.members] == T.offsets(Q) == [0, Q, 2 * Q, 3 * Q, 5 * Q]
     assert [m.n for m in win.members] == [Q * n for n in T.N_T] and win.population == Q * T.N_RHO
     assert P.in_order(win.program, win.query, Q * T.N_RHO)
@@ -106,11 +104,11 @@ def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run
         (p, o, writers), = m.wired
         assert (p, o, writers) == (T.LAYOUT[t][0][0][0], "o0", tuple(T.offsets(Q)[w] + i for i in spans))
         assert win.held(m, p) == win.members[w].port("o0") and win.held_leaves(m, p) == spans
-        assert m.port(p) not in c.roots and lay[m.port(p)] == {**lay[win.held(m, p)], "wired": win.held(m, p)}
+        assert m.port(p) not in c.roots and m.port(p) not in T.CS.expected_ports(win)
         assert dict(m.tables)[p] == win.members[w].n == Q and tuple(c.refs[t][:, 0].tolist()) == spans
         assert c.bc[m.port(p)] == c.bc[win.members[w].port("o0")]
-    assert set(c.roots) == {m.port(p) for m in win.members for p, _ in m.all_rows if win.held(m, p) == m.port(p)}
-    assert set(lay) == {m.port(p) for m in win.members for p, _ in m.all_rows} == set(c.roots) | set(T.CS.wired_ports(win))
+    assert set(c.roots) == set(T.CS.expected_ports(win)) == {
+        m.port(p) for m in win.members for p, _ in m.all_rows if win.held(m, p) == m.port(p)}
     WI.validate(win.members)
     assert WI.check(win.members, publics(run["it"].committed)) == {}
 
@@ -158,7 +156,6 @@ def test_every_other_port_reads_the_interior_record_at_its_own_leaves_or_its_wri
             n = roots[value]["leaves"]
             assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], n,
                                                                          roots[value]["domain"])
-            assert roots[m.port(p)] == {**roots[value], "port": m.port(p)}
             assert e["reads"] == leaves and (e[REG.READS_FROM], e["words"]) == (m.base, words)
             assert header["positions"] == list(range(n)) == list(range(dict(m.tables).get(p, m.n)))
             held = rows_bc(c, value, n)
@@ -227,14 +224,14 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     S.template_circuits(proofs, T.spec(N, Q, 1).check.query)
     bind = {"partition": win.partition_digest, "program": win.partition["program"]}
     parts = SS.parts(Q, P.strata(win.program, win.query))
-    drawn = sorted(p.lo + i * p.n for p in parts for i in range(Q))
+    sampled = sorted(p.lo + i * p.n for p in parts for i in range(Q))
     reads, stmts = T.reads(brec, irec, win, SAMPLE), []
     for k, (m, defn) in enumerate(zip(win.members, T.TEMPLATES)):
         got = FI.flock_input_files(tmp / "interior", k, member_stager(defn, m, bind).text, tmp / "served", write=("pub",))
         with open(got["pub"], "rb") as f:
             header = json.loads(f.readline())
         assert header["circuit_sha512"] == proofs["templates"][k]["circuit"]
-        stmts.append({"template": m.template, "header": header, "draw": SS.own_draw(Q, parts[k], drawn),
+        stmts.append({"template": m.template, "header": header, "draw": SS.own_draw(Q, parts[k], sampled),
                       "registered": reads[m.key]})
     links = SS.replay_links(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY), brec)
     wires = SS.replay_wires(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY))
@@ -257,7 +254,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
         for k, s in enumerate(stmts)})
 
     def check(sample, refs, verified=verified, ref_reads=ref_reads, wires=wires, rows=rows) -> dict:
-        own = SS.Own(tuple(sample), parts, irec, brec, tuple(drawn), links, SS.statement_reads(stmts),
+        own = SS.Own(tuple(sample), parts, irec, brec, tuple(sampled), links, SS.statement_reads(stmts),
                      verified=verified, refs=refs, ref_reads=ref_reads, wires=wires, rows=rows)
         return SS.check_twin(True, own, stmts).to_json()
     assert check(SAMPLE, refs) == {"ok": True, "codes": [], "detail": {}}

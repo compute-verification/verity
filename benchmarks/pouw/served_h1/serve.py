@@ -115,7 +115,7 @@ if TYPE_CHECKING:
     import torch
 
     from verity.protocols.proofs.spot.device.challenger import LiveCommitment
-    from verity.protocols.accounting.pouw.prover.serving.h1.receipts import Cubin
+    from verity_torch.pouw.h1.receipts import Cubin
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -155,7 +155,7 @@ class Record:
 def timing(cubin: Cubin, reps: int = 10) -> dict:
     """Per-unit noise on the GPU against the int8 GEMM of the same M x N x K call, both from CUDA events."""
     import torch
-    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
+    from verity_torch.pouw.h1 import receipts as RC
 
     def clock(fn, n: int) -> float:
         fn()
@@ -435,7 +435,7 @@ def run(a: argparse.Namespace) -> dict:
                              **({"commitment": cs.commitment.to_json()} if live else {})})
     workers = a.workers or max(2, min(48, len(os.sched_getaffinity(0)) - 2))
     pool = mp.get_context("spawn").Pool(workers)
-    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
+    from verity_torch.pouw.h1 import receipts as RC
 
     cubin = RC.Cubin(a.cubin) if a.cubin else None
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -876,7 +876,7 @@ def gate(a: argparse.Namespace, calls: list[dict], data: list[dict], levels: lis
     """Units picked on `rng` (`gate_rng`'s, from the sampling coin, when live) against the gated `h1tile.reference`, and the
     controls: per site a live and a dead unit of real steps' calls, then units of empty steps (dead)."""
     import torch
-    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
+    from verity_torch.pouw.h1 import receipts as RC
 
     picks = []
     for site in SITES:

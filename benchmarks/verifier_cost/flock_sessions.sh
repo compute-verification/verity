@@ -34,7 +34,7 @@ export HZ_CONFIGS=sessions HZ_MEM_GB=${FS_MEM_GB:?set it to the --mem-gb of the 
 # shellcheck source=../pouw/hidden_zk/job.sh
 source benchmarks/pouw/hidden_zk/job.sh
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
-export FC_FIREWALL=0
+export FC_ZK_SERVER=0
 unset FC_HOST_WITNESS
 I=$RESEARCH_RUN_DIR/inputs
 V=benchmarks/verifier_cost
@@ -50,9 +50,14 @@ staging=$!
 setup
 
 READ=$W/read/.lake/build/bin/flock-read
-cp -a "$(cd "$(dirname "$LEAN")/../../.." && pwd)" "$W/verifier" && mkdir -p "$W/read" && cp "$V/flock_read/Main.lean" "$W/verifier/lean-toolchain" "$W/read/" \
+# job.sh's build is the verifier beside the packages it requires by path (lean_copy), its .lake a link into the verifier's
+# own directory there: all of it is copied, and flock-read requires the verifier at its place in the copy
+BUILT=$(cd "$(dirname "$LEAN")/../../.." && pwd -P)
+PKG=$(cd -P "$(dirname "$LEAN")/../../.." && pwd)
+PKG=$W/verifier${PKG#"$BUILT"}
+cp -a "$BUILT" "$W/verifier" && mkdir -p "$W/read" && cp "$V/flock_read/Main.lean" "$PKG/lean-toolchain" "$W/read/" \
   && printf 'name = "flock_read"\ndefaultTargets = ["flock-read"]\n\n[[require]]\nname = "flock_verifier"\npath = "%s"\n\n[[lean_exe]]\nname = "flock-read"\nroot = "Main"\n' \
-    "$W/verifier" > "$W/read/lakefile.toml" && (cd "$W/read" && lake build flock-read) > "$OUT/build-read.log" 2>&1
+    "$PKG" > "$W/read/lakefile.toml" && (cd "$W/read" && lake build flock-read) > "$OUT/build-read.log" 2>&1
 [ -x "$READ" ] || { log "flock-read did not build: $(tail -3 "$OUT/build-read.log" 2> /dev/null | tr '\n' '|' | cut -c1-300)"; READ=; }
 
 wait $staging

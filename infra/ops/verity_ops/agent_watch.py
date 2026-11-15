@@ -301,6 +301,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Callable, Iterator
 
+from research import settings
+
 API = "https://api.cursor.com"
 POLL_S = 60
 HELD_S = 15 * 60
@@ -395,7 +397,9 @@ WORKER_RELAUNCH = (
     "`research msg send --as {handle} --thread {inbox} --text '...'`. End your turn while a research run goes on: when it ends, "
     "the agent watch rings your coordinator's inbox if it failed (`research msg ring-run`) and, if you are still idle 10 min later, starts a "
     "run on you with its result. Your branches: {branches}; fetch the one you work on and push only to it. Read your runs' "
-    "results with `research inspect RUN --on NODE`. Your predecessor's newest note ({note}) follows; carry on from where it "
+    "results with `research inspect RUN --on NODE`. A child you start names `claude-opus-5-5-high` (or "
+    "`claude-sonnet-5-5-high` for a fully specified task), never Fable, `inherit` or none. You hold no timer or "
+    "subscription of your own. Your predecessor's newest note ({note}) follows; carry on from where it "
     "stopped, and name both {old} and your own id in your notes' origin.\n"
     "--- newest note ---\n{text}")
 HANDOVER = (
@@ -406,7 +410,8 @@ NOTE_CHARS = 30_000             # a note given to a relaunched agent is cut to t
 #: a branch a note names, `cursor/...` in backticks: a relaunched worker with no recorded branch is told these, the first first
 NOTE_BRANCH_RE = re.compile(r"`(cursor/[A-Za-z0-9._/-]+)`")
 ENV_NAME = "Verity compute-verification"     # the one-repo environment every coordinator and worker runs on
-MODEL = {"id": "claude-fable-5-2", "params": [{"id": "effort", "value": "high"}]}
+# a worker runs Opus 5.5 at high effort; only leads run Fable 5.2
+WORKER_MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
 COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")  # launch_coordinator's
 DOORBELL_S = 10 * 60
 BELLS_STALE_S = 30 * 60
@@ -1160,7 +1165,8 @@ class Api:
         h = {"Authorization": self.auth, "Accept": "application/json", **(headers or {})}
         if data is not None:
             h["Content-Type"] = "application/json"
-        return urllib.request.Request(self.base + path, data=data, method=method, headers=h)
+        return urllib.request.Request(self.base + path, data=data, method=method,  # noqa: S310 (self.base is API, a literal https URL)
+                                      headers=h)
 
     def get(self, path: str, timeout: float | None = None, **params) -> dict:
         q = ("?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})) if params else ""
@@ -1168,11 +1174,12 @@ class Api:
         if self.reads_until is not None:
             if (timeout := min(timeout, self.reads_until - self.clock())) <= 0:
                 raise TimeoutError(f"this sweep's reads are spent ({SWEEP_READS_S // 60} min); the next sweep reads again")
-        with urllib.request.urlopen(self._req("GET", path + q), timeout=timeout) as r:
+        with urllib.request.urlopen(self._req("GET", path + q), timeout=timeout) as r:  # noqa: S310 (self.base is API, a literal https URL)
             return json.load(r)
 
     def post(self, path: str, body: dict | None = None) -> dict:
-        with urllib.request.urlopen(self._req("POST", path, body if body is not None else {}), timeout=self.timeout) as r:
+        req = self._req("POST", path, body if body is not None else {})
+        with urllib.request.urlopen(req, timeout=self.timeout) as r:  # noqa: S310 (self.base is API, a literal https URL)
             return json.load(r)
 
     def agents(self) -> Iterator[dict]:
@@ -1198,8 +1205,8 @@ class Api:
         while not stop():
             headers = {"Accept": "text/event-stream", **({"Last-Event-ID": last_id} if last_id else {})}
             try:
-                with urllib.request.urlopen(self._req("GET", f"/v1/agents/{agent}/runs/{run}/stream", headers=headers),
-                                            timeout=10 * 60) as r:
+                req = self._req("GET", f"/v1/agents/{agent}/runs/{run}/stream", headers=headers)
+                with urllib.request.urlopen(req, timeout=10 * 60) as r:  # noqa: S310 (self.base is API, a literal https URL)
                     event, data = "message", []
                     for raw in r:
                         line = raw.decode("utf-8", "replace").rstrip("\r\n")
@@ -2973,7 +2980,7 @@ class Watch:
                                           + (f"; its newest note names {', '.join(named)}" if named else ""),
                                           note=note.name if note else "none in the last 12 h", text=note_text(note))
             body = {"name": f"{handle or lane or 'verity'} worker {short} (relaunch of {agent[-4:]})"[:100],
-                    "prompt": {"text": text}, "env": {"type": "cloud", "name": ENV_NAME}, "model": MODEL}
+                    "prompt": {"text": text}, "env": {"type": "cloud", "name": ENV_NAME}, "model": WORKER_MODEL}
             try:
                 new = ((self.launch_api(key).post("/v1/agents", body) or {}).get("agent") or {}).get("id")
                 action = f"relaunched it fresh as {new}"
@@ -3335,7 +3342,7 @@ def main(argv: list[str] | None = None) -> int:
     ns = ap.parse_args(argv)
     if ns.cmd == "runs":
         return print_runs(ns.nodes, ns.notes, ns.hours)
-    key = os.environ.get("CURSOR_API_KEY")
+    key = settings.get("CURSOR_API_KEY")
     if not key:
         print("agent_watch: no CURSOR_API_KEY in the environment", file=sys.stderr)
         return 2
@@ -3350,7 +3357,7 @@ def main(argv: list[str] | None = None) -> int:
             return {"run": {"id": "dry-run"}}
         api.post = post
     publish = None
-    if url := os.environ.get("AGENT_WATCH_PG_URL"):
+    if url := settings.get("AGENT_WATCH_PG_URL"):
         publish = Publisher(url) if not ns.dry_run else (
             lambda body, t: print(f"dry-run: would publish {len(body)} bytes to {STATUS_TABLE}", file=sys.stderr, flush=True))
     launcher = ns.launcher or (ns.registry.resolve().parents[3] / "infra/cursor/launch_coordinator.py" if ns.registry else None)

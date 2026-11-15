@@ -175,6 +175,12 @@ structure W1Prices where
   sha512 : ℚ
   fetch : ℚ
 
+/-- **The H100's W1 prices** (`Dimension.H100.h100Nominal`, the datasheet): E4M3 1, BF16 2 and S8 1 per MAC (the H100
+has no E2M1 fragment, so that price is never read); FP32 32; a cast 64 per instruction (32 per code); INT32 64.
+
+These are the default reading (CMP-438; the card file's `price.fp32.sm`): both pipes at `h100SmMHz`, 1980 MHz, the higher
+tensor ceiling. A unit is an FP8 MAC's time at 1980 MHz, and an SM-pipe instruction 32 MACs' time at the same clock.
+
 S8's 1 (`nominalMac .s8`) is the data sheets' ratio, the same on the H100 and the H200 (one GH100; they differ in memory
 and its bandwidth, which W1 does not price). NVIDIA's H100 Tensor Core GPU Architecture whitepaper V1.04, Table 1, H100
 SXM5: "Peak INT8 Tensor Core" 1978.9 TOPS dense, equal to "Peak FP8 Tensor Core" 1978.9 TFLOPS (BF16 989.4). NVIDIA's
@@ -247,8 +253,8 @@ def h100Frags : List Frag := (List.range 25).flatMap fun i => [⟨.e4m3, 64, 64 
 
 /-- The H100's fragments with INT8: `h100Frags` and S8 m64nNk32 with `.satfinite` (`IGMMA.64xNx32.S8.S8.SAT`) for
 `N = 64, 80, …, 256`, PTX's dense integer `wgmma` shapes at `N ≥ 64`, as `h100Frags`. Each output is
-`GEMM_SM90_S8`'s dot (`verity.ml.circuits.ops.gemm`, `BlackwellS8ImmaDot32`): k32, clamped once. Only N = 8 is pinned:
-`verity.ml.circuits.silicon.instructions` pins `sm90.wgmma.m64n8k32.s8` on an H200. The
+`GEMM_SM90_S8`'s dot (`verity.circuits.ops.gemm`, `BlackwellS8ImmaDot32`): k32, clamped once. Only N = 8 is pinned:
+`verity.circuits.silicon.instructions` pins `sm90.wgmma.m64n8k32.s8` on an H200. The
 wider N here follow PTX's `wgmma` semantics, the same dot at each output, and no run has measured them. -/
 def h100S8Frags : List Frag := h100Frags ++ (List.range 13).map fun i => ⟨.s8, 64, 64 + 16 * i⟩
 
@@ -384,7 +390,7 @@ def s8Value (c : ℕ) : ℤ := if c < 128 then c else c - 256
 
 /-- **The S8 fragment's step** (PTX `mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32`, SASS
 `IMMA.16832.S8.S8.SAT`): the accumulator word as an s32, plus every product `x_l·y_l` of the codes as s8, summed
-exactly and clamped once to `[-2^31, 2^31 - 1]`, as a 32-bit word. It is `verity.ml.circuits.silicon.integer`'s
+exactly and clamped once to `[-2^31, 2^31 - 1]`, as a 32-bit word. It is `verity.circuits.silicon.integer`'s
 `BLACKWELL_SM120_S8_M16N8K32`, the served INT8 dot `BlackwellS8ImmaDot32`, which the RTX PRO 6000 reproduced on all
 10,243,968 words tested, the clamp only at D; an H200 and a B200 compute the same function. -/
 def s8Step (acc : ℕ) (x y : List ℕ) : ℕ :=
@@ -568,7 +574,7 @@ def init (salt : List ℕ) (pr : CodeImage) (U : Workload) (act : ℕ → Codes)
 
 /-- The committed transcript of a final memory: every declared unit's activations (within its shape as the program
 left them, outside it as supplied), ticket words and useful words. -/
-def readout (U : Workload) (act : ℕ → Codes) (M : Mem) : Transcript := fun u =>
+def readout (U : Workload) (act : ℕ → Codes) (M : Mem) : Trace := fun u =>
   if u < U.layout.N then
     some ⟨fun i l => if i < (U.layout.shape u).m ∧ l < (U.layout.shape u).k then M (actAt u i l) else act u i l,
       fun i j => M (ticketAt u i j), fun i j => M (usefulAt u i j)⟩
@@ -582,7 +588,7 @@ variable {Q R S : Type}
 
 /-- A first fetch W1 does not charge: an activation within a correct unit's shape, or a weight row and column a correct
 unit of that weight reads. -/
-def FreeFetch (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) (a : Addr) : Prop :=
+def FreeFetch (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) (a : Addr) : Prop :=
   let x := Nat.unpair a.2
   let y := Nat.unpair x.2
   (a.1 = 4 ∧ x.1 ∈ correctSet P U H s τ ∧ y.1 < (U.layout.shape x.1).m ∧ y.2 < (U.layout.shape x.1).k) ∨

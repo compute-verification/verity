@@ -3,7 +3,7 @@
 `window_circuit.class_circuit` lowers the class Program once a slot, exactly. At the class of record
 (`window_circuit.CLASS_OF_RECORD`: 8 slots, 1,024 prompt ids, 64 outputs, 1,087 positions a Program) a Program at
 Llama-3.2-1B is 46,028,317 units, and the class's 8 take a pod some 22 minutes and 42 GB to lower. So the size is also a
-projection (`project`) from an exact lowering of one Program of the same registration at a small probe class within one
+projection (`project`) from an exact lowering of one Program of the same docket at a small probe class within one
 key block, which the tests hold to the exact lowering at larger classes:
 
 * every template but the heads is a fixed number of units a position (`projected`), a slot's where it places them
@@ -12,9 +12,13 @@ key block, which the tests hold to the exact lowering at larger classes:
   probe, which is refused unless each divides evenly;
 * a head over T keys is `AttentionHead_v19`'s Calls: `AttnBlockFirst_v1{NVIS}` (its last NVIS = T - (nb - 1)·BN keys),
   nb - 1 `AttnBlock_v5` and `AttnHeadEnd_v1`, nb = ceil(T / BN), a full block's CHECK whether FA2 guards it (its
-  ``MASKED_FROM``, `attention_vocab.fa2_masked_from` of the Program's one-row decode: its first visited block only). A
+  ``MASKED_FROM``, ``masked_from`` of the Program's one-row decode: its first visited block only). A
   block reads its keys and values a row a key, so the exact lowering refuses a block past 126 keys, more than a unit's 256
   rows; the projection counts it all the same.
+
+The class's scan binding's label and ``masked_from`` are the adapter's, which SPOT never imports: its caller hands them
+over (``label(scan_state.bridge(cls.scan, cls.prompt))``, and ``attention_vocab.fa2_masked_from(T, 1, 0, BN, False)``
+as a function of T and BN).
 
 `size` prices a census with the ANDs and k_log a unit at Llama-3.2-1B (`measured`, each with its source, scaled or
 interpolated where only another binding was measured, and saying so), and m = ceil(log2 Σ units · 2^k_log), refusing a
@@ -29,14 +33,11 @@ from __future__ import annotations
 import json
 import math
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.program.predict import scan_state as SS
-
-from verity.definitions.registry.attention_vocab import fa2_masked_from
-from verity.commitments.windows.interface import K_MAX, LAST_BLOCK_BYTES, proof_block_k_log
+from verity.commitments.periods.interface import K_MAX, LAST_BLOCK_BYTES, proof_block_k_log
 
 FIRST = "AttnBlockFirst_v1"
 #: a first block's families: `AttnBlockFirst_v2{..., VS}` is v1 over a key's value as slices of VS columns
@@ -96,9 +97,10 @@ def placed(lab: str, T: int, P: int) -> int | None:
     return None
 
 
-def projected(lab: str, n: int, at: Any, cls: Any) -> tuple[str, int]:
+def projected(lab: str, n: int, at: Any, cls: Any, scan: str) -> tuple[str, int]:
     """A template outside the heads, ``n`` units of one Program at the probe's class ``at``, as one Program at class ``cls``
-    has it: a slot's template (`placed`) at the class's prompt and outputs (`ScanSlots_v2` at its scan state row) and
+    has it: a slot's template (`placed`) at the class's prompt and outputs (`ScanSlots_v2` at ``scan``, the label of its
+    binding at the class's scan state row) and
     `placed`'s units there, any other the probe's fixed count a position at each of the class's, refused unless ``n`` is
     the probe's by that rule."""
     if placed(lab, 1, at.positions) is None:
@@ -107,13 +109,16 @@ def projected(lab: str, n: int, at: Any, cls: Any) -> tuple[str, int]:
         return lab, n // at.positions * cls.positions
     if n != (want := sum(placed(lab, T, at.positions) or 0 for T in range(1, at.positions + 1))):
         raise ValueError(f"the probe has {n} {lab} units, not the {want} its slot places")
-    to = label(SS.bridge(cls.scan, cls.prompt)) if lab.startswith(SCAN + "{") else _relabel(lab, NP=cls.prompt, KO=cls.outputs)
+    to = scan if lab.startswith(SCAN + "{") else _relabel(lab, NP=cls.prompt, KO=cls.outputs)
     return to, sum(placed(to, T, cls.positions) or 0 for T in range(1, cls.positions + 1))
 
 
-def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
+def project(probe: Mapping[str, int], at: Any, cls: Any, scan: str, masked_from: Callable[[int, int], int]
+            ) -> dict[str, int]:
     """One Program's census at class ``cls`` from one Program's ``probe`` census at class ``at`` (`census` of
-    ``class_circuit(registered, at, 1)``), the probe's heads within one key block."""
+    ``class_circuit(registered, at, 1)``), the probe's heads within one key block: ``scan`` is the label of the class's
+    scan binding (`projected`), and ``masked_from(T, BN)`` the first key block FA2 guards in the one-row decode at T keys
+    in blocks of BN."""
     P0, P, NP0 = at.positions, cls.positions, at.prompt
     if P0 < 2 or NP0 < 2:
         raise ValueError(f"a probe of {P0} positions and {NP0} prompt ids: it needs 2 of each, for a head and a feed past the "
@@ -134,10 +139,10 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     out: Counter[str] = Counter()
     for lab, n in probe.items():
         if lab not in hs and lab != end:
-            to, k = projected(lab, n, at, cls)
+            to, k = projected(lab, n, at, cls, scan)
             out[to] += k
     for T in range(1, P + 1):
-        nb, mf = -(-T // BN), fa2_masked_from(T, 1, 0, BN, False)
+        nb, mf = -(-T // BN), masked_from(T, BN)
         nvis = T - (nb - 1) * BN
         out[f"{fam}{{D={D},NVIS={nvis},BN={BN}{vs}}}"] += H
         for b in range(nb - 1):
@@ -146,9 +151,9 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     return {lab: n for lab, n in sorted(out.items()) if n}
 
 
-#: the sources that cite a run, an artifact or a change, kept as data (``sources.json``): ``composed`` and ``rows_3``, a
+#: the sources that cite a run, an artifact or a change, kept as data (``benchmarks/prove_path/sources.json``): ``composed`` and ``rows_3``, a
 #: unit's by its label (``measured``) and a family's that `measured` prices past `MEASURED` (``families``)
-SOURCES: dict[str, Any] = json.loads(Path(__file__).resolve().with_name("sources.json").read_text())
+SOURCES: dict[str, Any] = json.loads((Path(__file__).resolve().parents[6] / "benchmarks" / "prove_path" / "sources.json").read_text())
 #: the compositions of the blocks this estimate scaled or interpolated, each staged by Flock's `UnitStager` at V3b's
 #: cuts
 COMPOSED: str = SOURCES["composed"]
@@ -245,7 +250,7 @@ def size(units: Mapping[str, int], times: int = 1) -> dict[str, Any]:
     rows = [(lab, n * times, *measured(lab)) for lab, n in units.items()]
     past = [f"{lab} (2^{k})" for lab, _, _, k, _ in rows if k > K_MAX]
     if past:
-        raise ValueError(f"{', '.join(past)}: an instance needs a block past 2^{K_MAX} bits, C-Flock's most; cut it finer")
+        raise ValueError(f"{', '.join(past)}: an instance needs a block past 2^{K_MAX} bits, Flock's most; cut it finer")
     cells = sum(n << k for _, n, _, k, _ in rows)
     return {"units": sum(n for _, n, *_ in rows), "ands": sum(n * a for _, n, a, _, _ in rows), "m": math.ceil(math.log2(cells)),
             "templates": [{"template": lab, "units": n, "ands": a, "k_log": k, "source": src}

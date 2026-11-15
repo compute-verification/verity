@@ -15,13 +15,10 @@ public import Definitions.Certifier.Assumptions
 # What holds at the instances the network certifier's count and period witnesses are stated at
 
 The instances are definitions of `Definitions.Certifier.Witness`, which the witnesses' statements read; this
-module proves what `CountWitnesses` and `PeriodWitnesses` conclude from. Each is built by hand, at a positive instance
-where the guarantee allows one: several steps, two execution blocks of one advice bit each, a non-empty incorrect set at
-a positive `δ`. `Witnesses` has the accepting verifiers at the negation `notStmt` (`leakL`, `certL`), which these
-extend.
+module proves what `CountWitnesses` and `MonitoringPeriodWitnesses` conclude from. Each is built by hand, at a positive
+instance where the guarantee allows one: several steps, a non-empty incorrect set at a positive `δ`. `Witnesses` has the
+accepting verifiers at the negation `notStmt` (`leakL`, `certL`), which these extend.
 
-* `honestI P a`, the honest certifier at the Program `P` under the advice `a`: `P` accepts its run over every number of
-  steps (`honestI_accepted`, `honestI_mem`).
 * `acceptAll`, the verifier that accepts everything: `AccSeqsAt` at the Program's acceptance is `AccSeqs`
   (`accSeqs_eq_at`), and over any positive number of steps `AccSeqsAt acceptAll`'s sequences are infinitely many
   (`accSeqsAt_acceptAll_not_le`).
@@ -45,32 +42,6 @@ namespace NetTiming.Witness
 
 open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 open Claims.Witness.SamplingGeneric (notStmt notPart)
-
-/-! ## The honest certifier -/
-
-/-- **`P` accepts the honest certifier's run under `a`**, over every number of steps. -/
-theorem honestI_accepted {L K S : ℕ} {Adv : Type} (P : EgressPrediction L S Unit Adv) (a : Adv) (n : ℕ) :
-    Accepted P unitOp n ((honestI (K := K) P a).obsRun () n) a := by
-  intro t ht
-  have hlen : t < ((honestI (K := K) P a).obsRun () n).length := by
-    rw [Interaction.length_obsRun]
-    exact ht
-  refine ⟨hlen, ?_, fun κ => ?_⟩
-  · rw [(honestI (K := K) P a).obsRun_getElem () ht]
-    have hxs : ((honestI (K := K) P a).trace () (t + 1)).2.1 =
-        ingressUpTo unitOp ((honestI (K := K) P a).obsRun () n) t :=
-      List.ext_getElem (by rw [((honestI (K := K) P a).trace_length () (t + 1)).2.1]; simp [ingressUpTo])
-        fun _ _ _ => Subsingleton.elim _ _
-    exact congrArg (fun ins => P.rows t ins a) hxs
-  · rw [(honestI (K := K) P a).obsRun_getElem () ht]
-    rfl
-
-/-- The honest certifier's run is among `P`'s accepted sequences at `D = 1`. -/
-theorem honestI_mem {L K S : ℕ} {Adv : Type} (P : EgressPrediction L S Unit Adv) (a : Adv) (n : ℕ) :
-    (honestI (K := K) P a).obsRun () n ∈ AccSeqs P (unitOp (K := K)) n 1 := by
-  refine ⟨Interaction.length_obsRun _ () n, fun x hx => ?_, a, honestI_accepted P a n⟩
-  obtain ⟨k, xs, as, rfl⟩ := Interaction.mem_obsRun _ () n x hx
-  exact Nat.one_pos
 
 /-! ## The verifier that accepts everything -/
 
@@ -192,26 +163,26 @@ theorem sampAllSlots : allSlots sampDesign sampPart = ∅ := by
   first | rfl | decide | simp [allSlots, allSlotsFrom, sampDesign, sampPart]
 
 theorem sampFaulty_mem {F : Finset ℕ} (hsub : F ⊆ Finset.range 1) (hPa : (1 / 4 : ℝ) < sampDesign.Pa sampPart F) :
-    F ∈ faultySets sampDesign sampPart (1 / 4) := by
+    F ∈ incorrectSets sampDesign sampPart (1 / 4) := by
   classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
+  simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset]
   exact ⟨hsub, hPa, by rw [sampAllSlots]; exact Finset.disjoint_empty_right _⟩
 
-theorem empty_mem_sampFaulty : (∅ : Finset ℕ) ∈ faultySets sampDesign sampPart (1 / 4) :=
+theorem empty_mem_sampFaulty : (∅ : Finset ℕ) ∈ incorrectSets sampDesign sampPart (1 / 4) :=
   sampFaulty_mem (Finset.empty_subset _) (by rw [sampPa]; norm_num [Claims.Sampling.window])
 
 /-- **The one proof block is a possible incorrect set** at `δ = 1/4`: the design misses it with probability `1/2`. -/
-theorem single_mem_sampFaulty : ({0} : Finset ℕ) ∈ faultySets sampDesign sampPart (1 / 4) :=
+theorem single_mem_sampFaulty : ({0} : Finset ℕ) ∈ incorrectSets sampDesign sampPart (1 / 4) :=
   sampFaulty_mem (by decide) (by
     rw [sampPa, show (Claims.Sampling.window 0 1 ({0} : Finset ℕ)).card = 1 by
       first | decide | rfl | simp [Claims.Sampling.window]]
     norm_num)
 
 /-- Each possible incorrect set at `δ = 1/4` commits at most the proof block's three gates' bits. -/
-theorem sampBits : ∀ F ∈ faultySets sampDesign sampPart (1 / 4), faultyBits sampProg sampPart F ≤ 3 := by
+theorem sampBits : ∀ F ∈ incorrectSets sampDesign sampPart (1 / 4), faultyBits sampProg sampPart F ≤ 3 := by
   intro F hF
   classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
+  simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset] at hF
   have h : faultyBits sampProg sampPart F ≤ faultyBits sampProg sampPart (Finset.range 1) := by
     unfold faultyBits
     exact Finset.sum_le_sum_of_subset hF.1

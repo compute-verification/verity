@@ -226,8 +226,8 @@ theorem reads_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Msg × Cla
     Option.some.inj ((ResLower.raw_ins_tags hb).1.symm.trans (ResLower.raw_ins_tags hb').1)
   obtain ⟨hc, -, ht⟩ := raw_ins_files hb
   obtain ⟨hc', -, ht'⟩ := raw_ins_files hb'
-  obtain ⟨d, hd, hdr⟩ := FlockDeploy.Raw.ins_draw hb
-  obtain ⟨d', hd', hdr'⟩ := FlockDeploy.Raw.ins_draw hb'
+  obtain ⟨d, hd, hdr⟩ := FlockDeploy.Raw.ins_sample hb
+  obtain ⟨d', hd', hdr'⟩ := FlockDeploy.Raw.ins_sample hb'
   have edd : d = d' := Except.ok.inj (hd.symm.trans hd')
   refine ⟨?_, hc.trans hc'.symm, ht.trans ht'.symm, by rw [hdr, hdr', edd]⟩
   rw [read_tags_of hb hz, read_tags_of hb' hz, e1] <;> rfl
@@ -236,7 +236,7 @@ theorem reads_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Msg × Cla
 
 /-- The unit count a staged table must have: the sample's proved units, else V*'s statement `s`'s instances. -/
 def nOf (r : XR) (s : ℕ) : Option Json → Option ℕ
-  | some d => (Draw.UnitDraw.ofJson d).toOption.map (·.proved.size)
+  | some d => (Draw.UnitSample.ofJson d).toOption.map (·.proved.size)
   | none => ((RecVStar.statements r.shape).toOption.bind (·[s]?)).map (·.instances)
 
 /-- **A staged statement that sets up has one table**, from `setupHidden` at its circuit, with the unit count `nOf`. -/
@@ -287,7 +287,7 @@ theorem side {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)
     | some d =>
       have hdr := hsome d hd
       unfold HmIn.drawn at hdr
-      obtain ⟨D, hD, -, hnD, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hdr
+      obtain ⟨D, hD, -, hnD, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hdr
       have e : nOf r s (some d) = some D.proved.size := by simp [nOf, hD, Except.toOption]
       rw [e, hn, hnD]
   · rw [hreg, Array.size_append, (FlockSoundness.Discharge.Hidden.regions_get hA).1]
@@ -296,7 +296,7 @@ theorem side {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)
 
 /-- The numbers of a session of one table `t`. -/
 noncomputable def numsT (t : Flock.Stmt) : Claims.Recursion.Nums :=
-  ⟨FlockDeploy.tableErr true t.spec t, FlockDeploy.tableLen true t, FlockDeploy.tableWeight true t,
+  ⟨FlockDeploy.tableErr true t.spec t, (2 : ℚ) ^ (Claims.Flock.zkLevel0 t.wideLeaf t.m).d, FlockDeploy.tableWeight true t,
     2 + 2 * FlockDeploy.repRounds true t.spec t, Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, 0, 0⟩
 
 theorem rounds_one (zk : Bool) (spec : SessionSpec) (t : Flock.Stmt) :
@@ -310,7 +310,7 @@ theorem numsOf_one {xO : Claims.Msg} {i : RecIns} {t : Flock.Stmt} (h : setupO x
     rw [h]
     all_goals rfl
   have hk : VO.k xO = 2 + FlockDeploy.rounds true t.spec #[t] := by simp only [VO, h]
-  unfold numsOf εtableO N₀O weightO numsT
+  unfold numsOf εtableO N₀Oq weightO numsT
   rw [ht, hk, rounds_one]
   all_goals simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
 

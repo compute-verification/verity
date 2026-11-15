@@ -38,11 +38,11 @@ from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
-from verity.definitions.replay import replayer
+from verity_vllm.definitions.replay import replayer
 
 from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
-from verity_vllm.program.inputs import check_params
-from verity_vllm.program.prune import dead_free as dead_free_form
+from verity_torch.inputs import check_params
+from verity_torch.prune import dead_free as dead_free_form
 
 from .common import (
     Unexpressible,
@@ -67,7 +67,7 @@ from .domain import check_phi
 from .model_shape import _ACTS, ModelShape, model_shape, rank_shape, weight_leaves
 from .phi import Phi
 
-__all__ = ["Unexpressible", "build_program"]
+__all__ = ["Unexpressible", "build_program", "dead_free_form", "decoder", "drive", "with_checks"]
 
 BUILDER_ID = "predict-build/derived/v1"
 I32 = Value(32)
@@ -123,11 +123,11 @@ class _Specs:
                 self.kind("rmsnorm", N=n * C.D * world, EPS=C.EPS, TARGET=target, M=M) for n in (C.NH, C.KVH)
             )
             self.q_gather, self.k_gather = [self.kind("all_gather2", N=n * C.D) if world > 1 else None for n in (C.NH, C.KVH)]
-        self.gate_up, self.down, self.logits = self.linear(C.H, 2 * C.I), self.linear(C.I, C.H), self.gemm(C.H, VS)
+        self.gate_up, self.down, self.logits = self.linear(C.H, 2 * C.INTER), self.linear(C.INTER, C.H), self.gemm(C.H, VS)
         if C.E:
             self.moe()
         self.rope_q, self.rope_k = self.kind("rope", NHEADS=C.NH, D=C.D), self.kind("rope", NHEADS=C.KVH, D=C.D)
-        self.silu = self.kind(_ACTS[C.act], I=C.I)
+        self.silu = self.kind(_ACTS[C.act], I=C.INTER)
         if C.norm_chain:
             self.chain = {r: self.kind(r, N=C.H) for r in ("square_bf16", "square_f32", "mean_triton", "add_widened_bf16", "scale_row_bf16",
                                                            "scale_row_f32", "mul_vec_f32", "narrow_f32_bf16")}
@@ -165,8 +165,8 @@ class _Specs:
             raise Unexpressible(f"numerics_unregistered: {e}") from None
         extra = {} if dot is None else {"DOT": dot}
         sfx = "" if dot is None else "_dot"
-        self.expert_up = self.kind("moe_expert_gemm" + sfx, E=C.E, K=C.H, N=2 * C.I, **extra)
-        self.expert_down = self.kind("moe_expert_gemm_w" + sfx, E=C.E, K=C.I, N=C.H, **extra)
+        self.expert_up = self.kind("moe_expert_gemm" + sfx, E=C.E, K=C.H, N=2 * C.INTER, **extra)
+        self.expert_down = self.kind("moe_expert_gemm_w" + sfx, E=C.E, K=C.INTER, N=C.H, **extra)
         self.moe_sum = self.kind("moe_sum", TOPK=C.TOPK, H=C.H)
 
     kind = staticmethod(kind)
@@ -444,7 +444,7 @@ class _Model:
                             pos, policy)
 
 
-def decoder(phi: Phi, M: int = 1, history: int = 0):
+def decoder(phi: Phi, M: int = 1, history: int = 0) -> Any:
     """φ's decoder at launches of M rows over a history of `history` keys: the family's constructor (`FAMILY_FACTS[...]["arch"]`), a
     DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
     Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in

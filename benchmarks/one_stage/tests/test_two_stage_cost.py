@@ -1,6 +1,6 @@
 """What `two_stage.py second` writes of its own cost and takes of its cards, without a session: the replay's seconds
-and cards are the replay's own record's (the command runs no replay), ``--devices`` reaches the audit as the cards'
-indices or the command stops at its parser, and the rehearsal's check (`two_stage_small.costed`) holds a summary to
+and cards are the replay's own record's (the command runs no replay), ``--gpus`` reaches the audit as the cards'
+indices, behind the ZK server or not, or the command stops at its parser, and the rehearsal's check (`two_stage_small.costed`) holds a summary to
 saying where each session proved and for how long. The interior's commitment by the caller's clock is
 ``test_two_stage_second``'s, and the sessions' own timing is the rehearsal's (``two_stage_small.sh``)."""
 
@@ -15,11 +15,11 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-TS = importlib.import_module("verity.protocols.proofs.spot.device.two_stage")
+TS = importlib.import_module("two_stage")
 SM = importlib.import_module("two_stage_small")
 
-SECOND = ["second", "--stage1", "s1.json", "--boundary", "class", "--capture", "capture", "--challenger", "local",
-          "--main", "main.txt", "--m0-pythonpath", "path", "--bin", "flock-circuit", "--lean", "flock-verify", "--out", "out"]
+SECOND = ["second", "--first-stage", "s1.json", "--boundary", "class", "--capture", "capture", "--challenger", "local",
+          "--main", "main.txt", "--m0-pythonpath", "path", "--bin", "flock-circuit", "--lean", "verity-verify-proof", "--out", "out"]
 
 
 def _replay(tmp_path: Path, **record) -> Path:
@@ -49,20 +49,20 @@ def ran(monkeypatch) -> list:
 
 
 def test_second_takes_its_cards_from_its_command_line_as_their_indices(ran):
-    assert TS.main([*SECOND, "--devices", "0,2,3,4,5,6,7", "--replay-record", "replay.json"]) == 0
-    assert ran[-1].devices == [0, 2, 3, 4, 5, 6, 7] and ran[-1].replay_record == "replay.json"
+    assert TS.main([*SECOND, "--gpus", "0,2,3,4,5,6,7", "--replay-record", "replay.json"]) == 0
+    assert ran[-1].gpus == [0, 2, 3, 4, 5, 6, 7] and ran[-1].replay_record == "replay.json"
+    assert TS.main([*SECOND, "--gpus", "1", "--zk-server", "flock-zk-server"]) == 0
+    assert ran[-1].gpus == [1] and ran[-1].zk_server == "flock-zk-server"
     assert TS.main(SECOND) == 0
-    assert ran[-1].devices is None and ran[-1].replay_record is None
+    assert ran[-1].gpus is None and ran[-1].replay_record is None
 
 
 @pytest.mark.parametrize("more, why", [
-    (["--devices", "0,0"], "their indices, each once"),
-    (["--devices", "GPU-1f0c"], "their indices, each once"),
-    (["--devices", "0", "--firewall", "flock-firewall"], "drop --devices"),
+    (["--gpus", "0,0"], "their indices, each once"),
+    (["--gpus", "GPU-1f0c"], "their indices, each once"),
 ])
 def test_second_stops_at_its_parser_on_cards_it_cannot_prove_on(ran, capsys, more, why):
-    """Cards named wrongly, or with sessions behind the ZK server (which prove on the CPU), end the command before
-    anything runs: it never proves on the CPU in silence where a card was asked for."""
+    """Cards named wrongly end the command before anything runs."""
     with pytest.raises(SystemExit) as e:
         TS.main([*SECOND, *more])
     assert e.value.code == 2 and why in capsys.readouterr().err and ran == []

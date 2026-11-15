@@ -15,7 +15,7 @@ When something gets in your way (a wrong command, a clumsy step, a check that fa
 first of sections 1 to 4 that applies. Four habits:
 
 - **Fix the kind, not the case:** make the incident's kind impossible or loud.
-- **Twice by hand makes a tool:** a `research` command, or a line in one.
+- **Twice makes a tool:** a step by hand, or a slip (AGENTS.md).
 - **What you learn goes where the next agent meets it:** a check, else a tool's default or message, else a skill.
 - **Look ahead:** rehearse what will stall next, before it does.
 
@@ -151,7 +151,7 @@ Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
-- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's;
+- Credit of declared size, values certified, is a statement about values (SPOT's). Compute credit (Dither's;
   PoUW's bar is T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
   credit as well as of exclusion. SAK is over noised operands only, never prover-chosen ones (pinned weights,
   served activations, un-noised outputs), and an un-noised call earns no compute credit.
@@ -201,7 +201,7 @@ Protocols and claims:
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
 - Harm is read at a replay block's footprint (GLOSSARY.md, "Two-stage design"), and compute credit charges it whole.
-- The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
+- The end goal is SPOT through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
   are sampled from the OS, not expanded by a PRG, but the lead keys its instances under one window key (`Hash.Keyed`).

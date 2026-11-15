@@ -25,7 +25,12 @@ from typing import TYPE_CHECKING, Any
 
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
 from verity_vllm.program.frontend.compilations import COMPILATIONS
-from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
+from verity_vllm.program.frontend.kernel_readback import (  # noqa: F401
+    applied_kernels,
+    fp8_block_gemm_kernel_of,
+    int8_exact_of,
+    moe_experts_class_of,
+)
 
 if TYPE_CHECKING:
     from verity_vllm.program.frontend.gemm_targets import GemmTarget
@@ -118,7 +123,7 @@ class TargetProfile:
                            None) = MOE-01 with the router stated in its selection order over one committed softmax
                            (`MoeRouterTopKOrdered_v1`).  `"padded"` = the
                            fixed-slot construction: ONE `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` call per token over ALL E experts on their own
-                           weights, the TOPK slot outputs selected by the router ids (`verity.definitions.registry.moe_pad`; its lift of record is the
+                           weights, the TOPK slot outputs selected by the router ids (`verity_vllm.definitions.registry.moe_pad`; its lift of record is the
                            hand-authored `LMoeFfnL_v1` with the unselected slots DISABLED by the enable vector `a_{r,t,e}`).  Two Programs
                            of the same trace differ in digest by construction; GP-01 refuses a workload whose components were derived under
                            another construction than the declared one, and labels the workload (`moe_construction` block) so the row's
@@ -152,7 +157,7 @@ class TargetProfile:
                            of what it computes).  Omitted from `to_json()` when None.
     ir                  -> the circuit profile the Program is written in (a Program static, declared-and-bound, never attested).  None = word
                            (every Call of the Definition its derive rule binds, on w-bit values).  `"boolean"` = the same Calls,
-                           each of the Boolean version of that Definition, on bits (`verity_vllm.program.frontend.boolean.derived`); the
+                           each of the Boolean version of that Definition, on bits (`verity_torch.frontend.boolean.derived`); the
                            Build refuses by name every Definition with no Boolean version.  Declaring `"word"` is refused (declare None).
                            Omitted from `to_json()` when None.
     registered_values   -> where the Program's values live (a Program static, declared-and-bound, never attested).  None = in the

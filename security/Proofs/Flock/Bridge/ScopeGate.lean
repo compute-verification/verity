@@ -21,7 +21,7 @@ them (`Flock.KsScope.check`, after `Flock.PortRoots.check` in its verdict), so t
 * `Bridge.KsScoped I D kd`: the five.
 * `Bridge.LiveAcceptsScoped I o`: `verify --zk` accepts: `Bridge.LiveAcceptsKS`, and the files and the record's sample
   pass `Flock.KsScope.check`.
-* `Bridge.ksScoped_files`, `Bridge.div_of_drawWhy`: the check gives four of the five from the files (the unit is built
+* `Bridge.ksScoped_files`, `Bridge.div_of_sampleWhy`: the check gives four of the five from the files (the unit is built
   because `HmRow.parse` built it from rows, `unit_built`), and the fifth, the sample's `k` a multiple of the tables,
   from the record's sample, which custody (`RecordCustodyZKJ`) makes the verifier's.
 * `SampledKSLiveV3`: at a statement, files and a sample in `KsScoped`, `SampledKSLiveRoots`' bound on
@@ -54,14 +54,14 @@ def LiveAcceptsScoped {n : ℕ} {Reg : Type} (I : Inputs)
     Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count
       (FlockSoundness.Discharge.Exec.recordDraw o.2.2.record) = .ok ()
 
-/-- **The files that pass `Flock.KsScope.check` are in four of `KsScoped`'s five**, and the sample passes `drawWhy`. The
+/-- **The files that pass `Flock.KsScope.check` are in four of `KsScoped`'s five**, and the sample passes `sampleWhy`. The
 unit is built because `HmRow.parse` built it (`unit_built`, at the untyped tags `tagsWhy` leaves). -/
 theorem ksScoped_files {I : Inputs} {D : Flock.Desc} {pub : Flock.Public} {draw : Option Lean.Json}
     (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D)
     (hpub : Flock.HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub)
     (h : Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count draw = .ok ()) :
     I.tags.typed = false ∧ Built D.unroll.unit ∧ FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true ∧
-      TagsOkZHJ I ∧ Flock.KsScope.drawWhy I.count draw = none := by
+      TagsOkZHJ I ∧ Flock.KsScope.sampleWhy I.count draw = none := by
   obtain ⟨ht, hs, -, hd⟩ := Flock.KsScope.check_ok h (Flock.Desc.parse_flat hD) hpub
   obtain ⟨ht1, ht2, ht3, ht4⟩ := Flock.KsScope.tagsWhy_none ht
   have P := parse_facts (FlockSoundness.Discharge.Hidden.parse_untyped ht1 (Flock.Desc.parse_flat hD)).1
@@ -71,20 +71,20 @@ theorem ksScoped_files {I : Inputs} {D : Flock.Desc} {pub : Flock.Public} {draw 
     ⟨(zkTags_hiddenOutputs I).symm.trans ht2, (zkTags_retainRounds I).symm.trans ht3,
       (zkTags_merkleLeaf I).symm.trans ht4⟩, hd⟩
 
-/-- **The record's sample passing `drawWhy` gives the sample's `k` a multiple of the tables**: custody makes an accepted
+/-- **The record's sample passing `sampleWhy` gives the sample's `k` a multiple of the tables**: custody makes an accepted
 record's sample `dj S`, and a `dj S` that parses the verifier's own subset sample of `kd` units. -/
-theorem div_of_drawWhy {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.Json}
+theorem div_of_sampleWhy {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.Json}
     {Jf : Finset (Fin n) → Reg → ℕ}
     {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → FlockSoundness.Discharge.Exec.Transcript}
     {kd : ℕ} (hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJ I dj Jf wr kd) {S : Finset (Fin n)} {R : Reg}
     {lo : LiveOutJ (Jf S R) mPts} (hacc : AcceptsZK I (wr S R lo))
-    (hd : Flock.KsScope.drawWhy I.count (FlockSoundness.Discharge.Exec.recordDraw (wr S R lo).record) = none) :
+    (hd : Flock.KsScope.sampleWhy I.count (FlockSoundness.Discharge.Exec.recordDraw (wr S R lo).record) = none) :
     kd % nTab I = 0 := by
   unfold nTab
   split
   · exact Nat.mod_one kd
   · next hc =>
-    obtain ⟨j, d, hj, hjd, hk⟩ := Flock.KsScope.drawWhy_none hd hc
+    obtain ⟨j, d, hj, hjd, hk⟩ := Flock.KsScope.sampleWhy_none hd hc
     rw [(hCust.1 S R lo hacc).1] at hj
     obtain rfl := Option.some.inj hj
     have hdS := hCust.2 S d hjd
@@ -123,7 +123,7 @@ def SampledKSLiveV3 : Prop :=
     (desc : Claims.Msg) (qr : Lean.Json)
     (kd : ℕ) (_hkd : kd ≤ n)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -134,13 +134,13 @@ def SampledKSLiveV3 : Prop :=
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     -- one opening's verification, in SHA-512 evaluations
     (v : ℝ) (_hv : 0 ≤ v)
     -- what the sampling statement carries and `RelS` doesn't read
     (q : Claims.Sampling.Query),
     if hs : Bridge.KsScoped I D kd then
-      let L := Law.execOS (n := n) src (.subset kd) n
+      let L := SamplingDesign.execOS (n := n) src (.subset kd) n
       let P := (keyProg D.unroll hs.built n).partition (Discharge.Layout.outsOf D.unroll hs.built n)
       let vb := (rsZHJ dj y₀ hs.typed (Flock.Desc.parse_flat hD) hs.scope hs.built hpub hpt).bindingZ
         (rsZHJ_computes dj y₀ hs.typed (Flock.Desc.parse_flat hD) hs.scope hs.built hpub hpt)
@@ -149,7 +149,7 @@ def SampledKSLiveV3 : Prop :=
         (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_live I hs.typed (Flock.Desc.parse_flat hD)
             (Discharge.Layout.scopeOkH_spec hs.built hs.scope).2.1 dj y₀ wr _ hs.tags hCust.1
-            fun _ => drawOkZKHJ_of_file I hs.typed (Flock.Desc.parse_flat hD) kd n hs.div dj hCust.2 _)) τ
+            fun _ => sampleOkZKHJ_of_file I hs.typed (Flock.Desc.parse_flat hD) kd n hs.div dj hCust.2 _)) τ
       let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
       let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
       -- the deployed commitment's layout: the game's rows, read off the circuit file
@@ -181,12 +181,12 @@ def SampledKSLiveV3 : Prop :=
             (2 * ((t' + v) * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
     else
       prob (fun o => Bridge.LiveAcceptsScoped I o ∧ Bridge.RunPopOk desc qr n)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ = 0
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ = 0
 
 /-- **`SampledKSLiveV2` gives `SampledKSLiveV3`**: at a statement, files and a sample in `KsScoped`, V3's event is inside
 `Bridge.SampledKSLiveRoots`' at `KsScoped`'s five, and that follows from V2 (`Bridge.sampledKSLiveRoots_of`); outside
 them no outcome the prover reaches is accepted, since an accepted outcome's files pass `Flock.KsScope.check`
-(`Bridge.ksScoped_files`) and its record's sample is the verifier's (`Bridge.div_of_drawWhy`). -/
+(`Bridge.ksScoped_files`) and its record's sample is the verifier's (`Bridge.div_of_sampleWhy`). -/
 theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
   have h := Bridge.sampledKSLiveRoots_of h
   intro n Reg I D hD pub hpub hpt hn desc qr kd hkd dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hCust k Rw M hk hRw hM ρ hρ hr
@@ -206,6 +206,6 @@ theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
     unfold liveOfZJ at ht
     obtain ⟨lo, -, rfl⟩ := Game.Outcome.of_map _ _ _ ht
     obtain ⟨hty, hU, hsc, hTags, hd⟩ := Bridge.ksScoped_files hD hpub he.1.2
-    exact ⟨hty, hU, hsc, Bridge.div_of_drawWhy hCust he.1.1.1 hd, hTags⟩
+    exact ⟨hty, hU, hsc, Bridge.div_of_sampleWhy hCust he.1.1.1 hd, hTags⟩
 
 end Flock.Guarantees

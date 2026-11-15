@@ -18,7 +18,9 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-import h1unit as U
+from verity.protocols.accounting.pouw.prover.lowering import h1unit as U
+
+import h1form as F
 import layer as L
 import numpy as np
 import pytest
@@ -142,7 +144,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     assert RN.check_registration(win, dict(com, window_root=U.open_root("v", bytes(64)))) != []
     why = RN.check_registration(win, RN.unrooted(com))
     assert len(why) == 1 and why[0].startswith("its registered entries")
-    port = {p.name: p for p in U.Shape(K).ports()}
+    port = {p.name: p for p in F.shape(K).ports()}
     assert [bytes(x) for x in priv["bcb"]] == U.commit_strings(port["b0"], U.row_words(priv["b"], priv["scale_b"]),
                                                                [bytes(s) for s in priv["sb"]])
     assert [bytes(x) for x in priv["bczy"]] == U.commit_strings(port["zy"], priv["zyw"], [bytes(s) for s in priv["szy"]])
@@ -165,7 +167,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     assert U.window_roots(com) == (hashlib.sha512(U.A_TABLES_TAG + a_roots).digest(), bytes.fromhex(reg[f"b/{K}"][1]))
 
     assert T == 2 * (8 // R) * (16 // C) == win.tp.population
-    assert win.query["params"]["templates"] == [P.template_instance_query(U.Shape(K).definition())["params"]["template"]]
+    assert win.query["params"]["templates"] == [P.template_instance_query(F.shape(K).definition())["params"]["template"]]
     assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], c["tile0"], c["tiles"])
                                                                     for c in com["calls"]]
     assert [n for n, _t in win.program.fn.signature()[0]] == [f"a/{K}", f"b/{K}", "zy", "salt", "position", "roots"]
@@ -202,7 +204,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     params = {port: key for key, port in U.window_ports(win.program).items() if port != key}
     for c, (first, n) in enumerate(U.HW.call_units(win.program)):
         reads = U.registered_reads(win.program, win.tp, c, roots, "w", wr, win.obj["program"])
-        assert sorted(reads["ports"]) == sorted([*U.Shape(K).in_rows, "o1"])
+        assert sorted(reads["ports"]) == sorted([*F.shape(K).in_rows, "o1"])
         for p, e in reads["ports"].items():
             v = U.unit_reads(win.program, win.tp, first)[p][0]
             assert e.get(G.PARAM_KEY) == params.get(p), "a renamed A or B row names the parameter it reads"
@@ -279,7 +281,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     units = list(range(T))
     assert all(RN.check_opening(win, com, served, op, u) == [] for u, op in zip(units, opened(tmp_path, "w", salt, units, "all")))
     with pytest.raises(ValueError, match="power of two"):
-        U.Shape(K).window(U.window_shape(com)[0], 6)
+        F.shape(K).window(U.window_shape(com)[0], 6)
     assert [U.slot(n) for n in (1, 4, 5, 8, 9, 16, 17)] == [4, 4, 8, 8, 16, 16, 32]
 
 
@@ -305,7 +307,7 @@ def test_sampled_proof_blocks_open_to_their_window_and_no_other(tmp_path, win):
     assert all(np.array_equal(w, U.OK) for w in rows["w_o1"])
     assert [bytes(s) for s in rows["s_o1"]] == [U.ok_salt("w1", u) for u in units]
     assert [reference(rows, i)[1] for i in range(3)] == [1, 1, 1]
-    prog, T, o1, wr = win.obj["program"], com["tiles"], U.Shape(K).ports()[-1], U.window_open_root(com)
+    prog, T, o1, wr = win.obj["program"], com["tiles"], F.shape(K).ports()[-1], U.window_open_root(com)
     okr = U.register_ok(prog, "w1", T, wr)
     assert (rows["v_o1"].tolist(), rows["r_o1"].tolist()) == (["ok"] * 3, units)
     for i, u in enumerate(units):
@@ -315,21 +317,21 @@ def test_sampled_proof_blocks_open_to_their_window_and_no_other(tmp_path, win):
             assert U.verify_registered(prog, "ok", T, okr.root, u, bc, [str(rows["p_o1"][i])], wr) is opens
         assert not U.verify_registered(prog, "ok", T, okr.root, u, U.commit_strings(o1, rows["w_o1"][i][None, :],
                                        [bytes(rows["s_o1"][i])])[0], [str(rows["p_o1"][i])], U.open_root("v", bytes(64)))
-    st = U.statement_tables(dict(rows), [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])
+    st = U.statement_tables(dict(rows), [*F.shape(K).in_rows, "pub"], ["o0", "o1"])
     assert st["registered"]["o1"] == {"value": "ok", "positions": units, "paths": [okr.path(u).hex() for u in units]}
     opened(tmp_path, "w1", salt, units, "ok-unregistered", "--unregistered-ok")
     loose = dict(np.load(tmp_path / "ok-unregistered" / "rows.npz"))
     assert not {"v_o1", "r_o1", "p_o1"} & set(loose) and np.array_equal(loose["w_o1"], rows["w_o1"])
-    assert "o1" not in U.statement_tables(loose, [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])["registered"]
+    assert "o1" not in U.statement_tables(loose, [*F.shape(K).in_rows, "pub"], ["o0", "o1"])["registered"]
 
-    a0 = U.Shape(K).ports()[0]
+    a0 = F.shape(K).ports()[0]
     ops = opened(tmp_path, "w1", salt, units, "tampered", "--tamper-a")
     assert [RN.check_opening(win, com, served, op, u) for u, op in zip(units, ops)] == [[]] * 3
     bad = np.load(tmp_path / "tampered" / "rows.npz")
     assert [int(np.count_nonzero(x != y)) for x, y in zip(bad["w_a0"], rows["w_a0"])] == [1, 1, 0]
     assert bytes(bad["s_a0"][0]) == bytes(bad["s_a0"][1]) != bytes(rows["s_a0"][0])
     assert np.array_equal(bad["w_a1"], rows["w_a1"]) and np.array_equal(bad["p_a0"], rows["p_a0"])
-    st = U.statement_tables(dict(bad), [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])
+    st = U.statement_tables(dict(bad), [*F.shape(K).in_rows, "pub"], ["o0", "o1"])
     assert st["registered"]["a0"]["positions"] == [0, 4] and st["registered"]["a0"]["value"] == f"a/{K}@1"
     reg = U.registered_of(com)
     for z, opens in ((rows, True), (bad, False)):
@@ -338,7 +340,7 @@ def test_sampled_proof_blocks_open_to_their_window_and_no_other(tmp_path, win):
                                    [str(z["p_a0"][0])], wr) is opens
     opened(tmp_path, "w1", salt, [0, 5], "two-calls")
     with pytest.raises(ValueError, match="one call's units a statement"):
-        U.statement_tables(dict(np.load(tmp_path / "two-calls" / "rows.npz")), [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])
+        U.statement_tables(dict(np.load(tmp_path / "two-calls" / "rows.npz")), [*F.shape(K).in_rows, "pub"], ["o0", "o1"])
 
     for flag, port, value in (("--zy-word", "zy", "zy@1"), ("--receipt", "o0", "receipt")):
         served_t, com_t = tampered(tmp_path, "w1", flag, "5")
@@ -425,17 +427,17 @@ def test_each_in_proof_negatives_window_changes_its_value_and_ok_drops_where_its
 
 
 def test_the_h1_statement_is_flat_unless_h1_tmpl_says_structural(monkeypatch):
-    """`h1unit.layout`, the form every H1 stager takes (`h1unit.stager`): unset, empty or ``flat`` the flat statement,
-    ``structural`` the templated statement at `h1unit.LAYOUT`, another mode the templated one at it, and anything else
-    refused by name."""
+    """`h1unit.layout`, the form every H1 stager takes (`h1unit.stager`), as ``H1_TMPL`` hands it in (`h1form.layout`):
+    unset, empty or ``flat`` the flat statement, ``structural`` the templated statement at `h1unit.LAYOUT`, another mode
+    the templated one at it, and anything else refused by name."""
     monkeypatch.delenv("H1_TMPL", raising=False)
-    assert U.layout() is None
+    assert F.layout() is None and U.layout() is None
     for value, want in (("", None), ("flat", None), ("structural", U.LAYOUT), ("iv/hybrid/4", "iv/hybrid/4"), ("iv", "iv")):
         monkeypatch.setenv("H1_TMPL", value)
-        assert U.layout() == want
+        assert F.layout() == U.layout(value) == want
     monkeypatch.setenv("H1_TMPL", "hybrid/4")
     with pytest.raises(ValueError, match="'hybrid/4' is not a layout mode"):
-        U.layout()
+        F.layout()
 
 
 @pytest.mark.slow
@@ -474,7 +476,7 @@ def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
     (`h1unit.ports`) the stager's rows as `Shape` sizes them (an A or B row K / 2 + 2 words, the record 3 R C, the public
     row 100), and by default `window_ports`' A and B ports, which credit's registered file reads, with the rest unchanged."""
     from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
-    for shape in (U.Shape(64), U.Shape(128)):
+    for shape in (F.shape(64), F.shape(128)):
         t = shape.definition()
         bits = {p.name: p.bits for p in shape.ports()}
         reads = {port: key for key, port in U.ports(t).items()}
@@ -525,7 +527,7 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     position are refused, and a forged statement (`h1unit.forge_statement`) is the verifier's file of a window with the
     wrong output row."""
     from verity_flock import circuit as FC
-    ports = U.Shape(K).ports()
+    ports = F.shape(K).ports()
     names = [p.name for p in ports]
     ins, outs, reg_ports = names[:-2], names[-2:], names[:-3]
     assert reg_ports[-1] == "zy" and ins[-1] == "pub"
@@ -776,7 +778,7 @@ def test_the_window_open_root_is_pouws_of_the_weights_and_a_stand_in_request_tab
 
 def test_the_verifiers_frame_is_c_flocks():
     from verity_flock import circuit as FC
-    ports = U.Shape(K).ports()
+    ports = F.shape(K).ports()
     rng = np.random.default_rng(3)
     n = 3
     rows = {p.name: rng.integers(0, 1 << 16, (n, p.words)).astype(np.uint16) for p in ports}

@@ -35,8 +35,8 @@ from verity.circuits.program import Program
 from verity.circuits.types import Array
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows.interface import digest_words
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods.interface import digest_words
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_tables as BT, chunk_rows as CR, interior_rows as IR,
                                   serving_rows as SRW)
 
@@ -142,7 +142,7 @@ def _first(tables):
     boundary = _boundary()
     stream = S.Stream(_spec(), [RD], span_values=IR.span_values(LINKS), replay=BLOCK, budget=1, delta=DELTA,
                       challenger="challenger-test", clock=lambda: 0.0,
-                      sampler=lambda law, n: next(draws) if law["law"] == "subset" else [0] * len(law["strata"]))
+                      sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset" else [0] * len(sampling_design["strata"]))
     c = CS.commit(boundary, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
                               "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)
     rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=R)
@@ -376,7 +376,7 @@ def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(stag
     assert [len(t.rows) for t in drawn] == [C, C] and [LENGTHS[u] for u in first.units] == [5, 3]
     it = honest
     assert [len(v) for v in it.published.values()] == [C, C]
-    zero = np.zeros(2, np.uint16)
+    zero: np.ndarray = np.zeros(2, np.uint16)
     for t in drawn:
         for k in (C - 1, C, CAP - 1):
             r = IR.table_reads(t, [k])
@@ -501,3 +501,35 @@ def test_the_challengers_history_refuses_a_table_round_1_did_not_register(staged
         IR.history(rec, [BT.name(RUN, PROMPT, OUTPUTS, SPANS, LAYER)], 2, C, {}, {})
     with pytest.raises(ValueError, match="under another domain"):
         IR.history(rec, [NAMES[0]], 4, C, {}, {})
+
+
+@_opt_in("VERITY_VLLM_INTERIOR_TABLE", "a round 1 and an interior over the table reads on a stream of the test's own, "
+         "as `SHARED`'s tests build once for the module")
+@pytest.mark.slow
+def test_an_interior_whose_history_names_a_table_round_1_did_not_serve_under_its_name_is_refused():
+    """An interior built, and its `history` taken, against a copy of round 1's record whose port for a sampled span's
+    table names another table's root: the prover's strings, the interior's `history` and its supplied reads all agree
+    on that table (`history.roots_of` and R7 pass), but the boundary registration the stream holds names another root
+    for the port, so the stream refuses the interior (`interior-table`). The honest interior registers
+    (`test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them`). Slow: the
+    refusal is the stream's, over the record it registered; `tables_served`'s difftest piece holds the Python to the Lean
+    on records written by hand."""
+    tables = _tables()
+    stream, reg, first, rec = _first(tables)
+    drawn = [tables[u] for u in first.units]
+    other = HT.HistoryTable(_program(), drawn[1].value, 2, CAP)
+    rows = np.array(drawn[1].rows)
+    rows[1, 0] ^= 1
+    other.append(rows, drawn[1].salts)
+    forged = {**rec, "roots": [{**r, "root": other.root.hex()} if r["port"] == other.value else r for r in rec["roots"]]}
+    it = _interior(reg, first, forged, [drawn[0], other])
+    hist = _history(forged, first, it)
+    assert HT.roots_of(it.leaf_layer, hist)[other.value] == (other.root, drawn[1].domain.domain_id) and \
+        other.root != drawn[1].root
+    assert not S.tables_served(rec, [(n, *rd) for n, rd in HT.roots_of(it.leaf_layer, hist).items()])
+    with pytest.raises(S.Refused) as refused:
+        IR.register(stream, first, it, history=hist, registered=IR.link_words(LINKS),
+                    supplied=IR.sources(LINKS, Q, [NAMES[u] for u in first.units]),
+                    schemas=IR.link_schemas(MEMBER, LINKS))
+    assert refused.value.verdict.codes == ("interior-table",)
+    assert refused.value.verdict.detail == {"interior-table": {"tables": [other.value]}}

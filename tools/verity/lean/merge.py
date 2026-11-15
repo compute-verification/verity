@@ -160,8 +160,8 @@ WIDTH = 120
 #: the others keep ours' order, with theirs' new entries after it, unless ours kept the base's order and theirs moved
 #: entries (`reordered`): then theirs' order, with ours' new entries after it.  `--update` writes `shape.inline`'s inner maps
 #: in their statement's order and `trust`, `claims`, `trees`, `upstream` and `deployed` as the lock has them
-SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time", "trust_gap", "unwitnessed",
-          "shape[inline]"}
+SORTED = {"assumptions", "domain", "open", "ids", "guarantees", "reads", "dependencies", "compile_time", "trust_gap",
+          "unwitnessed", "shape[inline]"}
 SORTED_NAMES = {"trust_gap"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`, `trust`'s `base` and `extra`), or lists of names merged as lists
@@ -176,7 +176,7 @@ JUDGED = {"unwitnessed", "witnesses"}
 MISSING = object()
 #: the newest lock `format` this file merges: bump it with `check.py`'s `FORMAT`, which writes it, so a copy older than a
 #: lock leaves it to git's conflict
-FORMAT = 1
+FORMAT = 2
 #: this directory, from the top of the worktree; the registered drivers run `origin/main`'s copy of it (`driver`)
 DIR = "tools/verity/lean"
 #: sections an entry sits in at most one of (`exclusive`), by the section holding them (None: the record): a claim is
@@ -337,8 +337,8 @@ def guarantees(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) 
 
 def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str], section: str = "assumptions") -> dict:
     """The named assumptions (or, ``section`` `open` or `domain`, the open premises or the domain hypotheses) entry by
-    entry, each one's hand-written fields (`owner`; an open premise's `issue` and `due`, a domain hypothesis's `why` and
-    `cites`) apart from its `digest` (the build's: the hash its `reads` record holds), which merges as `derived`; a field
+    entry, each one's hand-written fields (`id` and `owner`; an open premise's `issue` and `due`, a domain hypothesis's
+    `why` and `cites`) apart from its `digest` (the build's: the hash its `reads` record holds), which merges as `derived`; a field
     both sides changed differently is theirs' (`one`).  An entry one side removed and the other changed is kept: the lock
     run drops it when no guarantee of the merged tree reads it (`assumptions.unread`, `open.unread`, `domain.unread`)."""
     out = {}
@@ -350,7 +350,7 @@ def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str],
             v = derived(f"{section}[{k}]", x, y, z, candidate)
         else:
             v = {}
-            for f in ("owner", "digest", "issue", "due", "why", "cites"):
+            for f in ("id", "owner", "digest", "issue", "due", "why", "cites"):
                 w = (derived if f == "digest" else one)(f"{section}[{k}].{f}", owned(x, f), owned(y, f), owned(z, f),
                                                         candidate if f == "digest" else why)
                 v |= {} if w is MISSING else {f: w}

@@ -58,7 +58,7 @@ case: at a statement Lean's verifier refuses, (i)'s event is empty.
   to.
 
 Flock's definitions and the recursion's model are still in the proofs package, so the statement is here rather than
-in `Security/Properties/`.
+in `security/Properties/`.
 -/
 
 @[expose] public section
@@ -145,7 +145,7 @@ noncomputable abbrev custodied {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : 
 
 /-- **The prover's strategy against the typed sessions** (`Recursion.recT`): its strategy against the sessions as it
 supplies them, with the same registrations and rounds. -/
-noncomputable abbrev transported {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ}
+noncomputable abbrev transported {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ}
     {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg : ByteArray → ByteArray} {N : ℕ}
     (zr : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg')
     (hC : Flock.Premises.RecordCustody zr) (h : Typed zr)
@@ -166,18 +166,18 @@ abbrev hiddenAt {Ω H : Type} (st : Flock.Stmt) (rt : Flock.Registered.Port)
     (stmt : (Fin rt.leaves → ByteArray) → Ω → H) {Reg : Type} : Reg → Ω → H :=
   fun _ ω => stmtAt rt stmt (Flock.Registered.rowsOf st.c st.pub rt) ω
 
-/-- **The sampling design of a finite space of samples with an element**: `Law` at `Ω` and the units each sample takes, nonempty by
-the element. Every law is one (`Classical.inhabited_of_nonempty`); (i) binds the space, its element and the sample rather
+/-- **The sampling design of a finite space of samples with an element**: `SamplingDesign` at `Ω` and the units each sample takes, nonempty by
+the element. Every sampling design is one (`Classical.inhabited_of_nonempty`); (i) binds the space, its element and the sample rather
 than a sampling design, whose `nonempty` field would be a hypothesis of the statement. -/
-abbrev drawLaw {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] (draw : Ω → Finset (Fin n)) : Law n := ⟨Ω, draw⟩
+abbrev sampleDesign {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] (draw : Ω → Finset (Fin n)) : SamplingDesign n := ⟨Ω, draw⟩
 
 /-- **The recursive audit, as the verifier runs it.**
 
 (i) For every inner statement `st`, with its class, regions and schedule `execClassAt st`, and every prover `σ` of the
 recursive audit with Flock's compiled table there as its inner protocol (`innerAt`): V*'s statements `Vs`, as many
-as V*'s staging lays out over the class and its regions (`outerStatementsAt`), each sampling all its units (`VLaw`:
+as V*'s staging lays out over the class and its regions (`outerStatementsAt`), each sampling all its units (`VSamplingDesign`:
 the full sample on the operating system's bytes, `--draw subset:<units>`), V*'s sessions `zr R ω t R₂ j` under
-their laws as the prover supplies them (`ZkOuterR`: inputs, own ports, sample file and record writer, with nothing
+their sampling designs as the prover supplies them (`ZkOuterR`: inputs, own ports, sample file and record writer, with nothing
 assumed of what the inputs parse to), their records' custody `_hCust`, the verifier's own inputs to them
 (the inner shape `ish`, V*'s bindings `bind` and the shared rows `rows`; session `j` runs as V*'s statement `j`), at
 which V*'s statements' files parse to `Vs` (`VStarParses`, an obligation until gap 4), the messages V*'s layers hold
@@ -230,7 +230,7 @@ def RecursiveAudit : Prop :=
     -- V*'s statements over the class, each sampling all its units, and V*'s sessions at each history and
     -- registration `R₂`, as the prover supplies them
     {Vs : Fin (outerStatementsAt st) → VStmt}
-    (zr : Reg → (drawLaw draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
+    (zr : Reg → (sampleDesign draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
       (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
@@ -244,7 +244,7 @@ def RecursiveAudit : Prop :=
     (_hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
-    (σ : Strategy (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
+    (σ : Strategy (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
     (wmsg : ((j : Fin (outerStatementsAt st)) → (Vs j).Bits) → List (innerAt T CT st).Msg)
     (Sk : ℕ → (j : Fin (outerStatementsAt st)) →
@@ -256,7 +256,7 @@ def RecursiveAudit : Prop :=
       PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
       (innerAt T CT st).Msg)
     -- the registration's root, and the private circuit's statement by the commit strings of its rows
-    (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → (drawLaw draw).Ω → Hidden (execClassAt st).cls)
+    (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → (sampleDesign draw).Ω → Hidden (execClassAt st).cls)
     -- A3
     (_hA3 : Flock.Premises.UniformRandomBytes Vs)
     -- the registered commit strings, each opening `rt` at its row through the developer's path
@@ -264,14 +264,14 @@ def RecursiveAudit : Prop :=
     -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S₀
-      (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
+      (d₀ : Lean.Json) (y₀ : ZkHidden.SampleSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     -- V*'s bridge at the committed rounds, at the typed sessions
     (_hbr : ∀ h : Typed zr,
       Flock.Premises.VBridgeC (custodied zr _hCust h) dg N k Rw (hiddenAt st rt stmt) wmsg Sk cmt msg),
     prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ (innerAt T CT st).holds (stmtAt rt stmt p o.2.1))
-        (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
+        (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
     (∃ r < rt.leaves, Flock.Registered.rowsOf st.c st.pub rt r ≠ p r ∧
       Flock.Registered.Collides (Flock.Registered.bcPair rt r (Flock.Registered.rowsOf st.c st.pub rt r)
         (Flock.Registered.pathOf st.pub rt r) (p r) (path₀ r))) ∨
@@ -285,10 +285,10 @@ def RecursiveAudit : Prop :=
       prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
             VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (innerAt T CT st).holds (stmtAt rt stmt p o.2.1))
-          (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
+          (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
         expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
             (fun R₂ j τ =>
-              (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+              (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           ((innerAt T CT st).r : ℝ≥0∞) *
             expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
               (fun R₂ j τ => (custodied zr _hCust h σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +

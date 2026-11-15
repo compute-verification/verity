@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from verity.protocols.proofs.spot.prover.cost import int8_llama as L
-from inputs import I, MODELS
+from verity.protocols.proofs.spot.prover.cost.inputs import I, MODELS
 from verity.protocols.proofs.spot.prover.optimize import ReplayGrain, replay_cost
 
 V = {k: i.value for k, i in I.items()}
@@ -24,7 +24,7 @@ def test_the_replay_grain_is_the_windows_requests_each_a_prompt_at_the_plain_rat
         assert c.grain == "request" and c.units == c.n_rho * w["requests"], c.template
 
 
-def test_one_draw_reruns_one_request_and_proving_everything_reruns_the_window():
+def test_one_sample_reruns_one_request_and_proving_everything_reruns_the_window():
     """One sampled proof block re-runs its request; every unit sampled re-runs every request, the window's serving again."""
     w = L.workload(V, L.WINDOWS["round"], M)
     costs = L.model(V, L.fitted(V), w["requests"])

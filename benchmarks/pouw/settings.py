@@ -23,7 +23,7 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 #: moves, and a bare one only in a file it moves too
 STANDALONE = ("../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/run.py",
               "../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/run.py",
-              "../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/grouped.py", "pearl_c4/dev.py",
+              "../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/grouped.py", "../../verity/protocols/experimental/pearl_c4/prover/kernels/dev.py",
               "../../verity/protocols/accounting/pouw/prover/sass_gate.py", "harness/ieee_pin.py")
 
 
@@ -122,7 +122,7 @@ REGISTRY = Registry(
                                             "test_pearl_c_sm120.py's and test_pearl_c_sm90.py's build tests compile the "
                                             "kernels and hold them to the SASS gate"),
     S("POUW_SASS_GATE_CACHE", str, None, WHERE, "the SASS gate's cache; unset, ~/.cache/pouw-harness/sass-gate"),
-    S("POUW_HARNESS_LIB", str, None, WHERE, "the harness's native library; unset, verity/protocols/accounting/pouw/prover/kernels/harness/native/build/libpouw_harness.so"),
+    S("POUW_HARNESS_LIB", str, None, WHERE, "the harness's native library; unset, native/build/libpouw_harness.so"),
     S("POUW_HARNESS_LT2", str, None, VALUE, "the second cuBLASLt's library; unset, libpouw_lt2.so beside the harness's if "
                                             "built; none leaves it out"),
     S("POUW_LIBNVML", str, "libnvidia-ml.so.1", WHERE, f"NVML, for the harness's clocks and power: {LIB}"),
@@ -140,8 +140,10 @@ REGISTRY = Registry(
     S("POUW_CHALLENGER_PEER", str, None, WHERE, "the node the window's client runs on, as the gate names it (its draw session)"),
     S("POUW_CHALLENGER_SSH_KEY", str, None, WHERE, "the lane's own gate key, for the window's draw session"),
     # ---------------------------------------------------------------- which of the served path's tests run (tests/)
-    S("VERITY_POUW_H1_PIN", present, False, WHERE, "set, test_h1_pin.py builds the H1 unit's circuit at K = 64 and holds it "
-                                                   "to its pin (about 3.5 minutes, 9.5 GB): which tests run"),
+    # ---------------------------------------------------------------- H1's harness (h1_prove/h1form.py)
+    S("H1_TILE", str, "v1", WHERE, "the H1 tile under the unit, v1 or v3 (h1unit.tile)"),
+    S("H1_TMPL", str, None, WHERE, "the H1 statement's form: unset, empty or flat the flat statement, structural or a "
+                                   "layout mode the templated one (h1unit.layout)"),
     S("PARTIALS_LIB", str, None, WHERE, "an h1u.cu build with kh_lanes, which the partials' GPU tests load (test_partials.py, "
                                         "test_lane_refs.py); unset, they skip"),
     S("VERITY_POUW_H1U_SO", str, None, WHERE, "an h1u.cu -hbc build (benchmarks/hash/dither/sbench.sh's h1u_kc.so), which "

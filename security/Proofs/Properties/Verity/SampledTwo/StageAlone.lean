@@ -8,19 +8,19 @@ public import Proofs.Properties.Verity.Sampled.RecordDraw
 # On two windows the first session's read holds none of the second stage's coins
 
 `SecondAlone`, the premise `secondShown_of` takes on two windows, from the first session's roots: where the roots of
-the session `drawCoins` reads for the first stage show no coin of the second stage's family after the interior
+the session `sampleCoins` reads for the first stage show no coin of the second stage's family after the interior
 registration's digest (`FirstUnshown`), the cut's read of that session's log holds no such coins (`secondAlone_of`).
 The read places a coin only at a release whose root line names its family and digest (`none_readLog`), and the roots
 list every such line (`countFresh_zero`).
 
 The form's check refuses a case whose first session shows such a coin (`interiorUnshown`). It reads that session
 under the interior audit's challenger key, on the boundary's window against the interior audit's, in the interior
-audit's family, as the cut does (`keyOf_challenger`, `secondDraws_parts`); it differs from the cut in that it reads
+audit's family, as the cut does (`keyOf_challenger`, `secondSamples_parts`); it differs from the cut in that it reads
 the digest of the interior record where the cut reads the interior commitment's. `firstUnshown_of` gives
 `FirstUnshown` from the check where those agree (`SessionMatches`), and the form refuses unless they do
 (`interiorDigestIs`, `INTERIOR_DIGEST`), so `SessionMatches` is the form's check (`sessionMatches_of`).
 
-`FirstDrawn`, the premise `firstShown_of` takes, is the form's check (`firstDrawn_of`): the run of record's coin check
+`FirstSampled`, the premise `firstShown_of` takes, is the form's check (`firstSampled_of`): the run of record's coin check
 reads the cut's first sample, at the record the form holds to the commitment's digest (`digestIs`).
 -/
 
@@ -157,11 +157,11 @@ theorem countFresh_zero {c : LiveCommitment} {log : List String} {roots : Roots}
 /-! ## The premise and the statement -/
 
 /-- **On two windows the first session shows none of the second stage's coins**: on a play the form accepts whose two
-sessions are on two windows, the roots of the first session `drawCoins` reads (from `firstCoins`, under the
+sessions are on two windows, the roots of the first session `sampleCoins` reads (from `firstCoins`, under the
 parameters' key, on the boundary's window) show no coin of the second stage's family after the interior's digest. -/
 def FirstUnshown (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ cm roots, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
-    firstDraws key p c e = some d₁ → secondDraws p e = some d₂ → d₁.window ≠ d₂.window →
+    firstSamples key p c e = some d₁ → secondSamples p e = some d₂ → d₁.window ≠ d₂.window →
     trustedChallengePhaseOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d₁.window)]) d₁.key
       (Spot.getD (firstCoins e) "pins") (Spot.getD (firstCoins e) "main") (Spot.getD (firstCoins e) "session") =
         .ok (cm, roots) →
@@ -174,9 +174,9 @@ theorem secondAlone_of (C : CaseOf) (hU : FirstUnshown C) : SecondAlone C := by
   obtain ⟨ls, hls, hlsl⟩ := firstLines_arr hlines
   obtain ⟨cm, roots, hts, -⟩ := Verity.Sampled.drawCoins_ok hξ
   have hsh := hU o ha p c e key d₁ d₂ cm roots hcase hkey hd₁ hd₂ hw hts
-  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedSessionOf_ok hts
-  obtain ⟨_, hso⟩ := Verity.Sampled.sessionNamed_ok hsn
-  obtain ⟨ls', lines', hlog', hls', hrr⟩ := Verity.Sampled.sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok hts
+  obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
+  obtain ⟨ls', lines', hlog', hls', hrr⟩ := Verity.Sampled.challengePhaseOf_ok hso
   rw [hls] at hlog'
   cases hlog'
   rw [hlsl] at hls'
@@ -222,17 +222,17 @@ theorem keyOf_challenger {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Param
 
 /-- **The interior's sample is the interior audit's**: its key and family the interior audit's challenger's, its window
 the interior audit's, after the interior commitment's digest. -/
-theorem secondDraws_parts {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
-    {d : Properties.Challenger.Draws} (h : secondDraws p e = some d) :
+theorem secondSamples_parts {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
+    {d : Properties.Challenger.Draws} (h : secondSamples p e = some d) :
     ∃ c₂, interiorOf e = .ok c₂ ∧ p.audit.base.challenger = some (d.key, d.label) ∧
       p.audit.base.verifier.windowRoot = some d.window ∧ d.after = c₂.digest := by
   cases hi : interiorOf e with
   | error err =>
-    unfold secondDraws at h
+    unfold secondSamples at h
     rw [hi] at h
     simp [Except.toOption] at h
   | ok c₂ =>
-    have h' := secondDraws_eq hi h
+    have h' := secondSamples_eq hi h
     unfold Properties.Challenger.oneStageZkSource Properties.Challenger.oneStageSource at h'
     rcases hch : p.audit.base.challenger with _ | ⟨key, label⟩ <;>
       rcases hw : p.audit.base.verifier.windowRoot with _ | w <;> simp only [hch, hw] at h' <;> cases h'
@@ -242,15 +242,15 @@ theorem secondDraws_parts {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Rec
 pins, main and session `firstCoins` names, and the interior record's digest is the interior commitment's. -/
 def SessionMatches (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ p c e c₂, caseOf o.sent = .ok (p, c, e) → interiorOf e = .ok c₂ →
-    Spot.Registration.digest e.record = .ok c₂.digest ∧
+    Spot.Docket.digest e.record = .ok c₂.digest ∧
     ∀ f ∈ ["ledger", "pins", "main", "session"], Spot.getD (firstCoins e) f = Spot.getD e.coins f
 
 /-- **`FirstUnshown` from the form's check**, where it reads the cut's session (`SessionMatches`). -/
 theorem firstUnshown_of (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C) : FirstUnshown C := by
   intro o ha p c e key d₁ d₂ cm roots hcase hkey hd₁ hd₂ hw hts
-  obtain ⟨c₂, hi₂, hch₂, hwin₂, hafter⟩ := secondDraws_parts hd₂
+  obtain ⟨c₂, hi₂, hch₂, hwin₂, hafter⟩ := secondSamples_parts hd₂
   obtain ⟨hdig, hf⟩ := hM o ha p c e c₂ hcase hi₂
-  obtain ⟨bp, hb, hbw, hkey₁⟩ := firstDraws_window hd₁
+  obtain ⟨bp, hb, hbw, hkey₁⟩ := firstSamples_executionPhase hd₁
   have hbp : bp = p.boundary := by
     unfold boundaryOf at hb
     first
@@ -315,13 +315,13 @@ theorem inputOf_coinsRead (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneS
        cases VStar.Recursive.SampledTwo.rootsSplit c.record e.interior.base.sessionRoots
        exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩)
 
-/-- **The first stage read the cut's sample**: `FirstDrawn` from the form's check. On an accepted play the run of record's
-coin check gave no code, so either the first stage read no byte, or `drawCoins` read the evidence's `coins` under the
+/-- **The first stage read the cut's sample**: `FirstSampled` from the form's check. On an accepted play the run of record's
+coin check gave no code, so either the first stage read no byte, or `sampleCoins` read the evidence's `coins` under the
 run's key, window and family after the digest of the record the run was given, and the bytes read start them
 (`Coins.coinsReason_none`). The run's key, window and family are the cut's sample's (`inputOf`, `keyOf_challenger`), and
 the form refuses unless the record the run is given has the commitment's digest (`digestIs`, `RECORD_DIGEST`), which
 is the sample's. -/
-theorem firstDrawn_of (C : CaseOf) (hC : CaseIsSent C) : FirstDrawn C := by
+theorem firstSampled_of (C : CaseOf) (hC : CaseIsSent C) : FirstSampled C := by
   intro o ha i read hi hread p c e key d ξ hcase hkey hd hξ
   obtain ⟨k, p', c', e', c₂, ξ₂, r, run, hk, hdec, hin, -, -, -⟩ := inputOn_accepts ha hi
   obtain ⟨hcase', -⟩ := hC o k p' c' e' hk hdec
@@ -343,7 +343,7 @@ theorem firstDrawn_of (C : CaseOf) (hC : CaseIsSent C) : FirstDrawn C := by
   rw [his]
   show Properties.Challenger.bitsOf (e.source.extract 0 read) <+: Properties.Challenger.bitsOf ξ
   have hK := keyOf_challenger hcase hkey
-  unfold firstDraws at hd
+  unfold firstSamples at hd
   cases hb : boundaryOf p with
   | error _ => simp [hb, Except.toOption] at hd
   | ok bp =>
@@ -362,7 +362,7 @@ theorem firstDrawn_of (C : CaseOf) (hC : CaseIsSent C) : FirstDrawn C := by
           first | exact (Except.ok.inj hb).symm | (cases hb; rfl)
         subst hbp
         have hl' : p.boundary.challenger.map (·.2) = some label := hl
-        have hξ' : drawCoins key w label c.digest e.coins = .ok ξ := hξ
+        have hξ' : sampleCoins key w label c.digest e.coins = .ok ξ := hξ
         unfold Spot.Run.coinsCode at hcc'
         by_cases hr : (e.source.extract 0 read).isEmpty = true
         · have hz : (e.source.extract 0 read).size = 0 := by simpa [ByteArray.isEmpty] using hr

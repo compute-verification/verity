@@ -25,7 +25,7 @@ import torch
 
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.observe import capture, events
-from verity_vllm.pipeline import m1_capture
+from verity_vllm.pipeline import match_capture
 from verity_vllm.pipeline.tp import rank_worker as RW
 
 NATIVE = "verity_vllm.commit.committer.native_collect"
@@ -186,7 +186,7 @@ def _close(monkeypatch, out: Path, *, log: bytes | None = b"eleven byte", errors
     header = events.RunHeader("log/v1", "2026-01-01T00:00:00Z", "profile-of-this-rank", {}, {}, {})
     monkeypatch.setattr(capture, "make_header", lambda engine, workload, **kw: header)
     monkeypatch.setattr(capture, "Capture", lambda engine, *, log_path, **kw: _Recorder(order, stats, log_path, log))
-    monkeypatch.setattr(m1_capture, "dump_cos_sin", lambda engine, rank_dir: None)
+    monkeypatch.setattr(match_capture, "dump_cos_sin", lambda engine, rank_dir: None)
     monkeypatch.setattr(va, "versions_doc", lambda engine: {})
     w = _rank(monkeypatch, order)
     w.vllm_config, w.model_runner = SimpleNamespace(), SimpleNamespace(get_model=_Model)

@@ -1,14 +1,15 @@
 module
 
 public import CoreProtocol.Site
+public import RegistrationLog.SiteCheck
 
 /-!
 # The Site's difftest: `Core.Site` behind `Difftest.serve`
 
 `site-difftest` serves `table` to the core difftest harness, whose Python half (`tests/test_site_difftest.py`) holds it to
-`verity.core.site`. The Site is core's (`CoreProtocol.Site`, in `core_protocol`); its port is here, beside the registration log's
+`verity.device`. The Site is core's (`CoreProtocol.Site`, in `core_protocol`); its port is here, beside the registration log's
 check, because the log is what the Site is folded from. The functions,
-on the JSON `verity.core.site` writes, with the deployed digests (`Registration.sha512`):
+on the JSON `verity.device` writes, with the deployed digests (`Registration.sha512`):
 
 * `site_refusal`, `{"auditor", "log", "entry"}`: the entry held to the log, `{"refusal": name | null, "head", "digest"}`;
 * `site_check`, `{"auditor", "log"}`: the log checked and folded, `{"site", "head"}`, or `{"refused": {"entry", "name"}}`;

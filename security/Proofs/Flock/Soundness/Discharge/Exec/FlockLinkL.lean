@@ -7,7 +7,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
 /-!
-# The link theorem: `δ_link` under expected-time collision resistance (DESIGN.md §3)
+# The link theorem: `ε_bind` under expected-time collision resistance (DESIGN.md §3)
 
 The batched audit's binding error (`analysisBEL`) is discharged here for the plurality value layer,
 under expected-time collision resistance of SHA-512 for an explicit finder
@@ -62,7 +62,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-variable {L : Law n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type}
+variable {L : SamplingDesign n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : P.ValueBinding plan tab decode Hc)
   (R : Reg) (τ : Cont L Reg (batchedSessionL H E Lf plan) R)
 
@@ -115,7 +115,7 @@ noncomputable def readsAtL (ω : L.Ω) (bs : List (List (OutCL 𝔽 D Sl))) (c :
   Finset.univ.filter fun v => ∃ o, OpensAtL P H E Lf plan tab vb R τ ω bs c v o
 
 /-- A trial's outcome: the sample, the fresh run, and the waits' runs. -/
-abbrev TrialOutL (L : Law n) (D Sl : Type) := L.Ω × List (OutCL 𝔽 D Sl) × List (List (List (OutCL 𝔽 D Sl)))
+abbrev TrialOutL (L : SamplingDesign n) (D Sl : Type) := L.Ω × List (OutCL 𝔽 D Sl) × List (List (List (OutCL 𝔽 D Sl)))
 
 /-- **The trial for commit string `c`**: a sample that reads `c`, a fresh session, and `k` waits of at
 most `Rw` reruns each. -/
@@ -126,7 +126,7 @@ noncomputable def trialGL (c : vb.Pos) [Nonempty (P.Ωc plan tab vb L c)] (k Rw 
 /-- The prover's session strategy in every run. -/
 noncomputable def trialStratL (c : vb.Pos) [Nonempty (P.Ωc plan tab vb L c)] (k Rw : ℕ) :
     Strategy (trialGL P H E Lf plan tab vb R τ c k Rw) :=
-  Strategy.bind _ _ (drawStrat _) fun w => Strategy.bind _ _ (stratωL H E Lf plan R τ w.1).2 fun _ =>
+  Strategy.bind _ _ (sampleStrat _) fun w => Strategy.bind _ _ (stratωL H E Lf plan R τ w.1).2 fun _ =>
     Strategy.map _ _ (runsStrat _ (runsStrat _ (stratωL H E Lf plan R τ w.1).2 Rw) k)
 
 open Classical in
@@ -313,7 +313,7 @@ theorem expect_trialL (c : vb.Pos) [Nonempty (P.Ωc plan tab vb L c)] (k Rw : �
           (gameωL H E Lf plan R τ w.1) (stratωL H E Lf plan R τ w.1).2) /
         Fintype.card (P.Ωc plan tab vb L c) := by
   unfold trialGL trialStratL
-  rw [expect_bind, Verity.Game.expect_draw]
+  rw [expect_bind, Verity.Game.expect_sample]
   congr 1
   refine Finset.sum_congr rfl fun w _ => ?_
   rw [expect_bind]
@@ -466,7 +466,7 @@ theorem Xval_maxL (k Rw : ℕ) (c : vb.Pos) [hne : Nonempty (P.Ωc plan tab vb L
   exact (Classical.choose_spec (Finset.exists_max_image Finset.univ _ Finset.univ_nonempty)).2 v
     (Finset.mem_univ v)
 
-theorem readsAt_eq_emptyL {c : vb.Pos} {ω : L.Ω} (h : ¬ P.ReadsDraw plan tab vb c ω)
+theorem readsAt_eq_emptyL {c : vb.Pos} {ω : L.Ω} (h : ¬ P.ReadsSample plan tab vb c ω)
     (bs : List (List (OutCL 𝔽 D Sl))) : readsAtL P H E Lf plan tab vb R τ ω bs c = ∅ := by
   classical
   unfold readsAtL
@@ -531,13 +531,13 @@ theorem ideal_mass_leL (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ}
   have hB : 0 ≤ 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) +
       k / (Real.exp 1 * Rw) := by positivity
   -- off the samples that read `c`, the trace vanishes
-  have hoff : ∀ ω, ¬ P.ReadsDraw plan tab vb c ω → f ω = 0 := by
+  have hoff : ∀ ω, ¬ P.ReadsSample plan tab vb c ω → f ω = 0 := by
     intro ω hω
     have hpsi : psiL P H E Lf plan tab vb R τ k Rw c ω = fun _ => 0 := funext fun bs => by
       simp [psiL, readsAt_eq_emptyL P H E Lf plan tab vb R τ hω bs]
     simp only [hf, hpsi, expectAcc_zero, mul_zero]
   have hsum : ∑ ω : L.Ω, f ω = ∑ w : P.Ωc plan tab vb L c, f w.1 := by
-    rw [← Finset.sum_filter_of_ne (p := fun ω => P.ReadsDraw plan tab vb c ω)
+    rw [← Finset.sum_filter_of_ne (p := fun ω => P.ReadsSample plan tab vb c ω)
       (fun ω _ hne => by by_contra h; exact hne (hoff ω h))]
     exact Finset.sum_subtype _ (fun ω => by simp) f
   rw [hsum, div_le_iff₀ hΩ]
@@ -654,7 +654,7 @@ noncomputable def linkBoundCRL (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont
       (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
   else ⊤
 
-/-- **The link theorem: `δ_link` under expected-time collision resistance, prover by prover.** For the batched audit
+/-- **The link theorem: `ε_bind` under expected-time collision resistance, prover by prover.** For the batched audit
 with the expected-time extractor (`analysisBEL`) and the plurality value layer (`XplurL`), given the binding of wires to
 commit strings (`ValueBinding`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCRL`),
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$

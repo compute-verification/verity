@@ -55,7 +55,7 @@ statement (`setupTables_okH'`).
 The numbers read a table's `m`, `mPts`, `k_log` and region count and the spec's `points` and `mPts`. `setupHidden_key`
 reads those off the circuit (`HmOut.parseCommit`, the same file) and the statement's `n`: without a sample, the loaded file's
 instance count, which `RecVStar.checkCircuit` holds to the instances of V*'s statement `s` at the verifier's own inner
-shape (`staged_pop`); with one, the sample's proved units (`Layout.drawn_spec`), the same sample. They read the
+shape (`staged_pop`); with one, the sample's proved units (`Layout.sampled_spec`), the same sample. They read the
 statement's version too (`Stmt.wideLeaf`, which schedule its tables' proofs follow), and that is its tags', the same
 at both setups (`Hidden.setupHidden_tagsP`).
 -/
@@ -218,8 +218,8 @@ theorem hidden_same {tags : Tags} {cf pf pf' : ByteArray} {coins : Coins} {table
       have e₁ := hd0 d rfl
       have e₂ := hd0' d rfl
       unfold HmIn.drawn at e₁ e₂
-      obtain ⟨D, hD, -, hnD, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec e₁
-      obtain ⟨D', hD', -, hnD', -⟩ := FlockSoundness.Discharge.Layout.drawn_spec e₂
+      obtain ⟨D, hD, -, hnD, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec e₁
+      obtain ⟨D', hD', -, hnD', -⟩ := FlockSoundness.Discharge.Layout.sampled_spec e₂
       obtain rfl : D' = D := Except.ok.inj (hD'.symm.trans hD)
       rw [hnD, hnD']
   refine ⟨ec, ?_, ?_, ?_, ?_⟩
@@ -344,12 +344,13 @@ theorem rounds_one (zk : Bool) (spec : Flock.SessionSpec) (t : Flock.Stmt) :
 /-- **A one-table statement's numbers** are its table's. -/
 theorem numsOf_one {xO : Msg} {i : RecIns} {spec : Flock.SessionSpec} {t : Flock.Stmt}
     (h : setupO xO = some (i, spec, #[t])) :
-    numsOf xO = ⟨FlockDeploy.tableErr true spec t, FlockDeploy.tableLen true t, FlockDeploy.tableWeight true t,
-      2 + (0 + 2 * FlockDeploy.repRounds true spec t), Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, 0, 0⟩ := by
+    numsOf xO = ⟨FlockDeploy.tableErr true spec t, (2 : ℚ) ^ (Claims.Flock.zkLevel0 t.wideLeaf t.m).d,
+      FlockDeploy.tableWeight true t, 2 + (0 + 2 * FlockDeploy.repRounds true spec t), Claims.Flock.Numbers.waits,
+      Claims.Flock.Numbers.cap, 0, 0⟩ := by
   have ht : tablesO xO = [(spec, t)] := by simp [tablesO, h]
   have hk : VO.k xO = 2 + FlockDeploy.rounds true spec #[t] := by simp only [VO, h]
   rw [rounds_one] at hk
-  simp only [numsOf, εtableO, N₀O, weightO, ht, hk, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
+  simp only [numsOf, εtableO, N₀Oq, weightO, ht, hk, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
     add_zero]
 
 end RecDeploy.NumsFix

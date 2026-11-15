@@ -141,10 +141,10 @@ esac
 # --bw-passes (dbw.py): PoUB's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
 case " $* " in *" --bw-passes"*)
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
-    -o "$S/session.so" benchmarks/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
+    -o "$S/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL session"; grep -v "^ptxas info" "$OUT/build-session.log" | tail -30; exit 11; }
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=1024 \
-    -DKV_MASK=1 -o "$S/kv.so" benchmarks/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
+    -DKV_MASK=1 -o "$S/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL kv"; grep -v "^ptxas info" "$OUT/build-kv.log" | tail -30; exit 11; }
   export BW_LIB=$S/session.so BW_KV=$S/kv.so ;;
 esac
@@ -174,9 +174,9 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 # BW_PY runs the audit's side (verifier and prover), by default remote_session/run.sh's torch venv
 if [ -n "${BW_LIB:-}" ]; then
   (mkdir -p verity/circuits/difftest/.lake && cd verity/protocols/accounting/poub/verifier/lean \
-    && flock "$ROOT/verity/circuits/difftest/.lake/harness-build.lock" lake build remote-audit-verifier) \
+    && flock "$ROOT/verity/circuits/difftest/.lake/harness-build.lock" lake build poub-verifier) \
     > "$OUT/lean-bw-build.log" 2>&1 || { echo "sbench: LEAN_BUILD_FAIL bw"; tail -20 "$OUT/lean-bw-build.log"; exit 13; }
-  export BW_LEAN_EXE=$ROOT/verity/protocols/accounting/poub/verifier/lean/.lake/build/bin/remote-audit-verifier
+  export BW_LEAN_EXE=$ROOT/verity/protocols/accounting/poub/verifier/lean/.lake/build/bin/poub-verifier
   export BW_PY=${BW_PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
   [ -x "$BW_PY" ] || { echo "sbench: no BW_PY at $BW_PY"; exit 3; }
 fi
@@ -304,7 +304,7 @@ PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
 [ "${SBENCH_TIMED:-}" = 1 ] && PRE+=(--timed)
 # SBENCH_MEM_GB=G: the host memory the lease reserves (gpu-lease --mem-gb), else gpu-lease's default
 [ -n "${SBENCH_MEM_GB:-}" ] && PRE+=(--mem-gb "$SBENCH_MEM_GB")
-gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/hash/dither/numabind.py" "$OUT/numa.json" \
+gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/kernels/numabind/numabind.py" "$OUT/numa.json" \
   bash -c '
   if [ "$KGATE" = 1 ]; then
     timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \

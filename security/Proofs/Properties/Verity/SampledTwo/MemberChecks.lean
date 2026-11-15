@@ -12,19 +12,19 @@ public import Proofs.Flock.SpotFlock.Code
 The two-stage form checks each sampled member's sessions with `Spot.OneStageZk.stepMember`: the member's statement
 (`Member.statement`: `statementOf` at the member's own inputs, then its population and block checks), then `step` on
 each session, which sets the session up at its record's sample (`setupAt`) and pushes `verdictOf`'s verdict. Where the
-statement's run accepts every session (`Run.all`), each session's statement, as `flock-verify verify --zk` reads it, is in
+statement's run accepts every session (`Run.all`), each session's statement, as `verity-verify-proof verify --zk` reads it, is in
 the scope the two-stage proof reads of it (`SpotFlock.sessionOk`): it sets up in Flock's masked scope (`zkOk`), passes
 the deployed scope check (`FlockDeploy.scopeCheck true`) and has hidden outputs (`hiddenOf`).
 
 The session's statement is any `FlockDeploy.Raw` whose fields are the member's (`MemberFields`: the statement
-`verity/flock-circuit`, the member's circuit and public files, the blobs' lookup tables, `--zk`, one table, the member's
+`verity/flock-circuit`, the member's circuit and public files, its own lookup tables, `--zk`, one table, the member's
 program, and no `--work`, `--stratified`, `--closure` or `--public-inputs`) and whose JSON files read back as the member's
 (`ReadsBack`: its partition object and its registered reads, each up to `PartSame`, and the record's sample). The
 statement the sessions' reading builds (the member's statement with each value printed by
 `Flock.RecordText.printT`) has these fields by definition.
 
 * `statement_ok` (the member's statement): `Member.statement` passing is `statementOf`'s statement at the member's
-  files and registered reads (`StepAt.ofOwn`).
+  files, its own lookup tables (`ownTables`) and its registered reads (`StepAt.ofOwn`).
 * `step_all`, `foldl_all`, `stepMember_sessions` (the accepted sessions): a run that accepts every session had each
   session's verdict `.ok`, at the record the blobs hold for it.
 * `ins_of_fields` (the statement's reading): `FlockDeploy.Raw.ins` of such a statement reads v2's inputs at the
@@ -64,19 +64,21 @@ private theorem statement_circuit :
 /-! ## The member's statement -/
 
 /-- **A member's statement, where it passes, is `statementOf`'s at the member's files**: the circuit and public files
-on the blobs, the member's registered reads, at the statement `verity/flock-circuit` (whose leaves are not plain), with
-the member's population check at its slice. -/
+on the blobs, the member's own lookup tables (`ownTables`), the member's registered reads, at the statement
+`verity/flock-circuit` (whose leaves are not plain), with the member's population check at its slice. -/
 theorem statement_ok {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : Core.Blobs}
     {a : _root_.Spot.OneStageZk.StepAt} (h : m.statement slice bs = .ok a) :
-    ∃ circuitB pubB rd, Flock.Tags.circuit.plainLeaves = false ∧
+    ∃ circuitB pubB rd tables, Flock.Tags.circuit.plainLeaves = false ∧
       bs.get m.own.circuit "circuit" = .ok circuitB ∧ bs.get m.own.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.readsOf m.own.registered = .ok rd ∧
-      a = _root_.Spot.OneStageZk.StepAt.ofOwn m.own Flock.Tags.circuit circuitB pubB bs rd
+      _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables ∧
+      a = _root_.Spot.OneStageZk.StepAt.ofOwn m.own Flock.Tags.circuit circuitB pubB tables rd
         (m.population slice pubB) := by
   unfold _root_.Spot.OneStageZk.Member.statement at h
   obtain ⟨a', ha', h⟩ := bind_ok h
   obtain ⟨⟨⟩, -, h⟩ := bind_ok h
   obtain rfl : a' = a := Except.ok.inj h
+  obtain ⟨tables, ht, ha'⟩ := bind_ok ha'
   unfold _root_.Spot.OneStageZk.statementOf at ha'
   obtain ⟨⟨⟩, -, h⟩ := bind_ok ha'
   split at h
@@ -93,7 +95,7 @@ theorem statement_ok {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : Co
   split at h
   · exact absurd h (throw_ne _ _)
   obtain ⟨rd, hrd, h⟩ := bind_ok h
-  exact ⟨circuitB, pubB, rd, hpl, hc, hp, hrd, (Except.ok.inj h).symm⟩
+  exact ⟨circuitB, pubB, rd, tables, hpl, hc, hp, hrd, ht, (Except.ok.inj h).symm⟩
 
 /-! ## The statement the run reads for a member -/
 
@@ -214,7 +216,7 @@ theorem step_all {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} 
     (ha : r'.all = true) :
     r.all = true ∧ ∃ b record, bs.get s.record s!"session {s.name}'s record" = .ok b ∧
       String.fromUTF8? b = some record ∧
-      _root_.Spot.OneStageZk.drawFitsWhy _root_.Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none ∧
+      _root_.Spot.OneStageZk.sampleFitsWhy _root_.Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none ∧
       _root_.Spot.OneStageZk.verdictOf I scope ksFiles population r.coinKeys record (Flock.Witness.recordDraw record)
         (_root_.Spot.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record))
         (_root_.Spot.OneStageZk.filesOf bs s (_root_.Spot.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record)))
@@ -232,12 +234,11 @@ theorem step_all {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} 
     · obtain rfl := Except.ok.inj h
       simp at ha
     · rename_i hv
-      split at h
-      · exact absurd h (throw_ne _ _)
+      split_ifs at h <;> try exact absurd h (throw_ne _ _)
       obtain ⟨units, -, h⟩ := bind_ok h
       obtain rfl := Except.ok.inj h
       refine ⟨ha, b, record, hb, hrec, ?_, hv⟩
-      cases hd : _root_.Spot.OneStageZk.drawFitsWhy _root_.Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) with
+      cases hd : _root_.Spot.OneStageZk.sampleFitsWhy _root_.Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) with
       | none => rfl
       | some what =>
         rw [hd] at hfit
@@ -285,31 +286,33 @@ theorem stepMember_sessions {slice : _root_.Spot.OneStageZk.Member → Json}
     {r r' : _root_.Spot.OneStageZk.Run} {sf : _root_.Spot.OneStageZk.StatementFiles}
     {m : _root_.Spot.OneStageZk.Member} (hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a)
     (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r') (ha : r'.all = true) :
-    ∃ circuitB pubB rd, Flock.Tags.circuit.plainLeaves = false ∧
+    ∃ circuitB pubB rd tables, Flock.Tags.circuit.plainLeaves = false ∧
       bs.get m.own.circuit "circuit" = .ok circuitB ∧ bs.get m.own.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.readsOf m.own.registered = .ok rd ∧
+      _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables ∧
       ∀ s ∈ sf.sessions.toList, SessionAccepted
-        (_root_.Spot.OneStageZk.StepAt.ofOwn m.own Flock.Tags.circuit circuitB pubB bs rd
+        (_root_.Spot.OneStageZk.StepAt.ofOwn m.own Flock.Tags.circuit circuitB pubB tables rd
           (m.population (slice m) pubB)) bs s := by
   unfold _root_.Spot.OneStageZk.stepMember at h
   have h := mapError_ok h
   unfold _root_.Spot.OneStageZk.runFrom at h
   obtain ⟨a, ha', h⟩ := bind_ok h
-  obtain ⟨circuitB, pubB, rd, hpl, hc, hp, hrd, rfl⟩ := statement_ok (hst a ha')
+  obtain ⟨circuitB, pubB, rd, tables, hpl, hc, hp, hrd, ht, rfl⟩ := statement_ok (hst a ha')
   rw [← Array.foldlM_toList] at h
-  exact ⟨circuitB, pubB, rd, hpl, hc, hp, hrd, (foldl_all _ r r' h ha).2⟩
+  exact ⟨circuitB, pubB, rd, tables, hpl, hc, hp, hrd, ht, (foldl_all _ r r' h ha).2⟩
 
-/-! ## The session's statement as `flock-verify` reads it -/
+/-! ## The session's statement as `verity-verify-proof` reads it -/
 
 /-- **A session statement's fields are a member's**: the statement `verity/flock-circuit` under `--zk` (no `--coins
-os`), the member's circuit and public files `circuitB` and `pubB`, the blobs' lookup tables, one table, the member's
-program, and no `--work`, `--work-table`, `--stratified`, `--closure` or `--public-inputs`. -/
+os`), the member's circuit and public files `circuitB` and `pubB`, the member's own lookup tables `tables`
+(`ownTables`), one table, the member's program, and no `--work`, `--work-table`, `--stratified`, `--closure` or
+`--public-inputs`. -/
 structure MemberFields (w : FlockDeploy.Raw) (m : _root_.Spot.OneStageZk.Member) (circuitB pubB : ByteArray)
-    (bs : Core.Blobs) : Prop where
+    (tables : List (String × ByteArray)) : Prop where
   statement : w.statement = _root_.Spot.OneStageZk.STATEMENT
   circuit : w.circuit = circuitB
   publicFile : w.publicFile = pubB
-  tables : w.tables = _root_.Spot.OneStageZk.tablesOf bs
+  tables : w.tables = tables
   zk : w.zk = true
   osCoins : w.osCoins = false
   count : w.count = 1
@@ -367,16 +370,17 @@ theorem registered_of_reads {o : Option ByteArray} {R j : Option Json}
       rw [hb]
       exact hj
 
-/-- **`flock-verify`'s reading of a member's session statement holds v2's inputs at the member's files**: where the
+/-- **`verity-verify-proof`'s reading of a member's session statement holds v2's inputs at the member's files**: where the
 statement's fields are the member's and its JSON files read back, `FlockDeploy.Raw.ins` reads it as `si`, which matches
-v2's inputs `inputsOf` at the member's files and its registered reads `rd` (`Record.SessionMatch`), with the record's
-sample. -/
+v2's inputs `inputsAt` at the member's files and own lookup tables and its registered reads `rd`
+(`Record.SessionMatch`), with the record's sample. -/
 theorem ins_of_fields {w : FlockDeploy.Raw} {m : _root_.Spot.OneStageZk.Member} {circuitB pubB : ByteArray}
-    {bs : Core.Blobs} {record : String} {rd : _root_.Spot.OneStageZk.Reads} (hf : MemberFields w m circuitB pubB bs)
+    {tables : List (String × ByteArray)} {record : String} {rd : _root_.Spot.OneStageZk.Reads}
+    (hf : MemberFields w m circuitB pubB tables)
     (hb : ReadsBack w m record) (hrd : _root_.Spot.OneStageZk.readsOf m.own.registered = .ok rd)
     (hpl : Flock.Tags.circuit.plainLeaves = false) :
     ∃ si, w.ins = .ok si ∧
-      SessionMatch si (_root_.Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB bs) rd ∧
+      SessionMatch si (_root_.Spot.OneStageZk.inputsAt Flock.Tags.circuit m.own circuitB pubB tables) rd ∧
       si.read.draw = Flock.Witness.recordDraw record := by
   obtain ⟨D, hD, hDn⟩ := hb.draw
   obtain ⟨P, hP, hPs⟩ := hb.partition
@@ -426,14 +430,16 @@ theorem memberSession_checks (hst : ∀ a, st m = .ok a → m.statement (slice m
     (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r') (ha : r'.all = true) {s : _root_.Spot.OneStageZk.RunFiles} (hs : s ∈ sf.sessions.toList)
     {circuitB pubB b : ByteArray} {record : String}
     (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
+    {tables : List (String × ByteArray)} (ht : _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables)
     (hb : bs.get s.record s!"session {s.name}'s record" = .ok b) (hu : String.fromUTF8? b = some record)
-    {w : FlockDeploy.Raw} (hf : MemberFields w m circuitB pubB bs) (hr : ReadsBack w m record)
+    {w : FlockDeploy.Raw} (hf : MemberFields w m circuitB pubB tables) (hr : ReadsBack w m record)
     (hdec : FlockDeploy.decode w.encode = some w) :
     _root_.SpotFlock.zkOk w.encode = true ∧ FlockDeploy.scopeCheck true w.encode = true ∧
       _root_.SpotFlock.hiddenOf w.encode = true := by
-  obtain ⟨circuitB', pubB', rd, hpl, hc', hp', hrd, hall⟩ := stepMember_sessions hst h ha
+  obtain ⟨circuitB', pubB', rd, tables', hpl, hc', hp', hrd, ht', hall⟩ := stepMember_sessions hst h ha
   obtain rfl : circuitB' = circuitB := Except.ok.inj (hc'.symm.trans hc)
   obtain rfl : pubB' = pubB := Except.ok.inj (hp'.symm.trans hp)
+  obtain rfl : tables' = tables := Except.ok.inj (ht'.symm.trans ht)
   obtain ⟨coinKeys, b', record', hb', hu', hv⟩ := hall s hs
   obtain rfl : b' = b := Except.ok.inj (hb'.symm.trans hb)
   obtain rfl : record' = record := Option.some.inj (hu'.symm.trans hu)
@@ -446,7 +452,7 @@ theorem memberSession_checks (hst : ∀ a, st m = .ok a → m.statement (slice m
   obtain ⟨_, -, hv⟩ := bind_ok hv
   obtain ⟨⟨⟩, hsc, hv⟩ := bind_ok hv
   obtain ⟨⟨⟩, hsz, -⟩ := bind_ok hv
-  unfold _root_.Spot.OneStageZk.scopeOf at hsc
+  unfold _root_.Spot.OneStageZk.scopeAt at hsc
   try dsimp only at hsc
   obtain ⟨⟨⟩, hsc, -⟩ := bind_ok hsc
   obtain ⟨si, hins, hm, hdraw⟩ := ins_of_fields hf hr hrd hpl
@@ -517,12 +523,13 @@ theorem memberSession_ok (H : _root_.SpotFlock.Held) (t : ℕ)
     (ha : r'.all = true) {s : _root_.Spot.OneStageZk.RunFiles} (hs : s ∈ sf.sessions.toList)
     {circuitB pubB b : ByteArray} {record : String}
     (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
+    {tables : List (String × ByteArray)} (ht : _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables)
     (hb : bs.get s.record s!"session {s.name}'s record" = .ok b) (hu : String.fromUTF8? b = some record)
-    {w : FlockDeploy.Raw} (hf : MemberFields w m circuitB pubB bs) (hr : ReadsBack w m record)
+    {w : FlockDeploy.Raw} (hf : MemberFields w m circuitB pubB tables) (hr : ReadsBack w m record)
     (hdec : FlockDeploy.decode w.encode = some w)
     (hshape : _root_.SpotFlock.shapeOf w.encode = _root_.SpotFlock.shapeOf (H.xS₀ t)) :
     _root_.SpotFlock.sessionOk H t w.encode = true := by
-  obtain ⟨h1, h2, h3⟩ := memberSession_checks hst h ha hs hc hp hb hu hf hr hdec
+  obtain ⟨h1, h2, h3⟩ := memberSession_checks hst h ha hs hc hp ht hb hu hf hr hdec
   unfold _root_.SpotFlock.sessionOk
   simp [h1, h2, h3, hshape]
 

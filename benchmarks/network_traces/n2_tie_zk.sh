@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The ingress tie in zero knowledge (n2_tie_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
-# Flock's flock-circuit and the Lean verity-verify-proof) with the ZK server's Lean frame and the sampled-proofs verifier
+# Flock's flock-circuit and the Lean verity-verify-proof) with the ZK server's Lean frame and the SPOT verifier
 # built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in one of the network slots, as a job of at most 180
 # minutes:
 #   env N2_MEM_GB=56 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py \
@@ -38,12 +38,12 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-  > "$OUT/build-firewall.log" 2>&1
-[ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "n2tie: no firewall frame"; exit 7; }
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+  > "$OUT/build-zk-server.log" 2>&1
+[ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "n2tie: no ZK server frame"; exit 7; }
 
 log "n2tie: proving${N2_DRY:+, dry}"
 GPU_ARG= SMI=
@@ -54,7 +54,7 @@ if [ "${N2_GPU:-0}" = 1 ]; then
     > "$OUT/gpu-samples.csv" 2>&1 &
   SMI=$!
 fi
-"$PY" benchmarks/network_traces/n2_tie_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/n2tie" \
+"$PY" benchmarks/network_traces/zk_drivers.py n2_tie_zk prove --bin "$BIN" --lean "$LEAN" --out "$W/n2tie" \
   --class "${N2_CLASS:-test}" $GPU_ARG \
   ${N2_WARDEN_RUN:+--warden-run "$N2_WARDEN_RUN"} ${N2_WINDOWS:+--windows "$N2_WINDOWS"} \
   ${N2_PORT:+--port "$N2_PORT"} ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 \

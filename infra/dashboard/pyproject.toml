@@ -5,12 +5,10 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# the runner writes through the harness kit's writer, whose settings.py is built on verity_config's registry
+# the runner writes its result with the platform's own helper and reads the run's variables from the shared settings
 inputs = [
     "tools/config/verity_config",
     "verity/__init__.py",
-    "tools/config/verity_config/verity_settings.py",
-    "benchmarks/harness/verity_bench/__init__.py",
-    "benchmarks/harness/verity_bench/kit.py",
-    "benchmarks/harness/verity_bench/settings.py",
+    "tools/research/src/research/__init__.py",
+    "tools/research/src/research/result.py",
 ]

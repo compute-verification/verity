@@ -14,8 +14,9 @@ roots (`row_table.step_tree`): the row's digests with the GPU's one SHA-512 (`ve
 the hm96 leaf and the frame's leaf, pad and node with the GPU's one row commitment (`verity.commitments.cuda.ROW_COMMIT`).  The host
 computes the domain ids, the rows' rank order and the tables' layout (`plan`).  `host_step` runs the same functions on the CPU
 (`row_table_host.cpp`, built with the system C++ compiler), the twin the CPU tests hold to `row_tables.step_roots` on machines
-without a GPU.  The kernels' builds, libraries and device streams are PoUW's
-(`verity.protocols.accounting.pouw.prover.serving.row_table_kernels`), which this module re-exports.
+without a GPU.  The kernels' builds, libraries and device streams are PoUW's, which this module takes from
+`verity.protocols.accounting.pouw.prover.serving`'s exports (`row_table_host_lib`, `hm_tables`, ...) and
+`verity_torch.pouw`'s (`RowTableLibrary`).
 """
 from __future__ import annotations
 
@@ -32,15 +33,29 @@ from verity.commitments import row_table as RT
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
-from verity.protocols.accounting.pouw.prover.serving.row_table_kernels import (CFLAGS, CUDA_DIR, DEVICE_SOURCES, HOST_SOURCES,
-    NVCC_FLAGS, SEG_BYTES, SHARED, TAB_WORDS, Args, DeviceLibrary, _hm, _prefixes, _width, _words, built, device_lib,
-    host_lib, nvcc, side_stream)
+from verity.protocols.accounting.pouw.prover.serving import (
+    ROW_TABLE_SEG_BYTES as SEG_BYTES,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
+    ROW_TABLE_TAB_WORDS as TAB_WORDS,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
+    RowTableArgs as Args,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
+    hm_tables,
+    leaf_prefixes,
+    table_width,
+    u64_words,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
+    row_table_host_lib as host_lib,
+)
+from verity_torch.pouw import RowTableLibrary as DeviceLibrary
 
 from . import row_tables as RTB
 
-__all__ = ["CFLAGS", "CUDA_DIR", "DEVICE_SOURCES", "HOST_SOURCES", "NVCC_FLAGS", "SEG_BYTES", "SHARED", "TAB_WORDS", "Args",
-           "DeviceLibrary", "Pending", "Plan", "built", "device_lib", "host_lib", "host_step", "nvcc", "plan", "record_ready",
-           "side_stream", "step_roots", "table_domain_id"]
+__all__ = ["Pending", "Plan", "host_step", "plan", "record_ready", "step_roots", "table_domain_id"]
 
 
 # --- the host's part: domains, rank order, layout ---------------------------------------------------------------------------
@@ -82,7 +97,7 @@ class Plan:
     @property
     def step_scratch(self) -> int:
         """Nodes of the step tree's scratch: its leaves, then its levels."""
-        return len(self.order) + _width(len(self.order))
+        return len(self.order) + table_width(len(self.order))
 
 
 def plan(context: bytes, engine_step: int, shapes: Mapping[str, tuple[Sequence[tuple[str, int]], int, int]], key: bytes) -> Plan:
@@ -106,16 +121,16 @@ def plan(context: bytes, engine_step: int, shapes: Mapping[str, tuple[Sequence[t
                 raise ValueError(f"{op}: a (request, token row) twice in one step")
             ranked[id(ids)] = sorted(range(b), key=keys.__getitem__)
         perms.append(ranked[id(ids)])
-        s, w = -(-(k + 4) // SEG_BYTES), _width(b)
+        s, w = -(-(k + 4) // SEG_BYTES), table_width(b)
         layout.append((0, 0, k | b << 32, row0 | s << 32, seg0, w | tree0 << 32))
         dids.append(table_domain_id(context, engine_step, i, b))
         row0, seg0, tree0 = row0 + b, seg0 + b * s, tree0 + w
-    tabs = np.concatenate([np.asarray(layout, dtype=np.uint64), _words(b"".join(dids)).reshape(-1, 8)], axis=1)
+    tabs = np.concatenate([np.asarray(layout, dtype=np.uint64), u64_words(b"".join(dids)).reshape(-1, 8)], axis=1)
     args = Args()
     args.key[:] = np.frombuffer(key, dtype="<u4").tolist()
     args.nonce[:] = np.frombuffer(engine_step.to_bytes(12, "little"), dtype="<u4").tolist()
     args.T = len(order)
-    args.did[:] = _words(RT.step_domain(context, engine_step, len(order)).domain_id).tolist()
+    args.did[:] = u64_words(RT.step_domain(context, engine_step, len(order)).domain_id).tolist()
     return Plan(engine_step, order, tabs, np.asarray([p for q in perms for p in q], dtype=np.uint32), seg0, row0, tree0, args)
 
 
@@ -136,7 +151,7 @@ def host_step(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequ
     for i, op in enumerate(p.order):
         p.tabs[i, 0], p.tabs[i, 1] = held[op][0].ctypes.data, held[op][1].ctypes.data
     out = np.zeros(8 * (len(p.order) + 1), dtype=np.uint64)
-    rc = host_lib().rt_step_host(p.tabs, p.perm, p.S, p.N, _hm(), _prefixes(), ctypes.byref(p.args), out)
+    rc = host_lib().rt_step_host(p.tabs, p.perm, p.S, p.N, hm_tables(), leaf_prefixes(), ctypes.byref(p.args), out)
     if rc:
         raise ValueError(f"rt_step_host refused the step's layout ({rc})")
     return _roots(p, out)

@@ -67,7 +67,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   (`core_check.work_units`), over the window's own units. The window's layout is its Program's,
   ``h1window.program(linears, calls, m, tile)``, and its units are in that Program's order: call by call, each call's
   tiles row block major. There is one stratum per template, that is per K (`strata`), each unit's work its tile's
-  R·C·K served MACs, at the K its period's open committed (`law`). The served window's arguments are fixed (`window`):
+  R·C·K served MACs, at the K its period's open committed (`sampling_design`). The served window's arguments are fixed (`window`):
   the stream is the window's root, the registration its sample root, and the receipt ``{"receipts": …}``, its last
   round's receipts.
 * **The layout is the committed circuit's** (`layout_of`): `window` reads it from the descriptor whose SHA-512 the
@@ -297,7 +297,7 @@ PERIOD_PIN_FIELD = "pinned"
 #: pin, never from main's head, so main moving on never refuses a window fresh at its open). Optional,
 #: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
-#: the period-open's field holding the rows of record's fixed length: ``{max_tokens, stop}``,
+#: the period-open's field holding the workloads of record's fixed length: ``{max_tokens, stop}``,
 #: each request's public max_tokens in admission order and the stop mode `window.STOP_FIXED` (ignore_eos, circuits'
 #: ``public-cap`` done source), signed before any window, so it is the verifier's own and never the prover's
 LENGTH_FIELD = "length"
@@ -1240,7 +1240,7 @@ def ok_table(program: str, value: str, window: str, population: int) -> tuple[li
     return rows, salts, G.Registered.commit(program, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
-def law(ss: list[dict], k: Any) -> tuple[str, str] | None:
+def sampling_design(ss: list[dict], k: Any) -> tuple[str, str] | None:
     """`ss` (`strata`'s) under the work sampling design ``work:k`` at the committed K `k`: each stratum's k_s (`core_check.work_k`,
     over the population's work W = Σ w_s·n_s), set in place; else the refusal (``budget``): `k` isn't a positive integer
     at most `MAX_K`, or the window has fewer than K units, so its sample would not be K's."""
@@ -1321,7 +1321,7 @@ def _drawn(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[d
     if not (type(stream) is str and _digest(registration) is not None and isinstance(receipt, dict)
             and all(_printable(x) and _printable(v) for x, v in receipt.items())):
         return None, ("draw", DRAW_ARGS)
-    why = law(ss, k)
+    why = sampling_design(ss, k)
     if why is not None:
         return None, why
     got = CC.work_units(coin, stream, registration, receipt, ss)
@@ -1384,7 +1384,7 @@ def _proved(drawn: list[int], proofs: Any) -> tuple[str, str] | None:
 def drawn_twin(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
                ) -> tuple[list[int] | None, tuple[str, str] | None]:
     """The units the sampling coin `coin` (its value, a SHA-512 digest in hex) samples from the window `layout` (`strata`)
-    under `law` at the committed K `k`, ascending (`core_check.work_units` under the stream's digest `stream`, the
+    under `sampling_design` at the committed K `k`, ascending (`core_check.work_units` under the stream's digest `stream`, the
     registration `registration` and its `receipt`), and None; or None and the refusal (``layout``, ``draw``,
     ``budget`` or ``sampler``, and why)."""
     ss, why = strata(layout)
@@ -1398,7 +1398,7 @@ def drawn_twin(coin: Any, stream: Any, registration: Any, receipt: Any, layout: 
 
 def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
           ) -> tuple[list[int] | None, tuple[str, str] | None]:
-    """The sampled units of record and None, or None and the refusal: the Lean `Credit.drawn`'s (`verifier.of_record` on
+    """The sampled proof blocks of record and None, or None and the refusal: the Lean `Credit.drawn`'s (`verifier.of_record` on
     ``drawn``), with `drawn_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
     got, why = drawn_twin(coin, stream, registration, receipt, layout, k)
     said = V.of_record("drawn", {"coin": coin, "stream": stream, "registration": registration, "receipt": receipt,
@@ -3651,7 +3651,7 @@ __all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "CO
            "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PASS_REFUSED", "PEARL_C_FORM", "PEARL_C_KEYS", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
            "SALT_ONLY", "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
-           "credited_work", "domain_of", "draw_root", "drawn", "drawn_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "law", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
+           "credited_work", "domain_of", "draw_root", "drawn", "drawn_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "sampling_design", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
            "merkle_depth", "partition_of", "passes_distinct", "passes_distinct_twin", "pearl_c_period_credit",
            "pearl_c_period_credit_twin", "period", "period_twin", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",

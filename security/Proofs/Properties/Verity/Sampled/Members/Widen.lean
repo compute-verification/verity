@@ -11,9 +11,9 @@ samples the period's other coins beside the sample's (`Verity.Sampled.Widening`)
 (`Verity.Sampled.Live.extend`). The sample reads only the window's bytes, so the widened audit is the registered one in
 everything its bound reads:
 
-* `JointAuditV5.extend`: the audit with its sample's coins widened by the coins `S`; its members, law, strata and
+* `JointAuditV5.extend`: the audit with its sample's coins widened by the coins `S`; its members, sampling design, strata and
   layout are the registered audit's (`Laid.extend`);
-* `extend_draw`, `extend_design_draw`: the widened audit samples, and each member's part is, what the registered audit
+* `extend_sample`, `extend_design_sample`: the widened audit samples, and each member's part is, what the registered audit
   does at the sample's own coins;
 * `uniform_extend`: A3 at the window's bytes is A3 at the widened audit's (`Verity.Sampled.uniform_fst`);
 * `avg_extend_design`, `epsKs_extend`, `link_extend`, `eps_extend`, `pa_extend`: a mean over a member's widened design
@@ -49,15 +49,15 @@ noncomputable def extend (S : Verity.Sampled.Widening) : JointAuditV5 where
     exact h
 
 /-- The widened audit samples what the registered audit does at the sample's own coins. By `dsimp`, not `rfl`:
-elaborating the two samples as definitionally equal reduces their `match` and evaluates `drawUnits`. -/
-theorem extend_draw (S : Verity.Sampled.Widening) (ω : (w.extend S).L.Ω) :
+elaborating the two samples as definitionally equal reduces their `match` and evaluates `sampleUnits`. -/
+theorem extend_sample (S : Verity.Sampled.Widening) (ω : (w.extend S).L.Ω) :
     (w.extend S).L.draw ω = w.L.draw ω.1 := by
   dsimp only [JointAuditV5.L, Bridge.execSel, JointAuditV5.extend]
 
 /-- Member `k`'s part of the widened audit's sample is its part of the registered audit's at the sample's own coins. -/
-theorem extend_design_draw (S : Verity.Sampled.Widening) (k : Fin w.ms.length) (ω : (w.extend S).L.Ω) :
+theorem extend_design_sample (S : Verity.Sampled.Widening) (k : Fin w.ms.length) (ω : (w.extend S).L.Ω) :
     ((w.extend S).design k).draw ω = (w.design k).draw ω.1 :=
-  congrArg (w.ms.get k).part (w.extend_draw S ω)
+  congrArg (w.ms.get k).part (w.extend_sample S ω)
 
 /-- **A3 at the widened audit's bytes** is A3 at the window's. -/
 theorem uniform_extend (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (S : Verity.Sampled.Widening) :
@@ -74,7 +74,7 @@ theorem avg_extend_design (S : Verity.Sampled.Widening) (k : Fin w.ms.length)
     (G : Finset (Fin (w.ms.get k).n) → ℝ≥0∞) :
     avg (fun x : ((w.extend S).design k).Ω => G (((w.extend S).design k).draw x)) =
       avg (fun ω : (w.design k).Ω => G ((w.design k).draw ω)) :=
-  (congrArg avg (funext fun x => congrArg G (w.extend_design_draw S k x))).trans
+  (congrArg avg (funext fun x => congrArg G (w.extend_design_sample S k x))).trans
     ((avg_congr_fintype _ _ _).trans (avg_fst (B := S.T) fun ω => G ((w.design k).draw ω)))
 
 /-- **Member `k`'s `ε_ks` at the widened audit is the registered audit's.** -/
@@ -99,15 +99,15 @@ theorem readShare_extend (S : Verity.Sampled.Widening) (k : Fin w.ms.length) (p 
       ΩcZ execArith (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
         (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.design k) p × S.T :=
     (Equiv.subtypeEquivRight fun x : w.Ω × S.T => by
-      show ReadsDrawZ (L := (w.extend S).design k) execArith (w.ms.get k).P
+      show ReadsSampleZ (L := (w.extend S).design k) execArith (w.ms.get k).P
           (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb p
           x ↔
-        ReadsDrawZ (L := w.design k) execArith (w.ms.get k).P
+        ReadsSampleZ (L := w.design k) execArith (w.ms.get k).P
           (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb p
           x.1
-      unfold ReadsDrawZ
-      rw [w.extend_design_draw S k x]).trans
-      (Equiv.prodSubtypeFstEquivSubtypeProd (p := fun ω : w.L.Ω => ReadsDrawZ (L := w.design k) execArith
+      unfold ReadsSampleZ
+      rw [w.extend_design_sample S k x]).trans
+      (Equiv.prodSubtypeFstEquivSubtypeProd (p := fun ω : w.L.Ω => ReadsSampleZ (L := w.design k) execArith
         (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀)
         (w.ms.get k).vb p ω))
   have hΩ : Fintype.card ((w.extend S).design k).Ω = Fintype.card (w.design k).Ω * Fintype.card S.T :=
@@ -139,7 +139,7 @@ session played alone at `τ`. -/
 theorem sampled_extend (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (S : Verity.Sampled.Widening)
     [Nonempty (w.extend S).EndΩ] (τ : Strategy (w.extend S).game)
     (hCR : ∀ k ω j, Assumptions.TableCRZAt execArith hs512
-      (planZHJP ((w.extend S).ms.get k).dj ((w.extend S).ms.get k).y₀ (((w.extend S).memberLaw τ k).draw ω)
+      (planZHJP ((w.extend S).ms.get k).dj ((w.extend S).ms.get k).y₀ (((w.extend S).memberSamplingDesign τ k).draw ω)
         (reg ((w.extend S).memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP ((w.extend S).ms.get k).dj ((w.extend S).ms.get k).y₀)
         (cont ((w.extend S).memberSim τ k) ω))
@@ -150,7 +150,7 @@ theorem sampled_extend (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (S : Ve
       (reg ((w.extend S).memberSim τ k)) (cont ((w.extend S).memberSim τ k))
       ((w.extend S).ms.get k).k ((w.extend S).ms.get k).Rw ((w.extend S).ms.get k).M ((w.extend S).ms.get k).t')
     (W : Finset (Fin w.nJ)) :
-    prob (fun o => (w.extend S).Accepts o ∧ W ⊆ (w.extend S).wrongSet τ) (w.extend S).game τ ≤
+    prob (fun o => (w.extend S).Accepts o ∧ W ⊆ (w.extend S).incorrectSet τ) (w.extend S).game τ ≤
       ENNReal.ofReal (w.pa W) + w.eps :=
   (Flock.SecurityProofs.JointSampledV5 (w.extend S) (w.uniform_extend hA3 S) τ (fun _ => hCR) (fun _ => hA2)
     W).trans_eq

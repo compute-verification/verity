@@ -47,7 +47,7 @@ The exfiltration bound at the footprint: on fixed inputs, the boundary traces `R
 * `eq_of_mem_of_nodup`, `gateBlock`, `glue`, `glue_correct_iff`: **one trace at interiors `ι`**. Replay blocks are
   disjoint, so each gate's values at interiors are those of the one replay block that holds it (`glue`), and a proof block
   of a cell is correct on it exactly when it is on its replay block's values (`Prog.refIn`). Its incorrect proof blocks
-  (`wrongOf`) have the footprint's counts (`counts_wrongOf`), so they are admissible when the footprint is in `M̄_δ`.
+  (`incorrectOf`) have the footprint's counts (`counts_incorrectOf`), so they are admissible when the footprint is in `M̄_δ`.
 * `boundary_eq`, `outs_eq`: **the determinism lemma**, by induction along the topological order: two traces that make
   every proof block outside `T` correct and agree at the inputs and at `T`'s committed values (`exits`) agree at every
   committed value, so at every returned gate.
@@ -175,7 +175,7 @@ theorem glue_correct_iff {C : Prog} {Pt Pρ : Partition} (hP : Pt.Partitions C) 
 
 open Classical in
 /-- **The incorrect proof blocks of a trace** `X`: those it doesn't make correct. -/
-noncomputable def wrongOf (C : Prog) (Pt : Partition) (X : ℕ → Option Bool) : Finset ℕ :=
+noncomputable def incorrectOf (C : Prog) (Pt : Partition) (X : ℕ → Option Bool) : Finset ℕ :=
   (range Pt.blocks.length).filter fun v => ¬ C.Correct X (Pt.blocks.getD v [])
 
 /-- A cell's proof block lies within its replay block. -/
@@ -194,12 +194,12 @@ theorem cell_blocks {Pt Pρ : Partition} {ρ t v : ℕ} (h : v ∈ cell Pt Pρ �
       exact ⟨u, r, rfl, rfl, fun g hg => by simpa using hp g hg⟩
 
 /-- **The incorrect proof blocks at interiors `ι` are the footprint's, cell by cell.** -/
-theorem inter_cell_wrongOf (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement} {Pt Pρ : Partition}
+theorem inter_cell_incorrectOf (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement} {Pt Pρ : Partition}
     (hP : Pt.Partitions s.prog) (hn : Pρ.gates.Nodup) (w : Wit) (ι : ℕ → ℕ → Bool) (ρ t : ℕ) :
-    wrongOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) ∩ cell Pt Pρ ρ t = wrongIn H Cm s Pt Pρ w ρ t (ι ρ) := by
+    incorrectOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) ∩ cell Pt Pρ ρ t = incorrectIn H Cm s Pt Pρ w ρ t (ι ρ) := by
   classical
   ext v
-  unfold wrongOf wrongIn
+  unfold incorrectOf incorrectIn
   simp only [mem_inter, mem_filter]
   constructor
   · rintro ⟨⟨_, hnc⟩, hc⟩
@@ -215,23 +215,23 @@ theorem inter_cell_wrongOf (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : A
     rw [getD_of_getElem? hu] at hcor
     exact ⟨u, r, hu, hr, (glue_correct_iff hP hn hu hr hur).1 hcor⟩
 
-theorem counts_wrongOf (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement} {Pt Pρ : Partition}
+theorem counts_incorrectOf (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement} {Pt Pρ : Partition}
     (hP : Pt.Partitions s.prog) (hn : Pρ.gates.Nodup) (w : Wit) (ι : ℕ → ℕ → Bool) :
-    counts Pt Pρ (wrongOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι)) = footprint H Cm s Pt Pρ w ι := by
+    counts Pt Pρ (incorrectOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι)) = footprint H Cm s Pt Pρ w ι := by
   funext ρ t
-  exact congrArg card (inter_cell_wrongOf H Cm hP hn w ι ρ t)
+  exact congrArg card (inter_cell_incorrectOf H Cm hP hn w ι ρ t)
 
 /-- **The incorrect set at interiors whose footprint is in `M̄_δ` is admissible.** -/
-theorem wrongOf_mem_admissible (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement} {Pt : Partition}
+theorem incorrectOf_mem_admissible (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement} {Pt : Partition}
     {d : Design.Two} (hP : Pt.Partitions s.prog) (hn : d.part.gates.Nodup) {w : Wit} {ι : ℕ → ℕ → Bool} {δ : ℝ}
     (hM : footprint H Cm s Pt d.part w ι ∈ d.M Pt δ) :
-    wrongOf s.prog Pt (glue s.prog d.part (w.val H Cm s) ι) ∈ admissibleTwo Pt d δ := by
+    incorrectOf s.prog Pt (glue s.prog d.part (w.val H Cm s) ι) ∈ admissibleTwo Pt d δ := by
   classical
   unfold admissibleTwo
   refine mem_filter.2 ⟨mem_powerset.2 fun v hv => ?_, ?_⟩
-  · unfold wrongOf at hv
+  · unfold incorrectOf at hv
     exact (mem_filter.1 hv).1
-  · rw [counts_wrongOf H Cm hP hn w ι]
+  · rw [counts_incorrectOf H Cm hP hn w ι]
     exact hM
 
 /-! ## The determinism lemma -/
@@ -307,7 +307,7 @@ open Classical in
 noncomputable def servedAt (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
     (a : ℕ → Option Bool) (T : Finset ℕ) : Finset (Fin s.prog.outs.length → Bool) :=
   univ.filter fun y => ∃ (w : Wit) (ι : ℕ → ℕ → Bool), inputsOf H Cm s w = a ∧
-    wrongOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) = T ∧ served H Cm s w = y
+    incorrectOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) = T ∧ served H Cm s w = y
 
 /-- **`T`'s exits**: the committed values of its proof blocks. -/
 def exits (C : Prog) (Pt : Partition) (T : Finset ℕ) : Finset ℕ :=
@@ -321,19 +321,19 @@ theorem card_exits_le (s : AuditStatement) (Pt : Partition) (T : Finset ℕ) :
 the same outputs. -/
 theorem served_eq_of (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement} {Pt Pρ : Partition}
     (hC : s.prog.Topological) (hP : Pt.Partitions s.prog) {w w' : Wit} {ι ι' : ℕ → ℕ → Bool} {T : Finset ℕ}
-    (hw : wrongOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) = T)
-    (hw' : wrongOf s.prog Pt (glue s.prog Pρ (w'.val H Cm s) ι') = T)
+    (hw : incorrectOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) = T)
+    (hw' : incorrectOf s.prog Pt (glue s.prog Pρ (w'.val H Cm s) ι') = T)
     (ha : inputsOf H Cm s w = inputsOf H Cm s w')
     (hT : ∀ g ∈ exits s.prog Pt T,
       (glue s.prog Pρ (w.val H Cm s) ι g).getD false = (glue s.prog Pρ (w'.val H Cm s) ι' g).getD false) :
     served H Cm s w = served H Cm s w' := by
   classical
-  have hcor : ∀ Z : ℕ → Option Bool, wrongOf s.prog Pt Z = T →
+  have hcor : ∀ Z : ℕ → Option Bool, incorrectOf s.prog Pt Z = T →
       ∀ v < Pt.blocks.length, v ∉ T → s.prog.Correct Z (Pt.blocks.getD v []) := by
     intro Z hZ v hv hvT
     by_contra hc
     refine hvT (hZ ▸ ?_)
-    unfold wrongOf
+    unfold incorrectOf
     exact mem_filter.2 ⟨mem_range.2 hv, hc⟩
   have hin : ∀ g, s.prog.gates[g]? = some .input →
       glue s.prog Pρ (w.val H Cm s) ι g = glue s.prog Pρ (w'.val H Cm s) ι' g := by
@@ -361,11 +361,11 @@ theorem card_servedAt_le (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : Aud
     (servedAt H Cm s Pt Pρ a T).card ≤ 2 ^ (exits s.prog Pt T).card := by
   classical
   have hspec : ∀ y ∈ servedAt H Cm s Pt Pρ a T, ∃ (w : Wit) (ι : ℕ → ℕ → Bool), inputsOf H Cm s w = a ∧
-      wrongOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) = T ∧ served H Cm s w = y :=
+      incorrectOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) = T ∧ served H Cm s w = y :=
     fun y hy => (mem_filter.1 hy).2
   let f : (Fin s.prog.outs.length → Bool) → (exits s.prog Pt T → Bool) := fun y =>
     if h : ∃ (w : Wit) (ι : ℕ → ℕ → Bool), inputsOf H Cm s w = a ∧
-        wrongOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) = T ∧ served H Cm s w = y then
+        incorrectOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) = T ∧ served H Cm s w = y then
       fun g => (glue s.prog Pρ ((Classical.choose h).val H Cm s) (Classical.choose (Classical.choose_spec h)) g).getD false
     else fun _ => false
   calc (servedAt H Cm s Pt Pρ a T).card ≤ (univ : Finset (exits s.prog Pt T → Bool)).card := by
@@ -390,7 +390,7 @@ theorem card_influenceTwo_le (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s :
     intro y hy
     unfold influenceTwo at hy
     obtain ⟨w, ha, ⟨ι, hM⟩, hwy⟩ := (mem_filter.1 hy).2
-    refine mem_biUnion.2 ⟨_, wrongOf_mem_admissible H Cm hs.2.1 hs.2.2.1 hM, ?_⟩
+    refine mem_biUnion.2 ⟨_, incorrectOf_mem_admissible H Cm hs.2.1 hs.2.2.1 hM, ?_⟩
     unfold servedAt
     exact mem_filter.2 ⟨mem_univ _, w, ι, ha, rfl, hwy⟩
   calc (influenceTwo H Cm s Pt d δ a).card ≤ ∑ T ∈ admissibleTwo Pt d δ, (servedAt H Cm s Pt d.part a T).card :=
@@ -493,7 +493,7 @@ theorem footprint_congr (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : Audi
     footprint H Cm s Pt Pρ w ι = footprint H Cm s Pt Pρ w' ι := by
   classical
   funext ρ t
-  unfold footprint wrongIn
+  unfold footprint incorrectIn
   refine congrArg card (filter_congr fun v hv => not_congr ?_)
   obtain ⟨u, r, hu, hr, hur⟩ := cell_blocks hv
   have hin : ∀ g ∈ r, s.prog.refIn r (w.val H Cm s) (ι ρ) g = s.prog.refIn r (w'.val H Cm s) (ι ρ) g :=

@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.log import write
 
 NAME = "verity_router_tap"
 TAP_VERSION = 1
@@ -52,50 +53,50 @@ EDITS: tuple[tuple[str, str, str], ...] = (
     ("          typename InputType = float, ScoringFunc SF>", "replace",
      "          typename InputType = float, ScoringFunc SF, bool Tap = false>"),
     ("        const float* bias, const double routed_scaling_factor, const bool* is_padding)", "replace",
-     "        const float* bias, const double routed_scaling_factor, const bool* is_padding,\n"
-     "        float* __restrict__ tap_out = nullptr, const int tap_stride = 0)"),
+     ("        const float* bias, const double routed_scaling_factor, const bool* is_padding,\n"
+      "        float* __restrict__ tap_out = nullptr, const int tap_stride = 0)")),
     ("      // From this point, thread max in all the threads have the max within the row.", "before",
-     "      if constexpr (Tap) {\n"
-     "        if (thread_group_idx == 0) {\n"
-     f"          tap_out[{ROW}] = thread_max;\n"
-     "        }\n"
-     "      }"),
+     ("      if constexpr (Tap) {\n"
+      "        if (thread_group_idx == 0) {\n"
+      f"          tap_out[{ROW}] = thread_max;\n"
+      "        }\n"
+      "      }")),
     ("// Now, we perform the sum reduce within each thread group. Similar to the max reduce, we use a bufferfly pattern.", "before",
-     "      if constexpr (Tap) {\n"
-     "#pragma unroll\n"
-     "        for (int ldg = 0; ldg < LDG_PER_THREAD; ++ldg) {\n"
-     "#pragma unroll\n"
-     "          for (int ii = 0; ii < ELTS_PER_LDG; ++ii) {\n"
-     f"            tap_out[{ROW} + 1 + first_elt_read_by_thread + ldg * ELTS_PER_LDG * THREADS_PER_ROW + ii] =\n"
-     "                row_chunk[ldg * ELTS_PER_LDG + ii];\n"
-     "          }\n"
-     "        }\n"
-     "      }"),
+     ("      if constexpr (Tap) {\n"
+      "#pragma unroll\n"
+      "        for (int ldg = 0; ldg < LDG_PER_THREAD; ++ldg) {\n"
+      "#pragma unroll\n"
+      "          for (int ii = 0; ii < ELTS_PER_LDG; ++ii) {\n"
+      f"            tap_out[{ROW} + 1 + first_elt_read_by_thread + ldg * ELTS_PER_LDG * THREADS_PER_ROW + ii] =\n"
+      "                row_chunk[ldg * ELTS_PER_LDG + ii];\n"
+      "          }\n"
+      "        }\n"
+      "      }")),
     ("      const float reciprocal_row_sum = 1.f / row_sum;", "after",
-     "      if constexpr (Tap) {\n"
-     "        if (thread_group_idx == 0) {\n"
-     f"          tap_out[{ROW} + 1 + NUM_EXPERTS] = reciprocal_row_sum;\n"
-     "        }\n"
-     "      }"),
+     ("      if constexpr (Tap) {\n"
+      "        if (thread_group_idx == 0) {\n"
+      f"          tap_out[{ROW} + 1 + NUM_EXPERTS] = reciprocal_row_sum;\n"
+      "        }\n"
+      "      }")),
     ("    static constexpr int COLS_PER_GROUP_LDG = ELTS_PER_LDG * THREADS_PER_ROW;", "before",
-     "    if constexpr (Tap && SF == SCORING_SOFTMAX) {\n"
-     "#pragma unroll\n"
-     "      for (int ldg = 0; ldg < LDG_PER_THREAD; ++ldg) {\n"
-     "#pragma unroll\n"
-     "        for (int ii = 0; ii < ELTS_PER_LDG; ++ii) {\n"
-     f"          tap_out[{ROW} + 2 + NUM_EXPERTS + first_elt_read_by_thread + ldg * ELTS_PER_LDG * THREADS_PER_ROW + ii] =\n"
-     "              row_chunk[ldg * ELTS_PER_LDG + ii];\n"
-     "        }\n"
-     "      }\n"
-     "    }"),
+     ("    if constexpr (Tap && SF == SCORING_SOFTMAX) {\n"
+      "#pragma unroll\n"
+      "      for (int ldg = 0; ldg < LDG_PER_THREAD; ++ldg) {\n"
+      "#pragma unroll\n"
+      "        for (int ii = 0; ii < ELTS_PER_LDG; ++ii) {\n"
+      f"          tap_out[{ROW} + 2 + NUM_EXPERTS + first_elt_read_by_thread + ldg * ELTS_PER_LDG * THREADS_PER_ROW + ii] =\n"
+      "              row_chunk[ldg * ELTS_PER_LDG + ii];\n"
+      "        }\n"
+      "      }\n"
+      "    }")),
     ("                selected_sum += max_val;", "after",
-     "                if constexpr (Tap) {\n"
-     f"                    tap_out[{ROW} + 2 + 2 * NUM_EXPERTS + k_idx] = max_val;\n"
-     "                }"),
+     ("                if constexpr (Tap) {\n"
+      f"                    tap_out[{ROW} + 2 + 2 * NUM_EXPERTS + k_idx] = max_val;\n"
+      "                }")),
     ("        scale /= denom;", "after",
-     "        if constexpr (Tap) {\n"
-     f"          tap_out[{ROW} + 2 + 2 * NUM_EXPERTS + k] = scale;\n"
-     "        }"),
+     ("        if constexpr (Tap) {\n"
+      f"          tap_out[{ROW} + 2 + 2 * NUM_EXPERTS + k] = scale;\n"
+      "        }")),
 )
 HERE = Path(__file__).resolve().parent
 
@@ -205,10 +206,10 @@ class Options:
 def main(a: Options) -> int:
     if a.check:
         r = check(a.check)
-        print(("ROUTER-TAP-OK " if r["ok"] else "ROUTER-TAP-FAIL ") + json.dumps(r), flush=True)
+        write(("ROUTER-TAP-OK " if r["ok"] else "ROUTER-TAP-FAIL ") + json.dumps(r))
         return 0 if r["ok"] else 1
     if not (a.vllm_src and a.build_dir):
         raise UsageError("give --vllm-src and --build-dir (build) or --check SO")
     info = build(a.vllm_src, a.build_dir)
-    print(f"BUILD-OK {info['so']} {info['so_sha256']} arch={info['arch']} ({info['compile_seconds']} s)", flush=True)
+    write(f"BUILD-OK {info['so']} {info['so_sha256']} arch={info['arch']} ({info['compile_seconds']} s)")
     return 0

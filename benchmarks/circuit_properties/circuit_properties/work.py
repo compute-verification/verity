@@ -42,8 +42,8 @@ For the inputs of `min_cut.slowdown_of` it reads:
   word twice or the outputs of more than one node (calls a word, a batch a row). A carried word not shown distinct
   may repeat its rows: the smaller bound. A weight gradient and attention's products are both
   products of two activations, which a Program tells apart only by where their outputs go, which its author chooses.
-* Each operand's `β`, as `he_of_rows` derives it from the rate ρ at the operand's width w (its type's, at most the
-  source bits its values hold): w where ρ pays it, else w·ρ/(w + ρ). Where an adapter's rank shows (`Work.r_step`,
+* Each operand's `β`, as `he_of_rows` derives it from the rate ν at the operand's width w (its type's, at most the
+  source bits its values hold): w where ν pays it, else w·ν/(w + ν). Where an adapter's rank shows (`Work.r_step`,
   the least contraction of a product of two θ′ operands that widens it 4K-fold or more, one of them reading no input,
   on a Program where an operand no θ′ reaches and no input reaches multiplies one θ′ reaches; or of two weights both
   of whose sides are 4K or more), every activation is at most `beta_eff` at it. Every operand is at most
@@ -97,11 +97,11 @@ valued word by word, as `Reader(structure=False)` values every one, to the same 
 The reading rests on two premises, each held as a fact by a test where a Program breaks it. The rule rests on the
 one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens), `training_slowdown.work.P_BATCH`, whose
 words its suite holds this text to: past each row's first position, no two positions of the batch hold equal words.
-The point's second draw, word by word (`points`), meets `P_BATCH` by the construction of its tokens wherever a batch
+The point's second sample, word by word (`points`), meets `P_BATCH` by the construction of its tokens wherever a batch
 holds no more positions than the least table has rows, so it shows a specific operand's rows are not equal by an
 identity of the circuit (the attention's output plus -1 times itself is 0
 for every input). That the served data meets `P_BATCH` stays the premise it is today, and with it that a specific
-operand's rows the second draw shows differing are not equal only at values a submitter found by trying circuits
+operand's rows the second sample shows differing are not equal only at values a submitter found by trying circuits
 against its public seed.
 The three batches that break it, which `P_BATCH`'s comment states, make two positions' values equal at every layer,
 under this rule and the trace's reading alike. The updates': a weight is `θ`'s rows, which
@@ -183,7 +183,7 @@ class Lookup:
         return re.compile(self.op)
 
 
-#: the reference registry's matrix products (`verity.definitions.registry.ref_prims`): a row times a matrix, and a dot
+#: the reference registry's matrix products (`verity_vllm.definitions.registry.ref_prims`): a row times a matrix, and a dot
 PRODUCTS = (Product(r"LinearRef_v\d+", "x", "w"), Product(r"DotRef_v\d+", "x", "w"))
 #: the registered gathers: a column of a table at a token
 LOOKUPS = (Lookup(r"Gather\w+x\d+_v\d+", "token", "column"),)
@@ -1589,7 +1589,8 @@ def boolean_gates(program) -> int:
     none, summed once per Definition and multiplied through batches and scans. `NoBooleanVersion` names every
     primitive that has none."""
     from verity.circuits.evaluation.bits import compile as compile_bits
-    from verity.definitions.boolean import NoBooleanVersion, boolean_version
+    from verity.circuits.ops.boolean.versions import NoBooleanVersion, boolean_version
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     memo: dict = {}
     missing: dict = {}
@@ -1642,7 +1643,7 @@ def least_sequence(sites) -> int | None:
 
 
 def operand_beta(rate: float, w: float, activation: bool, r_step: int | None, k: float, most: float) -> float:
-    """An operand's β (`he_of_rows`): its width where its rate pays it, else w·ρ/(w + ρ), an activation's at most
+    """An operand's β (`he_of_rows`): its width where its rate pays it, else w·ν/(w + ν), an activation's at most
     `beta_eff` at the adapter's rank, and every one at most ``most``."""
     b = w if paid(rate, w) else w * rate / (w + rate) if rate > 0 else 0.0
     if r_step is not None and activation:
@@ -1746,11 +1747,11 @@ def _read(program, k: float, products, lookups, structure: bool = True, clock=No
 
 def min_cut():
     """The calculator's `min_cut`: its directory, one path from the repository's root, goes on `sys.path`, and
-    `rho.min_cut` is imported from it."""
-    rho = str(Path(__file__).resolve().parents[3] / "benchmarks/rho")
-    if rho not in sys.path:
-        sys.path.append(rho)
-    from rho import min_cut as mc
+    `slowdown.min_cut` is imported from it."""
+    calculator = str(Path(__file__).resolve().parents[3] / "benchmarks/slowdown")
+    if calculator not in sys.path:
+        sys.path.append(calculator)
+    from slowdown import min_cut as mc
     return mc
 
 

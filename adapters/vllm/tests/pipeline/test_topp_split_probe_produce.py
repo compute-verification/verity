@@ -2,7 +2,7 @@
 
 On a pod `produce` launches vLLM's three split top-p kernels and its own instrumented copy of the mask kernel on a GPU, and
 files what they return.  Here each kernel is a stand-in on `tests.fake_vllm`'s modules that writes the model's answer
-(`verity.definitions.registry.topp_split`) where the kernel writes its own, the temperature kernel is the model's division,
+(`verity_vllm.definitions.registry.topp_split`) where the kernel writes its own, the temperature kernel is the model's division,
 and the device is the CPU.  So no case below says a kernel is right, or that the model equals one: the fixture of record
 shows that (`tests/program/test_topp_split_geometry_of_record.py`).  These show what `produce` does around the kernels: which
 it launches on what, under which names and encodings it files their outputs, what its manifest says of each case and of the
@@ -26,8 +26,8 @@ pytest.importorskip("torch")
 
 import numpy as np
 import torch
-from verity.definitions.registry import topp_geometry
-from verity.definitions.registry import topp_split as TS
+from verity_vllm.definitions.registry import topp_geometry
+from verity_vllm.definitions.registry import topp_split as TS
 
 from tests import fake_vllm
 from verity_vllm.pipeline import topp_split_probe as tp
@@ -317,7 +317,7 @@ def test_produce_prints_a_line_a_case_a_line_a_drain_batch_and_the_totals(produc
     assert all(len(json.loads(line)["kept"]) == min(8, size) for line, size in zip(lines[5:-1], sizes, strict=True))
     npz = produced.out / "fixture.npz"
     assert lines[-1] == f"cases 6 -> {npz} {npz.stat().st_size / 1024:.0f} KB {2 * TICK:.1f}s"
-    assert produced.flushes == len(lines) - 1                        # each line but the totals is flushed as it is printed
+    assert produced.flushes == len(lines)                            # each line is flushed as it is printed
 
 
 def test_without_a_record_no_record_case_is_made_and_nothing_is_tempered(monkeypatch, tmp_path, capsys):

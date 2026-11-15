@@ -44,10 +44,11 @@ open Lean (Json)
 /-- **The running verifier's `Own` on what the model reads**: the fields the model's (`ownOf`) leaves at their defaults
 set to them: the reads the verifiers report (`reported`), what they name of each session (`verified`), the
 names of what the replay block returns (`returns`), the values the verifier supplies or fixes (`supplied`,
-`fixed`) and the templates the auditor's params record as reads (`reads`). Round 2's per-statement checks read none
-of these but `verified`. -/
+`fixed`), the templates the auditor's params record as reads (`reads`), the tables they pin (`tables`) and the
+replay's port widths (`widths`). Round 2's per-statement checks read none of these but `verified`. -/
 def core (own : Spot.SecondStage.Own) : Spot.SecondStage.Own :=
-  { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[], reads := #[] }
+  { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[], reads := #[],
+             tables := #[], widths := #[] }
 
 /-- **The running verifier holds what the model holds of the run**, at the run's statement `st`, round 1's record `rec`,
 the second stage's sample and round 0's coin: the replay sample, the parts, the two records, the second sample's units, the
@@ -71,7 +72,7 @@ def StmtsAre (h : Held) (m₂ : Msg) (ss : Array Json) : Prop :=
 def TwoHolds (h : Held) : Prop := ∀ s, (two h s).isSome = true
 
 /-- **The run's records name their registrations' names** (`recordsOk`). Round 2 does not make it: `Run.run`'s
-registration step (`Registration.check`) does. -/
+registration step (`Docket.check`) does. -/
 def RecordsHeld (h : Held) (x m₁ : Msg) : Prop := recordsOk h x m₁ = true
 
 /-- **Round 1's record registers no value**: no entry under its `registered` names a string `value`. The model's

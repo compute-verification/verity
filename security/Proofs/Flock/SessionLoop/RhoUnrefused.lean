@@ -551,7 +551,7 @@ theorem sched_l0Run {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) {tp : ℕ}
     (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout} {d : Draws}
     {mk : Option MaskSlot} (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
-    (hcd : c = Cfg.ofDraws lay d mk) {j : ℕ} (hj : j ≤ t.sch.k0 + 3)
+    (hcd : c = Cfg.ofSamples lay d mk) {j : ℕ} (hj : j ≤ t.sch.k0 + 3)
     (hcr : cr.pop.size = alg.size + (xs.size + 2) + 1 + j) (P : Array F128) :
     sched.size = alg.size + (xs.size + 2) + 1 + j + 1 ∧ ∀ b, b ≤ j → b ≤ t.sch.k0 + 2 →
       (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr (alg.size + (xs.size + 2) + 1 + b))).2 = false →
@@ -568,7 +568,7 @@ theorem sched_l0Run {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.
   have hlk : lay.k0 = t.sch.k0 := by subst hlay; rfl
   have hood : lay.nOod0 = 1 := by subst hlay; rfl
   have hk' : 0 < lay.k0 := by omega
-  have hlig : c.lig = true := by rw [hcd, Loop.ofDraws_lig, decide_eq_true_eq]; omega
+  have hlig : c.lig = true := by rw [hcd, Loop.ofSamples_lig, decide_eq_true_eq]; omega
   have hpi : c.nPiop = absPos lay (lay.lgOod 0) := by rw [hcd]; exact nPiop_ood lay d mk hk'
   have hord : c.order.size = (_root_.Flock.ZkServer.Frame.absorbed lay).size := by subst hcd; rfl
   intro b
@@ -638,7 +638,7 @@ theorem repState_rho {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]!
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) {tp : ℕ}
     (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout} {d : Draws}
     {mk : Option MaskSlot} (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
-    (hcd : c = Cfg.ofDraws lay d mk) (hord : c''.order.size = c.order.size)
+    (hcd : c = Cfg.ofSamples lay d mk) (hord : c''.order.size = c.order.size)
     (hcr : cr.size = alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 3) + 1) {cs : Array F128} {m : Masker}
     (ha : (repState c t rep dom xs hi cr0 cr ns (alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 3) + 1)).answer c'' cs =
       .ok m) :
@@ -890,7 +890,7 @@ theorem rho_unrefused_sched_pf (T : ZKMal.CoinLayer.TableData)
   have hlayT : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0 := by
     rw [hlay0, hts', ← hz'.1, htsch]
     all_goals rfl
-  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact ofDraws_order _ _ _
+  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact ofSamples_order _ _ _
   have hlay' : ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).lay = lay := by
     rw [hlay]
     unfold startOf

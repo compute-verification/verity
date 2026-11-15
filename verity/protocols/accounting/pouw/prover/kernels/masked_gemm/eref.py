@@ -1,6 +1,7 @@
 """CPU reference for egemm.cu's gate dump: the noise, every edited operand, product and receipt, bit for bit.
 
-python3 eref.py DIR [--no-receipts] prints one JSON line of checks and exits 0 only if every check passes.
+PYTHONPATH=. python3 verity/protocols/accounting/pouw/prover/kernels/masked_gemm/eref.py DIR [--no-receipts], from the repository root,
+prints one JSON line of checks and exits 0 only if every check passes.
 
 Recomputed independently of the device, per format (int8, E4M3's integer grid), from the dumped A and B (stacked over the
 batch) and the seed alone: the noise keys, the noise E (each 16-byte chunk of a stacked row from
@@ -17,9 +18,15 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from mref import decode, duo_receipts, words
-from ref import mix32, tbc_receipts
+from verity.protocols.accounting.pouw.prover.kernels.floored_gemm.ref import (
+    mix32,
+    tbc_receipts,
+)
+from verity.protocols.accounting.pouw.prover.kernels.masked_gemm.mref import (
+    decode,
+    duo_receipts,
+    words,
+)
 
 FMTS = ["i8", "e4"]
 S = np.array([5, 7, -5, -7], dtype=np.int64)

@@ -5,9 +5,6 @@ whole run (`Run.run`) at its select (`coins`). A toy window of two templates; an
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -16,10 +13,7 @@ from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
-
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
-sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC
 
 XOR8 = PrimitiveDefinition("A5CoinsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -40,7 +34,7 @@ PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
     ("domain:x", "x's served domain"), ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain"),
     *((f"population:{P.template_id(t)}", "a template's stratum") for t in WINDOW)))
 #: one of the PAIR and three of the 9 TRIPLEs
-RULE = S.Law("stratified-rate:1/3")
+RULE = S.SamplingDesign("stratified-rate:1/3")
 SPEC = S.Spec(VALUES, RULE,
               S.Check(tuple(P.program_digest(Program(t)) for t in WINDOW), QUERY, proof_deadline=60.0), PUBLIC,
               bytes.fromhex(ROOT))
@@ -66,7 +60,7 @@ def _record() -> dict:
     ports = _ports()
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
     program = P.mixed_population_program([(t, COUNTS[P.template_id(t)]) for t in WINDOW])
-    return R.record(program, QUERY, S.selection_law(RULE, sum(COUNTS.values()), D.strata_sizes(program, QUERY)), S.SCHEME, roots,
+    return R.record(program, QUERY, S.selection_sampling_design(RULE, sum(COUNTS.values()), D.strata_sizes(program, QUERY)), S.SCHEME, roots,
                     {"kind": "served", "run": RUN, "row": 0}, work_table=S.selection_table(RULE, program, QUERY, None))
 
 
@@ -78,7 +72,7 @@ def register(stream: S.Stream) -> S.WindowCommitmentRecord:
     return stream.register(_record(), _ports(), window_root=ROOT, counts=COUNTS)
 
 
-def test_a5s_stream_draws_on_no_coins_of_its_own():
+def test_a5s_stream_samples_on_no_coins_of_its_own():
     """The verifier's own coins (the Lean's `IO.getRandomBytes`, `verifier.coins`) or any callable but a challenger's are
     refused before the stream exists; the challenger's (`RankCoins`, `Replay`) are taken."""
     for own in (V.coins, lambda n: bytes([0x5a]) * n, None):
@@ -100,11 +94,11 @@ def test_the_challengers_bytes_with_no_evidence_are_rejected_by_the_lean_run():
     side = AC.lean_side(audit)
     assert (side["step"], side["codes"]) == AC.SELECT_COINS
     key = AC.Ch.ChallengerKey(4, 5, bytes(AC.Ch.PUBLIC_BYTES))
-    assert CC.coins_reason(key, [], None, ROOT, AC.family(0), bytes.fromhex(sample.registration.digest), b"\x5a",
+    assert CC.coins_reason(key, [], None, ROOT, AC.family(0), bytes.fromhex(sample.docket.digest), b"\x5a",
                            AC.lms_verify) == CC.DRAW_FORM
 
 
-def test_the_replay_reads_no_more_than_the_honest_draw():
+def test_the_replay_reads_no_more_than_the_honest_sample():
     replay = AC.Replay(b"\x01\x02\x03")
     assert replay(2) == b"\x01\x02"
     with pytest.raises(AC.Ch.CoinError, match="past the honest draw"):

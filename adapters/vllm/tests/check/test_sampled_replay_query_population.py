@@ -20,7 +20,7 @@ import json
 import sys
 
 import pytest
-from verity.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
 from tests.check import test_sampled_replay as T
 from tests.check.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
@@ -390,7 +390,7 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     assert p2["query_total"] == bpop["query_total"] and p2["sampled_strata"]["identities_reached"] == bpop["sampled_strata"]["identities_reached"]
     # the arithmetic is the rule's, not the caller's: LAG outside {0, 1} and a_r > cap are faults by name
     assert POP.executed_prefix_of_record("r0", a_r=2, lag=2, cap=cap, eos_declared=True, served_len_commit=2, **ok)["faults"][0].startswith("LAG 2 outside")
-    assert "outside [0, cap" in POP.executed_prefix_of_record("r0", a_r=cap + 1, lag=1, cap=cap, served_len_commit=cap + 1, **ok)["faults"][0]
+    assert "outside [0, max_tokens" in POP.executed_prefix_of_record("r0", a_r=cap + 1, lag=1, cap=cap, served_len_commit=cap + 1, **ok)["faults"][0]
     # (a)(b)(c) + the served-length rule, each a fault BY NAME; an unasserted fact is a fault, never a default
 
     def f(**kw):

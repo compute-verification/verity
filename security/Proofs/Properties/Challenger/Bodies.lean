@@ -64,14 +64,14 @@ theorem digests_alike {l : List (String × Json)} (hs : (l.map (·.1)).Pairwise 
     exact Built.isDigest_hex hb
 
 /-- The body of the open of a window withheld. -/
-def openBody (auditor host pins : String) (keyHash pin window : ByteArray) : Json :=
-  Json.mkObj [("by", .str auditor), ("host", .str host), ("key_sha512", .str (Flock.hexOf keyHash)),
+def openBody (auditor device pins : String) (keyHash pin window : ByteArray) : Json :=
+  Json.mkObj [("by", .str auditor), ("host", .str device), ("key_sha512", .str (Flock.hexOf keyHash)),
     ("pinned", .str (Flock.hexOf pin)), ("pins", Json.mkObj [("lines", Lean.toJson (1 : Nat)), ("sha512", .str pins)]),
     ("window", Json.mkObj [("root", .str (Flock.hexOf window))]), ("withheld", .bool true)]
 
 /-- **A value alike the open's body is an open's body.** -/
-theorem openBody_alike {auditor host pins : String} {keyHash pin window : ByteArray} {b : Json}
-    (h : Same (openBody auditor host pins keyHash pin window) b) (hh : isHost host = true)
+theorem openBody_alike {auditor device pins : String} {keyHash pin window : ByteArray} {b : Json}
+    (h : Same (openBody auditor device pins keyHash pin window) b) (hh : isHost device = true)
     (hk : keyHash.size = 64) (hp : pin.size = 20) (hw : window.size = 64) : isBodyOf "open" true b = true := by
   have hwin : isRun (getD b "window") = true := by
     have hsw := Entry.same_getD h "window"
@@ -82,7 +82,7 @@ theorem openBody_alike {auditor host pins : String} {keyHash pin window : ByteAr
     unfold isRun
     rw [hkw, hr, Built.isDigest_hex (by omega), beq_self_eq_true]
     rfl
-  have hhost : getD b "host" = .str host := read_str h rfl
+  have hhost : getD b "host" = .str device := read_str h rfl
   have hpin : getD b "pinned" = .str (Flock.hexOf pin) := read_str h rfl
   have hkey : getD b "key_sha512" = .str (Flock.hexOf keyHash) := read_str h rfl
   have hby : getD b "by" = .str auditor := read_str h rfl
@@ -92,7 +92,7 @@ theorem openBody_alike {auditor host pins : String} {keyHash pin window : ByteAr
       isDigest (getD b "key_sha512") &&
       (!true || isStr (getD b "by") && (match field? b "for" with | none => true | some j => isStr j))) = true
   rw [hwin, hhost, hpin, hkey, hby, hfor, Built.isDigest_hex (by omega), Built.isDigest_hex (by omega)]
-  show (true && isHost host && true && true && true) = true
+  show (true && isHost device && true && true && true) = true
   rw [hh]
   rfl
 

@@ -6,15 +6,19 @@ names), the network
 certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
 certificates and one-stage's answers, `verity/protocols/accounting/certifier/verifier/network/tests/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
-`nci_reference.check_baseline`, behind the protocol's decoders,
-`verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`)
+`inference_only_reference.check_theta`, behind the protocol's decoders,
+`verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_protocol.py`), for SPOT (`verity/sampled-proofs/v1`)
 `spot`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the decoders `OneStage` reads, v1's difftest's,
-`verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py`) and its check up to its one session's coin tree, and the
-recursive form's params refused by name (`RECURSIVE_REFUSED`), the wipe's
+`verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py`) and its check up to its one session's coin tree, the
+recursive form's params refused by name (`RECURSIVE_REFUSED`), and the two-stage form's params through its own difftest's
+twin (`sampled_two.py`) and its evidence up to its keys, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
+Onsite's development composite with the wipe's count held (`ONSITE_COUNTED`, `Core.Onsite.counted`) adds the count over
+the wipe's span on its host's one link (`HOST_SPAN`: the count's mirror, `span_case.reference`, behind `wipe_link`) and
+the counted wipe (`COUNTED_WIPE`, `wipe_protocol_case.counted_reference`), tied by `WIPE_NODE` and `WIPE_COUNT`.
 
 The trial's rule, onsite's and remote's over their subprotocols' statements:
 
@@ -51,6 +55,10 @@ from typing import Any, Callable
 from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
+from verity.protocols.accounting.certifier.verifier import registered as RH
+from verity.protocols.accounting.certifier.verifier import span
+from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.verifier import wipe_period as WP
 from verity.protocols.accounting.pouw.verifier import core_check, credit, period_check
 from verity.protocols.proofs.spot.device import challenger as CH
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
@@ -74,18 +82,21 @@ def module(name: str, path: Path) -> ModuleType:
 
 
 #: SPOT's one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `parsed_params_v2`,
-#: `subset_design` and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
+#: `subset_design` and `_challenger_sample` v2's parameters and its challenger's coins, and its strategies sample audits.
 ONE_STAGE = module("one_stage_difftest", ROOT / "verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", ROOT / "verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_period_cases.py")
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
 PERIOD = module("network_period_difftest", ROOT / "verity/protocols/accounting/certifier/verifier/network/tests/test_network_period_protocol.py")
-#: The inference-only policy's difftest: `reference` is the policy's Python check (`check_baseline`) behind the
-#: protocol's decoders, and `drawn` samples a declaration's case with one change.
+#: The inference-only policy's difftest: `reference` is the policy's Python check (`check_theta`) behind the
+#: protocol's decoders, and `sampled` samples a declaration's case with one change.
 INFERENCE = module("inference_only_protocol_difftest", ROOT / "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_protocol.py")
 #: The wipe protocol in Python: `answer`, its mirror under S1's LMS, and `case`, a signed wipe aimed at a kind (`KINDS`).
 WIPE_CASES = module("wipe_protocol_case", ROOT / "verity/protocols/accounting/pous/device/lean/tests/wipe_protocol_case.py")
+#: The count over a span's difftest helper: `reference` is the count's mirror behind a parameters decoder, and `build`
+#: makes a span with one change, around what runs between its two marks when given.
+SPAN_CASES = module("span_case", ROOT / "verity/protocols/accounting/certifier/verifier/network/tests/span_case.py")
 
 
 def trial_verdict(verdicts: list[str]) -> str:
@@ -147,7 +158,18 @@ class Recorded:
         raise KeyError(f"{self.id}: no answer recorded for this case")
 
 
-SAMPLED_PROOFS_V1 = "verity/sampled-proofs/v1"
+SPOT_V1 = "verity/sampled-proofs/v1"
+
+
+def _two_stage():
+    """The two-stage form's twin (`sampled_two.py`, its own difftest's), which reads `ONE_STAGE` from this module, so it
+    is imported once this module is."""
+    import sampled_two
+    return sampled_two
+
+
+#: `VStar.Recursive.Sampled.FORMS`: the forms, as a refusal names them.
+FORMS = '"one-stage", "recursive" or "two-stage"'
 
 
 def _form(j: Any, what: str) -> tuple[str, dict]:
@@ -155,7 +177,7 @@ def _form(j: Any, what: str) -> tuple[str, dict]:
     if not isinstance(j, dict):
         raise Reject(f"the {what} is not an object")
     if not isinstance(j.get("form"), str):
-        raise Reject(f"the {what} names no form")
+        raise Reject(f"the {what} names no form ({FORMS})")
     return j["form"], {k: v for k, v in j.items() if k != "form"}
 
 
@@ -262,17 +284,31 @@ def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]
     return REJECT, f"proofs: {CH.sessions_tree_reason(trees, [(s['name'], {'circuit': None}, None)])}"
 
 
+#: `SampledTwo.evidenceOf`'s keys.
+TWO_STAGE_EVIDENCE_KEYS = ["coins", "interior", "received", "record", "source", "statements"]
+
+
+def _two_stage_evidence(j: Any) -> dict:
+    """`SampledTwo.evidenceOf` up to its keys: the form's split (`sampled_two.split`) and the keys; the rest is outside
+    the mirror."""
+    rest = _two_stage().split(j, "evidence")
+    _keys(rest, TWO_STAGE_EVIDENCE_KEYS, "the evidence")
+    raise ValueError("outside the mirror: the two-stage form's evidence past its keys")
+
+
 def _form_params(j: Any) -> dict:
     form, rest = _form(j, "parameters")
     if form == "one-stage":
         return _one_stage_params(rest)
     if form == "recursive":
         raise Reject(RECURSIVE_REFUSED)
-    raise Reject(f"the parameters' form {form} is not one-stage or recursive")
+    if form == _two_stage().TWO_STAGE:
+        return _two_stage().params_of_json(j)
+    raise Reject(f"the parameters' form {form} is not {FORMS}")
 
 
 def _covered(form_params: Callable[[Any], dict]) -> Callable[[Any], dict]:
-    """`OneStage.paramsOfJson` behind the form's split: `form_params`, and every bernoulli law refused at any p, as
+    """`OneStage.paramsOfJson` behind the form's split: `form_params`, and every bernoulli sampling design refused at any p, as
     `covered_params` refuses it (`service.bernoulli`)."""
     def params(j: Any) -> dict:
         p = form_params(j)
@@ -286,21 +322,30 @@ _form_params = _covered(_form_params)
 
 
 def _form_evidence(b: bytes) -> dict:
-    form, rest = _form(P.canonical_json(b), "evidence")
+    j = P.canonical_json(b)
+    form, rest = _form(j, "evidence")
+    if form == _two_stage().TWO_STAGE:
+        _two_stage_evidence(j)
     if form == "one-stage":
         return _one_stage_evidence(rest)
     if form == "recursive":
         _recursive(rest, "evidence")
-    raise Reject(f"the evidence's form {form} is not one-stage or recursive")
+    raise Reject(f"the evidence's form {form} is not {FORMS}")
+
+
+def mismatch(params_form: str, evidence_form: str) -> str:
+    """`VStar.Recursive.Sampled.MISMATCH`: the refusal of evidence in another form than the params'."""
+    return f"the evidence's form is {evidence_form}, and the parameters' is {params_form}"
 
 
 def spot(case: Any) -> dict:
     """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v2 (`Spot.OneStageZk`,
     `_one_stage_check`, at the coins the challenger's release gives) when its params and evidence name the form
     ``one-stage`` and ``proofs``, a refusal of one-stage v1 (naming no ``proofs``) and of the recursive form's params
-    (`RECURSIVE_REFUSED`) by name, and of any other form on the cases the mirror decides."""
+    (`RECURSIVE_REFUSED`) by name, the two-stage form's refusals of its params (its twin's) and of its evidence's keys,
+    and a refusal of any other form, on the cases the mirror decides."""
     blobs = case.get("blobs", []) if isinstance(case, dict) else []
-    return P.answer(SAMPLED_PROOFS_V1, case, params=_form_params, commitment=ONE_STAGE.decode_commitment,
+    return P.answer(SPOT_V1, case, params=_form_params, commitment=ONE_STAGE.decode_commitment,
                     evidence=_form_evidence, digest=lambda c: c[1],
                     check=lambda p, c, e: _one_stage_check(p, c, e, blobs))
 
@@ -318,9 +363,9 @@ def _period_answer(case: str) -> str:
 #: subprotocol's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
 #: Integrity: SPOT (`VStar.Recursive.Sampled`), one-stage v2's audit (`Spot.OneStageZk`); one-stage v1 and the
-#: recursive audit refused.
-SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, spot, blobs=True)
-#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
+#: recursive audit refused, and the two-stage audit refused last while its switch is off.
+SPOT = Ported(SPOT_V1, spot, blobs=True)
+#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `Poub.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 #: Pearl+'s run verdict, remote's work in its composite of record: on the served run a test records for it
 #: (`pearl_plus_answer`), and else it refuses a commitment that isn't JSON, as Pearl+'s decoder does, and has no answer
@@ -349,6 +394,53 @@ def pearl_plus_answer(commitment: bytes, verified: dict) -> dict:
 BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
 #: The wipe, `MemoryChallenger.WipeProtocol.protocol`.
 WIPE = Ported("verity/wipe/v0", WIPE_CASES.answer)
+
+
+def _site_kind(site: dict, i: str) -> str | None:
+    """`Core.Site.kind?`: the outside's kind, or that of the first location registered under `i`."""
+    if i == RH.OUTSIDE:
+        return RH.OUTSIDE
+    return next((x["kind"] for x in site["locs"] if x["id"] == i), None)
+
+
+def _site_joins(site: dict, k: dict, a: str, b: str) -> bool:
+    """`Core.Site.Joins`: link `k` joins kinds `a` and `b`, in either order."""
+    return (_site_kind(site, k["ends"][0]), _site_kind(site, k["ends"][1])) in ((a, b), (b, a))
+
+
+def wipe_link(site: dict, host: str) -> str:
+    """`Core.Onsite.wipeLink`: the one link what leaves `host` leaves on, as the registered hardware `site` (a
+    `registered.site_of`) has it; `span.Refused`, with the Lean's message, otherwise."""
+    if _site_kind(site, host) != "host":
+        raise span.Refused(f"{host} is no host of the registered hardware")
+    own = [k for k in site["links"] if host in k["ends"] and not _site_joins(site, k, "challenger", "host")]
+    if not own:
+        raise span.Refused(f"host {host}: it has no link besides the memory challengers'")
+    if len(own) > 1:
+        raise span.Refused(f"host {host}: it has {len(own)} links besides the memory challengers' "
+                           f"({', '.join(k['id'] for k in own)}); a count on one of them is not of what left on the others")
+    k = own[0]
+    if not _site_joins(site, k, "certifier", "host"):
+        raise span.Refused(f"host {host}: its one link, {k['id']}, joins no network certifier, so no certificate counts "
+                           "what leaves on it")
+    return k["id"]
+
+
+def host_span_params(j: Any) -> span.Params:
+    """`Core.Onsite.spanParams`: the count's parameters (`span.params`), which must hold the registered hardware, the
+    link they name being its host's one link (`wipe_link`)."""
+    p = span.params(j)
+    if p.registered is None:
+        raise span.Refused("the parameters hold no registered hardware (site and head): a wipe's count is on a "
+                           "registered host's link")
+    wipe_link(RH.site_of(j["site"]), p.registered.host)
+    return p
+
+
+#: `Core.Onsite.hostSpan`: the count over the span between a wipe's two marks, on its host's one link.
+HOST_SPAN = Ported(span.ID, lambda case: SPAN_CASES.reference(case, host_span_params))
+#: `Core.Onsite.countedWipe`: the wipe whose count the composition holds, under the accepted schemes.
+COUNTED_WIPE = Ported(WP.COUNTED, WIPE_CASES.counted_reference(WP.COUNTED, WIPE_CASES.mc.SCHEMES))
 
 
 def bind(id: str, digests: list[tuple[str, bytes]]) -> bytes:
@@ -516,10 +608,12 @@ class Same(Product):
 class Tie:
     """`Core.Composition.Tie`: every value that each subprotocol of ``names`` names must be one value, ``what``; each
     reads the values it names off its case's commitment and evidence bytes with its function (None: its case doesn't
-    decode)."""
+    decode). With ``cased``, each function reads its whole case, ``(id, canonical params, commitment, evidence)``, as
+    the Lean's `Case → …` does."""
 
     what: str
     names: tuple = ()
+    cased: bool = False
 
     def values(self, ev: list) -> list[tuple[str, bytes]] | None:
         """Each value the subprotocols of ``names`` name on the cases ``ev``, in their order; None when one of them has no
@@ -529,20 +623,21 @@ class Tie:
             cases.setdefault(k[0], k)
         out: list[tuple[str, bytes]] = []
         for s, f in self.names:
-            ds = f(cases[s][2], cases[s][3]) if s in cases else None
+            ds = None if s not in cases else f(cases[s]) if self.cased else f(cases[s][2], cases[s][3])
             if not isinstance(ds, list):
                 return None
             out += [(s, d) for d in ds]
         return out
 
     def strays(self, ev: list) -> str | None:
-        """`Core.Composition.Tie.strays`: the first value that isn't the first one, with both; none when they all named
-        it, or when a subprotocol names none."""
+        """`Core.Composition.Tie.strays`: the tie's name, the subprotocol that named the first value and the one that
+        named the first value that isn't it, and nothing of either value; none when they all named it, or when a
+        subprotocol names none."""
         got = self.values(ev)
         if not got:
             return None
         (s, d), *rest = got
-        return next((f"{self.what}: {s} committed {d.hex()}, {t} committed {e.hex()}" for t, e in rest if e != d), None)
+        return next((f"{self.what}: {s} and {t} named different values" for t, e in rest if e != d), None)
 
 
 def _commitment_hex(key: str) -> Callable[[bytes, bytes], list[bytes]]:
@@ -646,6 +741,77 @@ RUN = Tie("record", ((INFERENCE_ONLY.id, policy_record), (PEARL_PLUS.id, run_rec
 WINDOW = Tie("window", ((INFERENCE_ONLY.id, policy_previous), (PEARL_PLUS.id, run_window)))
 
 
+def wipe_named(k: tuple) -> dict | Exception | None:
+    """`Core.Onsite.wipeNamed`: what the wipe's case names of its span (`wipe_period.named`); else what refused its
+    commitment, its evidence or its message, or None while it names nothing, any of which reads as no value."""
+    try:
+        e = WIPE_CASES.decode_evidence(k[3])
+        return WP.named(WIPE_CASES.decode_commitment(k[2]), e.signed, e.egress_mib)
+    except (Reject, ValueError, KeyError, TypeError, OverflowError) as x:
+        return x
+
+
+def span_named(k: tuple) -> dict | Exception:
+    """`Core.Onsite.spanNamed`: what the count's case names of its span (`span.named`, `NetworkCheck.Span.namedOf`);
+    else what refused its parameters or its commitment, which reads as no value."""
+    try:
+        return span.named(span.params(json.loads(k[1])), span.commitment(k[2]))
+    except (span.Refused, ValueError) as x:
+        return x
+
+
+def mib_bytes(n: int) -> bytes:
+    """`Core.Onsite.mibBytes`: a count of egress in whole MiB as the bytes a tie compares, its decimal digits."""
+    return str(n).encode()
+
+
+def wipe_server(k: tuple) -> list[bytes] | Exception:
+    """The wipe's side of `Core.Onsite.wipeNode`: the server its parameters name; else what refused them."""
+    try:
+        return [WIPE_CASES.decode_params(json.loads(k[1])).server]
+    except (Reject, ValueError, KeyError, TypeError) as x:
+        return x
+
+
+def span_host(k: tuple) -> list[bytes] | Exception:
+    """The count's side of `Core.Onsite.wipeNode`: the host end of the count's link, as the registered hardware in its
+    parameters has it (`host_span_params`), its id's UTF-8; else what refused them."""
+    try:
+        return [host_span_params(json.loads(k[1])).registered.host.encode()]
+    except (span.Refused, ValueError) as x:
+        return x
+
+
+def _named_value(named: Callable[[tuple], Any], key: str) -> Callable[[tuple], list[bytes] | Any]:
+    """A side of a tie of `wipe_count`: the value `key` of what `named` reads off the case, else what `named` gave."""
+    return lambda k: [n[key]] if isinstance(n := named(k), dict) else n
+
+
+def _wipe_egress(k: tuple) -> list[bytes] | Any:
+    """The wipe's side of the egress tie: the count its evidence gives, as `mib_bytes`."""
+    n = wipe_named(k)
+    return [mib_bytes(n["egress_mib"])] if isinstance(n, dict) else n
+
+
+def _span_egress(k: tuple) -> list[bytes] | Any:
+    """The count's side of the egress tie: its bits over the span and its tail in whole MiB
+    (`streamed_wipe.egress_units`), as `mib_bytes`; None where its marks are out of order."""
+    n = span_named(k)
+    if not isinstance(n, dict):
+        return n
+    return None if n["egress_bits"] is None else [mib_bytes(sw.egress_units(n["egress_bits"]))]
+
+
+#: `Core.Onsite.wipeNode`: the wipe is of the host the count's link is on.
+WIPE_NODE = Tie("node", ((WP.COUNTED, wipe_server), (span.ID, span_host)), cased=True)
+#: `Core.Onsite.wipeCount`: the wipe and the count over its span name one span and one count, a tie a value.
+WIPE_COUNT = (
+    *(Tie(what, ((WP.COUNTED, _named_value(wipe_named, key)), (span.ID, _named_value(span_named, key))), cased=True)
+      for what, key in (("start mark", "start_mark"), ("start message", "start_message"),
+                        ("end message", "end_message"))),
+    Tie("egress", ((WP.COUNTED, _wipe_egress), (span.ID, _span_egress)), cased=True))
+
+
 @dataclass(frozen=True)
 class TiedSame(Same):
     """`Core.Composition.tiedSameB id ss ties components`: `same`, except that when it doesn't reject, the subprotocols
@@ -683,9 +849,12 @@ class TiedSame(Same):
 #: of their ids: each one's policy and integrity committing to one registration record, remote's composite of record's
 #: Pearl+ run naming the policy's record, every window of its development composite's PoUW period and of onsite's naming
 #: it too, and onsite's PoUS and PoUB-P2 on one store (`Core.Onsite.ties`, in its order).
-REMOTE_V1 = TiedSame("verity/remote/v1", (INFERENCE_ONLY, PEARL_PLUS, SAMPLED_PROOFS),
-                     (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (RUN, WINDOW))
-REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS), (INFERENCE_ONLY.id, SAMPLED_PROOFS.id),
+REMOTE_V1 = TiedSame("verity/remote/v1", (INFERENCE_ONLY, PEARL_PLUS, SPOT),
+                     (INFERENCE_ONLY.id, SPOT.id), (RUN, WINDOW))
+REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SPOT), (INFERENCE_ONLY.id, SPOT.id),
                   (WINDOWS,))
-ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
-                  (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (WINDOWS, STORE))
+ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SPOT, WIPE),
+                  (INFERENCE_ONLY.id, SPOT.id), (WINDOWS, STORE))
+#: `Core.Onsite.counted`: onsite with the count over the wipe's span beside it and the wipe's count held to it.
+ONSITE_COUNTED = TiedSame("verity/onsite/counted/v0", (HOST_SPAN, *ONSITE.components[:-1], COUNTED_WIPE), ONSITE.same,
+                          (*ONSITE.ties, WIPE_NODE, *WIPE_COUNT))

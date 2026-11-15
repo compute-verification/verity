@@ -671,8 +671,8 @@ theorem MembersHeld.opening (H : MembersHeld lines trees log records tree)
     ∃ j, j < records.size ∧ i = tree j := by
   obtain ⟨l, ρ, name, k, hl, hro, hkey, -, -⟩ := Verity.Sampled.readLog_round hT hR he hr
   obtain ⟨a, b, hls⟩ := List.append_of_mem hl
-  obtain ⟨A, B, hused, -⟩ := Verity.Sampled.MemberForm.membersOrder_order H.order hls
-    (Verity.Sampled.MemberForm.openOf_opensRound hro.1)
+  obtain ⟨bo, hbo⟩ := Verity.Sampled.MemberForm.memberLine_opensLine hro.1.opensLine
+  obtain ⟨A, B, hused, -⟩ := Verity.Sampled.MemberForm.membersOrder_order H.order hls hbo
   have hmem : ρ ∈ (Verity.Sampled.MemberForm.usedOf records).toList := by
     rw [hused]
     simp

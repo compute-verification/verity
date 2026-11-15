@@ -31,7 +31,6 @@ import contextlib
 import os
 import pickle
 import socket
-import sys
 import threading
 from pathlib import Path
 from typing import Any
@@ -44,6 +43,7 @@ from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.accounting.pouw.prover.serving.tensors import Tensors, has_tensors, tensors
 
 #: a suspended window's hand-off state's schema, which `suspend` writes and `resume` refuses any other than
 SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
@@ -99,13 +99,17 @@ def _draw_of(state: dict[str, Any] | None, client: Any, gate: PHW.Gate | None) -
 
 
 class _HostOnly(pickle.Pickler):
-    """Refuses a tensor in the saved state: one left on the device would need it to resume."""
+    """Refuses one of the workload's buffers in the saved state (`tensors.Tensors.is_buffer`): one left on the device would
+    need it to resume. With no buffers handed in, the state holds none."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._buffers: Tensors | None = tensors() if has_tensors() else None
 
     def persistent_id(self, obj: Any) -> None:
-        torch = sys.modules.get("torch")
-        if torch is not None and isinstance(obj, torch.Tensor):
-            raise ValueError(f"a {tuple(obj.shape)} {obj.dtype} tensor on {obj.device} in the window's saved state: "
-                             "suspend saves host copies only")
+        if self._buffers is not None and self._buffers.is_buffer(obj):
+            raise ValueError(f"a {tuple(obj.shape)} {obj.dtype} buffer on {getattr(obj, 'device', 'its device')} in the "
+                             "window's saved state: suspend saves host copies only")
         return None
 
 
@@ -113,7 +117,7 @@ def client_of(run: PH.H1Run) -> remote.RemoteChallenger:
     """The window's session on the auditor device's challenger: refused (ValueError) unless its coins are that session's and
     the window is open and unclosed."""
     client = getattr(run.rounds, "challenger", None)
-    if run.coin_source != PH.CHALLENGER or not isinstance(client, remote.RemoteChallenger):
+    if run.coins_from != PH.CHALLENGER or not isinstance(client, remote.RemoteChallenger):
         raise ValueError(f"{run.entry}: only a window whose coins are the auditor device's session hands off")
     if run.closed or run._salt is None or run._unopened is not None or client._ended is not None:
         raise ValueError(f"{run.entry}: a window hands off once its salt is open, before its close, its session live")
@@ -150,7 +154,6 @@ def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tupl
     """The run `suspend` saved in `directory`, its coins on the session whose stream is the descriptor `fd`, its sample
     session opened through `gate` (`pouw_h1_window.Gate`; None leaves it unopenable, and the sample is refused), and that
     session's client: refused (ValueError) when a rebuilt request or slot table isn't the one its round's root is over."""
-    import torch
 
     with open(Path(directory) / FILE, "rb") as f:
         doc = pickle.load(f)
@@ -167,16 +170,23 @@ def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tupl
         r = x["round"]
         if (run._tables[r].commitment.root.hex(), run._slot_tables[r].commitment.root.hex()) != (x["requests"], x["slots"]):
             raise ValueError(f"{run.entry}: round {r}'s request or slot table, rebuilt, is not the one its root is over")
-    client = Resumed(socket.socket(fileno=fd), LiveCommitment.from_json(doc["commitment"]))
-    run.listeners, run._opener, run._recorded = [], None, None
-    run.rounds, run.draw = _live(rounds, client), _draw_of(draw, client, gate)
-    run._weights = {w: (torch.from_numpy(c), torch.from_numpy(s)) for w, (c, s) in weights.items()}
-    if served is not None:
-        kind, sstate, layers = served
-        run.served = kind.__new__(kind)
-        run.served.__dict__.update(sstate)
-        run.served._weights = {w: (run._weights[w][0], weights[w][0]) for w in layers}
-        _declare(run.served, run)
+    sock = socket.socket(fileno=fd)
+    try:
+        client = Resumed(sock, LiveCommitment.from_json(doc["commitment"]))
+        run.listeners, run._opener, run._recorded = [], None, None
+        run.rounds, run.draw = _live(rounds, client), _draw_of(draw, client, gate)
+        ts = tensors()
+        run._weights = {w: (ts.put(c), ts.put(s)) for w, (c, s) in weights.items()}
+        if served is not None:
+            kind, sstate, layers = served
+            run.served = kind.__new__(kind)
+            run.served.__dict__.update(sstate)
+            run.served._weights = {w: (run._weights[w][0], weights[w][0]) for w in layers}
+            _declare(run.served, run)
+    except BaseException:
+        # the stream, not the session: `client.close()` would end the challenger's session
+        sock.close()
+        raise
     return run, client
 
 

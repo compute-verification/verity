@@ -24,7 +24,7 @@ import pytest
 from research import remote
 
 HERE = Path(__file__).resolve().parents[1]
-ROOT = HERE.parents[2]
+ROOT = HERE.parents[1]
 UV = shutil.which("uv")
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(UV is None, reason="no uv")]
 #: what a run's environment doesn't inherit from this test's: credentials, a recording run's and `check`'s variables, and

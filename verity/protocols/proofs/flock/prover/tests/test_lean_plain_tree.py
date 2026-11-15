@@ -67,7 +67,7 @@ def test_the_sessions_coins_are_the_challengers(fx):
     assert "link points are not the coins" in C.sessions_tree_reason(trees, [("session", tables, rec)])
 
 
-def test_the_plain_session_on_the_tree_at_a_subset_draw_is_accepted(fx):
+def test_the_plain_session_on_the_tree_at_a_subset_sample_is_accepted(fx):
     import plain_hidden as PH
 
     program, _ = PH.program()
@@ -96,7 +96,7 @@ def test_its_session_key_is_used_once(fx, tmp_path):
     assert second["why"] == "S2: coin_tree.key is an earlier session's; a session key is never reused", second
 
 
-def test_a_changed_proof_or_an_uncovered_law_is_refused(fx, tmp_path):
+def test_a_changed_proof_or_an_uncovered_sampling_design_is_refused(fx, tmp_path):
     flipped = shutil.copytree(fx / "session", tmp_path / "flipped")
     rep = sorted(flipped.glob("*.bin"))[0]
     b = bytearray(rep.read_bytes())

@@ -54,6 +54,7 @@ import torch
 from verity.commitments.merkle import merkle_depth
 
 from verity_vllm import settings
+from verity_vllm.acquire.committer_api import RunCommitment
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.device_pool import DevicePool, pool_key, release
 from verity_vllm.commit.committer.flush_points import (
@@ -83,6 +84,7 @@ from verity_vllm.commit.committer.native_host import (
 )
 from verity_vllm.commit.committer.plan_cache import PlanCache, PlanMetas
 from verity_vllm.engine import runner_step
+from verity_vllm.log import write
 
 __all__ = ["GATHER_FLUSH_LEAVES", "GPU_CHUNK_BYTES", "NativeCollectCommitter", "ROWS_FOLD_BYTES", "ROWS_HOLD_BYTES",
            "WINDOW_SLOTS", "ext", "window_mb_default"]
@@ -1385,7 +1387,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         return {"stats": dict(self._nc.stats()), "window_stats": dict(self._nc.window_stats()),
                 "failure": str(getattr(self._nc, "failure", "") or "")}
 
-    def finalize(self):
+    def finalize(self) -> RunCommitment:
         if getattr(self, "_nc_at_detach", None) is None:
             for src in self.sources:
                 if hasattr(src, "sync_stats"):
@@ -1399,7 +1401,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             if self.fault == "hang_after_dead":
                 # DELIBERATE hang (negative test_e2e_collector_dead_hang_exits_rc3): the Python side never fails the run closed -- the
                 # C++ watchdog alone must end the process with rc 3 within the grace.
-                print("[collector] FAULT hang_after_dead: not acknowledging the dead collector (simulated hang)", flush=True)
+                write("[collector] FAULT hang_after_dead: not acknowledging the dead collector (simulated hang)")
                 threading.Event().wait()
             self.errors.append("windowed staging: collector dead (slot-wait timeout) -- run failed closed at finalize")
         try:

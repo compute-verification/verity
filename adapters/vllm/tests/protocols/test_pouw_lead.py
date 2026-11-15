@@ -7,7 +7,7 @@
 - The forward's one words root comes at the step's end: the calls' shapes fix the words instance's domain, the backend
   hashes its committed words to the subtree's top under it, and the keying keys that top. Then the pass's
   `PassCommitment` is published.
-- The option is refused where it can't be what it says: no backend, other schemes' settings, or beside sampled proofs or
+- The option is refused where it can't be what it says: no backend, other schemes' settings, or beside SPOT or
   PoUS. It uninstalls to the plain arm."""
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving import lead as PL
 from verity.protocols.accounting.pouw.prover.serving.lead import feed as F
 from verity.protocols.accounting.pouw.prover.serving.lead import record as R
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
+from verity_torch.pouw.pearl_c import passes as PP
 
 K = 64
 ENTRY = f"pouw:{PL.SCHEME}"
@@ -191,7 +191,7 @@ def test_the_lead_refuses_what_it_cannot_be():
 
 
 def test_the_lead_is_refused_beside_spot_and_pous():
-    """Sampled proofs would trace the lead's call as the stock computation, and under PoUS its GEMMs would read the
+    """SPOT would trace the lead's call as the stock computation, and under PoUS its GEMMs would read the
     backend's loaded weights, not what PoUS stores."""
     beside = PO.refusals(_ctx(enabled=(ENTRY, "sampled-proofs:rows-sha512"), backend=Backend()))
     assert any("the Program has no Definition for what it computes there" in r for r in beside)

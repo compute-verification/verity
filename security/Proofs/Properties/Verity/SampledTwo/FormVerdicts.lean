@@ -154,11 +154,11 @@ theorem paired_at {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.S
 /-! ## Each statement's sessions, accepted at its member's statement -/
 
 /-- **A session the statement's run accepted, with its sample's fit kept**: `MemberChecks.SessionAccepted`, and the
-record's sample fits its length word (`Spot.OneStageZk.drawFitsWhy`), which `Spot.OneStageZk.step` checks before its
+record's sample fits its length word (`Spot.OneStageZk.sampleFitsWhy`), which `Spot.OneStageZk.step` checks before its
 verdict. -/
 def SessionRead (a : Spot.OneStageZk.StepAt) (bs : Core.Blobs) (s : Spot.OneStageZk.RunFiles) : Prop :=
   ∃ coinKeys b record, bs.get s.record s!"session {s.name}'s record" = .ok b ∧ String.fromUTF8? b = some record ∧
-    Spot.OneStageZk.drawFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none ∧
+    Spot.OneStageZk.sampleFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none ∧
     Spot.OneStageZk.verdictOf a.I a.scope a.ksFiles a.population coinKeys record
       (Flock.Witness.recordDraw record) (Spot.OneStageZk.setupAt a.I a.rd (Flock.Witness.recordDraw record))
       (Spot.OneStageZk.filesOf bs s (Spot.OneStageZk.setupAt a.I a.rd (Flock.Witness.recordDraw record)))
@@ -191,14 +191,17 @@ public file, a lookup table, a program, a partition object or registered reads a
 (`Spot.OneStageZk.fitsWhy`), at the member's files on the blobs. The steps are `MemberChecks.statement_ok`'s, with
 the refusal's test kept. -/
 theorem statement_fits {m : Spot.OneStageZk.Member} {slice : Json} {bs : Core.Blobs} {a : Spot.OneStageZk.StepAt}
-    {circuitB pubB : ByteArray} (h : m.statement slice bs = .ok a)
-    (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB) :
-    Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB (Spot.OneStageZk.tablesOf bs) (some m.own.program)
+    {circuitB pubB : ByteArray} {tables : List (String × ByteArray)} (h : m.statement slice bs = .ok a)
+    (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
+    (ht : Spot.OneStageZk.ownTables m.own bs = .ok tables) :
+    Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB tables (some m.own.program)
       (some m.own.partition) m.own.registered = none := by
   unfold Spot.OneStageZk.Member.statement at h
   obtain ⟨a', ha', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨⟨⟩, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain rfl : a' = a := Except.ok.inj h
+  obtain ⟨tables', ht', ha'⟩ := Verity.Recursive.BaseSetup.bind_ok ha'
+  obtain rfl : tables' = tables := Except.ok.inj (ht'.symm.trans ht)
   unfold Spot.OneStageZk.statementOf at ha'
   obtain ⟨⟨⟩, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok ha'
   split at h
@@ -267,6 +270,7 @@ theorem runMembers_stmt {slice : Spot.OneStageZk.Member → Json} {ms : Array Sp
         ∀ s ∈ z.1.sessions.toList, SessionRead a bs s := by
   unfold Spot.OneStageZk.runMembers at h
   obtain ⟨held, hheld, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨_, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨files, hfiles, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨r₁, hfold, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨_, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
@@ -297,19 +301,20 @@ theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) 
     {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     (hf : SessionMsgs.formOf k = some (p, e)) {t : ℕ} {fs : Spot.OneStageZk.RunFiles}
     (hs : SessionMsgs.filesAt e t = some fs) :
-    ∃ (m : Spot.OneStageZk.Member) (circuitB pubB : ByteArray) (rd : Spot.OneStageZk.Reads) (record : String)
+    ∃ (m : Spot.OneStageZk.Member) (circuitB pubB : ByteArray) (rd : Spot.OneStageZk.Reads)
+      (tables : List (String × ByteArray)) (record : String)
       (spec : Flock.SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json) (proofs : Array ByteArray),
       Flock.Tags.circuit.plainLeaves = false ∧ SessionMsgs.memberAt p e t = some m ∧
         k.blobs.get m.own.circuit "circuit" = .ok circuitB ∧
         k.blobs.get m.own.pub "public file" = .ok pubB ∧ Spot.OneStageZk.readsOf m.own.registered = .ok rd ∧
-        SessionMsgs.recordAt k.blobs fs = some record ∧
-        Spot.OneStageZk.setupAt (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB k.blobs) rd
+        Spot.OneStageZk.ownTables m.own k.blobs = .ok tables ∧ SessionMsgs.recordAt k.blobs fs = some record ∧
+        Spot.OneStageZk.setupAt (Spot.OneStageZk.inputsAt Flock.Tags.circuit m.own circuitB pubB tables) rd
           (Flock.Witness.recordDraw record) = .ok (spec, tabs, rest) ∧
         (Spot.OneStageZk.filesOf k.blobs fs (.ok (spec, #[], Json.null, Json.null))).toOption = some proofs ∧
         Flock.Zk.verify spec tabs record proofs = .ok () ∧
-        Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB (Spot.OneStageZk.tablesOf k.blobs)
+        Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB tables
           (some m.own.program) (some m.own.partition) m.own.registered = none ∧
-        Spot.OneStageZk.drawFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none := by
+        Spot.OneStageZk.sampleFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none := by
   obtain ⟨k', hk', pp, c, e', pub, prof, hdec, hck⟩ := hacc
   obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
   have hpe : (pp, e') = (p, e) := Option.some.inj ((SessionMsgs.formOf_of_decoded hdec).symm.trans hf)
@@ -322,12 +327,12 @@ theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) 
   obtain rfl : held' = held := Except.ok.inj (hheld'.symm.trans hheld)
   obtain ⟨st, m, -, hm, hmem, hfs⟩ := paired_at hheld hs
   obtain ⟨a, ha, hsess⟩ := hz (st, m) hmem
-  obtain ⟨circuitB, pubB, rd, hpl, hc, hp, hrd, rfl⟩ := MemberChecks.statement_ok ha
+  obtain ⟨circuitB, pubB, rd, tables, hpl, hc, hp, hrd, ht, rfl⟩ := MemberChecks.statement_ok ha
   obtain ⟨coinKeys, b, record, hb, hu, hfitd, hv⟩ := hsess fs hfs
   dsimp only [Spot.OneStageZk.StepAt.ofOwn] at hv
   obtain ⟨proofs, spec, tabs, rest, hfiles, hst, hzk⟩ := Verity.Sampled.verdictOf_ok hv
-  refine ⟨m, circuitB, pubB, rd, record, spec, tabs, rest, proofs, hpl, hm, hc, hp, hrd, ?_, hst, ?_, hzk,
-    statement_fits ha hc hp, hfitd⟩
+  refine ⟨m, circuitB, pubB, rd, tables, record, spec, tabs, rest, proofs, hpl, hm, hc, hp, hrd, ht, ?_, hst, ?_,
+    hzk, statement_fits ha hc hp ht, hfitd⟩
   · have hb' : k.blobs.get fs.record "record" = .ok b := Verity.Sampled.Record.get_what hb
     unfold SessionMsgs.recordAt
     rw [hb']
@@ -349,7 +354,7 @@ theorem stmtAtCase_of_member {k : Case} {p : VStar.Recursive.SampledTwo.Params}
     {circuitB pubB : ByteArray} (hc : k.blobs.get m.own.circuit "circuit" = .ok circuitB)
     (hp : k.blobs.get m.own.pub "public file" = .ok pubB) :
     SessionMsgs.stmtAtCase k t =
-      some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.drawBytes record)
+      some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.sampleBytes record)
         (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).encode := by
   unfold SessionMsgs.stmtAtCase
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq]

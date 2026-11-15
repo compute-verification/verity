@@ -30,7 +30,7 @@ else   # a machine's clone has only the shipped commits, so a run there ships a 
   REF=${SC_PERIOD_REF:?this tree has no period: set SC_PERIOD_REF to a ref on origin whose tree has it}
   P=$W/period; log "period: network-period and the mirror from $REF"
 fi
-# before the scans, not beside them: scan_zk.sh's sampled-proofs build writes the same path dependencies' .lake
+# before the scans, not beside them: scan_zk.sh's SPOT build writes the same path dependencies' .lake
 { { [ "$P" = "$SRC" ] || { git fetch -q origin "$REF" && git worktree add -q --detach "$P" FETCH_HEAD; }; } \
   && (cd "$P/verity/protocols/accounting/certifier/verifier/lean" && lake build network-period); } > "$OUT/build-period.log" 2>&1 \
   || { tail -30 "$OUT/build-period.log"; log "period: no network-period"; exit 7; }
@@ -45,7 +45,7 @@ for run in honest late; do
   log "period: the $run run, scan_zk.sh rc ${rc[$run]}: $(grep -h '^SCZK .*answers:' "$OUT/$run/sczk.log" | cut -c1-600)"
 done
 NP=$P/verity/protocols/accounting/certifier/verifier/lean/.lake/build/bin/network-period
-PYTHONPATH=$PYTHONPATH:$SRC/tools/difftest/python "$PY" benchmarks/network_traces/scan_period.py \
+PYTHONPATH=$PYTHONPATH:$SRC/tools/difftest/python "$PY" -m verity.protocols.accounting.certifier.prover.scan_period \
   --mirror "$P/verity/protocols/accounting/certifier/verifier/network/tests/period_case.py" --lean "$NP" --out "$OUT/period" \
   "honest=$OUT/honest/warden,$OUT/honest/sczk" "late=$OUT/late/warden,$OUT/late/sczk" \
   "tampered=$OUT/honest/warden,$OUT/honest/sczk,tampered" "chain=$OUT/honest/warden,$OUT/honest/sczk,chain" \

@@ -3,7 +3,6 @@ module
 public import Definitions.Certifier
 public import Definitions.Certifier.Assumptions
 public import Definitions.Certifier.Ingress
-public import Definitions.Certifier.Schedule
 public import Mathlib.Data.Set.Card
 import Mathlib.Data.Sym.Sym2.Init
 
@@ -15,8 +14,7 @@ Each guarantee is a `def G : Prop`, stated over `Protocol`'s definitions with th
 one is open: nothing may cite it until it is proved. The statements that are only steps of these proofs, Theorem 1(b)'s
 counting bound among them, are in `Proofs.Certifier.Lemmas`, under the same names.
 
-`docs/network-transparency/timing-channel.md`: Proposition 2 (§2.3), Theorem 1(b) (§2.2), Theorem 3 (§2.4), and the
-ingress bound (§2.5, "Ingress content"; §3.2).
+`docs/network-transparency/timing-channel.md`: the ingress bound (§2.5, "Ingress content"; §3.2).
 -/
 
 @[expose] public section
@@ -27,126 +25,6 @@ open Finset
 
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
-
-/-! ## Proposition 2: timing is occupancy, its counts, and tightness -/
-
-/-- Free slots: the sender addresses slots, and there are `2^(T·S)` occupancies. -/
-def CardFree : Prop :=
-  ∀ (T S : ℕ), Fintype.card (Fin T → Fin S → Bool) = 2 ^ (T * S)
-
-/-- Left-packed: `(S + 1)^T` occupancies. -/
-def CardLeftPacked : Prop :=
-  ∀ (T S : ℕ), Fintype.card {P : Fin T → Fin S → Bool // LeftPacked P} = (S + 1) ^ T
-
-/-- **Fixed M, all released:** at most `binom(T + M − 1, M)` count vectors, which is the doc's `binom(M+T−1, T−1)`
-for `T ≥ 1`. -/
-def CardCountsEqLe : Prop :=
-  ∀ (T S M : ℕ),
-    (univ.filter fun n : Fin T → Fin (S + 1) => ∑ t, (n t : ℕ) = M).card ≤ (T + M - 1).choose M
-
-/-- **Fixed M, at the certifier.** When the sender enqueues at most `M` frames over the window, the FIFO certifier can release
-at most `binom(T + M, M)` distinct grids: the doc's `binom(M+T, T)`. -/
-def EncardFifoGridsLeOfAvailable : Prop :=
-  ∀ {F : Type} (T S M : ℕ) (f : ℕ → F),
-    {g | ∃ enq : ℕ → ℕ, ∑ t ∈ Finset.range T, enq t ≤ M ∧ g = fifoGrid T S f enq}.encard ≤
-      ((T + M).choose M : ℕ)
-
-/-- **Tightness.** Over all enqueue schedules, with the frames leaving in queue order `f`, the FIFO certifier can release
-exactly `(S + 1)^T` distinct grids. So `T·log2(S+1)` bits are attained with zero error. -/
-def EncardFifoGrids : Prop :=
-  ∀ {F : Type} (T S : ℕ) (f : ℕ → F),
-    (Set.range fun enq : ℕ → ℕ => fifoGrid T S f enq).encard = ((S + 1) ^ T : ℕ)
-
-/-! ## Theorem 3: the advice caps -/
-
-/-- **Theorem 3, the fixed advice budget.** This is the `2^A` cap with the advice type `Fin E → Fin k → Bool`: one
-string of exactly `k` bits for each of `E` execution blocks, padded to that length whatever is used. The accepted
-observation sequences of length `n` with jitter below `D` number at most `2^(E·k) · D^n`, that is `k` bits per
-execution block plus jitter. Every advice value has the same length, so the charge is `k` whatever an honest session
-used, and nothing used is counted: no cap per `T` buckets, no Kraft inequality and no `BitsCount`. -/
-def EncardAccSeqsLeAdviceBits : Prop :=
-  ∀ {L K S : ℕ} {In : Type} (E k : ℕ) (P : EgressPrediction L S In (Fin E → Fin k → Bool))
-    (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
-    (AccSeqs P op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞)
-
-/-! ## Theorem 3 for the reference schedule: the constant-rate Program
-
-`constantRate T g E frames` (`Definitions.Certifier.Schedule`) is the Program of one link's monitoring period:
-`E` execution blocks, each of `g·T` buckets, each block's frames and send ticks `frames ins e v ℓ` read from the
-ingress and that block's advice `v`, a string of `k = |a|` bits. None of these guarantees has a dataflow
-hypothesis. The counts are over the monitoring period's first `n` steps, within its `E` blocks (`hn : n ≤ E·(g·T)`):
-the audit gives verdicts for those blocks only, so every step counted is a step it checks. -/
-
-/-- **Theorem 3 for the reference schedule.** The constant-rate Program's accepted observation sequences of length `n`
-with jitter below `D` number at most `2^(E·k) · D^n`: `|a|` bits per execution block plus jitter. This holds for every
-frame function and operator. -/
-def EncardAccSeqsLeConstantRate : Prop :=
-  ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
-    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
-    (n D : ℕ) (hn : n ≤ E * (g * T)),
-    (AccSeqs (constantRate (S := S) T g E frames) op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞)
-
-/-- **A step's rows read only its execution block's advice.** Two advice values that agree on the block holding step
-`t`, `t / (g·T)`, give the same rows at `t`: the block's frames read only its own advice, and the FIFO starts empty at
-the block's first bucket. The advice is any value, in a registered set or not, so advice declared for a later block
-never changes an earlier block's verdict. -/
-def ExpectedRowCausal : Prop :=
-  ∀ {L S : ℕ} {In Adv : Type} (T g E : ℕ) (frames : List In → Fin E → Adv → Fin L → List LogicalFrame) (t : ℕ)
-    (ins : List In) (a a' : Fin E → Adv) (ha : ∀ e : Fin E, (e : ℕ) = t / (g * T) → a e = a' e),
-    (constantRate (S := S) T g E frames).rows t ins a = (constantRate (S := S) T g E frames).rows t ins a'
-
-/-- **`|a|` bits per execution block opened.** If the monitoring period's first `n` steps lie within its first `m`
-execution blocks (`n ≤ m·(g·T)`), the constant-rate Program's accepted sequences number at most
-`2^(min(E, m)·k) · D^n`: only the advice of blocks those steps reach counts, however many blocks the advice covers. -/
-def EncardAccSeqsLeConstantRateExecutionPhases : Prop :=
-  ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
-    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
-    (n D m : ℕ) (hn : n ≤ E * (g * T)) (hm : n ≤ m * (g * T)),
-    (AccSeqs (constantRate (S := S) T g E frames) op n D).encard ≤ ((2 ^ (min E m * k) * D ^ n : ℕ) : ℕ∞)
-
-/-- **The composed statement for the reference schedule (W2 and J).** A decoder reads the wire of the first `n` steps,
-within the first `m` execution blocks, and recovers every secret in `Zs`, all of whose runs the constant-rate Program
-accepts up to `n`. Then `Zs` has at most `2^(min(E, m)·k) · D^n` elements: a covert sender inside X moves at most
-`m·|a| + n·log2 D` bits through egress timing and content advice together, and under J only the advice's. -/
-def EncardDecodableLeConstantRate : Prop :=
-  ∀ {L K S : ℕ} {Z In Act Wire : Type}
-    (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)
-    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (n D m : ℕ) (hn : n ≤ E * (g * T))
-    (hm : n ≤ m * (g * T))
-    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
-    (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T g E frames) I.op n (I.obsRun z n))
-    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z),
-    Zs.encard ≤ ((2 ^ (min E m * k) * D ^ n : ℕ) : ℕ∞)
-
-/-- **`|a|` bits per execution block, from any block's start.** Fix what a run showed through its first `e₀` execution
-blocks, `p`, and take the `m` blocks after them, within the `E` blocks (`hn` is
-`EncardAccSeqsLeConstantRateExecutionPhases`'s `n ≤ E·(g·T)` for the monitoring period's first `n = (e₀ + m)·(g·T)` steps). The
-constant-rate Program's accepted sequences of that length with jitter below `D` that continue `p` number at most
-`(2^k · D^(g·T))^m`: `|a| + g·T·log2 D` bits per execution block, `|a|` under J (`D = 1`), whatever came before. At
-`e₀ = 0` they are the monitoring period's first `m` blocks. -/
-def EncardAccSeqsLeConstantRatePerExecutionPhase : Prop :=
-  ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
-    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
-    (e₀ m D : ℕ) (hn : (e₀ + m) * (g * T) ≤ E * (g * T)) (p : List (Obs L K S)),
-    {o | o ∈ AccSeqs (constantRate (S := S) T g E frames) op ((e₀ + m) * (g * T)) D ∧
-        o.take (e₀ * (g * T)) = p}.encard ≤ (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞)
-
-/-- **`|a|` bits per execution block through the wire, from any block's start (W2 and J).** Take secrets whose runs
-show the same observations `p` through the first `e₀` execution blocks, each accepted through the `m` blocks after
-them. A decoder of the wire through those blocks recovers at most `(2^k · D^(g·T))^m` of them: whatever the first `e₀`
-blocks showed, a covert sender inside X moves at most `m·(|a| + g·T·log2 D)` more bits through egress timing and
-content advice over the next `m` blocks. At `e₀ = 0` they are the monitoring period's first `m` blocks. -/
-def EncardDecodableLeConstantRatePerExecutionPhase : Prop :=
-  ∀ {L K S : ℕ} {Z In Act Wire : Type}
-    (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)
-    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (e₀ m D : ℕ)
-    (hn : (e₀ + m) * (g * T) ≤ E * (g * T))
-    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
-    (Zs : Set Z) (p : List (Obs L K S)) (hpre : ∀ z ∈ Zs, I.obsRun z (e₀ * (g * T)) = p)
-    (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T g E frames) I.op ((e₀ + m) * (g * T))
-      (I.obsRun z ((e₀ + m) * (g * T))))
-    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z ((e₀ + m) * (g * T))) = z),
-    Zs.encard ≤ (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞)
 
 /-! ## The ingress bound: what the outside can deliver into X through timing -/
 
@@ -163,7 +41,7 @@ def EncardIngressObsDecodableLe : Prop :=
     (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m),
     Ms.encard ≤ (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
-/-- **The ingress timing bound.** Read the interaction inward (`NetTiming.Protocol.Ingress`): the secret `m` is the
+/-- **The ingress timing bound.** Read the interaction inward (`Definitions.Certifier.Ingress`): the secret `m` is the
 outside's message, `snd m` chooses when ingress frames arrive and reacts to every record (and so to X's egress), `op`
 is X's devices, the record's `rows` are what the `L` ingress links release into X, and `wire` is everything that enters
 X. Take messages `Ms` whose runs keep every status complete up to `n`, and whose frames on each link `ℓ`, in the order
@@ -208,9 +86,9 @@ def EncardIngressDecodableLeContents : Prop :=
     (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m),
     Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
-/-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress link-window.** `EncardIngressObsDecodableLe` over the
+/-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress execution phase.** `EncardIngressObsDecodableLe` over the
 monitoring period's first `m` whole windows of `T` buckets, its first `n = m·T` steps: for one content assignment `c`,
-at most `(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each link-window contributes the factor `(r ℓ + 1)^T`, its
+at most `(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each execution phase contributes the factor `(r ℓ + 1)^T`, its
 `T·log2(r ℓ + 1)` bits, and each window `D^T` of jitter, 1 under J. -/
 def EncardIngressObsDecodableLePerExecutionPhase : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
@@ -239,8 +117,8 @@ def EncardIngressObsDecodableLeContentsPerExecutionPhase : Prop :=
 ## The schedule's declared bound and the coins
 
 This section fixes the two terms of the charge that the capacity bounds leave open: what the advice's content part
-counts and the coins (D7). Nothing in it is implemented yet. The numbers are at the llama8b-node1 calibration
-(`calibrations/llama8b-node1.json`): T = 600 buckets of 100 ms, B = 4,096, one egress link at r = 1,686, one ingress
+counts and the coins (D7). Nothing in it is implemented yet. The numbers are at the llama8b-node1 calibration:
+T = 600 buckets of 100 ms, B = 4,096, one egress link at r = 1,686, one ingress
 link (`requests`) at r_in = 34 and τ_in = 100 ms, and J (D = 1).
 
 ### What the advice counts
@@ -286,12 +164,12 @@ would have to hold: 2,400 bits at s_max = 15. The declaration below makes it a f
   a frame-v3-sha512 tree of hm96-sha512 rows (circuits' X3), hidden, and registered before any coin that depends on it.
   The registration statement proves that the rows are `Sched_E(p_i, arrivals)` for the arrivals the ingress
   certificates give, and that i < N. The count holds whenever i was chosen, since acceptance takes any value of the
-  advice. The rule that the root precedes the coins is there for the sampled proofs, so that the circuit can't be shaped
+  advice. The rule that the root precedes the coins is there for SPOT, so that the circuit can't be shaped
   around the sample.
 
 **The count.** The profile's index is `log2 N` of each execution block's `|a|` bits, read by B's codec beside the send
-ticks. `SecurityProofs.EncardAccSeqsLeConstantRate` counts it with the rest of the advice, so no new guarantee is
-needed.
+ticks. The constant-rate Program's count (`NetTiming.encard_accSeqs_le_constantRate`) counts it with the rest of the
+advice.
 
 **At the recorded parameters.** The recordings use one scheduler configuration. κ needs a grid that covers the honest
 step rate, and κ has none. Taking 8 values of κ gives N = 8, 3 bits of each execution block's `|a|`. A codec that spends

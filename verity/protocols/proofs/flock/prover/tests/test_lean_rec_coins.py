@@ -135,7 +135,7 @@ def shape(built, tmp_path_factory) -> Path:
 
 
 #: the sample of every one of the inner statement's 64 units, in order, as `--rec-inner-draw` takes it
-FULL_DRAW = {"law": "subset", "population": 64, "k": 64, "units": list(range(64))}
+FULL_SAMPLE = {"law": "subset", "population": 64, "k": 64, "units": list(range(64))}
 
 
 def _form(d: Path, draw: dict | None = None) -> list[str]:
@@ -144,7 +144,7 @@ def _form(d: Path, draw: dict | None = None) -> list[str]:
     unit unless given), written to `d`."""
     f = d / "draw.json"
     if draw is not None or not f.exists():
-        f.write_text(json.dumps(FULL_DRAW if draw is None else draw))
+        f.write_text(json.dumps(FULL_SAMPLE if draw is None else draw))
     return ["--rec-inner-statement", "verity/flock-circuit+plain-leaves", "--rec-inner-draw", str(f)]
 
 
@@ -263,7 +263,7 @@ def test_the_honest_level_is_refused_without_the_inner_transcript(forged, shape,
 
 
 @pytest.mark.parametrize("rep", [0, 1])
-def test_a_level_climbing_to_tops_the_coin_server_did_not_commit_is_refused(forged, shape, tmp_path, rep, restaged):
+def test_a_level_climbing_to_tops_the_live_coin_part_did_not_commit_is_refused(forged, shape, tmp_path, rep, restaged):
     """`RecVStar.checkTopRows` at a real level: the honest level 3 against an inner transcript whose rep `rep` level-3 top
     (its third salted top, 32 nodes, after level 0's `root_B` and one salted top a level, `rec_vstar.tops`; `rec-top-L3`
     is rep 0's, then rep 1's) has node 0's `b ‖ c` one bit off is refused at the table row that reads the node: the
@@ -279,10 +279,10 @@ def test_a_level_climbing_to_tops_the_coin_server_did_not_commit_is_refused(forg
     v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest",
                 "--rec-inner-transcript", str(tmp_path / "transcript.json"), rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert re.fullmatch(rf"setup: rec-tops: {re.escape(UNIT)}: port out's table row \d+ is not node 0 of rep {rep}'s level "
-                        rf"{LEVEL} top, which the coin server committed", v["why"]), v["why"]
+                        rf"{LEVEL} top, which the challenger's live-coin part committed", v["why"]), v["why"]
 
 
-def test_a_level_at_link_points_the_coin_server_did_not_draw_is_refused(forged, shape, tmp_path, restaged):
+def test_a_level_at_link_points_the_live_coin_part_did_not_sample_is_refused(forged, shape, tmp_path, restaged):
     """`RecVStar.innerLink`: check 5 takes the extra claims at the inner session record's link points, so the honest level
     against an inner transcript whose first link coin is one bit off from the record's is refused before setup."""
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
@@ -291,11 +291,11 @@ def test_a_level_at_link_points_the_coin_server_did_not_draw_is_refused(forged, 
     p = _run(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest",
              "--rec-inner-transcript", str(tmp_path / "transcript.json"), rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the inner session's record's link points are not "
-                                                   "the ones the coin server drew (link.points): check 5 would take the extra "
+                                                   "the ones the challenger's live-coin part drew (link.points): check 5 would take the extra "
                                                    "claims at points the prover chose")
 
 
-def test_a_level_over_a_transcript_not_in_the_coin_servers_format_is_refused(forged, shape, tmp_path, restaged):
+def test_a_level_over_a_transcript_not_in_the_live_coin_parts_format_is_refused(forged, shape, tmp_path, restaged):
     """`RecSetup.checkReads` among `verify`'s inputs (`RecSetup.commits`): the honest level against the honest inner
     transcript's values written as compact JSON is refused before setup, since the recursion's transcript model reads
     the record in the challenger's own format."""
@@ -304,13 +304,13 @@ def test_a_level_over_a_transcript_not_in_the_coin_servers_format_is_refused(for
     f.write_text(json.dumps(t))
     p = _run(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest",
              "--rec-inner-transcript", str(f), rows=_acc_rows(tmp_path / "rows.json", restaged))
-    assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the coin server's record does not read in "
+    assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the challenger's live-coin part's record does not read in "
                                                    "its own format (RecRecord.readFull: rec_live.record_bytes, its "
                                                    "rounds first, then its kind, tops, Hello in its keys' order and "
                                                    "the link's roots and points, at json.dumps' indent=1)")
 
 
-def _inner_drawn(tmp_path: Path, draw: dict) -> Path:
+def _inner_sampled(tmp_path: Path, draw: dict) -> Path:
     """The honest inner session, its record given `draw` as its `unit_draw`."""
     inner = shutil.copytree(SET / "inner-honest", tmp_path / "inner-drawn")
     s = json.loads((inner / "session" / "session.json").read_text())
@@ -319,20 +319,20 @@ def _inner_drawn(tmp_path: Path, draw: dict) -> Path:
     return inner
 
 
-def test_an_inner_record_whose_draw_leaves_a_unit_out_is_refused(forged, shape, tmp_path, restaged):
-    """`RecCoins.drawnSpec`: V* recurses on an inner session that proves every unit, so a record whose sample is a well
+def test_an_inner_record_whose_sample_leaves_a_unit_out_is_refused(forged, shape, tmp_path, restaged):
+    """`RecCoins.sampledSpec`: V* recurses on an inner session that proves every unit, so a record whose sample is a well
     formed sample of the 64 units is refused before its record is read."""
-    inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 1, "units": [0]})
+    inner = _inner_sampled(tmp_path, {"law": "subset", "population": 64, "k": 1, "units": [0]})
     v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, inner,
                 rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert v["why"] == (f"setup: rec-coins: {UNIT}: the inner session's draw: the session's draw proves 1 units, not "
                         "every one of the statement's 64 in order"), v["why"]
 
 
-def test_an_inner_record_given_the_full_draw_is_read_at_the_drawn_statement(forged, shape, tmp_path, restaged):
-    """`RecCoins.drawnSpec`: a record whose sample is every unit is decoded against the sampled statement's spec, whose
+def test_an_inner_record_given_the_full_sample_is_read_at_the_sampled_statement(forged, shape, tmp_path, restaged):
+    """`RecCoins.sampledSpec`: a record whose sample is every unit is decoded against the sampled statement's spec, whose
     header carries the sample. The honest session ran without one, so its record is refused there, at its parameters."""
-    inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
+    inner = _inner_sampled(tmp_path, {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
     v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, inner,
                 rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert v["why"] == f"setup: rec-coins: {UNIT}: the inner session's record: {S2_R7}", v["why"]
@@ -535,7 +535,7 @@ def test_rec_cap_holds_every_node_of_level_0s_cap_at_the_level_0_registration(ca
     assert off.result() == (f"setup: {CAP}: its port top reads rec-top-L0, which the verifier's shared rows (--rec-rows) "
                             f"register as rec-top-L0: root {top['root']}, against {flipped}"), off.result()
     assert re.fullmatch(rf"setup: rec-tops: {re.escape(CAP)}: port top's table row \d+ is not node 5 of circuit's root_B, "
-                        "which the coin server committed", forged.result()), forged.result()
+                        "which the challenger's live-coin part committed", forged.result()), forged.result()
 
 
 def test_rec_cap_is_refused_without_its_top_or_out_in_the_reads_file(cap, shape, undrawn, tmp_path):

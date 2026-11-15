@@ -20,10 +20,10 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.batch import evaluate_batch
 from verity.circuits.refs import runs
-from verity.commitments.windows import interface as IF
-from verity.definitions.registry import b1
-from verity.definitions.registry import dead_free as DF
-from verity.definitions.registry import greedy_stages as G
+from verity.commitments.periods import interface as IF
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import dead_free as DF
+from verity_vllm.definitions.registry import greedy_stages as G
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NSEL.FAMILIES}
 V, K, N, R = 154880, 20, 7744, 121
@@ -135,7 +135,7 @@ def test_joined_with_select():
     one decoder layer: nothing is unlowered, the stop check one `GreedyStopCheck_v1` unit reading the two selects' tokens a row
     each from their combines and the decode combine's own rows (its logits and its chunks' results); no row is free of the
     token select, the decode's 32 shard reads taking ``tok`` by one wire from the prefill select's combine unit, the
-    prefill's taking it as the request's ingress (the prompt); the prefill's 1,376 reads are still row 0 of the
+    prefill's leaving it free under the prompt, which no window declares; the prefill's 1,376 reads are still row 0 of the
     ``SIZE=192`` combine's ``parts``, which `node_window_multimem` combines as rows of 192 words. The only test that builds
     the window with the select beside the other five sets."""
     families = {**FAMILIES, **NS.FAMILIES, **NM.FAMILIES, **NE.FAMILIES}
@@ -155,8 +155,9 @@ def test_joined_with_select():
     tok = [(x.writer, x.out, x.at, x.radix, x.base, x.step, x.cut)
            for x in circuit.wires if x.reader == read and x.port == "tok"]
     assert tok == [(combine, "o0", IDS * blocks, (blocks,), 0, (0,), (0, 1))]
-    assert not [f for f in w.free if f.tid == read]
-    assert [(g.reader, g.port, g.at, g.units, g.step) for g in circuit.ingress] == [(read, "tok", 0, IDS * blocks, 0)]
+    assert [(f.port, f.at, f.count, f.kind, f.name) for f in w.free if f.tid == read] == [
+        ("tok", 0, IDS * blocks, "param", NW.PROMPT)]
+    assert circuit.ingress == ()
     parts = [x for x in circuit.wires if x.writer == read and x.reader.startswith("AllReduceMultimem_v1")]
     assert [(x.port, x.out, x.at, x.radix, x.base, x.step, x.cut[0]) for x in parts] == [
         ("parts", "o0", 0, (IDS, blocks), 0, (1, IDS), 0)]

@@ -11,15 +11,15 @@ public import Proofs.Properties.Challenger.Drawn
 history printed (`PrintsTwo`) and from the interior's records being held to its session's coin trees (`InteriorHeld`,
 which the form's per-member check holds: `OneStageZk.membersRun`'s `membersTreesHeld`).
 
-* **One session** (`read_on`): where `drawCoins` accepts a sample's coin evidence, it read the coins a run of the device
-  released and that run's lines (`Drawn.drawn_log`), or the finder outputs a break. The runs on the sample's window
+* **One session** (`read_on`): where `sampleCoins` accepts a sample's coin evidence, it read the coins a run of the device
+  released and that run's lines (`Drawn.sampled_log`), or the finder outputs a break. The runs on the sample's window
   print the play's log (`PrintsOn`), so the history keeping only those runs, with its ledger, prints it in the sense
-  `Lines.PrintsLog` states (`printsLog_onWindow`), and `Lines.read_run` reads the session's releases as that log but for
+  `Lines.PrintsLog` states (`printsLog_onExecutionPhase`), and `Lines.read_run` reads the session's releases as that log but for
   openings' coins of one SHA-512. `Lines.read_run` reads the history only at the run it reads, so no other run on
   another window need print this log.
 * **The first session** (`first_session`): `readsLogs` itself flips its coins under the parameters' key, so nothing of
   the form's check is read; its read takes no records.
-* **The interior session** (`second_session`): the coins the second stage read are what `drawCoins` reads from the
+* **The interior session** (`second_session`): the coins the second stage read are what `sampleCoins` reads from the
   interior audit's coin evidence (`oneStageZk_reads`), and its records are held to the trees its lines hold
   (`InteriorHeld`).
 * **Both** (`binds_of_prints`): on one window the sessions are one, and each read is the play's log; on two, the
@@ -28,7 +28,7 @@ which the form's per-member check holds: `OneStageZk.membersRun`'s `membersTrees
   samples' coins (`opensReads`).
 
 The history at each play may hold earlier runs and lines: `read_on` reads only the runs the sample names and the
-ledger. `PrintsTwo` is a premise at the history the leg's `dev` gives; at a one-play history it is the step
+ledger. `PrintsTwo` is a premise at the history the subprotocol's `dev` gives; at a one-play history it is the step
 `Device.lean`'s printing proves.
 -/
 
@@ -43,19 +43,19 @@ open Verity.Sampled.Binding (Read)
 /-! ## One session -/
 
 /-- **The device's history kept to the runs its ledger opens withheld on window `w`**, with all of its ledger. -/
-noncomputable def onWindow (dev : History) (w : String) : History :=
+noncomputable def onExecutionPhase (dev : History) (w : String) : History :=
   ⟨fun pk => (dev.runs pk).filter fun r => @decide (OpensOn dev pk w r.id) (Classical.propDecidable _), dev.ledger⟩
 
-theorem mem_onWindow {dev : History} {w : String} {pk : ByteArray} {r : Properties.Challenger.Run}
-    (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id) : r ∈ (onWindow dev w).runs pk :=
+theorem mem_onExecutionPhase {dev : History} {w : String} {pk : ByteArray} {r : Properties.Challenger.Run}
+    (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id) : r ∈ (onExecutionPhase dev w).runs pk :=
   List.mem_filter.2 ⟨hr, @decide_eq_true _ (Classical.propDecidable _) ho⟩
 
-theorem opensOn_onWindow {dev : History} {w w' : String} {pk : ByteArray} {id : String}
-    (ho : OpensOn dev pk w' id) : OpensOn (onWindow dev w) pk w' id := ho
+theorem opensOn_onExecutionPhase {dev : History} {w w' : String} {pk : ByteArray} {id : String}
+    (ho : OpensOn dev pk w' id) : OpensOn (onExecutionPhase dev w) pk w' id := ho
 
 /-- The runs on window `w` printing `log` is the history kept to them printing it. -/
-theorem printsLog_onWindow {dev : History} {w : String} {log : List Release} (h : PrintsOn dev w log) :
-    Verity.Sampled.Lines.PrintsLog (onWindow dev w) log := by
+theorem printsLog_onExecutionPhase {dev : History} {w : String} {log : List Release} (h : PrintsOn dev w log) :
+    Verity.Sampled.Lines.PrintsLog (onExecutionPhase dev w) log := by
   intro pk w' r hr _
   obtain ⟨hr, ho⟩ := List.mem_filter.1 hr
   obtain ⟨h1, -, h3⟩ := h pk r hr (@of_decide_eq_true _ (Classical.propDecidable _) ho)
@@ -79,22 +79,22 @@ theorem read_run_lines {dev : History} {log : List Release} (hP : Verity.Sampled
     (fun _ h => absurd h List.not_mem_nil) (hξ hcr label after) h
   simpa using hn.sublist ((List.tail_sublist r.log).filterMap _)
 
-/-- **A session's read, where `drawCoins` accepts its coin evidence and the runs on its window print `log`, is `log`
+/-- **A session's read, where `sampleCoins` accepts its coin evidence and the runs on its window print `log`, is `log`
 but for openings' coins of one SHA-512**, or the finder outputs a break: the lines it read are the sampled run's
 (`hl`), and its records give each round opened the coins those lines show (`hL`). -/
 theorem read_on {dev : History} {key : ChallengerKey} {w label : String} {after ξ : ByteArray} {coins : Json}
     {log : List Release} {lines : List String} {recs : List Json} {out : List Release}
-    (hP : PrintsOn dev w log) (hξ : drawCoins key w label after coins = .ok ξ)
+    (hP : PrintsOn dev w log) (hξ : sampleCoins key w label after coins = .ok ξ)
     (hl : ∀ (ls : Array Json) (l : List String), Spot.getD (Spot.getD coins "session") "log" = .arr ls →
       ls.toList = l.map Json.str → lines = l)
     (hL : ∀ ts, coinTreesOf lines = .ok ts → Verity.Sampled.Lines.TreeLines recs lines)
     (h : Verity.Sampled.readLog label after recs ξ lines = some out) :
     List.Forall₂ Verity.Sampled.Lines.ReadOf out log ∨ Break dev key label coins := by
-  rcases Drawn.drawn_log (dev := dev) hξ with ⟨s, hs, ho, hξs, hcr, ls, hls, hlog⟩ | b
+  rcases Drawn.sampled_log (dev := dev) hξ with ⟨s, hs, ho, hξs, hcr, ls, hls, hlog⟩ | b
   · obtain rfl : lines = s.log := hl ls s.log hls hlog
     obtain ⟨-, ⟨ts, hts⟩, -⟩ := hP key.pub s hs ho
     rw [hξs] at h
-    exact .inl (read_run_lines (printsLog_onWindow hP) (mem_onWindow hs ho) (opensOn_onWindow ho) hcr hts
+    exact .inl (read_run_lines (printsLog_onExecutionPhase hP) (mem_onExecutionPhase hs ho) (opensOn_onExecutionPhase ho) hcr hts
       (hL ts hts) h)
   · exact .inr b
 
@@ -159,8 +159,8 @@ theorem firstLines_eq {e : VStar.Recursive.SampledTwo.Evidence} {ls : Array Json
 the same read without the samples' coins agreeing with it; or its record carries a break. -/
 theorem first_session {dev : History} {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params}
     {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence} {d : Draws}
-    (hd : firstDraws key p c e = some d) {ξ : ByteArray}
-    (hξ : drawCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ) {log : List Release}
+    (hd : firstSamples key p c e = some d) {ξ : ByteArray}
+    (hξ : sampleCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ) {log : List Release}
     (hP : PrintsOn dev d.window log) {out : List Release} (h : firstRead key p c e ξ = some out) :
     (List.Forall₂ Verity.Sampled.Lines.ReadOf out log ∧
       ∃ out', firstRead key p c e .empty = some out' ∧ List.Forall₂ Verity.Sampled.Lines.Agree out out') ∨
@@ -195,7 +195,7 @@ def InteriorHeld (s : Verity.Sent) : Prop :=
 the same read without the samples' coins agreeing with it; or its record carries a break. -/
 theorem second_session {dev : History} {p : VStar.Recursive.SampledTwo.Params}
     {e : VStar.Recursive.SampledTwo.Evidence} {bs : _root_.Core.Blobs} {c₂ : Spot.OneStage.Commitment}
-    (hc₂ : interiorOf e = .ok c₂) {d : Draws} (hd : secondDraws p e = some d) {ξ : ByteArray}
+    (hc₂ : interiorOf e = .ok c₂) {d : Draws} (hd : secondSamples p e = some d) {ξ : ByteArray}
     (hξ : Spot.OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ) {log : List Release}
     (hP : PrintsOn dev d.window log)
     (hH : ∀ recs, secondRecords bs e = some recs → ∀ lines, Verity.Sampled.linesOf e.interior = .ok lines →
@@ -206,7 +206,7 @@ theorem second_session {dev : History} {p : VStar.Recursive.SampledTwo.Params}
       ∃ out', secondRead p e bs .empty = some out' ∧ List.Forall₂ Verity.Sampled.Lines.Agree out out') ∨
       Break dev d.key d.label e.interior.base.coins := by
   have hd' : oneStageZkSource p.audit c₂ = some d := by
-    unfold secondDraws at hd
+    unfold secondSamples at hd
     rw [hc₂] at hd
     exact hd
   obtain ⟨raw, hraw, hrx⟩ := oneStageZk_reads p.audit c₂ d hd' e.interior ξ hξ
@@ -251,11 +251,11 @@ theorem paramsAt_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Par
       | (simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h; exact h.1)
   rw [hp, hpe]
 
-theorem firstDraws_window {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params}
+theorem firstSamples_executionPhase {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params}
     {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence} {d : Draws}
-    (h : firstDraws key p c e = some d) :
+    (h : firstSamples key p c e = some d) :
     ∃ bp, boundaryOf p = .ok bp ∧ bp.verifier.windowRoot = some d.window ∧ d.key = key := by
-  unfold firstDraws at h
+  unfold firstSamples at h
   cases hb : boundaryOf p with
   | error _ => simp [hb, Except.toOption] at h
   | ok bp =>
@@ -273,14 +273,14 @@ theorem firstDraws_window {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.
           | exact ⟨bp, rfl, hw, rfl⟩
           | exact ⟨bp, hb, hw, rfl⟩
 
-theorem secondDraws_eq {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
-    {c₂ : Spot.OneStage.Commitment} {d : Draws} (h5 : interiorOf e = .ok c₂) (h : secondDraws p e = some d) :
+theorem secondSamples_eq {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
+    {c₂ : Spot.OneStage.Commitment} {d : Draws} (h5 : interiorOf e = .ok c₂) (h : secondSamples p e = some d) :
     oneStageZkSource p.audit c₂ = some d := by
-  unfold secondDraws at h
+  unfold secondSamples at h
   rw [h5] at h
   exact h
 
-theorem source_window {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {d : Draws}
+theorem source_executionPhase {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {d : Draws}
     (h : oneStageZkSource p c = some d) : p.base.verifier.windowRoot = some d.window := by
   unfold oneStageZkSource oneStageSource at h
   rcases hch : p.base.challenger with _ | ⟨key, label⟩ <;> rcases hw : p.base.verifier.windowRoot with _ | w <;>
@@ -288,13 +288,13 @@ theorem source_window {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment
   first | rfl | simp [hw]
 
 /-- **The two sessions' windows are the ones the parameters name**: the first's sample's and the interior's. -/
-theorem windowsOf_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
+theorem executionPhasesOf_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d₁ d₂ : Draws} {c₂ : Spot.OneStage.Commitment}
-    (h1 : caseOf s = .ok (p, c, e)) (h3 : firstDraws key p c e = some d₁) (h5 : interiorOf e = .ok c₂)
-    (h6 : secondDraws p e = some d₂) : windowsOf s.params = some (d₁.window, d₂.window) := by
-  obtain ⟨bp, hb, hw₁, -⟩ := firstDraws_window h3
-  have hw₂ := source_window (secondDraws_eq h5 h6)
-  unfold windowsOf
+    (h1 : caseOf s = .ok (p, c, e)) (h3 : firstSamples key p c e = some d₁) (h5 : interiorOf e = .ok c₂)
+    (h6 : secondSamples p e = some d₂) : executionPhasesOf s.params = some (d₁.window, d₂.window) := by
+  obtain ⟨bp, hb, hw₁, -⟩ := firstSamples_executionPhase h3
+  have hw₂ := source_executionPhase (secondSamples_eq h5 h6)
+  unfold executionPhasesOf
   rw [paramsAt_of_caseOf h1]
   simp [Except.toOption, hb, hw₁, hw₂]
 
@@ -302,8 +302,8 @@ theorem windowsOf_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {
 theorem key_second {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d₂ : Draws} {c₂ : Spot.OneStage.Commitment}
     (h1 : caseOf s = .ok (p, c, e)) (h2 : keyOf s.params = some key) (h5 : interiorOf e = .ok c₂)
-    (h6 : secondDraws p e = some d₂) : d₂.key = key := by
-  have hk := Verity.Sampled.Binding.key_of_source (secondDraws_eq h5 h6)
+    (h6 : secondSamples p e = some d₂) : d₂.key = key := by
+  have hk := Verity.Sampled.Binding.key_of_source (secondSamples_eq h5 h6)
   have hK : keyOf s.params = (some d₂.key).filter atDeployed := by
     unfold keyOf
     rw [paramsAt_of_caseOf h1]
@@ -314,8 +314,8 @@ theorem key_second {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c 
 theorem records_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} (h1 : caseOf s = .ok (p, c, e))
     (h2 : keyOf s.params = some key) :
-    records s = ((firstDraws key p c e).map fun d => (d, firstCoins e)).toList ++
-      ((secondDraws p e).map fun d => (d, e.interior.base.coins)).toList := by
+    records s = ((firstSamples key p c e).map fun d => (d, firstCoins e)).toList ++
+      ((secondSamples p e).map fun d => (d, e.interior.base.coins)).toList := by
   first
     | (simp only [records, h1, h2]; done)
     | (unfold records; rw [h1, h2])
@@ -323,8 +323,8 @@ theorem records_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c 
 /-- **Where the form's check read both sessions, the logs it made of them**, with every step it read on the way. -/
 theorem readsLogs_cases {s : Verity.Sent} {l : List Release} (hm : l ∈ readsLogs s) :
     ∃ p c e key d₁ ξ c₂ d₂ ξ₂ r₁ r₂, caseOf s = .ok (p, c, e) ∧ keyOf s.params = some key ∧
-      firstDraws key p c e = some d₁ ∧ drawCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ ∧
-      interiorOf e = .ok c₂ ∧ secondDraws p e = some d₂ ∧
+      firstSamples key p c e = some d₁ ∧ sampleCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ ∧
+      interiorOf e = .ok c₂ ∧ secondSamples p e = some d₂ ∧
       Spot.OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧ firstRead key p c e ξ = some r₁ ∧
       secondRead p e (_root_.Core.Blobs.ofArray s.blobs) ξ₂ = some r₂ ∧
       readsLogs s = logsOf d₁.window d₂.window r₁ r₂ := by
@@ -336,16 +336,16 @@ theorem readsLogs_cases {s : Verity.Sent} {l : List Release} (hm : l ∈ readsLo
   cases h2 : keyOf s.params with
   | none => simp [h1, h2, Except.toOption] at hm
   | some key =>
-  cases h3 : firstDraws key p c e with
+  cases h3 : firstSamples key p c e with
   | none => simp [h1, h2, h3, Except.toOption] at hm
   | some d₁ =>
-  cases h4 : drawCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) with
+  cases h4 : sampleCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) with
   | error _ => simp [h1, h2, h3, h4, Except.toOption] at hm
   | ok ξ =>
   cases h5 : interiorOf e with
   | error _ => simp [h1, h2, h3, h4, h5, Except.toOption] at hm
   | ok c₂ =>
-  cases h6 : secondDraws p e with
+  cases h6 : secondSamples p e with
   | none => simp [h1, h2, h3, h4, h5, h6, Except.toOption] at hm
   | some d₂ =>
   cases h7 : Spot.OneStageZk.coinsOf p.audit c₂ e.interior with
@@ -365,8 +365,8 @@ theorem readsLogs_cases {s : Verity.Sent} {l : List Release} (hm : l ∈ readsLo
 
 theorem opensReads_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d₁ d₂ : Draws} {o₁ o₂ : List Release}
-    (h1 : caseOf s = .ok (p, c, e)) (h2 : keyOf s.params = some key) (h3 : firstDraws key p c e = some d₁)
-    (h6 : secondDraws p e = some d₂) (h8 : firstRead key p c e .empty = some o₁)
+    (h1 : caseOf s = .ok (p, c, e)) (h2 : keyOf s.params = some key) (h3 : firstSamples key p c e = some d₁)
+    (h6 : secondSamples p e = some d₂) (h8 : firstRead key p c e .empty = some o₁)
     (h9 : secondRead p e (_root_.Core.Blobs.ofArray s.blobs) .empty = some o₂) :
     opensReads s = logsOf d₁.window d₂.window o₁ o₂ := by
   unfold opensReads
@@ -394,12 +394,12 @@ theorem binds_of_prints (dev : Exchange → History) (θ : ByteArray)
   | cons l₀ ls₀ =>
   obtain ⟨p, c, e, key, d₁, ξ, c₂, d₂, ξ₂, r₁, r₂, h1, h2, h3, h4, h5, h6, h7, h8, h9, hE⟩ :=
     readsLogs_cases (s := o.sent) (l := l₀) (by rw [hR]; simp)
-  obtain ⟨-, -, -, hk₁⟩ := firstDraws_window h3
+  obtain ⟨-, -, -, hk₁⟩ := firstSamples_executionPhase h3
   have hk₂ : d₂.key = key := key_second h1 h2 h5 h6
   have hm₁ : (d₁, firstCoins e) ∈ records o.sent := by rw [records_eq h1 h2, h3]; simp
   have hm₂ : (d₂, e.interior.base.coins) ∈ records o.sent := by rw [records_eq h1 h2, h6]; simp
   have hK : keyOf θ = some key := by rw [← hθ]; exact h2
-  have hw : windowsOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact windowsOf_eq h1 h3 h5 h6
+  have hw : executionPhasesOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact executionPhasesOf_eq h1 h3 h5 h6
   have hPT := hP o hθ d₁.window d₂.window hw
   have hH := hI o.sent hθ ha p c e h1
   unfold PrintsTwo at hPT

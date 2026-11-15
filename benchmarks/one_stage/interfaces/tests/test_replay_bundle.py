@@ -17,7 +17,7 @@ S = B.S
 SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json"
 #: the bundle of units 5, 200, 300 and 511 (slot 0 layer 0, slot 0 layer 1, slot 1 layer 0, slot 1 layer 1) of a W8A8 MLP's
 #: window (two requests, one step, width 128: 512 units in members of 8) on the RTX PRO 6000's dot, under the window's
-#: registered subset:4, and that registration; `prove_bundle.py make` wrote them at bc24cf2713 from the retired torch loop,
+#: registered subset:4, and that docket; `prove_bundle.py make` wrote them at bc24cf2713 from the retired torch loop,
 #: and the window itself is the registered fixture benchmarks/one_stage/tests/fixtures/bundle-window (prove_bundle.sh's BUNDLE_WINDOW)
 FIXTURES = Path(__file__).parent / "fixtures"
 DRAW = (5, 200, 300, 511)
@@ -37,7 +37,7 @@ def bundle() -> tuple[dict, bytes]:
 
 
 @pytest.fixture(scope="module")
-def registration() -> dict:
+def docket() -> dict:
     return json.loads((FIXTURES / "drawn-unit-registration.json").read_text())
 
 
@@ -186,7 +186,7 @@ def test_another_context_is_refused(bundle) -> None:
     assert {k for k, v in bad.items() if v == PATHS} == {f"unit:{u}/{p}" for u in DRAW for p in ("x", "sx", "o0")}
 
 
-def test_a_live_draw_carries_its_receipt(bundle, validator) -> None:
+def test_a_live_sample_carries_its_receipt(bundle, validator) -> None:
     doc, payload = bundle
     live = copy.deepcopy(doc)
     live["draw"]["source"] = "live"
@@ -240,16 +240,16 @@ def test_a_boolean_template_replays_its_bits_in_word_order() -> None:
         assert not B.replay(unit, bytes(bad))
 
 
-def test_the_fixture_is_its_digests(bundle, registration) -> None:
+def test_the_fixture_is_its_digests(bundle, docket) -> None:
     doc, payload = bundle
     assert B.digests(doc, payload) == GOLDEN
-    assert B.check(doc, payload, registration=registration) == {}
+    assert B.check(doc, payload, docket=docket) == {}
 
 
-def test_another_registration_is_refused(bundle, registration) -> None:
+def test_another_registration_is_refused(bundle, docket) -> None:
     doc, payload = bundle
-    reg = copy.deepcopy(registration)
+    reg = copy.deepcopy(docket)
     for r in reg["roots"]:
         r["root"] = "00" * 64
-    bad = B.check(doc, payload, registration=reg)
+    bad = B.check(doc, payload, docket=reg)
     assert bad and all(v == "not the registration's root" for v in bad.values())

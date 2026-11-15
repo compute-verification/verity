@@ -3,7 +3,7 @@ module
 public import Batteries.Data.List.Basic
 public import Std.Data.TreeMap.Raw.WF
 public import Proofs.Flock.Claims.CanonText
-public import Proofs.Properties.Accounting.Remote.Sort
+public import Proofs.Properties.Poub.Remote.Sort
 public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Core.QSort
 public import Spot.Json
@@ -448,7 +448,7 @@ theorem obj_read {m n : Std.TreeMap.Raw String Json} {s t : String}
         Flock.canonUtf8 p.2 = .ok kv.2 ∧ z = item kv := by
     intro k zs F z hz
     obtain ⟨kv, hkv, rfl⟩ := List.mem_map.1 hz
-    have hkv' : kv ∈ zs.toList := (Properties.RemoteAudit.qsort_toList_perm zs keyLt).mem_iff.1 hkv
+    have hkv' : kv ∈ zs.toList := (Properties.Poub.qsort_toList_perm zs keyLt).mem_iff.1 hkv
     obtain ⟨p, hp, hpk⟩ := forall₂_mem_right F kv hkv'
     obtain ⟨h1, h2⟩ := pair_ok hpk
     exact ⟨p, hp, kv, h1, h2, rfl⟩

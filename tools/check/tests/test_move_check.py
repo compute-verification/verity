@@ -657,15 +657,15 @@ def test_tools_registry_dotted_rewrite_is_certified(tmp_path):
 
 
 def test_pathlib_chain_from_a_call_is_certified(tmp_path):
-    repo, base = _repo(tmp_path, {"tools/lean/warm.py": 'CHECK = Path("tools") / "check"\n',
-                                  "tools/check/check.py": ""})
-    _move(repo, "tools/check", "tools/check")
-    _write(repo, {"tools/lean/warm.py": 'CHECK = Path("tools") / "check"\n'})
+    repo, base = _repo(tmp_path, {"pkg/warm.py": 'CHECK = Path("pkg") / "deep" / "gate"\n',
+                                  "pkg/deep/gate/run.py": ""})
+    _move(repo, "pkg/deep/gate", "pkg/gate")
+    _write(repo, {"pkg/warm.py": 'CHECK = Path("pkg") / "gate"\n'})
     r = _check(repo, base)
     assert r["certified"], r["refusals"]
-    _write(repo, {"tools/lean/warm.py": 'CHECK = Path("tools") / "chek"\n'})
+    _write(repo, {"pkg/warm.py": 'CHECK = Path("pkg") / "gat"\n'})
     [f] = _check(repo, base)["refusals"]
-    assert f["path"] == "tools/lean/warm.py"
+    assert f["path"] == "pkg/warm.py"
 
 
 def test_tools_registry_non_path_change_is_refused(tmp_path):
@@ -1380,6 +1380,22 @@ def test_a_parenthesized_import_of_a_module_that_did_not_move_there_is_refused(t
         assert f["path"] == "pkg/app/use.py" and "linear.api" in f["hunk"]
 
 
+WHOLE_NEW = "from app.protocols.bandwidth import (\n    remote as R,\n    host as H,\n)\n"
+
+
+@pytest.mark.parametrize("new", [WHOLE_NEW, WHOLE_NEW.replace("host as H", "host as H2"),
+                                 WHOLE_NEW.replace("bandwidth import (", "linear import (")])
+def test_an_import_the_move_writes_whole_in_parentheses_binds_each_name_where_its_module_went(tmp_path, new):
+    """A relative `from .store import remote as R, host as H`, written absolute and whole, one name a line, as
+    `tools/move/layout.py` writes it: each name binds where its module went, and one bound under another name or to a
+    module that went elsewhere is refused."""
+    r = _app(tmp_path, {"pkg/app/use.py": "from .store import remote as R, host as H\n"}, {"pkg/app/use.py": new})
+    if new == WHOLE_NEW:
+        assert r["certified"], r["refusals"]
+    else:
+        assert _refused(r) == {"pkg/app/use.py": "edit beyond moved paths and module names"}
+
+
 def test_a_module_anchor_that_names_another_directory_is_refused(tmp_path):
     [f] = _app(tmp_path, {"pkg/app/use.py": PY_OLD},
                {"pkg/app/use.py": PY_NEW.replace("parents[2]", "parents[3]")})["refusals"]
@@ -1867,6 +1883,90 @@ FLOCK_MOVED = {
     "Security/Proofs/lakefile.toml": FLOCK["Security/Proofs/lakefile.toml"].replace("verity/ml/flock", "verity/flock/prover"),
     "Security/Sha.lean": FLOCK["Security/Sha.lean"].replace("verity/ml/flock", "verity/flock/prover"),
 }
+
+
+#: `pkg` is an import root below `adapters/app/`, whose lint lists its files from `adapters/app/`; `gate.py` leaves it for
+#: `verity`'s root
+ROOTS = {
+    LAYOUT_MAP: ('[roots]\nold = { pkg = "adapters/app/pkg", verity = "verity" }\nnew = { pkg = "adapters/app/pkg", verity = "verity" }\n\n'
+                 '[paths]\n"adapters/app/pkg/gate.py" = "verity/serving/gate.py"\n'),
+    "adapters/app/pkg/__init__.py": "", "adapters/app/pkg/gate.py": "X = 1\n", "adapters/app/pkg/stay.py": "Y = 1\n",
+    "verity/__init__.py": "", "verity/serving/__init__.py": "",
+    "adapters/app/allow.json": '[\n {"file": "pkg/gate.py", "kind": "T201"},\n {"file": "pkg/stay.py", "kind": "T201"}\n]\n',
+}
+
+
+@pytest.mark.parametrize(("written", "message", "certified"), [
+    ("verity/serving/gate.py", LAYOUT_MSG, True),
+    ("verity/serving/gate.py", "Move by hand\n", False),
+    ("serving/gate.py", LAYOUT_MSG, False),
+])
+def test_a_path_written_from_its_import_root_follows_its_file_out_of_the_root(tmp_path, written, message, certified):
+    """`pkg/gate.py`, written from the name of the import root it is below (`[roots] old` of the map the move ran by), is
+    written as `tools/move/layout.py` writes it once the file leaves that root: from the root it lands below, here from the
+    repository's root (`verity` is its own directory). Without the move line no map names the roots, and any other
+    spelling is beyond the move."""
+    repo, base = _repo(tmp_path, ROOTS)
+    _move(repo, "adapters/app/pkg/gate.py", "verity/serving/gate.py")
+    _write(repo, {"adapters/app/allow.json": ROOTS["adapters/app/allow.json"].replace('"pkg/gate.py"', f'"{written}"')})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+    assert r["certified"] == certified, r["refusals"]
+    if not certified:
+        assert _refused(r) == {"adapters/app/allow.json": "edit beyond moved paths and module names"}
+
+
+@pytest.mark.parametrize(("init", "message", "certified"), [
+    ("lib/tests/new/__init__.py", LAYOUT_MSG, True),
+    ("lib/tests/new/__init__.py", "Move by hand\n", False),
+    ("lib/tests/else/__init__.py", LAYOUT_MSG, False),
+])
+def test_an_empty_init_the_map_creates_where_a_file_went_is_certified(tmp_path, init, message, certified):
+    """`tests/` is run by path, so the mover writes no package level there on its own: a map's `[create]` row asks for
+    it. The empty `__init__.py` it names counts in a directory a renamed file went to, and nowhere else."""
+    repo, base = _repo(tmp_path, {
+        LAYOUT_MAP: f'[paths]\n"lib/tests/old/test_x.py" = "lib/tests/new/test_x.py"\n\n[create]\n"{init}" = ""\n',
+        "lib/tests/old/test_x.py": "def test():\n    pass\n"})
+    _move(repo, "lib/tests/old/test_x.py", "lib/tests/new/test_x.py")
+    _write(repo, {init: ""})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+    assert r["certified"] == certified, r["refusals"]
+    if not certified:
+        assert _refused(r) == {init: "added"}
+
+
+SLOTS = {
+    "bench/slots/pyproject.toml": '[project]\nname = "slots"\n\n[tool.pytest.ini_options]\npythonpath = ["."]\n',
+    "bench/slots/slots.py": "X = 1\n",
+    "bench/slots/bench.py": "Y = 1\n", "other/pyproject.toml": '[project]\nname = "other"\n',
+    "pyproject.toml": '[project]\nname = "root"\n\n[tool.uv.workspace]\nmembers = ["other", "bench/slots"]\n',
+    "uv.lock": '[[package]]\nname = "slots"\nversion = "0.0.0"\nsource = { virtual = "bench/slots" }\n',
+    "README.md": "The slots' bench is `bench/slots`.\n",
+}
+
+
+@pytest.mark.parametrize("readme", [False, True])
+def test_a_distribution_moved_out_of_a_directory_it_splits_is_named_where_its_pyproject_went(tmp_path, readme):
+    """`bench/slots/`'s distribution moves to `lib/slots/` and its bench stays: the workspace's member and the lock's source
+    name the directory its `pyproject.toml` is in, now `lib/slots`, and so does the `"."` the moved `pyproject.toml`
+    names its own directory by. A reference elsewhere to the directory, which stays, is not the distribution's and keeps
+    its place."""
+    repo, base = _repo(tmp_path, SLOTS)
+    for f in ("pyproject.toml", "slots.py"):
+        _move(repo, f"bench/slots/{f}", f"lib/slots/{f}")
+    _write(repo, {"pyproject.toml": SLOTS["pyproject.toml"].replace('"bench/slots"', '"lib/slots"'),
+                  "uv.lock": SLOTS["uv.lock"].replace('"bench/slots"', '"lib/slots"')})
+    if readme:
+        _write(repo, {"README.md": SLOTS["README.md"].replace("bench/slots", "lib/slots")})
+    r = _check(repo, base)
+    if readme:
+        assert _refused(r) == {"README.md": "edit beyond moved paths and module names"}
+    else:
+        assert r["certified"], r["refusals"]
+        assert r["rules"]["members"] == ["pyproject.toml", "uv.lock"]
 
 
 def _flock(tmp_path: Path, message: str = LAYOUT_MSG, **over: str) -> dict:

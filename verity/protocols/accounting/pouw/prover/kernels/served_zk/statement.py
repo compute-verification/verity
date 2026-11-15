@@ -1,5 +1,5 @@
-"""A served pass's rows in the ZK statement's format beside the scheme's (-h3's): each decode forward that vLLM replays whole
-(`verity.protocols.accounting.pouw.prover.serving.pearl_c.whole`) commits, once after the forward and on the replay's stream (so the next
+"""A served pass's rows in the ZK statement's format beside the scheme's (-h3's): each decode forward that the engine replays whole
+(the device adapter's whole-forward replay) commits, once after the forward and on the replay's stream (so the next
 forward waits for it), its calls' A rows and its tile rows as hm96-sha512 leaves of frame-v3-sha512 trees (hm96_rows.cu,
 `rows_bench.Commit`).  `PearlCDeviceRun.statement` holds it; it runs while ``enabled`` (e2e.py's ``pearlc-zk`` mode).
 
@@ -17,7 +17,10 @@ forward waits for it), its calls' A rows and its tile rows as hm96-sha512 leaves
 
 `check` is the gate before any timing: a forward of every weight (m = 32) captured whole and replayed from poisoned stages
 and outputs must give Python's roots and b ‖ c over the rows it staged, which must be the calls' A words; the no-write
-control (the same replay with the commitments left out) must not."""
+control (the same replay with the commitments left out) must not.
+
+The device's tensors (`zeros`, `empty`, `fill_stages`) and the gate (`check`) are benchmark-side code, which verity does not
+import: they raise here, and `benchmarks/pouw/served_zk/statement_torch.py`'s Statement supplies them."""
 from __future__ import annotations
 
 import hashlib
@@ -32,6 +35,8 @@ PREFIX = "verity/pouw/served-zk/statement/v0"
 #: forwards whose roots the device ring holds
 ROOTS = 1 << 12
 POISON = 0xA5
+ON_THE_DEVICE = ("Statement.{} is benchmark-side code, which verity does not import (compute-accounting/pouw-package-holds-kernels): "
+                 "benchmarks/pouw/served_zk/statement_torch.py's Statement supplies it")
 
 
 def rows_bench() -> ModuleType:
@@ -55,7 +60,6 @@ def slots_of(ks: dict[int, int]) -> tuple[dict[int, tuple[int, int]], dict[int, 
 
 class Statement:
     def __init__(self, run: Any, cubin: str | Path) -> None:
-        import torch
         self.B, self.run = rows_bench(), run
         raw = Path(cubin).read_bytes()
         self.cubin_sha256 = hashlib.sha256(raw).hexdigest()
@@ -68,17 +72,30 @@ class Statement:
         self.ks = sorted(self.count)
         self.stages: dict[tuple[int, int], Any] = {}
         self.commits: dict[tuple[int, int], list] = {}
-        self.ring = torch.zeros(ROOTS * 64 * (len(self.ks) + 1), dtype=torch.uint8, device=run.device)
+        self.ring = self.zeros(ROOTS * 64 * (len(self.ks) + 1))
         self.forwards = self.taken = 0
+
+    # ---- the device's tensors ---------------------------------------------------------------------------------------
+
+    def zeros(self, n: int) -> Any:
+        """`n` zero bytes on the run's device."""
+        raise NotImplementedError(ON_THE_DEVICE.format("zeros"))
+
+    def empty(self, rows: int, k: int) -> Any:
+        """A `rows` × `k` FP32 stage on the run's device."""
+        raise NotImplementedError(ON_THE_DEVICE.format("empty"))
+
+    def fill_stages(self, byte: int) -> None:
+        """Every stage's bytes set to `byte`, the device synchronized after."""
+        raise NotImplementedError(ON_THE_DEVICE.format("fill_stages"))
 
     # ---- inside and around the whole capture ------------------------------------------------------------------------
 
     def prepare(self, w: int, sh: Any) -> None:
         """Outside the capture (vLLM's warm-up forward): the stage of `w`'s k at `sh`'s m₁₆."""
-        import torch
         k, key = self.pos[w][0], (self.pos[w][0], sh.m16)
         if key not in self.stages:
-            self.stages[key] = torch.empty((self.count[k] * sh.m16, k), dtype=torch.float32, device=self.run.device)
+            self.stages[key] = self.empty(self.count[k] * sh.m16, k)
 
     def stage(self, w: int, sh: Any) -> None:
         """Inside the capture, after the call's steps: its A words to its weight's slot, before a call of its shape rewrites
@@ -133,11 +150,7 @@ class Statement:
         return {"forwards": n, "roots_sha512": hashlib.sha512(roots).hexdigest()}
 
     def poison(self) -> None:
-        import torch
-        with torch.inference_mode():
-            for st in self.stages.values():
-                st.view(torch.uint8).fill_(POISON)
-        torch.cuda.synchronize(self.run.device)
+        self.fill_stages(POISON)
         for cms in self.commits.values():
             for cm in cms:
                 for p, n in ((cm.x, 64 * cm.rows), (cm.bc, 128 * cm.rows), (cm.tree, cm.tree_bytes)):
@@ -148,61 +161,6 @@ class Statement:
 
     def check(self, weights: dict, m: int = 32) -> dict:
         """The gate (the module's docstring), with hashing and graphs on for its length."""
-        import torch
-        run = self.run
-        dev = run.device
-        gen = torch.Generator(device=dev).manual_seed(20261006)
-        xs = {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
-        forward = lambda: [run.gemm(w, xs[w], W, None) for w, W in weights.items()]  # noqa: E731
-        held = run.graphs, run.hashing, self.enabled
-        run.graphs, run.hashing, self.enabled = True, True, True
-        res: dict = {}
-        try:
-            run.begin()
-            forward()
-            run.end()
-            run.begin()
-            side, graph = torch.cuda.Stream(device=dev), torch.cuda.CUDAGraph()
-            run.whole_capture_begin(run.whole_key())
-            try:
-                forward()
-                side.wait_stream(torch.cuda.current_stream(dev))
-                with torch.cuda.graph(graph, stream=side):
-                    forward()
-            finally:
-                calls = run.whole_capture_end()
-            run.end()
-            for name, skip in (("honest", False), ("control", True)):
-                run.begin()
-                run.poison()
-                self.poison()
-                at = run.cur.tiles
-                run.whole_replay(calls)
-                graph.replay()
-                self.skip = skip
-                try:
-                    run.whole_replayed(calls)
-                finally:
-                    self.skip = False
-                torch.cuda.synchronize(dev)
-                cms = self._commits(m, sum(c.tiles for c in calls))
-                cms[-1].data = run.leaves.data_ptr() + run.nb * at
-                same = []
-                for cm in cms:
-                    want = cm.reference(cm.read_rows())
-                    same.append(self.h.read(cm.tree + cm.tree_bytes - 64, 64) == want["root"]
-                                and self.h.read(cm.bc, 128 * cm.rows) == want["bc"])
-                staged = all(torch.equal(self.stages[(k, m)][i * m:(i + 1) * m], xs[w].float()) for w, (k, i) in self.pos.items())
-                res[name] = {"roots_equal": same, "staged_rows_equal": staged}
-                run.end()
-        finally:
-            run.graphs, run.hashing, self.enabled = held
-            self.forwards = self.taken = 0
-        rows = {f"x/k{k}": self.count[k] * m for k in self.ks}
-        rows["tiles"] = sum(c.tiles for c in calls)
-        ok = (all(res["honest"]["roots_equal"]) and res["honest"]["staged_rows_equal"] and res["control"]["staged_rows_equal"]
-              and not any(res["control"]["roots_equal"]))
-        return {"check": "statement", "cubin_sha256": self.cubin_sha256, "calls": len(calls), "rows": rows, **res, "ok": ok}
-
+        raise NotImplementedError(ON_THE_DEVICE.format("check"))
 
 __all__ = ["Statement", "slots_of"]

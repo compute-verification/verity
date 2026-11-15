@@ -114,7 +114,7 @@ binding error per audit.
 - **The expected-time extractor** (DESIGN.md §3) uses `k` reruns in which the session accepts:
   `ε·Pr[fails] ≤ ε_c⁻ + N₀ε/(ek) + √(k·Adv₀)` (`joint_le_accB`). `analysisBE`'s `cover` absorbs the middle term.
 - **The link theorem** (`flock_batched_linkSoundE`, DESIGN.md §3): given `ValueBinding` (named), at each prover whose
-  link finders satisfy A2 (`LinkCR`), `δ_link` is at most `Q_s(2(1+k)t'/2^256 + …)/(1 − ρ)`, `Q_s ≤ N_s`; at any other
+  link finders satisfy A2 (`LinkCR`), `ε_bind` is at most `Q_s(2(1+k)t'/2^256 + …)/(1 − ρ)`, `Q_s ≤ N_s`; at any other
   prover the bound is `⊤` (`linkBoundCR`). A2 is not asked of every prover at once: a prover can hard-code a collision.
   It dominates the audit's hash term.
 - **The value binding** (`Binding/`). `ValueBinding` is built from the serving rows' `hm96-sha512/row/v1` leaves
@@ -123,7 +123,7 @@ binding error per audit.
   key, and `collide` is an explicit extractor (`ExplicitLeaf.hm96`, `hm96Pair_spec`): two different rows with one leaf
   give a SHA-512 collision of the outer hash, of the salt digest, or of the rows' own digests. What `ValueBinding`
   carried becomes `Assumptions.HmRowComputes` (the circuit's row hashing computes the commit string, phase 2i) and the
-  layout's facts (`Layout`, `HmRows`). `flock_e2e_count_hm96`, `flock_e2e_drawn_hm96` and their `_exec_hm96` forms are
+  layout's facts (`Layout`, `HmRows`). `flock_e2e_count_hm96`, `flock_e2e_sampled_hm96` and their `_exec_hm96` forms are
   the end-to-end theorems with that binding. The headline, `Prog.flock_headline` (`Headline.lean`), is the count curve
   with that binding on the statement's rows' circuit at the live sample under A3 (`ASSUMPTIONS.md`, The headline). Each
   is proved under the assumptions its footprint lists, every hypothesis with its kind: hardness (`cr/sha-512`,
@@ -148,7 +148,7 @@ binding error per audit.
   SHA-512 collision (`TwoOpenings.collides`, from `Flock.Registered.opensLeaf_binding`), at most `q²/2^513` likely under
   `cr/sha-512` (`TwoOpenings.conflict_strict`). Where the check holds, a registered read's leaf is the registrant's, and
   the row a satisfying witness holds there is the row the registrant committed, or SHA-512 collides (`Reads.regLeaf_eq`,
-  `Reads.registered_weights`). `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` add to the end-to-end
+  `Reads.registered_weights`). `flock_e2e_sampled_hm96_reads` and `flock_e2e_count_hm96_reads` add to the end-to-end
   bounds the event that a registered read's leaf under the prover's registration is not the registrant's, at
   `δ_reg = qR²/2^513` (`Reads.prob_off_le`). With `--registered F` at hidden outputs, sampled proof blocks' reads are
   checked: `SoundZHJR` (`--zk`), `SoundExecHR` (plain, `Discharge/PlainReg/`).

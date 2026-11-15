@@ -55,7 +55,7 @@ what one query must give and assembles a level and a rep from it; nothing in it 
   positions, and the consistency sums being the opened rows' (`consAt`).
 * `openedAll_of_levels`: every context `verifierRows` gives, from one fact per level at the level's context
   (`rows_conss`). `verifierRows_info_comb`: the contexts and `κ` don't read the comb, so the coins' run at
-  `RecCoins.ZERO_COMB` (`staged_rep_drawn`) gives the rep's.
+  `RecCoins.ZERO_COMB` (`staged_rep_sampled`) gives the rep's.
 * `queryOpens_of_climb`: `QueryOpens` from a climb at any index whose low `d − c` bits are the position's.
   `climb_of_outs`, `queryOpens_of_outs`: the climb a rec-open copy computes is on its first 64 output bytes
   (`Readable.OpenOuts`), so `QueryOpens` holds where those bytes are the cap's entry. `dirsRow_testBit`: the `dirs` row

@@ -1,9 +1,9 @@
 """Round 2's wired key (`SecondStage.keyFailure`, `openedRow`) held to its Python (`second_stage._key_failure`) through
-the ``second_statements`` piece of two executables: `sampled-proofs-difftest`, the build of record's, whose switch is
-off (`SecondStage.WIRED_KEY`), and `sampled-proofs-wired-key-dev`, the development executable with it on. One MoE
+the ``second_statements`` piece of two executables: `spot-difftest`, the build of record's, whose switch is
+off (`SecondStage.WIRED_KEY`), and `spot-wired-key-dev`, the development executable with it on. One MoE
 layer's read of its expert's row, over the two-template interior (`SECOND_MIXED`): its router, PAIR, writes each
 token's expert index at `out`, and the read, TRIPLE, a read of the table round 1's record registers, takes its key
-`tok` from it, unit for unit. And the verifier of record (`sampled-proofs-verifier`) serves no piece that takes the
+`tok` from it, unit for unit. And the verifier (`spot-verifier`) serves no piece that takes the
 switch from its input.
 """
 
@@ -23,8 +23,8 @@ from test_difftest import PACKAGE, PIECES, SECOND_MIXED, _as_stated, _second_cas
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-DEV = "sampled-proofs-wired-key-dev"
-VERIFIER = "sampled-proofs-verifier"
+DEV = "spot-wired-key-dev"
+VERIFIER = "spot-verifier"
 PAIR, TRIPLE = SECOND_MIXED.templates
 SAMPLE, DRAWN = [0, 2], [1, 4, 6, 9]
 #: The read's table in round 1's record (`t`) of `V` rows, its root and domain id, which the verifier fills as bytes.
@@ -67,7 +67,7 @@ def _moe(statements: bool = False) -> dict:
                    for p in ("root", "domain", "row", "salt", "path")),
                  {"template": TRIPLE, "port": "tok", "per": 3, "runs": [[0, 2, 0, 1]]}]
     c["widths"] = [{"template": TRIPLE, "port": "tok", "reads": 2, "writes": 2}]
-    c["supplied"] = {"root": [[{"bytes": T_ROOT}]], "domain": [[{"bytes": T_DOMAIN}]], "one": [[{"bytes": "00000001"}]]}
+    c["supplied"] = {"root": [[{"bytes": T_ROOT}]], "domain": [[{"bytes": T_DOMAIN}]], "one": [[{"bytes": "0001"}]]}
     c["reads"] = {TRIPLE: V}
     c["ref_reads"] = {**c["ref_reads"], TRIPLE: {"ports": {"o1": {"value": "one"}}}}
     if not statements:
@@ -129,15 +129,15 @@ def test_no_input_turns_the_switch_on(of_record):
         assert got["detail"]["second-inputs"] == {"value": "row", "why": SS.KEY_WHY}, (extra, got)
 
 
-def test_the_verifier_of_record_serves_no_piece_that_takes_the_switch(verifier):
-    """The verifier of record's executable answers no ``second_statements`` request, whatever it carries: round 2 runs
+def test_the_verifier_serves_no_piece_that_takes_the_switch(verifier):
+    """The verifier's executable answers no ``second_statements`` request, whatever it carries: round 2 runs
     in it only inside the stream's run (`Run.run`), whose `Own` holds the switch as the build does."""
     for extra in ({}, {"wired_key": True}, {"wiredKey": True}):
         with pytest.raises(D.ProtocolError, match="unknown fn: second_statements"):
             verifier.call("second_statements", {**MOE, **extra})
 
 
-def test_a_sampled_unit_whose_key_is_not_its_writers_row_is_refused(dev):
+def test_a_sampled_proof_block_whose_key_is_not_its_writers_row_is_refused(dev):
     """The wired key's read in a statement (`second-read`, `second_stage._read_ok`'s wired arm, which the switch doesn't
     touch): TRIPLE's session reads `tok` at its writer units' committed rows, each slot its writer's first unit in its
     cell, and passes; a prover that opens another row, another unit's or another cell's, is refused ``second-read``.
@@ -154,6 +154,26 @@ def test_a_sampled_unit_whose_key_is_not_its_writers_row_is_refused(dev):
                                                    "tok": {**tok, "reads": reads}}}}]})
         got = _agree(ON, dev, case)
         assert "second-read" in got["codes"], (reads, got)
+
+
+def test_a_read_whose_key_is_wired_lists_no_table_rows(of_record, dev):
+    """TRIPLE's session lists ``table_rows`` at its wired key `tok`: both builds refuse it, ``second-table-rows`` with
+    `KEY_ROWS_WHY`, whatever the switch; round 2 reads no ``table_rows`` yet, so one listed at a wired port that is no
+    read's key (the same run, TRIPLE's port left `x`) is refused too, with `TABLE_ROWS_WHY`."""
+
+    def listed(c: dict, port: str) -> dict:
+        s0, s1 = c["statements"]
+        ports = s1["registered"]["ports"]
+        return _as_stated({**c, "statements": [s0, {**s1, "registered": {**s1["registered"], "ports": {
+            **ports, port: {**ports[port], "table_rows": [0, 1]}}}}]})
+
+    keyed = listed(_key_statements(), "tok")
+    plain = listed(_second_case(SECOND_MIXED, True, SAMPLE, DRAWN, wires=[(TRIPLE, PAIR)], allow=True), "x")
+    for port, server in ((ON, dev), (OF_RECORD, of_record)):
+        for case, at, why in ((keyed, "tok", SS.KEY_ROWS_WHY), (plain, "x", SS.TABLE_ROWS_WHY)):
+            got = _agree(port, server, case)
+            assert got["detail"]["second-table-rows"] == {"statement": 1, "template": TRIPLE, "port": at,
+                                                          "why": why}, got
 
 
 def _key_statements() -> dict:

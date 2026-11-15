@@ -73,9 +73,11 @@ def verdict(resp: bytes) -> dict:
 
 
 class Auditor:
-    """A scripted auditor: each connection's frames, `Register` answered with a sample of none, anything else `Ok`."""
+    """A scripted auditor: each connection's frames, `Register` answered with a sample of none and then `known` (the
+    verifier's list of the statement's known trees; by default no byte), anything else `Ok`."""
 
-    def __init__(self):
+    def __init__(self, known: bytes = b""):
+        self.known = known
         self.got: list[list[bytes]] = []
         self.srv = socket.socket()
         self.srv.bind(("127.0.0.1", 0))
@@ -93,7 +95,7 @@ class Auditor:
     def _conn(self, c, mine):
         while (f := _read(c)) is not None:
             mine.append(f)
-            c.sendall(_bytes(b"\x06" + _bytes(b"null") if f[:1] == REGISTER else OK))
+            c.sendall(_bytes(b"\x06" + _bytes(b"null") + self.known if f[:1] == REGISTER else OK))
         c.close()
 
 
@@ -188,7 +190,7 @@ def test_a_stop_at_finish_holds_the_proofs_and_cuts_the_auditor(exe, tmp_path):
     c.close()
     lp.close()
     assert auditor.got == [[REGISTER]]
-    (times,) = [json.loads(ln.split(" ", 1)[1]) for ln in lp.p.stderr.read().decode().splitlines() if ln.startswith("ZK-SERVER-TIMES ")]
+    (times,) = [json.loads(ln.split(" ", 1)[1]) for ln in lp.p.stderr.read().decode().splitlines() if ln.startswith("FIREWALL-TIMES ")]
     assert (times.pop("ready_ms") > 0, times) == (True, {"session": s, "part": "L0", "release_ms": None, "outcome": "stop"})
     py = FW.ZkServer(tmp_path / "py")
     py.finish(py.open("s", ["L0", "L1"]))

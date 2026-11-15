@@ -20,8 +20,8 @@ from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as OG
 from verity.commitments import row_table as RT
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows import tables as TB
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import tables as TB
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
@@ -101,19 +101,19 @@ class Served:
         return {op: (ids, np.stack(xs), np.array(ss, dtype=np.float32)) for op, (ids, xs, ss) in out.items()}
 
 
-def window(row_tables: bool = True, law=None, work_table=None) -> tuple[CS.Binding, Served, list]:
+def window(row_tables: bool = True, sampling_design=None, work_table=None) -> tuple[CS.Binding, Served, list]:
     s = Served()
     ms = SRW.members([COORD], [s.rows], [UNITS], {COORD: CAP})
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
-    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), law or D.parse_design("stratified:2"), RUN, tuple(ms),
+    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), sampling_design or D.parse_design("stratified:2"), RUN, tuple(ms),
                    tables, CTX.hex() if row_tables else "", work_table)
     return w, s, ms
 
 
-def committed(monkeypatch, row_tables: bool = True, law=None, work_table=None, **kw) -> tuple[CS.Committed, Served, list]:
-    w, s, ms = window(row_tables, law, work_table)
+def committed(monkeypatch, row_tables: bool = True, sampling_design=None, work_table=None, **kw) -> tuple[CS.Committed, Served, list]:
+    w, s, ms = window(row_tables, sampling_design, work_table)
     monkeypatch.setattr(SRW, "_operand", s.operand)
     got = SRW._read_s8(ms, s.rows, s, None, ARRIVALS)
     return CS.commit(w, [g[0] for g in got], salt_key=bytes(32), row_salt_key=ROW_KEY, **kw), s, got
@@ -197,7 +197,7 @@ def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_an
     # the window's commit holds its steps to the roots serving recorded before their coins
     recorded = {step: sr.root for step, sr in served.items()}
     assert committed(monkeypatch, segment_roots=recorded)[0].roots == c.roots
-    with pytest.raises(ValueError, match=r"segments \[1\]: the window's segment roots are not the ones recorded"):
+    with pytest.raises(ValueError, match=r"segments \[1\]: the period's segment roots are not the ones recorded"):
         committed(monkeypatch, segment_roots={**recorded, 1: bytes(64)})
     w2, _, _ = window()
     with pytest.raises(ValueError, match="give row_salt_key"):

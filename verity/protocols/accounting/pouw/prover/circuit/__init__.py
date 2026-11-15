@@ -13,11 +13,14 @@
   the width rule with the separator port pinned by the protocol.
 * `anchors`: the anchored inputs' anchors, which the verifier builds (the tile checks' derived noise too, `TileAnchors`, with
   each unit's public input regions), and the execution phase's refusal of a repeated call index.
-* `plan`: closure samples behind a draw-law seam (`CountLaw`, and `WorkLaw`, `Commitments/Draw.lean`'s work sampling design), and the tile checks' layout.
-* `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
-  their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are Flock-committed
-  ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
-* `rowk`: their row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
+* `plan`: closure samples behind a sampling-design seam (`CountSamplingDesign`, and `WorkSamplingDesign`, `Commitments/Draw.lean`'s work sampling design), and the tile checks' layout.
+* `tile_units`: what the tile checks share: their emitter, the ok word, the digest families, the row cut's shape
+  (`RowK`), the unit roles and the cut of a root into units (`units`, `unit_cut`).
+* `pc8`: Pearl-C's (FP8, forming v1) tile check as a Program, cut into row and tile units, and its hiding Program
+  (``Shape.hidden``), whose tiles return only their tile digest; the rows are Flock-committed ports and the anchored
+  inputs public input regions (`PORTS`).  Its scheme has no entry in `SCHEMES` yet.  Pearl-C4's (`pc4`) is
+  `verity.protocols.experimental.pearl_c4.prover`'s.
+* `rowk`: the tile checks' row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
   piece fits Flock's block.
 * `compile`: PoUW as one pass over a served Program: `compile(program, scheme,
   groups)` replaces every registered matmul's dots (`MATMULS`) with the scheme's r × c tile units, each deriving its seed
@@ -45,6 +48,9 @@
   `window.window_problem` in gates), one unit an execution phase: ok iff the P rows are entry rows of the layout, the
   calls, one filler, then empty entries, whose ranges tile [0, N) at the public registered level, every call's -h3 root
   the pass's public one and the calls' pass tiles in order.
+* `pearl_c_call`, `pearl_c_forming`, `pearl_c_noise`, `pearl_c_tile`: Pearl-C -h3's rows and cells, its forming, its noise
+  derivation and its tile's checked words as registered Definitions, each with its Boolean version, which
+  `pearl_plus_tile`, Pearl+'s tile check, calls.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs SPOT traces for one PoUW linear and its weight, their partition queries, the served outputs
@@ -115,14 +121,14 @@ class Traced:
         an = anchors.weight_inputs()
         return [list(b), an["salt"], an["weight"], an["colids"]]
 
-    def draw(self, law, anchors, ledger):
+    def draw(self, sampling_design, anchors, ledger):
         """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one, each
         stratum's subset keyed by the call's index (``anchors.call_index``) with its template, under the key of
         ``ledger``, the execution phase's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
         the caller. The sample is refused for a ledger not opened from a receipt or whose sample was sent, and for a call the
         receipt doesn't list or the execution phase already holds, before anything is sampled. So every call's commitment precedes
         the key (C1), and each call of an execution phase samples under a context of its own: the product distribution the execution phase pin
-        (`audit_window_split_of_record`) takes as M1."""
+        (`audit_executionPhase_split_of_record`) takes as M1."""
         from . import plan
         from .anchors import Ledger
 
@@ -131,7 +137,7 @@ class Traced:
         ledger.check_draw()
         ledger.admit(anchors, self.shape)
         index = anchors.call_index
-        return plan.draw(ledger.key, self.layout(), law, index if isinstance(index, tuple) else (index,))
+        return plan.draw(ledger.key, self.layout(), sampling_design, index if isinstance(index, tuple) else (index,))
 
     def check_openings(self, plan, anchors, ledger, domain, openings, limits=None) -> None:
         """Refuse the call's A-row openings unless they are the plan's A rows, once each, and each authenticates under

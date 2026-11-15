@@ -6,7 +6,9 @@ files and the capture (`two_stage.replayed`): the interior committed, its return
 salts, written as the one-stage audit reads a window, registered on the class's stream and sampled. Then what the
 verifier's half hands the one-stage audit and round 2 (`two_stage.prove`'s inputs: the verifier's reads, the params, the
 sessions' statements), held to round 2's check without the sessions, which run on a node (``two_stage_small.sh``): the
-public files the served path writes are the ones a5 stages, and a stand-in names them as a verdict of record does."""
+public files the served path writes are the ones a5 stages, and a stand-in names them as a verdict of record does.
+One class is no token select's: a check of two wired templates, inlined at two outputs a span, whose reader is wired
+to a writer of two units a block, which `two_stage.replayed` commits by the replay block's rows."""
 
 from __future__ import annotations
 
@@ -18,18 +20,21 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from verity.circuits.codec import canonical_json
-from verity.commitments.windows import flock_inputs as FI, links as LK, rows as CS
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
+from verity.commitments.periods import flock_inputs as FI, links as LK, rows as CS
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
-from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR
+from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR, serving_rows as SRW
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
-TS = importlib.import_module("verity.protocols.proofs.spot.device.two_stage")
+TS = importlib.import_module("two_stage")
 SM = importlib.import_module("two_stage_small")
 FC = importlib.import_module("fake_challenger")
 
@@ -58,10 +63,10 @@ def run(served) -> dict:
     check, tmp = served["check"], served["tmp"]
     got = TS.first(served["pub"], check, TS.rule_of(_layout(), f"rate:{Q}/{N}", K, 60.0),
                    FC.Challenger("first", label=TS.family_of(served["class"].layout)))
-    stage1 = json.loads(json.dumps(got.stage1()))
-    again = TS.resume(stage1, check, FC.Challenger("second"))
+    first_stage = json.loads(json.dumps(got.first_stage()))
+    again = TS.resume(first_stage, check, FC.Challenger("second"))
     r = TS.replayed(again, served["class"], served["capture"], tmp / "interior", clock=iter((100.0, 102.5)).__next__)
-    return {**served, "stage1": stage1, "again": again, "r": r}
+    return {**served, "first_stage": first_stage, "again": again, "r": r}
 
 
 def _handed(interior: Path, served: Path, mine: CS.Binding, reads: dict, drawn: list[int]) -> tuple[list[dict], dict]:
@@ -114,15 +119,75 @@ def test_a_class_whose_block_makes_no_wires_has_no_second_stage_and_one_of_insta
     assert [n for n, _s in rule.interior] == [f"{TID}/logits", f"{TID}/o0"]
 
 
+def _words(bits: np.ndarray) -> np.ndarray:
+    """Rows of bits as rows of u16 words, each word's low bit first."""
+    return np.packbits(np.asarray(bits, dtype=np.uint8), axis=1, bitorder="little").view("<u2")
+
+
+def test_a_class_wired_to_a_writer_of_two_units_a_block_is_committed_by_its_replay_blocks_rows(tmp_path, monkeypatch):
+    """A check whose body is two templates, the second reading the first's output (a mask block of the long row's cut
+    and its positions, at small statics: registered templates, which an interior window lays out by id), inlined at
+    two outputs a span: its replay block holds two units of each, so the reader's wire is to a writer of two units a
+    block, and only the block's rows (`second_stage.replay_rows`) say which each reader unit reads, its own
+    instance's. `replayed` commits the sampled spans' units under the design's wires and rows: the interior's window
+    is the design's, each reader unit held to its instance's writer, the block's four parameters registered as values,
+    and K proof blocks of each template sampled in every sampled span. Without the rows the interior refuses the wire
+    by name. The spans stand in for a capture (`spans_of`), which reads a token select's alone: each unit's rows are
+    random bits and its outputs its Definition's on them."""
+    o = 2
+    mask, positions = (SRW.template(t).fn for t in ("DsaTopKMaskBlock_v2{N=4,AT=0,TOPK=2}", "DsaMaskPositions_v2{N=4,AT=0,K=2}"))
+    check = bind(CompositeDefinition("TwoStageSecondTestCut", 0, (),
+                                     lambda S_: (mask.signature()[0], positions.signature()[1].fields[1]),
+                                     lambda B, S_, *a: B.call(positions, B.call(mask, *a))[1], register=False))
+    ids = [BR.descriptor_id(t) for t in (mask, positions)]
+    layout = BR.Layout(check, 0, 1, 4, o, N, BR.run_root("test-serve", 0), True)
+    c = BR.commit([BR.Span(f"r{i}", SM.PROMPT, {**SM.GREEDY, "max_tokens": o}, (7, i), "length") for i in range(N)], layout, 0)
+    d = TS.design(layout)
+    assert d.cells == (o, o) and [(w.template, w.port, w.writer, w.wport) for w in d.wires] == [(ids[1], "mask", ids[0], "o0")]
+    assert d.rows == tuple(SS.replay_rows(layout.program, d.key))
+    assert [(x.per, x.runs) for x in d.rows if (x.template, x.port) == (ids[1], "mask")] == [(o, (SS.Run(0, o, 0, 1),))]
+    first = TS.first(c.public(), check, TS.rule_of(layout, f"rate:{Q}/{N}", K, 60.0),
+                     FC.Challenger("first", label=TS.family_of(layout)))
+    again = TS.resume(json.loads(json.dumps(first.first_stage())), check, FC.Challenger("second"))
+    sample = [int(u) for u in again.sample.units]
+
+    def units(u: int) -> tuple[IR.Span, ...]:
+        rng = np.random.default_rng(u)
+        ins = [rng.integers(0, 2, (o, ty.leaves), dtype=np.uint8) for _p, ty in mask.signature()[0]]
+        m = np.asarray(BS.evaluate_bits(mask, *ins)).reshape(o, -1)
+        p = np.asarray(BS.evaluate_bits(positions, m)).reshape(o, -1)
+        cut = np.cumsum([0, *(f.leaves for f in positions.signature()[1].fields)])
+        rid, out = c.spans[u].engine_id, []
+        for t, rows, outs in ((ids[0], ins, [m]), (ids[1], [m], [p[:, a:b] for a, b in zip(cut, cut[1:], strict=False)])):
+            member = IR.member(t, o)
+            data = {"rows": {port: _words(x) for (port, _w), x in zip(member.rows, rows, strict=True)},
+                    "outs": {port: _words(x) for (port, _w), x in zip(member.outs, outs, strict=True)}}
+            out.append(IR.Span(rid, member, data, [[i, i + 1, rid, i] for i in range(o)], layout.partition["program"]))
+        return tuple(out)
+
+    monkeypatch.setattr(TS, "spans_of", lambda c, capture, sample, rids=None: ([units(int(u)) for u in sample], {}))
+    r = TS.replayed(again, c, tmp_path / "capture", tmp_path / "interior")
+    assert (r.design.wires, r.design.rows) == (d.wires, d.rows)
+    assert CS.expected_ports(r.design.window(again.docket.digest, sample)) == r.interior.ports
+    w = r.interior.committed.window
+    assert [(m.template, m.n) for m in w.members] == [(t, Q * o) for t in ids]
+    assert w.held_leaves(w.members[1], "mask") == tuple(range(Q * o))
+    assert [e["value"] for e in r.record["registered"]] == ["scores", "n", "key", "r"]
+    assert sorted(u // o for u in r.draw.units) == list(range(2 * Q))
+    with pytest.raises(ValueError, match="reads a writer of 2 units a block.*give the replay block's rows"):
+        IR.interior([units(u) for u in sample], d.cells, again.docket.digest, sample, row=again.pub["window"],
+                    links=d.links, wires=d.wires)
+
+
 def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_sampled(run):
-    """The written record is the one registered: after the boundary registration, over the sampled spans in the
+    """The written record is the one registered: after the boundary docket, over the sampled spans in the
     sample's order, registering the block's ``logits`` and nothing round 1's record names; the second stage samples
     K proof blocks in each sampled span."""
     again, r, tmp = run["again"], run["r"], run["tmp"]
     sample = [int(u) for u in again.sample.units]
-    assert r.record == json.loads((tmp / "interior" / "registration.json").read_text()) == r.registration.record
-    assert r.record["previous"] == again.registration.digest and r.record["window"]["replay_sample"] == sample
-    assert r.record["window"]["run"] == IR.interior_run(again.registration.digest, sample)
+    assert r.record == json.loads((tmp / "interior" / "registration.json").read_text()) == r.docket.record
+    assert r.record["previous"] == again.docket.digest and r.record["window"]["replay_sample"] == sample
+    assert r.record["window"]["run"] == IR.interior_run(again.docket.digest, sample)
     earlier = {x["port"] for x in again.record["roots"]} | {e["value"] for e in again.record.get("registered", ())}
     assert earlier == {*BR.PORTS, "o0"}
     assert [e["value"] for e in r.record["registered"]] == ["logits"]
@@ -133,7 +198,7 @@ def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_
 
 def test_the_interiors_commitment_is_timed_by_the_callers_clock_read_twice(run):
     """`replayed` reads the clock it is handed once before the capture and once after the window's files are written,
-    and nowhere else: the registration and the sample, which wait on the challenger, are not in ``commit_s``. (The
+    and nowhere else: the docket and the sample, which wait on the challenger, are not in ``commit_s``. (The
     fixture's clock has two readings: a third would have stopped it.)"""
     assert run["r"].commit_s == 2.5
 
@@ -156,9 +221,9 @@ def test_the_replay_side_refuses_a_capture_that_is_not_the_sampled_spans_or_a_re
     rows[sample[1] * O + 2, 0] ^= 1
     with pytest.raises(ValueError, match=f"unit {O + 2} \\(sampled span 1\\) returns at its 'o0' a row that is not row "
                                          f"{sample[1] * O + 2} of o0, the return round 1 committed"):
-        IR.interior(per, d.cells, again.registration.digest, sample, row=0, links=d.links, returns=[(x, replace(port, rows=rows))])
+        IR.interior(per, d.cells, again.docket.digest, sample, row=0, links=d.links, returns=[(x, replace(port, rows=rows))])
     with pytest.raises(ValueError, match="which round 1's record doesn't commit"):
-        IR.interior(per, d.cells, again.registration.digest, sample, row=0, links=d.links,
+        IR.interior(per, d.cells, again.docket.digest, sample, row=0, links=d.links,
                     returns=[(replace(x, held=False), port)])
     assert not (tmp / "never").exists()
 
@@ -209,7 +274,7 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_f
     either (``second-values``). Slow (about 15 s): it lowers the template for the references and the sessions' files."""
     again, r, tmp = run["again"], run["r"], run["tmp"]
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
-    mine, w = d.window(again.registration.digest, sample), r.interior.committed.window
+    mine, w = d.window(again.docket.digest, sample), r.interior.committed.window
     assert (mine.partition_digest, mine.run, mine.population) == (w.partition_digest, w.run, w.population)
     assert CS.expected_ports(mine) == r.interior.ports
     check = R.check(r.record, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), r.interior.leaf_layer,
@@ -323,7 +388,7 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
     first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0),
                      FC.Challenger("first", label=TS.family_of(c.layout)))
-    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
+    again = TS.resume(json.loads(json.dumps(first.first_stage())), check, FC.Challenger("second"))
     with pytest.raises(ValueError, match="makes no wires round 2 derives"):
         TS.replayed(again, c, got["capture"], tmp_path / "never")
     r = TS.replayed(again, c, got["capture"], tmp_path / "interior", unlinked=True)
@@ -333,7 +398,7 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     assert d.cells == (chunks, O) and "registered" not in r.record and r.tie == {}
     assert sorted(u // chunks for u in drawn if u < Q * chunks) == list(range(Q))
     assert sorted((u - Q * chunks) // O for u in drawn if u >= Q * chunks) == list(range(Q))
-    mine = d.window(again.registration.digest, sample)
+    mine = d.window(again.docket.digest, sample)
     assert CS.expected_ports(mine) == r.interior.ports
     reads = TS.verifier_reads(d, mine, r.record, again.record, sample)
     assert all(e["value"] == f"{m.template}/{p}" for m in mine.members for p, e in reads[m.key]["ports"].items())
@@ -369,8 +434,9 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     assert c.layout.inline and len(c.layout.templates) == k and len(names) == (N if tables else 0) and pub["ids"]
     assert ret == f"{block}o0"
     assert list(pub["values"]) == [*BR.PORTS, ret, *names]
-    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
-    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
+    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0),
+                     FC.Challenger("first", label=TS.family_of(c.layout)))
+    again = TS.resume(json.loads(json.dumps(first.first_stage())), check, FC.Challenger("second"))
     r = TS.replayed(again, c, got["capture"], tmp_path / "interior")
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
     combine = f"GreedyCombine_v2{{V={v},N={v // k}}}"
@@ -383,7 +449,7 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     assert [x.value for x, _v in r.interior.returns] == [ret]
     assert sorted(u // O for u in drawn) == sorted(t * Q + s for t in range(k) for s in range(Q))
 
-    mine = d.window(again.registration.digest, sample)
+    mine = d.window(again.docket.digest, sample)
     assert CS.expected_ports(mine) == r.interior.ports
     reads = TS.verifier_reads(d, mine, r.record, brec, sample)
     assert [x["port"] for x in brec["roots"]] == [*BR.PORTS, ret, *names]
@@ -440,12 +506,12 @@ def test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_
     assert (pub["values"][name]["leaves"], pub["values"][name]["words"]) == (N * k * O, v // k)
     rule_of = TS.rule_of(L, f"rate:{Q}/{N}", K, 60.0)
     assert rule_of.span_values == ()
-    first = TS.first(pub, check, rule_of, FC.Challenger("first"), stop=rule)
+    first = TS.first(pub, check, rule_of, FC.Challenger("first", label=TS.family_of(L)), stop=rule)
     assert [x["port"] for x in first.record["roots"]][-2 - len(L.tables):] == [ret, name, *L.tables]
-    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"), stop=rule)
+    again = TS.resume(json.loads(json.dumps(first.first_stage())), check, FC.Challenger("second"), stop=rule)
     with pytest.raises(ValueError, match="--kept"):
         TS.replayed(again, c, got["capture"], tmp_path / "never")
-    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"), stop=rule)
+    again = TS.resume(json.loads(json.dumps(first.first_stage())), check, FC.Challenger("second"), stop=rule)
     r = TS.replayed(again, c, got["capture"], tmp_path / "interior", kept=got["logits"])
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
     assert d.links == () and r.tie == {} and not r.record.get("registered")
@@ -453,7 +519,7 @@ def test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_
         (m.template, "logits", name, k * O, tuple(j * k + t for j in range(O)), v // k) for t, m in enumerate(d.members)]
     assert [x.value for x, _v in r.interior.inputs] == [name] * k and [x.value for x, _v in r.interior.returns] == [ret]
 
-    mine = d.window(again.registration.digest, sample)
+    mine = d.window(again.docket.digest, sample)
     assert CS.expected_ports(mine) == r.interior.ports
     reads = TS.verifier_reads(d, mine, r.record, brec, sample)
     served, = (x for x in brec["roots"] if x["port"] == name)
@@ -652,8 +718,9 @@ def test_under_a_stop_rule_the_serves_hook_gives_a_stop_class_of_the_greedy_sele
     rule_of = TS.rule_of(L, f"rate:{Q}/{spans}", K)
     assert rule_of.span_values == (("logits", outputs * k, (v // k, 16)),)
 
-    got = TS.first(pub, BR.check_template(check), rule_of, FC.Challenger("first"), stop=rule)
-    assert [r["port"] for r in got.registration.record["roots"]] == [*BR.PARTS, "o0"]
-    s = TS.stop_first(pub, BR.check_template(check), rule, f"rate:{Q}/{spans}", FC.Challenger("stop"), got.record)
-    assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == spans
+    got = TS.first(pub, BR.check_template(check), rule_of, FC.Challenger("first", label=TS.family_of(L)), stop=rule)
+    assert [r["port"] for r in got.docket.record["roots"]] == [*BR.PARTS, "o0"]
+    s = TS.stop_first(pub, BR.check_template(check), rule, f"rate:{Q}/{spans}",
+                      FC.Challenger("stop", label=TS.family_of(L, blocks=True)), got.record)
+    assert s["record"]["previous"] == got.docket.digest and s["record"]["population"] == spans
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP] and len(s["units"]) == Q

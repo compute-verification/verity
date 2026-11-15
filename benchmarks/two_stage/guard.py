@@ -84,12 +84,12 @@ def enc_list(enc, xs: Sequence) -> bytes:
 
 
 def raw(statement: str, circuit: bytes, public: bytes, tables: Sequence[tuple[str, bytes]], *, zk: bool,
-        os_coins: bool = False, count: int = 1, draw: bytes | None = None, partition: bytes | None = None,
+        os_coins: bool = False, count: int = 1, sample: bytes | None = None, partition: bytes | None = None,
         program: bytes | None = None, registered: bytes | None = None) -> bytes:
     """`FlockDeploy.Raw.encode` of a statement with no work sample, stratified count, closure map or public inputs."""
     return (enc_str(FORMAT) + enc_str(statement) + enc_bytes(circuit) + enc_bytes(public)
             + enc_list(lambda t: enc_str(t[0]) + enc_bytes(t[1]), tables) + enc_bool(zk) + enc_bool(os_coins)
-            + enc_nat(count) + enc_opt(enc_bytes, draw) + enc_opt(enc_bytes, partition) + enc_opt(enc_bytes, program)
+            + enc_nat(count) + enc_opt(enc_bytes, sample) + enc_opt(enc_bytes, partition) + enc_opt(enc_bytes, program)
             + enc_opt(enc_nat, None) + enc_opt(enc_bytes, None) + enc_opt(enc_nat, None) + enc_opt(enc_bytes, None)
             + enc_opt(enc_bytes, registered) + enc_opt(enc_bytes, None))
 
@@ -144,7 +144,7 @@ def session_statement(session_dir: Path) -> bytes:
     return raw(opts["--statement"], obj("--circuit"), obj("--public"),
                [(n, named(h)) for n, h in mufu_tables() if (archive / "sha512" / h).exists()],
                zk="--zk" in flags, os_coins=opts.get("--coins") == "os", count=int(opts.get("--session-tables", "1")),
-               draw=None if sample is None else compact(sample), partition=obj("--partition"), program=obj("--program"),
+               sample=None if sample is None else compact(sample), partition=obj("--partition"), program=obj("--program"),
                registered=obj("--registered"))
 
 
@@ -158,7 +158,7 @@ def verdict(session_dir: Path) -> dict:
 
 def ref_sample(q: int, n_t: int, k: int) -> dict:
     """The second stage's sample of template ``t``'s part at its first units: ``q·min(k, n_t)`` of its ``q·n_t``, the size
-    of every sample the second stage takes there (`select.second_law`'s subset in each cell)."""
+    of every sample the second stage takes there (`select.second_sampling_design`'s subset in each cell)."""
     size = q * min(k, n_t)
     return {"k": size, "law": "subset", "population": q * n_t, "units": list(range(size))}
 
@@ -195,7 +195,7 @@ def export_registration(out: Path, run_out: Path, stream, order: int, n: int, q:
     the run: `tests/TwoGuard.lean`'s ``files`` reads these alone. -> ``held.json``'s object."""
     from verity.protocols.proofs.spot.verifier import second_stage as SS
     from verity.circuits.codec import canonical_json, descriptor_id, encode_program
-    from verity.commitments.windows.rows import expected_ports
+    from verity.commitments.periods.rows import expected_ports
 
     out.mkdir(parents=True, exist_ok=True)
     entry = stream._entries[order]
@@ -240,7 +240,7 @@ def export_registration(out: Path, run_out: Path, stream, order: int, n: int, q:
         (out / f"ref-{t}.bin").write_bytes(raw(
             "verity/flock-circuit", (d / "circuit.txt").read_bytes(), (d / "pub.bin").read_bytes(),
             [(f.stem, f.read_bytes()) for f in sorted(tables, key=lambda f: order_of.index(f.stem))], zk=True,
-            draw=compact(ref_sample(q, n_t, ks[t])), partition=part, program=prog))
+            sample=compact(ref_sample(q, n_t, ks[t])), partition=part, program=prog))
         (out / f"ref-{t}.reads.json").write_bytes(canonical_json(reads))
     (out / "held.json").write_text(json.dumps(held, indent=1, sort_keys=True))
     return held
@@ -279,7 +279,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int,
     (out / "x.bin").write_bytes((run_out / "boundary" / "registration.json").read_bytes())
     (out / "m1.bin").write_bytes((run_out / "interior" / "registration.json").read_bytes())
     if entry.read is None or entry.second_read is None:
-        raise ValueError("a stage's sample read no coins of the challenger's (a sampler drew it)")
+        raise ValueError("a stage's sample read no coins of the challenger's (a sampler sampled it)")
     (out / "c0.bin").write_bytes(entry.read)
     (out / "c1.bin").write_bytes(entry.second_read)
     return held

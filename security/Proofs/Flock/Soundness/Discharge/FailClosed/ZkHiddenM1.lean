@@ -14,7 +14,7 @@ public import Proofs.Flock.Soundness.Instance
 ZK's parameters, from what `verify --zk` checks at setup, so the knowledge term `ε_ks = ksAvgStrictZ` at that plan is at
 most `ksAvgStrictZm1`, and at most one number that reads no table.
 
-A refused hidden-output table carries the reference setup's regions and `contra`'s two (`DrawSetupZHJ.refused`), up to
+A refused hidden-output table carries the reference setup's regions and `contra`'s two (`SampleSetupZHJ.refused`), up to
 1026 regions, where `TabZK.M1` reads `Stmt.InRange`'s 1024. So the tables meet `TabZK.M1W`, `M1` at
 `Stmt.InRangeWide`, and the padded table error is checked there:
 
@@ -29,11 +29,11 @@ A refused hidden-output table carries the reference setup's regions and `contra`
   $$\varepsilon_{ks}\le\frac{2^{-203}+(2\cdot25638+2^{14}+2)\sqrt{q_F^2/2^{513}}+q_S^2/2^{513}
   +\sqrt{k\,q_F^2/2^{513}}}{1-2^{23}/(ek)}$$
   (`ksClosedM1`, `rateM1`), whenever `2^23 < ek`.
-* `DrawSetupZHJ.tabAt_M1W`, `table_M1W`, `refused_M1W`, `tableZHJ_M1W`, `planZHJ_M1W`: every table of `planZHJ` is at
+* `SampleSetupZHJ.tabAt_M1W`, `table_M1W`, `refused_M1W`, `tableZHJ_M1W`, `planZHJ_M1W`: every table of `planZHJ` is at
   `M1W` (`Stmt.setupHidden`'s `checkInRange`, `Zk.schedule`'s `schedule_m1`, the inner code's `innerN_pow`), and
   `ksAvgStrictZ_planZHJ_le_m1` and `ksAvgStrictZ_planZHJ_le_closed` read the bounds at that plan (its rate cap is
   `ZkHidden.hr_planZHJ_23`).
-* `qs_le_io`, `qs_le_mul`: `Q_s = Σ_c |Ω_c|/|Ω|`, the factor of `δ_link` (`linkBoundZC`), is at most the largest
+* `qs_le_io`, `qs_le_mul`: `Q_s = Σ_c |Ω_c|/|Ω|`, the factor of `ε_bind` (`linkBoundZC`), is at most the largest
   `Σ_{u ∈ S} |io u|` over samples `S`, `io` the committed wires each unit reads or writes in the circuit's partition, so
   at most `k_d·r` at samples of `k_d` units with `|io u| ≤ r`.
 
@@ -284,7 +284,7 @@ theorem ksStrictZ_le_m1w (hF : Fintype.card F = 2 ^ 128) (ts : List (TabZK F mPt
 `ksAvgStrictZm1`. -/
 theorem ksAvgStrictZ_le_m1w (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type}
     (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
-    (hW : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1W) (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
+    (hW : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1W) (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
     ksAvgStrictZ planZ L k qF qS R ≤ ksAvgStrictZm1 planZ L k qF qS R := by
   refine avg_mono fun ω => iSup_mono fun j => ?_
   rcases le_or_gt (1 - rateZ (planZ (L.draw ω) R) j k) 0 with h0 | h0
@@ -346,7 +346,7 @@ theorem rateZ_le_m1w (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT : (ts.ge
 `M1W` and `2^23 < ek`, `ksAvgStrictZ ≤ ksClosedM1/(1 − 2^23/(ek))`. -/
 theorem ksAvgStrictZ_le_closed (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type}
     (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
-    (hW : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1W) (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg)
+    (hW : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1W) (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg)
     (hk : rateM1 k < 1) :
     ksAvgStrictZ planZ L k qF qS R ≤ ENNReal.ofReal (ksClosedM1 k qF qS / (1 - rateM1 k)) := by
   have hc : ∀ ω : L.Ω, (⨆ j : Fin (planZ (L.draw ω) R).length,
@@ -375,10 +375,10 @@ variable {K : Type} [Field K] (A : Arith F K) {C : Verity.Boolean.Circuit} {n : 
 committed wires the sampled proof blocks read or write, `Σ_{u ∈ S} |io u|`, at every sample `S`. A sample reads commit string `c`
 only through a wire of a sampled proof block's `io` that `c` holds (`ReadsZ`), so it reads at most that many strings, and
 `Σ_c |Ω_c|/|Ω|` averages that count over the samples. -/
-theorem qs_le_io (L : Law n) (B : ℕ) (hB : ∀ ω, ∑ u ∈ L.draw ω, (P.io u).card ≤ B) :
+theorem qs_le_io (L : SamplingDesign n) (B : ℕ) (hB : ∀ ω, ∑ u ∈ L.draw ω, (P.io u).card ≤ B) :
     ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω ≤ B := by
   classical
-  have hω : ∀ ω, (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card ≤ B := fun ω => by
+  have hω : ∀ ω, (Finset.univ.filter fun c => ReadsSampleZ A P planZ tab vb c ω).card ≤ B := fun ω => by
     refine le_trans (Finset.card_le_card (t := (L.draw ω).biUnion fun u => (P.io u).image vb.pos) ?_)
       (Finset.card_biUnion_le.trans ((Finset.sum_le_sum fun u _ => Finset.card_image_le).trans (hB ω)))
     intro c hc
@@ -386,9 +386,9 @@ theorem qs_le_io (L : Law n) (B : ℕ) (hB : ∀ ω, ∑ u ∈ L.draw ω, (P.io 
     exact Finset.mem_biUnion.2 ⟨u, hu, Finset.mem_image.2 ⟨g, hg, rfl⟩⟩
   have hsum : ∑ c : vb.Pos, Fintype.card (ΩcZ A P planZ tab vb L c) ≤ Fintype.card L.Ω * B := by
     calc ∑ c : vb.Pos, Fintype.card (ΩcZ A P planZ tab vb L c)
-        = ∑ c : vb.Pos, (Finset.univ.filter fun ω => ReadsDrawZ A P planZ tab vb c ω).card :=
+        = ∑ c : vb.Pos, (Finset.univ.filter fun ω => ReadsSampleZ A P planZ tab vb c ω).card :=
           Finset.sum_congr rfl fun c _ => Fintype.card_of_subtype _ fun ω => by simp
-      _ = ∑ ω : L.Ω, (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card := by
+      _ = ∑ ω : L.Ω, (Finset.univ.filter fun c => ReadsSampleZ A P planZ tab vb c ω).card := by
           simp only [Finset.card_filter]
           exact Finset.sum_comm
       _ ≤ ∑ _ω : L.Ω, B := Finset.sum_le_sum fun ω _ => hω ω
@@ -400,7 +400,7 @@ theorem qs_le_io (L : Law n) (B : ℕ) (hB : ∀ ω, ∑ u ∈ L.draw ω, (P.io 
   linarith [mul_comm (B : ℝ) (Fintype.card L.Ω : ℝ)]
 
 /-- **`Q_s ≤ k_d·r`**: at samples of at most `k_d` units, each with at most `r` committed wires in its `io`. -/
-theorem qs_le_mul (L : Law n) (kd r : ℕ) (hd : ∀ ω, (L.draw ω).card ≤ kd) (hr : ∀ u, (P.io u).card ≤ r) :
+theorem qs_le_mul (L : SamplingDesign n) (kd r : ℕ) (hd : ∀ ω, (L.draw ω).card ≤ kd) (hr : ∀ u, (P.io u).card ≤ r) :
     ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω ≤ kd * r := by
   have h := qs_le_io A P planZ tab vb L (kd * r) fun ω =>
     (Finset.sum_le_sum fun u _ => hr u).trans (by
@@ -419,9 +419,9 @@ open Game Audit Exec Flock FlockLevel3 Model Accounting Refine ZkSession ZkLink 
 
 variable {n mPts : ℕ}
 
-namespace DrawSetupZHJ
+namespace SampleSetupZHJ
 
-variable {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y : DrawSetupZHJ I' mPts S d)
+variable {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y : SampleSetupZHJ I' mPts S d)
 
 /-- **The range setupHidden checked** (`checkInRange`): `k_log ≤ 27`, at most 1024 regions and `m_pts ≤ 64`. -/
 theorem inRange : y.x.st.c.kLog ≤ 27 ∧ y.x.st.regions.size ≤ 1024 ∧ mPts ≤ 64 := by
@@ -431,7 +431,7 @@ theorem inRange : y.x.st.c.kLog ≤ 27 ∧ y.x.st.regions.size ≤ 1024 ∧ mPts
   exact ⟨hk, hr, by omega⟩
 
 /-- **A hidden-output `--zk` table of a sample `verify --zk` sets up is at Flock ZK's parameters**, at any regions of
-at most 1026 (`DrawSetupZK.tabAt_M1`'s twin). -/
+at most 1026 (`SampleSetupZK.tabAt_M1`'s twin). -/
 theorem tabAt_M1W (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) (hR : regs.length ≤ 1026) :
     (y.tabAt regs hregs).M1W := by
@@ -466,22 +466,22 @@ at most 1026. -/
 theorem refused_M1W : y.refused.M1W :=
   y.tabAt_M1W _ _ (by
     have := y.inRange.2.1
-    have hc : (Integrate.DrawSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)).length = 2 := by
-      simp [Integrate.DrawSetup.contra]
+    have hc : (Integrate.SampleSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)).length = 2 := by
+      simp [Integrate.SampleSetup.contra]
     rw [List.length_append, FlockVBridge.Family.length_regionsOf, hc]
     omega)
 
-end DrawSetupZHJ
+end SampleSetupZHJ
 
 variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-  (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {Reg : Type}
+  (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) {Reg : Type}
 
 /-- **Every table `tableZHJ` builds is at Flock ZK's parameters**: table `j`'s own, or the reference setup's refused
 one. -/
 theorem tableZHJ_M1W (S : Finset (Fin n)) (j : Fin (nTab I)) : (tableZHJ dj y₀ S j).M1W := by
   unfold tableZHJ
   split
-  · exact DrawSetupZHJ.table_M1W _
+  · exact SampleSetupZHJ.table_M1W _
   · exact y₀.refused_M1W
 
 /-- **Every table of the hidden-output plan of `J` tables is at Flock ZK's parameters** (`tableZHJ_M1W`). -/
@@ -492,13 +492,13 @@ theorem planZHJ_M1W :
   exact tableZHJ_M1W dj y₀ S _
 
 /-- **`ε_ks` at the hidden-output plan is at most `ksAvgStrictZm1`** (`ksAvgStrictZ_le_m1w` at `planZHJ_M1W`). -/
-theorem ksAvgStrictZ_planZHJ_le_m1 (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
+theorem ksAvgStrictZ_planZHJ_le_m1 (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
     ksAvgStrictZ (planZHJ dj y₀) L k qF qS R ≤ ksAvgStrictZm1 (planZHJ dj y₀) L k qF qS R :=
   ksAvgStrictZ_le_m1w execArith_correct.card_F (planZHJ dj y₀) (planZHJ_M1W dj y₀) L k qF qS R
 
 /-- **`ε_ks` at the hidden-output plan in closed form**: at most `ksClosedM1/(1 − 2^23/(ek))` once `2^23 < ek`, a
 number that reads no table (`ksAvgStrictZ_le_closed` at `planZHJ_M1W`). -/
-theorem ksAvgStrictZ_planZHJ_le_closed (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) (hk : rateM1 k < 1) :
+theorem ksAvgStrictZ_planZHJ_le_closed (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) (hk : rateM1 k < 1) :
     ksAvgStrictZ (planZHJ dj y₀) L k qF qS R ≤ ENNReal.ofReal (ksClosedM1 k qF qS / (1 - rateM1 k)) :=
   ksAvgStrictZ_le_closed execArith_correct.card_F (planZHJ dj y₀) (planZHJ_M1W dj y₀) L k qF qS R hk
 

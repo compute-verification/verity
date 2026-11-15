@@ -16,7 +16,7 @@ An entry is one of three kinds:
 * a declaration (`Declaration`, `verity/registration/declaration/v1`): a day's circuit: the day, by its index among
   the monitoring period's days, its program's digest and its block Definitions by descriptor key. The prover declares
   one circuit a day, before the day's first coin, so a second declaration of a day is refused (`duplicate-declaration`),
-  and each window's program is its day's (`View.declared`; the sampled-proofs registration record's R2).
+  and each window's program is its day's (`View.declared`; the SPOT registration record's R2).
 
 ~~~text
 entry digest   SHA-512(format ‖ 0 ‖ canon(entry))                          the entry's format and previous among its keys
@@ -25,11 +25,12 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 ~~~
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
-fails (`REFUSALS`): a site entry by the Site's (`verity.device.entry_refusal`), an information entry by `previous`
-and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`; where every entry
+fails (`REFUSALS`): a site entry by the Site's (`verity.device.entry_refusal`), an information entry by `previous`,
+then `configuration-unordered` (a configuration item, which the log has no coin or run to order) and then
+`duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`; where every entry
 passes and the Site the log folds to lacks hardware the auditor's figures list (`verity.device.incomplete`), it
 raises `Refused` by `inventory` at the log's length. A component reads its view of an accepted log (`View`): the Site,
-θ's values (`View.value`), the builder and the days' declared circuits (`View.declared`), at the head, and the head
+θ's values (`View.value`), the builder and the days' registered circuits (`View.declared`), at the head, and the head
 after the log's first entry (`View.first`). Decoding takes exactly what the encoders write and raises `Malformed`
 otherwise; a log or parameters holding a character outside ASCII without DEL are `Malformed` (`ascii`), in
 `Core.canonicalJson`'s words.
@@ -49,7 +50,7 @@ from verity.channel import canonical
 INFORMATION = "verity/registration/information/v1"
 DECLARATION = "verity/registration/declaration/v1"
 PROTOCOL = "verity/registration/log/v1"
-REFUSALS = (*S.REFUSALS, "duplicate-information", "duplicate-declaration")
+REFUSALS = (*S.REFUSALS, "duplicate-information", "duplicate-declaration", "configuration-unordered")
 
 
 class Refused(Exception):
@@ -63,8 +64,9 @@ class Refused(Exception):
 @dataclass(frozen=True)
 class Information:
     """An information entry: the items it registers, each canonical JSON with its `kind`: `theta` (`value`, `root`,
-    `leaves`, `words`, `domain`, `word_bits` when it is 32, `checkpoint_sha512` for public weights) or `builder`
-    (`digest`, `advice`, `cap`), and the head of the log it follows (`previous`, set by `chain`)."""
+    `leaves`, `words`, `domain`, `word_bits` when it is 32, `checkpoint_sha512` for public weights), `builder`
+    (`digest`, `advice`, `cap`) or `configuration` (`digest`, a run's configuration's SHA-512, which the check refuses:
+    `configuration-unordered`), and the head of the log it follows (`previous`, set by `chain`)."""
 
     items: tuple[Mapping[str, Any], ...] = ()
     previous: str = ""
@@ -78,7 +80,7 @@ class Information:
 
 @dataclass(frozen=True)
 class Declaration:
-    """A day's declared circuit (`Core.Registration.Declared`): the day, by its index among the monitoring period's
+    """A day's registered circuit (`Core.Registration.Declared`): the day, by its index among the monitoring period's
     days, its program's SHA-512 as hex, and its block Definitions by descriptor key; and the head of the log it follows
     (`previous`, set by `chain`)."""
 
@@ -173,6 +175,13 @@ def _hex64(j: Any, what: str) -> str:
 THETA_KEYS = ["domain", "kind", "leaves", "root", "value", "words"]
 """A θ item's keys, besides `word_bits` (present only as 32) and `checkpoint_sha512` (a public checkpoint's pin)."""
 BUILDER_KEYS = ["advice", "cap", "digest", "kind"]
+CONFIGURATION_KEYS = ["digest", "kind"]
+
+
+def configuration(digest: str) -> dict[str, Any]:
+    """A configuration item naming a run's configuration by its SHA-512 as hex. Unwritten: the log has no coin and no
+    run to register it before, and the check refuses every configuration item (`configuration-unordered`)."""
+    raise NotImplementedError("proofs/architecture-on-branch")
 
 
 def item_of(j: Any) -> dict[str, Any]:
@@ -194,7 +203,10 @@ def item_of(j: Any) -> dict[str, Any]:
         _exactly(j, BUILDER_KEYS, "a builder item")
         return {"advice": _str(j["advice"], "advice"), "cap": _nat(j["cap"], "cap"), "digest": _hex64(j["digest"], "digest"),
                 "kind": kind}
-    raise Malformed(f"an item: kind {kind} is not one of [theta, builder]")
+    if kind == "configuration":
+        _exactly(j, CONFIGURATION_KEYS, "a configuration item")
+        return {"digest": _hex64(j["digest"], "digest"), "kind": kind}
+    raise Malformed(f"an item: kind {kind} is not one of [theta, builder, configuration]")
 
 
 def ascii(j: Any) -> None:
@@ -243,7 +255,8 @@ def site_refusal(auditor: Auditor, composite: str, s: S.Site, head: str, e: S.En
 @dataclass(frozen=True)
 class State:
     """The log so far, folded: its Site, its information items in order, its head, its length, its declarations in
-    order, and the head after its first entry (`first`, None while it is empty)."""
+    order, the head after its first entry (`first`, None while it is empty), and the head of each of its prefixes with
+    the prefix's length, shortest first."""
 
     site: S.Site
     items: tuple[Mapping[str, Any], ...]
@@ -251,6 +264,7 @@ class State:
     entries: int
     declared: tuple[Declaration, ...] = ()
     first: str | None = None
+    heads: tuple[tuple[int, str], ...] = ()
 
     def refusal(self, auditor: Auditor, composite: str, e: Entry) -> str | None:
         if isinstance(e, S.Entry):
@@ -259,11 +273,13 @@ class State:
             return "previous"
         if isinstance(e, Declaration):
             return "duplicate-declaration" if any(d.day == e.day for d in self.declared) else None
+        if any(i["kind"] == "configuration" for i in e.items):
+            return "configuration-unordered"
         return None if _nodup([item_key(i) for i in self.items + e.items]) else "duplicate-information"
 
     def add(self, e: Entry) -> State:
         s = replace(self, head=e.digest(), first=e.digest() if self.first is None else self.first,
-                    entries=self.entries + 1)
+                    entries=self.entries + 1, heads=self.heads + ((self.entries + 1, e.digest()),))
         if isinstance(e, S.Entry):
             return replace(s, site=s.site.add(e))
         if isinstance(e, Declaration):
@@ -273,14 +289,14 @@ class State:
     def view(self) -> View:
         return View(self.site, tuple(dict(i) for i in self.items if i["kind"] == "theta"),
                     next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head, self.declared,
-                    self.first)
+                    self.first, self.heads)
 
 
 def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
     """The log folded entry by entry, each held to the log before it; `Refused` at the first entry that fails, or, where
     every entry passes and the Site the log folds to is not complete against the auditor's figures, by `inventory` at
     the log's length."""
-    s = State(S.Site(), (), S.genesis(composite), 0)
+    s = State(S.Site(), (), S.genesis(composite), 0, heads=((0, S.genesis(composite)),))
     for e in log:
         if r := s.refusal(auditor, composite, e):
             raise Refused(s.entries, r)
@@ -293,9 +309,10 @@ def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
 @dataclass(frozen=True)
 class View:
     """What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder,
-    the days' declared circuits in order, the head, and `first`, the head after the log's first entry: the log only
-    appends, so every later head of this log has the same one, and a value bound to it is bound to this log whatever
-    is registered after. None for an empty log."""
+    the days' registered circuits in order, the head, `first`, the head after the log's first entry (None for an empty
+    log): the log only appends, so every later head of this log has the same one, and a value bound to it is bound to
+    this log whatever is registered after; and the head of each prefix of the log with the prefix's length (shortest
+    first), the heads an answer may name."""
 
     site: S.Site
     theta: tuple[dict[str, Any], ...]
@@ -303,19 +320,21 @@ class View:
     head: str
     declarations: tuple[Declaration, ...] = ()
     first: str | None = None
+    heads: tuple[tuple[int, str], ...] = ()
 
     def value(self, name: str) -> dict[str, Any] | None:
         """θ's registered value `name`."""
         return next((t for t in self.theta if t["value"] == name), None)
 
     def declared(self, day: int) -> Declaration | None:
-        """Day `day`'s declared circuit, the one declaration of the day in an accepted log; None when it declares none.
+        """Day `day`'s registered circuit, the one declaration of the day in an accepted log; None when it declares none.
         A window of that day runs its program."""
         return next((d for d in self.declarations if d.day == day), None)
 
     def to_json(self) -> dict[str, Any]:
         return {"builder": self.builder, "declarations": [d.body() for d in self.declarations], "first": self.first,
-                "head": self.head, "site": self.site.to_json(), "theta": list(self.theta)}
+                "head": self.head, "heads": [{"entries": n, "head": h} for n, h in self.heads],
+                "site": self.site.to_json(), "theta": list(self.theta)}
 
 
 # --- the core protocol ------------------------------------------------------------------------------------------------

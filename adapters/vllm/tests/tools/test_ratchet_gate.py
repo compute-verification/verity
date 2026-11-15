@@ -61,7 +61,7 @@ SUPPRESSED = "import sys  # noqa: F401"
 MOVE_CHECK = """\
 import importlib.util, subprocess, sys
 from pathlib import Path
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 for path in ("tools/move/rename.py", "tools/check/pins.py"):
     spec = importlib.util.spec_from_file_location(Path(path).stem, ROOT / path)
     spec.loader.exec_module(importlib.util.module_from_spec(spec))
@@ -978,7 +978,7 @@ def test_the_repositorys_ruff_list_may_not_grow(both_ruffed):
     {G.REPO_RUFF_CONFIG: RUFF_TOML + 'ignore = ["F401"]\n'},
     {G.REPO_RUFF_CONFIG: 'extend-exclude = ["tools", "verity_vllm"]\n' + RUFF_TOML},
     {G.REPO_RUFF_CONFIG: None},
-    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"verity/definitions/")', '"verity/definitions/", "tools/")')},
+    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"adapters/vllm/",)', '"adapters/vllm/", "tools/")')},
 ], ids=["ignore", "exclude", "deleted", "lint-code"])
 def test_loosening_the_root_config_or_lint_fails_naming_what_both_base_ruff_lints_find(both_ruffed, loosen):
     both_ruffed.commit("loosens ruff and drops both entries", {RUFF_JSON: _allowlist(), REPO_RUFF_JSON: _allowlist(), **loosen})
@@ -1137,11 +1137,11 @@ def test_a_file_the_change_does_not_touch_is_never_linted(both_ruffed, monkeypat
     seen: list[list[str]] = []
     monkeypatch.setattr(G, "ruff_findings", _noting(seen, lambda ruff, config, files: sorted(files), G.ruff_findings))
     both_ruffed.git("checkout", "-q", "main")
-    both_ruffed.commit("definitions", {"verity/definitions/registry/word.py": "X = 1\n"})
+    both_ruffed.commit("definitions", {"adapters/vllm/verity_vllm/definitions/registry/word.py": "X = 1\n"})
     both_ruffed.git("checkout", "-q", "-B", "pr")
     both_ruffed.commit("a clean file, and others the lint doesn't hold", {
         "tools/c.py": "C = 1\n", "adapters/vllm/verity_vllm/c.py": "import os\n",
-        "verity/definitions/registry/tiny.py": "import os\n", "verity/definitions/registry/word.py": None, "tools/notes.md": "import os\n"})
+        "adapters/vllm/verity_vllm/definitions/registry/tiny.py": "import os\n", "adapters/vllm/verity_vllm/definitions/registry/word.py": None, "tools/notes.md": "import os\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["linted"]) == ("passed", ["tools/c.py"]), c["why"]
     assert seen == [[], ["tools/c.py"]]
@@ -1497,7 +1497,7 @@ def callers_linted(repo) -> Repo:
 
 
 def test_a_public_command_a_change_adds_passes_when_its_caller_runs_it_and_fails_when_it_does_not(callers_linted):
-    """A command run only from benchmarks/, as weights-tie is from verity/protocols/proofs/spot/prover/audit/prove_path.sh: the base's P16 lint, run on
+    """A command run only from benchmarks/, as weights-tie is from benchmarks/prove_path/run.sh: the base's P16 lint, run on
     the change's tree, reads the change's public table, and the gate checks each caller the table gains (a new command's, or
     one moved to another file) as that lint finds a call."""
     callers_linted.commit("adds tie, run from benchmarks", {

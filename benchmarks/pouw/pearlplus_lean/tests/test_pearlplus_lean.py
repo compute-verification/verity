@@ -121,7 +121,7 @@ def same(exe: Path, paths: list[Path], draws: int = 3, source: bytes | None = SO
     return got
 
 
-def challenger_draw(entropy: int = 7, after: bytes | None = None):
+def challenger_sample(entropy: int = 7, after: bytes | None = None):
     """`bench_arm.LiveDraw`'s sample on the run's commitment C from a seeded sample session (`window.draw_challenger`): its
     coin ``pouw/draw`` 0, opened after C (or `after`), and the record's ``draw`` naming it."""
     def draw(root: bytes, asking) -> tuple[bytes, dict]:
@@ -145,7 +145,7 @@ def test_an_honest_pass(exe, tmp_path):
     path = T.proved_pass(tmp_path, H100)[0]
     for draws in (3, 16):
         works = []
-        for rule in (None, *VR.OVER_CAP):
+        for rule in (None, *VR.OVER_INERT_BOUND):
             got = same(exe, [path], draws, over_cap=rule)
             assert got["verdict"] == "accept" and len(got["verdicts"]) == draws + 1
             assert got["over_cap"] == (rule or VR.UNCREDITED) and got["work"]["over_cap_draws"] == 0
@@ -160,13 +160,13 @@ def test_an_excluded_weight_row_zeroes_its_block(exe, tmp_path):
     and the run's credited cells' MACs (``macs``; a test instance's credit is 0) are the first call's alone, its 19
     credited rows x 16 columns at |K| = 128."""
     path = T.proved_pass(tmp_path, H100, bad_b=20)[0]
-    for rule in (None, *VR.OVER_CAP):
+    for rule in (None, *VR.OVER_INERT_BOUND):
         got = same(exe, [path], 16, over_cap=rule)
         assert got["verdict"] == "accept" and got["work"]["over_cap_draws"] == 0
         assert (got["work"]["macs"], got["work"]["credited_tiles"]) == (19 * 16 * 128, 2)
 
 
-def test_a_row_over_its_cap_and_its_give_up(exe, tmp_path):
+def test_a_row_over_its_inert_bound_and_its_give_up(exe, tmp_path):
     """Under the zero key a credited row is over its row cap: under ``reject`` the run is rejected; under ``uncredited``
     (the default) it is accepted, each tile over its inert-work bound ok with its bound's reason and credited nothing,
     the credit taking X_O, the samples on such tiles, at a larger ε.  Given up (V-EX), every tile passes; more given-up rows
@@ -189,7 +189,7 @@ def test_a_row_over_its_cap_and_its_give_up(exe, tmp_path):
     assert VR.credit_at_assumption([p], draws, VR.DELTA, drawn_over)["credited"] < honest["credited"]
     assert Fraction(took["work"]["epsilon"]) > Fraction(honest["epsilon"])
     assert VP.volunteer(path, T.published(path), 1)["ok"]
-    for rule in VR.OVER_CAP:
+    for rule in VR.OVER_INERT_BOUND:
         given = same(exe, [path], draws, over_cap=rule)
         assert given["verdict"] == "accept" and given["work"]["over_cap_draws"] == 0
     man = json.loads(path.read_text())
@@ -201,7 +201,7 @@ def test_a_row_over_its_cap_and_its_give_up(exe, tmp_path):
         assert got["verdict"] == "reject" and why in got["reason"] and got["source"] is None
 
 
-def test_a_salt_dead_element_over_the_row_cap(exe, tmp_path, monkeypatch):
+def test_a_salt_dead_element_over_the_row_inert_bound(exe, tmp_path, monkeypatch):
     """P3's forming term: credited row 9 holds one entry 300 times its RMS, which keeps the per-row rules and is salt-dead
     (its forming's two ends round to one code), inert work of fs·|cols|/n = 64 that puts the row over its inert-work
     bound, 41 at k = 128, where its words flag no atom. Under ``reject`` both verdicts reject the run on that tile; under
@@ -214,13 +214,13 @@ def test_a_salt_dead_element_over_the_row_cap(exe, tmp_path, monkeypatch):
     took = same(exe, [path], 16)
     reasons = [v["reason"] for v in took["verdicts"] if v["reason"]]
     assert took["verdict"] == "accept" and reasons and all(why in r for r in reasons)
-    monkeypatch.setattr(T.CW.D, "forming_elements", lambda flags, dead, device=None: 0)
+    monkeypatch.setattr(T.CW.D, "inert_elements", lambda flags, dead, device=None: 0)
     without = answer(VR.verify_passes([path], 16, 1, "test", T.published(path), SOURCE, test_instance=True))
     assert without["verdict"] == "accept" and not any(v["reason"] for v in without["verdicts"])
 
 
 def test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_some_flag(exe, tmp_path, monkeypatch):
-    """E's ∀ over the credited columns both ways (`forming_elements`, `Rule.rowElements`): under the zero key, credited row
+    """E's ∀ over the credited columns both ways (`inert_elements`, `Rule.rowElements`): under the zero key, credited row
     11 of the first call has atom-words flagging its blocks 0 … 3, all in one column.  On 16 x 16 tiles some of the row's
     16 credited words flag each block and the rest don't, so no block is inert and its debit is the chain's, 160, over
     its row cap, with or without the term.  On 16 x 1 tiles that column's tile has one credited word, which flags all
@@ -232,28 +232,28 @@ def test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_so
     for tile, draws, why, _ in cases:
         path = T.proved_pass(tmp_path / f"{tile[0]}x{tile[1]}", H100, key=bytes(32), tile=tile)[0]
         paths.append(path)
-        for rule in (None, *VR.OVER_CAP):
+        for rule in (None, *VR.OVER_INERT_BOUND):
             got = same(exe, [path], draws, over_cap=rule)
             assert any(why in (v["reason"] or "") for v in got["verdicts"]), (tile, rule, got["verdicts"])
-    monkeypatch.setattr(T.CW.D, "forming_elements", lambda flags, dead, device=None: 0)
+    monkeypatch.setattr(T.CW.D, "inert_elements", lambda flags, dead, device=None: 0)
     for path, (tile, draws, _, without) in zip(paths, cases):
         out = VR.verify_passes([path], draws, 1, "test", T.published(path), SOURCE, test_instance=True)
         assert any(without in (v["reason"] or "") for v in out["verdicts"]), tile
 
 
 def test_the_forming_term_reads_a_row_some_of_whose_blocks_are_inert(exe, tmp_path, monkeypatch):
-    """E's per-block read on one row (`forming_elements`, `Rule.rowElements`) where neither its all-inert shortcut nor a
+    """E's per-block read on one row (`inert_elements`, `Rule.rowElements`) where neither its all-inert shortcut nor a
     salt-dead element decides: under key 4, on 16 x 1 tiles, tile 14's one flagged row has its one credited word flag one
     of its four atom blocks and not the other three, and no element of the tile is salt-dead.  So 32 of the row's 128
     elements are inert and the tile's debit is 168 (40 for the flagged atom-word, 4 per inert element), 40 without the
     term; reading the three unflagged blocks as the inert ones would make it 424.  The Lean's verdicts are the Python's
     under each ``over_cap`` rule."""
     path = T.proved_pass(tmp_path, H100, key=bytes([4]) * 32, tile=(16, 1))[0]
-    for rule in (None, *VR.OVER_CAP):
+    for rule in (None, *VR.OVER_INERT_BOUND):
         got = same(exe, [path], 96, over_cap=rule)
         assert any(v["tile"] == 14 and "the replayed debit 168 exceeds the cap 38" in (v["reason"] or "")
                    for v in got["verdicts"]), (rule, got["verdicts"])
-    monkeypatch.setattr(T.CW.D, "forming_elements", lambda flags, dead, device=None: 0)
+    monkeypatch.setattr(T.CW.D, "inert_elements", lambda flags, dead, device=None: 0)
     out = VR.verify_passes([path], 96, 1, "test", T.published(path), SOURCE, test_instance=True)
     assert any(v["tile"] == 14 and "the replayed debit 40 exceeds the cap 38" in (v["reason"] or "") for v in out["verdicts"])
 
@@ -406,7 +406,7 @@ def test_a_live_epoch_and_a_challenger_draw(exe, tmp_path):
     a, b = (T.proved_pass(tmp_path / n, H100, ix, live=0)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))
     (b.parent / "coins.json").write_text((a.parent / "coins.json").read_text())
     rec = tmp_path / "coin.json"
-    got = same(exe, [a, b], 8, None, rec, draw=challenger_draw())
+    got = same(exe, [a, b], 8, None, rec, draw=challenger_sample())
     assert got["verdict"] == "accept" and len(got["source"]) == 128
     held = json.loads(rec.read_text())
     assert held["schema"] == VR.COIN_SCHEMA and held["draw"]["from"] == "challenger"
@@ -431,7 +431,7 @@ def test_a_verdict_of_record_takes_only_a_challenger_draw_on_live_coins(exe, tmp
     v1.write_text(json.dumps({**{k: v for k, v in json.loads(node.read_text()).items() if k != "draw"},
                               "schema": "verity-pouw/pearl-plus-coin/v1"}))
     drawn = tmp_path / "drawn.json"
-    assert same(exe, [plain], 3, None, drawn, draw=challenger_draw())["verdict"] == "accept"
+    assert same(exe, [plain], 3, None, drawn, draw=challenger_sample())["verdict"] == "accept"
     for paths, source, record, why in (([live], None, node, "drawn on the serving node"),
                                        ([live], None, v1, "not verity-pouw/pearl-plus-coin/v2"),
                                        ([live], SOURCE, None, "the source is given on the command line"),
@@ -446,15 +446,15 @@ def test_a_verdict_of_record_takes_only_a_challenger_draw_on_live_coins(exe, tmp
 def test_a_challenger_draw_that_is_not_the_runs_coin(exe, tmp_path):
     """A record whose challenger sample was opened after another commitment, whose source isn't its coin, whose commitment
     isn't a sample session's or whose opening doesn't parse: the Lean refuses it (`draw`) with the compose's words
-    (`served_verdicts.pearlplus_live_draw`), of record or not, where the Python, which leaves the sample to the compose,
+    (`served_verdicts.pearlplus_live_sample`), of record or not, where the Python, which leaves the sample to the compose,
     accepts."""
     path = T.proved_pass(tmp_path, H100, live=0)[0]
     rec = tmp_path / "coin.json"
     other = VR.verify_passes([path], 3, 1, "test", VR.epoch_coins(path.parent / "coins.json"), record=rec,
-                             draw=challenger_draw(after=b"\x0c" * 64), test_instance=True)
+                             draw=challenger_sample(after=b"\x0c" * 64), test_instance=True)
     assert other["answer"]["verdict"] == "accept"
     good = tmp_path / "good.json"
-    same(exe, [path], 3, None, good, draw=challenger_draw())
+    same(exe, [path], 3, None, good, draw=challenger_sample())
     held = json.loads(good.read_text())
     salt_only = Ch.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, random.Random(7).randbytes).commitment.to_json()
     cases = [(json.loads(rec.read_text()), "the record's draw coin: coin was not opened after what the verifier recorded"),

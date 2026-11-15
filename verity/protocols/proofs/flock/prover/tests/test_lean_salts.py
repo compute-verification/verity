@@ -156,7 +156,7 @@ def test_a_commit_is_the_references(values):
     assert v.salts(refs(trefs, [])) == b""
 
 
-def test_each_commit_draws_its_own_session(values):
+def test_each_commit_samples_its_own_session(values):
     """The same digests committed twice get two sessions, so two sets of salts: no commitment repeats another's."""
     v, _ = values
     ts = _tables()

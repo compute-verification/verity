@@ -45,7 +45,7 @@ ALLOWED = {
     "benchmarks/kv_filler/serve.py": "memory-accounting: a stock vllm.LLM serving under the KV filler's top-up",
     "benchmarks/pous/p2_v1/scale.py": "memory-accounting: P2's store held beside a stock vllm.LLM serving",
     **dict.fromkeys(("benchmarks/remote_session/engine.py", "benchmarks/remote_session/serve.py"),
-                    "memory-accounting: an in-process LLMEngine under the remote bandwidth audit's binder"),
+                    "memory-accounting: an in-process LLMEngine under PoUB's binder"),
     "benchmarks/network_traces/record.py": "network-accounting: per-token timing of served requests (SamplingParams)",
     # the stock kernels a benchmark times or gates against
     **dict.fromkeys(("benchmarks/kernels/exactlin/kbench.py", "benchmarks/kernels/exactlin/kgate.py",
@@ -65,7 +65,7 @@ ALLOWED = {
                     "kernels: Dither's served arms, a stock vllm.LLM per arm with its int8 linears swapped in process"),
     **dict.fromkeys(("benchmarks/kernels/exactlin/percall.py", "benchmarks/kernels/exactlin/share.py"),
                     "kernels: sbench's served arms over stock vLLM int8 (TritonInt8ScaledMMLinearKernel)"),
-    **dict.fromkeys(("benchmarks/moe_align/served.py", "benchmarks/moe_align/stress.py"),
+    **dict.fromkeys(("benchmarks/kernels/moe_align/served.py", "benchmarks/kernels/moe_align/stress.py"),
                     "kernels: verity_vllm.engine.moe_align's canonical moe_align_block_size held to vLLM's op and to its "
                     "Marlin MoE path, served at TP8"),
     **dict.fromkeys(("benchmarks/vllm_encoded/kernels.py",

@@ -34,7 +34,9 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/word_codec/paged.py").parent))
 sys.path.insert(0, str(HERE.parent / "codec_tensor"))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py").parent))
 
 import paged as P  # noqa: E402
 from paged import K, KB  # noqa: E402
@@ -42,7 +44,7 @@ import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 
 sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "tests")]
-import remote_bandwidth_vectors as RV  # noqa: E402
+import poub_vectors as RV  # noqa: E402
 from verity.protocols.accounting.poub.verifier import codec as RC  # noqa: E402
 
 RTOL = 8e-3  # step.py's for the tensor-core form, which rounds P (and here the output) to bf16
@@ -216,7 +218,7 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, main_rc) -> dict:
 
 def deferred_gate(lib: P.PagedLib, torch, k: int, plain, enc, bjs, rows, lay: P.CacheShape, bt, btd, lens, q, rng,
                   main_rc, log) -> dict:
-    """The plaintext flag (deferred residency, remote_bandwidth's PROTOCOL.md §4) on `bound_gate`'s random caches: each
+    """The plaintext flag (deferred residency, poub's PROTOCOL.md §4) on `bound_gate`'s random caches: each
     slot of both layers appended as it is (its flag set) or encoded under its offset (flag clear), at random, so every
     decode's tiles mix both.
 

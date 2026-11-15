@@ -23,10 +23,8 @@ from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P
-
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
-sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC
+from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
 XOR8 = PrimitiveDefinition("A5ReserveTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -39,7 +37,7 @@ ALL_FAMILIES = [256, 1, 2, 1, 160, 9, 9, 1, 8, 1, 49152, 6144, 4096, 2048, 19360
 SILU_RULE, FAMILIES_RULE = "stratified-rate:4/675", "stratified-rate:1/90112"
 ROOT = "ab" * 64
 AFTER = bytes.fromhex("cd" * 64)
-STUB = AC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
+STUB = LC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
 
 
 def template(i: int):
@@ -53,10 +51,10 @@ def window(counts: list[int]):
     return P.mixed_population_program(list(zip(defs, counts))), P.template_instances_query(defs), sum(counts)
 
 
-def law_of(rule: str, counts: list[int]) -> dict:
+def sampling_design_of(rule: str, counts: list[int]) -> dict:
     program, query, n = window(counts)
-    return D.derive(program, query, S.selection_law(S.Law(rule), n, D.strata_sizes(program, query)),
-                    S.selection_table(S.Law(rule), program, query, None))
+    return D.derive(program, query, S.selection_sampling_design(S.SamplingDesign(rule), n, D.strata_sizes(program, query)),
+                    S.selection_table(S.SamplingDesign(rule), program, query, None))
 
 
 def need_of(rule: str, counts: list[int]) -> int:
@@ -93,7 +91,7 @@ def reads(rule: str, counts: list[int], seed: int) -> int:
     def coins(n: int) -> bytes:
         got.append(n)
         return source(n)
-    S.select_draw(S.Law(rule), law_of(rule, counts), sum(counts), coins)
+    S.select_draw(S.SamplingDesign(rule), sampling_design_of(rule, counts), sum(counts), coins)
     return sum(got)
 
 
@@ -101,7 +99,7 @@ def test_the_silu_mul_window_keeps_todays_reserve():
     """38b2's SiluMul window reads 226 bytes a rank (a stratum of 675 at k 4, 144 bytes, and one of 3 at its floor of 1,
     82), so its need with the margin is 6 coins. The reserve keeps the current 16 coins a rank, each rank's in a family
     of its own, and one more in the window's: 129 for 8 ranks."""
-    assert [s["k"] for s in law_of(SILU_RULE, SILU_MUL)["strata"]] == [4, 1]
+    assert [s["k"] for s in sampling_design_of(SILU_RULE, SILU_MUL)["strata"]] == [4, 1]
     assert reads(SILU_RULE, SILU_MUL, 0) == 226
     need = need_of(SILU_RULE, SILU_MUL)
     assert need == -(-(226 + 144) // Ch.COIN_BYTES) == 6
@@ -115,34 +113,34 @@ def test_the_18_family_window_needs_more_coins_than_todays_reserve():
     """The 18-family window's sample reads 1,496 bytes, one stream of 82 to 86 bytes a stratum at k 1. That is past the
     1,024 of 16 coins, and the 25 coins it needs with the margin hold it. On seeded coins the sample reads 1,496 bytes
     (no word rejected)."""
-    assert all(s["k"] == 1 for s in law_of(FAMILIES_RULE, ALL_FAMILIES)["strata"])
+    assert all(s["k"] == 1 for s in sampling_design_of(FAMILIES_RULE, ALL_FAMILIES)["strata"])
     assert {reads(FAMILIES_RULE, ALL_FAMILIES, seed) for seed in range(4)} == {1496}
     assert 1496 > AC.COINS_PER_RANK * Ch.COIN_BYTES
     assert need_of(FAMILIES_RULE, ALL_FAMILIES) == -(-(1496 + 86) // Ch.COIN_BYTES) == 25
     assert AC.families({0: 25}) == layout(25)
 
 
-def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
+def test_todays_reserve_runs_out_on_the_18_family_sample_and_its_need_does_not():
     """On a challenger of one rank's old reserve (17 coins), the 18-family sample runs out of coins (`every sampling coin of the
     epoch is open`), as the 18-family run did. On its need's reserve (`families`) it samples, opening 24 coins after the
     rank's commitment, its family's first."""
-    rule, design, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
+    rule, design, n = FAMILIES_RULE, sampling_design_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
     with pytest.raises(Ch.CoinError, match="every draw/0 coin of the epoch is open"):
-        S.select_draw(S.Law(rule), design, n, challenger_coins(layout(16)))
+        S.select_draw(S.SamplingDesign(rule), design, n, challenger_coins(layout(16)))
     coins = challenger_coins(AC.families({0: need_of(rule, ALL_FAMILIES)}))
-    drawn = S.select_draw(S.Law(rule), design, n, coins)
+    drawn = S.select_draw(S.SamplingDesign(rule), design, n, coins)
     assert len(drawn["units"]) == 18 and len(coins.segments[-1].openings) == 24 and coins.segments[-1].start == 0
 
 
-def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_with():
+def test_a_work_sampling_designs_need_is_its_sample_under_the_work_table_the_rank_registers_with():
     """A window whose first template holds transfer gates (32 units at work 0 and floor 32, sampled whole) beside 8 sampled by
     ``work-rate:1/20`` (work:2): its sample reads 640 bytes for the whole stratum and 100 for the rest, so the need is 22 coins,
     and its reserve holds the sample. A work rate has no need without the table (`service.selection_table` refuses it)."""
     program, query, n = window([32, 8])
     t0, t1 = (P.template_id(template(i)) for i in range(2))
     table = {t0: {"work": 0, "floor": 32}, t1: {"work": 1, "floor": 1}}
-    rule = S.Law("work-rate:1/20")
-    design = D.derive(program, query, S.selection_law(rule, n, D.strata_sizes(program, query)),
+    rule = S.SamplingDesign("work-rate:1/20")
+    design = D.derive(program, query, S.selection_sampling_design(rule, n, D.strata_sizes(program, query)),
                    S.selection_table(rule, program, query, table))
     assert design["k"] == 2 and [s["k"] for s in design["strata"]] == [32, 2]
     need = AC.need(rule.text, program, query, n, table)
@@ -154,7 +152,7 @@ def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_wi
     assert e.value.verdict.codes == ("rate",) and "work table" in e.value.verdict.detail["rate"]["reason"]
 
 
-def test_a_reserve_that_cant_cover_the_draws_is_refused_naming_need_and_reserve():
+def test_a_reserve_that_cant_cover_the_samples_is_refused_naming_need_and_reserve():
     """`reserve_reason` names the need (the coin after the root, then each rank's, a family each) and the reserve when
     the reserve is short in a family or lacks one, and the challenger's own limit when the layout is past it."""
     need = "the draws need {'window': 1, 'draw/0': 25} coins (1 after the window's root, then each rank's in its own family)"
@@ -169,15 +167,15 @@ def test_a_reserve_that_cant_cover_the_draws_is_refused_naming_need_and_reserve(
 def local(tmp_path: Path, monkeypatch, ranks: list[int], root: str | None = None, dest: str = "challenger", **kw):
     """`a5_coins.start` on a local challenger session under `tmp_path` (on `ROOT`, or ``root``; finished into ``dest``),
     pinned on this tree's commit. Its serve.py runs under
-    live_challenger's stub of the Lean verifier's coins (`stub_serve.py`), so the test builds no `sampled-proofs-verifier`."""
-    A = AC._module("a5_auditor", AC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    live_challenger's stub of the Lean verifier's coins (`stub_serve.py`), so the test builds no `spot-verifier`."""
+    A = LC._module("a5_auditor", LC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     real = A.serve_argv
     monkeypatch.setattr(A, "serve_argv", lambda *a, **k: [sys.executable, str(STUB), *real(*a, **k)[2:]])
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     main = tmp_path / "main.txt"
     main.write_text(AC.on_main([]) + "\n")
-    return AC.start("local", ROOT if root is None else root, ranks, tmp_path / dest, main, **kw)
+    return AC.start("local", ROOT if root is None else root, ranks, tmp_path / dest, main, local=LC.Local, **kw)
 
 
 def nothing_reserved(tmp_path: Path) -> bool:
@@ -185,18 +183,18 @@ def nothing_reserved(tmp_path: Path) -> bool:
     return not (host / "var" / "windows.jsonl").exists() and not any((host / "var" / "sessions").iterdir())
 
 
-def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_path, monkeypatch):
+def test_the_local_challenger_opens_on_the_needs_reserve_and_the_sample_holds(tmp_path, monkeypatch):
     """The local challenger opens the session once the rank has planned its sample, on the layout of its need (26 coins:
     the window family's one and 25 in the rank's own). The 18-family sample reads its 24 coins after the rank's
     commitment, and its coins' evidence, which names no key, holds at the rank's family under the key the session's
     start had (`coins.coins_reason`, `a5_coins.held`), at no other family and under no other key."""
-    rule, design, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
+    rule, design, n = FAMILIES_RULE, sampling_design_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
     manager, turns, opener = local(tmp_path, monkeypatch, [0])
     try:
         coins = AC.RankCoins(turns, 0)
         coins.plan(need_of(rule, ALL_FAMILIES))
         coins.commit(AFTER)
-        S.select_draw(S.Law(rule), design, n, coins)
+        S.select_draw(S.SamplingDesign(rule), design, n, coins)
         segment = coins.drawn()
         turns.skip(0)
         opener.join()
@@ -225,7 +223,7 @@ def test_a_second_stage_session_samples_under_its_tagged_family_and_stays_open_w
     """A session started with the second stage's tag (`a5_coins.SECOND`, two_stage's ``--interior-trees``) reserves and
     releases its rank's coins under the tagged family, apart from the first stage's untagged one, and its coins'
     evidence holds there alone; a rank's hold keeps it open past the sample until its release."""
-    rule, design, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
+    rule, design, n = FAMILIES_RULE, sampling_design_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
     tagged = AC.family(0, AC.SECOND)
     assert tagged != AC.family(0)
     manager, turns, opener = local(tmp_path, monkeypatch, [0], stage=AC.SECOND)
@@ -234,7 +232,7 @@ def test_a_second_stage_session_samples_under_its_tagged_family_and_stays_open_w
         turns.hold(0)
         coins.plan(need_of(rule, ALL_FAMILIES))
         coins.commit(AFTER)
-        S.select_draw(S.Law(rule), design, n, coins)
+        S.select_draw(S.SamplingDesign(rule), design, n, coins)
         segment = coins.drawn()
         assert turns.layout(), "the held session closed with the sample"
         turns.release(0)
@@ -260,7 +258,7 @@ def test_a_kept_local_challenger_serves_a_later_session_under_the_same_key(tmp_p
     evidence is refused, and a directory that holds no challenger has no key to give (`NO_HOST`). The key's leaves
     are spent across the sessions and never reused: the later session signs at leaves after the earlier's, as many
     again, within the key's `LOCAL_PARAMS` height."""
-    rule, design, n = SILU_RULE, law_of(SILU_RULE, SILU_MUL), sum(SILU_MUL)
+    rule, design, n = SILU_RULE, sampling_design_of(SILU_RULE, SILU_MUL), sum(SILU_MUL)
     host, roots, sessions, spent = tmp_path / "kept", (ROOT, "ef" * 64), [], []
     with pytest.raises(Ch.CoinError, match="holds no development challenger"):
         AC.local_key(host)
@@ -270,7 +268,7 @@ def test_a_kept_local_challenger_serves_a_later_session_under_the_same_key(tmp_p
             coins = AC.RankCoins(turns, 0)
             coins.plan(need_of(rule, SILU_MUL))
             coins.commit(AFTER)
-            S.select_draw(S.Law(rule), design, n, coins)
+            S.select_draw(S.SamplingDesign(rule), design, n, coins)
             segment = coins.drawn()
             turns.skip(0)
             opener.join()
@@ -290,7 +288,7 @@ def test_a_kept_local_challenger_serves_a_later_session_under_the_same_key(tmp_p
         return CC.coins_reason(key, held["main"], evidence, root, AC.family(0), AFTER, read, AC.lms_verify)
     assert [reason(k, root) for k, root in enumerate(roots)] == [None, None]
     assert reason(0, roots[1]) is not None and reason(1, roots[0]) is not None
-    own = AC.Local(tmp_path / "own", held["main"]).key
+    own = LC.Local(tmp_path / "own", held["main"]).key
     assert own != held["key"] and all(reason(k, root, own) is not None for k, root in enumerate(roots))
     assert 0 < spent[0] and spent[1] == 2 * spent[0] <= 2 ** AC.LOCAL_PARAMS[1]
 
@@ -299,7 +297,7 @@ def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch
     """Rank 1's plan waits for rank 0's; then the session opens on both needs' layout (16 coins a rank and one, 33), and each
     rank samples in its turn from its own family's first coin, 4 coins for SiluMul's 226 bytes, as 38b2's gate run did
     on each of its 8 ranks."""
-    rule, design, n = SILU_RULE, law_of(SILU_RULE, SILU_MUL), sum(SILU_MUL)
+    rule, design, n = SILU_RULE, sampling_design_of(SILU_RULE, SILU_MUL), sum(SILU_MUL)
     manager, turns, opener = local(tmp_path, monkeypatch, [0, 1])
     segments: dict[int, dict] = {}
 
@@ -307,7 +305,7 @@ def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch
         coins = AC.RankCoins(turns, r)
         coins.plan(need_of(rule, SILU_MUL))
         coins.commit(bytes([r]) * Ch.COIN_BYTES)
-        S.select_draw(S.Law(rule), design, n, coins)
+        S.select_draw(S.SamplingDesign(rule), design, n, coins)
         segments[r] = coins.drawn()
         turns.skip(r)
     try:
@@ -362,8 +360,8 @@ def test_a_local_open_whose_challenger_signed_nothing_is_refused_without_the_ses
     """The gate answers an open with the session's secret even when its challenger stopped before it signed a commitment
     (`auditor.gate_open`). `Local.open` refuses that open by name with the gate's answer less its secret, so the text a
     run's log keeps holds no session's secret."""
-    session = AC.Local(tmp_path, [AC.on_main([])])
-    monkeypatch.setattr(AC.Local, "_serve", lambda self, s: None)  # the session's unit stops before it signs
+    session = LC.Local(tmp_path, [AC.on_main([])])
+    monkeypatch.setattr(LC.Local, "_serve", lambda self, s: None)  # the session's unit stops before it signs
     with pytest.raises(Ch.CoinError, match="the local gate refused the open, or its challenger signed no commitment: ") as e:
         session.open(ROOT, [[AC.FAMILY, 2]])
     secret = (session.host.sessions / session.session / session.A.SECRET).read_text().strip()

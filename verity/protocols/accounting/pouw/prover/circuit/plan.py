@@ -6,18 +6,18 @@ each sampled tile together with its **closure**: its X strip's unit, its strip's
 strip's path to D_A and the call's key unit, each proved once, and its Y strip's unit in the weight's own Program
 (`NcpWeight`), once per plan. Every other template is sampled at its floor, so a wholly wrong one is caught directly
 (`audit_work_whole_stratum`), and an incorrect proof block beneath no sampled tile is counted through the unsound tiles beneath it (Lean
-`harm_le_unsoundWork`, `closureLaw_escape`).
+`harm_le_unsoundWork`, `closure_escape`).
 
-**The sampling design is a seam** (`TileLaw`), so the plan switches sampling designs without changing:
-* `CountLaw` is one_stage's stratified sampling design: one stratum per template, a uniform k_s-subset
+**The sampling design is a seam** (`TileSamplingDesign`), so the plan switches sampling designs without changing:
+* `CountSamplingDesign` is one_stage's stratified sampling design: one stratum per template, a uniform k_s-subset
   inside each, k_s = max(1, round(K·n_s/N)) (rounding half up), K the sampling design's budget over the strata it samples.
-* `WorkLaw` is the verifier's work sampling design with its floors (`Commitments/Draw.lean` `workK`):
+* `WorkSamplingDesign` is the verifier's work sampling design with its floors (`Commitments/Draw.lean` `workK`):
   k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), with K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`) and f_s the
   verifier's floor. `work_table` is the verifier's `--work-table` and `design_object` the sampling design `verify`
   derives from it. K is an **execution phase's** budget: a call samples its share K_c = ⌈K·W_c/W_window⌉, capped at its
-  units, and its y cells at the floor ⌈K_y·n_c/N⌉ of the execution phase's N, K_y = K (`window_laws`).
+  units, and its y cells at the floor ⌈K_y·n_c/N⌉ of the execution phase's N, K_y = K (`window_sampling_designs`).
 
-**The tile checks' layout** (`tile_layout`, `pc4` and `pc8`) is beside it: a sampled tile's closure is its rows' units
+**The tile checks' layout** (`tile_layout`, `pc8` and the tile checks built as it is) is beside it: a sampled tile's closure is its rows' units
 in the call (`RowA`, or `rowk`'s pieces; TM rows, or `pc8`'s short last tile row's r), and its TN rows' units in the
 weight's Program (``b_rows``), each once per plan (`Plan.proved_b`); its W_ref is the caller's (the tile's cells' share of the scheme's).  It opens
 nothing: its rows are Flock-committed ports.
@@ -34,6 +34,7 @@ the unsound work at δ (Lean `audit_closure`, `accountable_compute`).
 """
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import ROUND_CEILING, Decimal, localcontext
@@ -51,7 +52,7 @@ from .ncp2 import D, Shape, rfc6962
 from .partition import ProofBlock, units
 
 if TYPE_CHECKING:
-    from . import pc4, pc8
+    from . import pc8
 
 DRAW_DOMAIN = domains.POUW_CLOSURE_SAMPLING
 
@@ -74,7 +75,7 @@ class StratumSpec:
         return out
 
 
-class TileLaw(Protocol):
+class TileSamplingDesign(Protocol):
     """A sampling design's sizes: k_s for each stratum it samples."""
 
     name: str
@@ -87,7 +88,7 @@ def _round_half_up(num: int, den: int) -> int:
 
 
 @dataclass(frozen=True)
-class CountLaw:
+class CountSamplingDesign:
     """The stratified sampling design on `main` today: k_s = max(1, round(K·n_s/N)), one stratum per template."""
 
     k: int
@@ -100,7 +101,7 @@ class CountLaw:
 
 def check_work_strata(strata: Sequence[StratumSpec]) -> None:
     """Refuse a call whose work is in more than one stratum, or whose tiles are of more than one template. The execution
-    phase pin's `covers_window` takes each call's work in one stratum as its hypothesis `hone`: where the limit K_c ≤
+    phase pin's `covers_executionPhase` takes each call's work in one stratum as its hypothesis `hone`: where the limit K_c ≤
     N_c binds, a second work stratum is under-sampled (`tests/test_circuit_plan.py`'s execution phase: ten incorrect
     proof blocks escape with 0.156 against a claimed 2.4·10⁻⁴). A stratum does work when 0 < w_s·n_s, its `work`. The
     verifier's layouts give work to the tile template only; this makes that a check, not a convention."""
@@ -141,7 +142,7 @@ RECORD_K = 27_713
 
 
 @dataclass(frozen=True)
-class WorkLaw:
+class WorkSamplingDesign:
     """The work sampling design (`Commitments/Draw.lean` `workK`): each stratum samples
     k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), W_s its work, W the strata's total, 1 ≤ K ≤ N, and f_s ≥ 1 its floor from the
     verifier's own table (1 for every template it doesn't name). The floor binds for the strata that do no work
@@ -173,8 +174,8 @@ class WorkLaw:
         return {s.name: min(len(s.units), max(self.floor(s.name), -(-k * s.work // work))) for s in strata}
 
 
-def window_laws(layouts: Sequence[Layout], k: int = RECORD_K, floors: tuple[tuple[str, int], ...] = (),
-                k_y: int | None = None) -> list[WorkLaw]:
+def window_sampling_designs(layouts: Sequence[Layout], k: int = RECORD_K, floors: tuple[tuple[str, int], ...] = (),
+                k_y: int | None = None) -> list[WorkSamplingDesign]:
     """Each call's work sampling design in an execution phase of calls: its share K_c = ⌈K·W_c/W_window⌉ of the execution phase's budget K, capped
     at its units, over its own strata. That is the sampling design `verify` enforces when each call is its own statement, given its own
     K_c (`--work K_c`) and work table. Within one Program (`ncp2.window`) the calls share their templates' strata and one K,
@@ -186,7 +187,7 @@ def window_laws(layouts: Sequence[Layout], k: int = RECORD_K, floors: tuple[tupl
     and a y-bad wrong set are one family of the audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y,
     not their sum. The other zero-work templates keep their floors (1 unless ``floors`` names them). Per call these are
     pinned (`audit_work_floor`); over the execution phase, the per-call split and y's floors are the execution phase pin
-    `audit_window_split_of_record` (`security/Proofs/Flock/Soundness/Audit/Window.lean`), which takes each call's work
+    `audit_executionPhase_split_of_record` (`security/Proofs/Flock/Soundness/Audit/Window.lean`), which takes each call's work
     in one stratum (`check_work_strata`) and each call's sample under its own key context (`Traced.draw`'s `Ledger`). It
     also takes an execution phase that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): an execution
     phase with either empty is refused here, so none is ever sampled or accepted."""
@@ -205,7 +206,7 @@ def window_laws(layouts: Sequence[Layout], k: int = RECORD_K, floors: tuple[tupl
     out = []
     for ss in ys:
         f = dict(floors) | {s.name: -(-k_y * len(s.units) // n) for s in ss}
-        out.append(WorkLaw(k, window_work=total, floors=tuple(f.items())))
+        out.append(WorkSamplingDesign(k, window_work=total, floors=tuple(f.items())))
     return out
 
 
@@ -274,8 +275,9 @@ def layout(shape: Shape, kind: str = "shift24") -> Layout:
     return Layout(shape, us, template_strata(us, Layout(shape, us, (), {}).tile_work()), closure, y_strip)
 
 
-def tile_layout(shape: pc4.Shape | pc8.Shape, w_ref: int) -> Layout:
-    """A tile check's layout (`pc4.Shape` or `pc8.Shape`), from the shape alone: the call's units and strata, each
+def tile_layout(shape: pc8.Shape, w_ref: int) -> Layout:
+    """A tile check's layout (`pc8.Shape`, or the `Shape` of a tile check built as `pc8` is, whose module's ``units``,
+    ``call`` and ``weight`` it reads), from the shape alone: the call's units and strata, each
     tile's closure (itself, then its rows of A's units: TM, or a short last tile row's r; and under pc8's inert-work
     bound, on whole tiles only, its strip, its TM·TN word units row by row, its TM rows' digest and tally units and its
     tally, so every word of the inert-work bound is proved with its tile, never sampled) and its TN rows of B's units in
@@ -283,9 +285,7 @@ def tile_layout(shape: pc4.Shape | pc8.Shape, w_ref: int) -> Layout:
     ``row_k`` its head, forms and tail (`rowk`).  A short tile is its own template's stratum at its rows' share of that,
     w_ref·r/TM, which must be whole; a call with whole and short tiles is then two tile strata, which the work sampling
     design refuses (`check_work_strata`)."""
-    from . import pc4, pc8
-
-    mod = pc8 if isinstance(shape, pc8.Shape) else pc4
+    mod = sys.modules[type(shape).__module__]
     us, ws = mod.units(mod.call(shape)), mod.units(mod.weight(shape))
     tm, tn = shape.tile
     row_a: dict[int, list[int]] = {}
@@ -327,7 +327,7 @@ def template_strata(us: Sequence[ProofBlock], per_tile: int) -> tuple[StratumSpe
 
 @dataclass(frozen=True)
 class Plan:
-    law: str
+    sampling_design: str
     sizes: Mapping[str, int]
     drawn: tuple[int, ...]                   # the units the sampling design drew (tiles and floor units)
     proved: tuple[int, ...]                  # the sampled proof blocks and every sampled tile's closure, ascending, each once
@@ -336,14 +336,14 @@ class Plan:
     proved_b: tuple[int, ...] = ()           # a tile check's: the weight Program's row units the sampled tiles read, each once
 
 
-def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
+def draw(key: Key, lay: Layout, sampling_design: TileSamplingDesign, call: Sequence[int] = ()) -> Plan:
     """The plan for one sample: a uniform k_s-subset of each stratum from ``key`` (the verifier's own randomness, derived under
     `DRAW_DOMAIN` after the receipt), then every sampled tile's closure.  ``call`` is the call's index (`anchors`'
     `call_index`), which keys each stratum's subset with its template: the strata are the call's own (one per template),
     and the calls of an execution phase sampled under one key sample independently.  The verifier samples through
     `Traced.draw`, over its own layout."""
     lay.check()
-    sizes = law.sizes(lay.strata)
+    sizes = sampling_design.sizes(lay.strata)
     drawn: list[int] = []
     for s in lay.strata:
         context = ("call", *call, "stratum", s.name) if call else ("stratum", s.name)
@@ -353,27 +353,27 @@ def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
     bs = {b for u in drawn if lay.b_rows and u in lay.b_rows for b in lay.b_rows[u]}
     for u in drawn:
         proved.update(lay.closure.get(u, ()))
-    return Plan(law.name, sizes, tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)),
+    return Plan(sampling_design.name, sizes, tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)),
                 tuple(sorted(bs)))
 
 
 #: the sampling design `work_table` reads floors from when it is given none: it names no template, so each floor is 1
-_NO_FLOORS = WorkLaw()
+_NO_FLOORS = WorkSamplingDesign()
 
 
-def work_table(lay: Layout, law: WorkLaw = _NO_FLOORS) -> dict[str, dict[str, int]]:
+def work_table(lay: Layout, sampling_design: WorkSamplingDesign = _NO_FLOORS) -> dict[str, dict[str, int]]:
     """The verifier's work table (its `--work-table`, `Draw.workTableOfJson`): every template of the call, with its W_ref
-    per unit (0 for units that do no PoUW work) and its floor f_s (`law.floors`). It refuses a call whose work is in more
+    per unit (0 for units that do no PoUW work) and its floor f_s (`sampling_design.floors`). It refuses a call whose work is in more
     than one stratum (`check_work_strata`, the execution phase pin's `hone`)."""
     check_work_strata(lay.strata)
-    return {s.name: {"work": s.work // len(s.units), "floor": law.floor(s.name)} for s in lay.strata}
+    return {s.name: {"work": s.work // len(s.units), "floor": sampling_design.floor(s.name)} for s in lay.strata}
 
 
-def design_object(lay: Layout, law: WorkLaw) -> dict:
+def design_object(lay: Layout, sampling_design: WorkSamplingDesign) -> dict:
     """The sampling design `verity-verify-proof draw --program P --partition Q --work K --work-table F` derives for this call
-    (`Draw.deriveWork`, as `Law.toJson` writes it): each stratum `{template, units, work, floor, k}`, at the call's K
-    (`WorkLaw.budget`)."""
-    sizes, table, k = law.sizes(lay.strata), work_table(lay, law), law.budget(lay.strata)
+    (`Draw.deriveWork`, as `SamplingDesign.toJson` writes it): each stratum `{template, units, work, floor, k}`, at the call's K
+    (`WorkSamplingDesign.budget`)."""
+    sizes, table, k = sampling_design.sizes(lay.strata), work_table(lay, sampling_design), sampling_design.budget(lay.strata)
     return {"law": "work", "k": k, "strata": [{"template": s.name, "units": s.ranges(), "work": table[s.name]["work"],
                                                "floor": table[s.name]["floor"], "k": sizes[s.name]} for s in lay.strata]}
 
@@ -404,7 +404,7 @@ def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> f
     return profile(lay, sizes).harm_bound({s.name: s.work / len(s.units) for s in lay.strata if s.role == "tile"}, delta)
 
 
-__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "check_work_strata",
+__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountSamplingDesign", "Layout", "Plan", "StratumSpec", "TileSamplingDesign", "WorkSamplingDesign", "check_work_strata",
            "draw", "design_object",
-           "layout", "openings", "profile", "record_k", "template_strata", "tile_layout", "unsound_work_bound", "window_laws",
+           "layout", "openings", "profile", "record_k", "template_strata", "tile_layout", "unsound_work_bound", "window_sampling_designs",
            "work_table"]

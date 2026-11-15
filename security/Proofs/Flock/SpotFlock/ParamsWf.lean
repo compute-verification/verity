@@ -28,8 +28,8 @@ the ports and the partition there.
 `paramsParsed` is one `do` block whose `match`es and `if`s each leave a join point for the rest of the block. It is
 walked once, join point by join point (`jp_step`, `do_walk` of `SpotFlock.DoWalk`), which is linear in the block.
 
-A `match` on an array literal (the one key `templates`, an entry's four keys) is one `split` does not split:
-`match_templates_ok` and `match_entry_ok` take its cases by hand, once, for any arms.
+A `match` on an array literal (an entry's four keys) is one `split` does not split: `match_entry_ok` takes its cases
+by hand, once, for any arms.
 
 ## What this does not show
 
@@ -194,25 +194,6 @@ theorem partition_wf {j : Json} {p : Spot.OneStage.Params} (hj : Wf j) (h : Spot
 
 /-! ## The templates' circuits (`Spot.Run.templateCircuits`) -/
 
-/-- **A `match` on the one key `templates` and a list returns only at a list**, in its first arm. The pattern is an
-array literal, which `split` does not split, so the cases are taken by hand. -/
-theorem match_templates_ok {α ε : Type} {ko : Option (Array String)} {d : Json} {A : Array Json → Except ε α}
-    {e : ε} {r : α}
-    (h : (match (ko, d) with
-      | (some #["templates"], .arr es) => A es
-      | _ => throw e) = .ok r) : ∃ es, d = .arr es ∧ A es = .ok r := by
-  rcases ko with _ | ⟨⟨l⟩⟩
-  · cases h
-  rcases l with _ | ⟨a, _ | ⟨b, t⟩⟩
-  · cases h
-  · by_cases ha : a = "templates"
-    case neg => exfalso; lit_walk h ha
-    subst ha
-    cases d with
-    | arr es => exact ⟨es, rfl, h⟩
-    | _ => cases h
-  · cases h
-
 /-- **A `match` on an entry's four keys and its fields returns only in its first arm**, a tuple whose last field is
 the entry's last. -/
 theorem match_entry_ok {ε : Type} {ko : Option (Array String)} {a b c d : Json}
@@ -258,22 +239,28 @@ is the `registered` field of an entry of its `templates`. -/
 theorem templateCircuits_readsWf {proofs query : Json} {cs : Array (String × String × Json × Json)}
     (hj : Wf proofs) (h : Spot.Run.templateCircuits proofs query = .ok cs) : ReadsWf cs := by
   unfold Spot.Run.templateCircuits at h
-  do_walk h to cs
+  -- The null short-circuit; then the templates match, which `templateCircuits` phrases as a `(keys ok?, templates)`
+  -- pair-let that `split` handles: split it by hand so the templates array gets a name for the well-formedness step.
+  split at h
   · cases h
     intro c hc
     simp at hc
-  · obtain ⟨es, hts, h⟩ := match_templates_ok h
-    do_walk h to cs
-    cases h
-    intro c hc
-    obtain ⟨e, he, hce⟩ := array_mapM_mem (by assumption) c hc
-    have hwe : Wf e := by
-      have hw := wf_getD hj "templates"
-      rw [hts] at hw
-      cases hw with
-      | arr hall => exact hall e he
-    rw [match_entry_ok hce]
-    exact wf_getD hwe "registered"
+  · obtain ⟨ids, -, h⟩ := bind_eq_ok.1 h
+    split at h
+    · rename_i es heq
+      do_walk h to cs
+      cases h
+      intro c hc
+      obtain ⟨e, he, hce⟩ := array_mapM_mem (by assumption) c hc
+      have hwe : Wf e := by
+        have hw := wf_getD hj "templates"
+        rw [Prod.mk.injEq] at heq
+        rw [heq.2] at hw
+        cases hw with
+        | arr hall => exact hall e he
+      rw [match_entry_ok hce]
+      exact wf_getD hwe "registered"
+    · cases h
 
 /-! ## The two-stage form's parameters (`VStar.Recursive.SampledTwo.paramsOfJson`) -/
 

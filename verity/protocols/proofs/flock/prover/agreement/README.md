@@ -47,13 +47,13 @@ the verifier follows upstream because the paper is silent are listed below.
 | sessions of several tables | `Stmt.setupTables`, `Draw.tablesWhy` |
 | `--zk` sessions: the mask slot, and Δ and regions kept off it | `Flock.Zk` (`shapeOk`, `maskFree`, `SLOT_LOG_MIN`) |
 | plain leaves, a recursive session's inner statement | `Tags.withPlainLeaves`, `Registered.checkDescription` |
-| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `drawLaw`, `programHeld`, `programBound`) |
+| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `sampleLaw`, `programHeld`, `programBound`) |
 | the ZK server's contract, frames, coins, `Hello` and session loop | `Flock.ZkServer` and `Flock/ZkServer/` |
 
 `verify` fails closed: after every check passes, `Flock.ProvedScope` refuses each statement form, sampling design or setting
 the soundness theorem doesn't cover, with `refused: <why>: a statement form the soundness proof does not cover`, so a
 session that fails a check keeps that check's reason. Under `--rec-inner` that includes a V* session over an inner session
-whose record holds no sample (`Flock.RecSetup.innerDrawn`), one at a holo or sparse inner shape (`Flock.RecSetup.denseOnly`:
+whose record holds no sample (`Flock.RecSetup.innerSampled`), one at a holo or sparse inner shape (`Flock.RecSetup.denseOnly`:
 `RecursiveKS` covers the dense form only, and the compiled model refuses the same sessions, `RecDeploy.acc_dense`), and a
 recursive session without `--zk` (`Flock.RecSetup.zkOnly`).
 
@@ -73,7 +73,7 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 - The guarantee statements: `security/Definitions/Flock/Guarantees/` (`ClaimsStated`, `SamplingClaimsStated`,
   `RecursionClaimsStated`, and the record sizing in `Audit.lean`); the proved ones are the `Flock.SecurityProofs.*`
   entries of `security/lean-audit.json`, among them `EndToEnd`, `EndToEndHidden`, `ZeroKnowledgeHidden`, `MaskedZK`,
-  `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityHorizon`, each stated in a `Statement.lean` (or
+  `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityPooled`, each stated in a `Statement.lean` (or
   `KSStatement.lean`, `PublicAudit.lean`) of its area under `security/Proofs/Flock/`.
 - The named assumptions, the lock's `assumptions`: `security/Definitions/Assumptions/Flock.lean` (`SHA512CRStrict`,
   `SHA512CRExpected`, `UniformRandomBytes`, `UniformRandomBytesTest`). The other assumptions, the lock's `open` and
@@ -268,7 +268,7 @@ sampling design or missing sample alone as accepted, and every set so compares a
 | D19 | a V* cap session that doesn't read its level's tops at the verifier's shared rows |
 | D20 | a record not in its canonical text |
 | D21 | a nonzero proof-of-work nonce |
-| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `NciCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on `NciCheck`'s mistyped descriptors |
+| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `InferenceOnlyCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on `InferenceOnlyCheck`'s mistyped descriptors |
 
 Where the paper is silent, the verifier follows upstream:
 

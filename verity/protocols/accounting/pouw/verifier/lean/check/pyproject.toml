@@ -27,7 +27,6 @@ inputs = ["verity/protocols/proofs/spot/verifier/one_stage/link_points.py", "ver
           "tools/difftest", "verity/__init__.py",
           "verity/channel.py",
           "verity/protocols/accounting/pouw/verifier/__init__.py",
-          "verity/claims/__init__.py",
           "verity/protocols/accounting/pouw/verifier/window.py", "verity/protocols/accounting/pouw/verifier/core_check.py",
           "verity/protocols/accounting/pouw/verifier/period_check.py",
           "verity/protocols/accounting/pouw/verifier/verifier.py", "verity/protocols/accounting/pouw/verifier/salt.py",
@@ -40,6 +39,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/one_stage/link_points.py", "ver
           "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
           "verity/protocols/proofs/spot/verifier/one_stage/proofs.py",
           "verity/protocols/proofs/spot/verifier/one_stage/verifier.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/caller.py",
           "verity/protocols/proofs/spot/verifier/one_stage/audit.py",
           "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
           "verity/protocols/proofs/spot/verifier/one_stage/hello.py",
@@ -65,7 +65,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/one_stage/link_points.py", "ver
           "verity/commitments/lms/lean/Lms",
           "verity/protocols/proofs/flock/verifier/lakefile.toml", "verity/protocols/proofs/flock/verifier/lake-manifest.json",
           "verity/protocols/proofs/flock/verifier/lean-toolchain", "verity/protocols/proofs/flock/verifier/Flock",
-          "verity/definitions/__init__.py", "verity/hardware/__init__.py",
+          "adapters/vllm/verity_vllm/definitions/__init__.py",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py",
           "verity/protocols/proofs/spot/device/__init__.py", "verity/circuits/base", "verity/circuits/lean",
           "verity/commitments/lean"]
@@ -77,3 +77,7 @@ untraced = [
     "tests/test_live_verified_difftest.py",
     "tests/test_verified_difftest.py",
 ]
+# check runs it as three parts by test id (`lean-suites:verity-pouw-check-difftest:K/3`, `suites.py`'s `id_part_of`), each
+# collecting every file and running the tests whose node id hashes to K, so that ci.toml's plans spread its one process over
+# three shards
+parts = 3

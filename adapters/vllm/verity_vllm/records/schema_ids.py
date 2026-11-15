@@ -51,7 +51,7 @@ REPLAY_SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
 #: a replay bundle's `context.json` and its manifest (`pipeline.replay_bundle.SCHEMA`), which `seal` writes;
 #: `open_bundle` refuses a manifest with any other
 REPLAY_BUNDLE_SCHEMA = "verity-vllm/replay-bundle/v1"
-#: a capture's `spec_tokens.json`, the workload as known before any engine step, which `pipeline.m1_capture`'s `main`
+#: a capture's `spec_tokens.json`, the workload as known before any engine step, which `pipeline.match_capture`'s `main`
 #: writes
 SPEC_TOKENS_SCHEMA = "verity-gen/spec-tokens/v1"
 #: a row's admission plan, the host memory reserved for each part of the row (`pipeline.telemetry.admission.SCHEMA`),
@@ -173,11 +173,9 @@ WEIGHTS_OF_RECORD_SCHEMA = "verity/commit/weights-of-record/v2"
 #: writes it, and a row calls a record that carries it stale
 WEIGHTS_OF_RECORD_PRIOR_SCHEMA = "verity/commit/weights-of-record/v1"
 
-# --- the properties (`verity_vllm.properties`)
-#: the manifest of a difftest's cases, `manifest.json` in the directory `properties.admission.produce` writes them to
-DIFFTEST_PRODUCE_SCHEMA = "verity-gen/difftest-produce/v1"
-#: the quarantine admission, `quarantine.json`: the difftest report of each definition checked, which
-#: `properties.admission`'s `main` writes
+# --- the quarantine admission
+#: the quarantine admission, `quarantine.json`: the difftest report of each definition checked, which gate G4 reads;
+#: the records under `engine/profiles/quarantine/` hold it, and no code of the tree writes one
 QUARANTINE_ADMISSION_SCHEMA = "verity-gen/quarantine/v1"
 
 # --- the TP row (`verity_vllm.pipeline.tp`)

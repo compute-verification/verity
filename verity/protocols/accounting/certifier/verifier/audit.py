@@ -7,15 +7,14 @@ An egress execution phase (`check_link`) is **accepted** if three things hold:
 
 It must also have exactly one record, settled by the verdict deadline: an execution phase with more than one record is a
 `duplicate` violation, whatever the records say. Anything else is a **violation**. It is recorded and the run is
-rejected, as a policy signal. There is no halt: later windows are still checked and recorded. Every bound in
-`capacity` holds on accepted runs only; a rejected window may already have carried up to its unbound capacity before it
+rejected, as a policy signal. There is no halt: later windows are still checked and recorded. Every capacity bound
+(`PROTOCOL.md`, "Capacity") holds on accepted runs only; a rejected window may already have carried up to its unbound capacity before it
 was rejected.
 
 A spatial unit has one clock. The audit keeps each window's sync (`Audit.syncs`), set by the first egress link checked
 for that window, and a link that declares a different sync for the window is an `advice` violation there. The bound on
-accepted runs charges one sync per window for all links, `#Σ_sync^W` values over W windows (Lean
-`Properties.Certifier.EncardAcceptedObservationsLe`, whose timing advice is `Fin W → Σ_sync`): 7 bits per window
-at 16 × 8. A sync per link would be advice of `#Σ_sync^(L·W)`, which that bound doesn't cover.
+accepted runs charges one sync per window for all links, `#Σ_sync^W` values over W windows
+(`PROTOCOL.md`, "Capacity": its timing advice is one sync a window): 7 bits per window at 16 × 8. A sync per link would be advice of `#Σ_sync^(L·W)`, which that bound doesn't cover.
 
 The Program's grids are computed from the syncs as declared, out-of-set values included, so a declared sync outside the
 set, or other than the unit's, is an `advice` violation in its own window only. A window's grid reads only the syncs of
@@ -32,7 +31,7 @@ the id the challenger sampled for it); a certificate that fails, one from anothe
 violation. A head settled after the verdict deadline is a `no-verdict`. The status is the head's, which the signed
 digest binds. On egress the grid check compares the head's record digest with the digest of the Program's grid's head,
 under the parameters digest of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest certifier
-every certificate verifies, and the verdicts are those of the raw records. N2 (`service.LinkWindows`) makes no grid
+every certificate verifies, and the verdicts are those of the raw records. N2 (`service.TransferBlocks`) makes no grid
 comparison: `check_link(grid=False)` leaves the grid to its proof block's head check (`head_check`), which holds the
 head's status, grid parameters and counts on every execution phase, so N2's claim is counts only, and nothing here holds
 the frames.
@@ -47,7 +46,7 @@ is a `mismatch`.
 
 A client holds its copy of one window's certificates, as a reveal endpoint served them, to the key and the session
 (`certificate_refusals`, whose Lean is `NetworkCheck.TransferBlocks.refusals`): it refuses a certificate of another key or
-link-window, a clock certificate that isn't egress, one whose signature doesn't verify (`Certificate.verify`), a second
+execution phase, a clock certificate that isn't egress, one whose signature doesn't verify (`Certificate.verify`), a second
 of its direction, and a clock certificate signing a digest that an earlier kept one signs, whose salt was reused.
 """
 
@@ -204,7 +203,7 @@ def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int,
                          clocks: Sequence[Certificate], seen: Collection[bytes] = ()
                          ) -> tuple[list[str | None], list[str | None]]:
     """Each certificate's refusal in one window's answer, then each clock certificate's, None where the client keeps
-    it, each read against those kept before it: another key's (``key``), another link-window's than `link`'s window
+    it, each read against those kept before it: another key's (``key``), another execution phase's than `link`'s window
     `window` (``link-window``), a clock certificate that isn't egress (``clock``), a signature that doesn't verify under
     `key` in certifier session `session` (``signature``), a second of its direction (``second``), or a clock certificate
     signing a digest that a kept one signs, earlier in the window or among `seen`'s (``reused``)."""

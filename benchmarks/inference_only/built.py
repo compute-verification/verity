@@ -47,7 +47,7 @@ H200 = {"compute_capability": (9, 0), "num_sms": load_card("h200-sxm-141gb")["sm
         "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
 #: the inference-only policy's check, a Lake package
-PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
+PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/lean"
 
 
 def _declared() -> tuple[tuple[str, ...], str]:
@@ -113,9 +113,9 @@ def block_work(cls: tuple[int, int, int], model: str) -> dict[str, int]:
 def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     """The session policy of the record ``doc`` under θ = ``pins``: its block Definition and slots, `c` and `k`, the
     gate table and each template's gates a unit."""
+    from verity.circuits.ops.boolean.versions import gate_table
+    # block_counts registers the vLLM adapter's catalog with the Boolean-versions lookup as it loads
     from verity_vllm.program.predict import block_counts as BC
-
-    from verity.definitions.boolean import gate_table
 
     fn, m, steps = BC.session(doc)
     table, unpriced = gate_table([fn])
@@ -138,7 +138,7 @@ def divisions(doc: Mapping[str, Any], pins: Mapping[str, str], gates: Mapping[st
     the largest block's fresh bits, and what that block's fresh bits are."""
     from verity_vllm.program.predict import block_counts as BC
 
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
 
     units = {t: int(n) for t, n in doc["templates"]}
     lays = {t: IF.layout(BC.resolve(t)) for t in units}

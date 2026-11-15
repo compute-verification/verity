@@ -30,13 +30,13 @@ from verity.circuits.evaluation.bits import compile as compile_bits
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Coll, Strided, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.boolean import NoBooleanVersion, boolean_version
+from verity.circuits.ops.boolean.versions import NoBooleanVersion, boolean_version
 from verity.circuits.ops import scalar as SC
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import F32Neg
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as RP
-from verity.definitions.registry.sampling import bit_at
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as RP
+from verity_vllm.definitions.registry.sampling import bit_at
 
 K, N, V, T = 4, 3, 6, 5
 F32, I32 = P.F32, P.I32
@@ -1373,7 +1373,7 @@ def test_a_specific_row_repeated_across_members_is_refused_at_the_word_by_word_p
 
 
 def test_the_word_by_word_points_token_input_is_a_permutation_of_the_least_tables_rows(monkeypatch):
-    """The token input, 32 bits wide like an f32, is found by its use as a lookup's token and drawn at the
+    """The token input, 32 bits wide like an f32, is found by its use as a lookup's token and sampled at the
     word-by-word point's lanes as a permutation of the least table's rows, repeated, not as a float."""
     seen = {}
     inputs = PT.Walk.inputs

@@ -290,16 +290,23 @@ CARD_FILE = {"sku": "sim-file", "kind": "gpu", "sm": {"count": _entry(2)},
              "clock": {"default": "sm", "sm": _entry(1530)},
              "rate": {"tensor": _entry(1024)}, "memory": {"bandwidth": _entry(1.23456e12)},
              "store": {"reg": _entry(65536), "reg_extra": _entry(0), "smem": _entry(262144), "l2": _entry(1 << 20),
-                       "dram": _entry(16 << 30)}}
-"""A card file's table as `load_card(sku)` returns it, with the entries `Sheet.of_file` reads."""
+                       "dram": _entry(12 << 30), "dram_installed": _entry(16 << 30)}}
+"""A card file's table as `load_card(sku)` returns it, with the entries `Sheet.of_file` reads and the memory a program
+gets (`store.dram`), which it does not."""
 
 
-def test_a_sheet_reads_the_memory_a_program_gets() -> None:
-    """A card file's second reading of device memory and the caches only a run found are not the sheet's: its `mem`
-    is `store.dram`, and its `chip` the registers', shared memory's and L2's."""
-    more = {"dram_installed": _entry(24 << 30), "l15": _entry(147456), "l1i": _entry(65536), "l0i": _entry(24576),
-            "const_l0": _entry(12288)}
-    assert Sheet.of_file({**CARD_FILE, "store": {**CARD_FILE["store"], **more}}) == Sheet.of_file(CARD_FILE)
+def test_a_sheet_reads_the_memory_on_the_board() -> None:
+    """Of a card file's two readings of device memory a sheet's `mem` is the larger, `store.dram_installed`: the
+    memory a program gets (`store.dram`) does not move it, and a card file that states no memory on the board gives
+    no sheet. The caches only a run found are not the sheet's: its `chip` is the registers', shared memory's and
+    L2's."""
+    store = CARD_FILE["store"]
+    assert Sheet.of_file(CARD_FILE).mem == 16 << 30
+    assert Sheet.of_file({**CARD_FILE, "store": {**store, "dram": _entry(16 << 30)}}) == Sheet.of_file(CARD_FILE)
+    more = {"l15": _entry(147456), "l1i": _entry(65536), "l0i": _entry(24576), "const_l0": _entry(12288)}
+    assert Sheet.of_file({**CARD_FILE, "store": {**store, **more}}) == Sheet.of_file(CARD_FILE)
+    with pytest.raises(Malformed, match="dram_installed"):
+        Sheet.of_file({**CARD_FILE, "store": {k: e for k, e in store.items() if k != "dram_installed"}})
 
 
 def test_a_sheet_from_its_card_file() -> None:
@@ -519,8 +526,12 @@ def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> 
     lone = _entry_of(Registration("remote"), one, "n0", ways=alone)
     assert lone.links == (QUIET, PATH)
     assert refusal(onsite, _reached(_entry_of(onsite, one, "n0", ways=alone)), auditor) is None
-    with pytest.raises(Malformed, match=r"no interface the node file states has a rate \(\['n0/eth0'\]\).*takes no certifier"):
+    with pytest.raises(Malformed, match=r"network certifier 'cert0': the interfaces \['n0/eth0'\].*takes no certifier"):
         _entry_of(Registration("remote"), one, "n0", certifier=("cert0", "dummy-cert0-key", SCHEME), ways=alone)
+    mixed = {**node, "interface": {**PORTS, "eth2": UNRATED["eth0"]}}
+    with pytest.raises(Malformed, match=r"network certifier 'cert0': the interfaces \['n0/eth2'\].*takes no certifier"):
+        _entry_of(Registration("remote"), mixed, "n0", certifier=("cert0", "dummy-cert0-key", SCHEME),
+                  ways=(*_ways()[:2], ("n0/eth2", None, True), ("n0/storage", DISKS, False)))
 
 
 def test_an_interface_that_reads_no_rate_is_registered_without_a_capacity() -> None:

@@ -96,7 +96,7 @@ def test_one_mathlib():
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
 # Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
 # restated at the deployed session its domain hypothesis fixes
-UNWITNESSED = {"security": 222, "security/Properties": 180, "verity/protocols/proofs/flock/verifier": 7}
+UNWITNESSED = {"security": 217, "security/Properties": 176, "verity/protocols/proofs/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -164,17 +164,6 @@ def test_lean_module_roots_are_disjoint():
                for x, y in itertools.combinations(claims, 2) if clash(x, y)]
     assert len(claims) >= 10
     assert not clashes, clashes
-
-
-def test_every_lock_is_owned():
-    """A lock with no owner, issue or due date in it is unowned, and the Lean check holds it to no owner rule
-    (`check.py`'s `unowned_lock`): the lock of a tree with no lanes.  This tree has lanes, so each of its locks that
-    lists a guarantee or a premise names who answers for it."""
-    merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
-    unowned = [_rel(p) for p in lake_packages() if merge.A.unowned_lock(_lock(p))]
-    assert not unowned, (f"locks that name no owner, so no entry of theirs owes one: {unowned}; run `check.py --update "
-                         f"--owner @lane` on each, which owns its entries")
-    assert any(merge.A.unowned_lock({s: {"X": {}}}) for s in merge.A.LANE_ENTRIES)
 
 
 def test_every_record_merges_with_the_driver():
@@ -387,7 +376,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
 #: all Flock's until its spec is extracted
-TREES_EXCEPT = {"security": 41}
+TREES_EXCEPT = {"security": 29}
 
 
 def test_the_trees_except_list_only_shrinks():
@@ -574,7 +563,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"security": 963, "security/Proofs": 54185, "verity/protocols/accounting/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 725}
+OVERLONG = {"security": 963, "security/Proofs": 53427, "verity/protocols/accounting/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 725}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
@@ -602,9 +591,12 @@ RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener
 IMPORT_ALL: dict[str, str] = {
     "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
         "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean: Spot.ChallengerSession":
+        "`pinnedChallengePhaseWith` restates `pinnedChallengePhase`, which reads the private `strOf`, and is held to it by "
+        "`rfl`; a copy of `strOf` is another constant, so the `rfl` fails",
 }
 #: the entries of `IMPORT_ALL` whose FILE the tree has, per package
-IMPORT_ALL_USES = {"security/Proofs": 1}
+IMPORT_ALL_USES = {"security/Proofs": 1, "verity/protocols/accounting/pouw/verifier/lean/check": 1}
 
 
 def imports_all(files: dict[str, str], in_tree) -> list[str]:

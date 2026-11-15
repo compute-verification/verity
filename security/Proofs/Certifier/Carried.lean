@@ -251,7 +251,7 @@ theorem rLeakCarried_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (H :
   rw [hP] at hP₁
   obtain rfl := Option.some.inj hP₁
   obtain ⟨ι, hι⟩ := SampledAuditProof.correct_of_not_faulty H D.commit s P w
-  have hF := faulty_mem_faultySets hRel hdisj
+  have hF := faulty_mem_incorrectSets hRel hdisj
   let a : ℕ → Bool := fun g =>
     if g ∈ freeInputs s.prog (lay s) (k s) then traceVal s.prog (w.val H D.commit s) g else false
   refine ⟨s, P, hs, hP, fun op o hcar hcov _ _ => ?_⟩
@@ -334,8 +334,8 @@ theorem encard_accSeqsCarried_le {L K S : ℕ} (C : Prog) (P : Partition) (d : D
     (reg : Finset ℕ) (ρ : ℕ → Bool) (prow nrow : List ℕ) (rin : Hash.Row) (δ : ℝ)
     (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) :
     (AccSeqsCarried C P d lay n (AsReg C lay n reg ρ) valid prow nrow rin δ op D).encard ≤
-      ((2 ^ (freeInputs C lay n \ (reg ∪ chk ∪ prow.toFinset)).card * (faultySets d P δ).card *
-        2 ^ ((faultySets d P δ).sup (faultyBits C P)) * D ^ n : ℕ) : ℕ∞) := by
+      ((2 ^ (freeInputs C lay n \ (reg ∪ chk ∪ prow.toFinset)).card * (incorrectSets d P δ).card *
+        2 ^ ((incorrectSets d P δ).sup (faultyBits C P)) * D ^ n : ℕ) : ℕ∞) := by
   classical
   let ρ' : ℕ → Bool := fun g => if g ∈ prow then rin.getD (prow.idxOf g) false else ρ g
   have hsub : AccSeqsCarried C P d lay n (AsReg C lay n reg ρ) valid prow nrow rin δ op D ⊆
@@ -674,7 +674,7 @@ theorem pooledLeakChecked_of_carried {L K S : ℕ} (lay : AuditStatement → Bou
     (hch : MonitoringPeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
     (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
     (had : MonitoringPeriodAdaptive n acc W) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
-    (hesc : MonitoringPeriodEscapes Zs acc W q e)
+    (hesc : MonitoringPeriodMissProb Zs acc W q e)
     (hleak : MonitoringPeriodLeaksChecked lay k reg valid Dj sw Pw ρ op Zs acc W
       (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e')
     (Fmax : ℕ) :

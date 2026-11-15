@@ -5,11 +5,14 @@
 # and `--firewall-state` are `--zk-server` and `--zk-server-state`. A word takes the spelling `terms_map.toml` gives it
 # (`firewalled` `zk_served`, `unfirewalled` `unserved`), and a kebab-case name its own rows, since the general row
 # would spell `zk_server` inside it. Phrases come first, so a string or data file reads as the prose already does.
+# This map renames the identifiers and `terms_map.toml` (scope prose) the prose, so a word has a row in each.
 #
 # What a served record, a verifier's input or another system already carries keeps its spelling until a format version
 # ([keep]): the domain tags and format ids (`verity/firewall-*/v0`, `firewall/v0/...`), the deployment's party and the
 # reports' key `"firewall"` as a quoted token, the parties' message type `"Firewall"` a deploy log records, the release's
-# reasons upstream's Rust records, a goal's id and the machines' systemd slice. `benchmarks/` follows in its own lane.
+# reasons upstream's Rust records, a goal's id and the machines' systemd slice, A7's recorded refusals (`firewall-.*`),
+# the Lean build lock `.firewall.lock`, which scripts outside these directories take too, and the replicated fixtures'
+# directory `recursion/verifier/firewall/tests/fixtures`, which no move renames.
 # Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that
 # `tools/verity/lean/check.py --update --moved` takes.
 
@@ -46,6 +49,10 @@
 "firewalled session" = "ZK server session"
 "firewalled sessions" = "ZK server sessions"
 "firewalled masked prover" = "masked prover behind the ZK server"
+"a firewalled prover's Lean Hello" = "the Lean Hello of a prover behind the ZK server"
+"firewall, and the Lean verifier's verdict" = "ZK server, and the Lean verifier's verdict"
+"firewall ${FW" = "ZK server ${FW"
+"device floor (firewall)" = "device floor (ZK server)"
 
 # --- the Lean namespace and its module paths; the executable's root takes `Main`, since the library `FlockZkServer`
 # holds the name it would get
@@ -69,7 +76,7 @@
 
 # --- refusal and line words, then environment names and constants
 "FIREWALL-REFUSED" = "ZK-SERVER-REFUSED"
-"FIREWALL-TIMES" = "ZK-SERVER-TIMES"
+"H1S_UNFIREWALLED" = "H1S_NO_ZK_SERVER"
 "UNFIREWALLED" = "UNSERVED"
 "FIREWALLED" = "ZK_SERVED"
 "FIREWALL" = "ZK_SERVER"
@@ -92,16 +99,47 @@
 
 [rewrite]
 # Never rewritten: the term source and the lints and tables that spell the old word on purpose, the move tools and
-# their tests, changelogs, replicated fixtures and patches; `benchmarks/` renames what it spells in its own lane.
+# their tests, changelogs, replicated fixtures and patches; and every directory of `benchmarks/` but the proof system's
+# (`one_stage`, `proof_throughput`, `two_stage`, `verifier_cost`, `sampling_plan`, `spot_figures`, `remote_session`,
+# `spot_proved`, `served_units`), which `firewall_words_map.toml` renames, or its owner.
 exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
            "tools/research/tests/test_slack.py", "tools/move/**", "tools/verity/check/tests/test_move_check.py",
            "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**",
-           "*.patch", "benchmarks/**"]
+           "*.patch",
+           "benchmarks/README.md", "benchmarks/bandwidth/**", "benchmarks/bool_build_cost/**",
+           "benchmarks/census/**", "benchmarks/certifier_term/**", "benchmarks/certifier_timing/**",
+           "benchmarks/circuit_properties/**", "benchmarks/codec_tensor/**", "benchmarks/commitments/**",
+           "benchmarks/communication/**", "benchmarks/compile_cost/**", "benchmarks/compute/**",
+           "benchmarks/datacenter/**", "benchmarks/definitions/**", "benchmarks/demo_minutes/**",
+           "benchmarks/dsa_topk/**", "benchmarks/exfiltration/**", "benchmarks/f32_exhaustive/**",
+           "benchmarks/flock_kernels/**", "benchmarks/flock_s8_block/**", "benchmarks/harness/**",
+           "benchmarks/hash/**", "benchmarks/inference_only/**", "benchmarks/int8_class_rate/**",
+           "benchmarks/kernels/**", "benchmarks/kv_filler/**", "benchmarks/landing/**",
+           "benchmarks/lean_unread_gate/**", "benchmarks/machine_model/**", "benchmarks/memory/**",
+           "benchmarks/mempool/**", "benchmarks/multi_unit/**", "benchmarks/native_peak/**", "benchmarks/nci/**",
+           "benchmarks/network_e2e/**", "benchmarks/network_sim/**", "benchmarks/network_traces/**",
+           "benchmarks/numerical/**", "benchmarks/overhead/**", "benchmarks/pous/**", "benchmarks/pouw/**",
+           "benchmarks/ppl/**", "benchmarks/private_circuit/**", "benchmarks/prod_repro/**",
+           "benchmarks/proof_status/**", "benchmarks/property_redteam/**", "benchmarks/prove/**",
+           "benchmarks/prove_path/**", "benchmarks/rate_squaring/**", "benchmarks/recursion_e2e/**",
+           "benchmarks/recursion_figures/**", "benchmarks/replay_determinism/**", "benchmarks/replay_ladder/**",
+           "benchmarks/route_capture/**", "benchmarks/scan_cost/**", "benchmarks/security_findings/**",
+           "benchmarks/serve_tax/**", "benchmarks/served_commit/**", "benchmarks/served_errors/**",
+           "benchmarks/slowdown/**", "benchmarks/stacked_share/**", "benchmarks/tc_probe/**",
+           "benchmarks/tc_probe_fp4/**", "benchmarks/tensor_duty/**", "benchmarks/torch_gpu/**",
+           "benchmarks/training_slowdown/**", "benchmarks/tree/**", "benchmarks/unit_block/**",
+           "benchmarks/unit_lowering/**", "benchmarks/unit_walk/**", "benchmarks/vllm_encoded/**",
+           "benchmarks/word_codec/**"]
 
 [keep]
 patterns = ['(?<![\w-])verity/firewall-[\w-]*(?:/v\d+)?', '(?<![\w/.-])firewall/v\d+(?:/\w+)*',
             '(?<=[\x22\x27])firewall-(?:salt|coins)(?=[\x22\x27])',
             '(?<=[\x22\x27])firewall(?=[\x22\x27])', '(?<=\\[\x22\x27])firewall(?=\\[\x22\x27])',
-            '(?:(?<=\()|(?<=type == )|(?<=messages = \[))\x22Firewall\x22|\bFirewall(?= \{sha512)',
+            '\x22Firewall\x22|\bFirewall(?= \{sha512)',
             '\bthe firewall(?: serves nothing more of it|\x27s fault)',
-            '\b(?:goal:)?proofs/firewall-[\w-]+', '\bfirewall\.slice\b']
+            '\b(?:goal:)?proofs/firewall-[\w-]+', '\bfirewall\.slice\b', '\.firewall\.lock\b',
+            'recursion/verifier/firewall/tests/fixtures',
+            '\bFIREWALL-TIMES\b', '(?<=\x22)FIREWALL(?=\\t)', '\bfirewall_(?:failed|device_rounds|device_failed)\b',
+            '\bfirewall\.json\b']
+strings = ["dials firewall, workers", "refused listen: firewall, workers", "outer prove (firewall) e2e_s",
+           'r"firewall-.*"']

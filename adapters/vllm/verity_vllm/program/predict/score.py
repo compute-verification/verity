@@ -28,8 +28,10 @@ from verity_vllm.engine.profiles.devices import device_name_of_row
 from verity_vllm.program import workload as W
 from verity_vllm.target_family import declared_profile
 
-from .build import Unexpressible, build_program
+from .build import BuildResult, Unexpressible, build_program
 from .phi import Phi
+
+__all__ = ["request_component"]
 
 # ------------------------------------------------------------------------------------------------------------------- φ of a row
 
@@ -89,7 +91,7 @@ def sampling_of(w: dict, phi: Phi) -> dict:
 # ------------------------------------------------------------------------------------------------------------------- the workload Program
 
 
-def request_component(r):
+def request_component(r: BuildResult) -> W.RequestComponent:
     """A predicted request Program (a `BuildResult`) as GP-01's component (`program.workload.program_component`): its own root,
     whose definitions are this process's, so nothing is decoded."""
     params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
@@ -117,8 +119,8 @@ def workload_program(phi: Phi, comps: dict | None = None):
             comps[(LP, T)] = request_component(build_program(phi, "request", LP=LP, T=T))
     wreqs = []
     for i, q in enumerate(reqs):
-        lp, cap = int(q["prompt_len"]), int(q["max_tokens"])
-        wreqs.append(W.WorkloadRequest(request_id_of(i), i, lp, cap, int(q.get("arrive_step") or 0), comps[(lp, cap - 1)], T=cap - 1))
+        lp, mt = int(q["prompt_len"]), int(q["max_tokens"])
+        wreqs.append(W.WorkloadRequest(request_id_of(i), i, lp, mt, int(q.get("arrive_step") or 0), comps[(lp, mt - 1)], T=mt - 1))
     return W.WorkloadProgram(wreqs, manifest_digest=None, lag=int(phi.target_profile().lag()))
 
 

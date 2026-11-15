@@ -1,6 +1,7 @@
 module
 
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 meta import Spot.SecondStage
 
 /-!
@@ -28,10 +29,10 @@ private def exRec (population : Nat) (roots : List (String × Nat × Nat)) (wind
 private def exRun : String := "run-0"
 
 /-- The interior registration's window: the run, and the replay sample `sample` it lays out. -/
-private def exWindow (sample : Json) (run : Json := .str exRun) : Json :=
+private def exExecutionPhase (sample : Json) (run : Json := .str exRun) : Json :=
   Json.mkObj [("kind", "served"), ("run", run), ("interior", Json.bool true), ("replay_sample", sample)]
 
-private def exInterior (window : Json := exWindow (natsJson #[1, 3])) : Json :=
+private def exInterior (window : Json := exExecutionPhase (natsJson #[1, 3])) : Json :=
   exRec 6 [("x", 1, 2), ("out", 3, 4)] window
 
 private def exSchemas : Json := Json.mkObj [("x", "hm96-sha512/row/v2"), ("out", "hm96-sha512/row/v2")]
@@ -146,19 +147,19 @@ private def exCodes (own : Own) (f : Json → Json) : Array String := (exCheck t
   #["second-header"]
 #guard exCodes exOwn (exIn "frame_v3" "bindings" (Json.mkObj [("x", exBinding "x")])) == #["second-header"]
 #guard exCodes exOwn (exIn "frame_v3" "schemas" (Json.mkObj [("x", "hm96-sha512/row/v2")])) == #["second-header"]
-#guard exCodes { exOwn with interior := exInterior (exWindow (natsJson #[1, 3]) (.str "run-1")) } id ==
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase (natsJson #[1, 3]) (.str "run-1")) } id ==
   #["second-header"]
-#guard exCodes { exOwn with interior := exInterior (exWindow (natsJson #[1, 3]) .null) } id == #["second-header"]
-#guard exCodes { exOwn with interior := exInterior (exWindow (natsJson #[3, 1])) } id == #["second-interior-order"]
-#guard exCodes { exOwn with interior := exInterior (exWindow (natsJson #[1])) } id == #["second-interior-order"]
-#guard exCodes { exOwn with interior := exInterior (exWindow (.arr #[.bool true, Lean.toJson (3 : Nat)])) } id ==
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase (natsJson #[1, 3]) .null) } id == #["second-header"]
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase (natsJson #[3, 1])) } id == #["second-interior-order"]
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase (natsJson #[1])) } id == #["second-interior-order"]
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase (.arr #[.bool true, Lean.toJson (3 : Nat)])) } id ==
   #["second-interior-order"]
-#guard exCodes { exOwn with interior := exInterior (exWindow .null) } id == #["second-interior-order"]
-#guard (exCheck false { exOwn with interior := exInterior (exWindow (natsJson #[3, 1])) } #[exHeader id]).codes ==
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase .null) } id == #["second-interior-order"]
+#guard (exCheck false { exOwn with interior := exInterior (exExecutionPhase (natsJson #[3, 1])) } #[exHeader id]).codes ==
   #["second-interior-order"]
-#guard (check true { exOwn with interior := exInterior (exWindow (natsJson #[3, 1])) } none).codes ==
+#guard (check true { exOwn with interior := exInterior (exExecutionPhase (natsJson #[3, 1])) } none).codes ==
   #["second-interior-order", "second-statements"]
-#guard (check true { exOwn with interior := exInterior (exWindow .null), links := none } none).codes ==
+#guard (check true { exOwn with interior := exInterior (exExecutionPhase .null), links := none } none).codes ==
   #["second-interior-order", "second-links"]
 #guard (exCodes exOwn (exIn "units" "blocks" (natsJson #[0]))).isEmpty
 #guard (exCodes { exOwn with refs := #[("Pair_v0", exIn "units" "blocks" (natsJson #[9]) exRef)] } id).isEmpty
@@ -655,7 +656,7 @@ private def exWire : Wire := ⟨"Triple_v0", "x", "Pair_v0", "out"⟩
 /-- An interior record naming its ports by template, six leaves each: `Pair_v0`'s `x` and `out` and `Triple_v0`'s
 `out`, and no tree of `Triple_v0`'s wired `x`. -/
 private def exWiredInterior : Json :=
-  exRec 6 [("Pair_v0/x", 1, 2), ("Pair_v0/out", 3, 4), ("Triple_v0/out", 5, 6)] (exWindow (natsJson #[1, 3]))
+  exRec 6 [("Pair_v0/x", 1, 2), ("Pair_v0/out", 3, 4), ("Triple_v0/out", 5, 6)] (exExecutionPhase (natsJson #[1, 3]))
 
 /-- `exTwoParts` over `exWiredInterior`, `Triple_v0`'s `x` wired from `Pair_v0`'s `out`, its unit reading its writer's
 first unit of three a block. -/
@@ -761,11 +762,11 @@ private def exReadRec : Json := exRec 4 [("bx", 5, 6), ("t", 7, 8), ("u", 9, 3)]
 key, and the 1 its verdict port reads. -/
 private def exFilled : Array (String × Array (Array (String × String))) :=
   #[("root", #[#[("bytes", exRoot 7)]]), ("domain", #[#[("bytes", exRoot 8)]]),
-    ("tok", #[#[("bytes", "00000002")]]), ("one", #[VERDICT_ONE, VERDICT_ONE])]
+    ("tok", #[#[("bytes", "00000002")]]), ("one", #[VERDICT_ONE_LEAF, VERDICT_ONE_LEAF])]
 
 /-- `exFilled` with the second row of the verdict's value a 0. -/
 private def exFilledZero : Array (String × Array (Array (String × String))) :=
-  exFilled.map fun (v, rows) => (v, if v == "one" then #[VERDICT_ONE, #[("bytes", "00000000")]] else rows)
+  exFilled.map fun (v, rows) => (v, if v == "one" then #[VERDICT_ONE_LEAF, #[("bytes", "0000")]] else rows)
 
 /-- Template `t`'s reference statement's registered reads: its port `p` reads value `v`. -/
 private def exRefRead (t p v : String) : String × Json :=
@@ -866,6 +867,22 @@ private def exKeyed : Own :=
   KEY_BOUNDS_WHY
 #guard inputsWhy { exKeyed with rows := exTableRows } "row" == KEY_BOUNDS_WHY
 #guard inputsWhy { exKeyed with parts := some #[⟨"Pair_v0", 0, 2⟩] } "row" == KEY_BOUNDS_WHY
+-- a read whose key is wired lists no `table_rows` at a port of its opening; round 2 reads none yet, so any is refused
+private def exListed : Json :=
+  Json.mkObj [("value", .str "row"), ("table_rows", Json.arr #[Lean.toJson (0 : Nat), Lean.toJson (2 : Nat)])]
+private def exListing (port : String) (e : Json) : Json :=
+  Json.mkObj [("template", .str exRead), ("header", Json.mkObj []), ("draw", Json.mkObj []),
+    ("registered", Json.mkObj [("ports", Json.mkObj [(port, e)])])]
+#guard tableRowsWhy exKeyed exRead "row" exListed == some KEY_ROWS_WHY
+#guard tableRowsWhy exKeyed exRead "tok" exListed == some KEY_ROWS_WHY && tableRowsWhy exKeyed exRead "o1" exListed ==
+  some KEY_ROWS_WHY
+#guard tableRowsWhy exKeyed exRead "root" exListed == some TABLE_ROWS_WHY
+#guard tableRowsWhy exOpening exRead "row" exListed == some TABLE_ROWS_WHY
+#guard tableRowsWhy exKeyed exRead "row" (Json.mkObj [("value", .str "row")]) == none
+#guard tableRowsWhy exKeyed exRead "row" (Json.mkObj [("value", .str "row"), ("table_rows", .null)]) == none
+#guard tableRowsFailures exKeyed [exListing "row" exListed] == [("second-table-rows", Json.mkObj [("statement",
+  Lean.toJson (0 : Nat)), ("template", .str exRead), ("port", .str "row"), ("why", .str KEY_ROWS_WHY)])]
+#guard tableRowsFailures exKeyed [exListing "row" (Json.mkObj [("value", .str "row")])] == []
 -- the root and the domain are one table's of round 1's record, row by row and by their bytes
 #guard bytesOf #[("bytes", "0a")] == some "0a" && bytesOf #[("port", "0a")] == none
 #guard bytesOf #[("bytes", "0a"), ("bytes", "0a")] == none && bytesOf #[] == none
@@ -900,6 +917,9 @@ private def exKeyed : Own :=
 #guard inputsFailure { exOpening with supplied := exFilled.filter (·.1 != "root") } == some "root"
 #guard inputsFailure { exOpening with supplied := exFilled.filter (·.1 != "one") } == some "row"
 #guard inputsFailure { exOpening with supplied := exFilledZero } == some "row"
+-- the verdict's 1 is one 16-bit leaf: the four bytes of 1, two leaves, hold it to nothing
+#guard inputsFailure { exOpening with supplied := exRefilled "one" #[#[("bytes", "00000001")]] } == some "row"
+#guard inputsWhy { exOpening with supplied := exRefilled "one" #[#[("bytes", "00000001")]] } "row" == INPUTS_WHY
 #guard inputsFailure { exOpening with refReads := #[] } == some "row"
 #guard inputsFailure { exOpening with links := some (exReadLinks.push ⟨"Other_v1", "x", "row"⟩) } == some "row"
 -- nor may a port no link names read the row: a reference statement's read of it there is refused

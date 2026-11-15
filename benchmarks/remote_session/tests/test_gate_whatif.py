@@ -30,7 +30,7 @@ def loop(rtt: int, passes: list[int], *, tau: int = MS // 2, gap: int = MS // 5)
     """The record of a k = 1 session whose every exchange with the challenger is `rtt` ns, half each way, and whose
     passes take `passes`: verifier.json's session, the challenger's release log and the prover's session. chal_0's fetch
     holds the loop until it returns, then chal_1's; at root g the verifier asks openings coin g, and chal_(g+2) behind
-    it, once it has sent window g's boundary, draws for d after the reply and sends the boundary s after that."""
+    it, once it has sent window g's boundary, samples for d after the reply and sends the boundary s after that."""
     n, h = len(passes), rtt // 2
     c0, po, fsync, ps, d, s = 40_000, 30_000, 2 * MS, 20_000, 300_000, 100_000
     R, A, D, C, b = [0] * n, [0] * n, [0] * n, [0] * n, [0] * n

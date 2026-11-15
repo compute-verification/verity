@@ -50,6 +50,7 @@ from verity.protocols.accounting.pouw.prover.serving import ncp as NCP
 from verity.protocols.accounting.pouw.prover.serving import operands as OPS
 from verity.protocols.accounting.pouw.prover.serving import lead as pouw_lead
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PPK
 
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n
@@ -422,8 +423,10 @@ def test_an_unregistered_served_fp8_checkpoint_is_served_and_its_commitment_clai
             pass
 
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
-    monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: roots)
-    monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, salt_key=None: roots)
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPDR.weight_roots)
+    monkeypatch.setattr(PPDR, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
     model, coins = Model(_rng().standard_normal((128, 1024), np.float32)), _coins()
     settings = {"pouw": {"coins": coins, "device": "cuda", "kernel": "k"}}
     with PO.install(model, _serve(f"pouw:{scheme}", settings=settings)) as comp:

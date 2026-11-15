@@ -1,10 +1,10 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.Leg
+public import Proofs.Properties.Verity.SampledTwo.Subprotocol
 public import Proofs.Core.Game.Tape
 
 /-!
-# The two-stage leg's projection, piece by piece
+# The two-stage subprotocol's projection, piece by piece
 
 `CouplingTargetTwo` reads a play of the period's game as a run of the two-stage verifier (`Live₂.L`, SPOT[Flock]'s
 `SpotFlock.V` at the held copies) at a prover built from the strategy. This module states that reading in pieces
@@ -21,7 +21,7 @@ that hold separately, each a `Prop` here and a theorem in a file of its own, and
   first stage's (round 0), the second stage's (rounds 1 to `stage`), the statements' (round `stage + 1`) and the
   sessions' (past it).
 * **The pieces**:
-  * `CoinMapLaw`: the coin map is uniform, and the device's releases agree with the run's coins (an agreement `Ag`),
+  * `CoinMapDistribution`: the coin map is uniform, and the device's releases agree with the run's coins (an agreement `Ag`),
     up to the device's coin trees' hiding; `DevAgrees`: on an accepted play whose log is the device's, coins `Ag` holds
     of agree with every release the log holds for a read round, as the check reads it.
   * `CoinsAgree` at each group of coins: on a play the form's check accepts (`Acc`) whose log the check read is the
@@ -110,11 +110,11 @@ def groupOf (A : Live₂) (i : ℕ) : Group :=
   else if i = A.h.stage + 1 then .stmt
   else .sessions
 
-/-- **The coin map's law** (piece: the coin map and the coin trees' hiding): the period's play is distributed as the
+/-- **The coin map's distribution** (piece: the coin map and the coin trees' hiding): the period's play is distributed as the
 frame's play at a uniform tape and uniform run coins, and there the device's releases agree with the run's coins
 (`Ag`), up to `hide`. The agreement holds only up to `hide`, not at every tape: an opening whose tree has no round
 beginning with the run's coin's elements releases a round of its own, and nothing in the log shows it. -/
-def CoinMapLaw (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+def CoinMapDistribution (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ) (Ag : Verity.Exchange → Coins A x → Prop)
     (hide : ℝ≥0∞) : Prop :=
   ∀ E : Verity.Exchange → Prop, Verity.Game.prob E (V.game θ F c) σ ≤
@@ -204,7 +204,7 @@ def ProjectionBound (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
 
 /-- **The projection from its pieces** (piece: the assembly; its theorem is `projection_of`): the sampled verdict, on
 a play of the parameters `θ`, only where the form's check accepts (`Acc`, which the composite's wiring owes; at other
-parameters the sampled verdict also accepts other forms), the coin map's law at an agreement `Ag` and the releases'
+parameters the sampled verdict also accepts other forms), the coin map's distribution at an agreement `Ag` and the releases'
 agreement at it, the coins read at the first stage's, the second stage's and the sessions' rounds, no coin read at the
 statements', the messages, the cut, the accept and the statement read give the projection's bound at
 `hide + miss + terms`. -/
@@ -213,7 +213,7 @@ def ProjectionOf (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live�
   ∀ (Fr : Frame V A x θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop)
     (Ag : Verity.Exchange → Coins A x → Prop) (hide miss terms : ℝ≥0∞),
     (∀ o, o.params = θ → V.Verdict k .sampled o → Acc o) →
-    CoinMapLaw V A x θ F c σ Fr Ag hide → DevAgrees A x Rd Acc Good Ag →
+    CoinMapDistribution V A x θ F c σ Fr Ag hide → DevAgrees A x Rd Acc Good Ag →
     CoinsAgree A Rd Acc Good .first → CoinsAgree A Rd Acc Good .second →
       CoinsAgree A Rd Acc Good .sessions → StmtReadsNone A Rd → MessagesFixed V A x θ F c σ Fr Rd Acc Good miss →
       CutBound V k θ F c σ Good terms → AcceptsRun A x Rd Acc → StmtAt V A x θ F c σ Fr Rd Acc →
@@ -232,7 +232,7 @@ def MajorityBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F :
         (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2.1).out = .acc ∧
           Claims.Rel.ext A.R x (A.L.E.eval FlockDeploy.sha512 Fr.P x s.1 s.2.1 s.2.2).1) ≤ bind
 
-/-- **The coupling from the projection and the majority** (piece: the leg's assembly; its theorem is `coupling_of`):
+/-- **The coupling from the projection and the majority** (piece: the subprotocol's assembly; its theorem is `coupling_of`):
 at each strategy a statement in scope or a verdict that never accepts, a frame, a transcript and bounds such that the
 projection's bound and the majority's hold, and where `error`'s premises hold the session's error at the statement and
 the frame's prover plus the bounds is within the published `δ`, give the coupling at the two-stage form with the bounds

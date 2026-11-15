@@ -21,7 +21,7 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
 * **Evidence**: the service's answer for that registration, read as `Core.Answer.ofJson` and `Core.Integrity.ofJson`
   read it (only what `toJson` writes, in the shapes `answer` returns): its verdict, the registration digest it is for,
   and on acceptance the integrity profile and the public outputs ``{"draw": d}``, `d` the verifier's sample as one-stage's
-  `draw.py` writes it (any of its laws; PoUW's rule then holds it to subset:K′), and a live execution phase's ``salt``, its salt
+  `draw.py` writes it (any of its sampling designs; PoUW's rule then holds it to subset:K′), and a live execution phase's ``salt``, its salt
   coin and the salt it gives (`window_salt`).
 * **The check** accepts when the registration is PoUW's (`window.REGISTERED`, its `length` item a fixed-length
   execution phase's at the verifier's max_tokens (`window.length_problem`), each item the verifier's own
@@ -531,7 +531,7 @@ def _strata(work: bool, j: Any, ctx: str) -> list[dict]:
 
 
 def _num_den(p: str, ctx: str) -> str:
-    """`pOf`: ``num/den``, each a natural number in canonical decimal (`Flock.Draw.Law.bernoulli`'s) of any length, kept as
+    """`pOf`: ``num/den``, each a natural number in canonical decimal (`Flock.Draw.SamplingDesign.bernoulli`'s) of any length, kept as
     written."""
     parts = p.split("/")
     if len(parts) == 2 and all(t and all(c in "0123456789" for c in t) and (len(t) == 1 or t[0] != "0") for t in parts):
@@ -540,22 +540,22 @@ def _num_den(p: str, ctx: str) -> str:
 
 
 def unit_draw(j: Any) -> dict:
-    """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` laws with exactly its keys (`check_draw`'s),
+    """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` sampling designs with exactly its keys (`check_draw`'s),
     and a live execution phase's ``salt``, an object (`window_salt` reads it)."""
     if not (isinstance(j, dict) and sorted(j) in (["draw"], ["draw", "salt"])):
         raise Refused("public: keys are not draw, and optionally salt")
     d, ctx = j["draw"], "public.draw"
-    law = _str_at(d, "law", ctx)
-    if law not in _DRAW_KEYS:
+    sampling_design = _str_at(d, "law", ctx)
+    if sampling_design not in _DRAW_KEYS:
         raise Refused(f"{ctx}.law: not subset, bernoulli, stratified or work")
-    _keys_are(d, (["closure"] if law == "work" and "closure" in d else []) + _DRAW_KEYS[law], ctx)
-    out: dict[str, Any] = {"law": law, "population": _nat_at(d, "population", ctx)}
-    if law == "bernoulli":
+    _keys_are(d, (["closure"] if sampling_design == "work" and "closure" in d else []) + _DRAW_KEYS[sampling_design], ctx)
+    out: dict[str, Any] = {"law": sampling_design, "population": _nat_at(d, "population", ctx)}
+    if sampling_design == "bernoulli":
         out["p"] = _num_den(_str_at(d, "p", ctx), ctx)
     else:
         out["k"] = _nat_at(d, "k", ctx)
-    if law in ("stratified", "work"):
-        out["strata"] = _strata(law == "work", d, ctx)
+    if sampling_design in ("stratified", "work"):
+        out["strata"] = _strata(sampling_design == "work", d, ctx)
     if "closure" in d:
         out["closure"] = _nats_at(d, "closure", ctx)
     out["units"] = _nats_at(d, "units", ctx)
@@ -564,7 +564,7 @@ def unit_draw(j: Any) -> dict:
     return out
 
 
-def law_name(d: dict) -> str:
+def sampling_design_name(d: dict) -> str:
     """`parse_design`'s spelling of a sampling design."""
     return f"bernoulli:{d['p']}" if d["law"] == "bernoulli" else f"{d['law']}:{d['k']}"
 
@@ -624,9 +624,9 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
         return f"public-value: {', '.join(wrong)}", None
     if rec["population"] != w.n:
         return f"population: registered {rec['population']}, the level's {w.n}", None
-    law = {"k": k, "law": "subset"}
-    if _canon(rec["law"]) != _canon(law):
-        return f"law: registered {_canon(rec['law'])}, the window's {_canon(law)}", None
+    sampling_design = {"k": k, "law": "subset"}
+    if _canon(rec["law"]) != _canon(sampling_design):
+        return f"law: registered {_canon(rec['law'])}, the window's {_canon(sampling_design)}", None
     if rec["query"] != p["query"]:
         return f"query: registered {rec['query']}, the check's {p['query']}", None
     if rec["scheme"] != p["check"]["scheme"]:
@@ -664,7 +664,7 @@ def check_twin(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
     if prof["drawn"] != [(LEVEL, k)]:
         return "reject", f"profile: drawn {_canon(dict(prof['drawn']))}, not {k} units", None
     if not (draw["law"] == "subset" and draw["k"] == k) or draw["population"] != w.n:
-        return "reject", f"draw: {law_name(draw)} over {draw['population']}, not subset:{k} over {w.n}", None
+        return "reject", f"draw: {sampling_design_name(draw)} over {draw['population']}, not subset:{k} over {w.n}", None
     units = draw["units"]
     if len(units) != k or any(b <= a for a, b in zip(units, units[1:])) or (units and units[-1] >= w.n):
         return "reject", f"draw: its {len(units)} units are not {k} ascending distinct units below {w.n}", None
@@ -1913,7 +1913,7 @@ def line(a: dict) -> str:
 __all__ = ["ANSWER_KEYS", "COIN_KEY", "EXE", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "SCHEME", "SIGNED_LIVE",
            "VALUES_TAG", "WINDOW_VALUES", "Refused", "answer", "answer_of", "answer_twin", "canonical", "case",
            "case_twin", "check_twin", "commitment", "digest", "draw_twin", "evidence", "integrity", "integrity_json",
-           "law_name", "line", "live_epoch", "live_salt", "live_salt_twin", "lms_verify", "opening_twin", "params",
+           "sampling_design_name", "line", "live_epoch", "live_salt", "live_salt_twin", "lms_verify", "opening_twin", "params",
            "pass_epoch_twin", "ratio", "recorded_reason", "registered_twin", "rounds", "rounds_twin", "salt_of_record",
            "salt_twin", "serve_case", "unit_draw", "values_root", "verify_path", "window_anchors", "window_domain",
            "window_salt", "work_k", "work_units"]

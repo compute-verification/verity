@@ -114,7 +114,7 @@ def _root_.Flock.Bridge.OpeningsCanonTargetH : Prop :=
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (kd : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀),
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀),
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
@@ -158,7 +158,7 @@ theorem _root_.Flock.Bridge.openingsCanon_row
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (kd : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) :
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) :
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
@@ -184,7 +184,7 @@ theorem _root_.Flock.Bridge.openingsCanon_const
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (kd : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) :
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) :
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)

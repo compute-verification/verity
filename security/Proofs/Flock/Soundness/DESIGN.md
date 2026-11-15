@@ -164,7 +164,7 @@ adopted form is "fill and decode"; it is proved (`Knowledge.lean`).
   output them.
 - **Binding to registered data.** Given the registrant's opening `(W, R)`, the extracted rows equal `W` wherever the
   statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision.
-- **Sampled audits need the binding error `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
+- **Sampled audits need the binding error `ε_bind` as well** (the lifetime-soundness desk study, §2 and §3).
   - Its collision finder runs the extractor, so the extractor's run count enters the collision-resistance bound.
   - The analysis is below.
 - **Risks:** `ValueBinding` until the `hm96` layout; bridging CompPoly, ArkLib and `Model` for the efficient decoder.
@@ -249,7 +249,7 @@ strict time.
   whose session model receives `final_c'` before the inner proof. Improving substantially on the strict-time loss would
   improve the analysis of Schnorr's protocol (CDGSY24).
 - **The random-oracle column** (comparison, lifetime doc §7). The extractor reads the commit strings, the `hm96`
-  openings and the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one
+  openings and the tables off the prover's queries, so `δ_tree`, `ε_bind` and the knowledge term collapse into one
   global $t^2/2^{511}$. `ASSUMPTIONS.md` keeps the random oracle as a cross-check only.
 - **Either way,** the table theorems (`table_sound_compiled`, `table_knowledge_sound_joint`) and `δ_tree` stand as
   proved under strict-time collision resistance. A2 enters only the value layer, and `CROnly` replaces it there by
@@ -556,7 +556,7 @@ If real concurrency is ever needed:
     `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`. `unitPlace_of_setupH` gives
     the `UnitPlace` from the executable's accept step (`Stmt.setupH`), given the unit's instance in `C`.
   - The link event is the weakest one (every satisfying candidate disagrees). For the expected-time extractor's
-    analysis (`analysisBE`), `flock_batched_linkSoundE` discharges `δ_link` under A2 and `ValueBinding` (§3).
-  - Composed (`FlockLinked.lean`): `flock_batched_count_linked` and `flock_batched_drawn_linked` carry no `δ_link`
+    analysis (`analysisBE`), `flock_batched_linkSoundE` discharges `ε_bind` under A2 and `ValueBinding` (§3).
+  - Composed (`FlockLinked.lean`): `flock_batched_count_linked` and `flock_batched_sampled_linked` carry no `ε_bind`
     hypothesis. They rest on A2, `ValueBinding` and the lowering; the `_placed` forms take `UnitPlace`
     (row placement) for the lowering.

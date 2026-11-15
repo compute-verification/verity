@@ -7,7 +7,7 @@ its `--jobs`; a run of many suites at no less than TEST_PROCESS_GB each. That is
 processes (its `--mem-gb`: `serial_slots` and `wide_workers` start no more than it holds at each one's figure), so a run stays
 inside it unless a process passes its own figure, and a larger one buys processes beyond the CPUs asked. A run of named suites
 reserves it whole. A run of many suites has processes at their figure only while the few suites that reach it run, and in a
-pool's slot the reservation caps nothing and is held against the node, whether or not the run reaches it, for as long as the run
+pool's slot the reservation limits nothing and is held against the node, whether or not the run reaches it, for as long as the run
 holds the slot: there it reserves MANY_RESERVED of the budget (`reserve_gb`) and plans its processes on all of it (slot.py's
 BUDGET_OPT). A run
 past its reservation meets the node's own limits, as one past its budget does, and where the node orders its OOM kills by
@@ -92,7 +92,8 @@ def touched(source: Path, names: list[str], rev: str) -> list[str] | None:
     try:
         r = subprocess.run([sys.executable, SUITES_PY, *names, "--changed", rev, "--list"], cwd=source, capture_output=True, text=True,
                            timeout=120)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"suite_size: suites.py --list did not run, so the suites touched are not known ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
     line = next((x for x in r.stdout.splitlines() if x.startswith("suites: the change from ") and " touches " in x), None)
     if r.returncode != 0 or line is None:
@@ -113,7 +114,8 @@ def declared(source: Path) -> list[dict]:
     for f in filter(None, files):
         try:
             data = tomllib.loads((source / f).read_text())
-        except (OSError, tomllib.TOMLDecodeError):
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            print(f"suite_size: {f} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if "pytest" not in data.get("tool", {}):
             continue

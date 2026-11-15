@@ -26,7 +26,7 @@ ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": 
 SCRIPTS = [f"tools/move/{p.name}" for p in sorted((ROOT / "tools/move").glob("*.py"))] + [ST.MOVE_CHECK, ST.PINS]
 WORDS = 'scope = "prose"\n\n[words]\n"zorble" = "quux"\n\n[rewrite]\nexclude = ["tools/**"]\n'
 PATHS = ('[roots]\nold = {}\nnew = {}\n\n[paths]\n"alpha/" = "beta/"\n\n[modules]\n"alpha" = "beta"\n\n'
-         '[rewrite]\nexclude = ["tools/move/**", "tools/verity/**"]\n')
+         '[rewrite]\nexclude = ["tools/move/**", "tools/check/**"]\n')
 TREE = {
     ".gitignore": "__pycache__/\n",  # as the tree's: the scripts import pins.py from the root they run at
     "notes.md": "A zorble is `zorble`.\n",

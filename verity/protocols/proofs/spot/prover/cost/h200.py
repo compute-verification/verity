@@ -8,9 +8,9 @@ nothing carries across it. Its subcircuits are Definitions (`templates`): the W8
 and the row units (RMSNorm, the quantizer, softmax, the residual add, the gathers, the embedding and
 argmax), each id `stub:` until its Definition lands, its ANDs composed from pinned pieces.
 
-**The sampling design is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one Flock `--zk`
+**The sampling design is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityMonitoringPeriod`): one Flock `--zk`
 session sampling a uniform `subset:k` of its n units, split over `tables` tables of at most `Template.cap` sampled proof blocks each
-(m = k_log + nbl <= 35). Every subcircuit samples `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
+(m = k_log + nbl <= 35). Every subcircuit samples `k = ceil(ln(S/delta)/share)`, so by `IntegrityMonitoringPeriodLog` each sampling block has
 fewer than `K0 = ln(S/delta) n/k` <= share n units incorrect outside delta (the S sampling blocks of the block split delta), and by
 `IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The incorrect ANDs beside
 them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: the law-level bound is proved
@@ -31,15 +31,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import asdict, dataclass, field, replace
 from math import ceil, exp, log
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "sampling_plan")))
-
 from verity.protocols.proofs.spot.prover.cost import transformer as X
-from inputs import CARDS, I, cap
+from verity.protocols.proofs.spot.prover.cost.inputs import CARDS, I, cap
 
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 from verity.protocols.proofs.spot.prover.candidates import shape_of
@@ -116,7 +113,7 @@ class Template:
         """The least number of parts a unit proves in within Flock's block (`inputs.cap`), each its share of the ANDs and
         of every row's bytes: a unit past the block is sampled whole and proved as its parts."""
         if cap(0, [1] * len(self.rows)) < 1:
-            raise ValueError(f"{self.id}: its {len(self.rows)} rows alone fill a C-Flock block: cut its ports fewer ways")
+            raise ValueError(f"{self.id}: its {len(self.rows)} rows alone fill a Flock block: cut its ports fewer ways")
         p = 1
         while cap(*self._part(p)) < 1:
             p += 1
@@ -188,7 +185,7 @@ def templates(m: Shape, pins: dict[str, int] | None = None, *, tiles: bool = Fal
 
 @dataclass(frozen=True)
 class Rates:
-    """C-Flock's fitted rates (`transformer.costs`) and the commitment rate."""
+    """Flock's fitted rates (`transformer.costs`) and the commitment rate."""
 
     statement_fixed: float
     statement_per_and: float
@@ -221,7 +218,7 @@ class SamplingBlock:
 
 def window(t: Template, k: int, windows: int, r: Rates) -> SamplingBlock:
     """`t`'s sampling block sampling k: its tables (at most `Template.cap` sampled proof blocks each, k rounded up to a multiple of them, as
-    `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityPeriodLog`'s K0 (delta split over
+    `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityMonitoringPeriodLog`'s K0 (delta split over
     the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's sampling blocks."""
     a, cap = t.proved, t.cap
     k = min(t.units, k)
@@ -327,7 +324,7 @@ def render(o: dict) -> str:
              f"(MQA, {m['kv_heads']} KV head), MLP {m['mlp']}, V {m['vocab']}, C {m['context']}; a block of "
              f"{m['batch']:,} requests, {o['block_s']:g} s; the {o['card']} card's cost model", "",
              f"Every subcircuit's sampling block draws k = ceil(ln(S/1%)/{o['share']:g}) of its units (S = {len(o['windows'])} "
-             f"sampling blocks), so each has fewer than K0 = ln(S/delta) n/k units incorrect outside delta (IntegrityPeriodLog), "
+             f"sampling blocks), so each has fewer than K0 = ln(S/delta) n/k units incorrect outside delta (IntegrityMonitoringPeriodLog), "
              f"and its sampling blocks over any period fewer than that in all (IntegrityHorizon). {o['units']:,} units, "
              f"{o['ands']:.4g} ANDs a block.", "",
              "| template | units a block | k | statements | ANDs a unit | proved, rows opened | statements GPU-s "
@@ -352,7 +349,7 @@ def render(o: dict) -> str:
               f"| as planned (tiles {o['tiles']}, padded {o['pad']}) | {len(o['windows'])} | {c['proving']:.4g} |"]
     lines += [f"| {k} | {v['windows']} | {v['proving']:.4g} |" for k, v in o["alternatives"].items()]
     lines += ["", "incorrect proof blocks over a period, summed over the templates (Lean: pooled is IntegrityHorizon a template, "
-              "delta split over the S templates; each block is IntegrityPeriodLog at delta / (S blocks)):", "",
+              "delta split over the S templates; each block is IntegrityMonitoringPeriodLog at delta / (S blocks)):", "",
               "| period | fleet | blocks | pooled at 1% | at 1e-6 | each block at 1% | at 1e-6 |",
               "|---|---|---|---|---|---|---|"]
     for p in o["periods"]:

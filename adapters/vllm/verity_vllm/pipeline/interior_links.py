@@ -48,15 +48,15 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
-from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.circuits.codec import definitions
-from verity.commitments import hm96, history as HT
+from verity.commitments import history as HT
+from verity.commitments import hm96
 from verity.commitments.gates import embedding as EMB
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows.interface import digest_words
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods.interface import digest_words
 from verity_vllm.pipeline import boundary_tables as BT, serving_rows as SRW
+from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+from verity.protocols.proofs.spot.verifier import second_stage as SS
 
 #: a table read's parameters (`gates.embedding`'s `EmbeddingRead_v1`): its key, its table's root and domain id, its opening
 READ = ("tok", "root", "domain", "row", "salt", "path")
@@ -248,8 +248,8 @@ def link_schemas(members: CS.Member | Sequence[CS.Member], links: Sequence[Link]
     return out
 
 
-Members = CS.Member | Sequence[CS.Member]
-Cells = int | Sequence[int]
+type Members = CS.Member | Sequence[CS.Member]
+type Cells = int | Sequence[int]
 
 
 def cells(members: Members, n_rho: Cells) -> tuple[tuple[CS.Member, ...], tuple[int, ...]]:
@@ -263,7 +263,7 @@ def cells(members: Members, n_rho: Cells) -> tuple[tuple[CS.Member, ...], tuple[
 
 
 def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n_rho: Cells,
-          supplied: Mapping[str, Sequence[int] | None] | None = None,
+          supplied: Mapping[str, tuple[int, ...] | None] | None = None,
           tables: Mapping[str, Sequence[str]] | None = None) -> tuple[Link, ...]:
     """The links of the replay block ``program`` defines under descriptor id ``key``, as the interior registers their
     values: each parameter of the block a template's port reads, under the name round 2 gives it where round 1's record
@@ -283,6 +283,7 @@ def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n
         raise ValueError(f"replay block {key} makes no links round 2 derives (`second_stage.replay_links`)")
     rows = {(r.template, r.port): r for r in SS.replay_rows(program, key)}
     held = _committed(record)
+    sup = supplied or {}
     out: list[Link] = []
     for b, x in zip(bare, named, strict=True):
         if x.template not in by:
@@ -299,9 +300,9 @@ def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n
         at = tuple(SS.row_at(r.runs, j) for j in range(n))
         if any(a is None for a in at):
             raise ValueError(f"{x.template}: its {x.port!r} rows place other than its {n} units a span")
-        if b.value in (supplied or {}):
+        if b.value in sup:
             named = (tables or {}).get(b.value)
-            out.append(Supply(x.template, x.port, x.value, r.per, at, supplied[b.value],
+            out.append(Supply(x.template, x.port, x.value, r.per, at, sup[b.value],
                               None if named is None else tuple(named)))
         else:
             out.append(Operand(x.template, x.port, x.value, r.per, at, dict(m.rows)[x.port]))

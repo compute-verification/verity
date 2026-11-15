@@ -1,8 +1,8 @@
-"""PoUW's `ncp-v2` under sampled proofs: each weight's side as its own `NcpWeight_v1` Program call, once per run, and each
+"""PoUW's `ncp-v2` under SPOT: each weight's side as its own `NcpWeight_v1` Program call, once per run, and each
 executed linear call as its own `NcpLinear_v1` Program call reading it.
 
 `verity.protocols.accounting.pouw.prover.circuit` gives the circuit (`traced_as`: both Definitions, their `Q_template_instances` queries, the served
-count and the closure-sampling layout; P is the scheme's). Here is what the vLLM integration does with it:
+count and the closure-sampling layout; P is the scheme's). Here is what the serving engine's adapter does with it:
 
 - **Build.** A model Program's row at a PoUW site is lowered to `ROW_FAMILY` (`lower`): the served output of one row of
   that site's `NcpLinear` call, which the replay checks against the call rather than as a bf16 GEMM.
