@@ -178,6 +178,7 @@ structure Terms where
   carrier : Rat
   horizon : Rat
   floor : Rat
+  deriving Inhabited
 
 /-- γ with each window's sample at δ, the terms' sum. -/
 def Terms.gamma (t : Terms) : Rat :=
@@ -190,6 +191,7 @@ structure Window where
   window : Nat
   spanNs : Nat
   terms : Terms
+  deriving Inhabited
 
 /-- `audit.GammaTerms` for the credit this module computes. -/
 structure Gamma where
