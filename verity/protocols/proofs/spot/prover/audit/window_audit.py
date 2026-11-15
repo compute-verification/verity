@@ -1034,6 +1034,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         print("A5 " + json.dumps(why))
         return summary, False
+    on_stage = drawn is not None and trees  # a caller's stage's trees, before `drawn` names the members' draws
     drawn_units, drawn = set(union_sample["units"]), []
     for mm in members:
         m = mm["m"]
@@ -1095,7 +1096,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (`window_trees`, `closes_trees`): once both sides have recorded it, the challenger is asked for its closing round
         (`member_trees.closing_round`), before the next member's session starts. A session with no record closes no
         tree, and the release log then refuses the audit (``challenger/m<k>``)."""
-        if relay is None or not closes_trees(members, drawn is not None and trees):
+        if relay is None or not closes_trees(members, on_stage):
             return s
         try:
             if "handle" in s:
@@ -1213,7 +1214,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             tree_coins(a).release(rank if streamed(a) else 0)
     if relay is not None:
         held = window_trees_held(tree_coins(a).evidence(), done, relayed,
-                                 closes_trees(members, drawn is not None and trees))
+                                 closes_trees(members, on_stage))
         for got in done:
             got["challenger"] = {**held, "closing": got["closing"]}
     for got in done:
@@ -1251,7 +1252,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                    {"draw": union_sample, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part,
-                   per_member=members_proof(members, done, not plain(a), one=drawn is not None and trees),
+                   per_member=members_proof(members, done, not plain(a), one=on_stage),
                    **stage_case(a, relay is not None))
         if drawn is not None:
             summary["handed"] = {"verdicts": verdicts, "statement": statement, "sessions": sessions,
