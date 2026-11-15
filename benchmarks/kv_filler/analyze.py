@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import lag  # noqa: E402
+import lag
 
 DECODE_CELL = (64, 2048)
 

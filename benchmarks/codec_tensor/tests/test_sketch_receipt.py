@@ -13,7 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py").parent))
 
-import sketch_receipt as SR  # noqa: E402
+import sketch_receipt as SR
 
 SEED = SR.rb.seed(bytes(range(32)), 3, bytes(64))
 SB = 8192

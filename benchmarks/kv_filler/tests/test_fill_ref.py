@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import fill_ref as F  # noqa: E402
+import fill_ref as F
 
 SEED = hashlib.sha256(b"test/fill").digest()
 

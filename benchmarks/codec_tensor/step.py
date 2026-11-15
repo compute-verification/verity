@@ -1064,7 +1064,7 @@ def main() -> int:
     res["times"] = {n: statistics.median(v) for n, v in times.items()}
     res["model"] = model_terms(res)
     t, p = res["times"], res["times"]["pass"]
-    log(f"times (ms): " + ", ".join(f"{n} {v * 1e3:.2f}" for n, v in t.items()))
+    log("times (ms): " + ", ".join(f"{n} {v * 1e3:.2f}" for n, v in t.items()))
     log(f"plain step {t['plain'] / p:.3f} passes; " + "; ".join(
         f"k={k}: step {r['step_over_plain']:.3f}x plain, d {r['d']:.3f} (layerwise append {r['d_layerwise']:.3f}); "
         f"weights {r['weights']:+.3f} (decode {r['weights_decode']:+.3f}, tag {r['weights_tag']:+.3f}: receipt "
