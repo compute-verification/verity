@@ -137,6 +137,20 @@ COINS = {"local": "local challenger", "serve": "local challenger", "gate": "depl
 #: the checkpoint those rows serve, which the bootstrap makes from its ungated BF16 pin (`unsloth/Llama-3.2-1B`)
 LOCAL_CASE = "LLAMA32_1B_INT8"
 BOOTSTRAP = ROOT / "adapters" / "vllm" / "verity_vllm" / "ops" / "pod_bootstrap.sh"
+#: what a bootstrap that touches files outside LOCAL_WORK holds, which `--local` won't run: removing the machine's package
+#: caches, and reading tap builds at a fixed path
+OUTSIDE_WORK = {"rm -rf /root/.cache": "removes /root/.cache/uv and /root/.cache/pip, other programs' package caches",
+                "/workspace/cp/fa2/build": "reads its tap builds from /workspace/cp/fa2, not from LOCAL_WORK"}
+#: where the bootstrap builds each tap under LOCAL_WORK (its scripts' variables), and the served row's option that
+#: names each build there
+TAPS = {"FA2": "cp/fa2", "NT": "cp/norm_tap", "RT": "cp/router_tap"}
+TAP_SOS = {"--hidden-so-fa2": "cp/fa2/build/matReq/verity_fa2_matReq.so",
+           "--hidden-so-fa3": "cp/fa2/build/fa3_matReq/verity_fa3_matReq.so",
+           "--hidden-so-fa2-guarded": "cp/fa2/build/matReqG/verity_fa2_matReqG.so",
+           "--hidden-so-fa3-guarded": "cp/fa2/build/fa3_matReqG/verity_fa3_matReqG.so",
+           "--norm-tap-so": "cp/norm_tap/build/verity_norm_tap.so",
+           "--router-tap-so": "cp/router_tap/build/verity_router_tap.so",
+           "--native-collect-default": "cp/nc_build"}
 #: why `--local` prints no reference beside its number
 NO_STORE = "a --local run reads no evidence store, and the references are other runs' numbers in ours"
 #: `gamma_decided_by` for a share read from the Python ledger where the Lean's answer for γ's terms isn't written, and
@@ -510,15 +524,26 @@ def local(run: Callable = subprocess.run) -> dict:
     env = {"VERIFIER_CPUS": verifier_cpus, "PROVER_CPUS": prover_cpus, **SETTINGS.environ(), **FORM, "ROLE": "both",
            "SERVE": "row", "ROW": row, "PLAN": SETTINGS.PLAN or "serve"}
     if not SETTINGS.VLLM_PY:
+        script = BOOTSTRAP.read_text()
+        if outside := [why for held, why in OUTSIDE_WORK.items() if held in script]:
+            raise NoNumber(f"this tree's bootstrap ({BOOTSTRAP.name}) {' and '.join(outside)}, so --local doesn't run "
+                           "it: set VLLM_PY to a vLLM environment of your own, or run from a tree whose bootstrap "
+                           "keeps to LOCAL_WORK")
         work.mkdir(parents=True, exist_ok=True)
-        boot = {**SETTINGS.environ(), "WORK": str(work), "VENV": str(work / "venv312"), "HF_HOME": str(work / "hf")}
+        boot = {**SETTINGS.environ(), "WORK": str(work), "VENV": str(work / "venv312"), "HF_HOME": str(work / "hf"),
+                "UV_CACHE_DIR": str(work / "cache" / "uv"), "PIP_CACHE_DIR": str(work / "cache" / "pip"),
+                "XDG_CACHE_HOME": str(work / "cache"), **{k: str(work / v) for k, v in TAPS.items()}}
         done = run(["bash", str(BOOTSTRAP), "--cases", LOCAL_CASE, "--out", str(work / "bootstrap")],
                    cwd=BOOTSTRAP.parents[2], env=boot, stdout=sys.stderr)
         if done.returncode:
             raise NoNumber(f"the bootstrap failed (pod_bootstrap.sh exited {done.returncode}; its logs are in "
                            f"{work / 'bootstrap'}): a checkpoint that won't download means Hugging Face can't be reached "
                            "from here")
-        env.update(VLLM_PY=str(work / "venv312" / "bin" / "python"), NODE_WORKSPACE=str(work), HF_HOME=str(work / "hf"))
+        env.update(VLLM_PY=str(work / "venv312" / "bin" / "python"), NODE_WORKSPACE=str(work), HF_HOME=str(work / "hf"),
+                   UV_CACHE_DIR=boot["UV_CACHE_DIR"], PIP_CACHE_DIR=boot["PIP_CACHE_DIR"],
+                   XDG_CACHE_HOME=boot["XDG_CACHE_HOME"],
+                   ROW_ARGS=" ".join([*(f"{flag} {shlex.quote(str(work / at))}" for flag, at in TAP_SOS.items()),
+                                      *filter(None, [env.get("ROW_ARGS")])]))
     if shutil.which("gpu-lease") is None:
         env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
     held = SETTINGS.RESEARCH_RUN_DIR

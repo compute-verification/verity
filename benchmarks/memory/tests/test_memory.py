@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import shlex
 import sys
 import tomllib
 from pathlib import Path
@@ -1006,10 +1007,55 @@ class Machine:
 
 @pytest.fixture
 def work(tmp_path, monkeypatch) -> Path:
-    """LOCAL_WORK in the test's directory, and no `gpu-lease` installed."""
+    """LOCAL_WORK in the test's directory, no `gpu-lease` installed, and a bootstrap that keeps to LOCAL_WORK."""
     monkeypatch.setenv("LOCAL_WORK", str(tmp_path / "work"))
     monkeypatch.setattr(M.shutil, "which", lambda name: None)
+    script = tmp_path / "tree" / "verity_vllm" / "ops" / "pod_bootstrap.sh"
+    script.parent.mkdir(parents=True)
+    script.write_text('WORK=${WORK:-/workspace}\nFA2=${FA2:-$WORK/cp/fa2}\n')
+    monkeypatch.setattr(M, "BOOTSTRAP", script)
     return tmp_path / "work"
+
+
+@pytest.mark.parametrize("held", sorted(M.OUTSIDE_WORK))
+def test_local_refuses_a_bootstrap_that_touches_files_outside_local_work(store, capsys, work, held):
+    """A person runs `--local` as themselves on their own machine: a bootstrap that removes the machine's package caches
+    or reads its tap builds at a fixed path is refused before it runs, with no number and the way out."""
+    M.BOOTSTRAP.write_text(f"{M.BOOTSTRAP.read_text()}x {held}/y\n")
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 1
+    assert not [a for a, _ in machine.started if a[1:2] == [str(M.BOOTSTRAP)]] and machine.runs() == []
+    text, doc, _ = printed(capsys)
+    assert text[0] == f"memory: no number: this tree's bootstrap (pod_bootstrap.sh) {M.OUTSIDE_WORK[held]}, so --local " \
+                      "doesn't run it: set VLLM_PY to a vLLM environment of your own, or run from a tree whose bootstrap " \
+                      "keeps to LOCAL_WORK"
+    assert doc["value"] is None and not work.exists()
+
+
+def test_local_keeps_the_bootstrap_and_the_row_inside_local_work(store, work):
+    """The bootstrap's package caches and tap builds, and the taps the served row loads, are all in LOCAL_WORK, set
+    without reading HOME, so the first run downloads and builds there only."""
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    ((_, boot),) = [(a, e) for a, e in machine.started if a[1:2] == [str(M.BOOTSTRAP)]]
+    assert {k: boot[k] for k in ("UV_CACHE_DIR", "PIP_CACHE_DIR", "XDG_CACHE_HOME", "FA2", "NT", "RT")} == {
+        "UV_CACHE_DIR": str(work / "cache/uv"), "PIP_CACHE_DIR": str(work / "cache/pip"),
+        "XDG_CACHE_HOME": str(work / "cache"), "FA2": str(work / "cp/fa2"), "NT": str(work / "cp/norm_tap"),
+        "RT": str(work / "cp/router_tap")}
+    ((_, env),) = machine.runs()
+    args = shlex.split(env["ROW_ARGS"])
+    named = dict(zip(args[::2], args[1::2]))
+    assert set(named) == set(M.TAP_SOS) and all(Path(v).is_relative_to(work) for v in named.values())
+    assert named["--hidden-so-fa2"] == str(work / "cp/fa2/build/matReq/verity_fa2_matReq.so")
+    assert env["UV_CACHE_DIR"] == str(work / "cache/uv")
+
+
+def test_local_keeps_a_persons_own_row_args_after_the_taps(store, work, monkeypatch):
+    monkeypatch.setenv("ROW_ARGS", "--norm-tap 0")
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    assert env["ROW_ARGS"].endswith(" --norm-tap 0") and env["ROW_ARGS"].startswith("--hidden-so-fa2 ")
 
 
 def test_local_serves_the_cards_row_with_the_verifier_beside_it_and_says_first_it_is_no_audit(store, capsys, work):

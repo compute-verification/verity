@@ -45,8 +45,11 @@ with the SHA-256 of the tree's data sheets (`hardware/`) and of the verifier
 (`verity/protocols/accounting/poub/verifier/`), the JSON's `machine`; a result whose digests are not `main`'s was
 measured against another verifier or other figures, and is not comparable.
 
-- **What it needs from you:** nothing of ours. The first run makes a Python environment with the pinned vLLM and the
-  checkpoint in `LOCAL_WORK` (default `~/.cache/verity/bench-memory`), by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`:
+- **What it needs from you:** nothing of ours. The first run downloads and builds into `LOCAL_WORK` only (default
+  `~/.cache/verity/bench-memory`): a Python environment with the pinned vLLM, the checkpoint, the package caches and
+  the attention taps, by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`, and it removes nothing outside it. A
+  bootstrap that would touch another file of your machine (your package caches, a fixed build path) is refused before
+  it runs:
   the vLLM wheel from vLLM's index, torch from PyTorch's, and `unsloth/Llama-3.2-1B` at a pinned revision from
   Hugging Face, which is not gated, so no account or token is needed; the int8 checkpoint is made from it on your
   machine and checked against its pinned SHA-256s. A machine that can't reach Hugging Face stops there: the command
@@ -134,7 +137,8 @@ verity bench memory --local                       vLLM serving Llama 3.2 1B on t
   Lean verifier in the tree, so under `research run` it takes `--cwd clone`, and `--store-read` for the references.
   `PLAN` is the prover's plan, `honest` unless set: a cheating one (`skip:0.0625`) is refused by the verifier.
 - **`--local`** is the section above: `remote_session/run.sh` with `ROLE=both SERVE=row`, the Llama 3.2 1B row for this
-  card (`LOCAL_ROWS` in `run.py`), after the bootstrap. It writes no result to the Metrics tab, since it is no audit.
+  card (`LOCAL_ROWS` in `run.py`), after the bootstrap. Its row on the Metrics tab says it is no audit and that the
+  share is the Python ledger's.
 
 It prints the number as text, then one line of JSON whose first keys are `value`, `unit`, `commit` and `run`, and exits
 0. A session that wasn't accepted, or a run that left no verifier's record, prints no number and exits 1; a command
