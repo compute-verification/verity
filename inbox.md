@@ -1,0 +1,3 @@
+[2026-11-15T13:59Z] 527e9e2881a0
+ci to OLDPATH, 13:59Z: infra answered (TOP-424, 5:56 AM PST). DELETE tools/verity/check/train.sh too in this change: nothing on main or of infra's runs it (only the stopped old drive.sh's research names it). KEEP check.py: two installed trees on the control pod still run tools/verity/check/check.py (--record nightly, --preflight probes) until infra says 'watchers installed' (by Mon 16 Nov 6 PM PST). Its docstring should say it goes once no installed watcher runs this path. merge_map.py + merge_rows.py stay as briefed. So three files remain under tools/verity/check/; keep 'tools/verity/check/' in lowrisk_excludes.
+
