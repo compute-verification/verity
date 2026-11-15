@@ -31,6 +31,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 from statistics import linear_regression
+from typing import Any
 
 import pytest
 
@@ -60,7 +61,7 @@ def _outside_a_research_run(monkeypatch):
 # ---- the rules, on small tables ------------------------------------------------------------------------------------------------
 
 #: one request of 4 tokens: two block types cut from a GEMM row, one from a norm row, and one no step ran
-CENSUS = {
+CENSUS: dict[str, Any] = {
     "tokens": {"prefill": 3, "decode": 1}, "per_request": {"circuit_macs": 4000, "macs": 3600},
     "definitions": {
         'Gemm_v1{K=64,N=1,DOT={"fn":"Dot_v1"}}': {"k_log": 20, "ands": 1000, "of": {"Linear_v1": "row"}, "prefill": 6,
@@ -628,7 +629,7 @@ def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatc
     cover all of the time the total prices, and the total is still partial, never measured. It names the type it leaves
     out with its share of the blocks, and of the MACs where the census holds them."""
 
-    doc = {"tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 100, "macs": 80}, "definitions": {
+    doc: dict[str, Any] = {"tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 100, "macs": 80}, "definitions": {
         GEMM64: {"k_log": 20, "of": {"Linear_v1": "row"}, "prefill": 1, "decode": 0, "macs": 60},
         "Unpriced_v1{N=1}": {"of": {"Unpriced_v1": "row"}, "prefill": 3, "decode": 0, "macs": 5},
         "Rare_v1{N=1}": {"of": {"Rare_v1": "row"}, "prefill": 1, "decode": 0, "macs": 5}}}
@@ -743,7 +744,7 @@ def test_the_lean_verifiers_seconds_and_the_proofs_bytes_are_one_types_and_price
 
 #: one served token of a head block measured at two statics and at a third not, a GEMM measured, and a read of no
 #: measured Definition
-HEADS = {
+HEADS: dict[str, Any] = {
     "tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 100, "macs": 100},
     "definitions": {
         "Head_v1{NVIS=64,FIRST=false}": {"k_log": 27, "ands": 37_000, "of": {"Attn_v1": "row"}, "prefill": 1, "decode": 0},
@@ -1072,7 +1073,7 @@ ROW_WHYS = {
 DROP = object()
 #: made-up rows the steady-state rules don't pass and a reader of the fields alone would: what is changed in the good
 #: row, and what the rules' check then says
-STRICT = [
+STRICT: list[tuple[dict[str, Any], str]] = [
     ({"unfiled": DROP}, "`accepted` (cannot tell): its row lacks `unfiled`"),
     ({"unfiled": 1}, "`accepted` (fail): 1 sessions never filed by their verifier"),
     ({"warm": True}, "`accepted` (cannot tell): `warm` (True) of its row isn't a count"),
@@ -1269,7 +1270,7 @@ class Store:
         path.write_text(json.dumps(doc))
         return self.art(kind, meta or {}, file=path)
 
-    def tree(self, kind: str, name: str, doc: dict, meta: dict | None = None) -> str:
+    def tree(self, kind: str, name: str, doc: Any, meta: dict | None = None) -> str:
         """A tree art holding `doc` as its file `name`."""
 
         root = self._scratch()
@@ -1283,7 +1284,7 @@ class Store:
         from research.store import canon
 
         record = self.art("run-record/v1", {}, tree=files) if files else None
-        attempt = {
+        attempt: dict[str, Any] = {
             "schema": "research/attempt/v0.1", "id": run, "tool": {"name": tool, "version": None},
             "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {}, "key_params": [], "inputs": {},
             "conditions": {}, "key_conditions": [], "source": {"commit": "c" * 40, "dirty": False}, "closure": None,
@@ -1716,7 +1717,7 @@ def as_steady_point(s: Store, tmp: Path, run: str, validation: str | None, verdi
 def test_the_steady_point_tool_and_its_verdict_file_are_the_harnesss():
     from verity_bench import tool
 
-    assert R.STEADY_POINT_TOOL == tool.STEADY_POINT.name and N.VERDICT_FILE == "out/verdict.json"
+    assert tool.STEADY_POINT.name == R.STEADY_POINT_TOOL and N.VERDICT_FILE == "out/verdict.json"
 
 
 def test_a_labelled_steady_point_whose_own_verdict_failed_prices_nothing_and_is_named(tmp_path):
@@ -1749,10 +1750,10 @@ def test_a_labelled_steady_point_whose_own_verdict_failed_prices_nothing_and_is_
 
 
 @pytest.mark.parametrize("validation, verdict, says", [
-    (None, None, "can't be told: run {run} is a steady-state point's, and its attempt carries no verdict (its result's "
-                 "validation is None)"),
-    ("not_run", None, "can't be told: run {run} is a steady-state point's, and its attempt carries no verdict (its "
-                      "result's validation is 'not_run')"),
+    (None, None, ("can't be told: run {run} is a steady-state point's, and its attempt carries no verdict (its result's "
+                  "validation is None)")),
+    ("not_run", None, ("can't be told: run {run} is a steady-state point's, and its attempt carries no verdict (its "
+                       "result's validation is 'not_run')")),
     ("failed", None, "failed: run {run} keeps no `out/verdict.json` naming the checks it didn't pass"),
     ("failed", {"passed": False, "why": "refused, nothing timed: no lease", "verdict": None},
      "failed: run {run} wasn't a passed point: refused, nothing timed: no lease"),
@@ -1961,7 +1962,7 @@ def test_a_rows_cores_are_its_own_else_its_runs_host_else_24(tmp_path):
     newest = RUNS[-1]
     whole = json.loads((FIXTURES / "steady" / newest / "rate" / "rate.json").read_text())
 
-    def store(name: str, host: dict | None) -> Store:
+    def store(name: str, host: object) -> Store:
         s = Store(tmp_path / name)
         for slot, card in ((R.CUT, "partition.json"), (R.SINGLE, "proof_overhead.json")):
             s.record(s.doc(R.CARD_SCHEMA, card, fixture(card)), slot)
@@ -2183,7 +2184,7 @@ def lean_record(run: str, *, word: str | None = RMSNORM, seconds: tuple[float, .
     """A made-up record of `verity bench prove lean-verify`: a full statement of 256 blocks of 2^27 witness bits, each
     run accepted, or its last refused with `why`."""
 
-    runs = [{"wall_s": x, "rc": 0, "accepted": True, "why": None} for x in seconds]
+    runs: list[dict[str, Any]] = [{"wall_s": x, "rc": 0, "accepted": True, "why": None} for x in seconds]
     if why:
         runs[-1] |= {"rc": 1, "accepted": False, "why": why}
     return {"schema": L.SCHEMA, "run": run,
@@ -2416,7 +2417,8 @@ class Verifier:
     `verify` takes the next verdict (None: it prints none), a made-up clock advancing by the seconds it took."""
 
     def __init__(self, monkeypatch, verdicts: list[tuple[dict | None, float]], *, put_rc: int = 0):
-        self.verdicts, self.put_rc, self.now, self.calls = list(verdicts), put_rc, 0.0, []
+        self.verdicts, self.put_rc, self.now = list(verdicts), put_rc, 0.0
+        self.calls: list[list[str]] = []
         monkeypatch.setattr(L, "spawn", self.spawn)
         monkeypatch.setattr(L, "clock", lambda: self.now)
         monkeypatch.setattr(L, "host", lambda: LEAN_HOST)
@@ -2794,7 +2796,12 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
                                                     "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi on PATH"})
     writers, writer = [], kit.writer
-    monkeypatch.setattr(kit, "writer", lambda out: writers.append(out) or writer(out))
+
+    def recording(out):
+        writers.append(out)
+        return writer(out)
+
+    monkeypatch.setattr(kit, "writer", recording)
     metrics = runpy.run_path(str(RUNNER))["METRICS"]
     spot = ("--system", "spot", "--workload", "glm53")
 
