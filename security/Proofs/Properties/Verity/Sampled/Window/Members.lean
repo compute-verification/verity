@@ -26,8 +26,8 @@ longer refuses it, and reads its acceptance; nothing here is the verifier's, and
 * **What the registration fixes of a member before the sample** (`SliceHeld`, `Member.Fixed`): the member's public file
   is held to the member's slice of the registration (its scheme, its ports' roots and domains, its number of proof
   blocks) and to the member's units, as `publicHeld` holds the one statement's to the whole registration.
-  `publicHeld_iff` is that reading of `publicHeld`: the one-statement path's check is the slice check at the whole
-  registration and the population's units. `Accepts` and `accepts_iff` put the two together.
+  `publicHeld_iff` is that reading of `publicHeld`: where the public file names the record's own ports, the
+  one-statement path's check is the slice check at the whole registration and the population's units. `Accepts` and `accepts_iff` put the two together.
 -/
 
 @[expose] public section
@@ -600,15 +600,18 @@ theorem of_not_bnot {b : Bool} (h : ¬((!b) = true)) : b = true := by
   | true => rfl
   | false => exact absurd rfl h
 
-/-- **`publicHeld`'s whole-registration check is the slice check at the whole registration**: the one-statement
+/-- **`publicHeld`'s whole-registration check is the slice check at the whole registration**: where the public file
+names the registration's roots by the record's own ports (`publicPorts` reads `Record.byPort`), the one-statement
 path's public file is held to the registration record itself and the population's units in order. -/
 theorem publicHeld_iff {rec : Json} {n : ℕ} (hn : _root_.Spot.nat? (_root_.Spot.getD rec "population") = some n)
-    {pubB : ByteArray} :
+    (hp : _root_.Spot.OneStageZk.publicPorts rec = .ok (_root_.Spot.Record.byPort rec)) {pubB : ByteArray} :
     _root_.Spot.OneStageZk.publicHeld rec pubB = .ok () ↔ SliceHeld rec (Array.range n) pubB := by
   constructor
   · intro h
     unfold _root_.Spot.OneStageZk.publicHeld at h
     obtain ⟨hd, hh, h⟩ := ebind_ok h
+    obtain ⟨reg, hreg, h⟩ := ebind_ok h
+    obtain rfl : reg = _root_.Spot.Record.byPort rec := Except.ok.inj (hreg.symm.trans hp)
     dsimp only at h
     split at h
     · cases h
@@ -619,8 +622,10 @@ theorem publicHeld_iff {rec : Json} {n : ℕ} (hn : _root_.Spot.nat? (_root_.Spo
         exact ⟨hd, hh, of_not_bnot hc, by rw [← indicesHeld_eq hn]; exact of_not_bnot hi⟩
   · rintro ⟨hd, hh, hc, hi⟩
     rw [← indicesHeld_eq hn] at hi
+    unfold _root_.Spot.Record.matchesPublic at hc
     unfold _root_.Spot.OneStageZk.publicHeld
     refine ok_bind_of hh ?_
+    refine ok_bind_of hp ?_
     dsimp only
     rw [hc, hi]
     try rfl
