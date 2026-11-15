@@ -39,7 +39,7 @@ says. These are the directories that have one:
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
 | `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
 | `verity bench property_redteam` | a stacking-property check graded against the red team's cases |
-| `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`), a row a block type, and the Lean verifier timed on one kept proof (`lean-verify`) |
+| `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`), a row a block type, and the Lean verifier timed on one kept proof (`lean-verify`); and the proof system by layer, Flock, with zero knowledge, with sampling and with recursion, a row each read from its run's output (`layers`) |
 | `verity bench prove_path` | a served run's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
 | `verity bench rate_squaring` | squarings a second modulo the store codec's primes, each form gated before it is timed: `sq` on one GPU, `ifma` on the host's CPUs |
 | `verity bench recursion_e2e` | recursive witness zero knowledge, timed step by step: `plan`, `run`, `result`, `table` and `store` |
