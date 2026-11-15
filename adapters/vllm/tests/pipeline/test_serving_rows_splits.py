@@ -587,7 +587,8 @@ def test_each_scores_and_values_unit_is_wired_to_the_units_that_wrote_what_it_re
         keys = [at[m.base + i] for i in range(m.n)]
         g = {nm: i for i, (nm, _ty) in enumerate(SRW.template(m.template).fn.signature()[0])}
         reads = pl[keys[0][2]].reads
-        cols: list = {"scores": [(f"kv{c}", lambda _j, c=c: c) for c in range(3)], "values": [("kv", lambda j: pl[j].col)]}.get(kind, [])
+        by_kind: dict[str, list] = {"scores": [(f"kv{c}", lambda _j, c=c: c) for c in range(3)], "values": [("kv", lambda j: pl[j].col)]}
+        cols = by_kind.get(kind, [])
         assert m.wired == tuple((f"in{g[x]}" + ("" if sp is None else f".{sp}"), o,
                                  tuple(unit[(p, h, pl[j].reads[i][3])] for p, h, j in keys)) for i, (x, sp, o, _to) in enumerate(reads)) + \
             tuple((f"in{g[x]}", "o0", tuple(writer[(p, pl[j].split, pl[j].block, c(j))] for p, _h, j in keys)) for x, c in cols)

@@ -195,8 +195,8 @@ def read_coord(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable,
         if mid:
             twin = MIDS[spec_base(r["spec"])].y
             assert twin is not None
-            got = twin(mid, W[0], WS[0], G)
-            if not np.array_equal(np.asarray(got, dtype=np.uint16).reshape(-1), y.reshape(-1)):
+            twin_out = twin(mid, W[0], WS[0], G)
+            if not np.array_equal(np.asarray(twin_out, dtype=np.uint16).reshape(-1), y.reshape(-1)):
                 raise ValueError(f"row {r['i']} ({d['op_path']}): the twin's output on its intermediates {sorted(mid)} is not "
                                  f"the row's served {member} words")
         wcol = np.ascontiguousarray(W.reshape(E, U, c, K).transpose(1, 0, 2, 3)).reshape(U, -1).view("<u2")

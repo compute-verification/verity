@@ -514,7 +514,8 @@ def test_a_serve_of_ids_commits_the_ids_served_as_its_blocks_return_beside_its_t
     layout, and the class's files reopen to the same roots."""
     check = BR.check_template("GreedySelect_v1{V=160,N=8}")
     _runner, hook, _hooks = serve()
-    (make, tables), lines = built(), []
+    make, tables = built()
+    lines: list = []
     bw, sched, hooks = windows(tmp_path, hook.latents, make, lines, check=check, ids=True)
     try:
         finish(sched)
