@@ -50,7 +50,7 @@ spec = importlib.util.spec_from_file_location("reserve", Path(__file__).with_nam
 spec.loader.exec_module(importlib.util.module_from_spec(spec))
 a = sys.argv[1:]
 out = Path(a[a.index("--out") + 1])
-named = [x for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts"))]
+named = [x for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--program-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 with open(out / "ran.txt", "a") as f:
     f.write("".join(os.path.relpath(p) + "\n" for p in named))
