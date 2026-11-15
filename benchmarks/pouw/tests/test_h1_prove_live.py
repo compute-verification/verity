@@ -2,7 +2,7 @@
 form) the verifier's files are the live Program's, every opened row opens its registered root, each round's staged
 statement is the verifier's own public file byte for byte with ok 1 at the served rows, and a prover that claims one row
 more stages ok 0; a tampered opening is refused. The live Program is credit's, `PouwLiveWindow_v2`, each unit reading the
-public max_tokens as its caps. Past `live.PIECE_ROWS` rows (here past `R` = 2, `LV.R`) each round is cut by rows into
+public max_tokens as its caps. Past `live.PIECE_ROWS` rows (here past `R` = 2, `lowering.live.R`) each round is cut by rows into
 `live.PouwLiveRows_v1` pieces, each staged as its own unit."""
 from __future__ import annotations
 
@@ -14,10 +14,12 @@ import live as LV
 import numpy as np
 import pytest
 
-from verity.protocols.pouw.prover.circuit import live as L
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import live_reads as LR
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.prover.circuit import live as L
+from verity.protocols.accounting.pouw.prover.lowering import h1unit as U
+from verity.protocols.accounting.pouw.prover.lowering import live as LL
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import live_reads as LR
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 T, S, PREFIX = 4, 2, "h1/"
 PROGRAM, WINDOW, SESSION = "ab" * 64, "cd" * 64, "session-1"
@@ -29,7 +31,7 @@ SLOTS = [[1, 1, 2, 0], [1, 2, 0, 0]]
 
 
 def salts(n: int) -> list[bytes]:
-    return [os.urandom(LV.U.SALT_BYTES) for _ in range(n)]
+    return [os.urandom(U.SALT_BYTES) for _ in range(n)]
 
 
 def dump(out: Path, T: int = T, S: int = S, HEADERS: list = HEADERS, MAX_TOKENS: list = MAX_TOKENS,
@@ -126,7 +128,7 @@ def test_evidence_is_credits_live_statements_on_the_staged_program(prepared, tmp
     import hashlib
     import shutil
 
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
 
     base, _pub, _rc = prepared
     work = tmp_path / "work"
@@ -156,11 +158,11 @@ PIECED = {"T": 4, "S": 1, "HEADERS": [(0, 0, 0, 1, 2), (1, 0, 2, 1, 1)], "MAX_TO
 def pieced(tmp_path_factory):
     base = tmp_path_factory.mktemp("pieced")
     pub = dump(base / "dump", **PIECED)
-    LV.R = 2
+    LL.R = 2
     try:
         rc = LV.main(["prepare", "--live", str(base / "dump"), "--work", str(base / "work")])
     finally:
-        LV.R = L.PIECE_ROWS
+        LL.R = L.PIECE_ROWS
     return base, pub, rc
 
 
@@ -190,7 +192,7 @@ def test_a_round_past_the_piece_rows_is_staged_piece_by_piece_on_the_verifiers_o
 
 def test_a_pieces_opening_is_its_rounds_rows_from_its_base(pieced):
     base, pub, _rc = pieced
-    LV.R = 2
+    LL.R = 2
     try:
         opening = json.loads((base / "dump" / "0" / "opening.json").read_text())
         reg = LV.files(pub, 1, pub["served"][0])
@@ -198,4 +200,4 @@ def test_a_pieces_opening_is_its_rounds_rows_from_its_base(pieced):
         assert LV.check_openings(pub, 1, LV.piece_opening(pub, 0, opening), reg) == [
             f"live@0 piece 1: port slot_{k}'s opened row is not row {2 + k} of h1/slots@0's registered root" for k in range(2)]
     finally:
-        LV.R = L.PIECE_ROWS
+        LL.R = L.PIECE_ROWS

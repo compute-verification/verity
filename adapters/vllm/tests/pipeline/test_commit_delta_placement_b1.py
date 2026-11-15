@@ -17,9 +17,8 @@ SRC = Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit
 
 def _placement_ifs() -> list[ast.If]:
     tree = ast.parse(SRC.read_text())
-    main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
     out: list[ast.If] = []
-    for node in ast.walk(main):
+    for node in ast.walk(tree):
         if not isinstance(node, ast.If):
             continue
         calls = [c for c in ast.walk(node) if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr == "restrict_manifest_identities"]
@@ -53,4 +52,5 @@ def test_the_gate_the_sync_twin_failed_on_would_be_caught():
     """The test's own negative: the pre-fix condition is what the assertion rejects."""
     pre = ast.parse('if len(reqs) > 1 and isinstance(required_manifest, dict) and required_manifest.get("identities"):\n    pass').body[0]
     post = ast.parse('if isinstance(required_manifest, dict) and required_manifest.get("identities"):\n    pass').body[0]
+    assert isinstance(pre, ast.If) and isinstance(post, ast.If)
     assert _mentions_len_reqs(pre.test) and not _mentions_len_reqs(post.test)

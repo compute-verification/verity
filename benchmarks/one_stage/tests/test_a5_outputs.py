@@ -1,7 +1,7 @@
 """a5's output class (`a5.output_units`): a window's units whose outputs are served out would be proved whole beside a work
 sample only on a closure map, which the stream refuses (`closure`), so a5 refuses a window with an output class before the
 sample (`a5.output_refusal`). On a test's own challenger (`fake_challenger`) the stream refuses the class's closure map
-before reading a coin, and the same registration's work sample without one is accepted, the Lean's `Run.run` agreeing. A
+before reading a coin, and the same docket's work sample without one is accepted, the Lean's `Run.run` agreeing. A
 toy window of one template."""
 
 from __future__ import annotations
@@ -15,12 +15,12 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
 import a5 as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 
@@ -42,7 +42,7 @@ PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
     ("domain:x", "x's served domain"), ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain"),
     (f"population:{P.template_id(PAIR)}", "a template's stratum")))
 #: K of the N proof blocks, an eighth of however many the window registers
-RULE = S.Law("work-rate:1/8")
+RULE = S.SamplingDesign("work-rate:1/8")
 SPEC = S.Spec(VALUES, RULE, S.Check((P.program_digest(Program(PAIR)),), QUERY, proof_deadline=60.0), PUBLIC,
               bytes.fromhex(ROOT))
 VERDICTS = {"lean": {"of_record": True, "accepted": True, "digest": "dd" * 64, "sessions": [SESSION]}}
@@ -73,7 +73,7 @@ def _ports() -> dict:
 
 def _record() -> dict:
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **e} for i, (p, e) in enumerate(_ports().items())]
-    return R.record(program(), QUERY, S.selection_law(RULE, N), S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
+    return R.record(program(), QUERY, S.selection_sampling_design(RULE, N), S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
                     work_table=S.selection_table(RULE, program(), QUERY, TABLE))
 
 
@@ -95,8 +95,21 @@ def test_an_output_class_is_refused_before_the_sample():
     assert A5.output_refusal(args(outputs=None)) is None and A5.output_refusal(args(outputs=[])) is None
 
 
+def test_an_output_class_the_design_samples_whole_needs_no_closure_map():
+    """A design that samples every unit of the class's stratum (`D.derive` at k = N) puts the class in every sample, so
+    a5 takes it; at K of N the same class is refused, and a class split across a whole stratum and a sampled one is refused
+    for the sampled one's units alone."""
+    table = S.selection_table(RULE, program(), QUERY, TABLE)
+    whole, part = (D.derive(program(), QUERY, D.parse_design(f"work:{k}"), table) for k in (N, K))
+    assert [s["k"] for s in whole["strata"]] == [N]
+    assert A5.output_refusal(args(), whole) is None
+    assert A5.output_refusal(args(), part) == {"output-class-needs-a-closure-map": {"units": len(OUTS)}}
+    split = {"strata": [{"units": [[0, 24]], "k": 24}, {"units": [[24, 32]], "k": 2}]}
+    assert A5.output_refusal(args(), split) == {"output-class-needs-a-closure-map": {"units": 8}}
+
+
 @pytest.mark.parametrize("seed", range(3))
-def test_the_class_closure_map_is_refused_and_the_work_draw_without_it_accepted(seed):
+def test_the_class_closure_map_is_refused_and_the_work_sample_without_it_accepted(seed):
     """The stream refuses the class's closure map (every unit's closure the whole class) before any coin is read, so its
     sample of record afterwards is the one a stream on the same challenger samples with no refusal before it: k units (the
     work sampling design over one template of work 1 is the uniform k-subset), proving exactly those, and accepted, the Lean's run

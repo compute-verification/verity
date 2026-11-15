@@ -36,14 +36,16 @@ import hashlib
 import itertools
 import json
 import sys
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
-from . import census
 from verity.circuits.codec import descriptor_id
 from verity_flock import boolean_export as BX
 from verity_flock import circuit as FC
 from verity_flock import subcircuit_templates as TM
+
+from . import census
 
 __all__ = ["KIND", "LOWERING_FIELDS", "RECORDS_KIND", "build", "census_ids", "export", "main", "put", "put_report"]
 

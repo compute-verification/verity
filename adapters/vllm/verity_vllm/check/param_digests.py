@@ -1,8 +1,8 @@
 """sha256 of every live parameter and buffer of a served model, as raw contiguous bytes, by `named_parameters()` name.
 
 A tensor's bytes go to the host a chunk at a time and into its hash (the digest of the whole byte string, never a whole host copy),
-and tensors hash on a thread pool: `hashlib` and the device copy release the GIL.  A rank's ~94 GB of GLM-5.3 parameters then holds
-`workers x chunk` bytes of host memory and hashes on `workers` cores.
+and tensors hash on a thread pool: `hashlib` and the device copy release the GIL.  Hashing a rank's parameters then holds
+`workers x chunk` bytes of host memory and runs on `workers` cores.
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def _digest(p, chunk: int) -> tuple[str, int]:
     return h.hexdigest(), int(raw.numel())
 
 
-def param_digests(model, *, include_buffers: bool = True, raw_for: "re.Pattern[str] | None" = None, chunk: int = CHUNK,
+def param_digests(model, *, include_buffers: bool = True, raw_for: re.Pattern[str] | None = None, chunk: int = CHUNK,
                   workers: int = WORKERS) -> dict[str, Any]:
     """{params: {name: {digest, dtype, shape, bytes} | {..., alias_of}}, raw: {name: uint16 words}, n, wall_s}: a tensor reached under
     two names is hashed once and its later name carries `alias_of`; a bf16 tensor whose name matches `raw_for` also keeps its words."""

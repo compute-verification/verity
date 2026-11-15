@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.boolean_int8`: `int8_exact`'s numerics on bits.
+"""`verity_vllm.definitions.registry.boolean_int8`: `int8_exact`'s numerics on bits.
 
 Each leaf is its word primitive on uniform words and on its special ones (signed zeros, infinities, quiet and signalling NaNs,
 subnormals, rint's ties, the s8 and u32 saturation edges). Each σ composite is its word Definition on random rows and on the
@@ -10,17 +10,16 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate, evaluate_batch
-from verity.definitions.ops import prims as CP
+from verity.circuits.ops import prims as CP
 from verity.circuits.types import Array, Value
-from verity.definitions.boolean import boolean_version
-from verity.definitions.registry import boolean_int8 as BI8
-from verity.definitions.registry import int8_exact as IE
+from verity.circuits.ops.boolean.versions import boolean_version
+from verity_vllm.definitions.registry import boolean_int8 as BI8
+from verity_vllm.definitions.registry import int8_exact as IE
 
 #: 1/sqrt(128), the 8B row's attention scale
 SCALE = 128 ** -0.5
@@ -119,7 +118,8 @@ def test_the_quantizer_element_ties_saturates_and_takes_extreme_scales() -> None
     subnormal, the largest finite and the floored scale RN32(1e-30) / 127, and NaN and infinite x or s."""
     xs = [2.5, 3.5, 126.5, 127.5, -2.5, -126.5, -127.5, 1000.0, -1000.0, 0.0, -0.0, 1.0, np.inf, -np.inf, np.nan]
     ss = [1.0, 2.0, 0.0, -1.0, float(np.float32(1e-30) / np.float32(127)), 1.4e-45, 3.4028235e38, np.inf, np.nan]
-    x, s = (a.ravel() for a in np.meshgrid(_bf16(xs), _f32(ss)))
+    mesh: tuple[np.ndarray, ...] = np.meshgrid(_bf16(xs), _f32(ss))
+    x, s = (a.ravel() for a in mesh)
     _agree(QE, [x, s])
     codes = BS.evaluate_words(_bits_of(QE), _bf16([2.5, 3.5, 127.5, 1000.0, -1000.0, -127.5]),
                               _f32([1.0] * 6)).astype(np.uint8).view(np.int8)

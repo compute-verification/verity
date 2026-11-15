@@ -8,7 +8,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 E = pytest.importorskip("verity_vllm.engine.int8_exact")
-ZR = pytest.importorskip("verity_vllm.protocols.pouw.h1.records")
+ZR = pytest.importorskip("verity.protocols.accounting.pouw.prover.serving.h1.records")
 
 K, N, ROWS = 64, 96, 128
 HALF = 4 * 32 * 32
@@ -75,7 +75,7 @@ def test_a_served_y_that_isnt_the_records_is_left_to_the_hosts_read(device):
     y = y.clone()
     y[2, 7] = -y[2, 7] if float(y[2, 7]) else 1.0
     on, host = _read(zy, y, s_a, s_w)
-    assert not on and "served y" in host
+    assert not on and host is not None and "served y" in host
 
 
 @pytest.mark.parametrize("device", DEVICES)

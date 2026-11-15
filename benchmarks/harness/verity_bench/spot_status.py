@@ -171,7 +171,8 @@ def _changed(root: Path, parent: str, fix: str) -> tuple[dict[str, list[tuple[li
                 old = name
             else:
                 path = name or old
-                kept[path] = name is not None
+                if path is not None:
+                    kept[path] = name is not None
         elif line.startswith("@@") and path:
             in_hunk = True
             changed.setdefault(path, []).append(([], []))
@@ -451,7 +452,8 @@ def served(record: Mapping[str, Any], *, root: Path | None = None) -> dict:
         if at is None:
             why = r.get("why") or "its entry names no commit"
         elif r.get("dirty"):
-            at, why = None, f"it ran a dirty tree at {at[:12]}, whose code that commit doesn't name"
+            why = f"it ran a dirty tree at {at[:12]}, whose code that commit doesn't name"
+            at = None
         listed.append({"name": name, "given": True, "run": r.get("run"), "commit": r.get("commit") or None,
                        "machine": r.get("machine"), "why": why})
         sources[f"{name} {r.get('run') or '(no run id)'}"] = (at, why)
@@ -500,10 +502,10 @@ def render(doc: Mapping[str, Any]) -> str:
     of = ("of the commit the served run's record names and of each of its runs' commits" if sv else
           "of the commit each run's record names")
     lines = ["## SPOT's resampling holes in the code that ran", "",
-             f"Each hole is closed only where its fix's commit (`{doc['fixes']}`; a hole with none is open) is an ancestor "
-             f"{of}. The label is `SPOT soundness` only when both are closed in every "
-             f"{'one, with all four runs read' if sv else 'run read'}.", "", f"- label: **{doc['label']}**"]
-    partly = sv and f" ({', '.join(sv['read']) or 'its record alone'}); {', '.join(sv['not_given'])} not given"
+             (f"Each hole is closed only where its fix's commit (`{doc['fixes']}`; a hole with none is open) is an ancestor "
+              f"{of}. The label is `SPOT soundness` only when both are closed in every "
+              f"{'one, with all four runs read' if sv else 'run read'}."), "", f"- label: **{doc['label']}**"]
+    partly = f" ({', '.join(sv['read']) or 'its record alone'}); {', '.join(sv['not_given'])} not given" if sv else ""
     runs_at: dict[str, list[str]] = {}
     for r in sv["runs"] if sv else ():
         if r["holes"]:

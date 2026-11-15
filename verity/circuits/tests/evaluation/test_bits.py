@@ -234,7 +234,7 @@ def test_a_boolean_definition_takes_its_word_definitions_kernel(monkeypatch) -> 
 def test_gemm_v3_runs_on_gemm_v2s_kernel(monkeypatch) -> None:
     """The BF16 GEMM on bits takes the word GEMM's numpy kernel; the s8 accumulator's word Definition has no kernel, so it
     stays bit-sliced."""
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
 
     gemm = bind(BG.Gemm, K=32, N=4, **BG.GEMM_AMPERE)
     assert E.word_kernel(gemm).name == "numpy"
@@ -288,7 +288,7 @@ def _held(spec, n: int) -> int:
 
 @pytest.mark.parametrize("n", [1, 200, 5000])
 def test_peak_bytes_bounds_what_evaluate_bits_holds(n: int) -> None:
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
 
     for spec in (bind(_random(0)), bind(_random(3)), bind(_wide_adder(1024))):
         assert _held(spec, n) <= BS.peak_bytes(spec, n)

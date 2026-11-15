@@ -1,5 +1,5 @@
-"""`predict node-registration`: a TP2 node Program's θ registered from a toy TP Commit of record is a log nci-check's full check accepts
-(`nci_reference.check_baseline`), each rank's θ parameter the entry `registered_rows.commit` makes of that rank's committed tensor,
+"""`predict node-registration`: a TP2 node Program's θ registered from a toy TP Commit of record is a log the inference-only policy's full check accepts
+(`inference_only_reference.check_theta`), each rank's θ parameter the entry `registered_rows.commit` makes of that rank's committed tensor,
 whether the checkpoint holds it (a shard composed at the rank) or the bundle does; and each way the Commit is not the node's is
 refused by name before a row is committed."""
 import copy
@@ -11,23 +11,24 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import canonical_json
 from verity.commitments import hm96
+
+from tests.pipeline.test_cpu_replay import _shard
+from tests.program.predict.test_predict import TINY, _phi
 from verity_vllm.commit import registered_rows as RR
 from verity_vllm.commit import step_rows
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.program.predict import aot as A
-from verity_vllm.program.predict.common import _arr_shape
 from verity_vllm.program.predict import node_registration as NR
+from verity_vllm.program.predict.common import _arr_shape
 from verity_vllm.program.predict.node import build_node_program, node_parameters
-from tests.pipeline.test_cpu_replay import _shard
-from tests.program.predict.test_predict import TINY, _phi
 
 _spec = importlib.util.spec_from_file_location(
-    "nci_reference", Path(__file__).resolve().parents[5] / "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py")
+    "inference_only_reference", Path(__file__).resolve().parents[5] / "verity/protocols/policy/inference_only/verifier/lean/scripts/inference_only_reference.py")
+assert _spec is not None and _spec.loader is not None
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)
 
@@ -70,6 +71,7 @@ def commit(tmp_path, monkeypatch):
     ckd.mkdir()
     (ckd / "config.json").write_text("{}")
     _shard(ckd / "model.safetensors", CKPT)
+    cfg: dict
     served, roots, bundles, cfg = {}, {}, [], {"programs": {}, "of_record": {}, "requests": [{"request_id": "r0", "prompt_len": 4, "max_tokens": 3}]}
     for r in range(WORLD):
         served[r] = _served(r)
@@ -128,7 +130,7 @@ def _manifest(d, sha=None):
 
 @pytest.mark.slow
 def test_the_nodes_theta_registers_from_each_ranks_commit_and_passes_the_full_check(commit):
-    """Two spawned rank processes, on the pinned checkpoint: the log passes `check_baseline`, and each rank's θ parameter i is
+    """Two spawned rank processes, on the pinned checkpoint: the log passes `check_theta`, and each rank's θ parameter i is
     `registered_rows.commit` of the tensor that rank registered under its field i's name, under the salts written to --salts and
     nowhere under --out."""
     o = NR.Options(**{**commit["o"].__dict__, "workers": 2, "checkpoints_manifest": _manifest(commit)})
@@ -138,7 +140,7 @@ def test_the_nodes_theta_registers_from_each_ranks_commit_and_passes_the_full_ch
     assert doc["checkpoint"]["pinned_shards"] == 1 and doc["checkpoint"]["entry"]["repo"] == "test/tiny"
     provenance = json.loads((log / "provenance.json").read_text())
     inst, computed = _instance(provenance)
-    assert REF.check_baseline(inst, trusted) == {"gates": NODE.program.gates, "ius": [[computed, 4 * 32]], "complies": True, "failure": None}
+    assert REF.check_theta(inst, trusted) == {"gates": NODE.program.gates, "ius": [[computed, 4 * 32]], "complies": True, "failure": None}
     assert doc["program_digest"] == NODE.digest == rec["program"] and doc["record_digest"] == REF.record_digest(rec) == trusted["run"]
     assert [e["value"] for e in rec["registered"]] == list(NODE.theta) and len(provenance) == len(NODE.theta)
     assert [rk["opened_by_source"] for rk in doc["ranks"]] == [{"checkpoint": 2, "bundle": len(PARAMS.leaves[0]) - 2}] * WORLD
@@ -224,6 +226,13 @@ def _flip_checkpoint(d):
      "rank 1: rank1.weights[0] (model.embed_tokens.weight) is"),
     (lambda d: _retree(d, 0, lambda ns: next(n for n in ns if n[0] == "model.norm.weight").__setitem__(0, "model.final_norm.weight")),
      "rank 0: rank0.weights[13] is 'model.norm.weight', which the rank's committed weights tree does not register"),
+    # a field the record leaves out states nothing: no bundle, no request, no Program of record, no committed root
+    (lambda d: (d["out"] / "replay_deferred.json").write_text(json.dumps({"world": WORLD})), "rank 0: replay_deferred.json names no bundle of pair 0"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"].pop("requests")), "holds no Program of record for the rank (['1111111111111111'])"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"].pop("of_record")), "rank1'] holds no Program of record for the rank ([])"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"]["of_record"].pop("1")), "rank1'] holds no Program of record for the rank ([])"),
+    (lambda d: _runs(d, lambda c: c.pop("per_rank")), "is not the committed weights root None"),
+    (lambda d: _runs(d, lambda c: c["per_rank"].pop("1")), "is not the committed weights root None"),
 ])
 def test_a_commit_that_is_not_the_nodes_is_refused_by_name(commit, tamper, named, capsys):
     tamper(commit)
@@ -241,6 +250,19 @@ def test_a_descriptor_that_is_not_the_nodes_is_refused(commit, capsys):
     desc["annotations"]["theta"] = desc["annotations"]["theta"][1:]
     Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
     assert NR.main(commit["o"]) == 2 and "the descriptor's θ is" in capsys.readouterr().out
+    bare = {k: v for k, v in NODE.desc.items() if k != "annotations"}
+    for desc in ({**bare, "annotations": {}}, bare):   # annotations that hold no θ, and a descriptor without annotations: no θ at all
+        Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
+        assert NR.main(commit["o"]) == 2 and "the descriptor's θ is 0 root nodes" in capsys.readouterr().out
+
+
+def test_a_builds_program_digest_is_its_program_blocks_else_the_one_at_the_results_top(tmp_path):
+    """`program_digest_of` reads a Build's `result.json`: the `program` block's `digest`, else `program_digest` at its top (a
+    result without the block), else none."""
+    for doc, digest in (({"program": {"digest": "aa"}, "program_digest": "bb"}, "aa"), ({"program_digest": "bb"}, "bb"),
+                        ({"program": {}, "program_digest": "bb"}, "bb"), ({}, "")):
+        (tmp_path / "result.json").write_text(json.dumps(doc))
+        assert NR.program_digest_of(str(tmp_path)) == digest
 
 
 def test_a_checkpoint_its_manifest_does_not_pin_is_refused(commit, capsys):

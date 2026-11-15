@@ -10,6 +10,11 @@ from dataclasses import dataclass
 from verity_vllm.check.match import global_match_fast as GMF
 from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.config import option
+from verity_vllm.log import init_logger
+
+__all__ = ["Options", "main"]
+
+logger = init_logger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -23,5 +28,5 @@ def main(a: Options) -> int:
     res = GMF.dag_multiset(PL.load_derived(a.a, "derived", compact=True), PL.load_oracle(a.b, "oracle", compact=True))
     with open(a.out, "w") as f:
         json.dump(res, f, indent=1)
-    print(json.dumps(res))
+    logger.info("%s", json.dumps(res))
     return 0 if res["equal"] else 1

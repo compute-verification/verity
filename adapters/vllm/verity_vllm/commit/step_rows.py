@@ -1,4 +1,4 @@
-"""The Commit's ``rows-sha512`` scheme: COMMIT-GPU's construction (``benchmarks/pouw/commit_gpu``) over a step's
+"""The Commit's ``rows-sha512`` scheme: COMMIT-GPU's construction (``verity/commitments/cuda/commit_gpu``) over a step's
 stream, on the windowed worker (``NativeCollectCommitter``, whose unset scheme it is) and its offline CPU core
 (``NativeHostCommitter.commit_block_offline``, by name).  Every Commit commits under it by default: the single-GPU Commit
 (``pipeline.commit``'s ``--commit-scheme``, on the windowed ``native_collect_v2b``) and every rank of a TP Commit (``pipeline.tp.commit``,
@@ -43,14 +43,19 @@ import hashlib
 import json
 from collections.abc import Sequence
 
-from verity.errors import InvalidArtifact
-from verity.commitments import hm96
+from verity.commitments import domains, hm96
 from verity.commitments.hm96 import batch as hm96_batch
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.commitments.rowleaf import (
+    SCHEMA_HM96_SHA512_ROW_V2,
+    row_leaf,
+    sha512_row_v2_digest,
+    sha512_row_v2_prefix,
+)
 from verity.commitments.scheme import DIGEST_BYTES
+from verity.errors import InvalidArtifact
 
 __all__ = ["DOMAIN_TAG", "ID_BYTES", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG",
            "binding", "ctx_digest", "domain", "geo_digest", "hiding_leaf", "keyed_tensor_root", "layout_digest", "leaf", "levels",
@@ -70,10 +75,10 @@ KEY_BYTES = 64
 ROOT_BYTES = DIGEST_BYTES["sha512"]
 #: The program, ctx, geo, layout and names digests a root binds (SHA-512 identity digests, whole).
 ID_BYTES = DIGEST_BYTES["sha512"]
-STEP_ROOT_TAG = b"verity/fa2c/root/v0"
-RUN_ROOT_TAG = b"verity/cmt-integ/run-root/v0"
-WEIGHTS_ROOT_TAG = b"verity/cmt-integ/weights-root/v0"
-NODE_TAG, LIFT_TAG, EMPTY_TAG = b"verity-vllm/node/v1", b"verity-vllm/lift/v1", b"verity-vllm/empty/v1"
+STEP_ROOT_TAG = domains.FA2C_ROOT.encode()
+RUN_ROOT_TAG = domains.CMT_INTEG_RUN_ROOT.encode()
+WEIGHTS_ROOT_TAG = domains.CMT_INTEG_WEIGHTS_ROOT.encode()
+NODE_TAG, LIFT_TAG, EMPTY_TAG = domains.VLLM_NODE.encode(), domains.VLLM_LIFT.encode(), domains.VLLM_EMPTY.encode()
 
 
 def binding(program: bytes, ctx: bytes, geo: bytes, row_bits: int = 8 * ROW_BYTES) -> bytes:

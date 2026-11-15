@@ -8,6 +8,11 @@ the digest the harness hashed it to, the state:
   which cancels most of the slice's own difficulty. The recorded coin and digest reproduce the slice.
 - `final`: on the whole final set.
 
+A state is scored in the start's architecture at its own depth, which its names give (a route may deepen the start,
+`routes.grow`): its blocks must run 0..N-1 and its tensors be those of the start's shape at N blocks, each of its
+shape, else it is refused by name. The score states the blocks it was scored at (`blocks`). The evaluator imports no
+route: what it scores is what it is handed.
+
 `window_nats` is each window's summed negative log-likelihood of its targets, in nats, under bf16 autocast.
 """
 from __future__ import annotations
@@ -44,10 +49,11 @@ def window_nats(model: torch.nn.Module, toks: np.ndarray, starts: list[int], dev
 
 class Evaluator:
     def __init__(self, data: Data, split: str, theta: dict[str, torch.Tensor], shape: dict, device: str):
-        self.data, self.split, self.device = data, split, device
+        self.data, self.split, self.device, self.shape = data, split, device, dict(shape)
         with torch.device(device):
-            self.base, self.net = LM.of(shape), LM.of(shape)
+            self.base = LM.of(shape)
         self.base.load_state_dict(theta)
+        self.nets: dict[int, LM] = {}
         self.toks, man = held_out(data, split)
         self.bytes, self.documents = man["bytes"], man["documents"]
         full, tail = windows(len(self.toks))
@@ -67,21 +73,45 @@ class Evaluator:
     def bpb(nats: float, nbytes: int) -> float:
         return float(nats) / nbytes / math.log(2)
 
+    def net(self, state: dict[str, torch.Tensor]) -> tuple[LM, int]:
+        """The model `state` is scored in and its blocks: the start's architecture at the depth `state`'s names give,
+        `state` loaded. Refused by name: a state whose blocks don't run 0..N-1, and one with a tensor more, fewer or
+        of another shape than the start's shape at N blocks."""
+        at = sorted({int(k.split(".")[1]) for k in state if k.startswith("blocks.")})
+        if at != list(range(len(at))):
+            missing = sorted(set(range(at[-1] + 1)) - set(at)) if at else [0]
+            raise ValueError(f"evaluate: the state has no block {missing[0]}, and a model's blocks run 0..N-1 "
+                             f"(it has blocks {at[:8]}{'...' if len(at) > 8 else ''})")
+        n, shape = len(at), self.shape | {"n_layer": len(at)}
+        with torch.device("meta"):
+            want = {k: tuple(v.shape) for k, v in LM.of(shape).state_dict().items()}
+        got = {k: tuple(v.shape) for k, v in state.items()}
+        if odd := sorted(set(want) ^ set(got)) or sorted(k for k in want if want[k] != got[k]):
+            k = odd[0]
+            how = (f"of shape {got[k]} where the start's architecture has {want[k]}" if k in want and k in got else
+                   "a tensor the start's architecture lacks" if k in got else "missing")
+            raise ValueError(f"evaluate: the state's {k} is {how}: a state is the start's shape at {n} blocks")
+        if n not in self.nets:
+            with torch.device(self.device):
+                self.nets[n] = LM.of(shape)
+        self.nets[n].load_state_dict(state)
+        return self.nets[n], n
+
     def __call__(self, state: dict[str, torch.Tensor], weights_digest: str, coin: str | None = None) -> dict:
-        self.net.load_state_dict(state)
+        net, blocks = self.net(state)
         tok = self.data.tokenizer
         if self.split == "final":
             full, tail = windows(len(self.toks))
-            nats = float(window_nats(self.net, self.toks, full + tail, self.device).sum())
+            nats = float(window_nats(net, self.toks, full + tail, self.device).sum())
             return {"split": "final", "bpb": self.bpb(nats, self.bytes), "nats_per_byte": nats / self.bytes,
                     "targets": len(self.toks) - 1, "bytes": self.bytes, "documents": self.documents, "tokenizer": tok,
-                    "start_bpb": self.start_bpb}
+                    "start_bpb": self.start_bpb, "blocks": blocks}
         sl = sample_slice(len(self.full), weights_digest, coin, self.slice_windows)
         pick = np.asarray(sl["windows"])
         nbytes = int(self.window_bytes[pick].sum())
-        a = self.bpb(window_nats(self.net, self.toks, [self.full[i] for i in pick], self.device).sum(), nbytes)
+        a = self.bpb(window_nats(net, self.toks, [self.full[i] for i in pick], self.device).sum(), nbytes)
         b = self.bpb(self.start_nats[pick].sum(), nbytes)
         return {"split": "search", "bpb": self.start_bpb + a - b, "slice_bpb": a, "start_slice_bpb": b,
-                "start_bpb": self.start_bpb, "tokenizer": tok,
+                "start_bpb": self.start_bpb, "tokenizer": tok, "blocks": blocks,
                 "slice": {"coin": sl["coin"], "weights_digest": weights_digest, "windows": len(pick), "bytes": nbytes,
                           "targets": len(pick) * EVAL_CTX}}

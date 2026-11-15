@@ -1,4 +1,4 @@
-"""The replay's pure parts: a trace's arrivals (times from its start, breaks drawn or from reverts) and the old path's
+"""The replay's pure parts: a trace's arrivals (times from its start, breaks sampled or from reverts) and the old path's
 figures from the same trace."""
 import fake_vqueue as vq
 import pytest
@@ -31,7 +31,7 @@ def test_arrivals_count_minutes_from_the_start_and_a_revert_breaks_a_task_it_tou
         (1, 60.0, 90.0, frozenset()), (2, 120.0, 120.0, frozenset({"unit:a"})), (3, 180.0, 180.0, frozenset())]
 
 
-def test_arrivals_draw_breaks_only_among_the_tasks_a_pr_touches() -> None:
+def test_arrivals_pick_breaks_only_among_the_tasks_a_pr_touches() -> None:
     got, _ = replay.arrivals(DOC, 1.0, 0, W)
     assert [a.breaks for a in got] == [frozenset({"unit:a"}), frozenset({"unit:a"}), frozenset()]
 

@@ -144,3 +144,9 @@ def test_a_cloud_agents_linear_write_offered_directly_as_an_mcp_tool_is_refused_
 def test_direct_mcp_reads_other_connectors_and_a_local_sessions_writes_pass_unlogged(tmp_path, conversation_id, tool):
     assert answer(tmp_path, conversation_id, {"id": "INF-1"}, tool) == {"permission": "allow"}
     assert not (tmp_path / "task.jsonl").exists()
+
+
+def test_an_event_that_is_not_json_passes_and_says_why(tmp_path):
+    env = {**os.environ, "AGENT_GUARD_TASK_LOG": str(tmp_path / "task.jsonl")}
+    r = subprocess.run([sys.executable, HOOK], input="{", capture_output=True, text=True, env=env, check=True)
+    assert json.loads(r.stdout) == {"permission": "allow"} and "task_hook: the event is not JSON, so the call passes" in r.stderr

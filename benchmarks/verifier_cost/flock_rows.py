@@ -8,13 +8,13 @@ ANDs) and the derive vectors' fan-out unit at M placed calls and M placed reads 
 Each target's classes (`partition_units` under Q_word, `lower_class`) are written as a flat circuit type and as a one-layout
 archive, and every binary runs every mode on them: `rows` is the default path (`CircuitType.check`, then `Flock.Derive.derive`,
 as `flock-rows TYPES --root D --name N` prints them), the others the archive's parts (`--archive FILE --part P`: the
-verifier's `DeriveAll.deriveChecked`). Each output is held to the Python mirror: `ir_lower.netlist` for `rows`, the SHA-512
+verifier's `DeriveAll.deriveChecked`). Each output is held to the Python mirror: `ir_lower.circuit_description` for `rows`, the SHA-512
 of `verity_flock.derive`'s unit rows, Δ and logical list for the parts, and `ok` for `check`. `flock_rows.json`
 (`verity/verifier-cost-flock-rows/v1`) has one row per unit, binary and mode: its ANDs, input ports and bits, wall and CPU
 seconds, peak RSS, exit code and whether the output equals the mirror's (null past `--cap`). `flock_rows.sh` builds the binaries
 before and after a change and runs this on a node.
 
-The MoE targets need circuits' static MoE forms (`verity.definitions.ops.moe`) and Flock's MoE select pieces where their
+The MoE targets need circuits' static MoE forms (`verity.circuits.ops.moe`) and Flock's MoE select pieces where their
 definitions do; each target imports only its own.
 """
 from __future__ import annotations
@@ -37,14 +37,14 @@ MODES = ("rows", "unit", "delta", "logical", "check")
 
 def _qwen3(name: str, **kw):
     from verity.circuits.defs import bind
-    from verity.definitions.ops import prims as P
+    from verity.circuits.ops import prims as P
 
     if name.startswith("registry"):
-        from verity.definitions.registry import moe as VM
+        from verity_vllm.definitions.registry import moe as VM
 
         d = VM.MoeExpertCoordinateWV2 if name.endswith("-w") else VM.MoeExpertCoordinateV2
     else:
-        from verity.definitions.ops import moe as M
+        from verity.circuits.ops import moe as M
 
         d = M.MoePairCoordinateW if name.endswith("-w") else M.MoePairCoordinate
     return bind(d, E=128, DOT=P.HopperBF16WgmmaDot16, **kw)
@@ -52,20 +52,20 @@ def _qwen3(name: str, **kw):
 
 def _glm(form: str, **kw):
     from verity.circuits.defs import bind
-    from verity.definitions.ops.prims import HopperE4m3QgmmaDot32
-    from verity.definitions.registry import fp8_moe_experts as X
+    from verity.circuits.ops.prims import HopperE4m3QgmmaDot32
+    from verity_vllm.definitions.registry import fp8_moe_experts as X
 
     return bind(getattr(X, form), E=256, G=128, KB=128, SWAP=True, DOT=HopperE4m3QgmmaDot32, **kw)
 
 
 def _select(e: int):
-    from verity.definitions.ops import moe as M
+    from verity.circuits.ops import moe as M
 
     return M.select_bf16(e)
 
 
 def _gather(v: int):
-    from verity.definitions.registry import fp8_moe_experts as X
+    from verity_vllm.definitions.registry import fp8_moe_experts as X
 
     return X.gather_e4m3(v)
 
@@ -98,13 +98,13 @@ def _parts(types: dict, layouts: list, unit: int, tables: dict) -> dict:
     from verity_flock import derive as D
 
     dv = D.Derivation(types, layouts, unit, tables)
-    return {"unit": _sha(D.netlist(dv.unit, layouts[unit].digest()[:16])), "delta": _sha(D.delta_text(dv)),
+    return {"unit": _sha(D.circuit_description(dv.unit, layouts[unit].digest()[:16])), "delta": _sha(D.delta_text(dv)),
             "logical": _sha(D.logical_text(dv))}
 
 
 def write_target(name: str, scratch: Path) -> list[dict]:
     """Each class of `name` as `STEM.types.json` and `STEM.archive.json` in `scratch`, with the mirror's outputs."""
-    from verity.definitions.circuits import library
+    from verity.circuits import library
     from verity_flock import circuit_types as CT
     from verity_flock import ir_lower as IL
     from verity_flock import layouts as LY
@@ -123,7 +123,7 @@ def write_target(name: str, scratch: Path) -> list[dict]:
                         [(1, w) for w in U.in_widths], [(1, w) for w in U.out_widths], library.PROGRAM, {})
         stem = f"{name}.{k}"
         (scratch / f"{stem}.types.json").write_text(json.dumps({"types": [t.content()]}))
-        (scratch / f"{stem}.netlist").write_text(IL.netlist(IL.layout(C, ins, outs), f"moe/{name}"))
+        (scratch / f"{stem}.circuit_description").write_text(IL.circuit_description(IL.layout(C, ins, outs), f"moe/{name}"))
         lay = LY.BlockLayout(t.digest(), None, (), (), ("derive",), (), ())
         (scratch / f"{stem}.archive.json").write_text(json.dumps(
             {"types": [t.content()], "tables": {}, "layouts": [lay.to_json()], "unit_layout": 0}))
@@ -135,7 +135,7 @@ def write_target(name: str, scratch: Path) -> list[dict]:
 
 def write_fanout(m: int, scratch: Path) -> dict:
     """`test_derive.fanout_case(m, m)`: a unit of m placed calls of a one-AND callee and m placed reads of a 4-bit table."""
-    from verity.definitions.circuits import library
+    from verity.circuits import library
     from verity_flock import circuit_types as CT
     from verity_flock import layouts as LY
 
@@ -198,7 +198,7 @@ def measure(u: dict, label: str, binp: str, mode: str, scratch: Path, cap: float
     if rc is None:
         equal = None
     elif mode == "rows":
-        equal = rc == 0 and out == (scratch / f"{stem}.netlist").read_bytes()
+        equal = rc == 0 and out == (scratch / f"{stem}.circuit_description").read_bytes()
     elif mode == "check":
         equal = rc == 0 and out == b"ok\n"
     else:

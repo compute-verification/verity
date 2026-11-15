@@ -26,6 +26,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, only, optional, required
 
+__all__ = ["BuildSummary"]
+
 SCHEMA = "verity-vllm/build-summary/v1"
 #: a request shape's derive: `build_request_` + `program.prefix_plan.shape_name`
 SHAPE = r"build_request_LP\d+_T\d+(?:_C\d+)?"

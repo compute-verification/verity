@@ -10,7 +10,7 @@ patterns = ['"advice_before_draw"', '"fixed_before_draw"']
 
 # the device's salts, taken from its own coins at each PoUW window
 [[words_in]]
-files = ["verity/core/protocols/certifier/active.py"]
+files = ["verity/protocols/certifier/verifier/active.py"]
 [words_in.words]
 "_draw_salt" = "_fresh_salt"
 
@@ -43,12 +43,12 @@ files = ["benchmarks/network_traces/tests/test_chain_record.py"]
 "test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw" = "test_report_merges_runs_and_counts_a_negative_that_escaped_the_sample"
 
 [[words_in]]
-files = ["verity/core/protocols/certifier/tests/test_network_certifier_io_tie_adversarial.py"]
+files = ["verity/protocols/certifier/verifier/tests/test_network_certifier_io_tie_adversarial.py"]
 [words_in.words]
 "test_a_payload_in_m_cells_is_refused_and_the_draws_price_is_the_comparison" = "test_a_payload_in_m_cells_is_refused_and_the_samples_price_is_the_comparison"
 
 [[words_in]]
-files = ["verity/core/protocols/certifier/tests/test_network_certifier_period.py"]
+files = ["verity/protocols/certifier/verifier/tests/test_network_certifier_period.py"]
 [words_in.words]
 "test_all_draws_every_window_and_reads_no_coin" = "test_all_samples_every_window_and_reads_no_coin"
 "test_a_sampled_link_is_accepted_on_its_drawn_windows_and_states_its_wrong_units_at_delta" = "test_a_sampled_link_is_accepted_on_its_sampled_windows_and_states_its_incorrect_blocks_at_delta"

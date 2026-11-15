@@ -17,6 +17,7 @@ from verity_vllm.pipeline import build as ds
 def _source(rel: str) -> str:
     """Where a `_CONSTRUCTION_SOURCES` path is: beside the top-level package it starts with."""
     top = importlib.import_module(rel.split("/", 1)[0])
+    assert top.__file__ is not None, f"{top.__name__} has no file of its own"
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(top.__file__))), rel)
 
 

@@ -4,10 +4,7 @@ and the bookkeeping iteration after a finish advances no committed step, so the 
 identities 'unbound' = the drift, every launch exact).  Torch-free."""
 from __future__ import annotations
 
-import importlib.util
 import pathlib
-import sys
-import types
 
 # commit_delta imports torch/vllm at module import; lift engine_schedule out of the source without importing the module
 _SRC = pathlib.Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit.py"

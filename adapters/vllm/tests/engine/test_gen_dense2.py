@@ -4,21 +4,31 @@ one-request workload (32 prompt tokens, 16 greedy tokens, no accepted tokens); p
 patterns (`gen_dense2_patterns`, when present).  Phi-3's captured rotary table is `test_gen_dense2_of_record`."""
 from __future__ import annotations
 
+import dataclasses
 import importlib
-
 import json
 from pathlib import Path
 
 import numpy as np
 import pytest
+from verity_vllm.definitions.registry import b1
 
-from verity_vllm.program import model as analytic
-from verity_vllm.observe.events import RunHeader
+from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
+from verity_vllm.config import workload_file
+from verity_vllm.observe.events import DispatchEnter, RunHeader
+from verity_vllm.observe.fold.patterns import AttentionScope
 from verity_vllm.observe.fold.profiles import profile_module_for_case
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as B1PROF
+from verity_vllm.observe.fold.profiles.gen_dense2_patterns import (
+    AttentionScopeInertWindow,
+    with_dense2_patterns,
+)
+from verity_vllm.observe.fold.resolver import Unsupported, resolve_step
+from verity_vllm.observe.fold.tree import step_events
+from verity_vllm.program import model as analytic
 
 gemma = importlib.import_module("verity_vllm.observe.fold.profiles.derived_GEMMA2_2B")
 phi3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_PHI3_MINI")
-from verity.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 PROFILES = REPO / "workloads"
@@ -247,8 +257,8 @@ def test_check_header_gemma2_checks_the_softcap_and_window_facts():
 @pytest.mark.parametrize("name, case, model, V", [("workload_phi3_mini_32x16_1req.json", "PHI3_MINI", phi3.MODEL, 32064),
                                                   ("workload_gemma2_2b_32x16_1req.json", "GEMMA2_2B", gemma.MODEL, 256000)])
 def test_workloads_mirror_the_b1_one_request_workload(name, case, model, V):
-    ref = json.loads((PROFILES / "workload_qwen15_32x16_1req.json").read_text())
-    doc = json.loads((PROFILES / name).read_text())
+    ref = json.loads(workload_file(PROFILES / "workload_qwen15_32x16_1req.json").read_text())
+    doc = json.loads(workload_file(PROFILES / name).read_text())
     assert doc["schema"] == ref["schema"] == "verity-vllm/workload/v2" and doc["case"] == case and doc["model"] == model
     assert doc["variants"] == ref["variants"] and doc["prompt_lengths"] == [32] and doc["max_tokens"] == [16]
     (r,) = doc["requests"]
@@ -258,16 +268,6 @@ def test_workloads_mirror_the_b1_one_request_workload(name, case, model, V):
 
 
 # --- patterns: AttentionScopeInertWindow (Phi-3 `sliding_window` 2047 -> FA2 window_size_left 2046 >= max_seqlen_k) ----------
-
-import dataclasses
-
-from verity_vllm.observe.events import DispatchEnter
-from verity_vllm.observe.fold.patterns import AttentionScope
-from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as B1PROF
-from verity_vllm.observe.fold.profiles.gen_dense2_patterns import AttentionScopeInertWindow, with_dense2_patterns
-from verity_vllm.observe.fold.resolver import Compute, Unsupported, resolve_step
-from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
-from verity_vllm.observe.fold.tree import step_events
 
 FA2 = "_vllm_fa2_C.varlen_fwd.default"
 SCOPE = "vllm.unified_attention_with_output.default"

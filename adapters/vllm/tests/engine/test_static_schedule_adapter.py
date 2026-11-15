@@ -4,12 +4,11 @@ engine whose tokens depend on the prompt, so an EOS stop makes the schedule depe
 from __future__ import annotations
 
 import json
-import sys
-import types
 from types import SimpleNamespace
 
 import pytest
 
+from tests.fake_vllm import install
 from verity_vllm.engine import static_schedule
 
 EOS = 0
@@ -21,9 +20,7 @@ def _va():
 
 @pytest.fixture
 def fake_vllm(monkeypatch):
-    mod = types.ModuleType("vllm")
-    mod.SamplingParams = lambda **kw: SimpleNamespace(**kw)
-    monkeypatch.setitem(sys.modules, "vllm", mod)
+    install(monkeypatch).set("vllm:SamplingParams", lambda **kw: SimpleNamespace(**kw))
 
 
 class _Core:
@@ -62,8 +59,8 @@ def _engine(va, prefix_caching=False):
     return eng, core
 
 
-def _reqs(p0s, cap=6):
-    return [{"request_id": f"r{i}", "prompt_token_ids": [p, 9, 9], "max_tokens": cap, "arrive_step": i} for i, p in enumerate(p0s)]
+def _reqs(p0s, max_tokens=6):
+    return [{"request_id": f"r{i}", "prompt_token_ids": [p, 9, 9], "max_tokens": max_tokens, "arrive_step": i} for i, p in enumerate(p0s)]
 
 
 def test_load_workload_carries_ignore_eos_only_when_declared(tmp_path):

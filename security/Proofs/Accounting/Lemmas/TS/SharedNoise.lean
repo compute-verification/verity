@@ -1,16 +1,16 @@
 module
 
-public import Definitions.Accounting.TS.SharedNoise
+public import Definitions.Pouw.TS.SharedNoise
 
 /-!
 # One noise seed a call: the bridge and the grid's moment, lemmas
 
 These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
-J10's guarantees: H1 + fx1's noise derived from one seed a call (`Definitions.Accounting.TS.SharedNoise`).
+J10's guarantees: H1 + fx1's noise derived from one seed a call (`Definitions.Pouw.TS.SharedNoise`).
 
 * `CondReceiptLuckMarginal`: luck given the rest implies the marginal luck. At `CallCoin.keySplit t` it turns the keys'
-  argument for B′ into the marginal `ReceiptLuck` that `PerTile … ReceiptLuckAt` reads (`Definitions.Accounting.TS.
+  argument for B′ into the marginal `ReceiptLuck` that `PerTile … ReceiptLuckAt` reads (`Definitions.Pouw.TS.
   SharedNoise`'s module doc).
 * `GridLuck`: `TileLuck` for a grid whose rows' noise is shared along its row and whose columns' along its column. Row
   `i` has its own coins in `Rw` and column `j` its own in `Cl`. Unit `(i, j)` skips `w i j ≥ 0`; it is dead with

@@ -1,6 +1,6 @@
 """FA2 on a target: the stock vllm-flash-attn kernel vLLM launches there, against the attention Definitions a target can bind.
 
-One GPU process writes `<out>/fa2_target_capture.json`, the property record `fa2_target_capture` (`properties.record`).  `ok` = the
+One GPU process writes `<out>/fa2_target_capture.json`, the property record `fa2_target_capture` (`records.property_record`).  `ok` = the
 gate, MUFU, every launch's tile and determinism, the engine, every row equal to fa2_check_inf and v5 and, on its finite heads, to
 v2_hopper, and the target's own binding of every row the checked `Attention_v5` (where the target binds FA2's construction).
 The device gate runs first and nothing else runs when it fails (exit 3):
@@ -47,8 +47,9 @@ from typing import Any
 import numpy as np
 
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
-from verity_vllm.properties.record import seal as seal_record
+from tests.properties.fa_tap_exactness import PAGE
+from tests.properties.fa_tap_exactness import cases as tap_cases
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-target-capture/v1"
 RECORD = "fa2_target_capture.json"
@@ -77,7 +78,7 @@ def cpu_workers() -> int:
     """CPUs this container may use: the cgroup v2 quota when one is set (RunPod pods see the host's CPUs), else the affinity mask."""
     n = len(os.sched_getaffinity(0))
     try:
-        quota, period = open("/sys/fs/cgroup/cpu.max").read().split()
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
         if quota != "max":
             n = min(n, max(1, int(quota) // int(period)))
     except (OSError, ValueError):
@@ -137,8 +138,8 @@ def binary() -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------------------ mufu
 def mufu(work: Path, sm: str) -> dict[str, Any]:
-    from verity.definitions.circuits import library as L
-    from verity.definitions.numerics import fa2_relation
+    from verity.circuits import library as L
+    from verity_vllm.definitions.numerics import fa2_relation
 
     pinned = fa2_relation.tables()
     ref = work / "pinned_tables.bin"
@@ -152,7 +153,7 @@ def mufu(work: Path, sm: str) -> dict[str, Any]:
             continue
         out = work / f"tables_{tag}.bin"
         t = _run([str(exe), "table", str(out)])
-        words = np.fromfile(out, dtype="<u4")
+        words: np.ndarray = np.fromfile(out, dtype="<u4")
         n = 1 << 23
         ex2, rcp = words[:n], words[n:2 * n]
         v = _run([str(exe), "verify", str(ref)])
@@ -229,7 +230,7 @@ _TRAITS = re.compile(r"Flash_fwd_kernel_traits<(\d+), (\d+), (\d+), (\d+),")
 
 
 def launch_geometry(names: list[str], D: int) -> dict[str, Any]:
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
 
     tiles = sorted({tuple(int(x) for x in m.groups()) for n in names for m in [_TRAITS.search(n)] if m})
     want = (D, KBLOCK_M, b1.fa2_kblock_n(D), 4)
@@ -254,8 +255,8 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
     reference evaluator, with FA2's `Check_inf` placement: block b guards the rescale's running max iff b >= gfrom; `max * scale` is guarded
     in every block.  `AttnBlock_v2`'s body otherwise, line for line (gfrom 0 is `AttentionHead_v2`)."""
     from verity.circuits.evaluation.reference import evaluate
-    from verity.definitions.registry import b1, hopper
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import b1, hopper
+    from verity_vllm.definitions.registry import prims as P
 
     def E(prim, *a):
         return int(evaluate(prim, *a)[0])
@@ -265,7 +266,7 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
     scale = b1.scale_log2_bits(D)
     nb = -(-T // BN)
     m = 0
-    l = [0] * 4
+    sums = [0] * 4
     o = [0] * D
     for b in range(nb - 1, -1, -1):
         first = b == nb - 1
@@ -291,7 +292,7 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
         for ln in range(4):
             cols = [c for c in range(nvis) if b1._lane(c) == ln]
             first_p = p[cols[0]] if cols else 0
-            acc = first_p if first else E(P.F32FmaFtz, sc, l[ln], first_p)
+            acc = first_p if first else E(P.F32FmaFtz, sc, sums[ln], first_p)
             for c in cols[1:]:
                 acc = E(P.F32AddFtz, acc, p[c])
             lanes.append(acc)
@@ -305,8 +306,8 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
             for d in range(D):
                 vcol = [int(v[lo + k0 + j, d]) if k0 + j < nvis else 0 for j in range(16)]
                 o[d] = E(DOT, o[d], prow, vcol)
-        m, l = m_new, lanes
-    total = E(P.F32AddFtz, E(P.F32AddFtz, l[0], l[2]), E(P.F32AddFtz, l[1], l[3]))
+        m, sums = m_new, lanes
+    total = E(P.F32AddFtz, E(P.F32AddFtz, sums[0], sums[2]), E(P.F32AddFtz, sums[1], sums[3]))
     inv = E(P.Fa2InvSum, total)
     return [E(P.F2fpBf16, E(P.F32MulFtz, o[d], inv)) for d in range(D)]
 
@@ -315,11 +316,11 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against the three constructions (a worker process: numpy words in, a record out)."""
     from verity.circuits.evaluation.reference import evaluate
     from verity.circuits.defs import bind
-    from verity.definitions.numerics import derived_rows as DR
+    from verity_vllm.definitions.numerics import derived_rows as DR
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity.definitions.registry import b1, hopper
-    from verity.definitions.registry import fa2_check_inf as F2
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import b1, hopper
+    from verity_vllm.definitions.registry import fa2_check_inf as F2
+    from verity_vllm.definitions.registry import prims as P
     from verity_vllm.program.frontend import targets as TG
 
     c, D, q, k, v, o, bt = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"]
@@ -357,6 +358,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
                 spec = TG.attention_spec(tp, T, H, Hk, D, sq_max, row=r, own_rows=sq)
                 rec["binding_mismatch"] += spec.id != bind(F2.AttentionV5, T=T, NH=H, KVH=Hk, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16,
                                                              INV=P.Fa2InvSum, MASKED_FROM=gfrom).id
+            h: int | np.integer[Any]
             for h in np.flatnonzero(nonfinite):
                 qh, kf, vf = q[tok + r, h].tolist(), kk[h].reshape(-1).tolist(), vv[h].reshape(-1).tolist()
                 want["v2_hopper"][h] = evaluate(bind(b1.AttentionHeadV2, T=T, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum),
@@ -462,6 +464,7 @@ def run(out: str, min_driver: int, want_cc: str, want_sms: int, workers: int, on
     from torch.profiler import ProfilerActivity, profile, record_function
 
     op = torch.ops._vllm_fa2_C.varlen_fwd
+    jobs: list[dict[str, Any]]
     doc["launches"], jobs = [], []
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
         for i, c in enumerate(case_list()):

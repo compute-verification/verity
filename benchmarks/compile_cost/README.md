@@ -10,4 +10,4 @@ unless each Program digest is the pinned one.
 - **Provides:** `run.py`, a command, and the two result files it writes under `--out`.
 - **Loaded by:** nothing.
 - **Loads:** `verity_vllm.program.predict`, `verity_vllm.engine`, `verity.circuits` and
-  `verity.protocols.certifier.verifier`.
+  `verity.protocols.accounting.certifier.verifier`.

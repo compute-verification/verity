@@ -21,7 +21,6 @@ from __future__ import annotations
 import math
 from typing import Any
 
-VLLM = "vllm @ d9105ea80"
 _LLAMA = "vllm/model_executor/models/llama.py"
 _QWEN2 = "vllm/model_executor/models/qwen2.py"
 _QWEN3 = "vllm/model_executor/models/qwen3.py"
@@ -449,7 +448,8 @@ def header_checks(cfg_family: dict[str, Any], C: dict[str, Any], header_cfg: dic
             new = f["derive"](header_cfg, C)
             if new != C.get(name):
                 out.append(f"{f['check_key']}={header_cfg[f['check_key']]!r}: {name} {new!r} != C[{name}]={C.get(name)!r}")
-    for hf, key in (fam.get("header_keys") or {}).items():
+    held = fam.get("header_keys")
+    for hf, key in (held if held else {}).items():
         if hf in header_cfg and header_cfg[hf] != C.get(key):
             out.append(f"{hf}={header_cfg[hf]!r} != C[{key}]={C.get(key)!r}")
     return out

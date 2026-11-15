@@ -1,12 +1,13 @@
 """leak_bounds, the one calculator of K, in its scaling by links. `per_link` and `at_link_rate` give chain_record.leak's
-rows on a warden run's files, and `datacenter` is links × `per_link` for identical links, each link at δ / links.
+rows on a network certifier run's files, and `datacenter` is links × `per_link` for identical links, each link at δ /
+links.
 
 K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lean (`clog2`, `capsTerm`, `rowsTerms`,
 `eps`) rather than from the calculator:
 - the registered free inputs are the tied audit's slot entries, NR·T / EVERY entries of `ingress_scan.entry_bits`;
 - a request's caps are charged twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉;
 - a sampling block's jitter term is ⌈log2 D_j^T⌉ over its scan's T steps (`Scan.terms`), at D_j = 2;
-- the datacenter's links are the census's reference datacenter's machines, and the world's are the machines of rho's
+- the datacenter's links are the census's reference datacenter's machines, and the world's are the machines of the slowdown calculator's
   world fleet, the census's inference at the fleet's serving MFU;
 - a share is of one copy of the served model's weights, the workload card's parameters in FP4, labelled with what it
   is;
@@ -32,13 +33,14 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
-from verity.protocols.certifier.prover import ingress_scan as IS  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS  # noqa: E402
 
 CENSUS = HERE.parents[1] / "benchmarks" / "census"
-RHO = HERE.parents[1] / "verity" / "protocols" / "inference_only" / "rho" / "data"
+SLOWDOWN = HERE.parents[1] / "benchmarks" / "slowdown" / "data"
 #: the scan class of a window class of KO 1 at 4 lanes, a timestep every 16 buckets (`scan_state.scan_class(4, 1, 16)`)
 KO1 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=1, KI=1024)
-#: the warden's scan class, KO 64 (`scan_zk.CLASS`)
+#: the network certifier's scan class, KO 64 (`scan_zk.CLASS`)
 W63 = replace(KO1, KO=64)
 #: 8 requests a sampling block of 32 buckets of 100 ms
 RATE = 2.5
@@ -61,14 +63,15 @@ def clog2(x: int) -> int:
 
 
 def test_per_link_and_at_link_rate_are_chain_records_rows(tmp_path):
-    import scan_zk as sz
+    from verity.protocols.accounting.certifier.prover import scan_zk as sz
     assert sz.CLASS == W63
     cr = _load("chain_record")
     run = tmp_path / "c1"
     (run / "out").mkdir(parents=True)
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
-    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
-    doc = cr.leak(run, {"draw": {"honest": 64}})
+    (run / "request.json").write_text(json.dumps({"run": "c1", "requests": 100}))
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"accepted": True, "windows": 75}}))
+    doc = cr.leak(run, {"draw": {"honest": 65}})
     at = {"T": 32, "tau": Fraction(1, 10), "egress_cells": 65}
     per_s = Fraction(100, 75) / Fraction(32, 10)
     link = LB.link(sz.CLASS, per_s, **at)
@@ -129,21 +132,21 @@ def test_the_caps_are_charged_twice_at_lean_s_ceilings():
         link = LB.link(W63, RATE, T=32, egress_cells=cells)
         assert link.cell == clog2(cells + 1) and link.cap == 2 * clog2(cells + 1)
     assert [LB.link(W63, RATE, T=32, egress_cells=c).cap for c in (1, 2, 3, 63, 64, 65)] == [2, 4, 4, 12, 14, 14]
-    assert LB.JITTER_BOUND == 2
+    assert SA.JITTER_BOUND == 2
     steps = (16, 32, 48)
     assert [LB.link(W63, RATE, T=t).jitter for t in steps] == [clog2(2 ** t) for t in steps] == list(steps)
     tau = Fraction(4)
     four = LB.link(W63, Fraction(4) / (32 * tau), T=32, tau=tau, egress_cells=65)
     schedules = cells = clog2(65 + 1) * 4
-    jitter = clog2(LB.JITTER_BOUND ** 32)
+    jitter = clog2(SA.JITTER_BOUND ** 32)
     assert four.bits(four.block_s, "registered") == schedules + cells + 9_088 + jitter == 9_176
 
 
 def test_the_census_sets_the_datacenter_and_rhos_fleet_the_world():
     dc, world = _reference("deployments.json"), _reference("adversary.json")
     assert LB.datacenter_links() == dc["machines"] == 12_500
-    fleet = tomllib.loads((RHO / "reference.toml").read_text())["fleet"]["world-h200"]
-    machine = tomllib.loads((RHO / "hardware.toml").read_text())["location"][fleet["location"]]
+    fleet = tomllib.loads((SLOWDOWN / "reference.toml").read_text())["fleet"]["world-h200"]
+    machine = tomllib.loads((SLOWDOWN / "hardware.toml").read_text())["location"][fleet["location"]]
     assert LB.world_links() == fleet["count"]["value"] == 46_870_000
     served = machine["flops"]["value"] * world["monitoring_period_s"] * fleet["mfu_serve"]["value"]
     assert LB.world_links() == pytest.approx(world["total_flop"] / served, rel=1e-4)
@@ -190,8 +193,8 @@ def test_eps_is_the_scans_delta_summed():
 def test_the_pooled_datacenter_pays_its_incorrect_blocks_whatever_it_serves():
     n, one = LB.datacenter_links(), Fraction(1, 100)
     floor = LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", one)
-    faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1))
-    jitter = n * 189_000 * clog2(LB.JITTER_BOUND ** 32)
+    faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 65 + 1))
+    jitter = n * 189_000 * clog2(SA.JITTER_BOUND ** 32)
     assert LB.fmax(one / n) == 15 and floor.share == floor.bits / LB.WEIGHTS.bits
     assert floor.bits == pytest.approx(faulty + jitter)
     assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == jitter

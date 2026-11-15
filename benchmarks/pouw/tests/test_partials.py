@@ -9,18 +9,19 @@ byte where PARTIALS_LIB names an h1u build and CUDA is up (job.sh's partials ben
 from __future__ import annotations
 
 import hashlib
-import os
 import types
 
 import numpy as np
 import partials as PT
 import pytest
 import torch
+from verity_config.settings import of
 
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import seeds as SD
-from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 
+SETTINGS = of(__file__)
 RC = PT.RC
 COM = types.SimpleNamespace(root=bytes(range(7, 71)), epoch=3)
 COIN, ROOT = bytes(range(100, 164)), bytes(range(30, 94))
@@ -33,7 +34,7 @@ def _s8(shape, seed: int) -> torch.Tensor:
     return torch.randint(-128, 128, shape, generator=torch.Generator().manual_seed(seed), dtype=torch.int8)
 
 
-def _window(steps: dict[int, int]) -> "PT.Calls":
+def _window(steps: dict[int, int]) -> PT.Calls:
     """Two calls; steps {s: m}, each its own A and coin index s."""
     units = [(T // 32) * (n // 32) for n, _ in NK]
     offs = [sum(units[:w]) for w in range(len(NK))]
@@ -182,10 +183,10 @@ def test_seed_records_hash_to_the_seeds():
         assert got == [SD.seed(st.salt, p, *roots), SD.receipt_seed(st.salt, p, *roots)]
 
 
-@pytest.mark.skipif(not (torch.cuda.is_available() and os.environ.get("PARTIALS_LIB")),
+@pytest.mark.skipif(not (SETTINGS.PARTIALS_LIB and torch.cuda.is_available()),
                     reason="the gpu backend needs CUDA and PARTIALS_LIB (an h1u.cu build with kh_lanes)")
 def test_gpu_is_the_cpu_byte_for_byte():
-    kern = PT.Kernel(os.environ["PARTIALS_LIB"])
+    kern = PT.Kernel(SETTINGS.PARTIALS_LIB)
     dev = torch.device("cuda")
     nk = [(96, 512), (64, 1024), (32, 4608)]  # m = 2, 2, 3: both of kh_lanes' instantiations
     units = [(T // 32) * (n // 32) for n, _ in nk]

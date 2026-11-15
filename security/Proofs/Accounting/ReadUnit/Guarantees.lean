@@ -18,7 +18,7 @@ table's committed row at the index its token picks, except with probability at m
 collision finder's expected SHA-512 calls over `2^256` (`ReadUnit.BindsAt`). Nothing is assumed of the read's gates:
 the check fixes them, and the gate refinement and the rows' run are proved of every template it accepts.
 
-C-Flock's unit rows (`Flock.Bridge.copyGate`, `constGate`, `FlockSoundness.Rows.ofNet`) are still in its proofs package, so
+Flock's unit rows (`Flock.Bridge.copyGate`, `constGate`, `FlockSoundness.Rows.ofNet`) are still in its proofs package, so
 this module imports them.
 -/
 
@@ -52,10 +52,10 @@ noncomputable def portsAt (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.u
 
 /-- **The table reads at `D`'s copies bind.** In the key program of `n` units of `D`'s circuit, with every unit's
 constant registered as `true`, take reads `R` whose ports are each at a copy of its unit (`portsAt`), each table
-committed under its root and domain id with the served hm96 key (`Reads.Committed`), and any law `Ω` on the verifier's
-acceptance `acc`, its drawn units and the trace. If an accepted run draws a read's unit that is incorrect or whose rows'
+committed under its root and domain id with the served hm96 key (`Reads.Committed`), and any sampling design `Ω` on the verifier's
+acceptance `acc`, its sampled proof blocks and the trace. If an accepted run samples a read's unit that is incorrect or whose rows'
 openings aren't the registered ones with probability at most `ε` (the sampling layer's bound), and SHA-512 is collision
-resistant at the finder the reads build from the run (`SHA512CRExpected` at its one coin), then an accepted run draws a
+resistant at the finder the reads build from the run (`SHA512CRExpected` at its one coin), then an accepted run samples a
 read whose index is inside its table and whose returned row is not the table's row there with probability at most
 `ε + E[cost] / 2^256`. -/
 def BindsAt (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (V H : ℕ) : Prop :=
@@ -63,19 +63,19 @@ def BindsAt (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (V H : �
     (∀ u, consts (Flock.Bridge.constGate D hU n u) = some true) →
     ∀ {ι : Type} (R : Reads (Flock.Bridge.circuitOf D hU n) n ι),
     (∀ i ∈ R.reads, ∃ j, ∃ hj : j < D.unroll.upv, R.port i = portsAt D hU n (R.unit i) hj V H) →
-    ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] (acc : Ω → Prop) (drawn : Ω → Finset (Fin n))
+    ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] (acc : Ω → Prop) (sampled : Ω → Finset (Fin n))
       (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace) (cost : Ω → ℕ) (ε : ℝ),
     R.Committed Verity.sha512 Verity.sha512 Flock.Hm96.Default512.key.data.toList →
-    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) (R.unit i) ∧
         RegisteredRows consts (Flock.Bridge.partsOf D hU n) (R.unit i) (R.port i) (R.root i) (R.domain i) (tr ω))) ≤ ε →
     FlockSoundness.Assumptions.SHA512CRExpected (fun m => (Verity.sha512 m).bytes)
       (Verity.Game.draw (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 Flock.Hm96.Default512.key.data.toList
-        drawn tr cost).S) (fun _ => PUnit.unit)
-      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 Flock.Hm96.Default512.key.data.toList drawn tr cost).out
+        sampled tr cost).S) (fun _ => PUnit.unit)
+      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 Flock.Hm96.Default512.key.data.toList sampled tr cost).out
       (fun s => ((R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 Flock.Hm96.Default512.key.data.toList
-        drawn tr cost).cost s : ℝ)) →
-    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+        sampled tr cost).cost s : ℝ)) →
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) < (R.port i).count ∧
       (R.port i).hOf ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) ≠
         (R.table i (R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)))).row) ≤

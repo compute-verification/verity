@@ -19,7 +19,7 @@ Every unit's session is that one, on the rounds from `p` on. Where `ok` passed, 
 prover after the first `p` rounds (`sessProver`), and `RecDeploy.sim` makes its run the sampled run's from round `p`
 on (`run_session`). Where `ok` refused, the sampled run ends refused at round `p`, and the session is the run of the
 prover that sends `[2]`, which the Flock verifier refuses at once (`twoP`). The Flock verifier's facts this reads
-(`FlockAt`) hold at flock-verify `--zk` against SHA-512 (`flockAt_sha512`).
+(`FlockAt`) hold at verity-verify-proof `--zk` against SHA-512 (`flockAt_sha512`).
 -/
 
 @[expose] public section
@@ -525,9 +525,9 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
       simp only [↓reduceIte] at hlast'
       exact hpass x u hx (run H P D.V x ω r').seen _ hlast' (hokD x _ _ hok)
 
-/-! ## At flock-verify `--zk` -/
+/-! ## At verity-verify-proof `--zk` -/
 
-/-- **flock-verify `--zk` against SHA-512 is a session's Flock verifier**: it accepts only at its last round
+/-- **verity-verify-proof `--zk` against SHA-512 is a session's Flock verifier**: it accepts only at its last round
 (`next_acc_length_sha512`), answers a message only at a coin, with the coin's bytes (`next_msg_coin`, never empty:
 `coin_bytes_ne_nil`), has a round, and refuses `[2]`, which is neither a coin's tag `0` nor `finalOf`'s tag `1`. -/
 theorem flockAt_sha512 : FlockAt FlockDeploy.sha512 (FlockDeploy.V true) where

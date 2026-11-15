@@ -6,8 +6,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.protocols.pouw.prover.circuit import h1zy as Z
-from verity.protocols.pouw.verifier import leaf_lanes as LL
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 
 RC, K = (32, 32), 64
 

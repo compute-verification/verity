@@ -11,7 +11,9 @@ the doorbell also counts toward the coordinator's own ready-to-wake rule). A wor
 saying so, for infra to find its launcher; its alerts, which the watch marks `quiet`, are posted with no handle and no lane
 and ring no one.
 An alert of a worker whose registered lane no handle owns, which the watch doesn't mark, leads with infra's handle and says
-its lane is unknown. A silent worker (ACTIVE 90 min with no note
+its lane is unknown. A run its stream shows held that the watch could not judge (`unjudged`: it could not read it afresh, or
+its stream keeps breaking) leads with infra's handle and rings infra's inbox too, whatever its agent: it needs someone who
+reads the agent and its run by the API and cancels it by hand. A silent worker (ACTIVE 90 min with no note
 and no push) leads with the record's handle and rings it the same way; a silent coordinator (in one turn, with no note, no
 push and no assistant text for 60 min; its record's owner top) rings top, its sentence giving the turn's length, and saying
 so when its conversation went unread and its text unchecked. A `research run` that ended on a node leads with its
@@ -44,7 +46,9 @@ with each worker named, one in ERROR said so, and the wake-up it says it set. A 
 a swarm's integrator (`handin_waiting`: a comment on the issue it takes hand-ins on, with none signed by the integrator
 after it) leads with the integrator's lane's handle and rings it, once per such comment, linking the issue and saying who
 signed the comment, how many wait with it, and the command that signs a comment as the integrator's own, without which its
-answers don't count. A handle
+answers don't count. A read of the watch's own that GitHub refused (`github_refused`: the open PRs, read with a
+token GitHub doesn't take or with none) leads with infra's handle and rings it, once until a read works again, saying
+what the watch misses meanwhile and how to find the reason on the pod. A handle
 renamed in the registry ("renamed from @OLD") is rung by its new
 name. The pod frees held runs whether or not this runs; this relay stops with the pod, and resumes from the offset it last
 posted.
@@ -60,7 +64,6 @@ $AGENT_WATCH_OFFSET the offset's file, default ~/agent-watch/offset):
 import hashlib
 import http.client
 import json
-import os
 import re
 import shlex
 import string
@@ -69,13 +72,13 @@ import sys
 import time
 from pathlib import Path
 
-from research import slack
+from research import settings, slack
 from research.pods import budgets, connect
 
 EVENTS = "/data/agent-watch/events.jsonl"
 BELLS = "/data/agent-watch/doorbells.json"
 BELLS_WINDOW_S = 24 * 3600
-OFFSET = Path(os.environ.get("AGENT_WATCH_OFFSET") or Path.home() / "agent-watch/offset")
+OFFSET = Path(settings.get("AGENT_WATCH_OFFSET") or Path.home() / "agent-watch/offset")
 SENT_KEEP_S = 3 * 86400     # the sent-set beside OFFSET (`sent_path`) keeps each line posted this long
 EVERY_S = 2 * 60
 DRY = "--dry-run" in sys.argv
@@ -120,7 +123,17 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "unplaced": "is under no lane: no Task call the watch saw, workers.d entry or brief gives it a launcher that a "
                    "handle owns, however many workers up, and no workers.d entry or note gives it a lane",
        "handin_waiting": "has a hand-in on {issue} waiting since {since} ({minutes} min): a comment signed {by} with no "
-                         "comment signed LANE/{signs} after it"}
+                         "comment signed LANE/{signs} after it",
+       "unjudged": "was found {rule} by its stream since {since} ({minutes} min), but {why}: the watch cancelled nothing, "
+                   "and judges it again each sweep; look at it if it can't wait",
+       "continued_itself": "went on by itself (its run {own_run} is going), so the run the watch had waiting for it since "
+                           "{since}, which the API refused, was dropped",
+       "github_refused": "can't read {what} from GitHub: {why}. Until it reads, a push to a PR's branch counts only for the "
+                         "agents the last read's PRs named. On the control pod, `/data/infra/gh_read_token.sh > /dev/null` "
+                         "mints a token and prints GitHub's reason when it can't (the App's key, its installation or its "
+                         "permissions); if that mints, the cached token is the one GitHub no longer takes: `rm "
+                         "/dev/shm/verity-read-token`. The watch reads again every {every_min} min and says nothing more "
+                         "until a read has worked"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step", "outage"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived", "handin_waiting"}     # rung to the record's handle
@@ -130,7 +143,9 @@ FAIL = {"held", "stalled", "crashed", "dropped", "idle_after_run", "relaunch", "
 SILENT_LEAD = "has been in one turn for {active_minutes} min, with no note, no push and no assistant text for {minutes} min"
 SILENT_LEAD_UNREAD = ("has been in one turn for {active_minutes} min, with no note and no push for {minutes} min; the API "
                       "wouldn't read its conversation for {unread_minutes} min, so its assistant text is unchecked")
-UNROUTED = "infra"      # rung once for a worker the watch can't place, and for one whose lane no handle owns
+UNROUTED = "infra"      # rung once for a worker the watch can't place, for one whose lane no handle owns, and for a run the
+#                         watch could not judge
+OWN = {"github_refused"}    # the watch's own reads failing, which infra mends: rung to infra
 UNSENT_LISTED = 12      # runs of unknown senders one post names; the rest are counted
 RING_RUN = [sys.executable, "-m", "research", "msg", "ring-run"]
 RUNBELL_RE = re.compile(r"^from runs, run \S+ rc ")      # ring-run's doorbell
@@ -176,8 +191,9 @@ def renderable(rec: dict) -> bool:
 def rung(rec: dict) -> str | None:
     """The handle whose inbox the alert rings, if any. A worker's is its lane's: only its coordinator can resume it. One the
     watch could place under no lane (`unplaced`) goes to infra (`UNROUTED`), who finds its launcher, and so does an alert of a
-    worker whose lane no handle owns, and a record `text` can't render."""
-    if not renderable(rec):
+    worker whose lane no handle owns, a run the watch could not judge (`unjudged`), which someone must read by the API and
+    cancel by hand, a record `text` can't render, and a read of the watch's own that was refused (`OWN`)."""
+    if not renderable(rec) or rec.get("kind") in OWN:
         return UNROUTED
     if rec.get("quiet"):        # the watch's own judgement that nobody must act: a run its lane cancelled, a relaunch declined,
         return None             # an alert of a worker or a run of a sender it placed nowhere and rang infra for already
@@ -196,7 +212,7 @@ def rung(rec: dict) -> str | None:
         return handle
     if is_worker(rec):
         return lane_of(rec) or UNROUTED
-    if rec.get("kind") == "run_ended":
+    if rec.get("kind") in ("run_ended", "unjudged"):
         return UNROUTED
     return None
 
@@ -296,6 +312,8 @@ def text(rec: dict) -> str:
         who = f" <@{human['slack_user']}>" if human and human.get("slack_user") else ""
         down = ", ".join(f"@{h}" for h in rec.get("handles") or [])
         return f"{lead.rstrip()}{who} *Agent watch, outage:* {SAY['outage'].format(**{**rec, 'handles': down})}."
+    if rec.get("kind") in OWN:
+        return f"{lead}*Agent watch:* the watch {line}."
     if rec.get("kind") == "dropped":
         line = dropped(rec)
     if rec.get("kind") == "silent":
@@ -365,7 +383,7 @@ def text(rec: dict) -> str:
 
 def pod(cmd: str, data: str | None = None) -> str:
     """`cmd` on the control pod: over ssh, or in a local shell when $AGENT_WATCH_ON_POD is set (the watchers supervisor's loop)."""
-    argv = ["sh", "-c", cmd] if os.environ.get("AGENT_WATCH_ON_POD") else [*connect.ssh_base(budgets.GUARD_HOST), cmd]
+    argv = ["sh", "-c", cmd] if settings.get("AGENT_WATCH_ON_POD") else [*connect.ssh_base(budgets.GUARD_HOST), cmd]
     return subprocess.run(argv, input=data, capture_output=True, text=True, timeout=120, check=True).stdout
 
 
@@ -426,7 +444,7 @@ def bells(api: slack.Slack, now: float) -> dict:
 
 def once() -> None:
     try:
-        b = json.dumps(bells(slack.Slack(os.environ.get("SLACK_BOT_TOKEN")), time.time()))
+        b = json.dumps(bells(slack.Slack(settings.get("SLACK_BOT_TOKEN")), time.time()))
         if DRY:
             log(f"would write {BELLS}: {b}")
         else:
@@ -454,7 +472,7 @@ def once() -> None:
         elif DRY:
             log(f"would post: {text(rec)}" + (f" and ring @{to}" if (to := rung(rec)) else ""))
         else:
-            api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"))
+            api = slack.Slack(settings.get("SLACK_BOT_TOKEN"))
             ts = slack._post(api, ALERTS, "infra", post := text(rec))
             sent[key] = time.time()
             save_sent(sent)
@@ -480,9 +498,12 @@ def sent_path() -> Path:
 
 
 def load_sent() -> dict:
+    if not sent_path().exists():
+        return {}
     try:
         d = json.loads(sent_path().read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        log(f"{sent_path()} unreadable, so no line counts as posted before ({type(e).__name__}: {e})")
         return {}
     return d if isinstance(d, dict) else {}
 

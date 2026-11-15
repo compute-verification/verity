@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[3]
 RUN = "c20261027T160500Z-0000"
 #: a witness value the stub's status plants (STUB_NOTE), 64 hex characters: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
-#: the warden's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
+#: the network certifier's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
 #: aligned text pieces (`leak_guard.TEXT` bytes)
 _CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
 STALLS = " " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n'
@@ -40,8 +40,7 @@ elif cmd.startswith("status "):
         open(os.environ["STUB_FIFO"], "w")
         signal.pause()
     print(json.dumps({"run": "%(run)s", "note": os.environ.get("STUB_NOTE"),
-                      "end": {"run": "%(run)s", "rc": 0, "ended_utc": "2026-10-27T17:05:00Z",
-                              "verdict": {"accepted": True}}}))
+                      "end": {"run": "%(run)s", "rc": 0, "ended": "ended", "verdict": {"accepted": True}}}))
 elif cmd == "fetch %(run)s":
     files = {"end.json": b"{}", "request.json": b"{}", "out/certificates.jsonl": b"",
              "out/deployment.json": json.dumps({"windows": 3, "origin_unix": 1.5,
@@ -73,7 +72,8 @@ def _gate(tmp_path: Path, popen: bool = False, **env: str):
     out.mkdir(parents=True, exist_ok=True)
     env = {"PATH": f"{bin_}{os.pathsep}{os.path.dirname(sys.executable)}{os.pathsep}{os.defpath}",
            "HOME": str(tmp_path), "OUT": str(out), "RESEARCH_RUN_DIR": str(tmp_path / "run"), "RESEARCH_RUN_ID": "r1",
-           "GATE_KEY": str(tmp_path / "key"), "REQUESTS": "4", "PY": sys.executable, **env}
+           "GATE_KEY": str(tmp_path / "key"), "REQUESTS": "4", "PY": sys.executable,
+           "VY_CHALLENGER_1_HOST": "192.0.2.21", **env}
     if popen:
         return subprocess.Popen(["bash", str(ROOT / "benchmarks/network_traces/wipe_gate.sh")], cwd=ROOT,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
@@ -85,6 +85,17 @@ def _gate(tmp_path: Path, popen: bool = False, **env: str):
 def _published(tmp_path: Path) -> list[str]:
     return sorted(p.relative_to(tmp_path / "run" / "out").as_posix()
                   for p in (tmp_path / "run" / "out").rglob("*") if p.is_file())
+
+
+def test_without_the_challenger_hosts_address_nothing_is_sent(tmp_path):
+    """site.json names the variable that holds the challenger host's address, which `_gate` sets: with it unset and no
+    CHALLENGER the script ends naming it, before the gate is asked anything; a CHALLENGER given whole reads none."""
+    keep = tmp_path / "keep"
+    got = _gate(tmp_path, KEEP=str(keep), VY_CHALLENGER_1_HOST="")
+    assert got.returncode != 0 and "VY_CHALLENGER_1_HOST is unset: site.json names it for its gate" in got.stderr
+    assert not keep.exists() and _published(tmp_path) == []
+    got = _gate(tmp_path, KEEP=str(keep), VY_CHALLENGER_1_HOST="", CHALLENGER="research@192.0.2.9")
+    assert got.returncode == 0 and (keep / RUN / "fetch.tar.gz").is_file(), got.stdout + got.stderr
 
 
 def test_record_keeps_no_witness(tmp_path):
@@ -106,12 +117,13 @@ def test_record_keeps_no_witness(tmp_path):
     assert not [n for n in names if "witness" in n.split("/")]
     assert f"{RUN}/out/deployment.json" in names and f"{RUN}/request.json" in names
     sys.path.insert(0, str(HERE))
-    import wipe_egress
+    sys.path.append(str(ROOT))  # for benchmarks.network_traces
+    from benchmarks.network_traces import wipe_egress
     assert sorted(wipe_egress.read_run(tmp_path / "run" / "out" / "bundle.tgz")) == sorted(wipe_egress.FILES)
 
 
-def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_records(tmp_path):
-    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the warden's stall probe
+def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_network_certifier_records(tmp_path):
+    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the network certifier's stall probe
     records its cgroup in the witness (stalls.json), and no public file of the run holds it: in the hold, the leak guard
     holds the reply (and the log it was echoed to) as a piece of the witness, and the job exited 3. The reply goes to
     KEEP/RUN alone (0600), so the job exits on the gate's rc."""
@@ -126,9 +138,9 @@ def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_
     published, q = tmp_path / "published", tmp_path / "q"
     published.mkdir()
     shutil.copyfile(reply, published / "start.json")
-    held = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(published), str(q), "--gates",
+    held = subprocess.run([sys.executable, "-m", "benchmarks.network_traces.leak_guard", str(published), str(q), "--gates",
                            str(keep / RUN / "fetch.tar.gz"), "--dry", "--report", str(tmp_path / "report.json")],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, cwd=ROOT)
     assert held.returncode == 3, held.stdout + held.stderr
     (piece,) = [p for f in json.loads((q / "leak-guard.json").read_text())["found"] for p in f["pieces_found"]]
     assert (piece["witness"], piece["keypath"]) == (f"{RUN}/witness/stalls.json", ["unit"])
@@ -145,7 +157,7 @@ def test_a_refused_start_is_a_visible_failure_and_keeps_nothing(tmp_path):
 
 def test_a_start_naming_no_certifier_run_writes_nothing_under_its_name(tmp_path):
     """The run names a directory under KEEP, so the job holds it to the auditor's `CERTIFIER_RUN`, as the front does."""
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
     import auditor as A
     assert f'=~ ^{A.CERTIFIER_RUN.pattern.replace(r"\d", "[0-9]")}$ ]]' in (HERE / "wipe_gate.sh").read_text()
     keep = tmp_path / "keep"

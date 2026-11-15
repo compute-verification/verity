@@ -1,6 +1,6 @@
 """The test-file family: one task per test file of every suite, which `runners/test_file.py` runs alone under the suites' read guard.
 
-Suites are what `tools/verity/check/suites.py` finds (`discover`): each directory whose `pyproject.toml` configures pytest, the
+Suites are what `tools/check/suites.py` finds (`discover`): each directory whose `pyproject.toml` configures pytest, the
 repository's own at the root, but those check runs after its Lean steps (`build.lean_suites`, `suites.AFTER_LEAN`), which the
 build family's lean-suites tasks run whole once lean-build has built what they need. A suite's test files are its `test_*.py`
 under its `testpaths`, outside a data directory
@@ -72,14 +72,15 @@ from pathlib import Path
 
 KIND = "test-file"
 #: the read guard the runner loads into pytest, the one `suites.py` loads
-GUARD = ("tools/verity/check/guard/verity_suite_guard.py", "tools/verity/check/guard/child/sitecustomize.py",
-         "tools/verity/check/guard/child/verity_suite_reads.py")
-REGISTRY = "fixtures/artifacts.json"
+GUARD = ("tools/check/guard/verity_suite_guard.py", "tools/check/guard/child/sitecustomize.py",
+         "tools/check/guard/child/verity_suite_reads.py")
+REGISTRY = "artifacts.json"
 #: what `suites.py`'s guard lets every suite read besides its inputs (`suites.STORE_READS`; every pyproject.toml and the lockfile,
 #: `suites.metadata`, are the tree's `pyprojects` and the py env's spec)
 STORE_READS = (REGISTRY, "tools/research/store.pod.toml")
-#: a module that names the fixture registry's path, as the store's replica map does (`Path("fixtures") / "artifacts.json"`)
-_REGISTRY = re.compile(r"""["']fixtures["']\s*\)?\s*/\s*["']artifacts\.json["']|["']fixtures/artifacts\.json["']""")
+#: a module that names the fixture registry's path, whole or joined, as the store's replica map does
+#: (`Path("artifacts.json")`)
+_REGISTRY = re.compile(r"""["']fixtures["']\s*\)?\s*/\s*["']artifacts\.json["']|["'](?:fixtures/)?artifacts\.json["']""")
 #: directories whose `test_*.py` files are data a test hands on, not tests (`suites._DATA_DIRS`)
 DATA_DIRS = frozenset({"fixtures", "data", "expected", "testdata"})
 STDLIB = frozenset(sys.stdlib_module_names)
@@ -110,7 +111,7 @@ _CODE_IMPORT = re.compile(r"""(?:["']|\\n|;)[ \t]*(?:from[ \t]+([A-Za-z_][\w.]*)
 _BUILT = re.compile(r"""[fF][rR]?["'][^"'\n]*\{[^}]+\}\.py["']|\+\s*["']\.py["']""")
 _BARE = re.compile(r"""["']([A-Za-z_]\w*)["']""")
 _PLUGINS = re.compile(r"^pytest_plugins[ \t]*=", re.M)
-#: a module name built in an f-string (`f"verity.definitions.ops.boolean.{m.name}"`, `f"{__name__}.{n}"`), or a name holding one
+#: a module name built in an f-string (`f"verity.circuits.ops.boolean.{m.name}"`, `f"{__name__}.{n}"`), or a name holding one
 _FSTRING = re.compile(r"""\s*[fF](['"])([^'"\n]*\{[^'"\n]*)\1""")
 _ARG_NAME = re.compile(r"\s*([A-Za-z_]\w*)\s*[,)]")
 #: a dotted target string handed to pytest's `monkeypatch.setattr` or to `mock.patch`, which imports the module it names
@@ -640,7 +641,7 @@ class Imports:
 
     def named(self, path: str) -> list[str]:
         """The repository files under the paths file ``path`` names: string parts joined by `/` or one string holding one
-        (`"verity" / "core"`, `"tools/verity/check"`), each from its directory or the nearest one above it, and string parts
+        (`"verity" / "core"`, `"tools/check"`), each from its directory or the nearest one above it, and string parts
         joined to a path it builds (`VERIFIER / "agree.py"`, `VERIFIER = HERE.parent / "verifier"`)."""
         if (got := self._paths.get(path)) is None:
             text = self.tree.text(path)

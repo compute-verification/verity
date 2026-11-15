@@ -25,6 +25,8 @@ import threading
 from collections.abc import Iterator
 from multiprocessing.pool import Pool
 
+__all__ = ["cpu_quota", "die_with_parent", "fork_pool"]
+
 PR_SET_PDEATHSIG = 1
 
 
@@ -62,6 +64,8 @@ def fork_pool(processes: int) -> Iterator[Pool]:
 #: otherwise wait for it forever
 POOL_POLL_S = 10.0
 CGROUP_MEMORY_EVENTS = "/sys/fs/cgroup/memory.events"
+#: the cgroup v2 file that states this process's CPU quota: `<quota> <period>`, or `max <period>` where it has none
+CGROUP_CPU_MAX = "/sys/fs/cgroup/cpu.max"
 
 
 class WorkerDied(RuntimeError):
@@ -69,11 +73,26 @@ class WorkerDied(RuntimeError):
 
 
 def oom_kills() -> int | None:
+    """The cgroup's count of OOM kills (the first `oom_kill` line of its `memory.events`); None where none is read: the file is
+    absent (no cgroup v2 memory controller), cannot be read or holds no such line, or the line's count is no integer."""
     try:
         with open(CGROUP_MEMORY_EVENTS) as f:
             return next(int(ln.split()[1]) for ln in f if ln.split()[:1] == ["oom_kill"])
     except (OSError, StopIteration, ValueError, IndexError):
         return None
+
+
+def cpu_quota() -> int:
+    """The CPUs this process may use: the cgroup's quota where it states one (`CGROUP_CPU_MAX`), else os.cpu_count(): the file is
+    absent (no cgroup v2 CPU controller), cannot be read, says `max` or is not `<quota> <period>` in integers."""
+    try:
+        with open(CGROUP_CPU_MAX) as f:
+            q, per = f.read().split()
+        if q != "max":
+            return max(1, int(q) // int(per))
+    except (OSError, ValueError):
+        pass
+    return os.cpu_count() or 1
 
 
 def dead_worker(pool: Pool, pids: set[int], oom0: int | None, workers: int, flag: str) -> str | None:

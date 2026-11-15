@@ -11,7 +11,7 @@ try:
     PACIFIC: ZoneInfo | None = ZoneInfo("America/Los_Angeles")
 except ZoneInfoNotFoundError:  # a host with no tz database (the Nebius job images): `both` prints UTC alone
     PACIFIC = None
-UTC = dt.timezone.utc
+UTC = dt.UTC
 
 #: left alone by `slack_dates`: code blocks and spans, Slack's <...> tokens (links, mentions, dates) and bare URLs
 _PROTECTED = re.compile(r"```.*?```|`[^`\n]*`|<[^<>\n]*>|\bhttps?://\S+", re.S)

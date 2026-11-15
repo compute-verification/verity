@@ -346,6 +346,19 @@ def test_a_refused_variable_with_a_broker_that_gives_no_token_says_both(monkeypa
     assert "not-to-be-printed" not in c.detail + c.fix
 
 
+def test_a_cursor_agent_whose_mint_fails_is_told_so_and_probes_nothing_with_the_bots_credentials(monkeypatch, tmp_path):
+    clone = _clone(tmp_path, origin="https://github.com/compute-verification/research-notes.git")
+    monkeypatch.setenv("RESEARCH_NOTES", str(clone))
+    (tmp_path / "api.sock").write_text("")
+    monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path / "api.sock"))
+    runs_ = Runs(monkeypatch, git=(0, ""))
+    _Broker(monkeypatch).refuse = 403
+    c = doctor.check_notes_push()
+    assert c.status == FINDING and c.detail.startswith(f"the notes clone {clone} has nothing to push with: {notes_sync.MINT_FAILED} "
+                                                       "(the broker answered HTTP 403), so nothing was sent")
+    assert not [a for a, *_ in runs_.calls if "push" in a], "no push probe with cursor[bot]'s credentials"
+
+
 # ---- store, slack ---------------------------------------------------------------------------------------------------------------
 
 class _Remote:

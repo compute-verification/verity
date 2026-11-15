@@ -318,6 +318,17 @@ def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merg
     assert A.judge(regen, tree, FILES)[0] == [] and "P.Hyp" not in regen.get("assumptions", {})
 
 
+def test_a_premise_s_claim_id_merges_apart_from_its_owner_and_digest():
+    """A premise entry's `id` is written by hand, as its owner is: one side's new id and the other's new owner and digest
+    both stand."""
+    base = record(t=thm([F]))
+    def hyp(**entry):
+        return base | {"open": {"P.Hyp": {"owner": "@lean", "digest": "a" * 64, "due": "2026-12-01"} | entry}}
+    merged, why = M.merge(hyp(), hyp(id="trusted-device"), hyp(owner="@proofs", digest="b" * 64), candidate := [])
+    assert why == [] and merged["open"]["P.Hyp"] == {"id": "trusted-device", "owner": "@proofs", "digest": "b" * 64,
+                                                      "due": "2026-12-01"}
+
+
 def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_changed_its_owner_which_keeps_it():
     """A restatement is the build's, so the removal applies over it; an owner is a person's, so the side that changed it
     keeps the guarantee, named (a changed side beats a removed one)."""
@@ -425,12 +436,12 @@ def test_a_definition_taken_out_of_a_module_next_adds_readers_to_merges_as_the_s
 
 def test_a_branch_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, capsys):
     """A branch that renames `J10R.Layout` to `NoiseLayout`, merged onto `next` as drive merged it: `next` added readers of
-    `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its four fields beside the new names, which the
+    `Definitions.Pouw.TS.J10R`, and the union kept `Layout` and its four fields beside the new names, which the
     after-landing Lean check, with no regenerate, fails on.  The fixture is that group on each side with the records of its
     readers, as locks once listed them.  Read without them, `next`'s group is the base's, so the merge is the renaming
     branch's group, cleanly."""
     sides = json.loads((FIXTURES / "j10r-layout-renamed-onto-next.json").read_text())
-    m = "Definitions.Accounting.TS.J10R"
+    m = "Definitions.Pouw.TS.J10R"
     old = [d for d in sides["base"]["reads"][m]["definitions"] if ".Layout" in d]
     assert len(old) == 5 and all(d in sides["ours"]["reads"][m]["definitions"] for d in old)
     assert sides["ours"]["reads"][m]["guarantees"] != sides["base"]["reads"][m]["guarantees"]
@@ -440,7 +451,8 @@ def test_a_branch_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, caps
     assert capsys.readouterr().err == ""
     group = json.loads((tmp_path / "ours").read_text())["reads"][m]
     assert group["definitions"] == sides["theirs"]["reads"][m]["definitions"]
-    assert not set(old) & set(group["definitions"]) and f"{m.removeprefix('Definitions.')}.NoiseLayout" in group["definitions"]
+    renamed = next(d for d in old if d.endswith(".Layout")).removesuffix("Layout") + "NoiseLayout"
+    assert not set(old) & set(group["definitions"]) and renamed in group["definitions"]
     assert "guarantees" not in group
 
 
@@ -803,7 +815,7 @@ def test_a_renamed_premise_merges_to_one_entry_and_a_text_a_restated_statement_s
 
     def lock(h: str, *texts: str) -> dict:
         """A lock listing ``g`` with the premises ``texts``, reading ``d`` at hash ``h``."""
-        return {"guarantees": {g: rec}, "reads": {"Definitions.Accounting.Guarantees.Pouw": {"definitions": {d: h * 64}}},
+        return {"guarantees": {g: rec}, "reads": {"Definitions.Pouw.Guarantees.Pouw": {"definitions": {d: h * 64}}},
                 "shape": {"inline": {g: dict.fromkeys(texts, why)}}}
     merged, _ = M.merge(lock("1", old), lock("1", old), lock("2", new), candidate := [])
     assert merged["shape"]["inline"] == {g: {new: why}} and candidate == []
@@ -818,7 +830,7 @@ def test_a_guarantee_a_side_brings_to_unwitnessed_or_shape_inline_lands_in_updat
     """`check.py --update` writes `unwitnessed` and `shape.inline` sorted by guarantee (`unwitnessed_kept`,
     `inline_failures`), so a guarantee either side brings to one lands where `--update` puts it, not after ours' entries:
     the merged tree's `--update` then rewrites neither section.  A guarantee's inline premises, which `--update` writes in
-    its statement's order, keep ours' order with theirs' new one after it."""
+    its statement's order, keep ours' order with theirs' new one after it, as a map's keys do where theirs moved none."""
     def lock(*gs: str, **premises: str) -> dict:
         return {"unwitnessed": {f"P.{g}": f"hash of {g}" for g in gs},
                 "shape": {"inline": {f"P.{g}": {"z": "why z", "a": "why a"} | (premises if g == "b" else {}) for g in gs}}}
@@ -1091,7 +1103,7 @@ def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
     other moved its import: the merge drops the retired import, which would otherwise stop Security building."""
     sides = json.loads((FIXTURES / "accounting-retired-import-onto-next.json").read_text())
     text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
-    gone = "import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod\n"
+    gone = "import Definitions.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod\n"
     assert left == 0 and gone in sides["base"] and gone in sides["ours"] and gone not in sides["theirs"]
     assert gone not in text
     assert M._import_names(text) == M._import_names(sides["theirs"]) | (M._import_names(sides["ours"]) - M._import_names(
@@ -1177,7 +1189,7 @@ path = "../../pouw/window"
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Proofs.Properties.Pouw",
-  "Properties.Nci", "Proofs.Properties.Nci"]
+  "Properties.InferenceOnly", "Proofs.Properties.InferenceOnly"]
 '''
 
 
@@ -1196,21 +1208,21 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
     def req(n):
         return f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
     anchor = 'path = "../../pouw/window"\n'
-    tail = '"Proofs.Properties.Nci"]'
-    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]')
+    tail = '"Proofs.Properties.InferenceOnly"]'
+    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]')
     theirs = LAKEFILE.replace(anchor, anchor + req("network_check")).replace(
-        tail, '"Proofs.Properties.Nci", "Properties.Network"]')
+        tail, '"Proofs.Properties.InferenceOnly", "Properties.Network"]')
     text, left = _lakefile(tmp, LAKEFILE, ours, theirs)
     assert left == 0, text
     doc = tomllib.loads(text)
     assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_check", "network_check"]
-    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.Nci",
-                                           "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"]
+    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.InferenceOnly",
+                                           "Proofs.Properties.InferenceOnly", "Properties.Network", "Properties.Pous"]
     assert text.startswith("# Properties: the code's properties.\n") and all(len(s) <= M.WIDTH for s in text.splitlines())
     gone = LAKEFILE.replace(', "Proofs.Properties.Pouw"', "")
-    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]'), theirs)
+    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]'), theirs)
     assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == [
-        "Properties.Pouw", "Properties.Nci", "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"], text
+        "Properties.Pouw", "Properties.InferenceOnly", "Proofs.Properties.InferenceOnly", "Properties.Network", "Properties.Pous"], text
     def comment(s):
         return LAKEFILE.replace("the code's properties.", s)
     text, left = _lakefile(tmp, LAKEFILE, comment("ours."), comment("theirs."))
@@ -1228,11 +1240,12 @@ dependencies = ["numpy>=1.26",
 
 [tool.verity.tests]
 paths = ["tests"]
-inputs = ["verity/__init__.py", "verity/settings.py",
+inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/circuits",
           # the H1 units read both.
-          "verity/protocols/pouw/verifier/core_check.py", "verity/protocols/pouw/verifier/leaf_lanes.py",
-          "verity/protocols/pous/prover/circuit.py"]
+          "verity/protocols/accounting/pouw/verifier/core_check.py",
+          "verity/protocols/accounting/pouw/verifier/leaf_lanes.py",
+          "verity/protocols/accounting/pous/prover/circuit.py"]
 untraced = ["fixtures"]
 '''
 
@@ -1247,20 +1260,20 @@ def test_a_pyproject_whose_sides_each_add_a_suite_input_merges_and_any_other_con
     """Two PRs that each add a file a suite reads, at the same place in `inputs`, conflict line by line; they
     merge as a list.  A value both sides changed, and a list outside `[tool.verity.tests]` both sides added to, stay git's."""
     import tomllib
-    tail = '"verity/protocols/pous/prover/circuit.py"]'
+    tail = '"verity/protocols/accounting/pous/prover/circuit.py"]'
     def add(*xs):
         return PYPROJECT.replace(tail, tail[:-1] + "".join(f',\n          "{x}"' for x in xs) + "]")
     text, left = _pyproject(tmp_path, PYPROJECT, add("verity/a.py"), add("verity/b.py"))
     assert left == 0, text
     doc = tomllib.loads(text)
-    assert doc["tool"]["verity"]["tests"]["inputs"][-3:] == ["verity/protocols/pous/prover/circuit.py", "verity/b.py",
+    assert doc["tool"]["verity"]["tests"]["inputs"][-3:] == ["verity/protocols/accounting/pous/prover/circuit.py", "verity/b.py",
                                                              "verity/a.py"]
     assert doc["project"] == tomllib.loads(PYPROJECT)["project"] and "# the H1 units read both." in text
     gone = PYPROJECT.replace(tail, '"verity/a.py"]')
     text, left = _pyproject(tmp_path, PYPROJECT, gone, add("verity/b.py"))
     assert left == 0, text
     assert set(tomllib.loads(text)["tool"]["verity"]["tests"]["inputs"][-3:]) == {
-        "verity/protocols/pouw/verifier/leaf_lanes.py", "verity/a.py", "verity/b.py"}, "what ours removed stays removed"
+        "verity/protocols/accounting/pouw/verifier/leaf_lanes.py", "verity/a.py", "verity/b.py"}, "what ours removed stays removed"
     def version(v):
         return add(f"verity/{v}.py").replace('version = "0.1.0"', f'version = "{v}"')
     text, left = _pyproject(tmp_path, PYPROJECT, version("1"), version("2"))
@@ -1271,15 +1284,15 @@ def test_a_pyproject_whose_sides_each_add_a_suite_input_merges_and_any_other_con
     assert left and "<<<<<<< ours" in text, "a dependency both sides added stays git's"
 
 
-TAIL = '          "verity/protocols/pous/prover/circuit.py"]\n'
+TAIL = '          "verity/protocols/accounting/pous/prover/circuit.py"]\n'
 #: what a branch adds at the end of a suite's `inputs`, under a comment of its own
-UNDER_A_COMMENT = ('          "verity/protocols/pous/prover/circuit.py",\n'
+UNDER_A_COMMENT = ('          "verity/protocols/accounting/pous/prover/circuit.py",\n'
                    "          # the nightly check's loop, tested here: it reads a run as the dispatcher reads a check's, writes the state the\n"
                    "          # monitors' nightly-check reads, and pushes its label as the queue pushes a ready mark\n"
                    '          "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",\n'
                    '          "tools/research/src/research/store/labels_sync.py"]\n')
 #: what the other side adds there, with no comment
-PLAIN = ('          "verity/protocols/pous/prover/circuit.py",\n'
+PLAIN = ('          "verity/protocols/accounting/pous/prover/circuit.py",\n'
          '          "tools/research/src/research/__init__.py", "tools/research/src/research/telemetry/__init__.py"]\n')
 
 
@@ -1292,7 +1305,7 @@ def test_inputs_one_side_adds_under_a_comment_merge_with_the_other_sides_and_the
     assert ours != PYPROJECT != theirs
     text, left = _pyproject(tmp_path, PYPROJECT, ours, theirs)
     assert left == 0, text
-    want = ["verity/protocols/pous/prover/circuit.py", "tools/research/src/research/__init__.py",
+    want = ["verity/protocols/accounting/pous/prover/circuit.py", "tools/research/src/research/__init__.py",
             "tools/research/src/research/telemetry/__init__.py", "infra/control/nightly_check.py",
             "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",
             "tools/research/src/research/store/labels_sync.py"]
@@ -1317,7 +1330,7 @@ def test_a_comment_in_a_list_s_conflict_is_one_side_s_or_the_conflict_stays_gits
 
     def end(*rows):
         return PYPROJECT.replace(TAIL, "".join(f"          {r}\n" for r in rows))
-    circuit, a, b = '"verity/protocols/pous/prover/circuit.py",', '"verity/a.py"', '"verity/b.py"'
+    circuit, a, b = '"verity/protocols/accounting/pous/prover/circuit.py",', '"verity/a.py"', '"verity/b.py"'
     text, left = _pyproject(tmp_path, PYPROJECT, end(circuit, "# why a", a + "]"), end(circuit, "# why b", b + "]"))
     assert left == 0 and text.splitlines()[-6:-1] == ["          " + r for r in (circuit, "# why b", b + ",", "# why a", a + "]")]
     base = end("# old", circuit[:-1] + "]")
@@ -1356,7 +1369,7 @@ def test_git_merges_two_branches_that_each_add_a_suite_input_with_the_installed_
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"pyproject.toml merge={M.PYPROJECT}\n")
     pp = repo / "pyproject.toml"
-    tail = '"verity/protocols/pous/prover/circuit.py"]'
+    tail = '"verity/protocols/accounting/pous/prover/circuit.py"]'
     git(repo, "init", "-q", "-b", "main")
     for name in ("main", "a", "b"):
         if name != "main":
@@ -1411,6 +1424,104 @@ def test_lists_of_names_merge_where_both_sides_append_one():
     merged, why = M.merge({"roots": ["X"], "x": 1}, {"roots": ["X"], "x": 2}, {"roots": ["X"], "x": 3})
     assert why == ["x: changed on both sides, differently: took theirs"] and merged["x"] == 3, \
         "a value both sides changed is theirs', named"
+
+
+def placed(roots=("A", "B", "C"), witnesses=("P.a", "P.b", "P.c"), properties=("P.p", "P.q"), premises=("x", "y", "z"),
+           layers=("D", "E"), imports=("Mathlib", "D")) -> dict:
+    """A lock holding each order the merge writes and `check.py --update` doesn't sort, in the orders given: `roots`, the
+    `witnesses` map, `shape.properties`, `shape.premises`, `layers`' rules and rule `D`'s imports."""
+    rules = {"D": {"imports": list(imports), "except": [], "why": "trusted text"}, "E": {"imports": ["E"], "except": [], "why": "e"},
+             "F": {"imports": ["F"], "except": [], "why": "f"}}
+    return {"roots": list(roots), "witnesses": {w: {"honest": [f"{w}_honest"]} for w in witnesses},
+            "shape": {"properties": {p: {"function": f"{p}.f", "outcome": "accept"} for p in properties},
+                      "premises": list(premises)},
+            "layers": {r: rules[r] for r in layers}}
+
+
+def orders(rec: dict) -> dict:
+    return {"roots": rec["roots"], "witnesses": list(rec["witnesses"]), "properties": list(rec["shape"]["properties"]),
+            "premises": rec["shape"]["premises"], "layers": list(rec["layers"]), "imports": rec["layers"]["D"]["imports"]}
+
+
+#: the base, a side that moved a member of every order, and a side that kept the base's orders and added to each
+BASE = placed()
+MOVED = placed(roots=("C", "A", "B"), witnesses=("P.c", "P.a", "P.b"), properties=("P.q", "P.p"), premises=("z", "x", "y"),
+               layers=("E", "D"), imports=("D", "Mathlib"))
+ADDED = placed(roots=("A", "B", "C", "N"), witnesses=("P.a", "P.b", "P.c", "P.n"), properties=("P.p", "P.n", "P.q"),
+               premises=("x", "w", "y", "z"), layers=("D", "E", "F"), imports=("Mathlib", "P.Audit", "D"))
+
+
+def test_a_move_theirs_made_applies_with_ours_additions_placed_as_theirs_would_be():
+    """`main` moved entries of `roots`, `witnesses`, `shape.properties`, `shape.premises` and `layers` while a line that
+    kept the base's orders added to each: merging `main` into the line takes `main`'s orders, each of the line's
+    new items after the item the line has before it, and its new keys after `main`'s, as `main`'s would be placed had the
+    line moved.  Each value merges as before."""
+    merged, why = M.merge(BASE, ADDED, MOVED, candidate := [])
+    assert why == [] and candidate == []
+    assert orders(merged) == {"roots": ["C", "N", "A", "B"], "witnesses": ["P.c", "P.a", "P.b", "P.n"],
+                              "properties": ["P.q", "P.p", "P.n"], "premises": ["z", "x", "w", "y"], "layers": ["E", "D", "F"],
+                              "imports": ["D", "Mathlib", "P.Audit"]}
+    assert merged["layers"]["F"] == ADDED["layers"]["F"] and merged["witnesses"]["P.n"] == ADDED["witnesses"]["P.n"]
+
+
+def test_with_one_side_moved_the_order_does_not_depend_on_which_side_git_calls_ours():
+    """The same three records with the sides swapped give the same order, member for member, in every map and list."""
+    for ours, theirs in ((ADDED, MOVED), (MOVED, ADDED)):
+        merged, why = M.merge(BASE, ours, theirs)
+        assert why == [] and orders(merged) == orders(M.merge(BASE, theirs, ours)[0]), (ours is ADDED)
+    gone = placed(roots=("A", "C"), witnesses=("P.a", "P.c"), properties=("P.p",), premises=("x", "z"), layers=("D",),
+                  imports=("D",))
+    assert orders(M.merge(BASE, gone, MOVED)[0]) == orders(M.merge(BASE, MOVED, gone)[0])
+
+
+def test_a_move_applies_only_where_one_side_alone_made_it():
+    """Neither side moved: today's merge, ours' order with theirs' additions.  Both moved, differently: ours' order, named
+    nowhere, since an order states nothing.  Theirs alone moved: theirs' order.  A base that is missing or empty has no
+    order to keep: ours'."""
+    added = placed(roots=("A", "X", "B", "C"), witnesses=("P.a", "P.b", "P.c", "P.x"), properties=("P.p", "P.q", "P.x"),
+                   premises=("x", "y", "z", "v"), layers=("D", "E", "F"), imports=("Mathlib", "Core", "D"))
+    merged, why = M.merge(BASE, ADDED, added)
+    assert why == [] and orders(merged) == {"roots": ["A", "X", "B", "C", "N"], "witnesses": ["P.a", "P.b", "P.c", "P.n", "P.x"],
+                                            "properties": ["P.p", "P.n", "P.q", "P.x"], "premises": ["x", "w", "y", "z", "v"],
+                                            "layers": ["D", "E", "F"], "imports": ["Mathlib", "Core", "P.Audit", "D"]}
+    other = placed(roots=("B", "C", "A"), witnesses=("P.b", "P.c", "P.a"), properties=("P.q", "P.p"), premises=("y", "z", "x"),
+                   layers=("E", "D"), imports=("D", "Mathlib", "Core"))
+    merged, why = M.merge(BASE, other, MOVED)
+    assert why == [] and orders(merged) == orders(other), "both moved: ours' order"
+    assert orders(M.merge(BASE, BASE, MOVED)[0]) == orders(MOVED), "theirs alone moved: theirs' order"
+    for base in ({}, placed(roots=(), witnesses=(), properties=(), premises=(), layers=(), imports=())):
+        assert orders(M.merge(base, ADDED, MOVED)[0])["roots"] == ["A", "B", "C", "N"], "no base order: ours'"
+
+
+def test_a_move_on_one_side_merges_with_a_removal_or_an_addition_on_the_other():
+    """Theirs moves `C` to the front; ours removes `B`, which is no move, or each side adds its own member: theirs' order
+    with what either removed gone and both sides' additions placed."""
+    gone = placed(roots=("A", "C"), witnesses=("P.a", "P.c"), properties=("P.p",), premises=("x", "z"), layers=("D",),
+                  imports=("D",))
+    assert orders(M.merge(BASE, gone, MOVED)[0]) == {"roots": ["C", "A"], "witnesses": ["P.c", "P.a"], "properties": ["P.p"],
+                                                     "premises": ["z", "x"], "layers": ["D"], "imports": ["D"]}
+    both = placed(roots=("C", "A", "B", "T"), witnesses=("P.c", "P.a", "P.t", "P.b"), properties=("P.q", "P.t", "P.p"),
+                  premises=("z", "x", "y", "t"), layers=("E", "F", "D"), imports=("D", "Mathlib", "Core"))
+    merged, why = M.merge(BASE, ADDED, both)
+    assert why == [] and orders(merged) == {"roots": ["C", "N", "A", "B", "T"], "witnesses": ["P.c", "P.a", "P.t", "P.b", "P.n"],
+                                            "properties": ["P.q", "P.t", "P.p", "P.n"], "premises": ["z", "x", "w", "y", "t"],
+                                            "layers": ["E", "F", "D"], "imports": ["D", "Mathlib", "P.Audit", "Core"]}
+
+
+def test_a_trust_gap_entry_s_premises_merge_sorted_as_update_writes_them():
+    """`check.py --update` writes each `trust_gap` entry's premises sorted (`trust_gap_kept`), so the merge does too, with
+    the side holding them out of order as ours or as theirs, a premise one side adds taken and one the other discharges
+    dropped; a line whose base already held them out of order merges to them sorted.  An entry one side alone has is
+    sorted too."""
+    base = {"trust_gap": {"P.g": ["a", "b", "c"]}}
+    unsorted = {"trust_gap": {"P.g": ["c", "a", "b", "d"], "P.h": ["z", "y"]}}
+    discharged = {"trust_gap": {"P.g": ["a", "c"]}}
+    for ours, theirs in ((unsorted, discharged), (discharged, unsorted)):
+        merged, why = M.merge(base, ours, theirs)
+        assert why == [] and merged["trust_gap"] == {"P.g": ["a", "c", "d"], "P.h": ["y", "z"]}
+    old = {"trust_gap": {"P.g": ["c", "a", "b"]}}
+    merged, why = M.merge(old, old, {"trust_gap": {"P.g": ["c", "a", "b", "e"]}})
+    assert why == [] and merged["trust_gap"] == {"P.g": ["a", "b", "c", "e"]}
 
 
 def test_a_witness_entry_both_sides_changed_is_ours_unless_theirs_alone_is_at_its_merged_record():
@@ -1475,7 +1586,7 @@ def test_an_unwitnessed_entry_neither_side_has_at_its_merged_record_is_ours_name
             in capsys.readouterr().err)
 
 
-SEC, PROPS, FLOCK, POUS = "security", "security/Properties", "verity/protocols/flock/verifier", "verity/protocols/pous"
+SEC, PROPS, FLOCK, POUS = "security", "security/Properties", "verity/protocols/proofs/flock/verifier", "verity/protocols/accounting/pous"
 
 
 def packages(unwitnessed: dict[str, int], inline: dict[str, int], doc: str = "never grows",
@@ -1508,8 +1619,13 @@ def test_two_branches_that_each_move_the_ratchet_caps_merge_them_three_way(tmp_p
                            capture_output=True, text=True)
     assert plain.returncode == 2, "git alone conflicts on both cap lines"
     assert _caps(tmp_path, base, ours, theirs) == (want, 0)
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
     assert (tmp_path / "ours").read_text() == want and capsys.readouterr().err == ""
+    for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp_path / n).write_text(t)
+    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0, \
+        "the flag's older name, which the registered command passes until origin/main's copy knows --limits"
+    assert (tmp_path / "ours").read_text() == want
 
 
 def test_a_cap_key_a_side_adds_or_lacks_counts_0_there(tmp_path):
@@ -1546,7 +1662,7 @@ def test_a_cap_one_side_lowers_survives_a_merge_whose_other_side_kept_it(tmp_pat
     want = packages({SEC: 232, PROPS: props, FLOCK: flock}, {SEC: 890, PROPS: 132, FLOCK: 6}, doc="only shrinks")
     assert _caps(tmp_path, base, base, lowered) == (lowered, 0)
     assert _caps(tmp_path, base, main, lowered) == _caps(tmp_path, base, lowered, main) == (want, 0)
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
     assert (tmp_path / "ours").read_text() == want and capsys.readouterr().err == ""
 
 
@@ -1611,7 +1727,7 @@ def test_a_cap_two_sides_each_lowered_from_one_base_merges_as_the_larger_not_bel
     base, checked, pr = (packages({SEC: n, PROPS: 191}, inline) for n in (331, 311, 307))
     want = packages({SEC: 311, PROPS: 191}, inline)
     assert _caps(tmp_path, base, checked, pr) == _caps(tmp_path, base, pr, checked) == (want, 0)
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
     assert (tmp_path / "ours").read_text() == want and capsys.readouterr().err == ""
 
 
@@ -1625,7 +1741,7 @@ def test_a_conflict_beyond_the_cap_lines_and_comments_stays_git_s(tmp_path, caps
     text, left = _caps(tmp_path, base, ours, theirs)
     assert left == 1 and f"UNWITNESSED = {json.dumps({SEC: 355, PROPS: 185})}\n" in text
     assert "<<<<<<< ours\n    \"\"\"A lock's `unwitnessed` shrinks.\"\"\"\n" in text and ">>>>>>> theirs\n" in text
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 1
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 1
     assert "merge.py: tests/test_lean_packages.py: 1 conflict(s) beyond the ratchet caps" in capsys.readouterr().err
     text, left = _caps(tmp_path, base, packages({SEC: 355, PROPS: 184}, inline).replace("UNWITNESSED = ", "INLINE = "),
                        packages({SEC: 354, PROPS: 185}, inline))
@@ -1645,7 +1761,7 @@ def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(
     (repo / "tests").mkdir()
     for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
-    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.CAPS}\n")
+    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.LIMITS}\n")
     caps = repo / "tests" / "test_lean_packages.py"
     git(repo, "init", "-q", "-b", "main")
     inline = {SEC: 1422, PROPS: 129, FLOCK: 6}
@@ -1661,8 +1777,10 @@ def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(
     assert plain.returncode and "CONFLICT (content): Merge conflict in tests/test_lean_packages.py" in plain.stdout
     git(repo, "merge", "--abort")
     subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
-    driver = git(repo, "config", f"merge.{M.CAPS}.driver").stdout.strip()
-    assert driver == RECORD_DRIVER[f"merge.{M.CAPS}.driver"] == M.driver("--caps ")
+    driver = git(repo, "config", f"merge.{M.LIMITS}.driver").stdout.strip()
+    assert driver == RECORD_DRIVER[f"merge.{M.LIMITS}.driver"] == M.driver(M.LIMITS_FLAG)
+    assert git(repo, "config", f"merge.{M.OLD_LIMITS}.driver").stdout.strip() == driver == RECORD_DRIVER[f"merge.{M.OLD_LIMITS}.driver"], \
+        "the old name stays registered with the same command, for a branch whose .gitattributes still names it"
     git(repo, "merge", "--no-edit", "b")
     assert caps.read_text() == packages({SEC: 355, PROPS: 184, FLOCK: 7}, inline)
 
@@ -1678,7 +1796,7 @@ def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_dr
     (repo / "tests").mkdir()
     for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
-    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.CAPS}\n")
+    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.LIMITS}\n")
     caps = repo / "tests" / "test_lean_packages.py"
     inline = {SEC: 1422}
 
@@ -1710,7 +1828,7 @@ _uspec = importlib.util.spec_from_file_location("unread_for_merge", HERE.parent 
 U = importlib.util.module_from_spec(_uspec)
 _uspec.loader.exec_module(U)
 UNREAD = f"{M.DIR}/{M.UNREAD_CAPS}"
-FL, PW, NCI, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/Nci", "Proofs/Hash"
+FL, PW, INFERENCE_ONLY, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/InferenceOnly", "Proofs/Hash"
 
 
 def unread(**areas: tuple[int, int]) -> str:
@@ -1721,7 +1839,7 @@ def unread(**areas: tuple[int, int]) -> str:
 def _unread(tmp: Path, base: str, ours: str, theirs: str) -> tuple[int, str]:
     for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
         (tmp / n).write_text(t)
-    return M.main(["--caps", *(str(tmp / n) for n in ("base", "ours", "theirs")), UNREAD]), (tmp / "ours").read_text()
+    return M.main(["--limits", *(str(tmp / n) for n in ("base", "ours", "theirs")), UNREAD]), (tmp / "ours").read_text()
 
 
 def test_the_driver_reads_and_writes_the_unread_caps_as_unread_py_does():
@@ -1767,21 +1885,21 @@ def test_an_unread_area_one_side_adds_or_drops_and_a_count_below_zero(tmp_path):
     """An area the base lacks counts 0 there: one side adds is that side's, and one both add holds both. An area a side
     lacks counts 0 on that side: one the lock run dropped (its modules all read) while the other side raised it keeps only
     that raise. No count goes below 0, and an area left with no modules is dropped, as `ratchet` drops it."""
-    base = unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
-                   unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4))) == (
-        0, unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
-                   unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(1, 3))) == (
-        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(3, 12)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(2, 7))) == (
-        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 3)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))) == (
+    base = unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(274, 2310), Proofs_InferenceOnly=(1, 4))) == (
+        0, unread(Proofs_Flock=(274, 2310), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(1, 3))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(3, 12)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(2, 7))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 3)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4))) == (
         0, unread(Proofs_Flock=(273, 2309)))
-    assert _unread(tmp_path, unread(Proofs_Nci=(3, 10)), unread(Proofs_Nci=(2, 2)), unread(Proofs_Nci=(3, 3))) == (
-        0, unread(Proofs_Nci=(2, 0)))
-    assert _unread(tmp_path, unread(Proofs_Nci=(2, 5)), unread(), unread(Proofs_Nci=(1, 2))) == (0, unread())
-    assert _unread(tmp_path, "", unread(Proofs_Nci=(1, 2)), unread(Proofs_Nci=(2, 3))) == (0, unread(Proofs_Nci=(3, 5)))
+    assert _unread(tmp_path, unread(Proofs_InferenceOnly=(3, 10)), unread(Proofs_InferenceOnly=(2, 2)), unread(Proofs_InferenceOnly=(3, 3))) == (
+        0, unread(Proofs_InferenceOnly=(2, 0)))
+    assert _unread(tmp_path, unread(Proofs_InferenceOnly=(2, 5)), unread(), unread(Proofs_InferenceOnly=(1, 2))) == (0, unread())
+    assert _unread(tmp_path, "", unread(Proofs_InferenceOnly=(1, 2)), unread(Proofs_InferenceOnly=(2, 3))) == (0, unread(Proofs_InferenceOnly=(3, 5)))
 
 
 def test_an_unread_caps_side_the_merge_can_t_vouch_for_is_left_to_git_s_conflict(tmp_path, capsys):
@@ -1812,7 +1930,7 @@ def test_an_unread_caps_side_the_merge_can_t_vouch_for_is_left_to_git_s_conflict
 
 
 def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installed_driver(tmp_path, monkeypatch):
-    """The `lean-caps` driver `--install` registers, and every clone and the queue already set (`RECORD_DRIVER`), passes the
+    """The `lean-limits` driver `--install` registers, and every clone and the queue already set (`RECORD_DRIVER`), passes the
     path (`%P`), so `.gitattributes` naming it for `unread-caps.json` is all a clone needs: `git merge` of two branches that
     each raise an area's cap merges, and a side in another schema leaves git's conflict."""
     from research.clone import RECORD_DRIVER
@@ -1824,7 +1942,7 @@ def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installe
     (repo / M.DIR).mkdir(parents=True)
     for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / M.DIR / f)
-    (repo / ".gitattributes").write_text(f"{UNREAD} merge={M.CAPS}\n")
+    (repo / ".gitattributes").write_text(f"{UNREAD} merge={M.LIMITS}\n")
     caps = repo / UNREAD
     git(repo, "init", "-q", "-b", "main")
     for name, start, text in (("main", None, unread(Proofs_Flock=(273, 2309), Proofs_Pouw=(49, 412))),
@@ -1841,8 +1959,8 @@ def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installe
     assert plain.returncode and f"CONFLICT (content): Merge conflict in {UNREAD}" in plain.stdout
     git(repo, "merge", "--abort")
     subprocess.run([sys.executable, f"{M.DIR}/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
-    driver = git(repo, "config", f"merge.{M.CAPS}.driver").stdout.strip()
-    assert driver == RECORD_DRIVER[f"merge.{M.CAPS}.driver"] == M.driver("--caps ") and '"$f" --caps %O %A %B %P;' in driver
+    driver = git(repo, "config", f"merge.{M.LIMITS}.driver").stdout.strip()
+    assert driver == RECORD_DRIVER[f"merge.{M.LIMITS}.driver"] == M.driver(M.LIMITS_FLAG) and '"$f" --caps %O %A %B %P;' in driver
     git(repo, "merge", "--no-edit", "b")
     assert caps.read_text() == unread(Proofs_Flock=(280, 2471), Proofs_Pouw=(50, 416))
     refused = git(repo, "merge", "--no-edit", "v2", check=False)

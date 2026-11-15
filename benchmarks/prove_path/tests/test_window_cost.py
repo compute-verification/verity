@@ -28,9 +28,9 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit
 
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[1])))
 import class_rows as CR
 import window_cost as W
 
@@ -160,7 +160,7 @@ def test_serving_streams_commit_is_its_4_kib_rows_and_F_leaves_out_its_fa3_inter
 
 def test_a_compression_is_priced_at_its_circuit_check_pin():
     """The commit's ANDs are its compressions at `Sha512Compress_v1`'s pinned AND rows, not the ripple-carry model's count."""
-    from verity.protocols.spot.optimize import SHA512_ANDS, pinned_ands
+    from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS, pinned_ands
 
     sizing = json.loads(SIZING.read_text())["sizing"]
     pin = pinned_ands("Sha512Compress_v1")
@@ -187,8 +187,8 @@ def _ands(t) -> int:
 
 def test_the_h200s_small_and_counts_are_bs_compiles():
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
-    from verity.definitions.registry import boolean_attention as BA
+    from verity.circuits.ops.boolean import gemm as BG
+    from verity_vllm.definitions.registry import boolean_attention as BA
     assert _ands(bind(BG.ScaledMmS8Coordinate, K=2048, **BG.GEMM_SM90_S8)) == W.S8_COORD[2048]
     assert _ands(bind(BG.GemmCoordinate, K=2048, DOT=BG.HopperBF16WgmmaDot16)) == W.BF16_COORD[2048]
     for nvis in (1, 17):
@@ -202,9 +202,9 @@ def test_the_h200s_large_and_counts_are_bs_compiles():
     tens of seconds and a few GB a compile, and their counts move apart from the small blocks' (the online softmax over a
     block, the quantizer's row max), which the quick test can't see."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
-    from verity.definitions.registry import boolean_attention as BA
-    from verity.definitions.registry import boolean_int8 as X
+    from verity.circuits.ops.boolean import gemm as BG
+    from verity_vllm.definitions.registry import boolean_attention as BA
+    from verity_vllm.definitions.registry import boolean_int8 as X
     assert _ands(bind(X.Int8RowQuantV2, K=2048)) == W.ROW_QUANT[2048]
     for bn, check in ((128, False), (192, True)):
         assert _ands(bind(BA.AttnBlockV9, D=64, NVIS=bn, FIRST=False, BN=bn, DOT=BG.HopperBF16WgmmaDot16,

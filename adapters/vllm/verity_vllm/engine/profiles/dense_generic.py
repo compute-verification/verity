@@ -37,7 +37,12 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import CHECKPOINTS as MANIFEST, checkpoint_entries
+from verity_vllm.config import CHECKPOINTS as MANIFEST
+from verity_vllm.config import checkpoint_entries
+from verity_vllm.engine.profiles.cases import CASES
+
+__all__ = ["HF_CONFIG_DIR", "MANIFEST", "MODULE_PREFIX", "checkpoint_entries", "find_hf_config", "hf_snapshot",
+           "pinned_hf_config", "role_of_module"]
 
 MODULE_PREFIX = "dense_"                    # verity_vllm.observe.fold.profiles.dense_<ROLE>
 HF_CONFIG_DIR = Path(__file__).with_name("hf_configs")
@@ -46,17 +51,13 @@ HF_CONFIG_DIR = Path(__file__).with_name("hf_configs")
 #: with a structure the table does not describe, refuses fail-closed in `generic.structural_refusal` -- not a silently mis-fitted profile.
 
 
-def module_name(role: str) -> str:
-    return f"{MODULE_PREFIX}{role}"
-
-
 def role_of_module(name: str) -> str | None:
     """`dense_<ROLE>` -> ROLE (the suffix is a checkpoint role: upper-case letters / digits / underscores), else None."""
     short = name.rsplit(".", 1)[-1]
     if not short.startswith(MODULE_PREFIX):
         return None
     role = short[len(MODULE_PREFIX):]
-    return role if role and all(c.isupper() or c.isdigit() or c == "_" for c in role) else None
+    return role if role and all(c.isupper() or c.isdecimal() or c == "_" for c in role) else None
 
 
 def checkpoint_entry(role: str) -> dict[str, Any] | None:
@@ -68,8 +69,8 @@ def checkpoint_entry(role: str) -> dict[str, Any] | None:
     for e in entries:
         if e.get("role") == role:
             return e
-    from verity_vllm.engine.profiles.cases import CASES
-    repo = (CASES.get(role) or {}).get("repo")
+    case = CASES.get(role)
+    repo = case.get("repo") if case else None
     if repo:
         for e in entries:
             if e.get("repo") == repo:

@@ -15,14 +15,14 @@ from verity.circuits import boolean as BL
 from verity.circuits import codec
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.evaluation import evaluate_call
-from verity.definitions.ops import prims as P
+from verity.circuits.ops import prims as P
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, RecordType, Tuple, Value, type_from_json
 
 PATH = Path(__file__).parent / "boolean_vectors.json"
 REWRITE = ("the vectors differ from the reference implementation's; a change meant to move them rewrites them with "
-           "`uv run python tools/verity/check/pins.py --write verity/circuits/tests/boolean_vectors.json`")
+           "`uv run python tools/check/pins.py --write verity/circuits/tests/boolean_vectors.json`")
 BIT = BL.BIT
 
 

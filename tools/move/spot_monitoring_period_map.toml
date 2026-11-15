@@ -1,0 +1,13 @@
+# SPOT's monitoring period module (`Spot/MonitoringPeriod.lean`, namespace `Spot.MonitoringPeriod`) keeps its Glossary
+# name. `lean_names_map.toml`'s `MonitoringPeriod` -> `PeriodRecord` in that file was for the challenger's record of a
+# period (`Spot.Challenger.PeriodRecord`, which keeps its name here); it also moved the file and renamed its namespace,
+# which the module's importers and `MonitoringPeriodAudit.lean`, in the same namespace, don't follow.
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/lean/Spot/PeriodRecord.lean"]
+words = { "PeriodRecord" = "MonitoringPeriod" }
+
+[keep]
+strings = ["Challenger.PeriodRecord"]

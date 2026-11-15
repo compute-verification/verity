@@ -1,4 +1,4 @@
-"""What a node reports of itself, for its node file (`verity/hardware/nodes/`): the interfaces that carry traffic off
+"""What a node reports of itself, for its node file (`hardware/nodes/`): the interfaces that carry traffic off
 it, with their line rates, the interface each disk is behind, and what each NVIDIA card's firmware says it gives a
 program. One Attempt on the node (cwd = the source tree), which writes nothing to a device:
 

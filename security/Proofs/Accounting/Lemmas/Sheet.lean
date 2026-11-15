@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Accounting.Guarantees.Sheet
+public import Definitions.Registration.Guarantees.Sheet
 
 /-!
 # What the data-sheet axioms give: lemmas
 
-The statements of `Definitions.Accounting.Guarantees.Sheet` that are steps of its guarantees' proofs rather than
+The statements of `Definitions.Registration.Guarantees.Sheet` that are steps of its guarantees' proofs rather than
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 

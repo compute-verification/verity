@@ -1,5 +1,5 @@
 """Per-(request, engine step) attribution of a rank's committed sampled ids against the Match record
-(`tp2_worker._tp2_attribution`) -- CPU-only: the committer is the production per-tensor host committer (`tests.check.opened`) with
+(`tp2_worker._tp2_attribution`) -- CPU-only: the committer is the served per-tensor host committer (`tests.check.opened`) with
 `step_rows` (the rank's request->rows map) set; the sampled ids are read through `oracle_compare.OpenedReader` (opened, verified against
 the run root).
 
@@ -14,13 +14,14 @@ from __future__ import annotations
 import importlib
 import sys
 import types
+from typing import Any
 
 import numpy as np
 import pytest
 
 # tp2_worker imports torch inside the methods that need it, so the module imports torch-free.  A module-level
 # `sys.modules.setdefault("torch", SimpleNamespace())` here poisoned the whole pytest session on a torch-free host: every later
-# collected module that imports torch (cb_a torch_frontend -> `torch.utils`) then failed at COLLECTION ("'torch' is not a package")
+# collected module that imports torch (whatever reaches `torch.utils`) then failed at COLLECTION ("'torch' is not a package")
 # instead of skipping -- 2 collection errors, the session interrupted.  If tp2_worker ever needs torch at import, stub it in a
 # fixture with monkeypatch.setitem(sys.modules, ...), never for the process.
 try:
@@ -28,17 +29,20 @@ try:
 except ModuleNotFoundError as e:  # pragma: no cover -- only if tp2_worker grows a module-level torch import
     if e.name != "torch":
         raise
-    sys.modules["torch"] = types.SimpleNamespace()
+    sys.modules["torch"] = types.ModuleType("torch")
     try:
         w = importlib.import_module("verity_vllm.pipeline.tp.rank_worker")
     finally:
         del sys.modules["torch"]
-_cls = next(v for v in vars(w).values() if isinstance(v, type) and hasattr(v, "_tp2_attribution"))
+_cls: Any = next(v for v in vars(w).values() if isinstance(v, type) and hasattr(v, "_tp2_attribution"))
 
 
 class _Stub:
     _tp2_logical_request = _cls._tp2_logical_request
     _tp2_attribution = _cls._tp2_attribution
+    ids: dict[int, bytes]
+    rc: Any
+    _tp2_commit: dict[str, Any]
 
 
 TOK = {"A": [11, 12, 13], "B": [21, 22, 23]}

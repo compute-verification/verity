@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-import served_window as S
-from inputs import K_MAX, block_k_log, cap
-from verity.commitments.windows.interface import MASK_LOG
+from verity.protocols.proofs.spot.prover.cost import served_window as S
+from verity.protocols.proofs.spot.prover.cost.inputs import K_MAX, block_k_log, cap
+from verity.commitments.periods.interface import MASK_LOG
 
 
 @pytest.fixture(scope="module")
@@ -62,10 +62,10 @@ def test_proving_only_picks_the_finest_rung_at_every_scope(out):
 
 
 def test_the_commitment_moves_the_work_optimum_coarser_as_the_period_grows(out):
-    """The scopes are the window and core's monitoring periods (`reporting.PERIODS`); pooled over a longer one the
-    work optimum is never finer, and from a week on it is coord in both views."""
+    """The scopes are the window and core's monitoring periods (`verity.protocol.MONITORING_PERIODS`); pooled over a
+    longer one the work optimum is never finer, and from a week on it is coord in both views."""
     order = list(out["rungs"])
-    assert list(S.scopes()) == ["window"] + [name for name, _ in S.reporting.PERIODS]
+    assert list(S.scopes()) == ["window"] + [name for name, _ in S.MONITORING_PERIODS]
     for h in S.readings():
         best = [order.index(_results(out, target="work", scope=s, h=h, scheme="hm96", weight=1.0)[0]["best_lean"])
                 for s in S.scopes()]
@@ -107,7 +107,7 @@ def test_a_code_commitment_hashes_1_over_rho_the_bytes_and_no_row_in_circuit(out
             assert code["lean"]["prove"] < base["lean"]["prove"], (r["scheme"], code["rung"])
 
 
-def test_the_replay_reruns_each_drawn_request_and_moves_no_optimum(out):
+def test_the_replay_reruns_each_sampled_request_and_moves_no_optimum(out):
     """Serving keeps no values, so each request a sampled proof block lies in is re-run from its prompt: at one window every
     request of the step (the samples far outnumber them), one stock step; pooled over a period about one request a sample; and
     the cheapest fitting rung is the one it is without the replay."""
@@ -129,4 +129,4 @@ def test_no_rungs_fit_turns_on_the_hm96_and_sha512_slots(out):
     for name, rung in out["rungs"].items():
         if not rung["fits"]:
             assert any((1 << (round(p["gates"]) + 8 * sum(p["rows"])).bit_length()) + (1 << MASK_LOG) > 1 << K_MAX
-                       or p["out_bits"] > S.UNIT_CLASS_MAX for p in rung["parts"] if not p["fits"]), name
+                       or p["out_bits"] > S.SIZE_CLASS_MAX for p in rung["parts"] if not p["fits"]), name

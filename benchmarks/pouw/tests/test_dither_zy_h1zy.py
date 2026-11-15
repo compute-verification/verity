@@ -32,9 +32,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
-from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops as OPS
+
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 DITHER = Path(__file__).resolve().parents[2] / "hash" / "dither"

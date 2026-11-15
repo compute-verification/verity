@@ -34,19 +34,32 @@ from functools import cache
 from typing import Any
 
 import torch
-from vllm.model_executor.layers.fused_moe import FusedMoEMethodBase, FusedMoeWeightScaleSupported, RoutedExperts
-from vllm.model_executor.layers.linear import (LinearBase, LinearMethodBase, UnquantizedLinearMethod,
-                                               register_weight_loader_v2_supported_method)
+from vllm.model_executor.layers.fused_moe import (
+    FusedMoEMethodBase,
+    FusedMoeWeightScaleSupported,
+    RoutedExperts,
+)
+from vllm.model_executor.layers.linear import (
+    LinearBase,
+    LinearMethodBase,
+    UnquantizedLinearMethod,
+    register_weight_loader_v2_supported_method,
+)
 from vllm.model_executor.layers.quantization import register_quantization_config
 from vllm.model_executor.layers.quantization.base_config import QuantizationConfig
 from vllm.model_executor.layers.quantization.utils.quant_utils import is_layer_skipped
 from vllm.model_executor.layers.vocab_parallel_embedding import ParallelLMHead
-from vllm.model_executor.parameter import ChannelQuantScaleParameter, ModelWeightParameter
+from vllm.model_executor.parameter import (
+    ChannelQuantScaleParameter,
+    ModelWeightParameter,
+)
 from vllm.model_executor.utils import set_weight_attrs
 
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.program.frontend.target_profile import TargetProfile
+
+__all__ = ["Int8PlainLinearMethod", "register"]
 
 NAME = TargetProfile.INT8_EXACT_QUANTIZATION
 
@@ -54,7 +67,7 @@ NAME = TargetProfile.INT8_EXACT_QUANTIZATION
 class Int8PlainLinearMethod(X.PlainGemm, LinearMethodBase):
     """One linear layer's plain arm (`engine.int8_exact`): `int8_experts.PlainGemm`'s ``apply`` and ``observe``."""
 
-    def __init__(self, prefix: str):
+    def __init__(self, prefix: str) -> None:
         X.PlainGemm.__init__(self, prefix)
 
     def create_weights(self, layer: torch.nn.Module, input_size_per_partition: int, output_partition_sizes: list[int],
@@ -181,7 +194,7 @@ class Int8ExactConfig(QuantizationConfig):
         return []
 
     @classmethod
-    def from_config(cls, config: dict[str, Any]) -> "Int8ExactConfig":
+    def from_config(cls, config: dict[str, Any]) -> Int8ExactConfig:
         return cls(int(cls.get_from_keys(config, ["weight_max"])), cls.get_from_keys_or(config, ["modules_to_not_convert"], None))
 
     def get_quant_method(self, layer: torch.nn.Module, prefix: str

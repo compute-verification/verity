@@ -23,6 +23,8 @@ from collections.abc import Hashable, Iterable, Iterator, Sequence
 from itertools import chain
 from typing import Any
 
+__all__ = ["PlanMetas"]
+
 
 class PlanMetas(Sequence):
     """One plan's metas as columns, one flat tuple of names, dtypes, byte counts, offsets, ranks and dimensions each. A tuple
@@ -40,9 +42,9 @@ class PlanMetas(Sequence):
 
     def __init__(self, names: Iterable[str], dtypes: Iterable[str], sizes: Iterable[int], offsets: Iterable[int],
                  shapes: Iterable[Iterable[int]], chunk: int) -> None:
-        shapes = tuple(map(tuple, shapes))
+        dims: tuple[tuple[int, ...], ...] = tuple(map(tuple, shapes))
         self.names, self.dtypes, self.sizes, self.offsets = tuple(names), tuple(dtypes), tuple(map(int, sizes)), tuple(map(int, offsets))
-        self.ranks, self.dims = tuple(map(len, shapes)), tuple(map(int, chain.from_iterable(shapes)))
+        self.ranks, self.dims = tuple(map(len, dims)), tuple(map(int, chain.from_iterable(dims)))
         self.chunk = chunk
         self.nbytes = sum(self.sizes)
         self.digest: bytes | None = None

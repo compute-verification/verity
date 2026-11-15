@@ -1,4 +1,4 @@
-"""GPU-truth fixture for `TopPMask_v1{V,S}` (`verity.definitions.registry.topp_split`) across EVERY split geometry the vLLM
+"""GPU-truth fixture for `TopPMask_v1{V,S}` (`verity_vllm.definitions.registry.topp_split`) across EVERY split geometry the vLLM
 d9105ea80 split top-p pipeline can launch (S = 1, 2, 4, 8, 16, 32) with constructed pivot ties -- and the CPU checker the committed
 test uses.
 
@@ -26,13 +26,17 @@ import json
 import os
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Literal
 
 import numpy as np
-from dataclasses import dataclass, field
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import option
+from verity_vllm.pipeline.cli import write
+
+__all__ = ["COMMANDS", "main"]
 
 f32 = np.float32
 NEG_INF_BITS = 0xFF800000
@@ -47,7 +51,7 @@ MANIFEST_SEED = 20260920
 def drain_batches(num_sm: int) -> tuple[int, ...]:
     """The drain's batch sizes on a device of `num_sm` SMs, descending: DRAIN_BATCHES plus B and B + 1 for every B at which
     splits_for(B, num_sm) != splits_for(B + 1, num_sm), up to the split pipeline's largest batch."""
-    from verity.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for
+    from verity_vllm.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for
     edges = {b for n in range(1, SPLIT_MAX_BATCH) if splits_for(n, num_sm) != splits_for(n + 1, num_sm) for b in (n, n + 1)}
     return tuple(sorted(set(DRAIN_BATCHES) | edges, reverse=True))
 
@@ -75,7 +79,7 @@ def gen_random(seed: int, V: int) -> np.ndarray:
 def gen_ties(seed: int, V: int, S: int, k: int, keep_frac: float, head: int = 8, group_bias: int | None = None, plateau: float = 3.5) -> tuple[np.ndarray, float]:
     """Row with `k` identical plateau logits at lanes spread over the S slices (+ boundary pairs), and the p that puts the top-p
     boundary `keep_frac` of the way into the plateau.  `group_bias` (0/1) puts every plateau lane on a thread of that Z group."""
-    from verity.definitions.registry.topp_geometry import spt_for
+    from verity_vllm.definitions.registry.topp_geometry import spt_for
     g = CH.generator(seed)
     x = (g.standard_normal(V) * 1.0 - 6.0).astype(f32)             # tail: small mass
     slice_len = (V + S - 1) // S
@@ -103,8 +107,12 @@ def gen_ties(seed: int, V: int, S: int, k: int, keep_frac: float, head: int = 8,
     x[head_lanes] = hv
     x[lanes] = f32(plateau)
     x = bf16_round(x)
-    xd = x.astype(np.float64); m = xd.max(); e = np.exp(xd - m); pr = e / e.sum()
-    head_mass = float(pr[head_lanes].sum()); pm = float(pr[lanes[0]])
+    xd = x.astype(np.float64)
+    m = xd.max()
+    e = np.exp(xd - m)
+    pr = e / e.sum()
+    head_mass = float(pr[head_lanes].sum())
+    pm = float(pr[lanes[0]])
     p = head_mass + pm * (keep_frac * k)
     p = float(f32(min(max(p, 0.05), 0.999)))
     return x, p
@@ -116,17 +124,21 @@ def build_manifest(seed: int, with_record: bool = False) -> list[dict]:
     for S in SPLITS:
         for V in RANDOM_VOCABS:
             for r in range(2 if V == 128256 else 3):
-                cases.append({"id": cid, "kind": "random", "S": S, "V": V, "seed": seed + 1000 * S + 10 * V + r, "p": 0.95 if r != 1 else 0.9}); cid += 1
+                cases.append({"id": cid, "kind": "random", "S": S, "V": V, "seed": seed + 1000 * S + 10 * V + r, "p": 0.95 if r != 1 else 0.9})
+                cid += 1
         for V in TIE_VOCABS:
             for (k, kf, gb, pl) in ((3, 0.5, None, 3.5), (12, 0.25, None, 3.5), (24, 0.5, None, 3.5), (24, 0.95, None, 3.5), (40, 0.6, None, 3.5),
                                     (16, 0.5, 0, 3.5), (16, 0.5, 1, 3.5), (24, 0.5, None, 6.5), (12, 0.75, None, 7.5)):
                 if V == 128256 and k in (3, 40):
                     continue
-                cases.append({"id": cid, "kind": "ties", "S": S, "V": V, "seed": seed + 7 * cid, "k": k, "keep_frac": kf, "group_bias": gb, "plateau": pl}); cid += 1
+                cases.append({"id": cid, "kind": "ties", "S": S, "V": V, "seed": seed + 7 * cid, "k": k, "keep_frac": kf, "group_bias": gb, "plateau": pl})
+                cid += 1
         if with_record:
             for r in range(3):
-                cases.append({"id": cid, "kind": "record", "S": S, "V": 128256, "row": r}); cid += 1
-    cases.append({"id": cid, "kind": "drain", "V": 128256, "seed": seed + 99991, "k": 24, "keep_frac": 0.5, "p": None}); cid += 1
+                cases.append({"id": cid, "kind": "record", "S": S, "V": 128256, "row": r})
+                cid += 1
+    cases.append({"id": cid, "kind": "drain", "V": 128256, "seed": seed + 99991, "k": 24, "keep_frac": 0.5, "p": None})
+    cid += 1
     return cases
 
 
@@ -258,15 +270,17 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
     F, R = TT._SPLIT_FANOUT, TT._SPLIT_ROUNDS
     record = None
     if record_npz:
-        record = (np.load(record_npz), json.load(open(record_npz + ".json")))
+        record = (np.load(record_npz), json.loads(Path(record_npz + ".json").read_text()))
     cases = build_manifest(seed, with_record=record is not None)
-    o = Path(out); o.mkdir(parents=True, exist_ok=True)
-    arrays: dict[str, np.ndarray] = {}
+    o = Path(out)
+    o.mkdir(parents=True, exist_ok=True)
+    arrays: dict[str, Any] = {}
     summary = []
 
-    def run_pipeline(x_dev: "torch.Tensor", p_dev: "torch.Tensor", S: int, V: int):
+    def run_pipeline(x_dev: torch.Tensor, p_dev: torch.Tensor, S: int, V: int):
         """stats -> 5 steps -> (instrumented mask on a copy | real mask kernel in place); returns (keep_real, keep_probe, zlane, stats, sc)."""
-        stats = x_dev.new_empty((S, 4)); parts = x_dev.new_empty((1, R, S, F, 3))
+        stats = x_dev.new_empty((S, 4))
+        parts = x_dev.new_empty((1, R, S, F, 3))
         TT._topp_sb_stats_kernel[(S,)](x_dev, x_dev.stride(0), stats, x_dev, p_dev, HAS_K=False, VOCAB_SIZE=V, S=S, BLOCK=8192, num_warps=8)
         for r in range(R):
             TT._topp_sb_step_kernel[(S,)](x_dev, x_dev.stride(0), stats, parts, x_dev, p_dev, r, HAS_K=False, S=S, F=F, NUM_ROUNDS=R, VOCAB_SIZE=V, BLOCK=2048, num_warps=8)
@@ -310,12 +324,14 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
             c["temperature"] = record_temperature(c, record)
             c["x_in_sha"] = __import__("hashlib").sha256(x_in.tobytes()).hexdigest()[:16]    # the checker's TemperatureScale model must reproduce it
         c["p"] = float(p)
-        c["kept"] = int(keep_real.sum()); c["z_nunique"] = int(len(zu))
+        c["kept"] = int(keep_real.sum())
+        c["z_nunique"] = int(len(zu))
         c["probe_keep_eq_real"] = None if keep_probe is None else bool(np.array_equal(keep_probe, keep_real))
         c["ties"] = bool(np.nanmax(sc[:, 4]) < np.nanmax(sc[:, 5])) if not np.isnan(sc).all() else None
-        c["numkeep"] = None if np.isnan(sc[0, 4]) else float(sc[0, 4]); c["numdup"] = None if np.isnan(sc[0, 5]) else float(sc[0, 5])
+        c["numkeep"] = None if np.isnan(sc[0, 4]) else float(sc[0, 4])
+        c["numdup"] = None if np.isnan(sc[0, 5]) else float(sc[0, 5])
         summary.append(c)
-        print(json.dumps({k: c[k] for k in ("id", "kind", "S", "V", "p", "kept", "z_nunique", "ties", "numkeep", "numdup", "probe_keep_eq_real")}), flush=True)
+        write(json.dumps({k: c[k] for k in ("id", "kind", "S", "V", "p", "kept", "z_nunique", "ties", "numkeep", "numdup", "probe_keep_eq_real")}))
     # drain: the real entry point on a stacked batch
     dc = [c for c in cases if c["kind"] == "drain"][0]
     V = dc["V"]
@@ -326,7 +342,8 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
     X = torch.from_numpy(np.stack([r[0] for r in rows]).view(np.int32).copy()).view(torch.float32).to(dev)
     P = torch.tensor([r[1] for r in rows], dtype=torch.float32, device=dev)
     dc["rows"] = [{"seed": dc["seed"] + b, "S_gen": 16 if b % 2 == 0 else 32, "p": float(rows[b][1])} for b in range(len(rows))]
-    dc["num_sm"] = int(num_sm); dc["batches"] = []
+    dc["num_sm"] = int(num_sm)
+    dc["batches"] = []
     for B in drain_batches(num_sm):
         L = X[:B].clone()
         TT._apply_topp_split(L, None, P[:B], float("-inf"), num_sm)
@@ -337,14 +354,14 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
             s *= 2
         arrays[f"drain_B{B}_keep"] = np.packbits(keep, axis=1, bitorder="little")
         dc["batches"].append({"B": B, "S": s, "kept": [int(k.sum()) for k in keep]})
-        print(json.dumps({"drain": B, "S": s, "kept": [int(k.sum()) for k in keep][:8]}), flush=True)
+        write(json.dumps({"drain": B, "S": s, "kept": [int(k.sum()) for k in keep][:8]}))
     summary.append(dc)
     np.savez_compressed(o / "fixture.npz", **arrays)
     (o / "manifest.json").write_text(json.dumps({
         "cases": summary, "seed": seed, "num_sm": int(num_sm), "gpu": torch.cuda.get_device_name(0), "torch": torch.__version__,
         "triton": triton.__version__, "vllm": __import__("vllm").__version__, "record": os.path.basename(record_npz) if record_npz else None,
         "secs": round(time.time() - t0, 1)}, indent=1))
-    print("cases", len(summary), "->", o / "fixture.npz", f"{(o / 'fixture.npz').stat().st_size / 1024:.0f} KB", f"{time.time() - t0:.1f}s")
+    write(f"cases {len(summary)} -> {o / 'fixture.npz'} {(o / 'fixture.npz').stat().st_size / 1024:.0f} KB {time.time() - t0:.1f}s")
 
 
 # ------------------------------------------------------------------------------------------------ check (CPU)
@@ -352,15 +369,15 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
 
 def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
     """Model vs fixture: masked row (keep), stats, per-lane Z group, drain batches.  Returns the report dict (ok = every check passed)."""
-    from verity.definitions.registry import topp_split as TS
-    from verity.definitions.registry import topp_geometry
+    from verity_vllm.definitions.registry import topp_geometry
+    from verity_vllm.definitions.registry import topp_split as TS
     dd = Path(d)
     man = json.loads((dd / "manifest.json").read_text())
     z = np.load(dd / "fixture.npz")
     record = None
     if record_npz and os.path.exists(record_npz):
-        record = (np.load(record_npz), json.load(open(record_npz + ".json")))
-    rep = {"n": 0, "mask_ok": 0, "stats_ok": 0, "zgroup_ok": 0, "zgroup_checked": 0, "ties_cases": 0, "boundary_tie_cases": 0, "fail": [], "drain": []}
+        record = (np.load(record_npz), json.loads(Path(record_npz + ".json").read_text()))
+    rep: dict[str, Any] = {"n": 0, "mask_ok": 0, "stats_ok": 0, "zgroup_ok": 0, "zgroup_checked": 0, "ties_cases": 0, "boundary_tie_cases": 0, "fail": [], "drain": []}
     for c in man["cases"]:
         if c["kind"] == "drain":
             continue
@@ -381,7 +398,9 @@ def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
         keep_m = out.view(np.uint32) != NEG_INF_BITS
         mask_ok = bool(np.array_equal(keep_m, keep_k))
         stats_ok = bool(np.array_equal(stats.view(np.uint32), z[pre + "stats"].view(np.uint32)))
-        rep["n"] += 1; rep["mask_ok"] += mask_ok; rep["stats_ok"] += stats_ok
+        rep["n"] += 1
+        rep["mask_ok"] += mask_ok
+        rep["stats_ok"] += stats_ok
         if c.get("ties"):
             rep["ties_cases"] += 1
             if c["kind"] == "ties" and S >= 2:
@@ -399,21 +418,23 @@ def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
             zw_model = np.asarray(Zh, f32).view(np.uint32)[grp]
             zw_fix = zvals[zbit]
             zg_ok = bool(np.array_equal(zw_model, zw_fix))
-            rep["zgroup_checked"] += 1; rep["zgroup_ok"] += zg_ok
+            rep["zgroup_checked"] += 1
+            rep["zgroup_ok"] += zg_ok
         if not (mask_ok and stats_ok and (zg_ok in (None, True))):
             diff = np.nonzero(keep_m != keep_k)[0]
             rep["fail"].append({"id": c["id"], "kind": c["kind"], "S": S, "V": V, "p": p, "mask_ok": mask_ok, "stats_ok": stats_ok, "zgroup_ok": zg_ok,
                                 "lanes_differ": int(len(diff)), "first": [int(i) for i in diff[:8]], "numkeep_model": tr.get("numkeep"), "numdup_model": tr.get("numdup"),
                                 "numkeep_kernel": c.get("numkeep"), "numdup_kernel": c.get("numdup")})
         if verbose:
-            print(json.dumps({"id": c["id"], "kind": c["kind"], "S": S, "V": V, "mask_ok": mask_ok, "stats_ok": stats_ok, "zgroup_ok": zg_ok, "ties": c.get("ties"),
-                              "kept": c.get("kept")}), flush=True)
+            write(json.dumps({"id": c["id"], "kind": c["kind"], "S": S, "V": V, "mask_ok": mask_ok, "stats_ok": stats_ok, "zgroup_ok": zg_ok, "ties": c.get("ties"),
+                              "kept": c.get("kept")}))
     dc = [c for c in man["cases"] if c["kind"] == "drain"]
     if dc:
-        dc = dc[0]; V = dc["V"]
+        dc = dc[0]
+        V = dc["V"]
         for b in dc["batches"]:
             B, S = b["B"], b["S"]
-            assert S == topp_geometry.splits_for(B, dc["num_sm"]), (B, S)
+            assert topp_geometry.splits_for(B, dc["num_sm"]) == S, (B, S)
             keep_k = z[f"drain_B{B}_keep"]
             ok_rows = 0
             for i in range(B):
@@ -425,10 +446,10 @@ def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
             if ok_rows != B:
                 rep["fail"].append({"drain_B": B, "S": S, "rows_ok": ok_rows})
             if verbose:
-                print(json.dumps({"drain_B": B, "S": S, "rows_ok": f"{ok_rows}/{B}"}), flush=True)
+                write(json.dumps({"drain_B": B, "S": S, "rows_ok": f"{ok_rows}/{B}"}))
     rep["ok"] = not rep["fail"] and rep["mask_ok"] == rep["n"] and rep["stats_ok"] == rep["n"] and rep["zgroup_ok"] == rep["zgroup_checked"]
     if verbose:
-        print("TOTALS", json.dumps({k: v for k, v in rep.items() if k not in ("fail", "drain")}), "fail:", rep["fail"][:5])
+        write(f"TOTALS {json.dumps({k: v for k, v in rep.items() if k not in ('fail', 'drain')})} fail: {rep['fail'][:5]}")
     return rep
 
 
@@ -437,7 +458,7 @@ class ProduceOptions:
     out: str = option("--out")
     record: str | None = option("--record", default=None)
     seed: int = option("--seed", type=int, default=MANIFEST_SEED)
-    cmd: str = field(default="produce", init=False)
+    cmd: Literal["produce"] = field(default="produce", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -445,13 +466,13 @@ class CheckOptions:
     dir: str = option("--dir")
     record: str | None = option("--record", default=None)
     out: str | None = option("--out", default=None)
-    cmd: str = field(default="check", init=False)
+    cmd: Literal["check"] = field(default="check", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
 class ManifestOptions:
     record: bool = option("--record", default=False, action="store_true")
-    cmd: str = field(default="manifest", init=False)
+    cmd: Literal["manifest"] = field(default="manifest", init=False)
 
 
 COMMANDS = {"produce": ProduceOptions, "check": CheckOptions, "manifest": ManifestOptions}
@@ -467,4 +488,4 @@ def main(args: ProduceOptions | CheckOptions | ManifestOptions) -> None:
         sys.exit(0 if rep["ok"] else 1)
     else:
         for c in build_manifest(MANIFEST_SEED, with_record=args.record):
-            print(json.dumps(c))
+            write(json.dumps(c))

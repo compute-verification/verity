@@ -499,7 +499,7 @@ def lockLigPadZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P : Pads0 n
             obtain ⟨rfl, rfl, hlen⟩ := hxy
             rcases x with ⟨initial, s⟩
             exact .send (Fin e → K) fun ev =>
-              Lock.bind (g := drawKs A e) (g' := drawKs A e)
+              Lock.bind (g := sampleKs A e) (g' := sampleKs A e)
                 (R := fun i' (a b : Fin e → K) => i' = (fun _ => none : IRep F D) ∧ a = b)
                 (fun i'' ρ ρ' hρ => by
                   obtain ⟨rfl, rfl⟩ := hρ
@@ -510,7 +510,7 @@ def lockLigPadZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P : Pads0 n
                       (fun i3 acc pend h => .ret ⟨rfl, h⟩)
                       (lockLigTailZ A r hr ⟨m, k0, lv₀ :: rest, ext⟩ t c₀ e b C₀ lv₀ z₀ β₀ initial hlen ρ ybar T'
                         rest rfl))
-                (Lock.same (drawKs A e)))
+                (Lock.same (sampleKs A e)))
           (lockFoldZK A P r (fun _ => none) k0 0 _ _)
 
 end FlockSoundness.Discharge.ZkLink

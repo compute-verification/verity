@@ -74,7 +74,7 @@ theorem prob_false : prob π k (fun _ => False) = 0 :=
 theorem prob_congr {E E' : (Fin k → U) → Prop} (h : ∀ d, E d ↔ E' d) : prob π k E = prob π k E' :=
   Verity.Game.prPMFReal_congr _ h
 
-/-- `prob` as a sum over the samples, each weighted by the product of its draws' weights. -/
+/-- `prob` as a sum over the samples, each weighted by the product of its samples' weights. -/
 theorem prob_eq_sum (E : (Fin k → U) → Prop) [DecidablePred E] :
     prob π k E = ∑ d : Fin k → U, if E d then ∏ i, (π (d i)).toReal else 0 := by
   refine (Verity.Game.prPMFReal_eq_sum _ E).trans (sum_congr rfl fun d _ => ?_)

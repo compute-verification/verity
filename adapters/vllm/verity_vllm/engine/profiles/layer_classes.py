@@ -6,6 +6,9 @@ own class name.  ``REEXEC`` are the groups whose forward is a pure function of t
 """
 from __future__ import annotations
 
+# The module states no `__all__`: the list would hold GEMMA_RMS_NORM as a string, which the by-name lint
+# (tests/test_no_by_name_rules.py) reads as a model's name.
+
 TAPPED = ("RMSNorm", "GemmaRMSNorm", "SiluAndMul", "GeluAndMul", "RotaryEmbedding", "Attention", "VocabParallelEmbedding",
           "LogitsProcessor")
 LINEAR = frozenset({"LinearBase", "ColumnParallelLinear", "RowParallelLinear", "ReplicatedLinear", "QKVParallelLinear",
@@ -18,6 +21,7 @@ SAMPLER = "Sampler"
 RMS_NORM, GEMMA_RMS_NORM, LAYER_NORM = "RMSNorm", "GemmaRMSNorm", "LayerNorm"
 SILU_AND_MUL, GELU_AND_MUL = "SiluAndMul", "GeluAndMul"
 ROTARY, ATTENTION, EMBEDDING, LOGITS = "RotaryEmbedding", "Attention", "VocabParallelEmbedding", "LogitsProcessor"
+LM_HEAD = "ParallelLMHead"
 LINEAR_BASE, COLUMN_LINEAR, ROW_LINEAR = "LinearBase", "ColumnParallelLinear", "RowParallelLinear"
 #: The norms and the gated activations, each a family the step bound gives one width.
 NORMS = frozenset({RMS_NORM, GEMMA_RMS_NORM, LAYER_NORM})

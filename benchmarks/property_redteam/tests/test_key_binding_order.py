@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 
-from verity.protocols.poub.verifier import codec
+from verity.protocols.accounting.poub.verifier import codec
 
 P512 = codec.Codec(codec.P512, 2, False)
 

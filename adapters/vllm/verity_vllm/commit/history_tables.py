@@ -11,7 +11,7 @@ appends its own rows in position order from the table's length (`Histories.appen
 its tables, and the next window appends from that edge. The window's registration carries each table's root after the
 window's appends (`Histories.entries`), fixed before the window's coins; the verifier recomputes it from the writers'
 public strings and never takes the prover's. The window commits each appended row under the table's salt and string
-(`Histories.salts`, `Histories.strings`; `verity.commitments.windows.rows.commit`'s ``salts_of`` and ``strings_of``), so
+(`Histories.salts`, `Histories.strings`; `verity.commitments.periods.rows.commit`'s ``salts_of`` and ``strings_of``), so
 the leaf is the string the window commits and no row is hashed twice.
 
 Retention is per request: a table keeps every row and salt it holds, `ROW_BYTES` a row a layer beside its tree, until its
@@ -33,12 +33,16 @@ from typing import Any
 from verity.commitments import history as HT
 from verity.commitments import hm96
 
-__all__ = ["Histories", "ROW_BYTES", "SWITCH", "WORDS", "check", "name", "of_request", "on", "release"]
+__all__ = ["Histories", "LAYOUT_WORDS", "NAME", "ROW_BYTES", "SWITCH", "WORDS", "check", "name", "of_request", "on",
+           "release"]
 
 #: the registration's engine switch the table-read form is under, off by default
 SWITCH = "dsa_table_reads"
 #: a latent row's words: ``DsaLatentRow_v1{KVL=512, R=64}``'s [kv_c | k_pe], bf16
 WORDS = 576
+#: a latent row's words by the KV cache's layout: bf16 [kv_c | k_pe] (`WORDS`), or fp8_ds_mla's 656-byte row (the e4m3
+#: kv_c, its four f32 scales, one a 128-wide tile, then the bf16 k_pe) as u16 words in byte order
+LAYOUT_WORDS = {"bf16": WORDS, "fp8_ds_mla": 328}
 #: what a table retains a row: its words' bytes and its salt
 ROW_BYTES = 2 * WORDS + hm96.SHA512.salt_bytes
 

@@ -9,7 +9,7 @@ identity hash, the commitments, randomness, SPOT, Flock and the served path, whi
 
 namespace Domains
 
--- Shared: the identity hash, frame-v3 trees and indexed domains (`verity.ml.commitments`)
+-- Shared: the identity hash, frame-v3 trees and indexed domains (`verity.commitments`)
 abbrev TAGGED_SHA512 : String := "verity/tagged-sha512/v1"
 abbrev TAGGED_SHA256 : String := "veritor/tagged-sha256/v1"
 abbrev FRAME_V3 : String := "veritor/protocol/merkle/frame/v3"
@@ -17,7 +17,7 @@ abbrev FRAME_V3_SHA512_ROOT : String := "frame-v3-sha512/root/v1"
 abbrev INDEXED_RANGE : String := "veritor/indexed-domain/range/v1"
 abbrev INDEXED_EXPLICIT : String := "veritor/indexed-domain/explicit/v1"
 
--- Shared: hm96 leaves and row digests (`verity.ml.commitments`, `Flock.HmRow`)
+-- Shared: hm96 leaves and row digests (`verity.commitments`, `Flock.HmRow`)
 abbrev HM96_SHA512 : String := "hm96-sha512/v1"
 abbrev HM96_SHA512_NODE_ROW : String := "hm96-sha512/v1/node-row"
 abbrev HM96_SHA512_ROW_V1 : String := "hm96-sha512/row/v1"
@@ -40,14 +40,14 @@ abbrev SHA512_ROW : String := "verity/sha512-row/v2"
 abbrev SHA512_ROW_SEG : String := "verity/sha512-row-seg/v1"
 abbrev SHA512_ROW_SEG_SEGMENT : String := "verity/sha512-row-seg/v1/segment"
 
--- Shared: randomness (`verity.ml.randomness`, `Randomness`)
+-- Shared: randomness (`verity.commitments.randomness`, `Randomness`)
 abbrev RANDOMNESS_DERIVE : String := "verity/randomness/derive/v2"
 abbrev RANDOMNESS_STREAM : String := "verity/randomness/stream/v2"
 abbrev RANDOMNESS_SHARD : String := "verity/randomness/shard/v2"
 abbrev RANDOMNESS_DERIVE_V1 : String := "verity/randomness/derive/v1"
 abbrev RANDOMNESS_STREAM_V1 : String := "verity/randomness/stream/v1"
 
--- Shared: sampled proofs' one-stage statement, registrations and partitions; Flock's public inputs and descriptors
+-- Shared: SPOT's one-stage statement, registrations and partitions; Flock's public inputs and descriptors
 abbrev ONE_STAGE_PROTOCOL : String := "verity/sampled-proofs/one-stage/v1"
 abbrev ONE_STAGE_PROTOCOL_V2 : String := "verity/sampled-proofs/one-stage/v2"
 abbrev ONE_STAGE_SERVED_DOMAIN : String := "verity/one-stage/served-domain/v1"
