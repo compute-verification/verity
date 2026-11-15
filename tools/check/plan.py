@@ -39,7 +39,7 @@ The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict 
 answer for each:
 
     preflight-lock        `uv lock --check`: uv.lock is what the workspace's pyproject files resolve to.  A plan of a commit
-                          runs in that commit's tree under `uv run --locked` (`DECLARED`, and `research.merge`'s `PLAN`), which
+                          runs in that commit's tree under `uv run --locked` (`DECLARED`), which
                           refuses a lock that isn't current, so a plan exists only where it would pass; and every suite's key
                           holds the lock's resolution of what the suite imports.  Implied by every suite.
     preflight-fixtures    fetches each fixture `artifacts.json` lists that git doesn't hold.  A suite's key holds the
