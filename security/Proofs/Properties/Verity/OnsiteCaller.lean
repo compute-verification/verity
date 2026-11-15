@@ -23,11 +23,11 @@ namespace Verity
 open Accounting Core
 
 /-- **A composite's acceptance holds SPOT's case to the caller's facts**: where composite `k`, which lists SPOT, accepts
-what the prover sent, SPOT's case in it, at the parameters `k` names for it, keeps the caller's facts at the form those
+what the prover sent under any pins, SPOT's case in it, at the parameters `k` names for it, keeps the caller's facts at the form those
 parameters name (`Properties.Remote.StageHeld`), where the caller's check finds nothing only where the record keeps them
 (`Properties.Remote.CallerCheckSound`). -/
-theorem stageHeld_of_accepts (hm : Properties.Remote.CallerCheckSound) {k : Verity.Registration.Composite} {s : Sent}
-    (h : Accepts k s) (ha : Subprotocol.sampled ∈ subprotocols k) :
+theorem stageHeld_of_accepts (hm : Properties.Remote.CallerCheckSound) {pins : AuditorPins}
+    {k : Verity.Registration.Composite} {s : Sent} (h : Accepts pins k s) (ha : Subprotocol.sampled ∈ subprotocols k) :
     ∃ ps c ev, Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components k) ps ev,
       x.1 = VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray s.blobs) ∧ Properties.Remote.StageHeld x.2.2 := by
   obtain ⟨ps, c, ev, hdec, pub, prof, ⟨⟨⟨-, -, hfst, hpar⟩, hcases, -⟩, -⟩, -⟩ := accepts_same h
@@ -42,7 +42,7 @@ theorem stageHeld_of_accepts (hm : Properties.Remote.CallerCheckSound) {k : Veri
 
 /-- **Onsite's acceptance holds SPOT's case to the caller's facts**: `stageHeld_of_accepts` at onsite, which lists
 SPOT, on the proved caller's check (`Properties.Remote.SecurityProofs.callerCheckSound`). -/
-theorem onsite_stageHeld {s : Sent} (h : Accepts .onsite s) :
+theorem onsite_stageHeld {pins : AuditorPins} {s : Sent} (h : Accepts pins .onsite s) :
     ∃ ps c ev, Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components .onsite) ps ev,
       x.1 = VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray s.blobs) ∧ Properties.Remote.StageHeld x.2.2 :=
   stageHeld_of_accepts Properties.Remote.SecurityProofs.callerCheckSound h (mem_subprotocols.2 (by decide))
