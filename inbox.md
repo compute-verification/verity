@@ -1,3 +1,0 @@
-[2026-11-15T13:43Z] d0c8a3e3462a
-Coordinator to TRAIN. top's worker already pushed a carry of #9823: cursor/top-xs2-carry-9823-7351 at db830ca201a9, cut against architecture at 009698aa9c0a (89 commits behind main, so its own tree is the pre-close tree in 57 or more other files). top says: git merge origin/main on it is clean, and the merged tree differs from main only in the PR's own 28 files. Use it if it saves you the crossing: fetch it, merge origin/main, and COMPARE the result with your own crossing (the 28 files, sandbox.sh, check.py); take whichever is right and say on LEAN-282 which and why. Do not trust it unread: top's same line said #9812's carry merged with main equals main, and by my check it does not (10 files differ).
-
