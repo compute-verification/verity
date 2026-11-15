@@ -214,7 +214,11 @@ It needs:
   and for serve.sh, which looks there too. From the clone's root:
   `cd adapters/vllm && WORK=$HOME/verity-work bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B --gpu`, then
   back at the root, WORK=$HOME/verity-work bash benchmarks/compute/serve.sh;
-- Lean v4.34.0, through [elan](https://github.com/leanprover/elan), to build the Lean verifier;
+- this tree's `adapters/torch` importable (`verity_torch`, which the served model's PoUW hooks import): `research run`
+  puts it on `PYTHONPATH`; a bare `bash benchmarks/compute/serve.sh` needs it there where `benchmarks/harness/env.sh`
+  doesn't put it (`export PYTHONPATH=$PWD/adapters/torch:$PYTHONPATH`); serve.sh checks it before any step;
+- Lean v4.34.0, through [elan](https://github.com/leanprover/elan), to build the Lean verifier: `lake` on `PATH` or
+  in `~/.elan/bin`, which serve.sh also checks first;
 - about 2 GB of disk for the run's passes, besides the checkpoint and the vLLM environment; the record itself is about
   200 MB;
 - memory for the Python verdict's workers, one a core unless `JOBS` says otherwise: on a 96-core H200 node the run's
