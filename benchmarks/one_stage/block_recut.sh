@@ -20,7 +20,7 @@ R=("$REPO/.venv/bin/research")
 FAMS=$(find "$D" -name 'census-rank*.json' | sort -V)
 [ -n "$FAMS" ] || { echo "no census-rank<r>.json in $ART"; exit 4; }
 sha256sum $FAMS | sed "s|$D/||" > "$O/families.sha256"
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 start=$(date +%s)
 $PY - $FAMS <<'PYEOF' 2>&1 | tee "$O/retemplate.log"
 import json, sys

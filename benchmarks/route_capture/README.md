@@ -1,12 +1,12 @@
 # Route capture
 
-What a model served like production executes, at the granularity the ahead-of-time step compiler names routes in: every
+What a model served at serving's settings executes, at the granularity the ahead-of-time step compiler names routes in: every
 engine step's launch-shape class, and the device kernels of the first steps of each class. A served step hides most of
 its kernels from Python (CUDA graphs replay them, and for a model vLLM compiles, Inductor fuses them), so the capture reads
 the step's shape from its scheduler output, the graph dispatch from the model runner, and the kernels from
 `torch.profiler`, which sees the kernels a graph replays.
 
-`run.sh` serves GLM-5.3 on eight H200s at TP8 the way production does: `vllm serve` at vLLM's defaults (CUDA graphs,
+`run.sh` serves GLM-5.3 on eight H200s at TP8 the way serving does: `vllm serve` at vLLM's defaults (CUDA graphs,
 chunked prefill, prefix caching, async scheduling, the model runner vLLM picks), at most 256 sequences and 8,192 tokens a
 step, prompts up to 32k tokens. At the integration's vLLM pin, GLM-5.3's architectures are among those vLLM serves with
 breakable CUDA graphs (`DEFAULT_BREAKABLE_CUDAGRAPH_ARCHITECTURES`), which turn torch.compile off: the model runs vLLM's
@@ -26,7 +26,7 @@ custom CUDA kernels, captured whole into graphs that break around attention, whi
 `run.sh`'s header lists its variables (`VENV`, `CKPT`, `SHAREGPT`, `DURATION_S`). The engine runs with the Inductor pin
 the integration serves with (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`), so for a model vLLM compiles, the fused kernels
 captured are the ones a replay runs. vLLM takes FlashInfer's block-FP8 GEMM below 32 rows only when FlashInfer's kernels
-are prebuilt (`flashinfer-cubin`, which production images ship) or `nvcc` is on PATH to compile them, and FlashInfer's
+are prebuilt (`flashinfer-cubin`, which serving images ship) or `nvcc` is on PATH to compile them, and FlashInfer's
 sampler compiles at warmup with that `nvcc`, so `run.sh` puts `CUDA_HOME`'s `nvcc` on PATH, and `engine_env.txt` records
 `has_flashinfer()`. The FlashInfer sampler stays on, vLLM's default; if a sampled smoke request fails with it, the server
 restarts with it off, and `engine_env.txt` says so.

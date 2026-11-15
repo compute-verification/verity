@@ -271,7 +271,7 @@ def record_deadlines(rows: list[dict], reg: dict[str, dict]) -> list[str]:
 
 
 def sync_registry(message: str) -> None:
-    research = Path(os.environ.get("FLEET_RESEARCH", "/workspace/.venv/bin/research"))
+    research = settings.research_bin()
     subprocess.run([str(research), "notes", "sync", "--root", str(MACHINES_D.parent), "--path", MACHINES_D.name, "-m", message],
                    timeout=300, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -410,9 +410,9 @@ def quota_findings() -> list[dict]:
 
 def card_finding(rows_today: list[dict]) -> dict | None:
     """The card's UTC day so far (rate x hours seen) against $FLEET_CARD_DAILY_USD, when set, at >= 80%."""
-    cap = float(os.environ.get("FLEET_CARD_DAILY_USD") or 0)
+    limit = settings.card_daily_usd()
     spent = sum((r.get("rate_usd_per_hour") or 0) * INTERVAL_S / 3600 for r in rows_today)
-    return {"spent": round(spent, 2), "cap": cap} if cap and spent >= QUOTA_ALERT * cap else None
+    return {"spent": round(spent, 2), "limit": limit} if limit and spent >= QUOTA_ALERT * limit else None
 
 
 def machine_class(platform: str | None) -> str:
@@ -644,7 +644,7 @@ def loop(clock: Callable[[], float] = time.time, sleep: Callable[[float], None] 
                           f"({q['share']:.0%})") for q in quota_findings()]
                 start = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()
                 if c := card_finding(load_samples(start, now)):
-                    found.append(("card", f"the card's day so far: ${c['spent']:,.0f} of its ${c['cap']:,.0f} daily limit"))
+                    found.append(("card", f"the card's day so far: ${c['spent']:,.0f} of its ${c['limit']:,.0f} daily limit"))
                 for key, line in found:
                     if (day, key) not in told:
                         told.add((day, key))

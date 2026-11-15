@@ -63,19 +63,19 @@ def BindsAt (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (V H : �
     (∀ u, consts (Flock.Bridge.constGate D hU n u) = some true) →
     ∀ {ι : Type} (R : Reads (Flock.Bridge.circuitOf D hU n) n ι),
     (∀ i ∈ R.reads, ∃ j, ∃ hj : j < D.unroll.upv, R.port i = portsAt D hU n (R.unit i) hj V H) →
-    ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] (acc : Ω → Prop) (drawn : Ω → Finset (Fin n))
+    ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] (acc : Ω → Prop) (sampled : Ω → Finset (Fin n))
       (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace) (cost : Ω → ℕ) (ε : ℝ),
     R.Committed Verity.sha512 Verity.sha512 Flock.Hm96.Default512.key.data.toList →
-    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) (R.unit i) ∧
         RegisteredRows consts (Flock.Bridge.partsOf D hU n) (R.unit i) (R.port i) (R.root i) (R.domain i) (tr ω))) ≤ ε →
     FlockSoundness.Assumptions.SHA512CRExpected (fun m => (Verity.sha512 m).bytes)
       (Verity.Game.draw (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 Flock.Hm96.Default512.key.data.toList
-        drawn tr cost).S) (fun _ => PUnit.unit)
-      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 Flock.Hm96.Default512.key.data.toList drawn tr cost).out
+        sampled tr cost).S) (fun _ => PUnit.unit)
+      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 Flock.Hm96.Default512.key.data.toList sampled tr cost).out
       (fun s => ((R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 Flock.Hm96.Default512.key.data.toList
-        drawn tr cost).cost s : ℝ)) →
-    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+        sampled tr cost).cost s : ℝ)) →
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) < (R.port i).count ∧
       (R.port i).hOf ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) ≠
         (R.table i (R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)))).row) ≤

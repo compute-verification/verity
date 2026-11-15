@@ -6,7 +6,7 @@ import copy
 import gzip
 import json
 
-from tests.check.test_sampled_replay import H, I, _program
+from tests.check.test_sampled_replay import INTER, H, _program
 from tests.pipeline.test_vu_export import _export, _world
 from verity_vllm.pipeline import program_graph as PG
 from verity_vllm.pipeline import vu_export as VX
@@ -48,7 +48,7 @@ def test_every_call_is_in_its_module_body_and_every_read_is_an_edge(tmp_path):
     gemm = [x for x in g["groups"] if x["definition"] == "Gemm_v1"]
     assert all(x["template"] == "GemmCoordinate" and x["instances"] == x["calls"] * x["statics"]["N"] for x in gemm)
     down = next(x for x in gemm if x["module"].endswith("down_proj"))
-    assert down["statics"] == {"K": I, "N": H}
+    assert down["statics"] == {"K": INTER, "N": H}
     assert any(gid[e["from"]]["definition"] == "SiluMul_v1" and e["to"] == down["id"] for e in g["edges"])
     assert any(k.startswith("weights:") for k in down["prescribed_reads"])
 
@@ -222,7 +222,7 @@ def test_edges_carry_the_words_each_read_takes(tmp_path):
     runs = sum(hi - lo for r in inst["rows"] for grp in r["args"] for k, _a, lo, hi in grp if k == "n")
     assert sum(e["words"] for e in g["edges"]) == runs
     down = next(e for e in g["edges"] if gid[e["from"]]["definition"] == "SiluMul_v1" and gid[e["to"]]["module"].endswith("down_proj"))
-    assert down["words_per_read"] == I and down["ports"] == [{"param": "x", "port": "out", "words": down["words"]}]
+    assert down["words_per_read"] == INTER and down["ports"] == [{"param": "x", "port": "out", "words": down["words"]}]
     assert down["bits"] == 16 * down["words"]
     qkv = [e for e in g["edges"] if gid[e["from"]]["module"].endswith("qkv_proj")]
     assert qkv and all(e["words_per_read"] < gid[e["from"]]["statics"]["N"] for e in qkv)     # each reader takes a slice of q | k | v

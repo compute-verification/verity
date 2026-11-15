@@ -110,7 +110,7 @@ theorem Run.walkJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : R
       (∃ bs, o.bodies.toList = linkBody (cms.map fun c => flat c.cap).toList
         (o.tabs.map fun _ => ByteArray.empty).toList :: bs ∧ Recs o.resp 1 (streams.toList.flatMap Array.toList) bs) ∧
       o.sess.points = pointsOf o.spec (Claims.coinSeq o.r 0) ∧
-      ∀ i < o.sts.size, o.tabs[i]! = Setup.ofCircuit o.sts[i]! ∧ Zk.schedule o.sts[i]!.m = .ok schs[i]! ∧
+      ∀ i < o.sts.size, o.tabs[i]! = Setup.ofCircuit o.sts[i]! ∧ Zk.schedule o.sts[i]!.wideLeaf o.sts[i]!.m = .ok schs[i]! ∧
         o.sch i = schs[i]!.1 ∧ ∀ r < 2,
           (o.stream i r).rounds = streams[2 * i + r]!.map (roundRec o.spec (Claims.hOf H)) ∧
           RepRunJ o.resp (Claims.hOf H) o.spec (Setup.ofCircuit o.sts[i]!) schs[i]! (traces o.sts o.w)[i]! cms[i]!
@@ -145,7 +145,7 @@ theorem Run.walkJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : R
   dsimp only at hrec hpsz hfiles
   rw [htsz] at hcsz
   simp only [ptsOf_coin] at hrec hfiles
-  have hsc' : ∀ i (hi : i < o.sts.size), Zk.schedule (Setup.ofCircuit o.sts[i]!).m = .ok schs[i]! ∧
+  have hsc' : ∀ i (hi : i < o.sts.size), Zk.schedule (Setup.ofCircuit o.sts[i]!).wideLeaf (Setup.ofCircuit o.sts[i]!).m = .ok schs[i]! ∧
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit o.sts[i]!).merkle
         (schs[i]!.1.levels.getD 0 default) schs[i]!.2 (packed (traces o.sts o.w)[i]! (Setup.ofCircuit o.sts[i]!).m)
         (o.ω.extra i) (o.ω.lanePad i) (o.ω.salt i 0 0) = .ok cms[i]! := fun i hi => by
@@ -307,7 +307,7 @@ open FlockSoundness.Refine FlockSoundness.Discharge.ZkExec
 /-- **Where a masked rep's steps return, the inner proof ends at the rep's round count**, within the rep's stream, at
 any table (`RunZk.inner_k`). -/
 theorem Run.inner_kJ (o : Run H rel) {i r : ℕ} {st : Flock.Stmt} (ht : o.tabs[i]! = Setup.ofCircuit st)
-    {v : Schedule × ℕ} (hv : Zk.schedule st.m = .ok v) (hsch : o.sch i = v.1)
+    {v : Schedule × ℕ} (hv : Zk.schedule st.wideLeaf st.m = .ok v) (hsch : o.sch i = v.1)
     (hRp : (Zk.replayWith o.hs o.tabs[i]! (o.lay i) (o.zp i r).proof (o.zp i r).inner.root).run (o.t₀ i r) =
       .ok (o.rp i r))
     (hRS : (ringSwitchWith o.hs o.tabs[i]!.m (ringClaimsZk (o.rp i r).1 (o.zp i r).proof ++ o.extras i)
@@ -320,7 +320,7 @@ theorem Run.inner_kJ (o : Run H rel) {i r : ℕ} {st : Flock.Stmt} (ht : o.tabs[
     (o.inner i r).2.k = (st.m + ((Setup.ofCircuit st).kLog - 6)) + ((2 + (o.extras i).size) + 1) +
         (v.1.k0 + 7 + 11 * (v.1.levels.size - 1)) + 4 ∧
       (o.inner i r).2.k ≤ (o.stream i r).rounds.size := by
-  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams st.m v.1 v.2 hv
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ st.m v.1 v.2 hv
   obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
   rw [hsch] at hLg
   obtain ⟨hr₁, hk₁⟩ := replayWith_rounds o.hs (t' := (o.rp i r).2) (rp := (o.rp i r).1)

@@ -5,7 +5,8 @@
 # refuses, and one started off the pod, where /data/watchers doesn't exist, sends nothing; `floor` is the limit it reports against
 [[metric]]
 id = "infra/compute-usd-per-hour"
-title = "All compute's dollars an hour: every running Nebius machine and every RunPod pod, against the limit"
+title = "Compute dollars an hour"
+axis = "Dollars an hour of all running compute, every Nebius machine and every RunPod pod, against the limit."
 owner = "infra"
 unit = "USD per hour"
 better = "lower"
@@ -17,6 +18,7 @@ floor = 155
 [[metric]]
 id = "infra/store-index-pass-seconds"
 title = "One store index pass's length"
+axis = "Seconds one pass of the store index takes from its start to its end."
 owner = "infra"
 unit = "s"
 better = "lower"

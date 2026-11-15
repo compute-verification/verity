@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.HmRow
+public import Flock.ReadNet.Sha
+
+/-!
 `sha512/row-seg/v1`'s row digest as builder programs (`gates.rowleaf`): the segment hash `Sha512RowSegSegment_v1{M}`
 (`segment`), the outer hash `Sha512RowSegOuter_v1{N_BITS}` (`outer`), each a traced Definition, and the composite
 `Sha512RowSeg_v1{N_BITS}` (`rowSeg`), whose body calls the constants 0 and 1, then the segment hash once a segment from its
 prefix's chaining value over those two bits, then the outer hash.
 -/
-module
-
-public import Flock.HmRow
-public import Flock.ReadNet.Sha
 
 @[expose] public section
 

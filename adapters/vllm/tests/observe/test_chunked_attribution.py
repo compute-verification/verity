@@ -37,7 +37,7 @@ def test_parse_variant_accepts_sampling_names_and_feature_pairs():
         gw.parse_variant("unknown=1")
 
 
-def test_chunked_schedule_of_the_b1_c256_draw():
+def test_chunked_schedule_of_the_b1_c256_lengths():
     d = gw.draw_lengths("B1", "C256", 0)
     assert [(r["prompt_len"], r["max_tokens"]) for r in d] == [(155, 15)]
     sim = gw.simulate_schedule_chunked(d, 64)
@@ -331,7 +331,7 @@ def test_randomized_scheduler_ids_are_mapped_back_to_the_submitted_ids():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the adapter wiring (needs torch + vllm importable: runs in the pod's venv-cu129, skipped on the laptop)
+# the adapter wiring (needs torch and vllm importable; skipped where either is absent)
 # ---------------------------------------------------------------------------------------------------------
 
 

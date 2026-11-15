@@ -1,0 +1,45 @@
+# The messages between the workload and the prover, to each protocol's developer side: what
+# `tools/move/layout.py --map tools/move/workload_messages_map.toml` moves and rewrites.
+#
+# Each protocol's `verifier/workload.py` becomes its `prover/workload.py`. Both parties of these messages are the
+# developer's, and the adapter, which writes and reads them, imports no protocol's `verifier/`
+# (`adapters/vllm/tests/test_no_verifier_imports.py`); the architecture gives a protocol's developer side to `prover/`.
+# No file is split, added or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/proofs/spot/verifier/workload.py" = "verity/protocols/proofs/spot/prover/workload.py"
+"verity/protocols/accounting/pouw/verifier/workload.py" = "verity/protocols/accounting/pouw/prover/workload.py"
+"verity/protocols/accounting/pous/verifier/workload.py" = "verity/protocols/accounting/pous/prover/workload.py"
+"verity/protocols/accounting/certifier/verifier/workload.py" = "verity/protocols/accounting/certifier/prover/workload.py"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: the layout of record (`tests/tree.toml`), records of what was (the earlier moves and their maps,
+# changelogs, research's recorded moves, the archive), files whose bytes a digest pins, and Lean sources.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json"]
+
+[modules]
+# the renames [paths] implies (`layout.py --modules`)
+"verity.protocols.accounting.certifier.verifier.workload" = "verity.protocols.accounting.certifier.prover.workload"
+"verity.protocols.accounting.pous.verifier.workload" = "verity.protocols.accounting.pous.prover.workload"
+"verity.protocols.accounting.pouw.verifier.workload" = "verity.protocols.accounting.pouw.prover.workload"
+"verity.protocols.proofs.spot.verifier.workload" = "verity.protocols.proofs.spot.prover.workload"

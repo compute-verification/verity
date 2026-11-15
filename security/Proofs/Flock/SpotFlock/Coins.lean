@@ -13,7 +13,7 @@ public import Proofs.Flock.Soundness.ZK.Hiding
 Each stage of SPOT[Flock] reads its `L = 2^20` bytes off its round's coin (`coinByte`): the coin's `65536` field elements'
 `16` bytes each, in order (`FlockDeploy.Coin.bytes`). Those bytes determine the coin (`Claims.Bridge.coin_bytes_injective`)
 and there are as many coins as byte strings of length `L` (`2^128` elements, `65536` times), so the map is a bijection
-(`coinEquiv`) and carries the uniform law on coins to the uniform law on the bytes. That is `CallsUniform` at SPOT's
+(`coinEquiv`) and carries the uniform distribution on coins to the uniform distribution on the bytes. That is `CallsUniform` at SPOT's
 byte maps (`callsUniform`), A3 at each stage's call, as a theorem with no premise on the operating system.
 
 A stage that reads `R` rounds' coins reads their `R · L` bytes coin by coin (`stageByte`), one for one with the `R`

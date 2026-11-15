@@ -1,4 +1,4 @@
-"""verity_vllm.program.dsa_table: a DSA row past INDEX_TOPK keys read by table.  `DsaTopKIndex_v1{N,TOPK}` gives a mask's TOPK
+"""verity_torch.dsa_table: a DSA row past INDEX_TOPK keys read by table.  `DsaTopKIndex_v1{N,TOPK}` gives a mask's TOPK
 members' positions in ascending order, `DsaHistoryReads_v1{V,TOPK,H}` the history rows at given positions, and the two over a
 row's counted mask (`DsaTopKMaskCounted_v1`) read the rows the rows network routes for it: `DsaButterflyRowsPad_v1{T,N}` over the
 row's T history rows and its pad (`DsaButterflyRows_v1{N}` at T = N) at `DsaButterflySettings_v1{N}` of that mask.  The stand-ins
@@ -9,11 +9,11 @@ from __future__ import annotations
 import random
 
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
-from verity.definitions.registry import dsa_topk_mask as M
-from verity_vllm.program import dsa_table as DT
+from verity_vllm.definitions.registry import dsa_topk_mask as M
+
+from verity_torch import dsa_table as DT
 
 
 def _members(rng: random.Random, T: int, N: int, TOPK: int) -> tuple[list[int], list[int]]:

@@ -7,7 +7,7 @@ public import Properties.Verity.Coupling
 
 The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.SoundnessOf` read these: a small hand-built
 descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
-circuit file is read as empty files under the netlist tags (`fileRead`); the coin commitment has no families, the device
+circuit file is read as empty files under the `verity/flock-netlist/v1` tags (`fileRead`); the coin commitment has no families, the device
 samples nothing at the close and signs nothing (`signer`), the honest prover sends an empty request and closes the device
 at once, no check reads its log, and there are no commitment openings and no gates computed;
 the world charges nothing over an empty window (`world`); the schedule is one
@@ -38,7 +38,7 @@ noncomputable section
 /-- **The device**: no on-chip state, no memory, no ops, no bandwidth, and one side channel that carries nothing. -/
 def device : Device Unit := ⟨0, 0, fun _ => 0, 0, fun _ => 0⟩
 
-/-- **The committed files as v2 reads them**: empty files under the netlist tags. -/
+/-- **The committed files as v2 reads them**: empty files under the `verity/flock-netlist/v1` tags. -/
 def fileRead : FileRead := ⟨Flock.Tags.netlistV1, .empty, [], .empty⟩
 
 /-- The step that charges nothing. -/
@@ -96,7 +96,7 @@ def forger : Hash.Assumptions.LmsForger where
 
 /-- **The idle deployment's names**, publishing the error `δ` for every subprotocol and the work certificate `W`. -/
 noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
-  read _ _ := fileRead
+  read _ _ := .one fileRead
   place _ _ _ _ := none
   programDigest θ := some (sha512 θ.data.toList)
   publicDigest θ := some (sha512 θ.data.toList)

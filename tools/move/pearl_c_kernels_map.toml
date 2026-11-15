@@ -1,0 +1,138 @@
+# The Pearl-C kernels' move: what `tools/move/layout.py --map tools/move/pearl_c_kernels_map.toml` moves and rewrites.
+#
+# PoUW's Pearl-C kernel directories, `benchmarks/pouw/pearl_c/`, `pearl_c_sm120/` and `pearl_c_sm90/`, become PoUW's
+# prover's `verity/protocols/accounting/pouw/prover/kernels/` under the same names, siblings as they were, since their
+# includes cross and their names key schemes. Each moves whole but for what drives a benchmark, which stays in
+# `benchmarks/pouw/` under its old directory (the rows whose old and new paths are the same):
+# - `fixture.py`, the check's builder, which reads the verifier's tests' vectors, and `ship.sh`, which runs it;
+# - `card.sh`, run from a ship;
+# - `debit.py`, whose check imports a benchmark's module;
+# - the files that drive vLLM or a model (`glm53*.py`, `grouped_check.py`, `llama32_1b.py`), the overhead arm
+#   (`overhead_arm.py` and its record) and `h200.sh`, a run script.
+# The harness's `ieee_pin.cu`, the source of the SASS gate's pinned builds, goes beside the pins (`sass_pins.json`);
+# `ieee_pin.py` and its job scripts stay with the harness.
+#
+# Kernel sources are rewritten, each only where a relative `#include` crosses the move's edge: `pearl_c/`'s includes
+# of the circuits' headers, at their new depth, and other benchmarks' kernels' includes of `pearl_c/sha512.cuh`. The
+# includes between the three directories are unchanged. What stays and named its own directory as the kernel's is not
+# rewritten ([rewrite] exclude); the move's hand commit names the kernel's new directory where one of them loads it.
+# No file is split or deleted; `layout.py` writes the `__init__.py` of `kernels/` and of each moved directory, since
+# Python files move below the package root. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"benchmarks/pouw/pearl_c/" = "verity/protocols/accounting/pouw/prover/kernels/pearl_c/"
+"benchmarks/pouw/pearl_c_sm120/" = "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/"
+"benchmarks/pouw/pearl_c_sm120/fixture.py" = "benchmarks/pouw/pearl_c_sm120/fixture.py"
+"benchmarks/pouw/pearl_c_sm120/ship.sh" = "benchmarks/pouw/pearl_c_sm120/ship.sh"
+"benchmarks/pouw/pearl_c_sm120/card.sh" = "benchmarks/pouw/pearl_c_sm120/card.sh"
+"benchmarks/pouw/pearl_c_sm90/" = "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/"
+"benchmarks/pouw/pearl_c_sm90/fixture.py" = "benchmarks/pouw/pearl_c_sm90/fixture.py"
+"benchmarks/pouw/pearl_c_sm90/ship.sh" = "benchmarks/pouw/pearl_c_sm90/ship.sh"
+"benchmarks/pouw/pearl_c_sm90/debit.py" = "benchmarks/pouw/pearl_c_sm90/debit.py"
+"benchmarks/pouw/pearl_c_sm90/glm53.py" = "benchmarks/pouw/pearl_c_sm90/glm53.py"
+"benchmarks/pouw/pearl_c_sm90/glm53_passes.py" = "benchmarks/pouw/pearl_c_sm90/glm53_passes.py"
+"benchmarks/pouw/pearl_c_sm90/glm53_profile.py" = "benchmarks/pouw/pearl_c_sm90/glm53_profile.py"
+"benchmarks/pouw/pearl_c_sm90/glm53_slices.py" = "benchmarks/pouw/pearl_c_sm90/glm53_slices.py"
+"benchmarks/pouw/pearl_c_sm90/glm53_timing.py" = "benchmarks/pouw/pearl_c_sm90/glm53_timing.py"
+"benchmarks/pouw/pearl_c_sm90/grouped_check.py" = "benchmarks/pouw/pearl_c_sm90/grouped_check.py"
+"benchmarks/pouw/pearl_c_sm90/llama32_1b.py" = "benchmarks/pouw/pearl_c_sm90/llama32_1b.py"
+"benchmarks/pouw/pearl_c_sm90/overhead_arm.py" = "benchmarks/pouw/pearl_c_sm90/overhead_arm.py"
+"benchmarks/pouw/pearl_c_sm90/overhead_arm.json" = "benchmarks/pouw/pearl_c_sm90/overhead_arm.json"
+"benchmarks/pouw/pearl_c_sm90/h200.sh" = "benchmarks/pouw/pearl_c_sm90/h200.sh"
+"benchmarks/pouw/harness/ieee_pin.cu" = "verity/protocols/accounting/pouw/prover/ieee_pin.cu"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row
+paths = ["benchmarks/pouw/pearl_c/", "benchmarks/pouw/harness/ieee_pin.cu"]
+
+[split]
+# A reference to `pearl_c_sm120/`, `pearl_c_sm90/` or the harness, which the map splits, follows the kernel where it
+# means the kernel directory (the loader's setting, a build, a source glob), and stays where it means what stays (the
+# overhead arm, the check's builder, the model drivers): "old file: old directory" = why, or { to, why }.
+"adapters/vllm/tests/protocols/test_pouw.py: benchmarks/pouw/pearl_c_sm120" = "the served kernel setting: the kernel directory"
+"adapters/vllm/verity_vllm/protocols/pouw/__init__.py: benchmarks/pouw/pearl_c_sm120" = "the kernel setting's comment: the kernel directory"
+"adapters/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py: benchmarks/pouw/pearl_c_sm120" = "the kernel setting: the kernel directory"
+"benchmarks/harness/setup/pearl_c.sh: benchmarks/pouw/pearl_c_sm120" = "the kernel's sources it hashes"
+"benchmarks/harness/setup/pearl_c_sm90.sh: benchmarks/pouw/pearl_c_sm120" = "the shared headers it hashes"
+"benchmarks/harness/setup/pearl_c_sm90.sh: benchmarks/pouw/pearl_c_sm90" = "the kernel's sources it hashes and PEARLC_KERNEL, the kernel directory"
+"benchmarks/harness/specs/llama31-8b-1gpu-pearl-c-whole-served.toml: benchmarks/pouw/pearl_c_sm120" = "kernel =, the kernel directory"
+"benchmarks/harness/specs/llama31-8b-1gpu-pouw-protocol-served-b32.toml: benchmarks/pouw/pearl_c_sm120" = "kernel =, the kernel directory"
+"benchmarks/harness/specs/llama31-8b-1gpu-pouw-protocol-served.toml: benchmarks/pouw/pearl_c_sm120" = "kernel =, the kernel directory"
+"benchmarks/harness/tests/test_bench.py: benchmarks/pouw/pearl_c_sm120" = "the spec's kernel =, the kernel directory"
+"benchmarks/harness/tests/test_bench.py: benchmarks/pouw/pearl_c_sm90" = "PEARLC_KERNEL, the kernel directory"
+"benchmarks/harness/verity_bench/overhead.py: benchmarks/pouw/pearl_c_sm90" = { to = "benchmarks/pouw/pearl_c_sm90", why = "the overhead arm's home: overhead_arm.py stays" }
+"benchmarks/overhead/README.md: benchmarks/pouw/pearl_c_sm90" = { to = "benchmarks/pouw/pearl_c_sm90", why = "where overhead_arm.py is, which stays" }
+"benchmarks/pouw/pearl_c_sm120/README.md: benchmarks/pouw/harness" = { to = "benchmarks/pouw/harness", why = "the harness, which stays but for ieee_pin.cu" }
+"benchmarks/pouw/pearl_c_sm120/README.md: benchmarks/pouw/pearl_c_sm90" = "the sm_90a kernel, which includes this one's headers"
+"benchmarks/pouw/pearl_c_sm120/ship.sh: benchmarks/pouw/pearl_c_sm120" = { to = "benchmarks/pouw/pearl_c_sm120", why = "the status of fixture.py's directory; `verity`, beside it, holds the moved sources" }
+"benchmarks/pouw/pearl_c_sm90/h200.sh: benchmarks/pouw/pearl_c_sm90" = "D, the kernel directory the run's cubin and check go into"
+"benchmarks/pouw/pearl_c_sm90/ship.sh: benchmarks/pouw/pearl_c_sm120" = "the shared headers' status, under `verity` beside it"
+"benchmarks/pouw/pearl_c_sm90/ship.sh: benchmarks/pouw/pearl_c_sm90" = { to = "benchmarks/pouw/pearl_c_sm90", why = "the status of fixture.py's directory; `verity`, beside it, holds the moved sources" }
+"benchmarks/pouw/pearl_c_vllm/README.md: benchmarks/pouw/pearl_c_sm120" = "the sm_120 kernels"
+"benchmarks/pouw/pearl_c_vllm/README.md: benchmarks/pouw/pearl_c_sm90" = "the sm_90a kernels"
+"benchmarks/pouw/pearl_c_vllm/bench_arm.py: benchmarks/pouw/pearl_c_sm120" = "PEARLC_KERNEL's default, the kernel directory"
+"benchmarks/pouw/pearl_c_vllm/bench_arm.py: benchmarks/pouw/pearl_c_sm90" = "the H100 kernel directory"
+"benchmarks/pouw/pearl_c_vllm/e2e.py: benchmarks/pouw/pearl_c_sm120" = "--kernel, the kernel directory"
+"benchmarks/pouw/pearl_c_vllm/e2e.py: benchmarks/pouw/pearl_c_sm90" = "--kernel on an H100 or H200, the kernel directory"
+"benchmarks/pouw/pearl_c_vllm/served_profile.sh: benchmarks/pouw/pearl_c_sm120" = "--kernel and the run.py it compares, the kernel directory"
+"benchmarks/pouw/pearl_c_vllm/served_step.sh: benchmarks/pouw/pearl_c_sm120" = "PEARLC_KERNEL's default and the shared headers"
+"benchmarks/pouw/pearl_c_vllm/served_step.sh: benchmarks/pouw/pearl_c_sm90" = "PEARLC_KERNEL on an H100 or H200, the kernel directory"
+"benchmarks/pouw/pearl_c_vllm/window.sh: benchmarks/pouw/pearl_c_sm120" = "PEARLC_KERNEL's default, the kernel directory"
+"benchmarks/pouw/pearl_c_vllm/window.sh: benchmarks/pouw/pearl_c_sm90" = "PEARLC_KERNEL on an H100 or H200, the kernel directory"
+"benchmarks/pouw/tests/test_pearl_c_sm120.py: benchmarks/pouw/pearl_c_sm120" = "HERE, the kernel's sources and run.py"
+"benchmarks/pouw/tests/test_pearl_c_sm90.py: benchmarks/pouw/pearl_c_sm90" = "HERE, the kernel's sources and run.py"
+"benchmarks/pouw/tests/test_pearl_c_vllm.py: benchmarks/pouw/pearl_c_sm120" = "KERNEL, the kernel directory"
+"benchmarks/torch_gpu/s8_linear/README.md: benchmarks/pouw/pearl_c_sm90" = "the sm_90a kernel's plain GEMM"
+"benchmarks/torch_gpu/s8_linear/s8_wgmma.cu: benchmarks/pouw/pearl_c_sm90" = "the sm_90a kernel's plain GEMM"
+"verity/definitions/registry/pearl_c_tile.py: benchmarks/pouw/pearl_c_sm90" = "store_y in the kernel's sources"
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: the layout of record (`tests/tree.toml`, whose not-yet lines are deleted once the move lands),
+# records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the archive), files
+# whose bytes a digest pins, and Lean sources. Kernel sources are rewritten, each only where it names a moved path.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "adapters/vllm/tools/migrate/superseded_quarantine.py",
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "tests/tree.toml",
+           # what stays beside the kernels it named as `HERE`, its own directory, which a rewrite would make the
+           # kernel's: the move's hand commit names the kernel directory where one of them loads it
+           "benchmarks/pouw/pearl_c_sm120/fixture.py", "benchmarks/pouw/pearl_c_sm90/fixture.py",
+           "benchmarks/pouw/pearl_c_sm90/glm53_passes.py", "benchmarks/pouw/pearl_c_sm90/glm53_profile.py",
+           "benchmarks/pouw/pearl_c_sm90/glm53_timing.py", "benchmarks/pouw/pearl_c_sm90/grouped_check.py",
+           "benchmarks/pouw/pearl_c_sm90/overhead_arm.py", "benchmarks/pouw/tests/test_pearl_c_sm90_glm53.py",
+           # paths between the three directories, which move together: `simt_twin.py`'s join of a sibling, and the
+           # header `PD_HOST_EXTRA` names, which `pearl_c_sm120/hash_decode_host.cpp` includes from its own directory
+           "benchmarks/pouw/pearl_c/simt_twin.py", "verity/protocols/accounting/pouw/prover/kernels/pearl_c/simt_twin.py",
+           "benchmarks/pouw/pearl_c_sm90/hash_prefill_host.cpp",
+           "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/hash_prefill_host.cpp"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"benchmarks.pouw.pearl_c" = "verity.protocols.accounting.pouw.prover.kernels.pearl_c"
+"benchmarks.pouw.pearl_c_sm120" = "verity.protocols.accounting.pouw.prover.kernels.pearl_c_sm120"
+"benchmarks.pouw.pearl_c_sm120.fixture" = "benchmarks.pouw.pearl_c_sm120.fixture"
+"benchmarks.pouw.pearl_c_sm90" = "verity.protocols.accounting.pouw.prover.kernels.pearl_c_sm90"
+"benchmarks.pouw.pearl_c_sm90.debit" = "benchmarks.pouw.pearl_c_sm90.debit"
+"benchmarks.pouw.pearl_c_sm90.fixture" = "benchmarks.pouw.pearl_c_sm90.fixture"
+"benchmarks.pouw.pearl_c_sm90.glm53" = "benchmarks.pouw.pearl_c_sm90.glm53"
+"benchmarks.pouw.pearl_c_sm90.glm53_passes" = "benchmarks.pouw.pearl_c_sm90.glm53_passes"
+"benchmarks.pouw.pearl_c_sm90.glm53_profile" = "benchmarks.pouw.pearl_c_sm90.glm53_profile"
+"benchmarks.pouw.pearl_c_sm90.glm53_slices" = "benchmarks.pouw.pearl_c_sm90.glm53_slices"
+"benchmarks.pouw.pearl_c_sm90.glm53_timing" = "benchmarks.pouw.pearl_c_sm90.glm53_timing"
+"benchmarks.pouw.pearl_c_sm90.grouped_check" = "benchmarks.pouw.pearl_c_sm90.grouped_check"
+"benchmarks.pouw.pearl_c_sm90.llama32_1b" = "benchmarks.pouw.pearl_c_sm90.llama32_1b"
+"benchmarks.pouw.pearl_c_sm90.overhead_arm" = "benchmarks.pouw.pearl_c_sm90.overhead_arm"

@@ -10,7 +10,7 @@ import random
 from pathlib import Path
 
 import pytest
-from verity.commitments import hm96, merkle
+from verity.commitments import domains, hm96, merkle
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.limits import VerificationLimits
 from verity.commitments.merkle import (
@@ -206,3 +206,9 @@ def test_the_identity_digests_are_whole_sha512_digests():
 def test_roots_refuse_a_wrong_size_or_count(call):
     with pytest.raises(InvalidArtifact):
         call()
+
+
+def test_the_tree_tags_are_the_tables_and_their_bytes_dont_move():
+    assert R.NODE_TAG == domains.VLLM_NODE.encode() == b"verity-vllm/node/v1"
+    assert R.LIFT_TAG == domains.VLLM_LIFT.encode() == b"verity-vllm/lift/v1"
+    assert R.EMPTY_TAG == domains.VLLM_EMPTY.encode() == b"verity-vllm/empty/v1"

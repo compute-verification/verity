@@ -480,7 +480,7 @@ def test_the_shadow_refuses_nothing_so_it_runs_beside_the_low_risk_lane_as_it_is
 
 def test_a_client_reads_only_the_flag_at_main(tmp_path):
     def commit(text: str) -> str:
-        (tmp_path / "tools/verity/check").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "tools/check").mkdir(parents=True, exist_ok=True)
         (tmp_path / Q.DRIVE_FLAGS).write_text(text)
         subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
         subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"], check=True)

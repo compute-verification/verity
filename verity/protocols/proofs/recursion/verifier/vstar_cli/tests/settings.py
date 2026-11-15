@@ -32,7 +32,7 @@ def store_env() -> dict[str, str]:
 
 
 def lean_jobs() -> int:
-    """``LEAN_JOBS``: how many flock-verify processes a whole-session recursive test runs at once (default 4)."""
+    """``LEAN_JOBS``: how many verity-verify-proof processes a whole-session recursive test runs at once (default 4)."""
     return int(os.environ.get("LEAN_JOBS") or 4)
 
 

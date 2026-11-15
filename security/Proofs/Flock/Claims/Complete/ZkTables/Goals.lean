@@ -130,7 +130,7 @@ theorem Run.jsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) :
   have hlv : liveOf o.spec o.record = .ok ⟨rbs, o.spec.tables.map fun _ => ByteArray.empty,
       pointsOf o.spec (Claims.coinSeq o.r 0), streams.map (·.map liveRound)⟩ := by
     rw [hrec]
-    exact live_recordObjZkJ hn (good_draw hdraw) hz ct hrbs hss o.proofs
+    exact live_recordObjZkJ hn (good_sample hdraw) hz ct hrbs hss o.proofs
   have hsend : o.sends.headD [] = 0 :: linkBody rbs.toList (o.tabs.map fun _ => ByteArray.empty).toList := by
     unfold Run.sends
     rw [hbs]
@@ -175,7 +175,7 @@ theorem Run.mids_eq (o : Run H rel) {b : Claims.Msg} {bs : List Claims.Msg} (hbs
 
 /-- **The record's checks on the record, at a run of several tables**: `RecordAt`'s fields but the proof files'. -/
 structure RecordJsonAt (o : Run H rel) : Prop where
-  draw : drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
+  draw : sampleEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
   liveReads : liveOf o.spec o.record = .ok o.live
   rootB : (o.live.rootB.toList == o.link.1) = true
   publicsLink : (o.live.publics.toList == o.link.2) = true
@@ -223,7 +223,7 @@ theorem recordJsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) : Rec
       liveReads := hlv
       canonical := by
         rw [hrec]
-        exact check_printJ (good_recordObjZkJ hn _ hz ct hrbs _ streams o.proofs (good_draw hdraw))
+        exact check_printJ (good_recordObjZkJ hn _ hz ct hrbs _ streams o.proofs (good_sample hdraw))
       rootB := by rw [hlive, hlink]; exact list_bytes_beq_self _
       publicsLink := ?_
       points := by rw [hlive]; exact beq_self_eq_true _
@@ -235,16 +235,16 @@ theorem recordJsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) : Rec
       proofDigests := ?_
       repStream := ?_
       repExtras := ?_ }
-  · have hd := recordDraw_recordObjZkJ (h := Claims.hOf H) hn hdraw hz ct hrbs
+  · have hd := recordSample_recordObjZkJ (h := Claims.hOf H) hn hdraw hz ct hrbs
       (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs
     rw [hrec, ← hdr]
     revert hd
-    cases o.spec.unitDraw with
+    cases o.spec.unitSample with
     | none => intro hd; rw [hd]; rfl
     | some d =>
       rintro ⟨d', hd', hs⟩
       rw [hd']
-      exact (drawEq_iff _ _).2 (.some hs)
+      exact (sampleEq_iff _ _).2 (.some hs)
   · rw [hlive, hlink]
     dsimp only
     have : (o.spec.tables.map fun _ => ByteArray.empty).toList = (o.tabs.map fun _ => ByteArray.empty).toList := by

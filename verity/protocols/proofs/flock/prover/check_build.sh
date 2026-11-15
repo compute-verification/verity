@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check's flock-circuit build step (tools/verity/check/check.py): a Flock b684b12 checkout with the Rust patches the pods apply
+# check's flock-circuit build step (tools/check/check.py): a Flock b684b12 checkout with the Rust patches the pods apply
 # (pod/20-gpu-link.sh, pod/60-circuit.sh; no CUDA), this tree's live crate linked in, then `cargo check` of flock-circuit in each
 # CPU feature set a pod builds: the class sweep's proving build (sha512), 60-circuit's (sha512, glue), and the selftests'
 # (sha512, glue, seed-injection). A proving build never has seed-injection, so code only that feature defines must stay behind it.
@@ -36,7 +36,7 @@ export RUSTUP_TOOLCHAIN=$RUST_TOOLCHAIN
 [ -d "$F/.git" ] || git clone -q https://github.com/succinctlabs/flock "$F"
 cd "$F"
 git checkout -q b684b12 && git checkout -q -- . && git clean -qfd -e target
-for p in link gpu-link sha512 glue zk vtime; do
+for p in link gpu-link sha512 glue zk vtime wide; do
   git apply "$ROOT/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch"
 done
 ln -s "$ROOT/verity/protocols/proofs/flock/prover/live" crates/flock-live

@@ -26,7 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 #: research tool and the move tool it certifies moves against, the check, the Lean check, and the code an auditor's host runs
 #: outside a `device/` directory
 NEVER_PLAIN = re.compile(r"(.*/)?(.*\.lean|lean-audit\.json|unread-caps\.json|lakefile\..*|lean-toolchain|lake-manifest\.json"
-                         r"|TRUSTED\.sha256)|tools/research/.*|tools/move/.*|tools/verity/check/.*|tools/verity/lean/.*"
+                         r"|TRUSTED\.sha256)|tools/research/.*|tools/move/.*|tools/verity/check/.*|tools/check/.*"
+                         r"|tools/verity/lean/.*"
                          r"|benchmarks/one_stage/.*|benchmarks/network_traces/.*|benchmarks/remote_session/auditor_line\.py")
 #: the directories whose every file, present or added later, is the auditor's devices' or a verifier's code
 TRUSTED_DIRS = ("device", "verifier")

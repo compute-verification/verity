@@ -14,8 +14,8 @@ fold is its list's (`foldl_eq`); `hexOf` writes each byte as two characters, one
 one hex string are one (`hexOf_inj`); lists cut into pieces of one length `k > 0` are one when their concatenations are
 (`flatten_inj`).
 
-The network certifier's and the network records' byte lemmas (`Proofs.Properties.NetworkCertifier.Check.Bytes`,
-`Proofs.Properties.NetworkCertifier.Records.Bytes`) build on these, under the same names.
+The network certifier's and the network records' byte lemmas (`Proofs.Properties.Certifier.Check.Bytes`,
+`Proofs.Properties.Certifier.Records.Bytes`) build on these, under the same names.
 -/
 
 @[expose] public section
@@ -24,7 +24,7 @@ open Flock
 
 set_option maxRecDepth 20000
 
-namespace Properties.NetworkCertifier.Bytes
+namespace Properties.Certifier.Bytes
 
 /-- A byte string's bytes. -/
 def bs (b : ByteArray) : List UInt8 := b.data.toList
@@ -99,9 +99,9 @@ theorem hash_size (m : ByteArray) : (Sha512.hash m).size = 64 := by
   unfold Sha512.hash
   exact Array.size_ofFn
 
-end Properties.NetworkCertifier.Bytes
+end Properties.Certifier.Bytes
 
-open Properties.NetworkCertifier.Bytes (bs_inj)
+open Properties.Certifier.Bytes (bs_inj)
 
 namespace Properties.NetworkRecords.Bytes
 

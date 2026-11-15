@@ -1,7 +1,7 @@
 """The bundle prover's inputs (`prove_bundle.py --bundle B --window DIR`) on the H200 interfaces' drawn-unit bundle (four sampled proof blocks
 of a W8A8 MLP's window) and the part of its window that the hold reads (`fixtures/bundle-window-public`: its
 `window.json`'s run, registration and partition digests and the sampled members' public bodies, beside the H200 interfaces' copy of
-its registration): the honest bundle is held to its window with every check passing, and the command refuses, before
+its docket): the honest bundle is held to its window with every check passing, and the command refuses, before
 staging or proving anything, a bundle whose payload was edited and a window whose sampled member's public body isn't the
 one the bundle names. Proving it end to end needs Flock, Lean and the window's private files: `prove_bundle.sh`."""
 from __future__ import annotations
@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-HERE = Path(__file__).resolve().parent
-PUBLIC = HERE / "fixtures" / "bundle-window-public"
+HERE = (Path(__file__).resolve().parent)
+PUBLIC = Path(__file__).resolve().parent / "fixtures" / "bundle-window-public"
 E2E = HERE.parents[2] / "benchmarks" / "one_stage" / "interfaces" / "tests" / "fixtures"
 sys.path.insert(0, str(HERE.parent))
 import prove_bundle as PB  # noqa: E402
@@ -31,7 +31,7 @@ def window(tmp_path) -> Path:
 def _main(tmp_path: Path, bundle: Path, window: Path) -> tuple[int, dict]:
     out = tmp_path / "out"
     rc = PB.main(["--bundle", str(bundle), "--window", str(window), "--bin", "absent", "--lean", "absent",
-                  "--firewall", "absent", "--out", str(out)])
+                  "--zk-server", "absent", "--out", str(out)])
     return rc, json.loads((out / "summary.json").read_text())
 
 
@@ -40,7 +40,7 @@ def test_the_bundle_is_held_to_its_window(window) -> None:
     held, bad = PB.hold(doc, payload, window)
     assert bad == {} and held and all(held.values())
     assert set(held) == {"bundle_check", "run", "registration", "partition"} | {f"public:m{m['k']}" for m in doc["members"]}
-    assert PB.held_draw(doc, window) == {}
+    assert PB.held_sample(doc, window) == {}
 
 
 def test_an_edited_payload_is_refused_before_anything_is_proved(tmp_path, window) -> None:

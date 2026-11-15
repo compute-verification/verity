@@ -15,7 +15,7 @@ The import order is one listing, ``tests/import_order.toml``, and the checks at 
     by name;  ``infra/`` is the last row, which no file of another row loads, a test included, but the ties it lists.
 
 The listing's tables (``against`` and each place's lists) are generated from the tree by
-``tools/verity/check/import_order.py``, and the listing is byte for byte what it writes.
+``tools/check/import_order.py``, and the listing is byte for byte what it writes.
 
 Beside the order:
 
@@ -25,7 +25,8 @@ Beside the order:
     nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  circuit-check
     imports ``verity`` and no other distribution of the workspace (``CIRCUIT_CHECK_IMPORTS``);  only tests name
     a function past a guard (``TEST_ONLY``);  SPOT[Flock] imports none of the network certifier, in its Python, its Lean
-    packages or its analysis (``SPOT_NOT_CERTIFIER``).
+    packages or its analysis (``SPOT_NOT_CERTIFIER``);  a module the tree imports from the repository's root as
+    ``benchmarks.network_traces.NAME`` is imported by its bare name nowhere (``ONE_NAME``).
 
 An import is an import statement (a relative one resolved against its package), a string handed to
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
@@ -64,6 +65,17 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "verity"
 
+
+def _integration_sites() -> frozenset[tuple[str, str]]:
+    """``KNOWN`` of ``tests/test_integration_boundaries.py``, read from its source: this file is also loaded by path, where no
+    sibling imports."""
+    tree = ast.parse((ROOT / "tests" / "test_integration_boundaries.py").read_text(encoding="utf-8"))
+    return frozenset(next(ast.literal_eval(n.value) for n in tree.body
+                          if isinstance(n, ast.Assign) and [getattr(t, "id", None) for t in n.targets] == ["KNOWN"]))
+
+
+INTEGRATION_SITES = _integration_sites()
+
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
@@ -77,23 +89,25 @@ DEPENDENCIES = {"numpy"}
 #: the hardware's cards, the Site's types, SPOT's planning beside its verifier, and a protocol's manifest with the
 #: monitoring periods.  Within them, what may use numpy.
 STDLIB_ONLY = ("verity/circuits", "verity/circuits/silicon", "verity/commitments/randomness",
-               "verity/claims", "verity/hardware", "verity/device.py", "verity/protocols/proofs/spot",
+               "verity/commitments/claim_ids.py", "verity/device.py", "verity/protocols/proofs/spot",
                "verity/protocol.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: and the parts of the Definitions that use it, which are no scalar reference in `verity/circuits` either
 NUMPY_USERS += ("verity/circuits/cross_call.py", "verity/circuits/kernels", "verity/circuits/ops",
                 "verity/circuits/word.py")
+#: and the network certifier's load relay, whose `generate` lays a weight's generation rows with numpy
+#: (Mon 16 Nov 6 PM PST, network-accounting, whether `load_relay` keeps numpy)
+NUMPY_USERS += ("verity/protocols/accounting/certifier/device/load_relay.py",)
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
 #: own: each owner owes one of the two.  It only shrinks.
 NO_DATE_OR_REASON = ("verity/protocols/compose/device/live_challenger", "verity/protocols/accounting/poub/device/live_verifier",
                      "verity/protocols/accounting/pouw/prover/clear", "verity/protocols/accounting/pouw/verifier/receipts")
 #: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own by the rules on a
 #: file's text: it reads no other distribution at run time and names no path of the census, and each of its
-#: directories is a package.  The code that came from ``benchmarks/``, and the Lean check of σ beside Flock's prover.
+#: directories is a package.  The code that came from ``benchmarks/``.
 #: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
-HELD_AS_VERITY = ("verity/protocols/compose/device/live_challenger", "verity/protocols/proofs/flock/sigma",
-                  "verity/protocols/accounting/poub/device/live_verifier", "verity/protocols/accounting/pouw/prover/clear",
-                  "verity/protocols/accounting/pouw/verifier/receipts")
+HELD_AS_VERITY = ("verity/protocols/compose/device/live_challenger", "verity/protocols/accounting/poub/device/live_verifier",
+                  "verity/protocols/accounting/pouw/prover/clear", "verity/protocols/accounting/pouw/verifier/receipts")
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
 #: certified input and imports none of the certifier, and the two compose only above both.  SPOT's row of the
 #: listing and the certifier's, the trees each of whose Python files (tests included) is checked, SPOT's Lean packages
@@ -107,8 +121,8 @@ SPOT_LEAN = ("verity/protocols/proofs/spot/verifier/lean", "verity/protocols/pro
 SPOT_SECURITY = ("security/*/Flock", "security/*/Flock.lean", "security/*/Spot", "security/*/Spot.lean",
                  "security/Definitions/Claims/Sampling*")
 CERTIFIER_MODULES = ("verity.protocols.accounting.certifier.verifier", "verity.protocols.accounting.certifier.prover", "verity.protocols.accounting.certifier.device")
-CERTIFIER_LEAN = ("verity/protocols/accounting/certifier/device/program/lean", "verity/protocols/accounting/certifier/device/lean",
-                  "verity/protocols/accounting/certifier/verifier/lean", "security/*/NetworkCertifier", "security/*/NetworkCertifier.lean")
+CERTIFIER_LEAN = ("verity/protocols/accounting/certifier/device/program/lean",
+                  "verity/protocols/accounting/certifier/verifier/lean", "security/*/Certifier", "security/*/Certifier.lean")
 SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which composes with it only above both and whose "
                       "stamp SPOT reads as a certified input")
 #: Flock's Lean verifier, by its Lake package's name, and the Lake packages that may require it: those whose Lean reads the
@@ -116,8 +130,8 @@ SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which co
 #: the bytes, hashes and parsing below them requires a base package (``BASE_LEAN``) instead.
 FLOCK_VERIFIER = "flock_verifier"
 REQUIRES_FLOCK_VERIFIER = {
-    "core_firewall", "core_memory_challenger", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
-    "core_vstar_recursive", "network_check", "pous_check", "pouw_commit", "remote_audit", "security_proofs",
+    "core_zk_server", "core_memory_challenger", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
+    "core_vstar_recursive", "network_check", "pous_check", "pouw_commit", "poub", "security_proofs",
     "security_properties",
 }
 #: The base packages below Flock's verifier, each with every package it may require: nothing above it.
@@ -127,13 +141,6 @@ BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
-    # the served path: verity_vllm runs benchmarks' code
-    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store and its load "
-                                                       "(`benchmarks/pous/p2_v1`), through its `P2_V1`",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
-                                                                          "(`benchmarks/remote_session`, "
-                                                                          "its `REMOTE_SESSION`) and `paged.py` "
-                                                                          "(`benchmarks/vllm_encoded`, its `VLLM_ENCODED`)",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/protocols/proofs/flock/prover/pod/gemm_hill.py", "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
@@ -150,27 +157,8 @@ BENCHMARKS_IMPORTERS = {
     # tests and vector scripts that check against a benchmark's reference
     "verity/protocols/accounting/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
-    **dict.fromkeys(("verity/protocols/accounting/pous/verifier/check/scripts/difftest_vectors.py",
-                     "verity/protocols/accounting/pous/verifier/check/tests/test_timed_audit.py"),
-                    "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "
-                    "responder (`benchmarks/pous/band_gpu/harness.py`)"),
     "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
-    **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
-                    "compute-accounting: H1's prover, producer and the live challenger's auditor "
-                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
-    **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py"),
-                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`)"),
-    # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
-    "verity/protocols/compose/device/live_challenger/auditor.py":
-        "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
-        "loaded by path since before the move; goes when the session's code moves under `verity/`",
-    "verity/protocols/accounting/poub/device/live_verifier/tests/stub_verifier.py":
-        "memory-accounting: the remote session (`benchmarks/remote_session`), "
-        "loaded by path since before the move; goes when the session's code moves under `verity/`",
-    "verity/protocols/accounting/poub/device/live_verifier/tests/test_host.py":
-        "memory-accounting: the remote session (`benchmarks/remote_session`), "
-        "loaded by path since before the move; goes when the session's code moves under `verity/`",
 }
 #: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
 #: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).
@@ -201,11 +189,10 @@ PROVER_ONLY = {
                     "entry for a Definition's gates"),
 }
 
-#: The runtime's modules: what runs parties over channels and what starts a side as another process (the layout's
-#: ``verity/runtime/``, ``tests/tree.toml``).
-RUNTIME = ("verity.runtime.channels", "verity.runtime.process", "verity.runtime.runner",
-           "verity.runtime.sources", "verity.runtime.stream", "verity.runtime.transcript",
-           "verity.runtime.handshake")
+#: The runtime, its package and each module in it: what runs parties over channels and what starts a side as another
+#: process (the layout's ``verity/runtime/``, ``tests/tree.toml``).
+RUNTIME = ("verity.runtime", *sorted(f"verity.runtime.{p.stem}" for p in (ROOT / "verity" / "runtime").glob("*.py")
+                                     if p.stem != "__init__"))
 #: The trees whose files import no module of the runtime: only what starts a run does (a demo, a benchmark, the `verity`
 #: command), and it hands a protocol's file the stream, the side or the driver it needs.
 RUNTIME_FREE = ("verity/protocols/", "adapters/")
@@ -330,14 +317,15 @@ def test_verity_imports_the_standard_library_its_dependencies_and_itself() -> No
     directory of the repository (``FORBIDDEN_EXTERNAL``), in an import or in a string, and imports only the standard
     library, ``verity`` and its declared dependencies (``DEPENDENCIES``).  A verifier's and a device's Python and the
     directories of ``STDLIB_ONLY`` import no dependency either, but for ``NUMPY_USERS``; each listed path still holds
-    Python of ``verity``."""
+    Python of ``verity``.  An integration's module that a file imports where ``tests/test_integration_boundaries.py``'s
+    ``KNOWN`` lists the pair is that test's to hold."""
     offenders, held = [], set()
     for path in _sources():
         rel = path.relative_to(ROOT).as_posix()
         held |= {p for p in (*STDLIB_ONLY, *NUMPY_USERS) if _under(rel, [p])}
         alone = (_trusted(rel) is not None or _under(rel, STDLIB_ONLY)) and not _under(rel, NUMPY_USERS)
         offenders += [f"{rel}:{line}: {name}" for name, line, imported in _imports(path)
-                      if _external(name, imported, set() if alone else DEPENDENCIES)]
+                      if _external(name, imported, set() if alone else DEPENDENCIES) and (rel, name) not in INTEGRATION_SITES]
     assert not offenders, ("verity imports the standard library, its declared dependencies and itself, and a verifier, a "
                            "device and the scalar references (STDLIB_ONLY) the standard library and verity alone:\n"
                            + "\n".join(offenders))
@@ -481,7 +469,7 @@ def test_a_spot_import_of_the_certifier_is_found() -> None:
     parent = _lean_reach(["s/A.lean"], lambda f: imports.get(f, ()), files_of)
     found = [_chain(parent, f) for f in sorted(parent) if _covered(f, CERTIFIER_LEAN)]
     assert found == ["verity/protocols/accounting/certifier/device/program/lean/C.lean <- s/B.lean <- s/A.lean"], found
-    assert _covered("security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean", CERTIFIER_LEAN)
+    assert _covered("security/Proofs/Properties/Certifier/Check/Bytes.lean", CERTIFIER_LEAN)
     assert not _covered("security/Proofs/Flock/Bytes.lean", CERTIFIER_LEAN)
     modules = _lean_modules(["security/Proofs/Flock/Bytes.lean", "verity/protocols/proofs/flock/verifier/Flock/Bytes.lean"],
                             ["security/Proofs/lakefile.toml", "verity/protocols/proofs/flock/verifier/lakefile.toml"])
@@ -682,14 +670,21 @@ def _sys_path(node: ast.AST) -> bool:
 
 def _path_loads(nodes: Iterable[ast.AST], reaches: Callable[[ast.AST], bool], loaders: Set[str]) -> list[tuple[int, str]]:
     """``(line, code)`` for each of ``nodes`` that puts a path ``reaches`` accepts on ``sys.path`` or loads a module from
-    it, directly or through one of ``loaders``, the functions that hand a parameter to such a load."""
+    it, directly or through one of ``loaders``, the functions that hand a parameter to such a load.  A loader is matched by
+    name, so a function of that name on a standard-library module the nodes import as itself (``import subprocess``,
+    ``subprocess.run``) is not one; on a local module named like one (``from x import platform``) it still is.
+    ``PATH_LOADERS`` and ``sys.path`` are standard-library and always count."""
+    nodes = list(nodes)
+    std = {a.name.split(".")[0] for n in nodes if isinstance(n, ast.Import) for a in n.names if not a.asname}
+    std = (std & sys.stdlib_module_names) - {a.asname or a.name for n in nodes if isinstance(n, ast.ImportFrom) for a in n.names}
     out = []
     for n in nodes:
         if isinstance(n, ast.Call):
             f = n.func
             name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", None)
             on_path = name in {"insert", "append", "extend"} and isinstance(f, ast.Attribute) and _sys_path(f.value)
-            hit = on_path or name in PATH_LOADERS or name in loaders
+            stdlib = isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id in std
+            hit = on_path or name in PATH_LOADERS or (name in loaders and not stdlib)
             args = [*n.args, *(k.value for k in n.keywords)]
         elif isinstance(n, (ast.Assign, ast.AugAssign)):
             targets = n.targets if isinstance(n, ast.Assign) else [n.target]
@@ -709,8 +704,9 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
     ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
     import-call string or a ``"module:attr"`` string), or a path into ``benchmarks/`` (``_into_benchmarks``) put on
     ``sys.path`` or loaded by file.  A path is traced through the file's own names and parameter defaults, through other
-    files' upper-case module constants read as attributes (``remote.REMOTE_SESSION``), and through any function, wherever it
-    is defined, that hands a parameter to such a load (``remote.session_module``).  Nothing is executed (AST only), and
+    files' upper-case module constants read as attributes (``remote.REMOTE_SESSION``) in a file that imports the module
+    binding them, and through any function, wherever it is defined, that hands a parameter to such a load
+    (``remote.session_module``).  Nothing is executed (AST only), and
     only files a text search can't rule out are parsed."""
     alt = "|".join(map(re.escape, sorted(packages)))
     named = [re.compile(rf"""(?:import|from)\s+(?:{alt})\b|(?:{"|".join(IMPORT_CALLS)})\(\s*["'](?:{alt})\b"""),
@@ -719,7 +715,10 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
     loads = ("sys.path", *PATH_LOADERS)
     ours = {rel: text for rel, text in texts.items() if not rel.startswith("benchmarks/")}
     trees: dict[str, ast.AST] = {}
-    constants: set[str] = set()
+    #: Each upper-case module constant bound to a path into benchmarks/, with the modules (by last name) that bind it.
+    owners: dict[str, set[str]] = {}
+    #: The constants a file may read as attributes: those of the modules it imports.
+    visible: dict[str, set[str]] = {}
 
     def parse(rel: str) -> ast.AST:
         try:
@@ -727,8 +726,21 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
         except SyntaxError:
             return ast.Module(body=[], type_ignores=[])
 
-    def into(e: ast.AST, names: Set[str] = frozenset()) -> bool:
-        return _into_benchmarks(e, names, constants)
+    @functools.cache
+    def imported(rel: str) -> frozenset[str]:
+        """The last name of each module ``rel`` imports, and each name it imports from one."""
+        out: set[str] = set()
+        for n in nodes[rel]:
+            if isinstance(n, ast.Import):
+                out |= {a.name.rsplit(".", 1)[-1] for a in n.names}
+            elif isinstance(n, ast.ImportFrom):
+                out |= {(n.module or "").rsplit(".", 1)[-1], *(a.name for a in n.names)}
+        return frozenset(out)
+
+    def into(e: ast.AST, names: Set[str], rel: str) -> bool:
+        if rel not in visible:
+            visible[rel] = {c for c, mods in owners.items() if mods & imported(rel)}
+        return _into_benchmarks(e, names, visible[rel])
 
     by_name = {rel for rel, text in ours.items() if any(p in text for p in packages) and any(r.search(text) for r in named)}
     new = sorted(by_name | {rel for rel, text in ours.items() if "benchmarks" in text and quoted.search(text)})
@@ -739,18 +751,22 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
             trees[rel] = parse(rel)
             nodes[rel] = list(ast.walk(trees[rel]))
             assigned[rel] = _assigned(nodes[rel])
-        bound = {rel: frozenset(_bound_from(assigned[rel], set(), into)) for rel in trees}
-        grown = {t.id for rel, tree in trees.items() for s in tree.body if isinstance(s, (ast.Assign, ast.AnnAssign))
+        bound = {rel: frozenset(_bound_from(assigned[rel], set(), lambda e, n, r=rel: into(e, n, r))) for rel in trees}
+        grown = {(t.id, Path(rel).parent.name if rel.endswith("/__init__.py") else Path(rel).stem)
+                 for rel, tree in trees.items() for s in tree.body if isinstance(s, (ast.Assign, ast.AnnAssign))
                  for t in (s.targets if isinstance(s, ast.Assign) else [s.target])
-                 if isinstance(t, ast.Name) and t.id.isupper() and t.id in bound[rel]} - constants
+                 if isinstance(t, ast.Name) and t.id.isupper() and t.id in bound[rel]}
+        grown = {(c, mod) for c, mod in grown if mod not in owners.get(c, ())}
         if not grown:
             break
-        constants |= grown
-        attr = re.compile(r"\.(?:" + "|".join(sorted(grown)) + r")\b")
+        for c, mod in grown:
+            owners.setdefault(c, set()).add(mod)
+        visible.clear()
+        attr = re.compile(r"\.(?:" + "|".join(sorted({c for c, _ in grown})) + r")\b")
         new = [rel for rel, text in ours.items() if rel not in trees and attr.search(text)]
     handed = {n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", None)
               for rel in trees for n in nodes[rel]
-              if isinstance(n, ast.Call) and any(into(a, bound[rel]) for a in [*n.args, *(k.value for k in n.keywords)])}
+              if isinstance(n, ast.Call) and any(into(a, bound[rel], rel) for a in [*n.args, *(k.value for k in n.keywords)])}
     handed -= {None, *PATH_LOADERS, *dir(builtins)}
     defines = re.compile(r"^([ \t]*)(?:async[ \t]+)?def (?:" + "|".join(map(re.escape, sorted(handed))) + r")\(", re.M)
 
@@ -773,7 +789,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
     for rel in trees:
         hits = [(line, name) for name, line, _ in (_imports(ROOT / rel, ROOT, (), nodes[rel]) if rel in by_name else ())
                 if name.split(".")[0] in packages]
-        hits += _path_loads(nodes[rel], lambda e, n=bound[rel]: into(e, n), loaders)
+        hits += _path_loads(nodes[rel], lambda e, n=bound[rel], r=rel: into(e, n, r), loaders)
         if hits:
             found[rel] = [f"{line}: {what}" for line, what in sorted(hits)]
     return found
@@ -805,29 +821,113 @@ def test_nothing_outside_benchmarks_imports_it() -> None:
 
 def test_a_benchmarks_import_is_found() -> None:
     """The check above isn't vacuous: imports by name, a path put on ``sys.path`` through a name, a parameter's default
-    from another file's constant, and a call to another file's loader (whose load follows a nested function) are each
-    found; a path into another directory, a mere mention of ``benchmarks/``, and ``benchmarks/``'s own files are not."""
+    from another file's constant, a call to another file's loader (whose load follows a nested function), that constant
+    read in a file importing its module (also as ``import a.b as X``) and ``runpy.run_path`` are each found; a path into
+    another directory, a mere mention of ``benchmarks/``, ``benchmarks/``'s own files, that constant read in a file that
+    doesn't import its module, and a standard-library function named like a loader (``subprocess.run``) are not.  A loader
+    called on a local module named like a standard-library one (``from x import tool as platform``) is found."""
     texts = {
         "x/names.py": ("import verity_bench.vllm\nfrom benchmarks.tc_probe import tool\nimport importlib\n"
                        "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
-                         "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/rho']\n"),
+                         "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/census']\n"),
         "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'remote_session'\n",
         "x/loader.py": ("import importlib.util\nfrom x import config\ndef load(name, directory=config.SESSION):\n"
                         "    def named(n):\n        return n\n"
                         "    return importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')\n"),
         "x/caller.py": "from x import config, loader\nloader.load('paged', config.SESSION.parent / 'vllm_encoded')\n",
-        "x/clean.py": ("import sys\nsys.path.insert(0, 'tools/verity/check')\nimport suites\n"
+        "x/clean.py": ("import sys\nsys.path.insert(0, 'tools/check')\nimport suites\n"
                        "NOTE = 'the numbers come from benchmarks/ppl'\nimport verity_vllm\n"),
         "benchmarks/y/run.py": "import verity_bench\nimport sys\nsys.path.insert(0, '../benchmarks/z')\n",
+        "x/tool.py": "import runpy\ndef run(directory):\n    return runpy.run_path(directory / 'main.py')\n",
+        "x/shell.py": ("import subprocess\nfrom x import config, tool\nsubprocess.run(['make'], cwd=config.SESSION)\n"
+                       "tool.run(config.SESSION)\n"),
+        "x/runs.py": "import runpy\nrunpy.run_path('benchmarks/ppl/main.py')\n",
+        "x/aliased.py": "import sys\nimport x.config as C\nsys.path.insert(0, str(C.SESSION))\n",
+        "x/other.py": "import sys\nfrom y import settings\nsys.path.insert(0, str(settings.SESSION))\n",
+        "x/local.py": "from x import config, tool as platform\nplatform.run(config.SESSION)\n",
     }
     found = _benchmarks_importers(texts, {"benchmarks", "verity_bench", "datacenter"})
     assert found == {
         "x/names.py": ["1: verity_bench.vllm", "2: benchmarks.tc_probe", "4: datacenter.graph", "5: benchmarks.commitments.tool"],
-        "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/rho']"],
+        "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/census']"],
         "x/loader.py": ["6: importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')"],
         "x/caller.py": ["2: loader.load('paged', config.SESSION.parent / 'vllm_encoded')"],
+        "x/shell.py": ["4: tool.run(config.SESSION)"],
+        "x/runs.py": ["2: runpy.run_path('benchmarks/ppl/main.py')"],
+        "x/aliased.py": ["3: sys.path.insert(0, str(C.SESSION))"],
+        "x/local.py": ["2: platform.run(config.SESSION)"],
     }, found
+
+
+#: The directory of ``benchmarks/`` whose modules the tree imports from the repository's root
+#: (``benchmarks.network_traces.NAME``).  It is no package and stays on the path of the files beside those modules, so a
+#: bare ``import NAME`` still resolves, to a second copy of the module.
+ONE_NAME = "benchmarks/network_traces"
+
+
+def _second_names(texts: dict[str, str], one_name: str = ONE_NAME) -> list[str]:
+    """``file:line: NAME`` for each import in ``texts`` (repository path -> source) of a module of ``one_name`` by its
+    bare name, where another import names that module from the repository's root: a process that runs both holds the
+    module twice, each copy with its own state and its own classes.  An import is a statement or a constant string
+    handed to an import call (``IMPORT_CALLS``).  A name computed at run time is not read, and a load by file under a
+    private name is a copy its loader asked for.  A bare name that a file outside ``one_name`` has too may mean that
+    file, and is left.  Nothing is executed (AST only), and only files a text search can't rule out are parsed."""
+    dotted = one_name.replace("/", ".")
+
+    @functools.cache
+    def named(rel: str) -> list[tuple[int, str]]:
+        out: list[tuple[int, str]] = []
+        for node in ast.walk(ast.parse(texts[rel], filename=rel)):
+            if isinstance(node, ast.Import):
+                out += [(node.lineno, a.name) for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                out += [(node.lineno, f"{node.module}.{a.name}") for a in node.names]
+            elif (isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant)
+                  and isinstance(node.args[0].value, str)
+                  and (node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", None)) in IMPORT_CALLS):
+                out.append((node.lineno, node.args[0].value))
+        return out
+
+    own = {Path(rel).stem for rel in texts if posixpath.dirname(rel) == one_name}
+    others = {Path(rel).parent.name if rel.endswith("/__init__.py") else Path(rel).stem
+              for rel in texts if posixpath.dirname(rel) != one_name}
+    rooted = {name[len(dotted) + 1:].split(".")[0] for rel, text in texts.items() if dotted in text
+              for _, name in named(rel) if name.startswith(dotted + ".")}
+    held = (rooted & own) - others
+    if not held:
+        return []
+    return [f"{rel}:{line}: {name.split('.')[0]}" for rel, text in sorted(texts.items()) if any(m in text for m in held)
+            for line, name in sorted(named(rel)) if name.split(".")[0] in held]
+
+
+def test_a_module_the_tree_imports_from_the_root_has_no_second_name() -> None:
+    """A module of ``ONE_NAME`` that any file imports from the repository's root is imported by its bare name in no
+    file of the tree: every file is read, since any can put the directory on its path."""
+    dotted = ONE_NAME.replace("/", ".")
+    found = _second_names(_tracked_python())
+    assert not found, (f"{ONE_NAME}/ is on the path beside the repository's root, so a module of it imported as "
+                       f"`{dotted}.NAME` in one file and as a bare `NAME` in another is loaded twice by a process that "
+                       f"runs both. Import it as `{dotted}.NAME` (`from {dotted} import NAME`), with the root on the "
+                       "file's path:\n" + "\n".join(found))
+
+
+def test_a_second_name_is_found() -> None:
+    """The check above isn't vacuous: a bare import of a module that another file imports from the root is found as a
+    statement, a ``from`` import and an import call's string; a module imported by its bare name alone, a bare name a
+    file of another directory has too, and a load by file are not."""
+    dotted = ONE_NAME.replace("/", ".")
+    texts = {
+        **dict.fromkeys((f"{ONE_NAME}/relay.py", f"{ONE_NAME}/rows.py", f"{ONE_NAME}/plan.py", "x/plan.py"), ""),
+        f"{ONE_NAME}/tests/test_relay.py": f"from {dotted} import relay as R\nimport rows\n",
+        "x/rooted.py": f"def build():\n    from {dotted}.plan import build\n    return build\n",
+        "x/bare.py": ("import sys\nimport relay as R\nfrom relay import commit\nimport importlib\n"
+                      "M = importlib.import_module('relay')\nimport plan\nimport rows\n"),
+        "x/by_file.py": ("import importlib.util\n"
+                         f"SPEC = importlib.util.spec_from_file_location('private_relay', '{ONE_NAME}/relay.py')\n"),
+    }
+    found = _second_names(texts)
+    assert found == ["x/bare.py:2: relay", "x/bare.py:3: relay", "x/bare.py:5: relay"], found
 
 
 def _is_test(rel: str) -> bool:
@@ -837,8 +937,8 @@ def _is_test(rel: str) -> bool:
 
 def _runtime_importers(texts: dict[str, str]) -> dict[str, list[str]]:
     """``{file: ["line: module", ...]}`` for each file of ``RUNTIME_FREE`` outside its tests that names a module of
-    ``RUNTIME``: in an import statement (``from package import module`` too, and a relative one), or as a whole string (an
-    import call's argument, a ``"module:attr"``, a ``-m`` argument)."""
+    ``RUNTIME``, the most specific one a line names: in an import statement (``from package import module`` too, and a
+    relative one), or as a whole string (an import call's argument, a ``"module:attr"``, a ``-m`` argument)."""
     found: dict[str, list[str]] = {}
     for rel, text in sorted(texts.items()):
         if not rel.startswith(RUNTIME_FREE) or _is_test(rel) or not any(r.rpartition(".")[2] in text for r in RUNTIME):
@@ -856,7 +956,8 @@ def _runtime_importers(texts: dict[str, str]) -> dict[str, list[str]]:
                 names = [node.value.partition(":")[0]]
             else:
                 continue
-            hits |= {(node.lineno, r) for n in names for r in RUNTIME if n == r or n.startswith(r + ".")}
+            named = {r for n in names for r in RUNTIME if n == r or n.startswith(r + ".")}
+            hits |= {(node.lineno, r) for r in named if not any(o.startswith(r + ".") for o in named)}
         if hits:
             found[rel] = [f"{line}: {name}" for line, name in sorted(hits)]
     return found
@@ -864,7 +965,8 @@ def _runtime_importers(texts: dict[str, str]) -> dict[str, list[str]]:
 
 def test_no_protocol_or_adapter_imports_the_runtime() -> None:
     """No file of a protocol or an adapter, outside its tests, imports the runtime (``RUNTIME``), apart from
-    ``RUNTIME_IMPORTERS``, which only shrinks."""
+    ``RUNTIME_IMPORTERS``, which only shrinks. It counts direct imports only: a file that imports ``verity.party`` loads
+    ``verity.runtime.handshake`` through it, uncounted."""
     found = _runtime_importers(_tracked_python())
     offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in RUNTIME_IMPORTERS for hit in hits]
     assert not offenders, ("no protocol or adapter imports the runtime, only what starts a run does: take the stream, the "
@@ -876,9 +978,10 @@ def test_no_protocol_or_adapter_imports_the_runtime() -> None:
 
 def test_a_runtime_import_is_found() -> None:
     """The check above isn't vacuous: an import of a runtime module by either statement, by a relative one, by an import
-    call and as a ``-m`` argument are each found; the manifest, the party, a docstring's mention, a test's import and a
-    file outside ``RUNTIME_FREE`` are not."""
-    module = RUNTIME[0]
+    call and as a ``-m`` argument are each found, and so is the package's own (``import verity.runtime``, ``from verity
+    import runtime``); the manifest, the party, a docstring's mention, a test's import and a file outside
+    ``RUNTIME_FREE`` are not."""
+    module = RUNTIME[1]
     package, _, name = module.rpartition(".")
     texts = {
         "verity/protocols/x/a.py": (f"from {package} import {name}\nfrom {module} import Side\nimport {module} as R\n"
@@ -889,6 +992,7 @@ def test_a_runtime_import_is_found() -> None:
         "verity/protocols/x/clean.py": (f'"""Handed a `{module}.Side`."""\n'
                                         "from verity.protocol import Manifest\n"
                                         "from verity.party import Party\n"),
+        "verity/protocols/x/c.py": "import verity.runtime\nfrom verity import runtime\n",
         "verity/protocols/x/tests/test_a.py": f"from {module} import run\n",
         "demos/d/run.py": f"from {package} import {name}\n",
     }
@@ -896,6 +1000,7 @@ def test_a_runtime_import_is_found() -> None:
         "adapters/y/z.py": [f"1: {RUNTIME[-1]}"],
         "verity/protocols/x/a.py": [f"{line}: {module}" for line in (1, 2, 3, 4)],
         "verity/protocols/x/b.py": [f"{line}: {module}" for line in (2, 3, 4)],
+        "verity/protocols/x/c.py": ["1: verity.runtime", "2: verity.runtime"],
     }
 
 
@@ -1004,7 +1109,7 @@ def test_core_never_reads_the_census() -> None:
 ORDER = ROOT / "tests" / "import_order.toml"
 #: The command that writes the listing's generated tables from the tree, and the line of the listing they start at: what
 #: is above it (the order, the distributions) is kept by hand, as are each place's ``paths`` and its ``trusted`` mark.
-REGENERATE = "`uv run tools/verity/check/import_order.py`"
+REGENERATE = "`uv run tools/check/import_order.py`"
 GENERATED = "# The ties against the order"
 #: The files the order reads as loaders: Python, Lean, and a Lake package's requirements.
 LOADERS = (".py", ".lean", "lakefile.toml")
@@ -1127,15 +1232,15 @@ def _source(path: str, listing: Listing) -> bool:
 
 @functools.cache
 def _tracked_tree() -> Any:
-    """``tools/verity/check/tracked_tree.py``, whose ``Tree`` resolves a Python import and a Lake package among the tracked
+    """``tools/check/tracked_tree.py``, whose ``Tree`` resolves a Python import and a Lake package among the tracked
     files.  Loaded on first use."""
-    return _load_tool("tracked_tree_of_the_order", ROOT / "tools/verity/check/tracked_tree.py")
+    return _load_tool("tracked_tree_of_the_order", ROOT / "tools/check/tracked_tree.py")
 
 
 def _path_roots(tree: Any, f: str, parsed: ast.AST, text: str) -> tuple[str, ...]:
     """Where a bare import of ``f`` resolves beyond its package's and its suite's roots: its own directory (a script's), and,
     when it changes ``sys.path``, each tracked directory a path anchored on ``__file__`` reaches in it
-    (``tools/verity/check/anchors.py``), whether or not that path is the one put there."""
+    (``tools/check/anchors.py``), whether or not that path is the one put there."""
     roots = {posixpath.dirname(f)}
     if "sys.path" in text and "__file__" in text:
         anchors = _tracked_tree().ANCHORS
@@ -1492,7 +1597,16 @@ def _hold_distributions(dirs: Set[str], loads: Iterable[Load], listing: Listing,
                        f"reason, or is no longer listed; delete them: {named}")
     gone = sorted(set(listing.distributions) - dirs)
     assert not gone, f"directories of `distribution` (tests/import_order.toml) that hold no tracked file; delete them: {gone}"
-    loaded = _into_distributions(loads, listing)
+    unreasoned = sorted(d for d, e in listing.distributions.items() if e.get("known") and not e.get("known_reason"))
+    assert not unreasoned, ("a `distribution`'s `known` (tests/import_order.toml) says why in its `known_reason`, with its "
+                            f"owner and the day it goes: {unreasoned}")
+    into = _into_distributions(loads, listing)
+    known = {d: set(e.get("known", ())) for d, e in listing.distributions.items()}
+    stale = sorted(f"{d}: {f}" for d, fs in known.items() for f in fs
+                   if not any(x.loader == f and _distribution(x.loaded, listing) == d for x in into))
+    assert not stale, ("files a `distribution`'s `known` (tests/import_order.toml) lists, each by its path, that don't load "
+                       f"it; the list only shrinks, and names no directory or glob: delete them: {stale}")
+    loaded = [x for x in into if x.loader not in known[_distribution(x.loaded, listing)]]
     assert not loaded, ("`verity` loads no other distribution, one under verity/ included (`distribution` in "
                         "tests/import_order.toml): move what both read into `verity`, or pass it in:\n" + "\n".join(map(str, loaded)))
 
@@ -1597,7 +1711,8 @@ def test_verity_loads_no_distribution_of_its_own() -> None:
     loads none of them by name, a verifier's Python least of all: no Python of ``verity`` (``_source``) loads a file of
     one, by its own name or as a module of ``verity``.  A load by file is read only into ``benchmarks/``.  The list only
     shrinks: a listed directory with no tracked file fails, and a directory not listed is ``verity``'s, held to its
-    rules."""
+    rules.  The files a distribution's ``known`` lists, each by its path with its ``known_reason``, are its loaders
+    until the day the reason names: the list only shrinks, and a file it doesn't name is refused."""
     dirs, loads, _ = _tree_loads()
     _hold_distributions(dirs, loads, _listing())
 
@@ -1610,16 +1725,16 @@ BY_PATH = "verity/protocols/proofs/spot/by_path.py"
 ORDER_TREE = {
     "verity/__init__.py": "",
     "verity/circuits/__init__.py": "",
-    "verity/circuits/at_load.py": "from verity.definitions import toy\n",
-    "verity/circuits/in_function.py": "def f():\n    import verity.definitions.toy\n",
-    "verity/circuits/in_string.py": "TOOL = 'verity.definitions.toy:run'\n",
-    "verity/circuits/tests/test_a.py": "import verity.definitions.toy\n",
-    "verity/circuits/at_load.circuit-check.py": "import verity.definitions.toy\n",
+    "verity/circuits/at_load.py": "from verity.runtime import toy\n",
+    "verity/circuits/in_function.py": "def f():\n    import verity.runtime.toy\n",
+    "verity/circuits/in_string.py": "TOOL = 'verity.runtime.toy:run'\n",
+    "verity/circuits/tests/test_a.py": "import verity.runtime.toy\n",
+    "verity/circuits/at_load.circuit-check.py": "import verity.runtime.toy\n",
     "verity/commitments/__init__.py": "",
     "verity/commitments/crypto/__init__.py": "",
     "verity/commitments/crypto/lms.py": "",
-    "verity/definitions/__init__.py": "",
-    "verity/definitions/toy.py": "import verity.circuits.at_load\n",
+    "verity/runtime/__init__.py": "",
+    "verity/runtime/toy.py": "import verity.circuits.at_load\n",
     "verity/protocols/proofs/flock/__init__.py": "",
     "verity/protocols/proofs/flock/prover/stage.py": "import verity.protocols.accounting.pouw.verifier.check\n",
     "verity/protocols/proofs/flock/verifier/__init__.py": "",
@@ -1671,7 +1786,9 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     Lean script's of the prover; and what a place it loads gains, from a file no load of the verifier's reaches.  Into
     a trusted place: a prover's file, a prover's test, for a place the listing marks, a binding, and a file in a
     device's directory that the listing gives to an untrusted place; not a device's file.  Where the listing names a
-    file of a device as a place of its own: that file's load of the rest of its directory.  And the generator writes
+    file of a device as a place of its own: that file's load of the rest of its directory.  Into a distribution: a file
+    its ``known`` doesn't list, and a ``known`` naming a directory, a glob or a file that doesn't load it, or giving no
+    ``known_reason``; not a listed file's load.  And the generator writes
     a listing the checks hold, and without ``--grow`` holds back each line of a list that only shrinks."""
     for f, text in ORDER_TREE.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
@@ -1681,13 +1798,13 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     verifier, prover, device, check = (f"verity/protocols/accounting/pouw/{d}" for d in ("verifier", "prover", "device", "verifier/check"))
     own = {"verity/protocols/proofs/flock": {"owner": "proofs", "reason": "Flock's distribution"}, check: {"owner": "memory-accounting"}}
     steps = _listing().steps
-    places = _places([{"paths": ["verity/circuits"]}, {"paths": ["verity/definitions"]}, {"paths": ["verity/commitments/crypto"]},
+    places = _places([{"paths": ["verity/circuits"]}, {"paths": ["verity/runtime"]}, {"paths": ["verity/commitments/crypto"]},
                       {"paths": [verifier]}, {"paths": [device]}, {"paths": [prover]}, {"paths": ["verity/protocols/proofs/flock/verifier"]},
                       {"paths": ["verity/hardware"]}, {"paths": ["verity/protocols/proofs/spot"]}])
     listing = Listing(steps, own, {}, places)
     found = {pair: sorted(files) for pair, files in _against(loads, steps).items()}
     assert found == {
-        ("verity/circuits", "verity/definitions"): [f"verity/circuits/{f}.py" for f in ("at_load", "in_function", "in_string")],
+        ("verity/circuits", "verity/runtime"): [f"verity/circuits/{f}.py" for f in ("at_load", "in_function", "in_string")],
         ("verity/hardware", "verity/protocols/proofs/flock"): ["verity/hardware/package_above.py"],
         ("verity/protocols/proofs/flock/verifier", "verity/protocols/proofs/spot"): ["verity/protocols/proofs/flock/verifier/Flock/V.lean", "verity/protocols/proofs/flock/verifier/lakefile.toml"],
         ("verity/protocols/proofs/flock", "verity/protocols/accounting/pouw"): ["verity/protocols/proofs/flock/prover/stage.py"],
@@ -1698,9 +1815,9 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     }, found
     assert _row("verity/errors.py", steps) == "verity" and _row("pyproject.toml", steps) == "." \
         and _row("verity/protocols/proofs/flock/verifier/Flock/V.lean", steps) == "verity/protocols/proofs/flock/verifier"
-    listed = steps | {"verity/circuits/at_load.py": steps["verity/definitions"]}
+    listed = steps | {"verity/circuits/at_load.py": steps["verity/runtime"]}
     assert _row("verity/circuits/at_load.py", listed) == "verity/circuits/at_load.py"
-    assert sorted(_against(loads, listed)["verity/circuits", "verity/definitions"]) == [
+    assert sorted(_against(loads, listed)["verity/circuits", "verity/runtime"]) == [
         "verity/circuits/in_function.py", "verity/circuits/in_string.py"]
     assert [_below(f, steps) for f in ("verity/commitments/crypto/lms.py", "verity/commitments/merkle.py", "verity/errors.py",
                                        f"{prover}/circuit/words.py", "examples/a/b.py", "conftest.py")] == [
@@ -1715,7 +1832,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     assert [_trusted(f) for f in (f"{check}/interop.py", f"{device}/serve.py", f"{prover}/build.py", "tools/verifier/run.py")] == [
         verifier, device, None, None]
     assert [_trusted_place(e) for e in _places([{"paths": ["verity/commitments", party]}, {"paths": [party, prover]},
-                                                {"paths": ["verity/definitions"], "trusted": True}]).values()] == [False, True, True]
+                                                {"paths": ["verity/runtime"], "trusted": True}]).values()] == [False, True, True]
     assert sorted({(x.loader, x.line, x.loaded) for x in _to_provers(loads)}) == [
         (f"{verifier}/check.py", 6, f"{prover}/__init__.py"), (f"{verifier}/check.py", 6, f"{prover}/build.py"),
         (f"{check}/interop.py", 1, "verity/protocols/proofs/flock/prover/stage.py")]
@@ -1723,29 +1840,29 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         "verity/hardware/package_above.py:1: python package verity.protocols.proofs.flock.verifier.interface loads "
         "verity/protocols/proofs/flock/__init__.py"]
     found = _place_loads(loads, listing)
-    assert list(found) == sorted(["verity/circuits", "verity/definitions", "verity/hardware", "verity/protocols/proofs/flock/verifier",
+    assert list(found) == sorted(["verity/circuits", "verity/runtime", "verity/hardware", "verity/protocols/proofs/flock/verifier",
                                   device, prover, verifier, "verity/protocols/proofs/spot"]), list(found)
-    assert [sorted(x) for x in found["verity/circuits"]] == [["verity/definitions"], [], []], found["verity/circuits"]
-    assert [sorted(x) for x in found["verity/definitions"]] == [["verity/circuits"], [], []], found["verity/definitions"]
+    assert [sorted(x) for x in found["verity/circuits"]] == [["verity/runtime"], [], []], found["verity/circuits"]
+    assert [sorted(x) for x in found["verity/runtime"]] == [["verity/circuits"], [], []], found["verity/runtime"]
     assert [sorted(x) for x in found["verity/protocols/proofs/spot"]] == [["demos/e2e"], [], []], found["verity/protocols/proofs/spot"]
     assert [sorted(x) for x in found[prover]] == [[verifier], [], []], found[prover]
     direct, reach, loaders = found[verifier]
     assert sorted(direct) == ["verity/circuits", "verity/commitments/crypto", prover], direct
-    assert sorted(reach) == ["verity/circuits", "verity/commitments/crypto", "verity/definitions", prover], reach
-    assert reach["verity/definitions"] == [f"{verifier}/check.py", "verity/circuits/at_load.py", "verity/definitions/toy.py"]
+    assert sorted(reach) == ["verity/circuits", "verity/commitments/crypto", prover, "verity/runtime"], reach
+    assert reach["verity/runtime"] == [f"{verifier}/check.py", "verity/circuits/at_load.py", "verity/runtime/toy.py"]
     assert sorted(loaders) == sorted(["verity/protocols/proofs/flock/prover/stage.py", f"{prover}/build.py"]), loaders
     assert [sorted(x) for x in found[device]] == [[verifier], sorted([*reach, verifier]), [f"{prover}/tests/test_build.py"]], found[device]
     assert [sorted(x) for x in found["verity/protocols/proofs/flock/verifier"]] == [[], [], ["verity/hardware/package_above.py"]]
-    marked = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/definitions"], "trusted": True}])))
-    assert [sorted(x) for x in marked["verity/definitions"]] == [["verity/circuits"], ["verity/circuits"], [
+    marked = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/runtime"], "trusted": True}])))
+    assert [sorted(x) for x in marked["verity/runtime"]] == [["verity/circuits"], ["verity/circuits"], [
         "verity/circuits/at_load.circuit-check.py", "verity/circuits/at_load.py", "verity/circuits/in_function.py",
-        "verity/circuits/in_string.py", "verity/circuits/tests/test_a.py"]], marked["verity/definitions"]
+        "verity/circuits/in_string.py", "verity/circuits/tests/test_a.py"]], marked["verity/runtime"]
     parted = _place_loads(loads, listing._replace(places=split))
     assert list(parted) == sorted([*found, party]), list(parted)
     assert [sorted(x) for x in parted[device]] == [sorted(x) for x in found[device]], parted[device]
     assert [sorted(x) for x in parted[party]] == [[device], sorted([*reach, device, verifier]), []], parted[party]
     kept = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/circuits", party]}])))
-    assert sorted(kept["verity/circuits"][0]) == ["verity/definitions", device] and sorted(kept[device][2]) == [
+    assert sorted(kept["verity/circuits"][0]) == [device, "verity/runtime"] and sorted(kept[device][2]) == [
         party, f"{prover}/tests/test_build.py"], (kept["verity/circuits"], kept[device])
 
     def lists(places: dict[str, dict[str, Any]], found: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -1757,10 +1874,10 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     _hold_places(loads, files, held)
     hold_distributions = functools.partial(_hold_distributions, neither=(check,))
     hold_distributions(tree.dirs, [x for x in loads if "package_above" not in x.loader], held)
-    pair = ("verity/circuits", "verity/definitions")
-    with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/windows -> tools'\]"):
-        _hold_order(loads, held._replace(against=held.against | {("verity/commitments/windows", "tools"): {"verity/commitments/windows/rows.py"}}))
-    with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.definitions.toy loads"):
+    pair = ("verity/circuits", "verity/runtime")
+    with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/periods -> tools'\]"):
+        _hold_order(loads, held._replace(against=held.against | {("verity/commitments/periods", "tools"): {"verity/commitments/periods/rows.py"}}))
+    with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.runtime.toy loads"):
         _hold_order(loads, held._replace(against=held.against | {pair: held.against[pair] - {"verity/circuits/in_string.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*test_run.py:1: python import infra.cluster.usage loads"):
         _hold_order(loads, held._replace(against={p: files for p, files in held.against.items() if p[1] != "infra"}))
@@ -1777,8 +1894,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         _hold_places(loads, files, without(verifier, loads=prover, reaches=prover))
     with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{verifier} loads verity/commitments/crypto: "):
         _hold_places(loads, files, without(verifier, loads="verity/commitments/crypto"))
-    with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{verifier} reaches verity/definitions: {verifier}/check.py -> "):
-        _hold_places(loads, files, without(verifier, reaches="verity/definitions"))
+    with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{verifier} reaches verity/runtime: {verifier}/check.py -> "):
+        _hold_places(loads, files, without(verifier, reaches="verity/runtime"))
     aside = Load("verity/circuits/in_function.py", "verity/protocols/proofs/spot/by_path.py", 3, "python import", "verity.protocols.proofs.spot.by_path")
     with pytest.raises(AssertionError, match=f"gains no load(.|\n)*{verifier} reaches demos/e2e: {verifier} -> verity/circuits -> "
                                              f"verity/protocols/proofs/spot -> demos/e2e\n\\s*{verifier} reaches verity/protocols/proofs/spot: "):
@@ -1787,8 +1904,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         _hold_places(loads, files, without(device, loaded_by=f"{prover}/tests/test_build.py"))
     with pytest.raises(AssertionError, match=f"only shrinks.*\n\\s*{verifier} is loaded by {prover}/build.py:1: "):
         _hold_places(loads, files, without(verifier, loaded_by=f"{prover}/build.py"))
-    with pytest.raises(AssertionError, match="only the places its `loads` lists.*\n\\s*verity/circuits loads verity/definitions: .*at_load.py:1: "):
-        _hold_places(loads, files, without("verity/circuits", loads="verity/definitions"))
+    with pytest.raises(AssertionError, match="only the places its `loads` lists.*\n\\s*verity/circuits loads verity/runtime: .*at_load.py:1: "):
+        _hold_places(loads, files, without("verity/circuits", loads="verity/runtime"))
     with pytest.raises(AssertionError, match=f"no longer has; delete them .*: \\['{verifier}: reaches tools'"):
         _hold_places(loads, files, also(verifier, reaches="tools"))
     with pytest.raises(AssertionError, match="no longer has; delete them .*: \\['verity/circuits: loads verity/commitments/crypto'"):
@@ -1806,7 +1923,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     stub = ORDER.read_text(encoding="utf-8")
     stub = stub[:stub.index(GENERATED)] + GENERATED + "".join(
         f"\n[[place]]\npaths = {list(e['paths'])!r}\n".replace("'", '"') for e in split.values())
-    tool = _load_tool("import_order", ROOT / "tools/verity/check/import_order.py")
+    tool = _load_tool("import_order", ROOT / "tools/check/import_order.py")
     text, back = tool.tables(sys.modules[__name__], stub, loads, grow=True)
     assert not back and _generated(text, loads) == text and tool.tables(sys.modules[__name__], text, loads) == (text, [])
     bare, back = tool.tables(sys.modules[__name__], stub, loads)
@@ -1820,6 +1937,21 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         and written.places[party]["reaches"] >= parts.places[party]["reaches"]
     with pytest.raises(AssertionError, match="loads no other distribution.*\n.*package_above.py:1: python package"):
         hold_distributions(tree.dirs, loads, held)
+    flock, above = "verity/protocols/proofs/flock", "verity/hardware/package_above.py"
+
+    def knowing(*files: str, why: str = "a toy's") -> Listing:
+        return held._replace(distributions=own | {flock: own[flock] | {"known": list(files), "known_reason": why}})
+
+    hold_distributions(tree.dirs, loads, knowing(above))
+    seventh = Load("verity/protocols/proofs/spot/seventh.py", "verity/protocols/proofs/flock/prover/stage.py", 1, "python import",
+                   "verity.protocols.proofs.flock.prover.stage")
+    with pytest.raises(AssertionError, match="loads no other distribution.*\n.*seventh.py:1: python import"):
+        hold_distributions(tree.dirs, (*loads, seventh), knowing(above))
+    for listed in ("verity/hardware", "verity/hardware/*.py", "verity/hardware/gone.py"):
+        with pytest.raises(AssertionError, match=f"names no directory or glob: delete them: \\['{flock}: {re.escape(listed)}'\\]"):
+            hold_distributions(tree.dirs, loads, knowing(above, listed))
+    with pytest.raises(AssertionError, match=f"says why in its `known_reason`.*\\['{flock}'\\]"):
+        hold_distributions(tree.dirs, loads, knowing(above, why=""))
     for entry in ({"reason": "no owner"}, {"owner": "proofs", "date": "2026-11-18", "reason": "both"}, {"owner": "proofs", "date": "soon"}):
         with pytest.raises(AssertionError, match=r"its owner and exactly one of.*: \['verity/protocols/proofs/flock'\]"):
             hold_distributions(tree.dirs, (), held._replace(distributions=own | {"verity/protocols/proofs/flock": entry}))

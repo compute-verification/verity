@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import re
 import pytest
-from verity.definitions.numerics import flashmla_twin as FT
-from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
+from verity_vllm.definitions.numerics import flashmla_twin as FT
+from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
 
 from tests.program.predict.test_dsa_dense_prefill import _calls, _families, _topk
 from tests.program.predict.test_node import _first_layers

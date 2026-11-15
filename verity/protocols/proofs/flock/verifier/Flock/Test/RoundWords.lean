@@ -1,15 +1,16 @@
-/-
+module
+
+public import Flock.RecVStar
+public import VStar.Stage
+meta import Flock.RecVStar
+
+/-!
 The holders of one message round's row agree on its words (`RecVStar.checkRoundWords`, run by `checkRoundsListed`): every
 port of V*'s list under one `rec-c<k>` has the words of the round's first, read off the statements' descriptions
 (`ownWords`). At candidate 3's holo shape, RecSparse's `h` and the algebra part's `m<hRound>` (h's 64 elements) are both
 512 words; a list whose holders of a round differ is refused, naming both. RecSparse's `claim` (`rec-claim`) and R's
 opening's ports (`rec-opening-c<k>`) are no `rec-c<k>`, so they are not compared.
 -/
-module
-
-public import Flock.RecVStar
-public import VStar.Stage
-meta import Flock.RecVStar
 
 @[expose] public section
 

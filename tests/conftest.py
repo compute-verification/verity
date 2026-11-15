@@ -18,6 +18,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 #: {test file: the tests of it whose findings warn}
 BOOKKEEPING = {
+    "tests/lint/test_device_figures.py": ("test_no_new_device_figures", "test_the_list_is_current"),
     "tests/lint/test_lean_bar.py": ("test_no_new_findings",),
     "tests/lint/test_repo_ruff.py": ("test_no_new_findings",),
     "tests/lint/test_repo_lane_text.py": ("test_no_new_lane_text", "test_pinned_files_hold_none",
@@ -26,7 +27,10 @@ BOOKKEEPING = {
     "tests/lint/test_repo_python_verdicts.py": ("test_no_listed_function_changed_since_it_was_read",),
     "tests/test_retired_terms.py": ("test_no_retired_term_in_prose", "test_no_retired_term_in_the_maintained_docs",
                                     "test_no_retired_word_in_a_new_lean_name", "test_the_glossary_records_the_retired_terms",
-                                    "test_spot_s_older_name_only_falls"),
+                                    "test_spot_s_older_name_only_falls",
+                                    "test_the_network_certifier_s_older_name_stays_only_where_the_glossary_keeps_it",
+                                    "test_the_certifier_scan_leaves_out_only_files_that_hold_the_name",
+                                    "test_the_slowdown_s_older_name_is_gone"),
     "tests/test_doc_paths.py": ("test_every_path_a_document_names_exists", "test_not_paths_are_current"),
     "tests/test_documented_commands.py": ("test_every_documented_command_line_parses",
                                           "test_known_lists_only_lines_that_still_fail"),

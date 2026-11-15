@@ -175,7 +175,7 @@ _LOWERINGS: dict[tuple, Any] = {}
 
 
 def _lowering(x: dict, stage: bool = False) -> tuple[Any, dict | None]:
-    """C-Flock's lowering of ``x``'s statement (`class_statement.unit_lowering` on `h1zy.statement_rows`) and, with
+    """Flock's lowering of ``x``'s statement (`class_statement.unit_lowering` on `h1zy.statement_rows`) and, with
     ``stage``, its circuit file's META (`UnitStager`: each input row ``hm96-sha512/row/v2`` of its bits, ``ok`` one v2 row,
     as h1_lanes stages them); a reject where Flock refuses a row that isn't whole u16 words. Each is built once
     (a lane's lowering is about 2M ANDs), a staged one serving an unstaged ask."""

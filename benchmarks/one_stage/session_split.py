@@ -112,7 +112,7 @@ def main() -> int:
     gpu, t0, cpu0 = SR.Device(a.device), time.monotonic(), SR.throttled()
     wall0 = time.time() - t0
     ps = ProofServer(a.bin, out, devices=[a.device], provers=K, verify_ahead=a.ahead, verdicts=1,
-                     env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
+                     env={"FC_ZK_SERVER": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
 
     def stop(sig, _frame) -> None:
         # the server's processes run in sessions of their own, so a lease's SIGTERM to this one alone would leave them on the GPU

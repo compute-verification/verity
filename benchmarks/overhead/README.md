@@ -88,7 +88,7 @@ and says why. A reader of γ takes it from `table --json`, whose rows carry `of_
 `table` presents each γ of record per window and per monitoring period of a week, a month and a year, over all compute:
 the census's datacenter (`dc-12500-machines-600s`: the GPU-hours spent proving at the share γ/(1+γ), and their FLOP at the
 card's datasheet rate and gates) beside the world's inference compute (`world-inference-2027`: the FLOP and gates proving
-adds, γ times it). Gates are FLOP at `benchmarks/rho/data/hardware.toml`'s one conversion. γ is measured on one card;
+adds, γ times it). Gates are FLOP at `benchmarks/slowdown/data/hardware.toml`'s one conversion. γ is measured on one card;
 every total is scaled from it, not proved.
 
 ## A scheme's arm

@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.PortRoots
+
+/-!
 The forms `verify --zk` refuses so that the sampled audit's knowledge soundness (`Flock.Guarantees.SampledKSLiveV3`)
 takes none of `Flock.Bridge.SampledKSLiveRoots`' file preconditions as a hypothesis: no form goes ahead of its proof.
 Under `--zk` every session of a statement outside them is refused, beside `ProvedScope.check` and `PortRoots.check`:
@@ -11,15 +15,15 @@ Under `--zk` every session of a statement outside them is refused, beside `Prove
   (`sharedWhy`): the circuit's public input ports parse (`HmIn.parse`), the file loads over them (`HmIn.loadPublic`),
   and no two ports' roots over its tables are one root under different domains (`collidesT`, V5's `RootFixesDomainL` at
   the file's leaf map). A file without shared rows is V3's form (`pub.tables = none`).
-* `drawWhy count draw`: at more than one table, a session whose record holds no sample that parses, or whose subset sample's
-  `k` the tables don't divide (`SampledKSLiveRoots`' `kd % nTab = 0`).
+* `sampleWhy count sample`: at more than one table, a session whose record holds no sample that parses, or whose subset
+  sample's `k` the tables don't divide (`SampledKSLiveRoots`' `kd % nTab = 0`).
 
-`checkOf parsed tags publicFile count draw` runs them on the circuit `parsed` it is handed and the public file as
+`checkOf parsed tags publicFile count sample` runs them on the circuit `parsed` it is handed and the public file as
 `HmOut.loadPublic` loads it over that circuit. `check` runs `checkOf` on the circuit `HmOut.parse` reads, a flat file's,
 and `check_ok` says what passing `check` establishes: `SampledKSLiveRoots`' file preconditions, or V5's at a shared-row
 file. Their sixth, that the unit is a built net, follows from the parse of an untyped statement. A V* session
 (`--rec-inner`) is the recursion's, whose guarantee is its own, so `verify` doesn't run the check on it.
-`flock-verify ks-form` runs `checkOf` alone on a statement's files, and the Python mirror
+`verity-verify-proof ks-form` runs `checkOf` alone on a statement's files, and the Python mirror
 (`one_stage.proofs.ks_form_why`, `filesWhy` on the files' heads) is held to it.
 
 `verify --zk` hands `checkOf` the circuit `ProvedScope.circuitOf` reads: at a templated statement (`Tags.isTmpl`) the
@@ -30,11 +34,9 @@ flat circuit `HmOut.unrolled` gives, is then in `scopeOkH`. `checkOf_ok` says wh
 
 `filesOf parsed tags publicFile count` is `checkOf` without the session's sample: what `checkOf` holds of a
 statement's files alone, so a statement no session samples can be held to it. `checkOf` passes exactly where `filesOf`
-does and the sample passes `drawWhy` (`checkOf_iff`), and `filesOf_ok` says what passing establishes of the files.
+does and the session's sample passes its own check (`checkOf_iff`), and `filesOf_ok` says what passing establishes of the
+files.
 -/
-module
-
-public import Flock.PortRoots
 
 @[expose] public section
 
@@ -105,23 +107,23 @@ def filesWhy (tags : Tags) (count : Nat) (c : Circuit) (pub : Public) (publicFil
   | some why => some why
   | none => if pub.tables.isSome then sharedWhy tags c publicFile else none
 
-/-- The session's sample (`draw`, the record's `unit_draw`) at `count` tables: none to check at one table; at more, a sample
-that parses, and a subset sample's `k` a multiple of `count`, so every table proves `k / count` units. -/
-def drawWhy (count : Nat) (draw : Option Json) : Option String :=
+/-- The session's sample (`sample`, the record's `unit_draw`) at `count` tables: none to check at one table; at more, a
+sample that parses, and a subset sample's `k` a multiple of `count`, so every table proves `k / count` units. -/
+def sampleWhy (count : Nat) (sample : Option Json) : Option String :=
   if count ≤ 1 then none
-  else match draw with
+  else match sample with
     | none => some s!"a session of {count} tables without a draw"
-    | some j => match Draw.UnitDraw.ofJson j with
+    | some j => match Draw.UnitSample.ofJson j with
       | .error e => some s!"a draw that does not parse ({e})"
-      | .ok d => match d.law with
+      | .ok d => match d.samplingDesign with
         | .subset k => if k % count = 0 then none
           else some s!"a subset draw of {k} units over {count} tables, which do not divide it"
         | _ => none
 
 /-- **`verify --zk`'s files are in the form the sampled audit's knowledge soundness covers**: the tags (`tagsWhy`), on the
 circuit `parsed` (`ProvedScope.circuitOf`'s under `verify --zk`) and the public file as `HmOut.loadPublic` loads it the
-unit's form and no shared rows (`filesWhy`, or V5's shared-row form), and the session's sample (`drawWhy`). -/
-def checkOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count : Nat) (draw : Option Json) :
+unit's form and no shared rows (`filesWhy`, or V5's shared-row form), and the session's sample (`sampleWhy`). -/
+def checkOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count : Nat) (sample : Option Json) :
     Except String Unit :=
   match tagsWhy tags with
   | some why => .error (ProvedScope.refusal why)
@@ -131,7 +133,7 @@ def checkOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count :
       | .error e => .error (ProvedScope.refusal s!"a public file that does not load ({e})")
       | .ok pub => match filesWhy tags count c pub publicFile with
         | some why => .error (ProvedScope.refusal why)
-        | none => match drawWhy count draw with
+        | none => match sampleWhy count sample with
           | some why => .error (ProvedScope.refusal why)
           | none => .ok ()
 
@@ -151,8 +153,8 @@ def filesOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count :
 
 /-- `checkOf` on the circuit file as `HmOut.parse` reads it. -/
 def check (tags : Tags) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
-    (draw : Option Json) : Except String Unit :=
-  checkOf (HmOut.parse tags circuitFile tables) tags publicFile count draw
+    (sample : Option Json) : Except String Unit :=
+  checkOf (HmOut.parse tags circuitFile tables) tags publicFile count sample
 
 theorem tagsWhy_none {tags : Tags} (h : tagsWhy tags = none) :
     tags.typed = false ∧ tags.hiddenOutputs = true ∧ tags.retainRounds = true ∧ tags.merkleLeaf = "hm96-sha512/v1" := by
@@ -234,14 +236,14 @@ theorem filesWhy_none {tags : Tags} {count : Nat} {c : Circuit} {pub : Public} {
     next h2 => exact ⟨hu, Or.inl (by simpa using h2)⟩
 
 /-- **At more than one table, a passing sample parses, and its subset `k` is a multiple of the tables.** -/
-theorem drawWhy_none {count : Nat} {draw : Option Json} (h : drawWhy count draw = none) (hc : ¬ count ≤ 1) :
-    ∃ j d, draw = some j ∧ Draw.UnitDraw.ofJson j = .ok d ∧ ∀ k, d.law = .subset k → k % count = 0 := by
-  unfold drawWhy at h
+theorem sampleWhy_none {count : Nat} {sample : Option Json} (h : sampleWhy count sample = none) (hc : ¬ count ≤ 1) :
+    ∃ j d, sample = some j ∧ Draw.UnitSample.ofJson j = .ok d ∧ ∀ k, d.samplingDesign = .subset k → k % count = 0 := by
+  unfold sampleWhy at h
   rw [if_neg hc] at h
-  cases draw with
+  cases sample with
   | none => simp at h
   | some j =>
-    cases hj : Draw.UnitDraw.ofJson j with
+    cases hj : Draw.UnitSample.ofJson j with
     | error e => simp [hj] at h
     | ok d =>
       refine ⟨j, d, rfl, hj, fun k hk => ?_⟩
@@ -252,12 +254,12 @@ theorem drawWhy_none {count : Nat} {draw : Option Json} (h : drawWhy count draw 
 
 /-- **What `check` passing says of the files**: the tags pass `tagsWhy`, and at the circuit `HmOut.parse` reads and the
 public file `HmOut.loadPublic` loads, the circuit is in `scopeOkH`, the public file has no shared rows (V3's form) or is
-in V5's shared-row form (`SharedOk`), and the sample passes `drawWhy`. -/
+in V5's shared-row form (`SharedOk`), and the session's sample passes its own check. -/
 theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : Nat}
-    {draw : Option Json} {c : Circuit} {pub : Public} (h : check tags cf pf tables count draw = .ok ())
+    {sample : Option Json} {c : Circuit} {pub : Public} (h : check tags cf pf tables count sample = .ok ())
     (hc : HmOut.parse tags cf tables = .ok c) (hpub : HmOut.loadPublic tags c pf = .ok pub) :
     tagsWhy tags = none ∧ ProvedScope.scopeOkH c = true ∧ (pub.tables = none ∨ SharedOk tags c pf) ∧
-      drawWhy count draw = none := by
+      sampleWhy count sample = none := by
   unfold check checkOf at h
   rw [hc] at h
   cases ht : tagsWhy tags with
@@ -268,7 +270,7 @@ theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × Byt
     | some w => simp [hf] at h
     | none =>
       simp only [hf] at h
-      cases hd : drawWhy count draw with
+      cases hd : sampleWhy count sample with
       | some w => simp [hd] at h
       | none =>
         obtain ⟨hu, hp⟩ := filesWhy_none hf
@@ -277,12 +279,12 @@ theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × Byt
 /-- **What `checkOf` passing says of the files**, at any circuit `parsed` holds (a templated statement's carrying its
 template, as `ProvedScope.circuitOf` reads it): the tags pass `tagsWhy`, the circuit is in the unit's form (`unitWhy`:
 `unitWhy_flat`, `unitWhy_tmpl`), the public file `HmOut.loadPublic` loads has no shared rows or is in V5's shared-row
-form (`SharedOk`), and the sample passes `drawWhy`. -/
-theorem checkOf_ok {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count : Nat} {draw : Option Json}
-    {c : Circuit} {pub : Public} (h : checkOf parsed tags pf count draw = .ok ()) (hc : parsed = .ok c)
+form (`SharedOk`), and the session's sample passes its own check. -/
+theorem checkOf_ok {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count : Nat} {sample : Option Json}
+    {c : Circuit} {pub : Public} (h : checkOf parsed tags pf count sample = .ok ()) (hc : parsed = .ok c)
     (hpub : HmOut.loadPublic tags c pf = .ok pub) :
     tagsWhy tags = none ∧ unitWhy tags count c = none ∧ (pub.tables = none ∨ SharedOk tags c pf) ∧
-      drawWhy count draw = none := by
+      sampleWhy count sample = none := by
   subst hc
   unfold checkOf at h
   cases ht : tagsWhy tags with
@@ -293,15 +295,16 @@ theorem checkOf_ok {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count : 
     | some w => simp [hf] at h
     | none =>
       simp only [hf] at h
-      cases hd : drawWhy count draw with
+      cases hd : sampleWhy count sample with
       | some w => simp [hd] at h
       | none =>
         obtain ⟨hu, hp⟩ := filesWhy_none hf
         exact ⟨rfl, hu, hp, rfl⟩
 
-/-- **`checkOf` passes exactly where the files pass `filesOf` and the session's sample passes `drawWhy`.** -/
-theorem checkOf_iff {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count : Nat} {draw : Option Json} :
-    checkOf parsed tags pf count draw = .ok () ↔ filesOf parsed tags pf count = .ok () ∧ drawWhy count draw = none := by
+/-- **`checkOf` passes exactly where the files pass `filesOf` and the session's sample passes its own check.** -/
+theorem checkOf_iff {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count : Nat} {sample : Option Json} :
+    checkOf parsed tags pf count sample = .ok () ↔
+      filesOf parsed tags pf count = .ok () ∧ sampleWhy count sample = none := by
   unfold checkOf filesOf
   cases ht : tagsWhy tags with
   | some w => simp
@@ -314,7 +317,7 @@ theorem checkOf_iff {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count :
       | ok pub =>
         cases hf : filesWhy tags count c pub pf with
         | some w => simp [hl, hf]
-        | none => cases hd : drawWhy count draw <;> simp [hl, hf]
+        | none => cases hd : sampleWhy count sample <;> simp [hl, hf]
 
 /-- **What `filesOf` passing says of the files**, at any circuit `parsed` holds: what `checkOf_ok` says of them, with
 no session's sample. -/

@@ -91,15 +91,15 @@ theorem witnessMix_scope :
 `zk_session_soundHJ_nonvacuous_v2` at a circuit file that parses as `witnessSeg`. -/
 theorem zk_session_soundHJ_nonvacuous_seg (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok witnessSeg) (kd : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) n)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) n)
     {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) :
     Built witnessSeg.unit ∧ Layout.scopeOkH witnessSeg = true ∧ Layout.scopeOk witnessSeg = false ∧
       Hidden.Any.RowsFitS witnessSeg ∧
-      Nonempty (DrawSetupZHJ (inputsJ I 0) (mPtsOf witnessSeg.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
+      Nonempty (SampleSetupZHJ (inputsJ I 0) (mPtsOf witnessSeg.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
         (drawJ I (dj S) 0)) ∧
       (∀ j : Fin (nTab I), Nonempty
-        (DrawSetupZHJ (inputsJ I j) (mPtsOf witnessSeg.g (kd / nTab I)) (partS I (dj S) S j) (drawJ I (dj S) j))) ∧
-      ∀ S', DrawOkZKHJ I dj (mPtsOf witnessSeg.g (kd / nTab I)) S' := by
+        (SampleSetupZHJ (inputsJ I j) (mPtsOf witnessSeg.g (kd / nTab I)) (partS I (dj S) S j) (drawJ I (dj S) j))) ∧
+      ∀ S', SampleOkZKHJ I dj (mPtsOf witnessSeg.g (kd / nTab I)) S' := by
   have ht' : (zkTags I).typed = false := (zkTags_typed I).trans ht
   have P := parse_facts (parse_untyped ht' hc).1
   obtain ⟨ls, hls⟩ := P.check
@@ -112,15 +112,15 @@ theorem zk_session_soundHJ_nonvacuous_seg (I : Inputs) (ht : I.tags.typed = fals
 `zk_session_soundHJ_nonvacuous_v2` at a circuit file that parses as `witnessSegOut`. -/
 theorem zk_session_soundHJ_nonvacuous_segOut (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok witnessSegOut) (kd : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) n)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) n)
     {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) :
     Built witnessSegOut.unit ∧ Layout.scopeOkH witnessSegOut = true ∧ Layout.scopeOk witnessSegOut = false ∧
       Hidden.Any.RowsFitS witnessSegOut ∧
-      Nonempty (DrawSetupZHJ (inputsJ I 0) (mPtsOf witnessSegOut.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
+      Nonempty (SampleSetupZHJ (inputsJ I 0) (mPtsOf witnessSegOut.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
         (drawJ I (dj S) 0)) ∧
       (∀ j : Fin (nTab I), Nonempty
-        (DrawSetupZHJ (inputsJ I j) (mPtsOf witnessSegOut.g (kd / nTab I)) (partS I (dj S) S j) (drawJ I (dj S) j))) ∧
-      ∀ S', DrawOkZKHJ I dj (mPtsOf witnessSegOut.g (kd / nTab I)) S' := by
+        (SampleSetupZHJ (inputsJ I j) (mPtsOf witnessSegOut.g (kd / nTab I)) (partS I (dj S) S j) (drawJ I (dj S) j))) ∧
+      ∀ S', SampleOkZKHJ I dj (mPtsOf witnessSegOut.g (kd / nTab I)) S' := by
   have ht' : (zkTags I).typed = false := (zkTags_typed I).trans ht
   have P := parse_facts (parse_untyped ht' hc).1
   obtain ⟨ls, hls⟩ := P.check
@@ -133,15 +133,15 @@ theorem zk_session_soundHJ_nonvacuous_segOut (I : Inputs) (ht : I.tags.typed = f
 `zk_session_soundHJ_nonvacuous_v2` at a circuit file that parses as `witnessMix`. -/
 theorem zk_session_soundHJ_nonvacuous_mix (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok witnessMix) (kd : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) n)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) n)
     {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) :
     Built witnessMix.unit ∧ Layout.scopeOkH witnessMix = true ∧ Layout.scopeOk witnessMix = false ∧
       Hidden.Any.RowsFitS witnessMix ∧
-      Nonempty (DrawSetupZHJ (inputsJ I 0) (mPtsOf witnessMix.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
+      Nonempty (SampleSetupZHJ (inputsJ I 0) (mPtsOf witnessMix.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
         (drawJ I (dj S) 0)) ∧
       (∀ j : Fin (nTab I), Nonempty
-        (DrawSetupZHJ (inputsJ I j) (mPtsOf witnessMix.g (kd / nTab I)) (partS I (dj S) S j) (drawJ I (dj S) j))) ∧
-      ∀ S', DrawOkZKHJ I dj (mPtsOf witnessMix.g (kd / nTab I)) S' := by
+        (SampleSetupZHJ (inputsJ I j) (mPtsOf witnessMix.g (kd / nTab I)) (partS I (dj S) S j) (drawJ I (dj S) j))) ∧
+      ∀ S', SampleOkZKHJ I dj (mPtsOf witnessMix.g (kd / nTab I)) S' := by
   have ht' : (zkTags I).typed = false := (zkTags_typed I).trans ht
   have P := parse_facts (parse_untyped ht' hc).1
   obtain ⟨ls, hls⟩ := P.check
