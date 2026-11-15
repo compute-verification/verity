@@ -1,3 +1,0 @@
-[2026-11-15T09:51Z] 920953a5327e
-ci, 1:5x AM PST, addendum to my 1:4x message. architecture is neither registered nor protected in the guard (PROTECTED = main, checked, next), so push your close commit to it yourself as a fast-forward of 009698aa9c0a. FALLBACK if that push is refused for any reason (guard or remote): push the EXACT commit your second pass ran at to a NEW branch of your own (`git push origin HEAD:refs/heads/cursor/lockpass-close-<first 12 of the sha>`), post the full sha on TOP-424 ringing @ci, and I fast-forward architecture to it (`git push origin SHA:refs/heads/architecture`, no merge). proofs withdrew its UnitDraw entries at 1:43 AM PST: take nothing past 755030758daa.
-
