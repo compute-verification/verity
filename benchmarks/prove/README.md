@@ -312,8 +312,14 @@ each `flock-circuit prove`. Its ε at δ is the audit's `wrong_units`: `at most 
 probability 2^-20`. Its `ran with:` line is `layers.txt`'s first line, where that names its coins and parameters in
 these words.
 
-A `prove_path` row's workload names the commit its `machine.txt` states (`run.sh`'s `git rev-parse HEAD`), `arm z at
-commit c352729e2ee (machine.txt's git HEAD)`. It states no branch.
+Each row keeps the commit its output states it ran at, and the line `- commits:` under the `ran with:` lines names
+each: a prove_path or a5 row's from its `machine.txt` (`git rev-parse HEAD`, for example `c352729e2ee (machine.txt's
+git HEAD)`), a `layers.sh` row's from `job.log`'s `source`, recursion's from its `params.commit`. No output states a
+branch. The printer can't know `main` offline, so the line ends with how to check: a row reruns from `main` only where
+`git merge-base --is-ancestor COMMIT origin/main` holds.
+
+An a5 row's workload opens with `served values:` where its summary's `source` is `served` and its `REGISTERED` line's
+`kind=served`. Its `ran with:` line is its `COINS` line's draw clause where that says `one local challenger session`.
 
 A row prints its numbers only when its Lean verdict is an accept. Any other row prints none, and says why under the
 table. When no row prints a number, the first line is `prove layers: no number: WHY` (each layer's why) and the command
@@ -334,9 +340,9 @@ The table's columns, after the layer and its workload:
   record (above). Recursion's is CPU where its params
   say `GPU=0` and `OPROVE_GPU=0` (job.sh's CPU prover); a prove_path or a5 row's is read from its timing's `gpus` and
   `device` (a5's `proving_of`), which prove_path's runs leave unset, so theirs is "not stated".
-- **ε at δ:** what the output states. A `layers.sh` audit's `wrong_units` states it (above). a5's `summary.json` and
-  prove_path's `PROVE-PATH` line hold only `delta`, so their cell is `ε not stated at δ 0.5`. For a number, a5.py's summary and prove_path.py's `PROVE-PATH`
-  line would have to write the sample's ε.
+- **ε at δ:** what the output states: the audit's `wrong_units`, in a `layers.sh` summary or an a5 summary or `A5`
+  line, as `at most 2 of 880 units wrong except with probability 0.5`. prove_path's `PROVE-PATH` line holds only
+  `delta`, so its cell is `ε not stated at δ 0.5`, and prove_path.py's `PROVE-PATH` line would have to write the bound.
 - **prover, Lean, proof bytes:** each cell starts with its figure's unit and what it is per, so no figure is read as
   another's: `2.345 s a drawn block (Flock's prove_total_s, the mean over 8)`, `430,501 bytes a drawn block (...)`, and
   recursion's `1699 s a run, wall (one recursive run's path without Lean's step: ...)`. The four rows stay one table:
@@ -351,7 +357,7 @@ kit's writer, each a figure a drawn proof block:
 |---|---|
 | `benchmarks/proof-layer-prover-seconds` | Flock's `prove_total_s`, the mean over the drawn blocks |
 | `benchmarks/proof-layer-lean-seconds` | Lean's verify seconds, the mean over the drawn blocks |
-| `benchmarks/proof-layer-proof-bytes` | the session's proof files' bytes, over its drawn blocks |
+| `benchmarks/proof-layer-proof-bytes` | one proof's bytes over its drawn blocks: an a5 or `layers.sh` row's one rep's (its reps are timed repeats of one proof, and differing reps give none); a prove_path row's every rep's, as prove_path's `per_unit` sums them |
 
 Under each id it writes three measurements, in this order:
 

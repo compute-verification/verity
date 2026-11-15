@@ -155,7 +155,7 @@ def test_a_plain_sampling_row_writes_null_with_why_under_every_id(tmp_path):
 def test_an_a5_run_reads_its_audit_its_timing_and_states_no_more_of_its_coins_than_it_says(tmp_path):
     row = PL.read("sampling", str(a5_out(tmp_path)))
     assert row.accepted and row.format == PL.A5
-    assert (row.prover_s, row.lean_s, row.proof_bytes) == (5.0, 2.0, 250.0)
+    assert (row.prover_s, row.lean_s, row.proof_bytes) == (5.0, 2.0, 125.0)
     assert row.workload == ("row llama32-1b__int8__h200__tp1__b4: RoPEHead_v1{D=64} x 4 drawn of 112 units "
                             "(kind=served commitment=rows-sha512)")
     assert row.ran_with == "ran with: not stated"
@@ -220,7 +220,7 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
         (name, member) for name in IDS for member in ("flock", "zero knowledge", None)]
     values = {(m["name"], m.get("member")): m for m in written}
     assert [values[name, "zero knowledge"]["value"] for name in IDS] == [3.0, 1.0, 850000.0]
-    assert [values[name, None]["value"] for name in IDS] == [5.0, 2.0, 250.0]
+    assert [values[name, None]["value"] for name in IDS] == [5.0, 2.0, 125.0]
     assert all(values[name, "flock"]["value"] is None and values[name, "flock"]["why"].startswith("not run") for name in IDS)
     assert {m["unit"] for m in written} == {"s a proof block", "bytes a proof block"} and all(m["mark"] == "measured"
                                                                                            for m in written)
@@ -235,7 +235,7 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert "| 1202 s a run, wall (one recursive run's path" in line["with recursion"]
     assert "| 90 s a run, wall (the lean step whole" in line["with recursion"]
     assert "| 18,000,000 bytes a run (V*'s 10 releases" in line["with recursion"]
-    assert "| 850,000 bytes a drawn block (its session's" in line["Flock with zero knowledge"]
+    assert "| 850,000 bytes a drawn block (every rep's proof files" in line["Flock with zero knowledge"]
 
 
 def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_any_id(tmp_path):
@@ -365,7 +365,7 @@ def test_a_layers_sh_run_gives_its_three_layers_each_a_statements_figures_as_sta
     rows = {x: PL.read(x, str(run)) for x in ("flock", "zk", "sampling")}
     assert {r.format for r in rows.values()} == {PL.LAYERS_SH} and all(r.accepted for r in rows.values())
     assert all(r.workload.startswith("stand-in values, never served: 2 statements of 2,560 units") for r in rows.values())
-    assert f"(source {SHA[:11]}, job.log)" in rows["zk"].workload and "32 of them drawn" in rows["sampling"].workload
+    assert (rows["zk"].commit, rows["zk"].commit_from) == (SHA, "job.log's source") and "32 of them drawn" in rows["sampling"].workload
     assert [r.proof for r in rows.values()] == ["plain", "zk", "zk"]
     assert rows["sampling"].ran_with.startswith("ran with: coins local challenger; parameters development (a development")
     assert rows["sampling"].eps_delta == "at most 895 of 2,560 units wrong except with probability 2^-20"
@@ -396,6 +396,27 @@ def test_a_prove_path_row_names_the_commit_its_machine_txt_states(tmp_path):
     out = tmp_path / "out"
     prove_path_arm(out, "z")
     (out / "machine.txt").write_text(f"11\nMem: 755\n{'c352729e2ee' + '0' * 29}\n{'5e' * 20}\n")
-    assert PL.read("zk", str(out)).workload.startswith("arm z at commit c352729e2ee (machine.txt's git HEAD): ")
+    row = PL.read("zk", str(out))
+    assert row.commit == "c352729e2ee" + "0" * 29 and row.workload.startswith("arm z: ")
+    commits = next(x for x in PL.render([row]).splitlines() if x.startswith("- commits: "))
+    assert commits.startswith("- commits: Flock with zero knowledge c352729e2ee (machine.txt's git HEAD); a row reruns from main")
     (out / "machine.txt").write_text("11\n")
-    assert PL.read("zk", str(out)).workload.startswith("arm z: ")
+    assert PL.read("zk", str(out)).commit is None
+    assert "- commits: Flock with zero knowledge not stated; " in PL.render([PL.read("zk", str(out))])
+
+
+def test_a_served_a5_row_states_its_values_its_bound_its_coins_and_its_commit_from_its_files(tmp_path):
+    """r20261115-220537-6ebb's shapes: summary.json's source served beside REGISTERED kind=served, the audit's
+    wrong_units, summary.txt's COINS line and machine.txt's git HEAD (a5_llama1b_h200.sh's third line)."""
+
+    out = a5_out(tmp_path, source="served", audit={"wrong_units": {"bound": 2, "of": 880, "delta": 0.5}}) / "out"
+    (out / "machine.txt").write_text(f"uid=0(root)\n13722cef5f43\n{'45400e83995d' + '0' * 28}\nrow dir /w/r/llama32-1b__int8\n")
+    with (out / "summary.txt").open("a") as f:
+        f.write("COINS draw: one local challenger session (a development stand-in for the auditor's), law subset k=4 of 112 "
+                "units, delta 0.5; sessions: Flock --zk behind the Lean ZK server\n")
+    row = PL.read("sampling", str(tmp_path))
+    assert row.workload.startswith("served values: row llama32-1b__int8: RoPEHead_v1{D=64} x 4 drawn of 112 units (kind=served")
+    assert row.eps_delta == "at most 2 of 880 units wrong except with probability 0.5"
+    assert row.ran_with == ("ran with: coins local challenger; parameters not stated (summary.txt COINS draw: one local "
+                            "challenger session (a development stand-in for the auditor's), law subset k=4 of 112 units, delta 0.5)")
+    assert row.commit == "45400e83995d" + "0" * 28 and row.proof_bytes == 125.0

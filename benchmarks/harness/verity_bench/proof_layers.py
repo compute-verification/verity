@@ -104,6 +104,9 @@ class Row:
     proof: str | None = None
     why: str | None = None
     notes: list[str] = field(default_factory=list)
+    #: the commit its output states it ran at, and which of its files states it
+    commit: str | None = None
+    commit_from: str | None = None
     #: a layers.sh row's figures, one a statement (its name, units, Flock's and Lean's seconds, its proof's bytes)
     statements: list[dict[str, Any]] = field(default_factory=list)
 
@@ -213,20 +216,22 @@ def _number(x: Any) -> float | None:
 
 def per_unit(timing: Mapping[str, Any], counts: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     """An a5 summary's ``timing`` per sampled proof block of each type, in the form prove_path's ``per_unit`` prints: the
-    blocks drawn (``draw_counts``), Flock's ``prove_total_s`` and Lean's verify seconds over them, and the proof's bytes
-    over its reps."""
+    blocks drawn (``draw_counts``), Flock's ``prove_total_s`` and Lean's verify seconds over them, and one rep's proof's
+    bytes where every rep's are the same (a timed repeat of the one proof), else none."""
 
     out = {}
     for key, t in timing.items():
         tm, n = (t or {}).get("timing") or {}, counts.get(key) or 0
         pb = tm.get("proof_bytes")
-        out[key] = {"units": n, "proof_bytes": sum(pb) if isinstance(pb, list) else pb,
+        one = pb[0] if isinstance(pb, list) and pb and len(set(pb)) == 1 else pb if isinstance(pb, int) else None
+        out[key] = {"units": n, "proof_bytes": one,
                     **{f"{x}_per_unit": v / n if n and (v := _number(raw)) is not None else None
                        for x, raw in (("prove_s", tm.get("prove_total_s")), ("lean_verify_s", (t or {}).get("lean_verify_s")))}}
     return out
 
 
-def _per_block(row: Row, units: Iterable[Mapping[str, Mapping[str, Any]]]) -> None:
+def _per_block(row: Row, units: Iterable[Mapping[str, Mapping[str, Any]]],
+               bytes_what: str = "one rep's proof over its drawn blocks") -> None:
     """The row's prover and Lean seconds and proof bytes a block, over every drawn block of `units` (prove_path's
     ``per_unit`` maps, one a rank): the seconds' means weighted by each type's blocks, and the bytes' sum over the blocks."""
 
@@ -254,7 +259,7 @@ def _per_block(row: Row, units: Iterable[Mapping[str, Mapping[str, Any]]]) -> No
     row.lean_s = None if "lean" in missing else figures["lean"] / n
     row.lean_what = f"Lean's verify, the mean over {n}"
     row.proof_bytes = None if "bytes" in missing else figures["bytes"] / n
-    row.bytes_what = "its session's proof files over its drawn blocks"
+    row.bytes_what = bytes_what
 
 
 def _device(timings: Iterable[Mapping[str, Any]]) -> str:
@@ -267,6 +272,15 @@ def _device(timings: Iterable[Mapping[str, Any]]) -> str:
     if said and all(isinstance(g, int) and g >= 1 for g, _ in said):
         return "GPU " + ", ".join(sorted({str(d) for _, d in said})) + " (timing device)"
     return NOT_STATED
+
+
+def _wrong_units(w: Any) -> str | None:
+    """The audit's ``wrong_units`` bound as the row's ε at δ, where it states its bound, population and δ."""
+
+    w = w if isinstance(w, dict) else {}
+    if not all(_number(w.get(x)) is not None for x in ("bound", "of", "delta")):
+        return None
+    return f"at most {w['bound']:,} of {w['of']:,} units wrong except with probability {_delta(w['delta'])}"
 
 
 def _eps_delta(delta: Any) -> str:
@@ -318,6 +332,8 @@ def read_recursion(d: Path, row: Row) -> None:
         row.prover_what = "one recursive run's path without Lean's step: " + " + ".join(prover)
     row.lean_s = _number(pipeline.get("Lean step_s"))
     row.lean_what = "the lean step whole: every V* release and the inner statement"
+    if isinstance(p.get("commit"), str) and re.fullmatch(r"[0-9a-f]{40}", p["commit"]):
+        row.commit, row.commit_from = p["commit"], "params.commit"
     found = re.search(r"\(([^)]*)\)", str(h.get("outer_mode") or ""))
     outer = (h.get("outer") or {}).get(found.group(1) if found else "") or {}
     row.proof_bytes = _number(outer.get("proof_bytes"))
@@ -365,10 +381,10 @@ def read_prove_path(d: Path, row: Row) -> None:
         for t, n in (r.get("draw_counts") or {}).items():
             counts[t] = counts.get(t, 0) + int(n)
     population = sum(int(r.get("population") or 0) for r in ranks.values()) or None
-    commit = _commit(arm / "machine.txt", arm.parent / "machine.txt")
-    row.workload = (f"arm {arm.name}" + (f" at commit {commit[:11]} (machine.txt's git HEAD)" if commit else "") + ": "
-                    + _drawn(counts, population, len(ranks)))
-    _per_block(row, [r.get("per_unit") or {} for r in ranks.values()])
+    row.commit, row.commit_from = _commit(arm / "machine.txt", arm.parent / "machine.txt"), "machine.txt's git HEAD"
+    row.workload = f"arm {arm.name}: " + _drawn(counts, population, len(ranks))
+    _per_block(row, [r.get("per_unit") or {} for r in ranks.values()],
+               "every rep's proof files over its drawn blocks, as prove_path's per_unit sums them")
     summary = json.loads(_text(arm / "summary.json") or "{}")
     challenger = (summary.get("coins") or {}).get("challenger")
     said = ([f"PROVE-PATH coins {pp['coins']}"] if pp.get("coins") else []) + (
@@ -420,8 +436,10 @@ def read_a5(d: Path, row: Row) -> None:
     registered = next((x for x in text if x.startswith("REGISTERED ")), "")
     window = " ".join(w for w in registered.split() if w.startswith(("kind=", "commitment=")))
     counts = summary.get("draw_counts") or (a5 or {}).get("draw_counts") or {}
-    row.workload = ((f"row {Path(machine[len('row dir '):]).name}: " if machine else
-                     f"source {summary['source']}: " if summary.get("source") else "")
+    served = summary.get("source") == "served" and "kind=served" in window
+    row.workload = (("served values: " if served else "")
+                    + (f"row {Path(machine[len('row dir '):]).name}: " if machine else
+                       f"source {summary['source']}: " if summary.get("source") else "")
                     + _drawn(counts, summary.get("population")) + (f" ({window})" if window else ""))
     if summary.get("timing"):
         _per_block(row, [per_unit(summary["timing"], counts)])
@@ -430,17 +448,23 @@ def read_a5(d: Path, row: Row) -> None:
     coins = summary.get("coins") or {}
     said = (f"summary.json coins {json.dumps(coins, sort_keys=True)}" if coins else
             f"A5 line's verdicts {', '.join(challengers)}, a challenger per drawn member" if challengers else "")
-    row.said(_challenger(coins.get("source"), coins.get("challenger")), None, said)
+    drew = next((x[len("COINS "):] for x in text if x.startswith("COINS ")), None)
+    if drew and drew.startswith("draw: one local challenger session"):
+        row.said("local challenger", None, "summary.txt COINS " + drew.split("; ")[0])
+    else:
+        row.said(_challenger(coins.get("source"), coins.get("challenger")), None, said)
+    row.commit, row.commit_from = _commit(d / "machine.txt"), "machine.txt's git HEAD"
     row.proof = "plain" if summary.get("plain") else "zk" if summary else None
     row.device = _device((summary.get("timing") or {}).values())
-    row.eps_delta = _eps_delta(summary.get("delta"))
+    row.eps_delta = (_wrong_units((summary.get("audit") or {}).get("wrong_units"))
+                     or _wrong_units(((a5 or {}).get("audit") or {}).get("wrong_units")) or _eps_delta(summary.get("delta")))
     if summary.get("arm"):
         row.notes.append(f"arm {summary['arm']}")
 
 
 def _delta(x: float) -> str:
     e = math.log2(x) if x > 0 else 0.0
-    return f"2^{e:.0f}" if e == round(e) else f"{x:g}"
+    return f"2^{e:.0f}" if e == round(e) and e < -3 else f"{x:g}"
 
 
 def read_layers_sh(d: Path, row: Row) -> None:
@@ -483,16 +507,13 @@ def read_layers_sh(d: Path, row: Row) -> None:
                     f"of {len(stmts)} statements), {len(negs)} of {len(negs)} negative cases refused" if row.accepted else
                     "not accepted: " + ("; ".join(held) or f"audit accepted {audit.get('accepted')}"))
         drawn = f", {s.get('k')} of them drawn" if s.get("k") != s.get("population") else ", every unit drawn"
-        w = audit.get("wrong_units") or {}
-        if all(_number(w.get(x)) is not None for x in ("bound", "of", "delta")):
-            row.eps_delta = f"at most {w['bound']:,} of {w['of']:,} units wrong except with probability {_delta(w['delta'])}"
+        row.eps_delta = _wrong_units(audit.get("wrong_units")) or NOT_STATED
     population = s.get("population") or sum(int(x.get("units") or 0) for x in stmts)
     row.workload = ((f"{STAND_IN}: " if any(STAND_IN in x for x in said) else "")
                     + f"{len(stmts)} statements of {population:,} units{drawn}: "
                     + "; ".join(f"{x['name']}, {x['units']:,} units" + (f" of {x['template']}" if x.get("template") else "")
                                 for x in stmts))
-    if commit := _commit(d / "job.log"):
-        row.workload += f" (source {commit[:11]}, job.log)"
+    row.commit, row.commit_from = _commit(d / "job.log"), "job.log's source"
     for x in stmts:
         pb = x.pop("proof_bytes")
         x["proof_bytes"] = pb[0] if isinstance(pb, list) and pb and len(set(pb)) == 1 else pb if isinstance(pb, int) else None
@@ -581,6 +602,10 @@ def render(rows: Sequence[Row]) -> str:
     if not all(r.ran_with.startswith("ran with: coins deployed challenger; parameters deployed") for r in rows):
         lines.append(NOT_AN_AUDIT)
     lines += [f"- {LAYERS[r.layer]}: {r.ran_with}" for r in rows]
+    lines.append("- commits: " + "; ".join(f"{LAYERS[r.layer]} " + (f"{r.commit[:11]} ({r.commit_from})" if r.commit else
+                                                                     NOT_STATED if r.status == "read" else "—")
+                                           for r in rows)
+                 + "; a row reruns from main only where its commit is on main (`git merge-base --is-ancestor COMMIT origin/main`)")
     lines += ["", "| layer | workload | proof | device | ε at δ | prover | Lean verifier | Lean | proof bytes |",
               "|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
