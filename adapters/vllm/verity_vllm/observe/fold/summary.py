@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from verity_vllm.observe.fold.resolver import spec_label
+
+if TYPE_CHECKING:
+    from verity_vllm.observe.fold.fold import FoldResult
 
 #: the fail-closed reference-integrity rule id (definition and evaluation over persisted summaries:
 #: `verity_vllm.check.gates.REF_INTEGRITY_RULE` / `gates.fold_integrity`); quoted in `summarize()` so every fold summary names it
 REFERENCE_INTEGRITY_RULE = "R1/2026-09-18"
 
 
-def summarize(result) -> dict:
+def summarize(result: FoldResult) -> dict:
     """A JSON-able summary of a fold (`fold.FoldResult`) for reports."""
     return {"digest": result.digest, "params": [[n, repr(t)] for n, t in result.params], "ret_type": repr(result.body.ret_type) if result.body else None,
             "nodes": len(result.body.nodes) if result.body else 0, "instances": len(result.instances),
