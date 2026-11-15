@@ -118,7 +118,7 @@ class FakeStore:
 def store(tmp_path: Path, monkeypatch) -> FakeStore:
     """A store holding the two references' runs, which `references.json` is pointed at; no `research run` around
     the command; and the kit's writer stamping with `STAMP` rather than asking this machine."""
-    for name in ("RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "RESEARCH_SOURCE_SHA", "PACED", "UNPACED", "ROLE", "SERVE",
+    for name in ("RESEARCH_RUN_DIR", "OUT", "RESEARCH_RUN_ID", "RESEARCH_SOURCE_SHA", "PACED", "UNPACED", "ROLE", "SERVE",
                  "HOST_GIB", "LEAF_CTAS", *WINDOWED):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(M.kit, "host_stamp", lambda: dict(STAMP))

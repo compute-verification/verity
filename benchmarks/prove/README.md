@@ -2,7 +2,9 @@
 
 `verity bench prove` is the one command for what a proof system's prover costs on a workload. Its code is
 `verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_flock.py` Flock's prover,
-`prove_records.py` the store side and the table); this directory holds its runner. It reads the store's labelled
+`prove_records.py` the store side and the table, its code in `prove_common.py` (the slots, the workloads, reading a
+record), `prove_rows.py` (a steady-state row), `prove_store.py` (each input), `prove_table.py` (the table and what a
+runner records) and `prove_render.py` (the text)); this directory holds its runner. It reads the store's labelled
 records and runs on any machine that reaches the store, with no GPU and no node.
 
 ```text
@@ -60,9 +62,9 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
   that don't record it, each with its share of the proving time. Then come the rows priced from the single-session
   card, whose table records no CPUs. This is in the table's notes and in the inputs of both proving totals. A row
   records its card's node itself (`card_numa_node`, against its `cores.numa_nodes`). For a row that doesn't, the
-  harness's `verity_bench/data/off_node.json` holds a scan of the runs' own host records: the range of runs it read
-  (`covered`, less the runs it lists `unread`) and the runs among them that were off-node. A run the scan read and
-  doesn't list was on its node, and one it didn't read isn't recorded. The shares are of the whole proving time, so
+  harness's `verity_bench/data/off_node.json` holds a scan of the runs' own host records: the record whose runs it
+  read, the runs it read by id (`read`), and those among them that were off-node (`off`). A run the scan read and
+  doesn't list off-node was on its node, and a run it didn't read isn't recorded, whatever its id. The shares are of the whole proving time, so
   they need not add to 100%. Off-node rows still price their types: the line moves no value and no mark.
 - **The Lean verifier's seconds and the proof's bytes per served token, modeled.** Both are "not measured" until a
   Lean verifier run of record exists (below). With one, the block type it ran on takes its figures, and every other

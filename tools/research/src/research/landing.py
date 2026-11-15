@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import carry, policy, settings
+from . import carry, policy, settings, suite_layout
 from .notes import ART_RE
 from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, merge_main, unreviewed
 from .reds import CIRCUIT_KILLED, RATCHET_STEP, job_owner
@@ -690,13 +690,18 @@ def suite_pyproject(repo: Path, commit: str, suite: str) -> dict:
         return {}
 
 
+@functools.lru_cache(maxsize=16)
+def member_dirs(repo: Path, commit: str) -> dict[str, str]:
+    """{directory: distribution} of the workspace's members at ``commit`` but the root (`suite_layout.member_dirs`)."""
+    return suite_layout.member_dirs(lambda d: suite_pyproject(repo, commit, d))
+
+
 def suite_name(repo: Path, commit: str, suite: str) -> str:
-    """The name `suites.py` gives the suite in directory ``suite`` at ``commit`` (its `discover`): `repository` for the root,
-    else its pyproject.toml's project name, normalized, else its path."""
-    if suite.strip("/") in ("", "."):
-        return "repository"
-    name = suite_pyproject(repo, commit, suite).get("project", {}).get("name")
-    return re.sub(r"[-_.]+", "-", name).lower() if isinstance(name, str) else suite
+    """The name `suites.py` gives the suite in directory ``suite`` at ``commit`` (its `discover`: `suite_layout.suite_name`)."""
+    path = suite.strip("/") or "."
+    if path == ".":
+        return suite_layout.ROOT_SUITE
+    return suite_layout.suite_name(path, suite_pyproject(repo, commit, path).get("project", {}), member_dirs(repo, commit))
 
 
 def lean_errors(log: str) -> set[str]:
@@ -876,6 +881,21 @@ def suite_rows(run_dir: Path) -> dict[str, dict]:
             if n := s.get("name") or s.get("suite"):
                 out[n] = {**out.get(n, {}), **s, "step": step, "status": s.get("status") or "failed"}
     return out
+
+
+def unread_suites(run_dir: Path) -> set[str]:
+    """The suite steps (`SUITE_STEPS`) a check's steps.jsonl in ``run_dir`` says failed while no failed suite of theirs is
+    there (`suite_rows`) and its copy of their reports may not be their last: a remote run's, which no fetch begun after the
+    run ended brought them to (`_final`).  Which suites such a step failed, and whether an allowance covers them, is unknown
+    until then."""
+    from .remote import _read_json
+
+    if not (_read_json(run_dir / "remote.json") or {}).get("remote_run_dir"):
+        return set()
+    rows = {row["step"] for row in suite_rows(run_dir).values() if row["status"] == "failed"}
+    final = _final(run_dir)
+    return {s for st in failed_steps(run_dir) if (s := st.get("step")) in SUITE_STEPS and s not in rows and not not_run(st)
+            and not {n for n, x in SUITE_REPORTS.items() if x == s} <= final}
 
 
 def step_records(run_dir: Path) -> list[dict]:

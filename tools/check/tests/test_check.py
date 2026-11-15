@@ -1699,14 +1699,14 @@ def test_a_cold_check_runs_the_opt_in_tests_after_their_steps_suites_and_no_othe
 def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless_each_passed(tmp_path, monkeypatch, capsys):
     """Each suite's named tests in one `suites.py` run of its own with its variables set, every one of them, and no other
     suite's.  A named test that skipped (its mark reads a variable its suite doesn't list) or that its suite lacks (pytest's
-    "not found") ran nowhere, so it fails the step."""
+    "not found") ran nowhere, so it fails the step.  A suite whose tests moved to `tests/X` is still named by `X`."""
     from collections import namedtuple
 
     suite = namedtuple("suite", "name path")
     monkeypatch.setattr(CHECK, "OPT_IN", {"a/one": {"VERITY_A_SLOW": ("tests/test_a.py::test_x",),
                                                     "VERITY_A_E2E": ("tests/test_a.py::test_y",)},
                                           "b/two": {"VERITY_B_SLOW": ("tests/test_b.py::test_z",)}})
-    monkeypatch.setattr(CHECK.SUITES, "discover", lambda: [suite("one", "a/one"), suite("two", "b/two")])
+    monkeypatch.setattr(CHECK.SUITES, "discover", lambda: [suite("one", "a/one"), suite("two", "tests/b/two")])
     monkeypatch.setattr(CHECK, "AFTER_LEAN", ("two",))
     ran: list = []
     outcome = {"a/one": (0, {"passed": 2, "failed": 0, "error": 0, "skipped": 0}),
