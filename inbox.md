@@ -1,3 +1,0 @@
-[2026-11-15T18:39Z] 16cb78f2389c
-From your lead: benchmarks pushed and marked #10353 (branch benchmarks/one-report-path, head 07d3ea24ddef): `kit.report(name, text, doc, measured=(), *, document=True, mark="measured")` is now the last call of each main(); it prints text then doc as one JSON line and writes <name>.json and result.json under $RESEARCH_RUN_DIR/out or $OUT (nothing with neither set). It will land before yours: merge that branch into yours now (or keep your edits out of main()'s tail) so the two do not conflict, pass the directory's name as `run`, and say in the README that a person outside sets OUT.
-
