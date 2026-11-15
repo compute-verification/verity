@@ -42,8 +42,138 @@ The tests run from this directory, which is not a workspace member, in the works
 Outside `research run` it only prints. To keep what it prints as files too (`compute.json` and `result.json`, below),
 set `OUT` to a directory: `OUT=/tmp/compute verity bench compute --record DIR`.
 
-Producing a record (serving a model and auditing the run) is not yet one command from a clone. Today a record comes
-from a run on our machines.
+<!-- the serving command: one line here once it is on main -->
+**Producing a record** (serving the model on a card and auditing the run) is not yet one command on `main`. A branch
+adds it as serve.sh in this directory, which serves the load above on one H100 or H200 and writes a record directory
+for `--record`. Until it lands, a record comes from a run on our machines.
+
+Tonight's record uses a local challenger and development parameters: the coins come from a challenger process the
+developer runs, not the auditor's device, and the sample size and δ are the development defaults (459 draws, 1/100).
+The coins line says so. The card is an H100 or H200: the Lean verifier refuses the sm_120 schemes today.
+
+## PoUW under Pearl+: what you may change, what is fixed, how a cheat is refused
+
+This section was checked against the code by reading: its paths, names, constants and quoted reasons are the code's. No
+run exercised it.
+
+Pearl+ is PoUW's run verdict over `pearl-c-h100-v1-h3`, Pearl's FP8 (E4M3) proof of useful work. The prover commits
+every pass's operand rows and every tile's checked values. The verifier samples tiles by their credit, with a coin
+drawn after the commitment, replays each sampled tile from its opened rows, and credits the run at the scheme's named
+assumption. The verifier of record is Lean, `PouwCheck.PearlPlus`'s `check`
+(`verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Check.lean`, executable `pouw-pearlplus`).
+The Python `benchmarks/pouw/pearl_c_vllm/verify_run.py` computes the same answer beside it, and `verity bench compute`
+prints no number when the two differ or the record holds no Lean verdict.
+
+**A number from your own machine is a measurement, not an audit.** With in-process coins the salt comes from an
+in-process challenger and the sample from the node's own draw, and you control both. Run of record, the Lean verifier
+refuses such a run as a development run (`ofRecordReason` in
+`verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Coins.lean`): of record needs the coins live
+from the auditor's challenger. Locally nothing stops you re-rolling either until a run passes. A run is one execution
+phase; an audit pools execution phases over a monitoring period, which a local run doesn't.
+
+### What you may change
+
+Anything the verifier doesn't read, as long as what you commit is what it replays:
+
+- **The kernel.** The served kernel is `verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/`
+  (`pearl_c_sm90.cu`, the inert-work counter `debit_sm90.cu`, `build.sh`), built by
+  `benchmarks/harness/setup/pearl_c_sm90.sh`. Any code may replace it that commits the same operand rows, checked
+  words, leaves and served y bit for bit: `checkTile` replays them from the opened rows and never sees how they were
+  computed. `build.sh` refuses a cubin that fails `sass_gate.py`; that gate keeps an honest kernel replayable and is no
+  verifier check. A kernel wrong on any tile risks the whole run: one sampled wrong tile rejects it.
+- **The schedule.** How the load's requests become engine steps and passes (the tokens a step), and the streams,
+  graphs and overlap on the card. The requests, their prompt tokens and their output tokens are the load's
+  (`load.toml`): given the class (`served_passes.py verify --class SLOTS,PROMPT,OUTPUTS`), each round's rows are the
+  class's (`heldToLoad`), so what is left free is inside a pass.
+- **The give-up before the coin.** Which rows to give up as voluntary (`served_passes.py volunteer`), at most ⌈m/64⌉ A
+  rows a call and ⌈n/64⌉ B rows a fixed operand (`voluntaryCap`, `checkRecords`), and which passes to drop
+  (`served_passes.py retain`). Both credit nothing and are fixed before the sample.
+- **The sample size, locally.** Locally you are the verifier too, so you choose t, the work-weighted tiles sampled
+  (`served_passes.py verify --draws`, default 459). More samples take a smaller share ε off the credit and cost more
+  replay. In an audit t is the verifier's, and the coin that picks the tiles is never yours.
+
+### What is fixed
+
+The verifier and everything it pins. Changing any of these makes another verifier, whose number is not this
+benchmark's:
+
+- **The verifier**: the Lean package `pouw_pearlplus` (`PouwCheck.PearlPlus`) and its Python twin `verify_run.py`.
+- **The scheme and instance**: `pearl-c-h100-v1-h3` alone (`schemeOf` refuses the sm_120 records' schemes by name),
+  64 × 64 tiles at `k_min` 1,024 (`TILE`, `K_MIN`), k ≤ 2^16 (`K_MAX`). Its words follow the sm_90 FP8 tensor core
+  (`hopperE4m3K32`): the card is an H100 or H200, and on any other card your kernel must reproduce those words bit for
+  bit.
+- **The record's format**: the manifest schema (`manifestSchema`), the records root (`recordsRoot`), the coin record
+  (`CoinRecord`) and W's version (`wVersion`).
+- **The rules and the credit**: the per-row rules (`rowPasses`), the inert-work bound ρ = 1/400 (`INERT_BOUND_DEN`)
+  and its prices (`inertWorkUnits`), the over-bound rule `uncredited`, δ = 1/100 (`DELTA`) and the credit formula
+  (`creditAtAssumption`).
+- **The model and the load**: `load.toml`. The MACs the number divides by come from the model's shape and the class
+  (`MODELS`, `model_macs` in `run.py`), attention counted and never credited.
+
+### How a cheat is refused
+
+Each paragraph names a cheat and the check that meets it, in the Lean verifier and in `verify_run.py`. The checks'
+properties are stated in `security/Properties/Pouw/PearlPlus.lean` (`AcceptMeans`, `PlanMeans`, `TileAcceptMeans`,
+`LoadedGivesUp`, `YIsTheUnscale`, `WorkIsTheCredit`, `OpeningBinds`) and proved in
+`security/Proofs/Properties/Pouw/PearlPlus/`. That a passed check means the work was done rests on SHA-512's collision
+resistance (`cr/sha-512` in the lock) and on Pearl's assumption at the H100 record, TT_OUT rev1 (`TTOutPearlCDevRev1`;
+per tile `TTOutTilePearlCH100Rev1`), which is conjectured. A bridge from acceptance to the game's audit is proved
+(`acceptGivesTheAudit` in `security/Proofs/Pouw/PearlPlus/Sample.lean`), but no guarantee in the lock states a Pearl+
+run's credit yet, and `verity/protocols/accounting/pouw/verifier/README.md` records TT_OUT rev1 as refuted by a
+red-team rating.
+
+**Computing fewer products, or wrong ones.** `checkTile` recomputes a sampled tile's checked words from its opened rows
+under the salt's noise and compares them with the committed leaf (`checked values`; non-finite inputs are
+`inadmissible inputs`). A wrong tile the sample misses is neither refused nor found: every run has ε taken off its
+credit, and each wrong tile is a chance that the sample lands on it and rejects the run.
+
+**Opening other values than the committed ones.** Each opened row and leaf must open against its root:
+`activation opening`, `weight opening`, `transcript opening`, `y opening`. This rests on `cr/sha-512`.
+
+**Working ahead of the salt, or choosing it.** The noise derives from the salt and the operands' roots
+(`fixedNoise`). Each pass's salt coin is held to the epoch's coin commitment: `the pass's coin commitment is not the
+epoch's`, `the pass's salt is not its coin's and the weights'`, `the passes are not all of one salt`. A re-rolled salt
+is refused only in an audit, where a verdict of record refuses in-process coins (`ofRecordReason`).
+
+**Choosing the sample.** Tiles are sampled by a key of the coin's source and the run's commitment (`drawKey`). A coin
+record of another commitment is `after-coin`; a verdict of record refuses the node's sample (`of-record`). One sampling
+session a root, ever, is the challenger's own rule, in Python on the auditor's device (`open_refusal` in
+`verity/protocols/compose/device/live_challenger/auditor.py`), not in Lean. Locally nothing refuses a retried sample.
+
+**Dropping passes after the sample.** The run's commitment covers the retained passes (`runCommitment`) and must be
+the coin record's (`after-coin`); given a class, the retained rounds must be exactly its rounds (`heldToLoad`).
+
+**Skipping inert work.** `inertBoundCheck` replays a sampled tile's inert work exactly and requires at most ρ of the
+credited cells' credit. A tile over it is credited nothing and enlarges ε (`overInertBoundDraws`): `exceeds the cap`.
+Inert work below the bound, and any other skip, is what TT_OUT rev1 bounds.
+
+**Crediting cheap or padded rows.** `rowsFailure`: a credited row must pass the noise floor and liveness (`floorOK`,
+`liveRow`), and an excluded row must fail them; a filler row is zero and no row holds a word past the kept width
+(`not zero past the kept width`). `checkRecords` caps voluntary rows.
+
+**Crediting one call twice.** `passesDistinct` refuses `repeated-call` (an index repeated under one salt) and
+`call-range`; `workloadReason` refuses repeated matmul indices.
+
+**A smaller instance, or another scheme.** The verifier refuses passes off `k_min` 1,024 and 64 × 64 tiles, except as a
+test instance, which credits nothing (`testCredit`) and which `verity bench compute` refuses; `schemeOf` refuses other
+schemes; `domainReason` refuses k past 2^16.
+
+**Serving an output other than the checked product.** On a call that commits y, `yReason` requires each opened y word
+to be the unscale of the tile's U (`yOf`): `is not the unscale of the`. Tied to W, `tieOf` refuses a call that commits
+no y.
+
+**Crediting work nobody served.** `tieOf` requires W to register each call's A rows and y and each fixed operand's B
+rows, and `heldToLoad` the class's fixed load. These are Lean code with no proved property. `run.py` refuses an answer
+crediting more MACs than the class's linears (and LM head), Python on the measuring side.
+
+**Serving with weights other than the model's: not refused today.** The registration log can carry a checkpoint's
+SHA-512 (`checkpoint` in `verity/protocols/accounting/registration/verifier/lean/RegistrationLog.lean`), but no check
+recomputes the committed B rows' root from the published checkpoint, so other weights of the same shapes can be
+credited.
+
+**A faster exact method.** No check refuses a program that gives the same words bit for bit (a Strassen-like schedule,
+a low-rank split, a preprocessing of the fixed operand). One that does materially less work than the credit counts
+breaks no check: it falsifies TT_OUT rev1, and with it what the credit means.
 
 ## A record directory
 
