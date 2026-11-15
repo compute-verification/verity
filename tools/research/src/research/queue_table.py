@@ -8,8 +8,8 @@ Each row is one number with its unit, over three windows: now, the last hour, an
                             and why (`leave`); and the loop's own log for the time each tick ended
   the labels                `ready` and `reviewed` on `pr:N@HEAD` in the evidence store: a PR's mark and its land verdict
   the run directories       on every node, each run's `job.json` (its command and commit), `slot.json` (when it took a check
-                            slot, and for a check's shard what its scope used, `used`), `status.json` (when it ended), and for
-                            a check's shard `check-live.json`, `steps.jsonl`,
+                            slot, and for a check's shard what its scope used at its most, `used`), `status.json` (when it
+                            ended), and for a check's shard `check-live.json`, `steps.jsonl`, `spans.jsonl`'s `memory.peak`,
                             `suites.failed.json` and three lines of `lean-audit.log`; for a run of the task graph's executor,
                             the result files under `out/results`
   GitHub                    the open PRs and their heads, and each counted head's subject and nearest first parents, which
@@ -307,6 +307,22 @@ def audit(path):
         out["unread"] = repr(e)[:120]
     return out
 
+def spans_peak(path):
+    """A check's `memory.peak` in GB, the highest `mem_peak_gb` its spans.jsonl kept at a step's end or its own; nothing for a
+    check that kept none (it ran in no scope of its own); `spans_unread` says why a file that is there was not read."""
+    if not os.path.isfile(path):
+        return {}
+    peaks = []
+    try:
+        for line in open(path, errors="replace"):
+            if '"mem_peak_gb"' in line:
+                v = (json.loads(line).get("attributes") or {}).get("mem_peak_gb")
+                if isinstance(v, (int, float)):
+                    peaks.append(v)
+    except (OSError, ValueError) as e:
+        return {"spans_unread": repr(e)[:120]}
+    return {"mem_peak_gb": max(peaks)} if peaks else {}
+
 s0, t0 = stat(), time.time()
 runs = []
 for d in sorted(glob.glob(ROOT + "/runs/r2*")):
@@ -329,6 +345,7 @@ for d in sorted(glob.glob(ROOT + "/runs/r2*")):
     if kind == "shard":
         row["sha"] = (((job.get("run") or {}).get("remote") or {}).get("source_sha") or "")[:12]
         row["used"] = slot.get("used")
+        row.update(spans_peak(d + "/spans.jsonl"))
         row["shard"] = argv[argv.index("--shard") + 1] if argv.index("--shard") + 1 < len(argv) else "?"
         if row["end"] is None:
             row.update(scope(rid))
@@ -716,7 +733,7 @@ def cut(doc: dict, end: float) -> dict:
             if (r.get("took") or 0) > end:
                 r.update(took=None, slot_state="waiting")
             if (r.get("end") or 0) > end:
-                r.update(end=None, rc=None, state="running", used=None)
+                r.update(end=None, rc=None, state="running", used=None, mem_peak_gb=None)
             if "steps" in r:
                 r["steps"] = [st if (st.get("end") or 0) <= end else {"step": st["step"], "state": "running", "start": st.get("start")}
                               for st in r["steps"] if (st.get("start") or (st.get("end") or 0) - (st.get("seconds") or 0)) <= end]
@@ -1345,23 +1362,20 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     live = sum(1 for r in runs.values() if r["kind"] == "shard" and r.get("took") and r.get("end") is None)
 
     def used_text(since: float) -> str:
-        ended = [r for r in runs.values() if r["kind"] == "shard" and r.get("took") and (r.get("end") or 0) >= since]
         by: dict[str, list[dict]] = defaultdict(list)
-        for r in ended:
-            if isinstance(r.get("used"), dict):
-                by[r.get("shard") or "?"].append(r["used"])
-        if not by:
-            return (f"not measured: none of the {len(ended)} that ended kept what its scope used (`used` in its slot.json)"
-                    if ended else "none ended")
+        for r in runs.values():
+            if r["kind"] == "shard" and r.get("took") and (r.get("end") or 0) >= since:
+                by[r.get("shard") or "?"].append(r)
 
-        def most(us: list[dict], k: str) -> str:
-            vals = [u[k] for u in us if isinstance(u.get(k), (int, float))]
-            return f"p50 {pct(vals, .5):.0f}, most {max(vals):.0f}" if vals else "not read"
+        def most(vals: list, unit: str, missing: str) -> str:
+            vals = [v for v in vals if isinstance(v, (int, float))]
+            return f"p50 {pct(vals, .5):.0f}, most {max(vals):.0f}{unit} (n={len(vals)})" if vals else missing
 
-        kept = sum(map(len, by.values()))
-        return "; ".join(f"{part} (n={len(us)}): cores at the busiest minute {most(us, 'cores_max')}; anon at its highest "
-                         f"{most(us, 'anon_max_gib')} GiB; memory.peak {most(us, 'peak_gib')} GiB" for part, us in sorted(by.items())
-                         ) + (f"; {len(ended) - kept} more ended without it" if kept < len(ended) else "")
+        return ". ".join(
+            f"{part}, {len(rs)} ended: cores at the busiest minute "
+            f"{most([(r.get('used') or {}).get('cores_max') for r in rs], '', 'not kept')}; anon at its highest "
+            f"{most([(r.get('used') or {}).get('anon_max_gib') for r in rs], ' GiB', 'not kept')}; memory.peak "
+            f"{most([r.get('mem_peak_gb') for r in rs], ' GB', 'not kept')}" for part, rs in sorted(by.items())) or "none ended"
 
     add("7", "Reserved against used, a check's shard", past or ((f"{len(going)} of the {live} running, the ones whose cgroup was found: cores p50 {pct([r['cores'] for r in going], .5):.0f}, most "
         f"{max(r['cores'] for r in going):.0f}, of {pct([r.get('slot_cores') or 0 for r in going], .5):.0f} in its slot; memory without the page "
@@ -1371,9 +1385,9 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         used_text(hour), used_text(day), "",
         "now: the shards running now, from each one's own cgroup (`check-SLOT-RUN.scope`): CPU seconds over its seconds in the slot "
         "so far, `anon` of `memory.stat`, and `memory.peak`, which counts the page cache; the hour and the 24 hours: the shards that "
-        "ended in the window, by part (`--shard K/N`), from what the check read of its own cgroup every 10 s while it ran and kept "
-        "in its slot.json (`used`, tools/check/spans.py's `ScopeWatch`): CPU seconds over seconds at its busiest minute, `anon` at "
-        "its highest and `memory.peak`")
+        "ended in the window, by part (`--shard K/N`): CPU seconds over seconds at its busiest minute and `anon` at its highest, "
+        "which the check read of its own cgroup every 10 s and kept in its slot.json (`used`, tools/check/spans.py's "
+        "`ScopeWatch`), and `memory.peak`, the highest its spans.jsonl kept (`mem_peak_gb`)")
     read = [r for r in runs.values() if r["kind"] == "shard" and r.get("parallel") is not None]
     held = worker_memory(read)
     seen = [*(r for r in readings if "workers" in r), *([] if past else [{"now": now, "workers": held}])]

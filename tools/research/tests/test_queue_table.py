@@ -732,21 +732,33 @@ def test_a_checks_twins_in_line_on_several_machines_count_as_one_shard_waiting(t
 
 
 def test_the_shards_that_ended_say_by_part_what_their_scope_used():
-    """What a shard's scope used outlives the scope in its slot.json (`used`), so the hour and the 24 hours read it by part."""
+    """What a shard's scope used at its most outlives the scope in its slot.json (`used`) and its spans.jsonl
+    (`mem_peak_gb`), so the hour and the 24 hours read them by part."""
     d = doc()
     row = {r["name"]: r for r in qt.table(d)}["Reserved against used, a check's shard"]
-    assert row["hour"] == row["day"] == ("not measured: none of the 1 that ended kept what its scope used (`used` in its "
-                                         "slot.json)")
+    assert row["hour"] == row["day"] == ("1/1, 1 ended: cores at the busiest minute not kept; anon at its highest not kept; "
+                                         "memory.peak not kept")
     shard = d["nodes"]["vy-nebius-cpu-1"]["runs"][0]
-    shard["used"] = {"cores_max": 34.0, "anon_max_gib": 110.1, "peak_gib": 129.9, "file_at_current_max_gib": 17.2}
+    shard.update(used={"cores_max": 34.0, "anon_max_gib": 110.1}, mem_peak_gb=139.5)
     d["nodes"]["vy-nebius-cpu-1"]["runs"].append(dict(shard, id="r20261110-011000-ffff", shard="2/3", end=shard["took"] + 600,
-                                                      used={"cores_max": 25.0, "anon_max_gib": 51.0, "peak_gib": 68.6}))
+                                                      used=None, mem_peak_gb=73.6))
     row = {r["name"]: r for r in qt.table(d)}["Reserved against used, a check's shard"]
-    one = "1/1 (n=1): cores at the busiest minute p50 34, most 34; anon at its highest p50 110, most 110 GiB; memory.peak p50 130, most 130 GiB"
+    one = ("1/1, 1 ended: cores at the busiest minute p50 34, most 34 (n=1); anon at its highest p50 110, most 110 GiB (n=1); "
+           "memory.peak p50 140, most 140 GB (n=1)")
     assert row["hour"] == one
-    assert row["day"] == ("1/1 (n=1): cores at the busiest minute p50 34, most 34; anon at its highest p50 110, most 110 GiB; "
-                          "memory.peak p50 130, most 130 GiB; 2/3 (n=1): cores at the busiest minute p50 25, most 25; anon at its "
-                          "highest p50 51, most 51 GiB; memory.peak p50 69, most 69 GiB")
+    assert row["day"] == one + (". 2/3, 1 ended: cores at the busiest minute not kept; anon at its highest not kept; "
+                                "memory.peak p50 74, most 74 GB (n=1)")
+
+
+def test_a_shards_memory_peak_is_the_highest_its_spans_kept(tmp_path):
+    peak = node_function("spans_peak", tmp_path, json=json)
+    f = tmp_path / "spans.jsonl"
+    assert peak(str(f)) == {}, "a check with no spans.jsonl kept none"
+    f.write_text("\n".join(json.dumps({"span_id": i, "attributes": a}) for i, a in enumerate(
+        [{}, {"step": "pytest", "mem_peak_gb": 120.4}, {"step": "lean-suites", "mem_peak_gb": 139.5}, {"mem_peak_gb": 139.5}])) + "\n")
+    assert peak(str(f)) == {"mem_peak_gb": 139.5}
+    f.write_text(f.read_text() + '{"attributes": {"mem_peak_gb": 1\n')
+    assert peak(str(f))["spans_unread"].startswith("JSONDecodeError(")
 
 
 def test_a_node_says_why_an_audit_log_that_is_there_was_not_read(tmp_path):
