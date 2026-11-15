@@ -34,10 +34,11 @@
 # a development one. Both are development parameters, which $OUT/compute-run.json and the COINS line say.
 # Writes under OUT, RUN_DIR/out: pieces/pouw/pearlplus-answer.json,
 # pearlplus-lean.json, pearlplus-lean-check.json, verify.json, served.json and coin.json; inference-only-policy.json;
-# record/circuit-record.json, record/window-record.json and record/verdicts.json; auditor/ (the local gate's ledger,
+# record/circuit-record.json, record/window-record.json and record/verdicts.json; registered/; auditor/ (the local gate's ledger,
 # pins, public key and sessions' public files); compute-run.json and coins.txt. The record writes no Program: the tied
-# path's window record W stands in its place. The passes stay under PASSES (default a directory under SCRATCH, else
-# $TMPDIR), outside OUT: they hold the run's activations and salt key.
+# path's window record W stands in its place. The passes (about 2 GB) stay outside OUT, as they hold the run's activations
+# and salt key: in a directory under the run's own scratch under research run, else under SCRATCH or $TMPDIR, removed
+# on exit with the local gate's key; PASSES names a directory to keep them in instead.
 # Env: VERITY_BENCH_VENV (the pinned-vLLM Python's venv, else benchmarks/harness/env.sh's search), HF_HOME, CUDA_HOME,
 # RUN_DIR (the run directory, default $RESEARCH_RUN_DIR, else ./compute-run), COINS (local), GPU (0), DRAWS (459),
 # DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc), LEASE_MIN (30). The load is
@@ -65,7 +66,11 @@ print(d["model"], d["revision"], d["slots"], d["prompt"], d["outputs"])' benchma
   || { echo "benchmarks/compute/load.toml doesn't read as the benchmark's load" >&2; exit 3; }
 CLASS=$SLOTS,$PROMPT,$OUTPUTS
 export PATH=$HOME/.elan/bin:$PATH HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
-W=${PASSES:-$(mktemp -d -p "${SCRATCH:-${TMPDIR:-/tmp}}" pearlplus-compute.XXXXXX)}
+# the passes' directory: under research run the run's own scratch (`--cwd clone`'s, the tree's parent), else SCRATCH or
+# TMPDIR; removed on exit with the challengers stopped, unless PASSES names it
+here=$(dirname "$TREE")
+[ -n "${RESEARCH_RUN_ID:-}" ] && [ "$(basename "$here")" = "$RESEARCH_RUN_ID" ] || here=${SCRATCH:-${TMPDIR:-/tmp}}
+W=${PASSES:-$(mktemp -d -p "$here" pearlplus-compute.XXXXXX)}
 P=$W/passes WR=$W/window-record.json
 mkdir -p "$W" && chmod 700 "$W" || exit 3
 umask 077
@@ -170,9 +175,11 @@ registered() {  # what training reads the run registered: the circuit record and
       "$WR" > "$OUT/registered/log.jsonl" \
     && echo "registered: circuit.json and log.jsonl (W alone); no program.json: the tied path writes no Program"
 }
-[ -n "${RESEARCH_RUN_ID:-}" ] && "$PY" -m research keep "$W" --owner @compute-accounting --priority normal \
-  --expires "$(date -u -d "+${KEEP_DAYS:-7} days" +%F)" --why "the retained passes of compute serve $RESEARCH_RUN_ID" \
-  > "$OUT/logs/keep.log" 2>&1
+cleanup() {
+  gate_down
+  [ -n "${PASSES:-}" ] || rm -rf "$W"
+}
+trap cleanup EXIT
 echo "passes: $P" | tee -a "$OUT/steps.txt"
 
 step cubin cubin || exit 1
@@ -181,7 +188,6 @@ export PEARLC_KERNEL PEARLC_CUBIN PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
 unset PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER PEARLC_CHALLENGER_LANE VLLM_BATCH_INVARIANT
 case $COINS in
   local)
-    trap gate_down EXIT
     step gate gate_up || exit 1
     { read -r PEARLC_CHALLENGER_GATE; read -r PEARLC_CHALLENGER_PEER; read -r PEARLC_CHALLENGER_LANE; } < <("$PY" -c '
 import json, sys
@@ -225,8 +231,6 @@ step circuit env CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/prove_path/prove_path.
   --class "$CLASS" --pearl-tables "$SCHEME" --out "$REC/circuit-record.json"
 step verdicts verdicts
 step registered registered
-gate_down
-trap - EXIT
 coins
 step share "$PY" benchmarks/compute/run.py --record "$RUN" || failed=1
 cat "$OUT/logs/share.log"
