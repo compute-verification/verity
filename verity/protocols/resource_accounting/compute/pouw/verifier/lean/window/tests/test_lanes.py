@@ -323,7 +323,7 @@ def wire_in(rng: random.Random) -> dict:
     try:
         ws = wires(x)
     except D.Reject:
-        ws = []
+        return {**x, "wire": rng.choice([0, 1, -1, rng.randint(0, 1 << 40)])}
     n = sum(w["wires"] for w in ws)
     edges = [e for w in ws for e in (w["wire"], w["wire"] + w["wires"] - 1)]
     return {**x, "wire": rng.choice(edges + [0, n - 1, n, n + 1, rng.randrange(max(1, n)), -1, rng.randint(0, 1 << 40)])}

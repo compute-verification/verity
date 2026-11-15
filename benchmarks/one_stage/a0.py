@@ -216,7 +216,18 @@ def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
     """Whether `session`, given ``env`` and ``zk``, takes its coin tree from a challenger of its own (FLOCK_CHALLENGER=1 on the
     keyed coin tree)."""
     senv = {**os.environ, **(env or {})}
-    return senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree")
+    return _flock_challenger(senv) == "1" and (zk or senv.get("FC_COINS") == "tree")
+
+
+def challenger_off(env: dict | None = None) -> bool:
+    """Whether ``env`` opts its sessions out of every challenger (FLOCK_CHALLENGER=0, a development run's): each samples its
+    coin tree itself, even where the audit's challenger session could give it one (`a5.window_trees`)."""
+    return _flock_challenger({**os.environ, **(env or {})}) == "0"
+
+
+def _flock_challenger(senv: dict) -> str | None:
+    """FLOCK_CHALLENGER in a session's environment, read here alone (`own_challenger`, `challenger_off`)."""
+    return senv.get("FLOCK_CHALLENGER")
 
 
 #: `session` reads its verifier's log for ``SERVING`` this often, for this long at most (seconds): the prover starts
@@ -226,7 +237,8 @@ SERVING_POLL, SERVING_WAIT = 0.02, 900.0
 
 def session(bin_: str, st: dict, n: int, sampling_design: str, port: int, out: Path, sample_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600,
-            tree_from: Sequence[str] | None = None) -> tuple[dict | None, dict | None]:
+            tree_from: Sequence[str] | None = None, prover_prefix: Sequence[str] = (),
+            prover_args: Sequence[str] = ()) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: docket, the sample, coins, the verdict) and `prove`.
     Under FLOCK_CHALLENGER=1 a session on the keyed coin tree (`zk`, or `FC_COINS=tree`) takes its tree from a challenger of
     its own under ``out/challenger`` (`verity_flock.challengers`, `serve --tree-from`): ``live["challenger"]`` is its exit
@@ -236,7 +248,9 @@ def session(bin_: str, st: dict, n: int, sampling_design: str, port: int, out: P
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
     both sides' environment (a zk_served prover's, `zk_server_env`). `prove_timeout`: the prover's limit in seconds.
-    ``st["tmpl_unit"]``: a templated statement's unit rows at their positions, which both sides read (`--tmpl-unit`)."""
+    ``st["tmpl_unit"]``: a templated statement's unit rows at their positions, which both sides read (`--tmpl-unit`).
+    `prover_prefix`: the command the prover runs under (a card's lease, ``gpu-lease 1 --wait --``), and `prover_args` more of
+    `prove`'s (``--gpu``)."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
     tables = d / "tables"
@@ -258,7 +272,7 @@ def session(bin_: str, st: dict, n: int, sampling_design: str, port: int, out: P
         late = time.monotonic() + SERVING_WAIT
         while "SERVING" not in (out / "serve.log").read_text() and serve.poll() is None and time.monotonic() < late:
             time.sleep(SERVING_POLL)
-        p = run([bin_, "prove", *zf, "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
+        p = run([*prover_prefix, bin_, "prove", *zf, *prover_args, "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
                  "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log", env=env,
                 timeout=prove_timeout)
         live = next((json.loads(line[5:]) for line in p.stdout.splitlines() if line.startswith("LIVE\t")), None)

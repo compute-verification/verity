@@ -1,5 +1,5 @@
-"""The vLLM device path for Pearl-C on sm_120 (`verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c`) against GPU 1's pipeline
-(``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120``) on the CPU, with a recording stand-in for the device; and the pass verifier
+"""The vLLM device path for Pearl-C on sm_120 (`verity.protocols.accounting.pouw.prover.serving.pearl_c`) against GPU 1's pipeline
+(``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120``) on the CPU, with a recording stand-in for the device; and the pass verifier
 (``benchmarks/pouw/pearl_c_vllm/verify_run.py``) on an honest transcript that the scheme's reference prover builds."""
 from __future__ import annotations
 
@@ -25,20 +25,17 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity_torch.pouw.pearl_c import host as PH
 from verity_torch.pouw.pearl_c import served_y_device as SYD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
-from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-
-torch = pytest.importorskip("torch")
-
+from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.commitments import MerkleTree
 from verity.commitments.merkle import tree_levels
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
@@ -57,25 +54,27 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     weight_binding,
     weights_root,
 )
-from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
-from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger, CoinCommitment
-from verity.protocols.resource_accounting.compute.pouw.verifier.credit import passes_distinct
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SchemeId
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.coins import Challenger, CoinCommitment
+from verity.protocols.accounting.pouw.verifier.credit import passes_distinct
+from verity.protocols.accounting.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.verifier.serving import SchemeId
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 from verity_torch.pouw.pearl_c import run_device as PPDR
 
-# the work sampling design and the clear audit are a reference tool's (verity/protocols/resource_accounting/compute/pouw/prover/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
+torch = pytest.importorskip("torch")
+
+# the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
 import clear_work as CW  # noqa: E402
 from clear_audit import Prover, Verifier  # noqa: E402
 
-KERNEL = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
+KERNEL = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 POUW = Path(__file__).resolve().parents[1]
 SCHEME = "pearl-c-sm120-v1-h3"
 SEED = bytes(range(32))
@@ -1232,7 +1231,7 @@ def served_verify(d: Path, out: Path, *more: str) -> tuple[int, dict, dict]:
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     rc = SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1", "--draws", "3", "--test-instance", *more])
     answer = json.loads((out.parent / "answer.json").read_text())
-    from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+    from verity.protocols.accounting.pouw.verifier import core_check as CC
     CC.answer_of(answer)
     return rc, json.loads(out.read_text()), answer
 
@@ -1259,7 +1258,7 @@ def test_answer_names_its_schemes_assumption():
         assert "pearl_kw" not in got
     with pytest.raises(ValueError, match="only a v1 scheme"):
         VR.assumption_of(C.PearlC(forming="v0"))
-    run = (root / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/PouwPearlPlus/Run.lean").read_text()
+    run = (root / "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Run.lean").read_text()
     assert f'def ASSUMPTION : String := "{VR.ASSUMPTION_H100}"' in run
 
 
@@ -1612,7 +1611,7 @@ def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_ce
     `clear_work` credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over
     the pass alone: a filler row and an excluded A row each take their cells out, and an excluded B row its block of 64
     columns' (the band rule)."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import macs
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import macs
 
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     man = json.loads(path.read_text())
@@ -2273,8 +2272,8 @@ def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_o
     --withhold``), marks the record with the reserve before its open, and returns the session's ``pouw/draw`` coin 0
     after C with the record's sample.  It refuses before reserving while the lane's period is open, and before its open
     when the gate reserves it plain or into a period; `live_draw` is None with neither setting and refused with one."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64
@@ -2336,7 +2335,7 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
     is lane vllm's first reserve after P's close, the one a compose takes (`pouw_h1_window.after_close`): it is refused
     before reserving while the ledger doesn't close P or the lane (``for``, else ``by``) reserved since, and before its
     coin is asked when another reserve of the lane reached the gate first; another lane's reserve doesn't count."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root, sid = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64, "s20261104T120000Z-dr01"
@@ -2479,7 +2478,7 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path, monkeypatch):
     for bad in ((2, 8), (2, 8, 0), (2, 8, True), "2,8,2"):
         with pytest.raises(ValueError, match="a window class is SLOTS, PROMPT, OUTPUTS"):
             run([a, b], window_class=bad)
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+    from verity.protocols.accounting.pouw.verifier import verifier as PV
 
     # the served verify's node draw on `run`'s source: on the OS's coins its 3 draws can all land over the inert-work
     # bound, at ε 1 and no give-up
@@ -3072,7 +3071,7 @@ def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes
     in-process, untouched; one alone is refused, and a reserve while the lane's open period is H1's is refused before it
     is asked."""
     from verity_vllm.protocols import pouw
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate = "ssh -i KEY -o BatchMode=yes research@gate"
@@ -4269,9 +4268,9 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
 # ---- the hashing format, from the one table --------------------------------------------------------------------------
 
 def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
-    """Every tree's hash is the scheme's format's (`verity.protocols.resource_accounting.compute.pouw.verifier.serving.HASH_FORMATS`), not a
+    """Every tree's hash is the scheme's format's (`verity.protocols.accounting.pouw.verifier.serving.HASH_FORMATS`), not a
     literal: -h3's hm96-sha512, keyed by the prover's salt key; and the path runs only its own schemes."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
+    from verity.protocols.accounting.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
 
     make, *_ = device_run
     run = make()
@@ -4337,7 +4336,7 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     """-h3's row seeds come from A's rows, not its root, so its format lets A's tree leave the main lane; this path moves the
     tile hashing, which reads C~ and U, and A's tree where the kernel's pipeline splits A's commitment (sm_90a's and
     sm_120's), each with the buffers it touches rotated.  The screen stays on the caller."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier.serving import Schedule
+    from verity.protocols.accounting.pouw.verifier.serving import Schedule
     make, kernel, *_ = device_run
     s = PPD.scheme_of(SCHEME)
     assert PPD.schedule_of("deferred-a", s).name == "deferred-a" and PPD.splits(kernel)

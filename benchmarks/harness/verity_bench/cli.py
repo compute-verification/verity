@@ -390,7 +390,8 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
     """`metrics`: a runner's metric ids, each for what its command's table names, which the command records in a
     research run's result: for `prove` a total of its table (`prove_records.FIGURES`), for `overhead table` the γ of a
-    row (`overhead_records.measurements`), for `served-table` a row's ``SPEC/POINT`` (`served_render.measurements`)."""
+    row (`overhead_records.measurements`), for `served-table` a row's ``SPEC/POINT`` (`served_render.measurements`), for
+    `prove-layers` a figure a proof block (`proof_layers.FIGURES`)."""
 
     args = _parser().parse_args(argv)
     args.metrics = dict(metrics or {})

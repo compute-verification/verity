@@ -11,6 +11,8 @@
 // decode written out or XORed into a checksum (the read-and-decode rate), and under bound keys (a token-layer's offset b
 // added to every round's tweak, `kv.py`'s binding); the read of a store; compute-only chains for the
 // squaring (ILP 1 or 2 words a thread), decode and encode rates; a spin kernel to queue timed launches behind.
+// It builds for sm_80 and later: below sm_90 the ring's wait polls (`mbarrier.test_wait`) and the occupancy kernel's
+// prefetch is line by line, where sm_90 has `try_wait` and the bulk prefetch.
 #include <algorithm>
 #include <cstdint>
 #include <cuda_runtime.h>
@@ -1072,10 +1074,17 @@ __device__ __forceinline__ void mbar_arrive(uint64_t *bar) {
 }
 
 __device__ __forceinline__ void mbar_wait(uint64_t *bar, unsigned parity) {
+#if __CUDA_ARCH__ >= 900
   asm volatile("{\n .reg .pred p;\n WAIT:\n mbarrier.try_wait.parity.shared::cta.b64 p, [%0], %1;\n @!p bra WAIT;\n}\n" ::"r"(
                    smem_u32(bar)),
                "r"(parity)
                : "memory");
+#else
+  asm volatile("{\n .reg .pred p;\n WAIT:\n mbarrier.test_wait.parity.shared::cta.b64 p, [%0], %1;\n @!p bra WAIT;\n}\n" ::"r"(
+                   smem_u32(bar)),
+               "r"(parity)
+               : "memory");
+#endif
 }
 
 __global__ void __launch_bounds__(WT, 1) attn_ws_kernel(const uint8_t *__restrict__ kv, const uint16_t *__restrict__ q,
@@ -1826,7 +1835,12 @@ __global__ void __launch_bounds__(OWT, 2) attn_occ_kernel(const uint8_t *__restr
         if (t < nt) {
           ldg_word(src, x);
           if (OPF && (j & (HW / 2 - 1)) == 0 && t < t1 - t0 - (tile + 1) * OT)
+#if __CUDA_ARCH__ >= 900
             asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;" ::"l"(src + step), "n"(HB) : "memory");
+#else
+            for (int b = 0; b < HB; b += 128)
+              asm volatile("prefetch.global.L2 [%0];" ::"l"(reinterpret_cast<const uint8_t *>(src + step) + b));
+#endif
           if (ENC) decode_word_t(x, tw, k);
         } else {
 #pragma unroll

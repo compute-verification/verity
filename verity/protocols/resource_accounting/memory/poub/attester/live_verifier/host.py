@@ -1,5 +1,5 @@
 """The auditor device's verifier service: PoUB's verifier
-(`verity/protocols/resource_accounting/memory/poub/verifier/session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
+(`verity/protocols/accounting/poub/verifier/session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
 from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 
     vy-verifier-gate run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS]
@@ -9,7 +9,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-verifier-gate` (`command=`),
   which is this file's `gate` as root through one sudoers line, as on the challenger's host
-  (`verity/protocols/compose/verifier/live_challenger/auditor.py`). A lane's own key is forced with the lane's name (`vy-verifier-gate LANE`,
+  (`verity/protocols/compose/device/live_challenger/auditor.py`). A lane's own key is forced with the lane's name (`vy-verifier-gate LANE`,
   from `/etc/vy/verifier-gate-keys`, `vy-verifier-setup`), and only such a key starts, replays, stops a run or closes a
   registration: the run records that name as `by`. A key forced with no name (`-`) reads only: `status`, `fetch`. A party
   verb (below) answers only a caller from a registered node: the wrapper passes the first word of `SSH_CONNECTION` as
@@ -42,12 +42,12 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   file's SHA-512). One unit runs at a time, a run or a replay, so a replay never takes a live session's cores.
 - **A replay** (`replay RUN`, `vy-verifier-replay@<run>.service`) checks each transcript against `SHA256SUMS` and
   against the sha256 and bytes `verifier.json` recorded for it, and replays them through both verifiers
-  (`verity/protocols/resource_accounting/memory/poub/verifier/lean/tests/replay.py transcript --record verifier.json`), or the record
+  (`verity/protocols/accounting/poub/verifier/lean/replay.py transcript --record verifier.json`), or the record
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
-  run PoUS's streamed-wipe challenger (`verity/protocols/resource_accounting/memory/pous/verifier/wipe_party.py`, port 47611) and its block challenger
+  run PoUS's streamed-wipe challenger (`verity/protocols/accounting/pous/verifier/wipe_party.py`, port 47611) and its block challenger
   (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--session SID] [--minutes M]` PoUB's
-  P2 party (`verity/protocols/resource_accounting/memory/poub/verifier/p2_parties.py`, port 47612, with the registration the host
+  P2 party (`verity/protocols/accounting/poub/verifier/p2_parties.py`, port 47612, with the registration the host
   names; with `--session SID`, the session id the auditor gives the memory challenger, it signs the session's close with
   the block challenger's key and claims SID in its session log, `<root>/parties/pous/`, and keeps the session's case), as
   `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
@@ -119,9 +119,9 @@ from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterator, Sequence
 
 HERE = Path(__file__).resolve().parent
-TREE = Path(__file__).resolve().parents[7]
-VERIFIER = TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "remote_session" / "verifier_process.py"
-REPLAY = TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "lean" / "tests"
+TREE = Path(__file__).resolve().parents[6]
+VERIFIER = TREE / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "remote_session" / "verifier_process.py"
+REPLAY = TREE / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "lean"
 DIFFTEST = TREE / "tools" / "difftest" / "python"
 RESEARCH = TREE / "tools" / "research" / "src"
 
@@ -145,15 +145,15 @@ SPECS = 16
 INTS = {"--sessions": (1, 16), "--windows": (1, 64), "--samples": (1, 100_000), "--lifetime": (1, 1024),
         "--minutes": MINUTES}
 DECIMALS = {"--window-ms": (1.0, 600_000.0), "--jitter-ms": (0.0, 1_000.0), "--pace-pass-ms": (0.0, 1_000.0)}
-PARTIES = {"wipe_party": ("wipe", "verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger", 47611),
-           "challenger_party": ("pous", "verity.protocols.resource_accounting.memory.pous.attester.challenger_party", 47610),
-           "bw_party": ("bw", "verity.protocols.resource_accounting.memory.poub.verifier.p2_parties", 47612)}
-PARTY_CODE = {"bw_party": "import sys; from verity.protocols.resource_accounting.memory.pous.attester import onsite; "
-                          "from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties; "
+PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.device.wipe_challenger", 47611),
+           "challenger_party": ("pous", "verity.protocols.accounting.pous.device.challenger_party", 47610),
+           "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_parties", 47612)}
+PARTY_CODE = {"bw_party": "import sys; from verity.protocols.accounting.pous.device import onsite; "
+                          "from verity.protocols.accounting.poub.verifier import p2_parties; "
                           "sys.exit(p2_parties.main(sys.argv[1:], device_key=onsite.device_key))"}
 """A party run as code rather than its module: PoUB's verifier handed the memory challenger's key loader of PoUS's
 device, which the verifier's own code may not load."""
-PARTY_FIXED = {"bw_party": ["--registration", "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json"]}
+PARTY_FIXED = {"bw_party": ["--registration", "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json"]}
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
 which `bw_party --fixture` holds."""
 SESSION_ID = re.compile(r"[0-9a-f]{64}")
@@ -393,7 +393,7 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
                       "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
                       "challenger pin it can't find on it, so no run starts without it")
-    argv = [python, "-I", str(tree / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "remote_session" / "verifier_process.py"),
+    argv = [python, "-I", str(tree / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "remote_session" / "verifier_process.py"),
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],
@@ -747,7 +747,7 @@ def gate_party_log(rest: list[str], host: Host) -> dict:
     return {"party": rest[0], "log": rest[1], "lines": lines}
 
 
-KEYGEN = "import sys; from verity.protocols.resource_accounting.memory.pous.attester import onsite; print(onsite.device_key(sys.argv[1]).public_key.hex())"
+KEYGEN = "import sys; from verity.protocols.accounting.pous.device import onsite; print(onsite.device_key(sys.argv[1]).public_key.hex())"
 
 
 def gate_party_key(rest: list[str], host: Host, *, own: Callable[[Path], None],
@@ -1187,7 +1187,8 @@ def execute(host: Host, run: str, *, pinned: str, now: Callable[[], datetime],
 
 
 def replay_module():
-    """`replay.py`, imported from this tree as the host's python3 (no site packages, `-I`) reaches it."""
+    """`replay.py`, imported from this tree as the host's python3 (no site packages, `-I`) reaches it: by path, beside
+    the Lake package it serves, since it imports the difftest, which is no part of `verity`."""
     for p in (str(TREE), str(REPLAY), str(DIFFTEST)):
         if p not in sys.path:
             sys.path.insert(0, p)

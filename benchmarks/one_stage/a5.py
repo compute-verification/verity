@@ -111,7 +111,9 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   once the server closes, and a process pair's server from one of the session's own (`a0.session`); the audit passes only
   if each exited 0 and its audit held the sessions' records to its release log (``challenger/m<k>``, a verdict, and the
   summary's ``challengers``). A window sampled on the auditor's challenger's coins takes them from that challenger's
-  session instead (`window_trees`, `member_trees`): the session stays open past the sample, every verifier, the proof
+  session instead, whatever FLOCK_CHALLENGER says but 0 (`window_trees`, `member_trees`), since the auditor's verifier
+  takes a session's coins only from that session's release log (`OneStageZk.treesHeld`, `Challenger.NO_TREE`); 0 is a
+  development run's, its case refused there: the session stays open past the sample, every verifier, the proof
   server's or a process pair's, reaches it through the audit's relay, and the sessions run one at a time. In a window of
   several members, or of any number on a caller's stage (`stage_trees`), each ends with its tree's closing round, asked
   once its files are written (`closes_trees`). The session's release log then holds the sample, each session's rounds
@@ -2224,10 +2226,11 @@ def plain(a: argparse.Namespace) -> bool:
 
 def window_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
     """Whether the audit's sessions take their coin trees from the window's own challenger session (module docstring,
-    `member_trees`): a window sampled on the auditor's challenger's coins, its sessions `--zk`, where FLOCK_CHALLENGER=1
-    puts sessions' trees on a challenger, in a step of one rank (the session's release log holds one rank's sessions,
-    in the order they ran). A window of several ``members`` closes each tree there too (`closes_trees`)."""
-    return streamed(a) and not plain(a) and a0.own_challenger(zk=True) and len(a.coins.ranks()) == 1
+    `member_trees`): a window sampled on the auditor's challenger's coins, its sessions `--zk`, unless FLOCK_CHALLENGER=0
+    (a development run's sessions, each on a tree of its own, which the auditor's verifier refuses), in a step of one
+    rank (the session's release log holds one rank's sessions, in the order they ran). A window of several ``members``
+    closes each tree there too (`closes_trees`)."""
+    return streamed(a) and not plain(a) and not a0.challenger_off() and len(a.coins.ranks()) == 1
 
 
 def stage_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:

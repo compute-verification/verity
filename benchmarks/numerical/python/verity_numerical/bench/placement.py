@@ -103,10 +103,11 @@ PROBE = "benchmarks/numerical/python/verity_numerical/bench/placement.py"
 
 
 def _read(path: str) -> str | None:
-    try:
-        return Path(path).read_text().strip() or None
-    except OSError:
+    """The file's stripped text; None where it is absent or this process may not read it (DMI's ``product_uuid`` is root's)."""
+    p = Path(path)
+    if not os.access(p, os.R_OK):
         return None
+    return p.read_text().strip() or None
 
 
 def _cpu_model() -> str | None:
@@ -189,13 +190,13 @@ def _pod_env(key: str) -> str | None:
     job started over ssh does not inherit the container's ``RUNPOD_*`` environment."""
     if os.environ.get(key):
         return os.environ[key]
-    try:
-        for item in Path("/proc/1/environ").read_bytes().split(b"\0"):
-            k, sep, v = item.partition(b"=")
-            if sep and k.decode(errors="replace") == key:
-                return v.decode(errors="replace") or None
-    except OSError:
+    init = Path("/proc/1/environ")
+    if not os.access(init, os.R_OK):
         return None
+    for item in init.read_bytes().split(b"\0"):
+        k, sep, v = item.partition(b"=")
+        if sep and k.decode(errors="replace") == key:
+            return v.decode(errors="replace") or None
     return None
 
 
@@ -425,13 +426,14 @@ def _cgroup(lines: list[str]) -> str | None:
 
 def read_tasks(proc: str = PROC) -> dict[str, dict[str, Any]]:
     """Every task (thread) under ``proc`` by tid: its process, name, allowed CPUs (``Cpus_allowed_list``), cgroup and whether it
-    is a kernel thread (kthreadd or its child).  A task that exits while it is read is left out."""
+    is a kernel thread (kthreadd or its child).  A task that exits while it is read is left out, and said so on stderr."""
     out: dict[str, dict[str, Any]] = {}
     for status in Path(proc).glob("[0-9]*/task/[0-9]*/status"):
         try:
             fields = dict(line.split(":", 1) for line in status.read_text().splitlines() if ":" in line)
             cgroup = _cgroup(status.with_name("cgroup").read_text().splitlines())
-        except OSError:
+        except (FileNotFoundError, ProcessLookupError) as e:
+            sys.stderr.write(f"placement: task {status.parent.name} exited while it was read, so it is left out ({e})\n")
             continue
         f = {k: v.strip() for k, v in fields.items()}
         pid = status.parent.parent.parent.name
@@ -443,7 +445,7 @@ def read_tasks(proc: str = PROC) -> dict[str, dict[str, Any]]:
 def dedicated_cores(cores: frozenset[int], tasks: Mapping[str, Mapping[str, Any]], own: str) -> tuple[list[str], dict[str, Any]]:
     """Why ``cores`` are not the role's alone (empty: they are), and the evidence: its own task ``own`` (a tid of ``tasks``) may run
     on exactly ``cores``, in a cgroup of its own (not the root), and no task outside that cgroup or below it may run on any of
-    them; a task whose allowed CPUs cannot be read counts as on them.  Kernel threads are not counted: no cgroup moves them."""
+    them; a task whose allowed CPUs cannot be read counts as on them (the evidence's ``unparsed``, by pid).  Kernel threads are not counted: no cgroup moves them."""
     out: list[str] = []
     ev: dict[str, Any] = {"declared": cpu_text(cores), "own": None, "cgroup": None, "tasks": len(tasks), "kernel_threads": 0,
                           "intruders": {}}
@@ -456,7 +458,8 @@ def dedicated_cores(cores: frozenset[int], tasks: Mapping[str, Mapping[str, Any]
         return out, ev
     try:
         mine = cpu_list(me.get("cpus"))
-    except ValueError:
+    except ValueError as e:
+        out.append(f"this process's allowed CPUs {me.get('cpus')!r} do not parse: {e}")
         mine = frozenset()
     ev.update(own=cpu_text(mine), cgroup=scope)
     if mine != cores:
@@ -471,7 +474,8 @@ def dedicated_cores(cores: frozenset[int], tasks: Mapping[str, Mapping[str, Any]
             continue
         try:
             on = cpu_list(t.get("cpus")) & cores if t.get("cpus") else cores
-        except ValueError:
+        except ValueError as e:
+            ev.setdefault("unparsed", {})[str(t.get("pid"))] = f"{t.get('cpus')!r}: {e}"
             on = cores
         if on:
             x = intruders.setdefault(str(t.get("pid")), {"name": t.get("name"), "cgroup": cg, "cpus": set()})

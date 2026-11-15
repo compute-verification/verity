@@ -1,6 +1,7 @@
 """The honest one-window period whose log `Properties.Poub.Subprotocol.HonestLogAccepted` says the deployed check
 accepts (`security/Properties/Poub/Remote/HonestLog.lean`): its case (`run`), and that case as the Lean module the
-premise reads (`lean_module`). `python honest_log.py` writes the module; `test_honest_log.py` holds it to this file and
+premise reads (`lean_module`). `python honest_log.py` writes the module (with
+`..`, where `ra_cases.py` is, on `PYTHONPATH`); `test_honest_log.py` holds it to this file and
 holds the premise to the compiled check.
 
 The period is `test_protocol.periods`' honest one on node `n0`, at one window and one sample, over a store of one block:

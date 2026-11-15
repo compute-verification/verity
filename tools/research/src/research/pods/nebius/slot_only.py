@@ -29,6 +29,7 @@ import signal
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Callable
 
 MARKER = Path("/etc/vy/runs-via-slot")
 #: an auditor device's marker: each line but a comment is a command a `research run` there may be, as shlex splits it
@@ -178,7 +179,9 @@ def _json(p: Path) -> dict:
 def _proc_env(pid: int, proc: Path) -> str | None:
     try:
         env = (proc / str(pid) / "environ").read_bytes()
-    except OSError:
+    except OSError as e:
+        if (proc / str(pid)).exists():
+            print(f"slot_only: pid {pid}'s environment unread, so it is no run's ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     for kv in env.split(b"\0"):
         if kv.startswith(b"RESEARCH_RUN_DIR="):
@@ -189,7 +192,9 @@ def _proc_env(pid: int, proc: Path) -> str | None:
 def _pgid(pid: int, proc: Path) -> int | None:
     try:
         stat = (proc / str(pid) / "stat").read_text()
-    except OSError:
+    except OSError as e:
+        if (proc / str(pid)).exists():
+            print(f"slot_only: pid {pid}'s stat unread, so its group is unknown ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return int(stat[stat.rindex(")") + 2:].split()[2])
 
@@ -216,21 +221,21 @@ def offenders(runs: Path, allowed=through_slot) -> list[dict]:
     return out
 
 
+def _sent(kill: Callable[[int, int], None], pid: int, sig: int) -> bool:
+    """Whether ``kill(pid, sig)`` reached the process: False once it is gone."""
+    try:
+        kill(pid, sig)
+        return True
+    except ProcessLookupError:
+        return False
+
+
 def stop(o: dict, *, proc: Path = Path("/proc"), kill=os.kill, dry_run: bool = False,
          why: str = "not through a check slot (slot.py)") -> dict:
     """SIGTERM the run's processes but its runner; the record of what was sent."""
     pids = [p for p in members(o["dir"], proc) if p != o["runner_pid"]]
     groups = {_pgid(p, proc) for p in pids}
-    sent = []
-    for p in pids:
-        if dry_run:
-            sent.append(p)
-            continue
-        try:
-            kill(p, signal.SIGTERM)
-            sent.append(p)
-        except ProcessLookupError:
-            pass
+    sent = [p for p in pids if dry_run or _sent(kill, p, signal.SIGTERM)]
     return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
             "pgid": o["pgid"], "workload_group_seen": o["pgid"] in groups, "sigterm": sent, "dry_run": dry_run, "why": why}
 

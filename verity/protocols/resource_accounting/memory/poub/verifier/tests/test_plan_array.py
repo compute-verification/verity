@@ -132,7 +132,7 @@ def test_other_shapes_and_dtypes_meet_the_same_rule(a) -> None:
 
 
 def test_the_pinned_plans() -> None:
-    pinned = json.loads(Path(__file__).with_name("vectors.json").read_text())
+    pinned = json.loads((Path(__file__).parents[1] / "vectors.json").read_text())
     for p in pinned["passes"]["passes"]:
         plan = same(np.array(p["plan"], np.int64), pinned["registration"]["blocks"])
         assert plan.encode().hex() == p["plan_encoding"] and plan.digest.hex() == p["plan_digest"]
