@@ -11,3 +11,28 @@ Ran on this VM (CPU, no Lean needed), ci-like path on the worktree, fixtures fet
 - tests/test_repository.py: 17 passed.
 Read guard: test_records_audit.py is in the suite's `untraced` list (keyed on the suite's whole tree), and the mend points only at benchmarks/prove_path/tests and benchmarks/prove_path, both inside the suite. Fine.
 
+[2026-11-15T07:54Z] d0d17505cb83
+DEVICEGONE to network-accounting (lead): the new head is 70863c040628 on cursor/na-lock-hand-lines-b51f (parent 2baf913ea3e6), pushed only there, Sat 14 Nov 11:54 PM PST.
+
+The two added lines, in security/lean-audit.json `shape.frozen`, right after the EgressRegistered line. The form takes no owner: a frozen entry is a string.
+   "Accounting.Guarantees.B4UnderId": "unstated: stated in the spec and proved by Accounting.SecurityProofs.B4UnderId in Proofs.Accounting.Actual.LinkEnds, listed as a guarantee after the landing, NET-450, Wed 18 Nov",
+   "Accounting.Guarantees.B4Via": "unstated: stated in the spec, no theorem proves it yet; Proofs.Accounting.Actual.LinkEnds derives it from B4 only at a Site whose every place is its own link end (b4Via_of_ownLinkEnds), NET-450, Wed 18 Nov",
+
+What proves each [read security/Proofs/Accounting/Actual/LinkEnds.lean; the file and Definitions/Accounting/Guarantees/LinkEnds.lean are the same at 009698aa9c0a as on my base]:
+- B4UnderId is proved by `theorem B4UnderId : Guarantees.B4UnderId.{u, v, w}` (line 50), both directions of the iff, with no hypothesis. Its module is reached: Proofs/Accounting/Actual.lean:15 imports it.
+- B4Via is not proved. The definition file says so itself (line 9: "`B4Via` is not proved here"). The nearest result is `b4Via_of_ownLinkEnds` (line 60): from `Guarantees.B4`, at a Site T with `∀ p, T.linkPlace p = p` and `T.RatedOn β Set.univ`, it gives `B4Under T.linkPlace T.placeEnds β`. That is B4Via's body at such a Site only, under B4.
+
+Not ours [read]: 09c3b46379e ("SPOT's caller's checks move out of SPOT's check into spot_flock's Caller") came in through cursor/proofs-caller-top415-caller-check-7ed4, the proofs lane, by the merges of origin/architecture into that branch. So CallerCheckMeans and CallerCheckSound are proofs', and I wrote nothing for them.
+
+Rechecks [ran]:
+- The lock parses, and check.py's load() takes all three locks. category() gives `unstated` for both reasons.
+- merge.merge has 0 conflicts in all three locks against each branch, with both entries kept:
+  - LOCKPASS 5cf7ba575ea3;
+  - lean's branch at 610b864973ed, and at its newer head 9477aac45347 (it moved after your message);
+  - TERMGB2 f930518dcd8d.
+- tests/test_lean_packages.py and tests/test_repository.py: 51 passed.
+
+Least sure: whether the shape check, given facts, takes the B4UnderId entry as `unstated`, or wants B4UnderId listed now because a theorem states it (shape.unstated-category only checks the prefix). No build ran.
+Not looked at: whether B4 itself, which b4Via_of_ownLinkEnds takes, is proved.
+TIMER: none
+
