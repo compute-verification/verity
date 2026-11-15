@@ -127,7 +127,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Core.Site", "Proofs.Properties.InferenceOnly.Protocol",
   "Proofs.Properties.InferenceOnly.RecordRead", "Proofs.Properties.InferenceOnly.RecordForm",
   "Proofs.Properties.InferenceOnly.RecordCounts", "Proofs.Properties.InferenceOnly.DecodeKeys",
-  "Proofs.Properties.Accounting.Registration.Code", "Proofs.Properties.Ties", "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Ties", "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.InferenceOnly.Record", "Proofs.Properties.InferenceOnly.RecordProvenance",
   "Proofs.Properties.InferenceOnly.Lemmas.Opening", "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Verity.Sampled.Unbound",
