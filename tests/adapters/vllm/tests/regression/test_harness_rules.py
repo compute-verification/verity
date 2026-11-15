@@ -296,4 +296,4 @@ def test_importing_a_check_module_loads_neither_numpy_torch_nor_the_core(name):
             "importlib.import_module(sys.argv[1])\n"
             "loaded = sorted({m.partition('.')[0] for m in set(sys.modules) - before} & {'numpy', 'torch', 'verity'})\n"
             "assert not loaded, f'{sys.argv[1]} loads {loaded} as it is imported: import them in the function that recomputes'\n")
-    subprocess.run([sys.executable, "-c", code, f"tests.regression.checks.{name}"], check=True, cwd=resolver.VLLM_ROOT)
+    subprocess.run([sys.executable, "-c", code, f"tests.regression.checks.{name}"], check=True, cwd=resolver.TESTS_ROOT)
