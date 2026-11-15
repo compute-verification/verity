@@ -39,15 +39,42 @@ def rank_window(rank: int, fn: Any, families: Mapping[str, Lowering] | None = No
                 reads: Callable[[NodeWindow, int], Sequence[IF.Read]] | None = None) -> Rank:
     """Rank ``rank``'s Program ``fn`` lowered into its window (`node_window`), the frame dropped. With ``reads`` (as
     `node_window_reads.boundary_reads`), the window is built with stand-ins and declares ``reads(w, rank)`` as its boundary
-    reads, and the free inputs they fill are no longer free."""
+    reads, and the free inputs they fill are no longer free (`unfilled`)."""
     c, w = node_window(fn, families, grain, stand_ins=reads is not None)
     free = tuple(w.free)
     if reads is not None:
         rs = tuple(reads(w, rank))
         c = replace(c, boundary_reads=rs)
-        free = tuple(f for f in free if not any(r.reader == f.tid and r.port == f.port and r.cut == (0, 1) and f.rows == (0, 1, 1)
-                                                and r.at <= f.at and f.at + f.count <= r.at + r.reader_units for r in rs))
+        free = unfilled(free, rs)
     return Rank(rank, c, free, {t: tuple(s) for t, s in w.b.spans.items()}, w.steps, w.census(c))
+
+
+def unfilled(free: Sequence[Free], reads: Sequence[IF.Read]) -> tuple[Free, ...]:
+    """The runs of ``free`` that ``reads`` leave free. A run of whole rows is filled where reads of whole rows of its port
+    hold each of its units, one read or several together: `interface.coalesce` cuts a run of reads where its pattern
+    breaks, which need not be where a run of free rows ends (a prompt of several prefill steps)."""
+    spans: dict[tuple[str, str], list[tuple[int, int]]] = {}
+    for r in reads:
+        if r.cut == (0, 1):
+            spans.setdefault((r.reader, r.port), []).append((r.at, r.at + r.reader_units))
+    held: dict[tuple[str, str], tuple[list[int], list[int]]] = {}
+    for key, ss in spans.items():
+        starts: list[int] = []
+        ends: list[int] = []
+        for a, b in sorted(ss):
+            if ends and a <= ends[-1]:
+                ends[-1] = max(ends[-1], b)
+            else:
+                starts.append(a)
+                ends.append(b)
+        held[key] = (starts, ends)
+
+    def filled(f: Free) -> bool:
+        starts, ends = held.get((f.tid, f.port), ([], []))
+        i = bisect.bisect_right(starts, f.at) - 1
+        return f.rows == (0, 1, 1) and i >= 0 and f.at + f.count <= ends[i]
+
+    return tuple(f for f in free if not filled(f))
 
 
 @dataclass(frozen=True)
@@ -268,4 +295,4 @@ def free_rows(joined: Joined) -> list[dict[str, Any]]:
     return out
 
 
-__all__ = ["Joined", "Rank", "free_rows", "join", "rank_window", "ranks_of"]
+__all__ = ["Joined", "Rank", "free_rows", "join", "rank_window", "ranks_of", "unfilled"]

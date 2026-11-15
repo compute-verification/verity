@@ -10,6 +10,7 @@ import dataclasses
 import pytest
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_embed as NE
+from verity_vllm.program.predict import node_window_join as NJ
 from verity_vllm.program.predict import node_window_reads as NR
 from verity_vllm.program.predict.build import Unexpressible
 
@@ -100,6 +101,35 @@ def test_the_window_declares_them(ranks):
     served = [r for r in x0.circuit.boundary_reads if r.param == NR.EGRESS]
     with pytest.raises(ValueError, match="both fill rows"):
         dataclasses.replace(x0.circuit, boundary_reads=(*x0.circuit.boundary_reads, *served))
+
+
+def test_reads_fill_a_run_together():
+    """`node_window_join.unfilled`: a run of free rows is filled by whole-row reads of its port that hold each of its units,
+    one read or several together; a gap, a read of part of a row, another port and a free run of part of a row leave it
+    free."""
+    run = NW.Free(READ, "tok", 4, 8, "param", NW.PROMPT, NW.PROMPT)
+
+    def read(at, units, port="tok", cut=(0, 1)):
+        return IF.Read(READ, port, NR.PROMPT, at, (units,), 0, (2,), cut)
+
+    assert NJ.unfilled([run], [read(0, 6), read(6, 6)]) == ()
+    assert NJ.unfilled([run], [read(4, 8)]) == ()
+    assert NJ.unfilled([run], [read(0, 6), read(7, 6)]) == (run,)
+    assert NJ.unfilled([run], [read(0, 6), read(6, 6, cut=(0, 2))]) == (run,)
+    assert NJ.unfilled([run], [read(0, 12, port="ids")]) == (run,)
+    part = dataclasses.replace(run, rows=(0, 1, 2))
+    assert NJ.unfilled([part], [read(0, 12)]) == (part,)
+
+
+@pytest.mark.slow
+def test_a_prompt_of_two_prefill_steps():
+    """At a prompt served in two prefill steps the prompt's reads coalesce into runs that cross the steps' runs of free
+    rows, so no one read holds a step's run; together they hold both, and the window leaves only its peer inputs free.
+    About 5 s: the only test that builds a window over more than one prefill step."""
+    x = NR.rank_window(0, glm_request(2 * LP, 1, chunk=LP).program.fn, LOWERED)
+    reads = [(r.at, r.reader_units) for r in x.circuit.boundary_reads if r.param == NR.PROMPT]
+    assert len(reads) > 2 and reads[0] == (0, BLOCKS * LP - LP) and sum(n for _a, n in reads) == 2 * BLOCKS * LP
+    assert {f.kind for f in x.free} == {"peer"}
 
 
 def test_refused_by_name():
