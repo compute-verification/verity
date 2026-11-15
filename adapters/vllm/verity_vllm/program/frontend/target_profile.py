@@ -25,7 +25,12 @@ from typing import TYPE_CHECKING, Any
 
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
 from verity_vllm.program.frontend.compilations import COMPILATIONS
-from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
+from verity_vllm.program.frontend.kernel_readback import (  # noqa: F401
+    applied_kernels,
+    fp8_block_gemm_kernel_of,
+    int8_exact_of,
+    moe_experts_class_of,
+)
 
 if TYPE_CHECKING:
     from verity_vllm.program.frontend.gemm_targets import GemmTarget

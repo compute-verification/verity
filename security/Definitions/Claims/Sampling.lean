@@ -205,15 +205,15 @@ def Partition.gates (P : Partition) : List ℕ := P.blocks.flatten
 
 /-- **The widest public size class** of a proof block's outputs, in bits: 262,144, provisional. Setting it to `16` makes
 `sizeClasses` `[16]`, the former literal limit. -/
-def unitClassMax : ℕ := 262144
+def sizeClassMax : ℕ := 262144
 
 /-- **The public size classes** `w_c` of a proof block's outputs, in bits: the powers of two from `16` up to
-`unitClassMax`, ascending (`[16, 32, …, 262144]`). -/
-def sizeClasses : List ℕ := (List.range (Nat.log2 (unitClassMax / 16) + 1)).map (16 * 2 ^ ·)
+`sizeClassMax`, ascending (`[16, 32, …, 262144]`). -/
+def sizeClasses : List ℕ := (List.range (Nat.log2 (sizeClassMax / 16) + 1)).map (16 * 2 ^ ·)
 
 /-- **A proof block's size class** `w_{c(u)}`: the least public class that holds the values it commits (`committed`), a
 function of the program and the unit, both public; `none` when no class does. -/
-def unitClass (C : Prog) (u : List ℕ) : Option ℕ := sizeClasses.find? fun w => decide (committed C u ≤ w)
+def sizeClass (C : Prog) (u : List ℕ) : Option ℕ := sizeClasses.find? fun w => decide (committed C u ≤ w)
 
 /-- **`P` partitions `C`**: no gate is in two proof blocks, and every gate of `C` but a constant and an unread input is
 in one, the other input gates included. A constant, public, may be in one or in none, and so may an unread input
@@ -223,7 +223,7 @@ commits: `|out(u)| ≤ w_{c(u)}`. A proof block is a set of gates, so a unit's g
 def Partition.Partitions (P : Partition) (C : Prog) : Prop :=
   P.gates.Nodup ∧ (∀ g ∈ P.gates, g < C.gates.length) ∧
     (∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → ¬ C.Unread g → g ∈ P.gates) ∧
-    (∀ u ∈ P.blocks, u ≠ []) ∧ ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
+    (∀ u ∈ P.blocks, u ≠ []) ∧ ∀ u ∈ P.blocks, ∃ w, sizeClass C u = some w ∧ committed C u ≤ w
 
 /-! ## Proof blocks and the universal unit -/
 
@@ -410,7 +410,7 @@ proof blocks (sets of gates, constants and unread inputs in one or in none) whos
 classes, and a well-formed design.
 
 The query: whatever its own width parameter, every unit, input units included, commits at most its class's width
-`w_{c(u)}` (`sizeClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/
+`w_{c(u)}` (`sizeClasses`, up to `sizeClassMax`). A unit that commits more than the widest class is out of scope. -/
 def InScope (P : Partition) (s : AuditStatement) : Prop :=
   s.prog.Topological ∧ P.Partitions s.prog ∧ s.design.WellFormed P
 

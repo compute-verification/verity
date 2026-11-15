@@ -55,7 +55,7 @@ def test_incorrect_outputs_carry_every_reference_before_their_first_detection():
     row = operating.incorrect(REG, build(REG, "reference-remote-h200-sampled"))
     assert math.isclose(row.q, 2.0833e-15, rel_tol=1e-4)
     assert math.isclose(row.capacity, 1.7384e21, rel_tol=1e-3)
-    assert math.isclose(row.capacity, math.log(1e6) * (1 / row.q + 1) * partition_v2.UNIT_CLASS_MAX)
+    assert math.isclose(row.capacity, math.log(1e6) * (1 / row.q + 1) * partition_v2.SIZE_CLASS_MAX)
     assert set(row.detect) == set(REG.names("exfil"))
     assert all(REG[f"exfil.{n}.bits"] < row.capacity for n in row.detect)
     for name, p in (("weights-fp4", 5.0863e-8), ("sparseloco-sync", 1.0808e-9), ("sparseloco-1000", 1.0808e-6)):
@@ -74,7 +74,7 @@ def test_incorrect_outputs_are_the_same_in_either_regime_and_undetected_unregist
     assert operating.incorrect(REG, build(REG, "reference-remote-h200")) == onsite
     # every unit proved: the first incorrect block is sampled, so the channel carries J ln(1/δ) (1 + floor) blocks' bits,
     # each the widest public size class of a block's outputs
-    assert onsite.q == 1 and math.isclose(onsite.capacity, math.log(1e6) * 2 * partition_v2.UNIT_CLASS_MAX)
+    assert onsite.q == 1 and math.isclose(onsite.capacity, math.log(1e6) * 2 * partition_v2.SIZE_CLASS_MAX)
     unregistered = operating.incorrect(REG, build(REG, "unregistered-h200-kimi"))
     assert unregistered.capacity == math.inf and set(unregistered.detect.values()) == {0.0}
 

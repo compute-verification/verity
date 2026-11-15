@@ -5,7 +5,7 @@ public import Definitions.Claims.SamplingGeneric
 /-!
 # Claims: two-stage sampling at the footprint
 
-The sampled audit's two-stage design (registered `{"rule": "two-stage", "grain": Q, "replay": LAW, "k": K}`), on
+The sampled audit's two-stage design (registered `{"rule": "two-stage", "grain": Q, "replay": DESIGN, "k": K}`), on
 `Claims.Sampling`'s statement, witness and commitment and `Claims.SamplingGeneric`'s compiled verifier, read as they
 stand, so neither changes. Replay blocks are the blocks of a replay partition that the proof-block partition refines.
 Serving commits every value read across a replay-block boundary (the registration, the statement's roots). The first
@@ -34,7 +34,7 @@ are the proof blocks, with `k = 1` and no interior registration.
 4. **The compiled verifier** (`CompiledTwo`): a `Compiled` with the statement's two-stage design (`two`) and the
    replay sample (`replaySample`). Its second stage is `Compiled.secondStage`, and `iroots x v ρ` is the roots a run shows for
    replay block `ρ`'s interior. Its extractor, errors and numbers are `Compiled`'s.
-5. **The contract** (`CompiledTwo.Sessions`): `Compiled.Sessions` with its draw law split by stage and its openings
+5. **The contract** (`CompiledTwo.Sessions`): `Compiled.Sessions` with its sampling design split by stage and its openings
    read at a replay block. The first stage misses a set `T` of replay blocks with probability at most `P_a(T)`
    (`replaySamples`); at the first stage's coins, the second stage misses a set `X` of proof blocks with probability at
    most `∏_{ρ∈S} ∏_t C(n_{ρ,t} − |X ∩ cell|, k_t)/C(n_{ρ,t}, k_t)` (`secondSamples`); the waits' bits cover the
@@ -258,7 +258,7 @@ def Scope (L : CompiledTwo Coin A) (x : Msg) : Prop :=
 
 /-! ## 5. The contract -/
 
-/-- **The two-stage compiler's contract** at `H`: `Compiled.Sessions` with its draw law split by stage and its openings
+/-- **The two-stage compiler's contract** at `H`: `Compiled.Sessions` with its sampling design split by stage and its openings
 read at a replay block.
 
 * `replaySamples`: on a statement in scope, the first stage's sample misses a set `T` of replay blocks with probability

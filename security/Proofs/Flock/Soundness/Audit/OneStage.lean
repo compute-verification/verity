@@ -25,7 +25,7 @@ Because it is fixed before the sample, the sample is independent of its incorrec
 table, both named:
 
 * `KnowledgeSound ε_ks`: the table accepts while extraction of the unit fails;
-* `BindSound δ_link`: extraction succeeds, but what it recovers differs from the committed
+* `BindSound ε_bind`: extraction succeeds, but what it recovers differs from the committed
   transcript on the unit's wires (consistency across units).
 
 Both are bounds over the whole audit, for every prover and every rule that picks a sampled proof block before
@@ -36,7 +36,7 @@ theorems take once averaged over the prover's state; neither needs to hold state
 $$\Pr[\text{accept} \wedge E(X, S)] \le \Pr_S[E(X, S) \wedge S \cap \mathrm{incorrect}(X) = \emptyset]
   + \varepsilon_{ks} + \delta_{link}.$$
 Its corollaries are the integrity profile (`audit_profile`), the count curve
-`δ(K) = miss K + ε_ks + δ_link` (`audit_count`), and the sampled proof blocks (`audit_sampled`).
+`δ(K) = miss K + ε_ks + ε_bind` (`audit_count`), and the sampled proof blocks (`audit_sampled`).
 -/
 
 @[expose] public section
@@ -104,14 +104,14 @@ def KnowledgeSound (εks : ℝ≥0∞) : Prop :=
       ∃ u, tgt ω = some u ∧ u ∈ L.draw ω ∧ A.ksFail (L.draw ω) R (τ ω) u)
       (session (L.draw ω) R) (τ ω)) ≤ εks
 
-/-- **The binding error** (named hypothesis `δ_link`): for every prover and every rule `tgt` that
+/-- **The binding error** (named hypothesis `ε_bind`): for every prover and every rule `tgt` that
 picks a sampled proof block before the session's first coin, the probability that the session accepts while
-the picked unit's extraction disagrees with the committed transcript is at most `δ_link`. -/
-def BindSound (δlink : ℝ≥0∞) : Prop :=
+the picked unit's extraction disagrees with the committed transcript is at most `ε_bind`. -/
+def BindSound (εbind : ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
     avg (fun ω => prob (fun ok => ok = true ∧
       ∃ u, tgt ω = some u ∧ u ∈ L.draw ω ∧ A.linkFail (L.draw ω) R (τ ω) u (A.committed R τ))
-      (session (L.draw ω) R) (τ ω)) ≤ δlink
+      (session (L.draw ω) R) (τ ω)) ≤ εbind
 
 end Analysis
 
@@ -121,19 +121,19 @@ theorem avg_add₃ {C : Type} [Fintype C] (f g h : C → ℝ≥0∞) :
 
 /-- **The one-stage audit bound.** For every event `E` on the committed transcript and the sample,
 the audit accepts with `E` with probability at most the probability that the sample satisfies `E`
-and misses every incorrect proof block, plus `ε_ks + δ_link`. -/
-theorem audit_le (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) (E : A.Tr → Finset (Fin n) → Prop)
+and misses every incorrect proof block, plus `ε_ks + ε_bind`. -/
+theorem audit_le (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (E : A.Tr → Finset (Fin n) → Prop)
     (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ E (A.committedOf σ) o.2) (audit L Reg session) σ ≤
       prCoin (fun ω => E (A.committedOf σ) (L.draw ω) ∧
-        Disjoint (L.draw ω) (A.incorrect (A.committedOf σ))) + εks + δlink := by
+        Disjoint (L.draw ω) (A.incorrect (A.committedOf σ))) + εks + εbind := by
   classical
   obtain ⟨R, τ'⟩ := σ
   set τ : Cont L Reg session R := cont ⟨R, τ'⟩
   set X := A.committed R τ with hX
   show prob _ (audit L Reg session) ⟨R, τ'⟩ ≤
-    prCoin (fun ω => E X (L.draw ω) ∧ Disjoint (L.draw ω) (A.incorrect X)) + εks + δlink
+    prCoin (fun ω => E X (L.draw ω) ∧ Disjoint (L.draw ω) (A.incorrect X)) + εks + εbind
   -- the target: some incorrect sampled proof block, fixed by the registration and the sample
   let tgt : L.Ω → Option (Fin n) := fun ω =>
     if h : ∃ u, u ∈ L.draw ω ∧ u ∈ A.incorrect X then some (Classical.choose h) else none
@@ -175,11 +175,11 @@ theorem audit_le (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : 
     _ ≤ _ := add_le_add (add_le_add (avg_ite_eq_prCoin _).le (hks R τ tgt)) (hlink R τ tgt)
 
 /-- **The one-stage integrity profile.** For every family `𝓑` of incorrect sets,
-`Pr[accept ∧ incorrect(X) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} missProb B + ε_ks + δ_link`. -/
-theorem audit_profile (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) (𝓑 : Finset (Fin n) → Prop) (σ : Strategy (audit L Reg session)) :
+`Pr[accept ∧ incorrect(X) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} missProb B + ε_ks + ε_bind`. -/
+theorem audit_profile (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (𝓑 : Finset (Fin n) → Prop) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ 𝓑 (A.incorrect (A.committedOf σ))) (audit L Reg session) σ ≤
-      (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), L.missProb B) + εks + δlink := by
+      (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), L.missProb B) + εks + εbind := by
   refine (audit_le A hks hlink (fun X _ => 𝓑 (A.incorrect X)) σ).trans ?_
   gcongr
   by_cases hB : 𝓑 (A.incorrect (A.committedOf σ))
@@ -188,19 +188,19 @@ theorem audit_profile (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (h
   · exact (prCoin_mono (q := fun _ => False) fun ω h => absurd h.1 hB).trans (prCoin_false.le.trans
       (zero_le))
 
-/-- **The count curve**: `Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks + δ_link`. -/
-theorem audit_count (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) (K : ℕ) (σ : Strategy (audit L Reg session)) :
+/-- **The count curve**: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks + ε_bind`. -/
+theorem audit_count (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (K : ℕ) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ K ≤ (A.incorrect (A.committedOf σ)).card) (audit L Reg session) σ ≤
-      L.miss K + εks + δlink :=
+      L.miss K + εks + εbind :=
   audit_profile A hks hlink (fun B => K ≤ B.card) σ
 
-/-- **Sampled proof blocks are correct up to `ε_ks + δ_link`**, even for a consumer who looks after the
+/-- **Sampled proof blocks are correct up to `ε_ks + ε_bind`**, even for a consumer who looks after the
 sample. -/
-theorem audit_sampled (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) (σ : Strategy (audit L Reg session)) :
+theorem audit_sampled (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (A.incorrect (A.committedOf σ)) o.2) (audit L Reg session) σ ≤
-      εks + δlink := by
+      εks + εbind := by
   refine (audit_le A hks hlink (fun X S => ¬ Disjoint (A.incorrect X) S) σ).trans ?_
   have : prCoin (fun ω => ¬ Disjoint (A.incorrect (A.committedOf σ)) (L.draw ω) ∧
       Disjoint (L.draw ω) (A.incorrect (A.committedOf σ))) = 0 := by
@@ -267,7 +267,7 @@ def AnchorsSound (X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool))
 
 variable {X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool)}
   {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
-  {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞}
+  {a : Fin C.N → Bool} {εks εbind δin : ℝ≥0∞}
 
 /-- Split an accepted event on whether the committed inputs are the anchors'. -/
 theorem prob_split_inputs (X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool))
@@ -283,13 +283,13 @@ theorem prob_split_inputs (X : (R : Reg) → Cont L Reg session R → (Fin C.N �
 
 /-- **A consumer's value, through its cone.** For wires `T` fixed before the sample, the audit
 accepts while some committed wire of `T` differs from its evaluation with probability at most the
-largest miss probability of a unit in `T`'s cone, plus `ε_ks + δ_link + δ_in`. -/
+largest miss probability of a unit in `T`'s cone, plus `ε_ks + ε_bind + δ_in`. -/
 theorem audit_cone (hks : (P.analysis X ext).KnowledgeSound εks)
-    (hlink : (P.analysis X ext).BindSound δlink) (hin : AnchorsSound X a δin)
+    (hlink : (P.analysis X ext).BindSound εbind) (hin : AnchorsSound X a δin)
     (T : Finset (Fin C.N)) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ ∃ t ∈ T, t ∈ P.committed ∧ X (reg σ) (cont σ) t ≠ C.eval a t)
         (audit L Reg session) σ ≤
-      (⨆ u ∈ P.cone T, (1 - L.incl u)) + εks + δlink + δin := by
+      (⨆ u ∈ P.cone T, (1 - L.incl u)) + εks + εbind + δin := by
   refine (prob_split_inputs X a σ (fun _ => ∃ t ∈ T, t ∈ P.committed ∧ X (reg σ) (cont σ) t ≠ C.eval a t)).trans ?_
   rw [add_comm]
   refine add_le_add ?_ (hin σ)
@@ -311,24 +311,24 @@ theorem audit_cone (hks : (P.analysis X ext).KnowledgeSound εks)
 
 /-- **`j` incorrect proof blocks in a cone**: for wires `T` fixed before the sample, the audit accepts with at
 least `j` incorrect proof blocks in `T`'s cone with probability at most the largest missProb of `j` of the
-cone's units, plus `ε_ks + δ_link`. -/
+cone's units, plus `ε_ks + ε_bind`. -/
 theorem audit_cone_count (hks : (P.analysis X ext).KnowledgeSound εks)
-    (hlink : (P.analysis X ext).BindSound δlink) (T : Finset (Fin C.N)) (j : ℕ)
+    (hlink : (P.analysis X ext).BindSound εbind) (T : Finset (Fin C.N)) (j : ℕ)
     (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ j ≤ (P.incorrect (X (reg σ) (cont σ)) ∩ P.cone T).card)
         (audit L Reg session) σ ≤
-      (⨆ (B : Finset (Fin n)) (_ : j ≤ (B ∩ P.cone T).card), L.missProb B) + εks + δlink :=
+      (⨆ (B : Finset (Fin n)) (_ : j ≤ (B ∩ P.cone T).card), L.missProb B) + εks + εbind :=
   audit_profile (P.analysis X ext) hks hlink (fun B => j ≤ (B ∩ P.cone T).card) σ
 
 /-- **A cone the sample covered**, for wires `T S` chosen even after seeing the sample `S`: the audit
 accepts with `T S`'s cone inside the sample and some committed wire of `T S` incorrect with probability at
-most `ε_ks + δ_link + δ_in`. -/
+most `ε_ks + ε_bind + δ_in`. -/
 theorem audit_covered (hks : (P.analysis X ext).KnowledgeSound εks)
-    (hlink : (P.analysis X ext).BindSound δlink) (hin : AnchorsSound X a δin)
+    (hlink : (P.analysis X ext).BindSound εbind) (hin : AnchorsSound X a δin)
     (T : Finset (Fin n) → Finset (Fin C.N)) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ P.cone (T o.2) ⊆ o.2 ∧
         ∃ t ∈ T o.2, t ∈ P.committed ∧ X (reg σ) (cont σ) t ≠ C.eval a t) (audit L Reg session) σ ≤
-      εks + δlink + δin := by
+      εks + εbind + δin := by
   refine (prob_split_inputs X a σ (fun S => P.cone (T S) ⊆ S ∧
     ∃ t ∈ T S, t ∈ P.committed ∧ X (reg σ) (cont σ) t ≠ C.eval a t)).trans ?_
   rw [add_comm]
@@ -342,8 +342,8 @@ theorem audit_covered (hks : (P.analysis X ext).KnowledgeSound εks)
       (zero_le)
     obtain ⟨⟨hia, hcov, t, ht, htc, hne⟩, hd⟩ := h
     exact hne (P.compose_cone _ a _ hia (Finset.disjoint_of_subset_right hcov hd.symm) t ht htc)
-  calc _ ≤ 0 + εks + δlink := add_le_add (add_le_add this.le le_rfl) le_rfl
-    _ = εks + δlink := by rw [zero_add]
+  calc _ ≤ 0 + εks + εbind := add_le_add (add_le_add this.le le_rfl) le_rfl
+    _ = εks + εbind := by rw [zero_add]
 
 /-! ### The oracle layer
 

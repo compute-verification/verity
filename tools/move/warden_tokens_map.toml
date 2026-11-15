@@ -45,6 +45,9 @@
 files = ["*"]
 
 [words_in.words]
+"network certifier's warden" = "network certifier"   # the relay beside the term it becomes, which it would repeat
+"certifier front's warden" = "certifier front"
+"warden-paced" = "network-certifier-paced"
 "warden's" = "network certifier's"
 "wardens'" = "network certifiers'"
 "the warden-" = "the network-certifier-"
@@ -185,6 +188,7 @@ files = ["*"]
 "$WARDEN" = "$NETWORK_CERTIFIER"
 "${WARDEN" = "${NETWORK_CERTIFIER"
 "export WARDEN" = "export NETWORK_CERTIFIER"
+"with WARDEN," = "with NETWORK_CERTIFIER,"
 "A5-WARDEN" = "A5-NETWORK_CERTIFIER"
 
 [keep]
@@ -226,7 +230,10 @@ strings = [
     "the warden's domain (`warden_rows.domain`), which binds the session, the ",
     "the warden's salted root over the window's bucket rows, its signed head's",
     "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a ",
-    "the round's provenance: the group's link-windows of the warden's run",
+    "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public ",
+    "the round's provenance: its link-window of the warden's run",
+    'b"warden-run"',                                  # the tests' seeds of a synthetic run and of a second one
+    'b"another warden"',
 ]
 
 [rewrite]

@@ -24,7 +24,7 @@ A period's SPOT audit (`Audit.sampled`) is Flock's integrity audit over the peri
 fresh live subset sample, against one adaptive prover. `RealizesIntegrityOfIntegrityMonitoringPeriod` ties a `PeriodRun` to it: the
 sampled audit's own coins drive the period's game at the prover's strategy, its verdict is verity-verify-proof's on every
 sampling block, and the claim's units and incorrect proof blocks are the sampling blocks'. `IntegrityOfIntegrityMonitoringPeriod` is
-then `PeriodRun.Sound` for the sampled audit at error `δ + Σ_t (ε_ks,t + δ_link,t)`, the monitoring period's.
+then `PeriodRun.Sound` for the sampled audit at error `δ + Σ_t (ε_ks,t + ε_bind,t)`, the monitoring period's.
 
 Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityPooled`, this module imports
 them.

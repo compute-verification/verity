@@ -140,7 +140,7 @@ def _greedy_rows(x: Any, ids: Any, template: str) -> dict[str, dict[str, Any]]:
     n, V = x.shape
     head, _, rest = template.partition("{")
     statics = dict(kv.split("=", 1) for kv in rest.rstrip("}").split(",")) if rest else {}
-    if head != "GreedySelect_v1" or set(statics) != {"V", "N"} or not all(v.isdigit() for v in statics.values()):
+    if head != "GreedySelect_v1" or set(statics) != {"V", "N"} or not all(v.isdecimal() for v in statics.values()):
         raise ValueError(f"{template} is no token select whose pieces are laid out here: TokenSelect_v4{{V}} or "
                          "GreedySelect_v1{V,N}")
     if int(statics["V"]) != V or V % int(statics["N"]) or descriptor_id(GS.select(V, V // int(statics["N"]))) != template:

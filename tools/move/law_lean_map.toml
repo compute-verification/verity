@@ -34,7 +34,8 @@
 # `--sample-design`, `FLOCK_DRAW_LAW` to `FLOCK_SAMPLE_DESIGN`. Kept there: every string literal holding the word (record
 # keys such as "law", refusal codes such as R1-law, recorded case names, the messages the difftests compare with the
 # Lean's kept literals, but those naming the flag `--draw-law`), every attribute named `law` (other lanes' `Binding`, `Window`, `Component` and `Plan` carry
-# one, and ours, `Draw.law`, is read outside: our Python, Rust and shell table's `.law`, which [keep_in] holds there, never
+# one, and ours, `Draw.law`, is read outside: our Python and shell table's `.law`, which [keep_in] holds there (a Rust
+# field renames with its readers), never
 # a keep pattern, which would keep a Lean projection of a renamed field too), the keywords that write a "law" key or set another lane's field, the
 # adapter's `served_tp --law`, `V3C_LAW` (the onsite demo sets it) and the square-root law. Outside our paths only the
 # names other lanes import from us rename; `_law` takes `_design`, the name `law_words_map.toml` gives the served table's
@@ -152,11 +153,9 @@ strings = [
   "\"law: registered {",
   "\"laws\"",
   "\"link points: no draw under the law ends, so each of its windows fails\"",
-  "\"lists as holding transfer gates, every unit of which is proved (repeatable; the partition's law is work-rate:NUM/DEN)\"",
   "\"no Lean toolchain or no stratified law in core\"",
   "\"order.law\"",
   "\"over SiluMul_v2{I=8192} at model.layers.0.mlp. (law rate:2/4), drawn members [0, 2]\"",
-  "\"plain Flock sessions, not --zk (a5's --plain): the partition's law \"",
   "\"population is not an integer or law not an object\"",
   "\"proof blocks each of its templates holds is not known here. The launch states V3C_LAW, a stratified rate: \"",
   "\"rate law\"",
@@ -181,7 +180,6 @@ strings = [
   "\"the draw's law has no sampling design\"",
   "\"the draw's law is not subset\"",
   "\"the draw's record is not a draw of its units under the registered law and population\"",
-  "\"the first stage's law over a class's spans, a rate law: rate:NUM/DEN or rate:NUM/DEN:T\"",
   "\"the law is bernoulli, which the sampled audit's soundness statement doesn't cover\"",
   "\"the law is not an object\"",
   "\"the law is not subset, bernoulli, stratified or work\"",
@@ -195,14 +193,11 @@ strings = [
   "\"the law's p is not NUM/DEN, 0 <= NUM <= DEN, 0 < DEN\"",
   "\"the receipt, the draw or the law\"",
   "\"the registration's law is not subset:K′\"",
-  "\"the rest's units, sampled by the work law\"",
   "\"the rule's rate law refuses the population\"",
   "\"the second stage's draw is not well formed under its law: {",
   "\"the session's draw's law is not subset\"",
   "\"the stratified law at K = the population leaves a unit undrawn\"",
   "\"the verifier's partition file: {templates, law, scope?}\"",
-  "\"transfer gates, in its digest, every unit of which is proved (repeatable; the partition's law is work-rate:NUM/DEN). A \"",
-  "\"under the partition's stratified law, a window of one member with no registered reads or shared rows \"",
   "\"verity-verify-proof --stratified B, its own law\"",
   "\"{\\\"form\\\":\\\"one-stage\\\",\\\"law\\\":{}}\"",
   "\"{\\\"format\\\":\\\"verity/registration/v1\\\",\\\"law\\\":{},\\\"partition\\\":\\\"p\\\",\\\"population\\\":1,\\\"program\\\":\\\"\"",
@@ -314,7 +309,6 @@ strings = [
 "benchmarks/verifier_cost/*.py" = [".law"]
 "benchmarks/verifier_cost/*.sh" = [".law"]
 "verity/protocols/proofs/*.py" = [".law"]
-"verity/protocols/proofs/*.rs" = [".law"]
 "verity/protocols/proofs/*.sh" = [".law"]
 
 
@@ -408,7 +402,6 @@ files = [
   "security/Properties/Flock/Circuit.lean",
   "security/Properties/Flock/Circuit/*.lean",
   "security/Properties/Flock/Nets.lean",
-  "security/Properties/Flock/ReadNet.lean",
   "security/Properties/Hash/*.lean",
   "security/Properties/Spot*.lean",
   "security/Properties/Spot.lean",

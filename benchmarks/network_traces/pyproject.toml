@@ -13,6 +13,8 @@ package = false
 verity = { workspace = true }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# the repository root, for the tests that import `benchmarks.network_traces` (its proof drivers, a shared test's helpers)
+pythonpath = ["../.."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]

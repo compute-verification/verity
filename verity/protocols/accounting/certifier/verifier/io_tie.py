@@ -95,7 +95,8 @@ ID_AT = HEADER.size + len(ID_EVENT_HEAD)
 CELL_USED = HEADER.size + ID_EVENT_BYTES
 #: the network certifier's `END` kind (`warden.END`), beside `link_frame`'s `PAD` and `DATA`
 END = 0x20
-#: a response's last bytes, after its events: the network certifier's `END` holds them
+#: a response's last bytes, after its events: the network certifier's `END` holds them; the workload declares the same
+#: (`certifier.prover.workload.TRAILER`), held equal by `tests/test_network_certifier_id_request_writers.py`
 TRAILER = b"data: [DONE]" + EVENT_END
 #: `IoTieCell`'s output: ok, data, end, the stream and the id
 CELL_OUT = 3 + 32 + 32
@@ -114,7 +115,9 @@ SAMPLED = "sampled_token_ids"
 
 def id_event(token_id: int, size: int = ID_EVENT_BYTES) -> bytes:
     """The canonical event of one token id in `size` bytes: `ID_EVENT_HEAD`, the id right-aligned in 10 decimal
-    characters, then `ID_EVENT_TAIL` with spaces (JSON whitespace) ahead of its blank line to fill `size`."""
+    characters, then `ID_EVENT_TAIL` with spaces (JSON whitespace) ahead of its blank line to fill `size`. The
+    workload's declaration (`certifier.prover.workload.id_event`) writes the same bytes, held equal by
+    `tests/test_network_certifier_id_request_writers.py`."""
     if type(token_id) is not int or not 0 <= token_id < 1 << 32:
         raise ValueError(f"a token id is a u32, not {token_id!r}")
     if type(size) is not int or size < ID_EVENT_BYTES:

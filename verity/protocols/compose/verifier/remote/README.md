@@ -389,7 +389,7 @@ SPOT's accept rule and theorems, the Lean slowdown bounds, and the composed soun
 | Piece | Lean declaration | Lock | End to end |
 |---|---|---|---|
 | SPOT's accept rule | `Properties.Spot.AcceptMeans` (`security/Properties/Spot.lean`; proof `acceptMeans`) | **proved** | — |
-| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `security/Proofs/Flock/Bridge/ScopeGate.lean`, proved in `security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | SPOT `--zk`: proved |
+| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + ε_bind | `Flock.Guarantees.SampledKSLiveV3` (stated in `security/Proofs/Flock/Bridge/ScopeGate.lean`, proved in `security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | SPOT `--zk`: proved |
 | SPOT over a monitoring period | `Flock.Guarantees.IntegrityMonitoringPeriod`, `IntegrityPooled` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The slowdown over remote, per period | `Slowdown.Guarantees.SlowdownRemote` (`security/Definitions/Slowdown/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
 | The slowdown over a monitoring period | `Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod` (`security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean`; proof `Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod` in `security/Proofs/Slowdown/RemoteMonitoringPeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
@@ -397,7 +397,7 @@ SPOT's accept rule and theorems, the Lean slowdown bounds, and the composed soun
 
 `SlowdownRemote` is the slowdown bound max(1, 1/(s + x/MFU₀)) (`Slowdown.Slowdown.remoteSlowdown`; MFU₀ divides only
 x), not the bound displayed above: arithmetic over inline hypotheses (`Slowdown.Assumptions.PouwSound` among them), with
-the declared work bounded by `CountHE`.
+the registered circuit's work bounded by `CountHE`.
 
 ### 7. What is completeness, not security
 
@@ -507,8 +507,8 @@ The slowdown, `SlowdownRemote`:
   - `Slowdown.Assumptions.SampledDetection`: SPOT catches each incorrect proof block with probability at least q,
     whatever came before.
   - `Slowdown.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
-- (H) and (E), `Slowdown.Cut.Assumptions.Hardness` and `Exports` (`security/Definitions/Assumptions.lean`), on the declared
-  work, and the count's verdict `InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`), a hypothesis until
+- (H) and (E), `Slowdown.Cut.Assumptions.Hardness` and `Exports` (`security/Definitions/Assumptions.lean`), on the registered
+  circuit's work, and the count's verdict `InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`), a hypothesis until
   `DescCountsCK` is proved (part 4, link 7).
 
 The local bounds (part 6):
@@ -548,15 +548,8 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 ## The demo
 
 **No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. The remote demo
-is `demos/remote.toml` (`demos/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The lifecycle
-workload is the only code that steps through the whole remote composite, and the vLLM served run runs both halves on one
-served run, PoUW's as a development run:
-
-- the lifecycle workload (`tools/verity/cli/tests/lifecycle/README.md`), beside `verity run`'s tests: the remote composite
-  stepped through one monitoring period on CPU in about 2 s: hardware registration, registration, declarations, live
-  samples, each declaration's verdict and the period's accounting, with every deviation it lists refused by name. Its
-  prover is a labelled stand-in for Flock, and its verdict is the composition's Python mirror over per-declaration
-  stand-ins for its subprotocols, not `remote check`. It runs; nothing about it is proved.
+is `demos/remote.toml` (`demos/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The vLLM served
+run runs both halves on one served run, PoUW's as a development run:
 
 - the vLLM served run (`adapters/vllm/tools/served_run/README.md`): Llama-3.2-1B INT8 served by vLLM on one H200, its
   values committed while serving, a verification phase's proof blocks sampled by live coins, proved by Flock `--zk` and

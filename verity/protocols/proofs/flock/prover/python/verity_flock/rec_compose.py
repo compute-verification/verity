@@ -26,7 +26,7 @@ SHARED = (
     ("inner_partition", "the inner statement's partition, --rec-inner-partition"),
     ("inner_coins", "a record of check 5's coins, --rec-inner-coins"),
     ("inner_session", "the inner session's record, --rec-inner-session"),
-    ("inner_transcript", "the coin server's transcript, --rec-inner-transcript"),
+    ("inner_transcript", "the challenger's live-coin part's transcript, --rec-inner-transcript"),
     ("inner_registration", "the circuit registration, --rec-inner-registration"),
     ("inner_statement", "how the inner statement is proved, --rec-inner-statement"),
     ("inner_tables", "the inner statement's lookup tables, --rec-inner-tables"),
@@ -231,7 +231,7 @@ def _check_form(name: str, inner: str, links: tuple | None, s: tuple) -> None:
         raise Refused(f"{name}: it read a record of check 5's coins (--rec-inner-coins), which no part of the compiled "
                       "verifier reads")
     for v, what in ((session, "inner session's record (--rec-inner-session)"),
-                    (transcript, "coin server's transcript (--rec-inner-transcript)"),
+                    (transcript, "live-coin part's transcript (--rec-inner-transcript)"),
                     (statement, "word on how the inner statement is proved (--rec-inner-statement)"),
                     (tables, "inner statement's lookup tables (--rec-inner-statement)")):
         if v is None:

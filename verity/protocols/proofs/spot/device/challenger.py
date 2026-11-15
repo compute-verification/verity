@@ -1274,7 +1274,7 @@ def circuit_of(s: Any) -> str:
     """A period's circuit as its open records it: the registered circuit's SHA-512 (128 hex digits, kept in lowercase),
     never a Program's id; ValueError otherwise."""
     if type(s) is not str or not CIRCUIT.fullmatch(s):
-        raise ValueError(f"--circuit {s!r}: the declared circuit's SHA-512 (128 hex digits), not a Program's id")
+        raise ValueError(f"--circuit {s!r}: the registered circuit's SHA-512 (128 hex digits), not a Program's id")
     return s.lower()
 
 

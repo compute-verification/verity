@@ -129,7 +129,7 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
     assert moved["unit_log"] == FC._slot_log(size) + 1
     assert [r["slot_log"] for r in moved["ranges"] if r["net"] == "unit"] == [FC._slot_log(size) + 1]
     monkeypatch.setattr(T, "layout", layout)
-    with pytest.raises(ValueError, match="a unit class \\(META definition\\) has no templated statement"):
+    with pytest.raises(ValueError, match="a proof-block class \\(META definition\\) has no templated statement"):
         FC.compose(tm.low, tm.sub, port_bits=[b for _r, _s, b, _ps in args[2]], v2_out_rows=(("o0",),), definition="d", layout=MODE)
 
 

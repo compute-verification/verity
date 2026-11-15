@@ -161,11 +161,18 @@ keeps or drops from and never adds to.
   it (`trusted-device`, `cr/sha-512`), written by hand and never renamed; `claim_ids.py` writes the table from each id
   to its Lean names, `verity/commitments/claim_ids.json`, from these. `open_seed`, `open_default_issue` and
   `default_owner` are what `--update` and the records run fill an entry from (`bookkeeping_ticket`).
+- `ids`: {premise: its claim id}, the id `verity.claims` cites it by; every named assumption and every premise `trust`
+  names has one, written by hand, and `--update` drops an entry whose premise the lock no longer lists (`id_failures`).
+  `claim_ids.py --write` writes `verity.claims`' table of each id's premises (`LEAN`) from every lock's.
 - `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
   {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
   from; the report prints each gap (`trust_failures`, `trust_gaps`). `verity lean deployed [--rev REV]` prints every lock's
   deployed guarantees with each one's gap and its premises, counted once by name across the locks, as JSON from git alone.
+  `posture.py` prints one line per deployed guarantee, each premise marked against Daniel's trust list
+  (`trust-list.json`), which `tests/test_trust_list.py` holds every deployed guarantee to, outside its gap; a
+  definition still by choice that its record's `premises.choosing` names (the lock's `choosing`) is one of its open
+  premises.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside (`record_scope`).
 - `escapes`: every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`,
@@ -197,11 +204,6 @@ keeps or drops from and never adds to.
   registry handle of the lane that answers for it. `--update` fills each record, and the `reads` section, from the
   build (`judge`, `read_groups`, `PREMISE_KINDS`); without it the audit fails on any difference. A record holds the
   statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it.
-- An unowned lock (`unowned_lock`): one that lists a guarantee or a premise and holds no lane field (`LANE_FIELDS`,
-  `LANE_SECTIONS`), the lock of a tree with no lanes; no flag makes a lock unowned. No entry owes an owner (a premise
-  the lock doesn't list still fails); its `AUDIT` line ends with `unowned`, and its report holds `"unowned": true`.
-  One lane field, or `--owner` for that run, makes it owned and held to every rule. Every lock of this tree is owned
-  (`tests/test_lean_packages.py`).
 - `shape`: the shape every guarantee has (the lean-proofs skill, "One shape"): `properties`, `premises`, `frozen`,
   `statements`, `events`, `conjectures` (`shape`, `part_refusals`, `reordered`, `shares`), and `inline`, the inline
   hypotheses still allowed, which only shrinks (`inline_failures`).

@@ -545,17 +545,17 @@ def unit_draw(j: Any) -> dict:
     if not (isinstance(j, dict) and sorted(j) in (["draw"], ["draw", "salt"])):
         raise Refused("public: keys are not draw, and optionally salt")
     d, ctx = j["draw"], "public.draw"
-    law = _str_at(d, "law", ctx)
-    if law not in _DRAW_KEYS:
+    sampling_design = _str_at(d, "law", ctx)
+    if sampling_design not in _DRAW_KEYS:
         raise Refused(f"{ctx}.law: not subset, bernoulli, stratified or work")
-    _keys_are(d, (["closure"] if law == "work" and "closure" in d else []) + _DRAW_KEYS[law], ctx)
-    out: dict[str, Any] = {"law": law, "population": _nat_at(d, "population", ctx)}
-    if law == "bernoulli":
+    _keys_are(d, (["closure"] if sampling_design == "work" and "closure" in d else []) + _DRAW_KEYS[sampling_design], ctx)
+    out: dict[str, Any] = {"law": sampling_design, "population": _nat_at(d, "population", ctx)}
+    if sampling_design == "bernoulli":
         out["p"] = _num_den(_str_at(d, "p", ctx), ctx)
     else:
         out["k"] = _nat_at(d, "k", ctx)
-    if law in ("stratified", "work"):
-        out["strata"] = _strata(law == "work", d, ctx)
+    if sampling_design in ("stratified", "work"):
+        out["strata"] = _strata(sampling_design == "work", d, ctx)
     if "closure" in d:
         out["closure"] = _nats_at(d, "closure", ctx)
     out["units"] = _nats_at(d, "units", ctx)
@@ -624,9 +624,9 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
         return f"public-value: {', '.join(wrong)}", None
     if rec["population"] != w.n:
         return f"population: registered {rec['population']}, the level's {w.n}", None
-    law = {"k": k, "law": "subset"}
-    if _canon(rec["law"]) != _canon(law):
-        return f"law: registered {_canon(rec['law'])}, the window's {_canon(law)}", None
+    sampling_design = {"k": k, "law": "subset"}
+    if _canon(rec["law"]) != _canon(sampling_design):
+        return f"law: registered {_canon(rec['law'])}, the window's {_canon(sampling_design)}", None
     if rec["query"] != p["query"]:
         return f"query: registered {rec['query']}, the check's {p['query']}", None
     if rec["scheme"] != p["check"]["scheme"]:

@@ -471,7 +471,8 @@ def session_error(session: dict) -> dict:
     beside it its six parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
     2^-slack a pass, `delta_hiding`, the coin commitment's Σ_t hide_t, `delta_binding`, the receipts' binding term,
     `delta_sketch`, δs, and `delta_rejection`, the sample's Σ_t k_t/2^64. A record that carries the parts (verifier.json's
-    `delta`) must sum to the total as the ledger adds them, or there is no line (`Disagree`); one written before them
+    `delta`) must sum to the total as the ledger adds them, exactly where the ledger writes them as ratio text and in
+    floats where an older record wrote floats, or there is no line (`Disagree`); one written before them
     gives the profile δ from its windows (`recorded_windows`) and the slack from its passes at the slack its ledger was
     charged at (its `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. A ledger
     that didn't charge the hiding, the binding or the rejection (no such part) has it added to its total: the hiding
@@ -487,26 +488,26 @@ def session_error(session: dict) -> dict:
     totals = {m["delta"] for m in lg["declared"]["memory"].values() if "delta" in m}
     if len(totals) != 1:
         raise Disagree(f"session {session['k']}'s memory line forms record δ {sorted(totals)}: the ledger computes one")
-    total = Fraction(totals.pop())
+    total = pooled.number(totals.pop())
     hiding = binding = rejection = None
     if (d := lg.get("delta")) is not None:
-        parts = [d.get(n, 0.0) for n in ledger.DELTA_PARTS]
+        parts = [d[n] for n in ledger.DELTA_PARTS if n in d]
         if all(type(x) is str for x in parts):
-            agree = sum(map(Fraction, parts), Fraction(0)) == total
+            agree = sum(map(pooled.number, parts), Fraction(0)) == total
         else:
             added = 0.0
             for x in parts:
-                added += x
+                added += float(pooled.number(x))
             agree = added == float(total)
         if not agree:
-            raise Disagree(f"session {session['k']}'s δ parts {d} don't sum to its memory line's δ {float(total)!r}")
-        profile, slack, sketch = (Fraction(d[n]) for n in ("profile", "slack", "sketch"))
+            raise Disagree(f"session {session['k']}'s δ parts {d} don't sum to its memory line's δ {line.text(total)}")
+        profile, slack, sketch = (pooled.number(d[n]) for n in ("profile", "slack", "sketch"))
         if "hiding" in d:
-            hiding = Fraction(d["hiding"])
+            hiding = pooled.number(d["hiding"])
         if "binding" in d:
-            binding = Fraction(d["binding"])
+            binding = pooled.number(d["binding"])
         if "rejection" in d:
-            rejection = Fraction(d["rejection"])
+            rejection = pooled.number(d["rejection"])
     else:
         profile = pooled.number(V.recorded_windows(session)[1])
         slack = Fraction(lg["inputs"]["passes"], 2 ** lg["inputs"].get("slack_log2", V.UNRECORDED_SLACK_LOG2))

@@ -65,7 +65,7 @@ for every live prover `τ`:
 1. $$\Pr[\text{verity-verify-proof accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
    with "wrong" `EndToEndHidden`'s (`incorrectRegZ`, against the public file, in the committed transcript fixed at
-   registration) at the rows `rsZHJSt`, and `ε_ks`, `δ_link` `EndToEnd`'s terms;
+   registration) at the rows `rsZHJSt`, and `ε_ks`, `ε_bind` `EndToEnd`'s terms;
 2. at every outcome verity-verify-proof accepts, each registered read that is the verifier's own at the sample of the table its
    unit is sampled into (`OwnReadsHJ`) is checked at the outcome's registration (`Registered.Reads.Checked`): the SHA-512
    leaf of the public file's `b ‖ c` at the read row opens the root `own` holds, at the position `own` gives, through
@@ -214,7 +214,7 @@ open Classical in
 /-- **Flock's one-stage audit, end to end, with registered reads, at the sampled proof blocks.** `EndToEndRegistered`'s
 setting, with its first conjunct at the sampled proof blocks: for every live prover `τ`,
 1. $$\Pr[\text{verity-verify-proof accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
-   with "wrong" `EndToEndRegistered`'s (`incorrectRegZ` at the rows `rsZHJSt`), and `ε_ks`, `δ_link` `EndToEnd`'s terms,
+   with "wrong" `EndToEndRegistered`'s (`incorrectRegZ` at the rows `rsZHJSt`), and `ε_ks`, `ε_bind` `EndToEnd`'s terms,
    averaged over the verifier's sample;
 2. `EndToEndRegistered`'s second conjunct: at every outcome verity-verify-proof accepts, each registered read the verifier owns
    (`OwnReadsHJ`) is checked at the outcome's registration (`Registered.Reads.Checked`, through `regPathsHJ`).

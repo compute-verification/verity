@@ -18,7 +18,7 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 | in(S), out(S) | For a set S of gates: the gates outside S with a wire into S; the gates of S read outside it, and its output gates. in(C) is C's input gates and out(C) its output gates. | `Circuit.into`, `Circuit.exits`; `Circuit.isInput`, `Circuit.outputs` |
 | annotation α | The gates α(ℓ) each label ℓ of a circuit holds; blocks, placements, covers and selections are annotations, each a predicate on α. | `Verity.Annotation`, `Annotation.IsPartition`, `Partition.toAnnotation` |
 | θ, x | The registered information's input gates (weights, programs, the circuit builder), fixed before the period and the same in every circuit compared; the fresh input, x : in(C) ∖ θ → values (prompts, request inputs, network bits, what the memory wipe leaves). | `Verity.RegisteredCircuit.θ`; x is the input part of `Circuit.eval`'s argument |
-| D, R = (θ, D, 𝓘) | The declared circuit, what the developer claims it computed: its registered programs on its committed inputs (the one use of "declared"). R commits it once: θ's values, D and 𝓘, its private (c, k)-partition into inference blocks, checked from D and θ alone (the inference-only policy). | `Verity.RegisteredCircuit.D`, `Verity.Committed`; 𝓘 is `Verity.RegisteredCircuit.𝓘`, the registered compiler's output, with its proof blocks `Verity.RegisteredCircuit.P`; the policy, `InferenceOnly.Complies` |
+| D, R = (θ, D, 𝓘) | The registered circuit, what the developer claims it computed: its registered programs on its committed inputs. R commits it once: θ's values, D and 𝓘, its private (c, k)-partition into inference blocks, checked from D and θ alone (the inference-only policy). | `Verity.RegisteredCircuit.D`, `Verity.Committed`; 𝓘 is `Verity.RegisteredCircuit.𝓘`, the registered compiler's output, with its proof blocks `Verity.RegisteredCircuit.P`; the policy, `InferenceOnly.Complies` |
 | (c, k), 𝒞_{c,k} | A partition's budgets per block, each at most: gate budget c and fresh-input budget k; \|I\| ≤ c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the set of circuits with such a partition. | `Verity.Partition`, `Partition.gates`, `Partition.IsCK` |
 | A, x(g), t(g) | The actual circuit: everything the hardware computed in the period, hidden work included, each gate g placed at a device x(g) and a tick t(g). | `Accounting.Placed`, `Accounting.Placed.x`, `Accounting.Placed.t` |
 | A[X, J], Φ_X | The operation gates of A placed in the location X (a set of devices) during the ticks J; X's capacity in gates per second, \|A[X, J]\| ≤ Φ_X·\|J\|. Φ_s is a server's, Φ_total the fleet's, and M_s a server's memory in bits. | `Accounting.Placed.region`, `Accounting.Placed.ComputeRate`, `Accounting.Placed.Memory` |
@@ -241,7 +241,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "firewall"; the record ids and domain tags `firewall/v0` and `verity/firewall-*`, the party name `firewall` and the message type `Firewall`, until a format version; `benchmarks/`'s `MODES=firewall`, `--firewall`, `FC_FIREWALL*` and `flock-firewall`, until renamed | the ZK server |
 | `flock-verify`, `remote check` for the verifiers, until renamed | `verity verify proof`, `verity verify remote` |
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
-| "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, registered work; execution block, execution phase |
+| "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, the registered circuit's work; execution block, execution phase |
 | a served span: "window", "commit period" for PoUW's span and `window`, "sampling block", until renamed | execution phase |
 | "window" for SPOT's served span with its audit; SPOT's records' `window` (`window.kind`, `window_root`) until a format version | run (`Spot.Run`); its served part is the run's serving, and its length the run length |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
@@ -418,7 +418,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
   - **Verified queue**: the one landing path, ci's loop (`research queue vqueue`): it merges the PRs ready to land onto
     `main` as candidates, and fast-forwards `main` only to one with no new failure: each gating task passed or fails on its
-    base too.
+    base too. Under `--gate verdict` a plain candidate (each member with a land verdict of its own, no move, and nothing
+    drive.toml's `lowrisk_excludes` or `verdict_excludes` names) lands on those verdicts and the quick tier, and `main`'s
+    whole check follows: its red reverts the one culprit or, with none, sends plain candidates back to the whole check.
   - **Candidate**: `main`'s tip, or the candidate below it, with one `Queue: #N` merge per PR on top, pushed as
     `queue/<sha12>` and checked as one.
   - **Suspect**: a PR of a failed candidate whose change touches what a failure its base doesn't share names (every PR
@@ -436,7 +438,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     spec; the lock records it regenerated are committed on top (`Lock records regenerated for #N...`), and that commit is
     what is checked.
   - **After-landing run**: the whole check (every ci.toml job: `--kind after-landing`), which gates a candidate when the
-    verified queue runs with `--gate check`: one beside each candidate and beside `main` each time it moves, `main`'s saying
+    verified queue runs with `--gate check` (under `--gate verdict`, every candidate but a plain one): one beside each
+    candidate and beside `main` each time it moves, `main`'s saying
     which failures a candidate inherits. Under `--gate graph2`, the default, graph2's tasks check a candidate, with
     lean-agreement and ratchet-gate run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.

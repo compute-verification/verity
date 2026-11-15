@@ -336,7 +336,7 @@ def secondStage (i : Input) (sample : Array Nat) :
 /-- The interior registration's audit record over the second stage's proved units, with round 2's statement check
 (`SecondStage.checkAny`, the two-stage form allowed where `form` is) over the first stage's replay sample `sample`:
 whether it accepts, and the run's `interior` entry; nothing under a one-stage rule. -/
-private def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
+def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
     Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
   | none => return (true, [])
   | some (it, receipt, draw, samplingDesign, read) => do

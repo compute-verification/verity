@@ -26,9 +26,9 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 `Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd` is `zk_session_soundJ_custody_reg` with its first and last
 terms in closed form:
 * `zk_session_soundJ_custody_reg`: one `--zk` session of `J` tables at the record's custody, at the live subset sample, is
-  sound against the public file, `Pr[verity-verify-proof accepts ∧ at least K₀ units wrong on it] ≤ miss(K₀) + ε_ks + δ_link`;
+  sound against the public file, `Pr[verity-verify-proof accepts ∧ at least K₀ units wrong on it] ≤ miss(K₀) + ε_ks + ε_bind`;
 * `Audit.SamplingDesign.subset_miss`: the uniform `kd`-subset's `miss(K₀)` is `C(n − K₀, kd) / C(n, kd)` at `K₀ ≤ n`;
-* `linkBoundZC`: at a prover whose link finders satisfy A2 (`LinkCRZC`), `δ_link` is its closed form.
+* `linkBoundZC`: at a prover whose link finders satisfy A2 (`LinkCRZC`), `ε_bind` is its closed form.
 
 `EndToEnd_refSetup` shows the statement's reference setup `y₀` is no extra condition: every sample verity-verify-proof accepts
 gives one, at any number of tables.

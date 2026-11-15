@@ -38,7 +38,7 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     (RowsFormat): a row a bucket of frames that name their connections, in ordinal order
     (bucketFrames), the lanes read back from them (lanesOfRows), and the schedules it holds (Fits)
 ../../Definitions/Certifier/SampledCharge.lean  trusted: what the faulty proof blocks add under a sampled audit: their
-    committed bits (faultyBits), the possible faulty sets at δ (faultySets), the
+    committed bits (faultyBits), the possible incorrect sets at δ (incorrectSets), the
     sequences accepted with one (AcceptedFaulty, AccSeqsSampled), and what an accepted
     audit gives that count (AdviceIn, freeInputs, AsReg, RLeak); the runs before a
     run, which a period's operator reads (runsBefore)
@@ -53,7 +53,7 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     monitoring period of sampled audits (MonitoringPeriodLeakAccepted)
 ../../Definitions/Certifier/Guarantees/Pooled.lean  trusted: the incorrect proof blocks over a monitoring period
     of sampled audits on independent live coins (PooledIncorrectBlocksLe)
-../../Definitions/Certifier/PooledLeak.lean  trusted: a window's leak relation at one faulty set (LeakAt) and a
+../../Definitions/Certifier/PooledLeak.lean  trusted: a window's leak relation at one incorrect set (LeakAt) and a
     monitoring period's good event (PooledGood)
 ../../Definitions/Certifier/Guarantees/PooledLeak.lean  trusted: the leak through the network certifier over a
     monitoring period of sampled audits, conditional on two per-window inputs
@@ -146,7 +146,7 @@ Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform d
     soundness error added, the monitoring period's bound (pooledIncorrectBlocks)
 PooledLeak.lean  the leak through the network certifier over a monitoring period: the escapes multiply with
     each window's error added (pr_adaptive_add_le, the monitoring-period step
-    Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
+    Periods.prCoin_forall_prod_le at bounds capped at 1), the families of incorrect sets
     under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
     decode to at each draw, read back from the certifier's record
     (encard_pooledGood_le, pooledLeak; pooledLeak_fixed at operators fixed
@@ -347,7 +347,7 @@ The other 16 are the rest of the Capacity table's bounds:
   from the audits: over a monitoring period's windows, each registered as a
   statement, where the network certifier registers its observations at the transfer gates (`CertifierRegisters`, its openings
   under the statement's roots), the secrets of a covert sender whose every window meets its good event (`ExecutionPhaseGood`)
-  number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each
+  number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i`, and each
   window's audit fails the leak relation at the network certifier's rows (`RLeakCertifier`) with probability at most
   `δ + ε_ks + ε_bind + Pr[B_tap]`. The period's operator is fixed before the period and the secrets, a function of the
   observations: window `i`'s operator reads only the windows before `i`, closed by then (`runsBefore`), and its own

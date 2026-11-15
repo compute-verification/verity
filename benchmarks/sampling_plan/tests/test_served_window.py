@@ -129,4 +129,4 @@ def test_no_rungs_fit_turns_on_the_hm96_and_sha512_slots(out):
     for name, rung in out["rungs"].items():
         if not rung["fits"]:
             assert any((1 << (round(p["gates"]) + 8 * sum(p["rows"])).bit_length()) + (1 << MASK_LOG) > 1 << K_MAX
-                       or p["out_bits"] > S.UNIT_CLASS_MAX for p in rung["parts"] if not p["fits"]), name
+                       or p["out_bits"] > S.SIZE_CLASS_MAX for p in rung["parts"] if not p["fits"]), name

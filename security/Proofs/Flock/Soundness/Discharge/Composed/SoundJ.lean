@@ -22,7 +22,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 
 `zk_session_soundJ`: `zk_session_sound` at any number of tables. For any live prover `τ` of a public-output `--zk`
 session of `J ≥ 1` tables (`verity-verify-proof verify --zk --session-tables J`, `J = nTab I`),
-`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
+`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key program's
 partition, each read at its site in the table it is sampled into (`sitesZJ`, `tabZJ`) and bound to the rows it commits
 (`rsZJ`), at the simulated prover `simZJ … τ` in the compiled batched session of the `J` tables `planZJ`.
 
@@ -35,7 +35,7 @@ The same bound shape and assumptions as `zk_session_sound`, with two changes tha
   `RecordsLiveZKJ`, `SampleOkZKJ`): `TagsOk` without `count ≤ 1`, the record giving each table's `root_B` and rep streams,
   and the challenger's live-coin part's sample setting each table up at its part.
 
-`ε_ks` (`ksAvgStrictZ`) is the worst table's knowledge error averaged over the sampling design's samples, and `δ_link` reads the plan
+`ε_ks` (`ksAvgStrictZ`) is the worst table's knowledge error averaged over the sampling design's samples, and `ε_bind` reads the plan
 only through the positions the sample reads and `ρ`, a bound on every table's rate, so neither grows with `J`.
 -/
 

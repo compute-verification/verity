@@ -37,7 +37,7 @@ play; the window's are their images in the population (`JointAuditV5.incorrectSe
   blocks together with probability at least `δ` (the product of their `P_a`s), and their ANDs and output bits are each at
   most the most any choice in that confidence set holds.
 
-`ε_ks,m` is member `m`'s knowledge term at the worst registration and `ε_bind,m` its binding term `δ_link`, each at the
+`ε_ks,m` is member `m`'s knowledge term at the worst registration and `ε_bind,m` its binding term `ε_bind`, each at the
 sampling design that samples member `m`'s part of the sample (`JointAuditV5.design`), as `SampledKSLiveV5` states them. A
 member with no proof block in the sample contributes nothing to `ε_bind,m` at that sample and the empty sample's knowledge term
 to `ε_ks,m`. Each member's session has one link-point count at every sample that ended (`JointAuditV5.hcls`), which the
@@ -176,7 +176,7 @@ noncomputable def incorrectSet (L : SamplingDesign m.n) (hL : m.OneClass L) (τ 
 /-- The knowledge term `ε_ks` at `L`: `ksAvgStrictZ` at the worst registration. -/
 noncomputable def epsKs (L : SamplingDesign m.n) : ℝ≥0∞ := ⨆ R : Reg, ksAvgStrictZ (planZHJP m.dj m.y₀) L m.k m.qF m.qS R
 
-/-- The binding term `ε_bind` at `L`, `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in
+/-- The binding term `ε_bind` at `L`, `ε_bind = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in
 `SampledKSLiveV5`. -/
 noncomputable def link (L : SamplingDesign m.n) : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ p : m.vb.Pos,

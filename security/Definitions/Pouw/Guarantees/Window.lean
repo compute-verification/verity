@@ -15,10 +15,10 @@ Stated, not proved: the order is statement, review, card, then proof, so `lean-a
 `ExecutionPhaseDelta` and `ServiceMissProb` under `shape.frozen` as `unstated`.
 
 * `ExecutionPhaseDelta`: `Pr[accept ∧ incorrect(X) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} escape_{∏ L_c(R)}(B) + η + max_c κ_c + coll(R, τ) +
-  ∑_c δlink_c(R, τ)`, where `X` is the committed transcript (fixed at registration), `∏ L_c(R)` the calls' laws at the
+  ∑_c εbind_c(R, τ)`, where `X` is the committed transcript (fixed at registration), `∏ L_c(R)` the calls' sampling designs at the
   prover's registration sampled independently, `η` the sample's distance from that product on `𝓑`, `κ_c + g_c(state)`
   call `c`'s knowledge bound in a compiled table's shape, `coll(R, τ)` the calls' `g_c` summed along the window's run
-  (`Pouw.Window.coll`), and `δlink_c(R, τ)` call `c`'s binding error in the window at the window's state.
+  (`Pouw.Window.coll`), and `εbind_c(R, τ)` call `c`'s binding error in the window at the window's state.
 * `ServiceMissProb`: the deployed sample, SPOT, is within `η = 0` of its sessions' own sampling designs on the
   copy-closed sets, so `ExecutionPhaseDelta` reads it with each session a call.
 
@@ -27,12 +27,12 @@ and that call's extraction fails from the state the window brings with probabili
 state terms are one window-level collision term, in expectation over the window's run. The binding errors add: each bounds
 the picked unit's disagreement with the window's committed transcript on the samples where the unit is its call's. So
 `ExecutionPhaseDelta` gives gap (4)'s premises (`ExecutionPhaseBoundOfService` on `cursor/pouw-work-bound-stmt2-c7a9`, `KnowledgeSound εks`
-and `BindSound δlink`) at `εks R τ := max_c κ_c + coll R τ` with `coll := Pouw.Window.coll`, and `δlink := ∑_c δlink_c`.
+and `BindSound εbind`) at `εks R τ := max_c κ_c + coll R τ` with `coll := Pouw.Window.coll`, and `εbind := ∑_c εbind_c`.
 
 **The deployed sample** (decision 102, `verity/protocols/accounting/pouw/verifier/window.py`). The window's calls are the service's
-sessions and its units the `N` tiles in each (`serviceLaw`): after the receipt the verifier samples one uniform
-`K′`-subset, and session `σ` proves the sampled tiles of rank `σ·cap` to `σ·cap + cap − 1`. The sessions' laws `L σ` are
-uniform `share σ`-subsets on coins of their own (`sessionLaw`), so `η = 0` (`ServiceMissProb`). PoUW reads `ExecutionPhaseDelta` at
+sessions and its units the `N` tiles in each (`serviceSamplingDesign`): after the receipt the verifier samples one uniform
+`K′`-subset, and session `σ` proves the sampled tiles of rank `σ·cap` to `σ·cap + cap − 1`. The sessions' sampling designs `L σ` are
+uniform `share σ`-subsets on coins of their own (`sessionSamplingDesign`), so `η = 0` (`ServiceMissProb`). PoUW reads `ExecutionPhaseDelta` at
 `𝓑 = harmSets Wref ε ∧ CopyClosed`, where `Wref ⟨σ, t⟩` is tile `t`'s work: a copy-closed set holding the share `ε` of
 the work is every session's copy of a tile set holding the share `ε` of the window's, at least `ε·W/w_max` tiles, so
 the first term is at most `∏_σ (1 − ε·W/(N·w_max))^{share σ} = (1 − ε·W/(N·w_max))^{K′}`, which is at most `δ` where
@@ -53,7 +53,7 @@ decision 101's keyed sample) is retired.
   `g = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)` at the session's strategy, `ksBoundAccZ = ε_c⁻ + √(k·adv₀)` and
   `rateZ = N₀/(ek)` (`Pouw.Window.flockKnowledgeSound_analysisZC`, proved, read through Flock's analysis below).
   `ksJoint_le` (`κ = 2^logLen/(e·Kr)`) is the non-ZK plain-leaf table's, which main's window doesn't run.
-* `BindSoundIn … σ (δlink σ)`: Flock's link finder at the window's state, over the window's run.
+* `BindSoundIn … σ (εbind σ)`: Flock's link finder at the window's state, over the window's run.
 * `coll`: the random-oracle claim's collision bound at the sessions' counted queries (`CollCounted`, premise, open), on
   average over the oracle; `ExecutionPhaseDelta`'s bound at each oracle reads it through `Pouw.Window.avg_counted_le` (proved).
   It holds only where the plays are one oracle program's run at each oracle, counted by that program's calls. As
@@ -95,7 +95,7 @@ three more links, each stated:
   call's `KnowledgeSound` (`ofFlock_knowledgeSound`, proved). The bound reads the
   session's own coins and the extractor's `k` accepted reruns, at the state the registration, the sample and the earlier
   sessions left, never the sample's coin. At main's `--zk` sessions it is proved (`flockKnowledgeSound_analysisZC`, from
-  `jointZC_ksBound`), with `κ_c = 0` and `g_c = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)`; `δlink_c` is Flock's link finder at
+  `jointZC_ksBound`), with `κ_c = 0` and `g_c = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)`; `εbind_c` is Flock's link finder at
   the window's state.
 
 Each unit's statement carries its position: its seed inputs (tag, salt, position, root(A_j), root(B_j)) are
@@ -119,17 +119,17 @@ open Pouw.Window
 open scoped ENNReal
 
 /-- **M2 with C1: the window's ε from its calls'.** For a window of `C` calls, call `c` with `n c` units, a registration
-`R` (the receipt), the calls' laws `L R c` at each registration and the sampling design `Lw R` the verifier runs there, each call's
+`R` (the receipt), the calls' sampling designs `L R c` at each registration and the sampling design `Lw R` the verifier runs there, each call's
 session `sess c` on its share of the sample, the window's transcripts and its units' statements `U` (each unit's seed
 inputs, with its position and roots read at its place in the transcript, and what it computes), a committed transcript
 that is a function of the prover's state at registration, an analysis of each call, and a family `𝓑` of incorrect
 sets: if the sample's escapes on `𝓑` are within `η` of the calls' product distribution at every registration (`MissProbWithin`),
 every call's extraction fails from a state `τ` of its session with probability at most `κ c + g c τ`
-(`CallAnalysis.KnowledgeSound`), and every call's binding error in the window is at most `δlink c (R, τ)` at the window's
+(`CallAnalysis.KnowledgeSound`), and every call's binding error in the window is at most `εbind c (R, τ)` at the window's
 state (`BindSoundIn`), then for every prover the window accepts with its committed transcript's incorrect proof blocks in `𝓑` with
 probability at most the largest missProb over `𝓑` of the calls' product distribution at the prover's registration, plus `η`, plus
 the largest `κ c`, plus the window's collision term at the prover's state (`coll`), plus the sum of the
-`δlink c (R, τ)`.
+`εbind c (R, τ)`.
 
 A unit is incorrect when its committed outputs aren't its function of its inputs, so luck is not in the event: a deficient
 unit whose receipt came out right isn't incorrect, and gap (4) adds it. Fiat–Shamir grinding of the per-matmul seeds enters
@@ -139,24 +139,24 @@ def ExecutionPhaseDelta : Prop :=
     (η : ℝ≥0∞) (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool) (U : UnitStmts Tr n)
     (committed : (R : Reg) → Cont Lw (executionPhaseSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
     (κ : Fin C → ℝ≥0∞) (g : (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess c S R) → ℝ≥0∞)
-    (δlink : Fin C → (R : Reg) → Cont Lw (executionPhaseSession sess) R → ℝ≥0∞) (𝓑 : Finset (WUnit n) → Prop),
+    (εbind : Fin C → (R : Reg) → Cont Lw (executionPhaseSession sess) R → ℝ≥0∞) (𝓑 : Finset (WUnit n) → Prop),
     MissProbWithin Lw L 𝓑 η →
     (∀ c, (A c).KnowledgeSound (κ c) (g c)) →
-    (∀ c, BindSoundIn Lw sess committed A c (δlink c)) →
+    (∀ c, BindSoundIn Lw sess committed A c (εbind c)) →
     ∀ σ : Strategy (auditReg Lw (executionPhaseSession sess)),
       prob (fun o => o.1 = true ∧ 𝓑 (U.incorrect (committed (reg σ) (cont σ)))) (auditReg Lw (executionPhaseSession sess)) σ ≤
         (⨆ (B : Finset (WUnit n)) (_ : 𝓑 B), (SamplingDesign.prod (L (reg σ))).missProb B) + η + (⨆ c, κ c) +
-          coll Lw sess g (reg σ) (cont σ) + ∑ c, δlink c (reg σ) (cont σ)
+          coll Lw sess g (reg σ) (cont σ) + ∑ c, εbind c (reg σ) (cont σ)
 
-/-- **The service's sample is its sessions' laws on copy-closed sets.** For `N` tiles, `K ≤ N` sampled and sessions of
+/-- **The service's sample is its sessions' sampling designs on copy-closed sets.** For `N` tiles, `K ≤ N` sampled and sessions of
 `cap > 0` instances, at every registration: a copy-closed set of units, every session's copy of a tile set `B₀`, escapes
-the service's sample (`serviceLaw`, one uniform `K`-subset in rank-ordered sessions) with probability at most its missProb
-under the sessions' own uniform `share σ`-subsets sampled independently (`sessionLaw`). Both are hypergeometric: the
+the service's sample (`serviceSamplingDesign`, one uniform `K`-subset in rank-ordered sessions) with probability at most its missProb
+under the sessions' own uniform `share σ`-subsets sampled independently (`sessionSamplingDesign`). Both are hypergeometric: the
 service's is `∏_{i<K} (N − |B₀| − i)/(N − i)`, and the product's is the same factors with `i` restarting at `0` in every
 session, each at least the service's. So `ExecutionPhaseDelta` reads the service with each session a call at `η = 0` on every
 family of copy-closed sets. -/
 def ServiceMissProb : Prop :=
   ∀ {Reg : Type} (N K cap : ℕ), 0 < cap → K ≤ N →
-    MissProbWithin (fun _ : Reg => serviceLaw N K cap) (fun _ σ => sessionLaw N K cap σ.val) CopyClosed 0
+    MissProbWithin (fun _ : Reg => serviceSamplingDesign N K cap) (fun _ σ => sessionSamplingDesign N K cap σ.val) CopyClosed 0
 
 end Pouw.Guarantees.Window

@@ -32,7 +32,7 @@ def public(schedule, relations=(), statement=None, computes=(), coins=None) -> d
     """The verifier's public input `flock-zk-server contract --public` reads (`Flock.ZkServer.Contract.PublicInput`): the
     session's schedule (or ``None``), the relations the verifier checks on masked values, the values the public statement
     fixes (name to bytes), the names of the values the ZK server fixes by its own computation, and the challenger's
-    commitments to its coins, if it made any (`rec_live.CoinServer.commit_coins`: hex, per stream and round)."""
+    commitments to its coins, if it made any (`rec_live.LiveCoinPart.commit_coins`: hex, per stream and round)."""
     out = {"kind": PUBLIC_FORMAT, "schedule": schedule, "relations": list(relations),
            "statement": {k: v.hex() for k, v in (statement or {}).items()}, "computes": list(computes)}
     if coins is not None:
@@ -64,7 +64,7 @@ class Tape:
         return s
 
 
-class RecordingCoins(RL.CoinServer):
+class RecordingCoins(RL.LiveCoinPart):
     """The challenger, keeping every call the ZK server makes to it as it was made (before the challenger judges it); a
     call the challenger refused also carries its reason (``refused``)."""
 
@@ -108,7 +108,7 @@ class InnerRun:
     """One inner run through a ZK server: ``handle`` answers the workers' requests as the ZK server does and keeps what
     the transcript needs. ``proxy`` is the ZK server under test (`rec_live.Proxy` or a subclass). The challenger's coins are
     live, as `rec_live.serve`'s are, unless ``commit``: then it commits to them before the run
-    (`rec_live.CoinServer.commit_coins`, each commitment under a salt from ``coin_salt``, the challenger's own, never the
+    (`rec_live.LiveCoinPart.commit_coins`, each commitment under a salt from ``coin_salt``, the challenger's own, never the
     ZK server's tape). ``coins`` is the challenger under test (`RecordingCoins` or a subclass)."""
 
     def __init__(self, schedule: dict, rand=None, fresh: Callable[[], bytes] = INST.fresh_salt, proxy=RL.Proxy,

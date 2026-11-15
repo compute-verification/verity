@@ -26,7 +26,7 @@
 # it; lake-build.log in DIR), and one that doesn't build runs no session. DIR/session/session.json says where it went.
 #
 # The layout is the store's (`p2_store/store.py layout`), held to the store's setup.json; the lib is kernels' build
-# (`benchmarks/torch_gpu/p2_stage/build.sh` at this commit, its source.txt and MANIFEST.sha256 kept in DIR), or BW_LIB, a
+# (`verity/protocols/accounting/pous/prover/p2/p2_store/build.sh` at this commit, its source.txt and MANIFEST.sha256 kept in DIR), or BW_LIB, a
 # built lib/ directory. Both are written to scratch under DIR, which is removed: DIR keeps only records. A toy on the
 # CPU: BW_STORE, BW_LAYOUT, BW_REGISTRATION and BW_NODE name it, BW_DEVICE=cpu, BW_REF_DECODE=1 and BW_LEASE_MIN=0
 # (no lease, no lib). Exits 0 iff the session's answer is an accept; DIR/rc.txt has each step's exit code.
@@ -63,7 +63,7 @@ EOF
 fi
 LIB=${BW_LIB:-unused}
 if [ "$DEVICE" != cpu ] && [ -z "${BW_LIB:-}" ]; then
-  bash benchmarks/torch_gpu/p2_stage/build.sh "$S/lib" > "$O/build.log" 2>&1 \
+  bash verity/protocols/accounting/pous/prover/p2/p2_store/build.sh "$S/lib" > "$O/build.log" 2>&1 \
     && (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256)
   step lib $?
   cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/MANIFEST.sha256" "$O/" 2>/dev/null

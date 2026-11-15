@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"REFUSED: {why[0]}: {why[1]}")
     layout, _ = CR.layout_of(descriptor)
     strata, _ = CR.strata(layout)
-    CR.law(strata, k)
+    CR.sampling_design(strata, k)
     coin = LiveOpening.from_json(commits["draw"]["coin"]).coin
     out = {"window": root, "draw_root": commits["draw"]["root"], "coin": coin.hex(), "session": audited.session,
            "period": audited.period, "circuit": audited.circuit, "k": k,

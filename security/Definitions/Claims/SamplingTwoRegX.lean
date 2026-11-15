@@ -108,7 +108,7 @@ def CompilerKSRegTwoX : Prop :=
     (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.KSRegTwoX H
 
 /-- **The two-stage miss bound at the boundary trace read at the statement**: every compiled two-stage verifier that
-meets the contract meets `CompiledTwo.MissTwoX` at all rates `0 ≤ r₁ ≤ 1` and `0 ≤ r₂ ≤ 1`, from its draw laws. -/
+meets the contract meets `CompiledTwo.MissTwoX` at all rates `0 ≤ r₁ ≤ 1` and `0 ≤ r₂ ≤ 1`, from its sampling designs. -/
 def CompilerMissTwoX : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
     (H : Msg → Msg), L.Sessions H → ∀ r₁ r₂ : ℝ, 0 ≤ r₁ → r₁ ≤ 1 → 0 ≤ r₂ → r₂ ≤ 1 → L.MissTwoX H r₁ r₂

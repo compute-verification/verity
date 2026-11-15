@@ -4,7 +4,7 @@ public import Proofs.Properties.InferenceOnly.DigestDecode
 public import Proofs.Properties.InferenceOnly.DigestEntries
 public import Proofs.Properties.InferenceOnly.DigestRefs
 import Batteries.Tactic.OpenPrivate
-import all Circuits.Program
+import Circuits.Program
 import all Lean.Data.Json.Basic
 
 /-!

@@ -190,15 +190,15 @@ def CR : Prop :=
     (∀ u, (StrictCR.oneRun s.G s.τ fun o => (s.rdU u).pick o.1 (regPathsHJ s.I s.c s.pub o.2.2 (s.rdU u).port)).CR
       H512 s.qR)
 
-/-- `δ_link`'s closed form (also `δ_rows`'). -/
-def δlink : ℝ :=
+/-- `ε_bind`'s closed form (also `δ_rows`'). -/
+def εbind : ℝ :=
   (∑ p : s.vb.Pos,
       (Fintype.card (ΩcZ execArith s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb s.L p) : ℝ) / Fintype.card s.L.Ω) *
     (2 * (s.t' * (1 + s.k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * s.M) + s.k / (Real.exp 1 * s.Rw)) / (1 - s.ρ)
 
-/-- **`EndToEndRegisteredRows`' bound**: `ε_ks + δ_link + δ_rows + q_R²/2^513`. -/
+/-- **`EndToEndRegisteredRows`' bound**: `ε_ks + ε_bind + δ_rows + q_R²/2^513`. -/
 def bound : ℝ≥0∞ :=
-  ksAvgStrictZ (planZHJ s.dj s.y₀) s.L s.k s.qF s.qS (reg s.σ) + ENNReal.ofReal s.δlink + ENNReal.ofReal s.δlink +
+  ksAvgStrictZ (planZHJ s.dj s.y₀) s.L s.k s.qF s.qS (reg s.σ) + ENNReal.ofReal s.εbind + ENNReal.ofReal s.εbind +
     ENNReal.ofReal (s.qR ^ 2 / 2 ^ (513 : ℝ))
 
 end RowsSession

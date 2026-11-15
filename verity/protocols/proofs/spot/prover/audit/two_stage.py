@@ -411,7 +411,7 @@ class First:
     layout: BR.Layout
     stream: S.Stream
     record: dict[str, Any]
-    registration: S.WindowCommitmentRecord
+    docket: S.WindowCommitmentRecord
     sample: S.Draw
     coins: CC.ChallengerCoins
     read: bytes = b""
@@ -420,7 +420,7 @@ class First:
     def first_stage(self) -> dict[str, Any]:
         """``stage1.json``: what `resume` and the replay side read."""
         return {"format": FORMAT, "commit": self.pub, "rule": self.rule.to_json(), "spec": self.stream.spec.digest(),
-                "record": self.record, "registration": self.registration.digest, "receipt": dict(self.registration.receipt),
+                "record": self.record, "registration": self.docket.digest, "receipt": dict(self.docket.receipt),
                 "draw": self.sample.draw, "units": list(self.sample.units), "read": self.read.hex(),
                 "family": self.stream.family(self.sample), **self.extra}
 
@@ -599,6 +599,10 @@ def stop_order(key: Ch.ChallengerKey | None, main: Sequence[str], evidence: Mapp
 
 
 def template_fn(t: str) -> SpecializedDefinition:
+    """The check template descriptor id ``t`` names (`boundary_rows.check_template`), the long row's among them, which
+    `long_row` registers and no registry module does."""
+    from verity_vllm.pipeline import long_row  # noqa: F401
+
     return BR.check_template(t)
 
 
@@ -787,7 +791,7 @@ class Replayed:
     interior: IR.Interior
     directory: Path
     record: dict[str, Any]
-    registration: S.WindowCommitmentRecord
+    docket: S.WindowCommitmentRecord
     draw: S.Draw
     tie: dict[str, Any]
     launches: dict[str, str]
@@ -805,7 +809,8 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
              pins: Mapping[str, Mapping[str, Any]] | None = None, tied: Tied | None = None) -> Replayed:
     """The replay side's half of the second stage, on the class's stream at the end of its first stage (``again``,
     `resume`): the sampled spans' proof blocks from ``capture`` (`spans_of`), committed as the interior
-    (`interior_rows.interior`: each replay-block parameter a port reads registered as a value, under ``window_root``;
+    (`interior_rows.interior`: each wired unit held to the writer unit the block's rows give it, `Design.rows`; each
+    replay-block parameter a port reads registered as a value, under ``window_root``;
     each output that writes a return round 1's record commits under the serve's salts at round 1's rows, opened from
     ``c``; each port that reads a parameter round 1's record commits the same way, opened from ``kept``), written under
     ``directory`` as the one-stage audit reads a window (`interior_rows.write`), registered on the stream
@@ -833,7 +838,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     sample = [int(u) for u in again.sample.units]
     t0 = None if clock is None else clock()
     per, launches = spans_of(c, capture, sample, rids)
-    it = IR.interior(per, d.cells, again.registration.digest, sample, row=again.pub["window"], links=d.links,
+    it = IR.interior(per, d.cells, again.docket.digest, sample, row=again.pub["window"], links=d.links,
                      wires=d.wires, rows=d.rows, served=again.record, window_root=window_root, salt_key=salt_key,
                      returns=[(x, c.port(x.value)) for x in d.returns if x.held],
                      inputs=[(x, kept_port(c, x.value, kept)) for x in d.inputs], registered=registered, pins=pins)
@@ -1179,7 +1184,7 @@ def prove(a: argparse.Namespace, r: Replayed, out: Path,
     copies (``r.tie``). ``proofs``: the auditor's params, else a development run's built here (`references`).
     -> (a5's summary, what the run reports, the sessions' statements, the params)."""
     d, sample, layout = r.design, r.sample, r.first.layout
-    mine = d.window(r.first.registration.digest, sample)
+    mine = d.window(r.first.docket.digest, sample)
     if proofs is None:
         proofs = references(d, len(sample), out / "references")
     S.template_circuits(proofs, r.first.stream.spec.check.query)
@@ -1187,7 +1192,7 @@ def prove(a: argparse.Namespace, r: Replayed, out: Path,
     sets = {m.template: (composer(template_fn(m.template), m), template_fn(m.template)) for m in mine.members}
     s, _ok, _record, got, stmts = second_stage(
         a, sets, mine, r.directory, interior_source(mine, sample), r.first.record, r.record, sample,
-        (r.draw.draw, r.draw.law, r.registration.receipt), verifier_reads(d, mine, r.record, r.first.record, sample),
+        (r.draw.draw, r.draw.law, r.docket.receipt), verifier_reads(d, mine, r.record, r.first.record, sample),
         dict(proofs), out,
         {"two_stage": "interior", "class": [layout.prompt, layout.outputs], "window": r.first.pub["window"]},
         replay=(layout.program, d.key), tie=r.tie)
@@ -1377,7 +1382,7 @@ def first_coins(again: First, evidence: Mapping[str, Any] | None, window_root: s
     if s.key is None or window_root is None:
         return "the verifier holds no challenger key, or the hand-off names no window root"
     return CC.coins_reason(s.key, list(s.main), evidence, window_root, s.family(again.sample),
-                           bytes.fromhex(again.registration.digest), again.read, verify)
+                           bytes.fromhex(again.docket.digest), again.read, verify)
 
 
 def first_root(first_stage: Mapping[str, Any]) -> str:
@@ -1440,12 +1445,12 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
     except (S.Refused, ValueError, KeyError, OSError) as e:
         return done(1, refused=f"{type(e).__name__}: {e}")
     sample = [int(u) for u in again.sample.units]
-    summary.update(sample=sample, first_stage={"registration": again.registration.digest, "units": sample},
+    summary.update(sample=sample, first_stage={"registration": again.docket.digest, "units": sample},
                    stream={"digest": again.stream.digest, "cells": list(again.stream.cells),
                            "counts": list(again.stream.counts)})
     if not sample:
         return done(0, refused="the first stage sampled no span: there is no interior to register")
-    root = IR.interior_run(again.registration.digest, sample)
+    root = IR.interior_run(again.docket.digest, sample)
     trees = bool(getattr(a, "interior_trees", False))
     manager, turns, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.ssh_key,
                                         peer=a.peer, key_record=a.challenger_key, host=host,
@@ -1476,7 +1481,7 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
         w = r.interior.committed.window
         # the interior is committed from the capture's rows on the host (`interior_rows.interior`): no card
         summary["interior_commit"] = {"seconds": round(r.commit_s, 3), "gpus": 0}
-        summary.update(second_stage={"registration": r.registration.digest, "law": dict(r.draw.law), "draw": r.draw.units,
+        summary.update(second_stage={"registration": r.docket.digest, "law": dict(r.draw.law), "draw": r.draw.units,
                                      "window_root": root},
                        interior={"population": w.population, "run": w.run, "launches": r.launches,
                                  "members": [{"key": m.key, "n": m.n, "base": m.base} for m in w.members],
@@ -1521,7 +1526,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     f = sub.add_parser("first", help="every class's boundary registration and first stage")
     f.add_argument("--boundary", nargs="+", required=True, help="each class's directory (w<window>/p<P>-o<O>/), one window's")
     f.add_argument("--check", required=True, help="the check template's descriptor id (serving_templates.template)")
-    f.add_argument("--replay", required=True, help="the first stage's law over a class's spans, a rate law: rate:NUM/DEN or rate:NUM/DEN:T")
+    f.add_argument("--replay", required=True, help="the first stage's sampling design over a class's spans, a rate sampling "
+                                                   "design: rate:NUM/DEN or rate:NUM/DEN:T")
     f.add_argument("--k", required=True, help="proof blocks the second stage samples of each check template in each sampled span: "
                                               "a whole number, or a JSON file of each template's, {descriptor id: k_t}, "
                                               "which names each template of every class's check once")

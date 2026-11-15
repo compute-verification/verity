@@ -1280,7 +1280,7 @@ def checkFinished (tr : Json) : V Unit := do
   | .ok "finish" => pure ()
   | .ok e =>
     throw s!"rec inner transcript: the inner session ended {e}, not finish: a stopped session is no inner proof"
-  | .error _ => throw "rec inner transcript: the coin server's record names no end; only a finished session is read"
+  | .error _ => throw "rec inner transcript: the challenger's live-coin part's record names no end; only a finished session is read"
 
 /-- `rec_live.schedule_for`'s streams at the inner shape `i` over Hello's one table `t`, in its order: each stream's
 name, its parent and the parent's round it is opened at, and its rounds. The circuit table's two reps at `repRounds`
@@ -1307,7 +1307,7 @@ still ends `finish`. This holds that record to the schedule here, by counts alon
 schedule. It reads the schedule right only at `k_log ≥ 6`: below it `SchedRound`'s absorb flag can't tell z_partial's
 round from a 2-element one, and `statements`, which every V* session's setup runs, refuses such a shape. -/
 def checkSchedule (i : Inner) (tr : Json) : V Unit := do
-  let at_ := "the coin server's record is off the schedule of the verifier's inner shape " ++
+  let at_ := "the challenger's live-coin part's record is off the schedule of the verifier's inner shape " ++
     s!"(m {i.m}, k_log {i.kLog}, claims {i.claims})"
   let tables := ((tr.getObjVal? "hello").toOption.getD Json.null).getObjValAs? (Array String) "tables"
   let .ok #[t] := tables | throw s!"rec inner transcript: {at_}: Hello names no one table"
@@ -1699,7 +1699,7 @@ def innerLink (tr : Json) (record : String) : V InnerLink := do
     | throw "rec inner transcript: the inner session's record holds no link points (link.points)"
   let held ← rp.mapM (f128sOfHex "the inner session's record's link points")
   if held != points then
-    throw ("rec inner transcript: the inner session's record's link points are not the ones the coin server drew " ++
+    throw ("rec inner transcript: the inner session's record's link points are not the ones the challenger's live-coin part drew " ++
       "(link.points): check 5 would take the extra claims at points the prover chose")
   return { table := t, root, tops, points }
 
@@ -1727,7 +1727,7 @@ def checkTopRowsAt (unit name value : String) (lk : InnerLink) (l : Nat) (positi
     match topRow lk l positions[r]! with
     | .ok (what, c) =>
       if row r != c then
-        throw s!"rec-tops: {unit}: port {name}'s table row {r} is not {what}, which the coin server committed"
+        throw s!"rec-tops: {unit}: port {name}'s table row {r} is not {what}, which the challenger's live-coin part committed"
     | .error why =>
       throw s!"rec-tops: {unit}: port {name}'s table row {r} reads row {positions[r]!} of {value}, and {why}"
 

@@ -49,7 +49,7 @@ price is a corollary, stated beside its proof.
 The other audits' coins fix the adversary the device is in H1's game, so the windows, the service's openings, the
 salts, the period's live tiles, the play, its folded words and the right words it imported are functions of them
 (`ws ξ`, …), and each premise of the source that reads them is taken at every value `ξ` of the coins. The scheme, the
-declared circuit, the number of windows, the check's parameters, the salt's encoding, the staged and flat statements
+registered circuit, the number of windows, the check's parameters, the salt's encoding, the staged and flat statements
 and the errors are the protocol's and are fixed. The premises are the source's, unchanged; the gaps it names
 (`RegisteredBeforeDraw` and the binding it reads on today's tags, `SaltIsLiveCoin`, `StagedPins`) stay premises here.
 The bridge adds two: each right word of a unit the device didn't outsource cost `m` multiply-adds of

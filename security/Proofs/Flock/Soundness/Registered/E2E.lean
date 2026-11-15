@@ -44,7 +44,7 @@ theorem prob_or_off_le {β : Type} (G : Game β) (S : Strategy G) (A B : β → 
 
 /-- **The end-to-end drawn-unit bound with registered reads**: `flock_e2e_sampled_hm96`, with the event that some
 registered read's leaf under the prover's registration is not the registrant's, at most
-`ε_ks + δ_link + δ_tree + qR²/2^513`: the last under `SHA512CRStrict` of SHA-512 (`cr/sha-512`) for the registered-path
+`ε_ks + ε_bind + δ_tree + qR²/2^513`: the last under `SHA512CRStrict` of SHA-512 (`cr/sha-512`) for the registered-path
 finder (`hR`). -/
 theorem flock_e2e_sampled_hm96_reads
     {execAccept : Bool × Finset (Fin n) → Prop}
@@ -76,7 +76,7 @@ theorem flock_e2e_sampled_hm96_reads
 
 /-- **The end-to-end count curve with registered reads**: `flock_e2e_count_hm96`, with the event that some registered
 read's leaf under the prover's registration is not the registrant's, at most
-`miss_L(K) + ε_ks + δ_link + δ_tree + qR²/2^513`, as in `flock_e2e_sampled_hm96_reads`. -/
+`miss_L(K) + ε_ks + ε_bind + δ_tree + qR²/2^513`, as in `flock_e2e_sampled_hm96_reads`. -/
 theorem flock_e2e_count_hm96_reads
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)

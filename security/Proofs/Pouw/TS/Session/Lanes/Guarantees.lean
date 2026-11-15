@@ -84,7 +84,7 @@ placement from the window's committed descriptor and round log (`PouwCheck.LeafO
 on how the file was built. Each file marks its reads of the A, B and partials rows `read_in_full`
 (`PouwWindow.Lanes.readFull`), which the known-read check holds to one row of the registered words: so lane `l`'s
 partials row and the combine's `p<l>` are one row, the partials record is the rows the 33 statements read, and nothing
-of it is asked. The leaf is one unit of the declared circuit, and the partials are proof-layer values.
+of it is asked. The leaf is one unit of the registered circuit, and the partials are proof-layer values.
 Each proof is then accepted with a leaf that fails the unit's checks, and no collision in hand, with
 probability at most `33 δ`: `δ` a session from `CheckedSessionSound`, joined by a union bound. It is
 `Accounting.Guarantees.TS.LeafGroupSound`'s argument (`Accounting.TS.Group.group_soundAt`) at the 32 × 32 leaf, one

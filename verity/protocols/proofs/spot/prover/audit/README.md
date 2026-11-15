@@ -128,7 +128,7 @@ reads and its named assumptions.
 (`security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `verity-verify-proof verify --zk` accepts the transcript and the
 files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
 and the SPOT run passes the docket's population, the committed transcript, read as the sampling witness, is
-outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + δ_link. It takes no hypothesis on the files.
+outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + ε_bind. It takes no hypothesis on the files.
 It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier reads. Its named assumptions
 are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, and SHA-512's collision resistance.
 
@@ -148,7 +148,7 @@ the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc 
 **The leak bound.** `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted`
 (`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any compiled
 verifier. Given `SampledAuditAccepted` and `Compiled.KS` there, except with probability δ + ε_ks + ε_bind, an accepted
-audit's carried sequences, cut at the horizon, number at most 2^c · #faultySets(δ) · 2^β · D^n, at whatever values the
+audit's carried sequences, cut at the horizon, number at most 2^c · #incorrectSets(δ) · 2^β · D^n, at whatever values the
 statement's registered inputs `reg` hold (`AsReg`). So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
 - c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the horizon lists as
   ingress, and the registered inputs, the weights among them, don't count;

@@ -12,8 +12,10 @@ the window's units, as `interface.Read`s, each in 16-bit leaves of the parameter
   (`written_once`). The return's row is O ids zero past the n served (`boundary_rows.egress_row`), and the combines'
   ids are it at every n: each step's select writes the next step's live bit, and the steps past n write zeros.
 
-A rank's window is built on them (`rank_window`, through `node_window_join.rank_window`'s ``reads``): the window declares
-no ingress, and the prompt's rows its read fills leave its free list.
+A rank's window is built here (`rank_window`), the one place that states what a rank reads: its registered reads, its
+window's own, and its boundary reads, these. The window declares no ingress, and the rows its reads fill leave its free
+list. `node_window_join.join` joins these ranks and the served path commits each (`node_window_rows.commit_rank_window`),
+so the two read the same build.
 
 Each list is coalesced (`interface.coalesce`), so a read is a run of units, not a unit. Refused by name (`Unexpressible`):
 a window built without stand-ins, a prompt row that isn't one whole stand-in row of the prompt, and a token not one
@@ -21,6 +23,7 @@ template's output field."""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -28,7 +31,7 @@ from verity.commitments.periods import interface as IF
 
 from . import node_window_join as NJ
 from .build import Unexpressible
-from .node_window import _GRAIN, STAND_IN, Lowering, NodeWindow, _Free
+from .node_window import _GRAIN, STAND_IN, Free, Lowering, NodeWindow, _Free, node_window
 from .node_window import PROMPT as PROGRAM_PROMPT
 from .window_builder import Grain
 
@@ -75,9 +78,19 @@ def boundary_reads(w: NodeWindow, rank: int) -> list[IF.Read]:
     return [*prompt_reads(w), *served_reads(w, rank)]
 
 
+def _fills(r: IF.Read, f: Free) -> bool:
+    return (r.reader == f.tid and r.port == f.port and r.cut == (0, 1) and f.rows == (0, 1, 1) and r.at <= f.at
+            and f.at + f.count <= r.at + r.reader_units)
+
+
 def rank_window(rank: int, fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN) -> NJ.Rank:
-    """Rank ``rank``'s window of Program ``fn`` built on its `boundary_reads` (`node_window_join.rank_window`'s ``reads``)."""
-    return NJ.rank_window(rank, fn, families, grain, reads=boundary_reads)
+    """Rank ``rank``'s Program ``fn`` lowered into its window (`node_window.node_window`, with stand-ins), the frame
+    dropped: its circuit declares the rank's `boundary_reads`, and the free inputs they fill are no longer free."""
+    c, w = node_window(fn, families, grain, stand_ins=True)
+    reads = tuple(boundary_reads(w, rank))
+    c = replace(c, boundary_reads=reads)
+    free = tuple(f for f in w.free if not any(_fills(r, f) for r in reads))
+    return NJ.Rank(rank, c, free, {t: tuple(s) for t, s in w.b.spans.items()}, w.steps, w.census(c))
 
 
 def written_once(windows: Sequence[tuple[IF.Circuit, Sequence[IF.Read]]], leaves: int, param: str = EGRESS) -> None:

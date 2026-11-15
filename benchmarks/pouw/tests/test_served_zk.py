@@ -284,7 +284,7 @@ def _salt_after(params) -> bytes:
 def _challenger(params, units=None, coins=None, sampler=None, record=None) -> SC.Challenger:
     """The challenger holding the execution phase's coins (the ones that salted the execution phase's pass, by default), its salt coin opened
     after the pass's weights' root as the job opens it; `units` a stand-in for Lean's sample."""
-    sampler = sampler or (SC.python_sampler if units is None else (lambda law, n, src: list(units)[:law["k"]]))
+    sampler = sampler or (SC.python_sampler if units is None else (lambda sampling_design, n, src: list(units)[:sampling_design["k"]]))
     ch = SC.Challenger(params, coins or _coins(), sampler, clock=lambda: 0.0, record=ORL.Record() if record is None else record)
     ch.open("salt", _salt_after(params))
     return ch
@@ -417,7 +417,7 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
 
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    bad = _challenger(params, sampler=lambda law, n, src: list(range(law["k"] + 1)))
+    bad = _challenger(params, sampler=lambda sampling_design, n, src: list(range(sampling_design["k"] + 1)))
     _held(bad, "honest", rec)
     with pytest.raises(S.Refused):
         bad.select("honest")
@@ -475,13 +475,13 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
     *_, words = served
     params, public, _, _ = _window(words)
     bare = {k: v for k, v in params.items() if k != "registration_deadline"}
-    for refuse in (lambda: SC.Challenger(bare, _coins()), lambda: SC.spec_of(bare, public["level"]),
-                   lambda: _register(bare, public)):
+    for refuse in (lambda: SC.Challenger(bare, _coins(), record=ORL.Record(lean=False)),
+                   lambda: SC.spec_of(bare, public["level"]), lambda: _register(bare, public)):
         with pytest.raises(ValueError, match="no registration_deadline"):
             refuse()
     with pytest.raises(ValueError, match="carry a registration_deadline"):
-        SC.Challenger(params, _coins(), predates_deadline=True)
-    assert SC.Challenger(bare, _coins(), predates_deadline=True).predates_deadline
+        SC.Challenger(params, _coins(), record=ORL.Record(lean=False), predates_deadline=True)
+    assert SC.Challenger(bare, _coins(), record=ORL.Record(lean=False), predates_deadline=True).predates_deadline
     assert SC.spec_of(bare, public["level"], predates_deadline=True).check.registration_deadline is None
     assert SC.spec_of(params, public["level"]).check.registration_deadline == SC.REGISTRATION_DEADLINE
 
@@ -790,7 +790,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
                        ({**params, "context": _params(run, raw)["context"]}, base, "names its PoUW window"),
                        (params, {}, "so it is certified")):
         with pytest.raises(ValueError, match=why):
-            SC.Challenger(p, live, **kw)
+            SC.Challenger(p, live, record=ORL.Record(lean=False), **kw)
     for edit in ({"challenger_key": _coins().commitment}, {"challenger_key": ck.to_json()}, {"run_id": RUN_ID[:16]},
                  {"run_id": RUN_ID.hex()}, {"certifier_key": CS.KEY_ID}, {"certifier_key": object()}):
         with pytest.raises(ValueError, match=re.escape(SC.DEPLOYMENT_FORM)):
@@ -1039,19 +1039,19 @@ def test_r1_r6_of_a_window_are_leans(served):
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
     prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
-    law, ports = SC.sampling_design_of(params, ell), SC.ports(params, ell)
-    p = OR.registration_params(prog, q, law, S.SCHEME, ports, [], params["delta"])
+    sampling_design, ports = SC.sampling_design_of(params, ell), SC.ports(params, ell)
+    p = OR.registration_params(prog, q, sampling_design, S.SCHEME, ports, [], params["delta"])
     record = ORL.Record()
 
     def codes(r) -> list[str]:
-        return record.registration(p, r, lambda: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None, None))
+        return record.registration(p, r, lambda: R.check(r, prog, q, sampling_design, S.SCHEME, ports, None, (), [], None, None, None))
 
     assert codes(rec) == []
     honest = record.witness[0]
     assert honest["lean"] == honest["python"] and honest["lean"]["fanout"] == 1, honest
     root = rec["roots"][0]
     changes = {"protocol": "verity/other/v1", "program": "00" * 64, "partition": "00" * 64, "query": "00" * 64,
-               "population": n + 1, "law": {**law, "k": law["k"] + 1}, "scheme": "frame-v3/hm96", "leaf_layer": "x",
+               "population": n + 1, "law": {**sampling_design, "k": sampling_design["k"] + 1}, "scheme": "frame-v3/hm96", "leaf_layer": "x",
                "anchors": [{"x": 1}], "roots": [{**root, "domain": "00" * 64}, *rec["roots"][1:]]}
     got = {k: codes({**rec, k: v}) for k, v in changes.items()}
     got["leaves"] = codes({**rec, "roots": [{**root, "leaves": root["leaves"] + 1}, *rec["roots"][1:]]})
@@ -1068,6 +1068,54 @@ def test_the_record_follows_the_switch(monkeypatch):
     assert ORL.Record().lean is False and ORL.Record(lean=True).lean is True
     monkeypatch.setattr(OR.V, "RECORD_VERDICT", "lean")
     assert ORL.Record().lean is True and ORL.Record(lean=False).lean is False
+
+
+@pytest.mark.parametrize("call", [lambda: SC.check({}, {}, {}, 0, b"", {}), lambda: SC.Challenger({}, None),
+                                  lambda: SC.replay({}, Path("log"), Path("out"))], ids=["check", "Challenger", "replay"])
+def test_the_checks_of_record_are_a_required_argument(call):
+    """`check`, `Challenger` and `replay` take the checks of record from their caller: none has a default to fall back
+    to, so a call without `record` is refused before it runs."""
+    with pytest.raises(TypeError, match="required keyword-only argument: 'record'"):
+        call()
+
+
+@pytest.mark.parametrize("argv", [["challenger", "p.json", "log"], ["replay", "p.json", "log", "out"],
+                                  ["check", "p.json", "r.json", "d.json", "0", "pub.bin", "op.json"]],
+                         ids=lambda a: a[0])
+def test_without_the_lean_side_the_commands_that_check_refuse_before_any_work(argv, tmp_path):
+    """`main`'s default checks of record (`lean_record`) refuse a command that checks before it reads or writes
+    anything, naming the runner that passes the Lean side; no input it names exists, and nothing appears under the
+    root."""
+    with pytest.raises(NotImplementedError, match="benchmarks/pouw/served_zk/served_commit_run.py") as e:
+        SC.main([argv[0], *(str(tmp_path / x) if not x.isdigit() else x for x in argv[1:])])
+    assert "compute-accounting/pouw-package-holds-kernels" in str(e.value)
+    assert list(tmp_path.iterdir()) == []
+
+
+def _stub_calls():
+    from verity.protocols.accounting.pouw.prover.kernels.served_zk import stage_tile as STG
+    from verity.protocols.accounting.pouw.prover.kernels.served_zk import statement as ST
+    st = object.__new__(ST.Statement)
+    record = OR.Record(lean=False)
+    torch = "benchmarks/pouw/served_zk/statement_torch.py"
+    calls = [("Stager.stage", lambda: STG.Stager().stage(*[None] * 9), "benchmarks/pouw/hidden_zk/served_stage.py"),
+             ("Statement.zeros", lambda: st.zeros(1), torch), ("Statement.empty", lambda: st.empty(1, 1), torch),
+             ("Statement.fill_stages", lambda: st.fill_stages(0), torch), ("Statement.check", lambda: st.check({}), torch),
+             ("Record.canonical", lambda: record.canonical({}), "benchmarks/pouw/served_zk/of_record_lean.py"),
+             ("Record.start", lambda: record.start("x", Path(".")), "benchmarks/pouw/served_zk/of_record_lean.py"),
+             ("fast_tile.install", lambda: SC.install_tiles(None), "benchmarks/pouw/served_zk/served_commit_run.py")]
+    return [pytest.param(*c, id=c[0]) for c in calls]
+
+
+@pytest.mark.parametrize("name, call, supplier", _stub_calls())
+def test_each_interface_verity_leaves_to_the_benchmark_side_names_its_supplier(name, call, supplier):
+    """Each method verity's served_zk leaves raising (verity imports neither `verity_flock`, `verity_difftest`, torch
+    nor `fast_tile`) refuses with `NotImplementedError` naming its issue and the benchmark-side file that supplies it,
+    which the tree holds."""
+    with pytest.raises(NotImplementedError) as e:
+        call()
+    assert name in str(e.value) and "compute-accounting/pouw-package-holds-kernels" in str(e.value)
+    assert supplier in str(e.value) and (Path(__file__).resolve().parents[3] / supplier).is_file()
 
 
 @LEAN

@@ -381,13 +381,13 @@ def check_proof_block(fn: Any, cuts: Mapping[str, int] | None = None) -> int:
         f"{p} {len(bs)} rows of {bs[0]} B" if len(bs) > 1 else f"{p} {bs[0]} B" for p, bs in sizes.items())
     if len(rows) > MAX_ROWS:
         raise ValueError(f"{name}: {len(rows)} rows, past a proof block's {MAX_ROWS}, since their hm96 slots alone would fill "
-                         f"a C-Flock block of 2^{K_MAX} bits: cut its ports fewer ways, or bind the Definition smaller")
+                         f"a Flock block of 2^{K_MAX} bits: cut its ports fewer ways, or bind the Definition smaller")
     if all(b <= LAST_BLOCK_BYTES for _, b in rows):
         raise ValueError(f"{name}: no row past {LAST_BLOCK_BYTES} B, so none has a compression before its last SHA-512 block "
-                         "and C-Flock's sha512x3 range, which holds the pin, has no slot: cut its ports fewer ways, or bind "
+                         "and Flock's sha512x3 range, which holds the pin, has no slot: cut its ports fewer ways, or bind "
                          "the Definition larger")
     if (k := proof_block_k_log([b for _, b in ins], [b for _, b in outs])) > K_MAX:
-        raise ValueError(f"{name}: its rows alone need a C-Flock block of 2^{k} bits, past 2^{K_MAX}: bind the Definition "
+        raise ValueError(f"{name}: its rows alone need a Flock block of 2^{k} bits, past 2^{K_MAX}: bind the Definition "
                          "smaller, so that each unit reads and writes fewer row bytes")
     return k
 
@@ -2407,8 +2407,8 @@ def _frozen(x: Any) -> Any:
     return tuple(_frozen(v) for v in x) if isinstance(x, list) else x
 
 
-def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Callable[[str], Any]) -> CS.Binding:
-    """The verifier's period from ``circuit.json``'s document under its own ``law``, each template's Definition by
+def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any], resolve: Callable[[str], Any]) -> CS.Binding:
+    """The verifier's period from ``circuit.json``'s document under its own ``sampling_design``, each template's Definition by
     ``resolve`` (descriptor id -> Definition, the verifier's own catalog), its members the listed ones or, where the record
     states them, the ones its templates, ``cap``, wires, cuts and registered reads make (`members`); refused unless the population
     program, query, program digest and partition digest it rebuilds are the record's, and its blocks (stated records only)
@@ -2441,7 +2441,7 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
         ms = _listed_members(doc)
     tables = tuple(CS.RowTable(t["segment"], t["name"], t["template"], t["words"], _frozen(t["keys"]),
                                tuple((k, _frozen(v)) for k, v in t["label"])) for t in doc["row_tables"])
-    w = CS.Binding(program, query, dict(law), doc["run"], ms, tables, doc["context"], doc["work_table"])
+    w = CS.Binding(program, query, dict(sampling_design), doc["run"], ms, tables, doc["context"], doc["work_table"])
     got = {"query": dict(query), "program": w.partition["program"], "partition": w.partition_digest}
     if bad := sorted(k for k, v in got.items() if v != doc[k]):
         raise ValueError(f"the circuit record's {bad} are not the ones its templates make: {got}")
@@ -2452,7 +2452,7 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
     return w
 
 
-def of_records(window_dir: str | Path, law: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[CS.Binding, dict[str, Any]]:
+def of_records(window_dir: str | Path, sampling_design: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[CS.Binding, dict[str, Any]]:
     """The verifier's period from a period's records alone (`window_of_record` on its ``circuit.json``), refused unless the
     record is the one its registration binds (the period's ``circuit``) and names the registration's program, partition
     and run; -> (the period, the record)."""
@@ -2465,7 +2465,7 @@ def of_records(window_dir: str | Path, law: Mapping[str, Any], resolve: Callable
     if (doc.get("program"), doc.get("partition"), doc.get("run")) != (rec.get("program"), rec.get("partition"),
                                                                         (rec.get("window") or {}).get("run")):
         raise ValueError("the circuit record names another program, partition or run than its registration")
-    return window_of_record(doc, law, resolve), doc
+    return window_of_record(doc, sampling_design, resolve), doc
 
 
 @dataclass(frozen=True)

@@ -23,14 +23,14 @@ import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
 `zk_session_sound`: `zk_session_composed`'s soundness conjunct, at the same sampling design and parameters, with the same proof.
 For any live prover `τ` of a public-output one-table `--zk` session,
-`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key
+`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key
 program's partition (`keyProg c hU n`), each read at its `--zk` site and bound to the rows it commits (lp-zkbind's
 `sitesZAt`, `rsZAt`): `ZkBind.zk_flock_countC_execOS_at` at the simulated prover `simZ … τ`, with `δ_tree = 0`
 (`execAccept` is acceptance, so the tree's event is empty: `TreeRewind.ofNever`), carried to verity-verify-proof's acceptance
 by `zk_headline_exec_on`. `RunsZC` at the sampling design's samples is `ZkExec.runsZC_live`, from the tags (`TagsOk`), the challenger's
 live-coin part's record of the live session (`RecordsLiveZK`) and its sample at each of the sampling design's samples (`SampleOkZK`).
 
-What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`: `⊤` at a prover whose link finders break
+What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `ε_bind`: `⊤` at a prover whose link finders break
 it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `SampleOkZK` at each of the sampling design's samples). It reads neither
 `hash-derived-key` nor `PadNonvanishing`, nor the session's `Coined` tables: those are the zero-knowledge half's.
 
