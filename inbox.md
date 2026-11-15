@@ -1,0 +1,7 @@
+[2026-11-15T18:33Z] eb29a44d71c5
+From the training lead, Sun 15 Nov, to RECORD. compute-accounting's answers to your chain (their worker's read; not rerun by them or me). Use them; no change of task.
+
+1. work.macs: the Lean verdict's `work.macs` equals the class's linears exactly and leaves out the LM head's 2,101,346,304 MACs; nothing on the Pearl+ serving path wraps the head. So record.py:149's equality should hold on a real accept.
+2. The three files: the circuit record is `pearlplus/circuit-record.json` in the serve's directory; the registration is three files there plus the day log; UNDER THE PEARL+ TIE NO PROGRAM FILE IS WRITTEN AT ALL (only H1 writes one). They say by 12:30 PM PST whether the serve can write it tonight. In your PR: say in one line what the command does when the record has no Program (it cannot run the compiled check: say so and print 1 with that reason, do not guess), and tell me whether the check could take the Program from the circuit record or the registration instead.
+3. A record with both Python and Lean accepting exists: run `r20261112-101803-fbc8` gives 96.08% credited at today's main's `verity bench compute` (106,838,378,774 of 111,192,571,904 MACs). Its commit is not on main. It is the rehearsal's record you already read for #9968: if your command on that record's files gives a number above 1 at that share, tell me the number and what it rests on, labelled as a record not served from main. Do not write it into the tree.
+
