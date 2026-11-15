@@ -142,19 +142,20 @@ longer than every answered one and than the one before, the cuts the stop fixes 
 is past; the walk from the trace's end stops where `StopOf` says, with those logs answered too (`Walked`); and the
 trace answered `N` rounds or ended at a stop the decoders submit nothing at. -/
 theorem RoundsEnd.order {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
-    {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
+    {sg : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) (hsub : D.sub J (fun _ => none) = none)
     (bitsOf : (s : SubmitJ J) → (Fin s.n → 𝔽) → List Bool)
-    (hM : ∀ q s x, M.round q J s x = writeOpening (finish sg θ F c rq) q.s' (bitsOf s x))
-    (hB : ∀ g' s x, ¬ B g' J s x → ¬ EmptyAt (finish sg θ F c rq) g' (bitsOf s x))
+    (hM : ∀ q s x, M.round q J s x = writeOpening (finish sg Ds θ F c rq) q.s' (bitsOf s x))
+    (hB : ∀ g' s x, ¬ B g' J s x → ¬ EmptyAt (finish sg Ds θ F c rq) g' (bitsOf s x))
     {Ks₀ : Fin R → DigestCut Claims.Msg g} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ}
     {rs : Fin J → Fin 2 → List Flock.Round} {p q r : Pos g σ Claims.Msg (Fin R)} {out : LiveOutJ J mPts}
     {Lg : List Release} (hU : PicksOnce P Lg) (hLg : (CoinTape.run g σ r.tape).log = Lg)
     (he : RoundsEnd D M dg J B rootB pts N rs p q out) :
     p.Inv Ks₀ → q.Past r →
     ∀ (pre : List Release) (f : List Release → Game Exchange) (a : Fin R → Prop) (done : List (List Release)),
-      (∀ log, f log = finish sg θ F c rq (pre ++ log)) → StopOf P rv pre f a p.toStop → Walked P Lg pre a done →
+      (∀ log, f log = finish sg Ds θ F c rq (pre ++ log)) → StopOf P rv pre f a p.toStop →
+      Walked P Lg pre a done →
       ∃ (as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))) (ms : List (List Release))
         (pre' : List Release) (f' : List Release → Game Exchange) (a' : Fin R → Prop)
         (done' : List (List Release)),
@@ -164,7 +165,7 @@ theorem RoundsEnd.order {P : Fin R → List Release → Frame → Prop} {rv : Fi
           LoggedAfter P a.1.toStop m (bitsOf a.2.1 a.2.2) Lg ∧ CutsAt rv a.1.toStop m Lg) as ms ∧
         (∀ a ∈ as, a.1.Inv Ks₀ ∧ (a.1.toStop.rewrite (M.round a.1.toStop J a.2.1 a.2.2)).consume.Past q) ∧
         (∀ m ∈ ms, ∀ L₁ ∈ done, L₁.length < m.length) ∧ ms.Pairwise (fun m m' => m.length < m'.length) ∧
-        (∀ log, f' log = finish sg θ F c rq (pre' ++ log)) ∧ StopOf P rv pre' f' a' q.toStop ∧
+        (∀ log, f' log = finish sg Ds θ F c rq (pre' ++ log)) ∧ StopOf P rv pre' f' a' q.toStop ∧
         (∀ L₁, L₁ ∈ done' ↔ L₁ ∈ ms ∨ L₁ ∈ done) ∧ Walked P Lg pre' a' done' ∧
         (as.length = N ∨ D.sub J q.toStop.modes = none) := by
   induction he with
@@ -189,7 +190,7 @@ theorem RoundsEnd.order {P : Fin R → List Release → Frame → Prop} {rv : Fi
         (congrArg (fun K => DigestCut.modeHere K p.toStop.s') (hK j)).trans rfl
       rw [hm, hsub] at hs
       cases hs
-    · have hf'' : ∀ log, f' log = finish sg θ F c rq ((pre ++ L) ++ log) := fun log => by
+    · have hf'' : ∀ log, f' log = finish sg Ds θ F c rq ((pre ++ L) ++ log) := fun log => by
         rw [hf', hf, List.append_assoc]
       have ho' := ho.past
       rw [hM] at ho'
@@ -250,22 +251,22 @@ log longer than `L₀` and than the one before (`RoundsEnd.order`); the walk fro
 says, with `L₀` and those logs answered too (`Walked`); and the trace answered the member's `N` rounds or ended at a
 stop the decoders submit nothing at. -/
 theorem MemberReach.order {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
-    {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
+    {sg : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {i : ℕ}
     {m : Flock.Guarantees.MemberV5 Reg nJ} (hsub : (D i).sub (memberTabs S Rg m) (fun _ => none) = none)
     (bitsL : (Fin 2 → Fin (memberPts m) → 𝔽) → List Bool)
-    (hML : ∀ q pts, (M.member i (memberPts m)).link q pts = writeOpening (finish sg θ F c rq) q.s' (bitsL pts))
-    (hBL : ∀ g' pts, ¬ BL i (memberPts m) g' pts → ¬ EmptyAt (finish sg θ F c rq) g' (bitsL pts))
+    (hML : ∀ q pts, (M.member i (memberPts m)).link q pts = writeOpening (finish sg Ds θ F c rq) q.s' (bitsL pts))
+    (hBL : ∀ g' pts, ¬ BL i (memberPts m) g' pts → ¬ EmptyAt (finish sg Ds θ F c rq) g' (bitsL pts))
     (bitsOf : (s : SubmitJ (memberTabs S Rg m)) → (Fin s.n → 𝔽) → List Bool)
     (hM : ∀ q s x, (M.member i (memberPts m)).round q (memberTabs S Rg m) s x =
-      writeOpening (finish sg θ F c rq) q.s' (bitsOf s x))
-    (hB : ∀ g' s x, ¬ B i g' (memberTabs S Rg m) s x → ¬ EmptyAt (finish sg θ F c rq) g' (bitsOf s x))
+      writeOpening (finish sg Ds θ F c rq) q.s' (bitsOf s x))
+    (hB : ∀ g' s x, ¬ B i g' (memberTabs S Rg m) s x → ¬ EmptyAt (finish sg Ds θ F c rq) g' (bitsOf s x))
     {Ks₀ : Fin R → DigestCut Claims.Msg g} {p q r : Pos g σ Claims.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} {Lg : List Release} (hU : PicksOnce P Lg)
     (hLg : (CoinTape.run g σ r.tape).log = Lg) (h : MemberReach D M BL B S Rg i m p q out) (hqr : q.Past r)
     (hi : p.Inv Ks₀) {pre : List Release} {f : List Release → Game Exchange} {a : Fin R → Prop}
-    {done : List (List Release)} (hf : ∀ log, f log = finish sg θ F c rq (pre ++ log))
+    {done : List (List Release)} (hf : ∀ log, f log = finish sg Ds θ F c rq (pre ++ log))
     (hSO : StopOf P rv pre f a p.toStop) (hA : Walked P Lg pre a done) (hK : ¬ ∀ j, p.toStop.Ks j = .skip) :
     ∃ (pts : Fin 2 → Fin (memberPts m) → 𝔽) (L₀ : List Release)
       (as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ (memberTabs S Rg m)) × (Fin s.n → 𝔽))))
@@ -281,7 +282,7 @@ theorem MemberReach.order {P : Fin R → List Release → Frame → Prop} {rv : 
         ((M.member i (memberPts m)).round a.1.toStop (memberTabs S Rg m) a.2.1 a.2.2)).consume.Past q) ∧
       (∀ L₁ ∈ done, L₁.length < L₀.length) ∧ (∀ m' ∈ ms, L₀.length < m'.length) ∧
       ms.Pairwise (fun m' m'' => m'.length < m''.length) ∧
-      (∀ log, f' log = finish sg θ F c rq (pre' ++ log)) ∧ StopOf P rv pre' f' a' q.toStop ∧
+      (∀ log, f' log = finish sg Ds θ F c rq (pre' ++ log)) ∧ StopOf P rv pre' f' a' q.toStop ∧
       (∀ L₁, L₁ ∈ done' ↔ L₁ = L₀ ∨ L₁ ∈ ms ∨ L₁ ∈ done) ∧ Walked P Lg pre' a' done' ∧
       (as.length = m.N ∨ (D i).sub (memberTabs S Rg m) q.toStop.modes = none) := by
   obtain ⟨pts, hL, he⟩ := h
@@ -289,7 +290,7 @@ theorem MemberReach.order {P : Fin R → List Release → Frame → Prop} {rv : 
   obtain ⟨L, hNP, ⟨hK', -⟩ |
     ⟨k, fs, ts, f', i', s, n, b, hf', hT, ⟨j, haj, hj⟩, s'', Ks, x'', back'', hq, hKs⟩⟩ := hSO
   · exact absurd hK' hK
-  have hf'' : ∀ log, f' log = finish sg θ F c rq ((pre ++ L) ++ log) := fun log => by
+  have hf'' : ∀ log, f' log = finish sg Ds θ F c rq ((pre ++ L) ++ log) := fun log => by
     rw [hf', hf, List.append_assoc]
   have hp' := he.past
   rw [hML] at hp'

@@ -46,23 +46,24 @@ frame of the `i`-th tree's stream `s` that the device serves after the log `pre`
 after `pre` and them, off the opening's empty class at `bits`, the play on the tape of any position past the stop
 with `bits` written into its opening and consumed has as its log `pre`, then the opening answering `b` with `bits`,
 then the rest (`RoundsReach.release`, whose trace ends at such a position). -/
-theorem release_past {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray} {k : ℕ}
-    {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game Exchange} {pre : List Release} {i s n : ℕ}
+theorem release_past {sg : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
+    {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game Exchange} {pre : List Release}
+    {i s n : ℕ}
     {b : ByteArray} {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)}
     {s'' : Strategy (optOpenK k fs ts f i s n b ts[i]?)}
     {Ks : Fin R → DigestCut Claims.Msg (optOpenK k fs ts f i s n b ts[i]?)}
     {x'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s''}
     {back'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s'' → CoinTape g σ}
     (hq : q = ⟨optOpenK k fs ts f i s n b ts[i]?, s'', Ks, x'', back''⟩) (hi : q.Inv Ks₀)
-    (hf : ∀ log, f log = finish sg θ F c rq (pre ++ log)) (hT : TreesOf pre ts) (hS : Served pre i s n)
-    {bits : List Bool} (hE : ¬ EmptyAt (finish sg θ F c rq) q.g' bits) {r : Pos g σ Claims.Msg (Fin R)}
-    (hr : (q.rewrite (writeOpening (finish sg θ F c rq) q.s' bits)).consume.Past r) :
+    (hf : ∀ log, f log = finish sg Ds θ F c rq (pre ++ log)) (hT : TreesOf pre ts) (hS : Served pre i s n)
+    {bits : List Bool} (hE : ¬ EmptyAt (finish sg Ds θ F c rq) q.g' bits) {r : Pos g σ Claims.Msg (Fin R)}
+    (hr : (q.rewrite (writeOpening (finish sg Ds θ F c rq) q.s' bits)).consume.Past r) :
     ∃ L, (CoinTape.run g σ r.tape).log = pre ++ ⟨.opening i s n, b, bits⟩ :: L := by
   subst hq
   obtain ⟨T, hTi, _, _, hp, -⟩ := Served.next hT hS
   have hc := Served.cap hT hS
   obtain ⟨z, hz, hh⟩ := hr.head (OpeningAt.ofNext (k := k) (b := b) hf hc hTi hp).eq (Pos.isHere_consume _)
-  have hw := opened_of_head (finish_recordsLog sg θ F c rq) hf hc hTi hp hE x'' z hh
+  have hw := opened_of_head (finish_recordsLog sg Ds θ F c rq) hf hc hTi hp hE x'' z hh
   have hX : CoinTape.run g σ r.tape = CoinTape.run (optOpenK k fs ts f i s n b ts[i]?) s'' z := by
     rw [hz]
     exact hi.run z
@@ -77,12 +78,12 @@ on the tape of any position past the position with `bits` written into its openi
 opening the rounds whose cuts the position fixes pick (`LoggedAt`; `RoundsReach.stop_logged`, whose trace ends at
 such a position). -/
 theorem stop_logged_past {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
-    {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
+    {sg : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {Ks₀ : Fin R → DigestCut Claims.Msg g}
-    {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀) (hS : StopsAt P rv sg θ F c rq q)
-    (hK : ¬ ∀ j, q.Ks j = .skip) {bits : List Bool} (hE : ¬ EmptyAt (finish sg θ F c rq) q.g' bits)
+    {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀) (hS : StopsAt P rv sg Ds θ F c rq q)
+    (hK : ¬ ∀ j, q.Ks j = .skip) {bits : List Bool} (hE : ¬ EmptyAt (finish sg Ds θ F c rq) q.g' bits)
     {r : Pos g σ Claims.Msg (Fin R)}
-    (hr : (q.rewrite (writeOpening (finish sg θ F c rq) q.s' bits)).consume.Past r) :
+    (hr : (q.rewrite (writeOpening (finish sg Ds θ F c rq) q.s' bits)).consume.Past r) :
     LoggedAt P q bits (CoinTape.run g σ r.tape).log := by
   obtain ⟨pre, f, a, hf, L, -, h⟩ := hS
   rcases h with ⟨hK', -⟩ | ⟨k, fs, ts, f', i, s, n, b, hf', hT, ⟨j, haj, hj⟩, s'', Ks, x'', back'', hq, hKs⟩
@@ -109,13 +110,13 @@ variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} {D :
 /-- **The stop after a member's session's end is where `StopsAt` says**, from a log and the close after it, where the
 stop its session starts at is and each round's reading picks only openings (`StopsAt.next` at each consumed stop). -/
 theorem MemberReach.stopsAt {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
-    {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
+    {sg : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {i : ℕ}
     {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Claims.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (h : MemberReach D M BL B S Rg i m p q out)
-    (hS : StopsAt P rv sg θ F c rq p.toStop) : StopsAt P rv sg θ F c rq q.toStop :=
-  h.keeps (fun q => StopsAt P rv sg θ F c rq q.toStop) hS (fun q φ hq => StopsAt.next hP hq φ) fun q hq => by
-    show StopsAt P rv sg θ F c rq q.toStop.toStop
+    (hS : StopsAt P rv sg Ds θ F c rq p.toStop) : StopsAt P rv sg Ds θ F c rq q.toStop :=
+  h.keeps (fun q => StopsAt P rv sg Ds θ F c rq q.toStop) hS (fun q φ hq => StopsAt.next hP hq φ) fun q hq => by
+    show StopsAt P rv sg Ds θ F c rq q.toStop.toStop
     rw [Pos.toStop_toStop]
     exact hq
 
@@ -130,20 +131,20 @@ position the last member's session ends at is one) releases `pts`' bits at an op
 stop fixes pick, and each answered submission's coins at an opening the rounds whose cuts its stop fixes pick
 (`firstStop_logged` and `RoundsReach.answers_logged`, at a member of a window). -/
 theorem MemberReach.logged {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
-    {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
+    {sg : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {i : ℕ}
     {m : Flock.Guarantees.MemberV5 Reg nJ} (hsub : (D i).sub (memberTabs S Rg m) (fun _ => none) = none)
     (bitsL : (Fin 2 → Fin (memberPts m) → 𝔽) → List Bool)
-    (hML : ∀ q pts, (M.member i (memberPts m)).link q pts = writeOpening (finish sg θ F c rq) q.s' (bitsL pts))
-    (hBL : ∀ g' pts, ¬ BL i (memberPts m) g' pts → ¬ EmptyAt (finish sg θ F c rq) g' (bitsL pts))
+    (hML : ∀ q pts, (M.member i (memberPts m)).link q pts = writeOpening (finish sg Ds θ F c rq) q.s' (bitsL pts))
+    (hBL : ∀ g' pts, ¬ BL i (memberPts m) g' pts → ¬ EmptyAt (finish sg Ds θ F c rq) g' (bitsL pts))
     (bitsOf : (s : SubmitJ (memberTabs S Rg m)) → (Fin s.n → 𝔽) → List Bool)
     (hM : ∀ q s x, (M.member i (memberPts m)).round q (memberTabs S Rg m) s x =
-      writeOpening (finish sg θ F c rq) q.s' (bitsOf s x))
-    (hB : ∀ g' s x, ¬ B i g' (memberTabs S Rg m) s x → ¬ EmptyAt (finish sg θ F c rq) g' (bitsOf s x))
+      writeOpening (finish sg Ds θ F c rq) q.s' (bitsOf s x))
+    (hB : ∀ g' s x, ¬ B i g' (memberTabs S Rg m) s x → ¬ EmptyAt (finish sg Ds θ F c rq) g' (bitsOf s x))
     {Ks₀ : Fin R → DigestCut Claims.Msg g} {p q r : Pos g σ Claims.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (h : MemberReach D M BL B S Rg i m p q out)
-    (hqr : q.Past r) (hi : p.Inv Ks₀) (hS : StopsAt P rv sg θ F c rq p.toStop)
+    (hqr : q.Past r) (hi : p.Inv Ks₀) (hS : StopsAt P rv sg Ds θ F c rq p.toStop)
     (hK : ¬ ∀ j, p.toStop.Ks j = .skip) :
     ∃ (pts : Fin 2 → Fin (memberPts m) → 𝔽)
       (as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ (memberTabs S Rg m)) × (Fin s.n → 𝔽)))),
@@ -157,7 +158,7 @@ theorem MemberReach.logged {P : Fin R → List Release → Frame → Prop} {rv :
   have hi' := (Pos.toStop_spec hi).2.2
   rw [hML] at he
   have hlink := stop_logged_past hPS hi' hS hK (hBL _ _ hL) (he.past.trans hqr)
-  obtain ⟨as, h1, h2⟩ := he.answers (fun q => q.Inv Ks₀ ∧ StopsAt P rv sg θ F c rq q.toStop)
+  obtain ⟨as, h1, h2⟩ := he.answers (fun q => q.Inv Ks₀ ∧ StopsAt P rv sg Ds θ F c rq q.toStop)
     ⟨Pos.inv_consume (Pos.inv_rewrite hi' _), StopsAt.next hP hS _⟩
     fun q φ hq => ⟨Pos.inv_consume (Pos.inv_rewrite (Pos.toStop_spec hq.1).2.2 φ), StopsAt.next hP hq.2 φ⟩
   refine ⟨pts, as, h1, hlink, fun a ha => ?_⟩

@@ -77,11 +77,11 @@ live ones that pick it, with the cuts `q` fixes at the bytes it answers (`CutsAt
 opening asking for its `n` coins, and the walk from `q`, consumed, on any rewriting of the tape there stopping where
 `StopOf` says from the log before that frame, at the live rounds that don't pick it (`stopOf_next`). -/
 theorem stop_frame_through {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
-    {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
+    {sg : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {Ks₀ : Fin R → DigestCut Claims.Msg g}
     {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀) {pre₀ : List Release} {f : List Release → Game Exchange}
-    {a : Fin R → Prop} (hf : ∀ log, f log = finish sg θ F c rq (pre₀ ++ log)) (hS : StopOf P rv pre₀ f a q)
+    {a : Fin R → Prop} (hf : ∀ log, f log = finish sg Ds θ F c rq (pre₀ ++ log)) (hS : StopOf P rv pre₀ f a q)
     {z : CoinTape g σ} (hz : ∃ w, z = q.back w) :
     ∃ L, NoPick P a pre₀ L ∧
       (((∀ j, q.Ks j = .skip) ∧ (CoinTape.run g σ z).log = pre₀ ++ L) ∨
@@ -90,8 +90,8 @@ theorem stop_frame_through {P : Fin R → List Release → Frame → Prop} {rv :
           (∀ j, (q.Ks j).isHere = true ↔ a j ∧ P j (pre₀ ++ L) (.opening i s n)) ∧
           (CoinTape.run g σ z).log = (pre₀ ++ L) ++ ⟨.opening i s n, b, bits⟩ :: L' ∧
           CutsAt rv q (pre₀ ++ L) (CoinTape.run g σ z).log ∧
-          (∀ o' : OpeningAt (finish sg θ F c rq) q.g', o'.n = n) ∧
-          (∀ log, f' log = finish sg θ F c rq ((pre₀ ++ L) ++ log)) ∧
+          (∀ o' : OpeningAt (finish sg Ds θ F c rq) q.g', o'.n = n) ∧
+          (∀ log, f' log = finish sg Ds θ F c rq ((pre₀ ++ L) ++ log)) ∧
           ∀ φ : CoinTape q.g' q.s' → CoinTape q.g' q.s',
             StopOf P rv (pre₀ ++ L) f' (fun j => a j ∧ ¬ P j (pre₀ ++ L) (.opening i s n))
               (q.rewrite φ).consume.toStop) := by
@@ -112,7 +112,7 @@ theorem stop_frame_through {P : Fin R → List Release → Frame → Prop} {rv :
     have hall : ∀ j', (q.Ks j').isHere = true ↔ a j' ∧ P j' (pre₀ ++ L) (.opening i s n) := fun j' => by
       rw [hq]
       exact isHere_openCuts hKs j'
-    have hf'' : ∀ log, f' log = finish sg θ F c rq ((pre₀ ++ L) ++ log) := fun log => by
+    have hf'' : ∀ log, f' log = finish sg Ds θ F c rq ((pre₀ ++ L) ++ log) := fun log => by
       rw [hf', hf, List.append_assoc]
     have hSv := hPS j _ i s n hj
     subst hq
@@ -122,7 +122,7 @@ theorem stop_frame_through {P : Fin R → List Release → Frame → Prop} {rv :
     obtain ⟨L', hL'⟩ := log_of_opening hf'' hc hTi hp s'' w
     rw [← hX] at hL'
     exact ⟨i, s, n, b, _, L', f', ⟨j, haj, hjK, hj⟩, hall, hL', cutsAt_openCuts rfl hKs hL', fun o' =>
-      OpeningAt.n_eq (finish_recordsLog sg θ F c rq) o' (OpeningAt.ofNext (k := k) (b := b) hf'' hc hTi hp), hf'',
+      OpeningAt.n_eq (finish_recordsLog sg Ds θ F c rq) o' (OpeningAt.ofNext (k := k) (b := b) hf'' hc hTi hp), hf'',
       fun φ => stopOf_next hP s'' Ks x'' back'' rfl hT hKs φ⟩
 
 end Through

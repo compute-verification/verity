@@ -300,11 +300,11 @@ stop's release is the first pick not answered, so the link's of session `u` (`Se
 tree not opened before after `u` trees (`SessionPicks.link`), which asks for the link points' coordinates
 (`SessionRead.link_n`). -/
 theorem link_stop {g : Game Exchange} {σ : Strategy g} {R : ℕ} {P : Fin R → List Release → Frame → Prop}
-    {rv : Fin R → Exchange → Option Claims.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
-    {c rq : ByteArray} (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
+    {rv : Fin R → Exchange → Option Claims.Msg} {sg : Signer} {Ds : List Signer} {θ : ByteArray}
+    {F : Array ByteArray} {c rq : ByteArray} (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {Ks₀ : Fin R → DigestCut Claims.Msg g}
     {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀) {pre : List Release} {f : List Release → Game Exchange}
-    {a : Fin R → Prop} {done : List (List Release)} (hf : ∀ log, f log = finish sg θ F c rq (pre ++ log))
+    {a : Fin R → Prop} {done : List (List Release)} (hf : ∀ log, f log = finish sg Ds θ F c rq (pre ++ log))
     (hSO : StopOf P rv pre f a q) {z : CoinTape g σ} (hz : ∃ w, z = q.back w)
     (hW : Walked P (CoinTape.run g σ z).log pre a done) {su : Fin R → ℕ} {lk : Fin R → Prop}
     (hSP : SessionPicks P su lk (CoinTape.run g σ z).log) {u : ℕ}
@@ -313,7 +313,7 @@ theorem link_stop {g : Game Exchange} {σ : Strategy g} {R : ℕ} {P : Fin R →
     {spec : Flock.SessionSpec} {sess : Flock.RunRecord} {w₀ : Claims.Msg}
     (hR : SessionRead (CoinTape.run g σ z).log tables u text J sess w₀)
     (hd : Flock.Record.decode spec text = .ok sess) (hp2 : spec.points = 2) :
-    (¬ ∀ j, q.Ks j = .skip) ∧ ∀ o' : OpeningAt (finish sg θ F c rq) q.g', o'.n = spec.mPts + spec.mPts := by
+    (¬ ∀ j, q.Ks j = .skip) ∧ ∀ o' : OpeningAt (finish sg Ds θ F c rq) q.g', o'.n = spec.mPts + spec.mPts := by
   have hU := hSP.once
   obtain ⟨L, hNP, ⟨-, hlog⟩ | ⟨i, s, n, b, bits, L', f', ⟨j, haj, hjK, hj⟩, -, hlog, -, hcnt, -, -⟩⟩ :=
     stop_frame_through hP hPS hi hf hSO hz
