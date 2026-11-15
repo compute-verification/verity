@@ -1019,7 +1019,7 @@ def test_a_ruff_finding_in_a_lint_module_a_change_edits_is_judged_on_its_own_cop
     """The gate runs the base's copy of a lint module the change edits, and both ruff lints read that copy too: a change
     that fixes each module's finding and drops its entry passes, judged on its own copy, and one that edits the module, keeps
     its finding and drops its entry fails, naming the finding where the change's copy holds it."""
-    util, toy = "tests/lint/_util.py", LINT.removeprefix(f"{G.INTEGRATION}/")
+    util, toy = "tests/lint/_util.py", G.key_of(LINT)
     f541 = {"file": toy, "kind": "F541", "symbol": "<module>", "detail": "f-string without any placeholders"}
     both_ruffed.git("checkout", "-q", "main")
     both_ruffed.commit("a lint module of each directory with an f-string, listed", {
@@ -1046,14 +1046,14 @@ def test_a_vllm_rules_finding_in_a_lint_module_a_change_edits_is_judged_on_its_o
     fixes one of the module's two findings and drops its entry passes, judged on its own copy against that lint's own list,
     which still holds the other; and one that edits the module, keeps both and drops an entry fails, naming the findings
     where the change's copy holds them.  Ruff runs on that copy from the integration, as the lint runs it, so a path the
-    config names means there what it means to the lint: here `print` is flagged under ``tests/`` alone."""
-    toy, n = LINT.removeprefix(f"{G.INTEGRATION}/"), len(TOY_LINT.splitlines())
+    config names means there what it means to the lint: here `print` is flagged under the integration's tests alone."""
+    toy, n = G.key_of(LINT), len(TOY_LINT.splitlines())
     say, tell = ({"file": toy, "kind": "T201", "symbol": f, "detail": "`print` found"} for f in ("say", "tell"))
     says, tells = 'def say():\n    print("x")\n', 'def tell():\n    print("y")\n'
     ruffed.git("checkout", "-q", "main")
     ruffed.commit("ruff with vLLM's rules, and a lint module that prints twice, listed", {
         RUFF_VLLM_LINT: (REAL_LINT / "test_ruff_vllm.py").read_text(), RUFF_VLLM_JSON: _allowlist(say, tell),
-        G.RUFF_VLLM_CONFIG: RUFF_VLLM_TOML + '[lint.per-file-ignores]\n"!tests/**" = ["T201"]\n',
+        G.RUFF_VLLM_CONFIG: RUFF_VLLM_TOML + '[lint.per-file-ignores]\n"!../../tests/adapters/vllm/tests/**" = ["T201"]\n',
         LINT: TOY_LINT + says + tells, "adapters/vllm/verity_vllm/b.py": "print(1)\n"})
     ruffed.git("checkout", "-q", "-B", "pr")
     ruffed.commit("fixes one and drops its entry", {LINT: TOY_LINT + tells, RUFF_VLLM_JSON: _allowlist(tell)})
