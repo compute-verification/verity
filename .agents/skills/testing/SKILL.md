@@ -56,7 +56,8 @@ SUITE` says why a suite would run, and `lean_audit.py --explain PKG` the same fo
 
 A failed test is reported failed, whoever is fixing it: no runner tolerates a red. To let one stand while its fix lands, add
 an allowance to `tools/check/policy.toml` (`suite NAME::TEST`, the owner's handle, a UTC expiry and a reason) in a
-reviewed change: the verified queue and the quick tier take that failure as not red until it expires.
+reviewed change: the verified queue and the quick tier take that failure as not red until it expires, and a recorded check
+runs that test as an expected failure (`suites.py --allowances` at its base), so its suite keeps a pass until the allowance lapses.
 
 ## Where a test goes
 
