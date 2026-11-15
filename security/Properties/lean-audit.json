@@ -1275,10 +1275,6 @@
    "honest": ["Properties.Site.checks_honest"],
    "nontrivial": "Properties.Site.checks_nontrivial"
   },
-  "Properties.Site.refusedAt": {
-   "honest": ["Properties.Site.refusedAt_honest"],
-   "nontrivial": "Properties.Site.refusedAt_nontrivial"
-  },
   "Verity.soundness_at_of_targets": {
    "honest": ["Verity.soundness_at_of_targets_honest"],
    "nontrivial": "Verity.soundness_at_of_targets_nontrivial"
@@ -10831,69 +10827,6 @@
    "type_hash": "e91c284b54e1f6120b1eb55e943c39395584f74cd8460c66826e4e149b49c407",
    "unfolded_hash": "3c5eb4b4c367027b938f4ae9cc43f8d0219e41ad7995d2cebf00eaf49e69cd9d"
   },
-  "Properties.Site.refusedAt": {
-   "owner": "@lean",
-   "signature": ["Properties.Site.refusedAt : Properties.Site.RefusedAt"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Verity.Site.Boundary"],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "bded101a69bef766ebdd41f5169a68b8093d468663cfbc1fe206581d58ac002c",
-   "unfolded_hash": "a81b9ed139727da45cd828f837b9c9d8a2c7ae5443b03f5a26df2c6d778d4a82"
-  },
-  "Properties.Site.refusedAt_honest": {
-   "owner": "@lean",
-   "signature": [
-    "Properties.Site.refusedAt_honest :",
-    "  And",
-    "    (Eq",
-    "      (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
-    "        Core.Site.Registration.Composite.remote Properties.Site.honestLog)",
-    "      (Except.ok (Core.Site.ofLog Properties.Site.honestLog)))",
-    "    (And",
-    "      (Eq",
-    "        (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
-    "          Core.Site.Registration.Composite.remote Properties.Site.staleLog)",
-    "        (Except.error { fst := 1, snd := Core.Site.Registration.Refusal.previous }))",
-    "      ((Properties.Site.site (Core.Site.ofLog Properties.Site.honestLog)).Boundary",
-    "        (Properties.Site.link",
-    "          { id := \"uplink\", ends := { fst := \"h0\", snd := Core.Site.outside }, β := 1, latency := 1 })))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "ea5d0682b1a8a094664dbd8234957efbc48c51637f9dc9a703912daa63420f4d"
-  },
-  "Properties.Site.refusedAt_nontrivial": {
-   "owner": "@lean",
-   "signature": [
-    "Properties.Site.refusedAt_nontrivial (i : Fin (List.length Properties.Site.honestLog)) :",
-    "  Not",
-    "    (Eq",
-    "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
-    "        (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
-    "        (Verity.Site.ofLog (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
-    "        (Verity.Registration.head (Properties.Site.digests Properties.Site.witnessDigests)",
-    "          Core.Site.Registration.Composite.remote (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
-    "        (Properties.Site.regEntry (Fin.instGetElemFinVal.getElem Properties.Site.honestLog i ⋯)))",
-    "      (Option.some (Properties.Site.refusal Core.Site.Registration.Refusal.previous)))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "18e9833595a8f60150b756dc0074e3dc2b587bdc66522ba3b8e93a0d92bcd62b"
-  },
   "Properties.Site.refuses": {
    "owner": "@lean",
    "signature": ["Properties.Site.refuses : Properties.Site.Refuses"],
@@ -13978,10 +13911,6 @@
    "Properties.Site.fold": {
     "function": "Core.Site.ofLog",
     "outcome": "none"
-   },
-   "Properties.Site.refusedAt": {
-    "function": "Core.Site.Registration.check",
-    "outcome": "accept"
    },
    "Properties.Site.refuses": {
     "function": "Core.Site.Registration.Entry.refusal",
