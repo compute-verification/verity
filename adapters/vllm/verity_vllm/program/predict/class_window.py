@@ -107,6 +107,7 @@ from verity.circuits.ops.scalar import SelectI32
 from verity.circuits.refs import Coll, Refs, concat, runs
 from verity.circuits.types import Array, Tuple
 from verity.commitments.periods import interface as IF
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import greedy_stages as G
 from verity_vllm.definitions.registry.prims import BF16, BIT, I32
@@ -116,7 +117,17 @@ from . import node_window_reads as NR
 from . import node_window_select as NSEL
 from . import node_window_sparse as NS
 from .build import Unexpressible
-from .node_window import _GRAIN, NAME, PROMPT, STAND_IN, Lowering, NodeWindow, Piece, _family, _Free
+from .node_window import (
+    _GRAIN,
+    NAME,
+    PROMPT,
+    STAND_IN,
+    Lowering,
+    NodeWindow,
+    Piece,
+    _family,
+    _Free,
+)
 from .window_builder import WEIGHTS, Grain, Row
 
 if TYPE_CHECKING:
@@ -328,11 +339,11 @@ class Selects:
         if self.last is None or self.state is None or self.n != self.O:
             raise Unexpressible(f"the class (P {self.P}, O {self.O}): its check after {self.n} selects")
         V, logits = self.last
-        fn = bind(ClassStopCheck, P=self.P, **{k: v for k, v in self._statics(V).items()})
+        fn = bind(ClassStopCheck, P=self.P, **self._statics(V))
         count, live = self.state
-        return (B.call(fn, Coll(Array(V, BF16), logits), ids, self.request, count, live),
-                f"the class's length check ({CHECK}_v1 at P {self.P}, O {self.O}): its bit and count, the limits of "
+        what = (f"the class's length check ({CHECK}_v1 at P {self.P}, O {self.O}): its bit and count, the limits of "
                 f"{LIMITS_ROW} and the ids zero past the stop")
+        return B.call(fn, Coll(Array(V, BF16), logits), ids, self.request, count, live), what
 
 
 def _power(x: Any) -> bool:
@@ -381,7 +392,7 @@ def class_request(registered: Registered, P: int, O: int, policy: Mapping[str, A
     phi = Phi.from_json({**registered.phi.to_json(), "sampling": {"kind": "greedy"}})
     hf, eng = phi.hf_config, phi.engine or {}
     mml = min(int(hf["max_position_embeddings"]), int(eng.get("max_model_len") or hf["max_position_embeddings"]))
-    if P + O > mml:
+    if mml < P + O:
         raise Unexpressible(f"the class (P {P}, O {O}): positions to {P + O - 1}, past the model's length {mml}")
     klass = Selects(P, O, SR.stop_ids(hf), mml)
     batched = not phi.target_profile().batch_invariant
