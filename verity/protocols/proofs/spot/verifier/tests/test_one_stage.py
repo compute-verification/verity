@@ -1,4 +1,4 @@
-"""One-stage audit: the demo partition query, the registration record, the sample and proved-block checks, the profile."""
+"""One-stage audit: the demo partition query, the docket, the sample and proved-block checks, the profile."""
 
 from __future__ import annotations
 
@@ -137,7 +137,7 @@ def test_several_templates_one_population():
 
 EPS = bind(CompositeDefinition("OneStageTestEps", 0, ("EPS", "NAME"), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False), EPS=1e-5, NAME='a"b')
-#: the program and registration record digests of `_registration(6, version=0)`: what an old record holds
+#: the program and docket digests of `_registration(6, version=0)`: what an old record holds
 V0_PAIR_6 = ("179416c1470fbf1c1d679826635d18b475dcf5584b94a9249397c22c7c70f986"
              "23f87f33d710c1b58fe2f55824d85af4af52df20fe3f64231046f23549e84355")
 V0_RECORD_6 = ("677e6e684f82c37bb8610bbbfb5732805fc2678b96140443b1f048cb6c35e3b5"
@@ -203,7 +203,7 @@ def test_v1_names_a_template_by_its_descriptor_id_and_decodes_from_its_descripto
 
 
 def test_an_old_v0_record_still_decodes_and_verifies():
-    """A registration made with v0's program, at the digests an old record holds, passes R1-R6 against the verifier's v0
+    """A docket made with v0's program, at the digests an old record holds, passes R1-R6 against the verifier's v0
     copy, built or decoded from its descriptor; v1's program of the same population is another program, which it refuses."""
     old, q, rec = _registration(6, version=0)
     assert (rec["program"], R.digest(rec)) == (V0_PAIR_6, V0_RECORD_6)
@@ -469,7 +469,7 @@ def test_audit_record_needs_every_check_and_verdict():
 
 
 def _accepted(verdicts: dict) -> dict:
-    """An accepted audit record of the six-block registration over the sample [1, 4], on `verdicts`."""
+    """An accepted audit record of the six-block docket over the sample [1, 4], on `verdicts`."""
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {}, verdicts,
@@ -479,7 +479,7 @@ def _accepted(verdicts: dict) -> dict:
 
 
 def test_the_answer_of_an_accepted_record_says_whether_every_verdict_ran():
-    """`audit.answer` is one-stage's accept of the record's registration, its public outputs the sample, the proved
+    """`audit.answer` is one-stage's accept of the record's docket, its public outputs the sample, the proved
     proof blocks, the bound and the record's own ``complete``: true when every verdict ran, false beside one not of
     record that did not run, on which the record accepts all the same. A record that did not accept has no such answer."""
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
