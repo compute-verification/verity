@@ -2140,6 +2140,8 @@ def _add_inputs(text: str, add: list[str], first: bool = False) -> str:
         return text
     ins = ", ".join(json.dumps(a) for a in missing)
     items = m.group("items")
+    tail = items.rstrip().rsplit("\n", 1)[-1]
+    first = first or "#" in tail or items.rstrip().endswith(",")   # appended there, the item would land in a comment or after ",,"
     new_items = (ins + (", " + items.lstrip() if items.strip() else "")) if first else \
         (items.rstrip() + (", " if items.strip() else "") + ins)
     new_body = body[: m.start("items")] + new_items + body[m.end("items"):]
