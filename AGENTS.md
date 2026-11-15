@@ -14,8 +14,9 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/protocols/`: the protocols in three group directories, two layers on the proofs: `proofs/` holds `flock`, with
     `spot` and `recursion` on it, what the other protocols call to prove; `accounting/` holds `pouw`, `pous`, `poub` and
-    `certifier` (compute, memory and network); `policy/` holds `inference_only`, on accounting. Both layers use the
-    proofs, and the proofs use neither. On top of the audits, `compose/` is a ninth protocol. Its `verifier/` holds its
+    `certifier` (compute, memory and network) and `registration` (the registration log, checked once, before any
+    challenge; its Lean is still in `interface/`); `policy/` holds `inference_only`, on accounting. Both layers use the
+    proofs, and the proofs use neither. On top of the audits, `compose/` is a tenth protocol. Its `verifier/` holds its
     Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an auditor with no devices at the
     datacenter runs, and `onsite/` what an auditor with devices there runs. Its `device/` holds the auditor host's
     challenger service. Target, not yet: `experimental/NAME/` for a whole directory
@@ -41,9 +42,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `registration` (the registration log) and `lean` (the Lean card
-    tables' writer); its types, and the readers of the data sheets, which are in the top-level
-    `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
+  - `verity/hardware/`: the registered hardware: `lean` (the Lean card tables' writer); its types, and the readers of
+    the data sheets, which are in the top-level `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
   - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
     channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
     directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
@@ -100,7 +100,8 @@ protocol or adapter imports it; `circuits/` imports nothing and `commitments/` o
 `security/` or the hardware data; inside `verity/protocols/`, flock is at the bottom, spot and recursion on it, the
 audits on those, and compose on top; no protocol imports a configuration.
 
-`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity --help`.
+`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity verify proof ARGS`,
+`verity --help`.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu        # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
@@ -122,8 +123,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
   from 16 to 262,144 bits, and its output bits count in leakage (provisional; `UNIT_CLASS_MAX` = 16 restores the
   16-bit limit). A plain path, Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
-  works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
-  refuses a plain session past what the plain theorem covers (one table today).
+  works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and
+  `verity verify proof` refuses a plain session past what the plain theorem covers (one table today).
 - **One proof system** for PoUW, PoUS and network certification: the workers behind the ZK server, the challenger and the
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
@@ -249,21 +250,30 @@ A pass of a test suite, a circuit-check target or a Lean package's Lean check is
 unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
-docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
-only fully checked commits: the verified queue's loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
+docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. Every commit of
+`main` is checked whole, before it lands or, for a plain candidate under `--gate verdict`, right after: the verified queue's
+loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
 verdict, are low-risk or are certified moves onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
 ratchet-gate run beside them; under `--gate check`, every job in shards), and fast-forwards `main` only to a candidate with
 no new failure: each gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or
-fails on its base too. A failure the candidate's base shares blames none of its PRs;
+fails on its base too. Under `--gate verdict` a plain candidate lands on its members' land verdicts and the quick tier,
+`main`'s whole check follows each landing, and a red check reverts the one culprit or, with no culprit, sends plain
+candidates back to the whole check until `main` is green; a candidate is plain when each member has a land verdict of its
+own, is no move and touches nothing drive.toml's `verdict_excludes` names, nor any entry of its `lowrisk_excludes` that
+`verdict_plain` doesn't list (with either of the first two empty, none is plain), so every other candidate (Lean, a lock, a move, a verifier or device, the soundness path, the landing code
+itself) keeps the whole check before landing. A failure the candidate's base shares blames none of its PRs;
 any other's suspects are the PRs whose change touches what it names (its files, the files declaring a Lean declaration it
 names), every PR when none does: a lone suspect is ejected, several are bisected, and in the same tick the candidate and
 those above it are rebuilt without them. A candidate holding a Lean, lock or spec change runs lean-audit alone first (its records run) and is checked on the
 commit of the lock records it regenerated, so `main` moves only to regenerated records. What drive.toml lets warn (its
 `warn_gates` and `warn_steps`), a step off the gate and a lock's bookkeeping hold nothing, and the owner fixes it in their
 next PR: a warn gate's failure is printed at the ready mark, a red off the gate that its base's run doesn't share is rung to
-who acts on it under the loop's `--gate check` (to no one under graph2), and a lock's bookkeeping is told to `lean` and each
+who acts on it under the loop's `--gate check` or `verdict` (to no one under graph2), and a lock's bookkeeping is told to `lean` and each
 owner a warning names. How a PR lands, from its ready mark to `main`, and the loop's rule for each case: the team skill's
 Landing.
+
+An owner closes its own PR once `main` holds its change or another PR carries it, with one line naming the commit or PR
+that holds it. Nobody is asked first, and a superseded PR is not left open as a record: the closed PR is the record.
 
 ## Lean
 
@@ -330,6 +340,11 @@ Landing.
   do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
   baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
   run` compute. Each measured run carries a label with its numbers, and the best one that passes the guard lands.
+- **A slip made twice becomes a tool.** When you make the same kind of mistake a second time, or see that two agents
+  have each made it, a note to be more careful is no fix. That day, change the tool so that kind of mistake can't happen,
+  or fails with the fix in its message (a refusal in the shell hook, a default, a check), in a PR that names the slips it
+  ends. Watch for the signs in your own work and in what you read of others': a rule kept by hand, a slip listed for a
+  later review. Another owner's tool gets the PR all the same, and its owner is told.
 - **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a

@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -95,7 +96,8 @@ def test_each_hook_records_its_events_key_names_and_of_its_values_only_the_model
 
     for name, event in (("shell_hook.py", shell), ("task_hook.py", task), ("stop_hook.py", stop)):
         run(name, event)
-    run("shell_hook.py", {**shell, "model": "m" * 500, "generation_id": "g" * 500})
+    run("shell_hook.py", {**shell, "conversation_id": "bc-45454545-4545-4545-8545-454545454545", "model": "m" * 500,
+                          "generation_id": "g" * 500})
     run("shell_hook.py", {**shell, "model": {"name": "not-to-be-copied"}, "generation_id": 7})
     run("shell_hook.py", {k: v for k, v in shell.items() if k not in ("model", "generation_id")})
     run("shell_hook.py", "not json")
@@ -241,7 +243,7 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "printenv PATH | tr : '\\n'",
     "set -euo pipefail",
     "set -x; make",
-    "export PYTHONPATH=/tmp/x",
+    "export UV_CACHE_DIR=/tmp/x",
     "export -n FOO",
     "declare -f my_function",
     "declare -A table",
@@ -890,6 +892,257 @@ def test_turns_prints_the_model_each_turn_of_an_agent_names_from_both_files_of_t
     nobody = turns("bc-nobody")
     assert nobody.returncode == 1 and nobody.stdout == (
         f"inbox: {event_log} holds no event of bc-nobody: no hook has run for it on this VM, or its events have rotated out\n")
+
+
+ALLOW = {"permission": "allow"}
+LAUNCH, OTHER = "launch-model", "other-model"
+AGENT, PEER = "bc-56565656-5656-4565-8565-565656565656", "bc-67676767-6767-4676-8676-676767676767"
+TURNS = [f"{n * 8}-1111-4111-8111-111111111111" for n in "123456789"]
+
+
+def on_model(command: str, agent: str, turn: str | None, model: str | None, inbox: Path, **env: str) -> dict:
+    """The hook's verdict on `command` in the turn `turn` of `agent` on `model`; a None leaves that key out of the payload."""
+    event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": agent,
+             **({"generation_id": turn} if turn is not None else {}), **({"model": model} if model is not None else {})}
+    out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                         env={**os.environ, "AGENT_INBOX": str(inbox), "AGENT_GUARD_MIN_AVAIL": "0", **env}).stdout
+    return json.loads(out)
+
+
+def settled(log: Path, event: str = "model_refusal") -> list[dict]:
+    return [e for e in map(json.loads, log.read_text().splitlines()) if e.get("event") == event]
+
+
+def logged(t: int, agent: str, **kept: str) -> str:
+    return json.dumps({"t": t, "hook": "shell_hook.py", "event": "beforeShellExecution", "conversation_id": agent,
+                       **kept}) + "\n"
+
+
+def test_a_turn_on_another_model_than_the_launchs_is_refused_once_at_its_first_command_with_both_models_and_both_ways_on(
+        tmp_path, event_log):
+    """A turn an agent's own timer or a subscription starts can take another model than its launcher named, and nothing in
+    the turn says so. Its first command is refused once, naming both models and the two ways on; the rest of the turn
+    passes, and so does every turn back on the launch model. Each turn on another model is told, not only the first."""
+    one, two, three, four = TURNS[:4]
+    assert on_model("ls", AGENT, one, LAUNCH, tmp_path) == ALLOW
+    assert on_model("pwd", AGENT, one, LAUNCH, tmp_path) == ALLOW
+    first = on_model("ls", AGENT, two, OTHER, tmp_path)
+    text = first["user_message"]
+    assert first["permission"] == "deny" and text == first["agent_message"]
+    assert f"this turn runs on `{OTHER}`, and you were launched on `{LAUNCH}`" in text
+    assert "Task and `model: claude-opus-5-5-high` (or `claude-sonnet-5-5-high`" in text and "never Fable 5.2" in text
+    assert f"model: {LAUNCH}" not in text and "resumed by your lead" in text and "go by your brief" in text
+    assert on_model("ls", AGENT, two, OTHER, tmp_path) == ALLOW
+    assert on_model("pwd", AGENT, two, OTHER, tmp_path) == ALLOW
+    (line,) = settled(event_log)
+    assert sorted(line) == ["conversation_id", "event", "generation_id", "hook", "launch_model", "model", "t"]
+    assert (line["hook"], line["conversation_id"], line["generation_id"], line["model"], line["launch_model"]) == (
+        "shell_hook.py", AGENT, two, OTHER, LAUNCH)
+    assert on_model("ls", AGENT, three, LAUNCH, tmp_path) == ALLOW
+    assert on_model("pwd", AGENT, three, LAUNCH, tmp_path) == ALLOW
+    assert on_model("ls", AGENT, four, OTHER, tmp_path)["permission"] == "deny"
+    assert on_model("ls", AGENT, four, OTHER, tmp_path) == ALLOW
+    assert [e["generation_id"] for e in settled(event_log)] == [two, four], "once a turn, not once an agent"
+
+
+def test_an_agent_whose_turns_all_run_on_its_launch_model_is_never_refused(tmp_path, event_log):
+    """The launch model is each agent's own: another agent's turns on another model, in the same log and the first in it,
+    refuse nothing of this one's."""
+    assert on_model("ls", PEER, TURNS[5], OTHER, tmp_path) == ALLOW
+    for mine, peers in zip(TURNS[:3], TURNS[5:8]):
+        for command in ("ls", "pwd"):
+            assert on_model(command, AGENT, mine, LAUNCH, tmp_path) == ALLOW
+            assert on_model(command, PEER, peers, OTHER, tmp_path) == ALLOW
+    assert settled(event_log) == []
+
+
+def test_models_are_compared_by_family_never_by_effort(tmp_path, event_log, registry):
+    """A lead moved from Extra High to Medium runs the model it was launched on: a launch on Fable 5.2 Extra High and a
+    turn on Fable 5.2 Medium pass, and so does Opus at another effort; a turn on another family is told, whatever its
+    effort, and its refusal names no Fable child."""
+    one, two, three, four = TURNS[:4]
+    assert on_model("ls", HOLDER, one, "claude-fable-5-2-xhigh", tmp_path, **registry) == ALLOW
+    assert on_model("ls", HOLDER, two, "claude-fable-5-2-medium", tmp_path, **registry) == ALLOW
+    assert on_model("ls", HOLDER, three, "claude-fable-5-2", tmp_path, **registry) == ALLOW
+    told = on_model("ls", HOLDER, four, "claude-opus-5-5-medium", tmp_path, **registry)
+    assert told["permission"] == "deny" and "you were launched on `claude-fable-5-2-xhigh`" in told["user_message"]
+    assert "model: claude-fable" not in told["user_message"]
+    assert on_model("ls", PEER, one, "claude-opus-5-5-high", tmp_path, **registry) == ALLOW
+    assert on_model("ls", PEER, two, "claude-opus-5-5-medium", tmp_path, **registry) == ALLOW
+    assert [e["conversation_id"] for e in settled(event_log)] == [HOLDER]
+
+
+def test_no_launch_model_on_record_refuses_nothing(tmp_path, event_log):
+    """A payload that names no model or no turn, an agent whose first line names no turn or whose first turn names no
+    model, and a local session pass on any model. The launch model is the first model a line of the first turn names,
+    though that turn's first line names none."""
+    one, two, three = TURNS[:3]
+    assert on_model("ls", AGENT, one, LAUNCH, tmp_path) == ALLOW
+    assert on_model("ls", AGENT, two, None, tmp_path) == ALLOW
+    assert on_model("ls", AGENT, None, OTHER, tmp_path) == ALLOW
+    assert on_model("ls", AGENT, two, OTHER, tmp_path)["permission"] == "deny", "the turn the two payloads would be in"
+
+    untold, unnamed = "bc-78787878-7878-4787-8787-787878787878", "bc-89898989-8989-4898-8898-898989898989"
+    with event_log.open("a") as log:
+        log.write(logged(1_000_000_000, untold, model="model-before-turns"))
+        log.write(logged(1_000_000_000, unnamed, generation_id=one))
+    for turn, model in ((one, LAUNCH), (two, OTHER), (three, LAUNCH)):
+        assert on_model("ls", untold, turn, model, tmp_path) == ALLOW, "its first line names no turn"
+    for turn, model in ((two, LAUNCH), (three, OTHER)):
+        assert on_model("ls", unnamed, turn, model, tmp_path) == ALLOW, "its first turn names no model"
+    local = "56565656-5656-4565-8565-565656565656"
+    assert on_model("ls", local, one, LAUNCH, tmp_path) == ALLOW
+    assert on_model("ls", local, two, OTHER, tmp_path) == ALLOW, "a local session's user picks its model turn by turn"
+
+    named_later = "bc-90909090-9090-4909-8909-909090909090"
+    with event_log.open("a") as log:
+        log.write(logged(1_000_000_000, named_later, generation_id=one))
+    assert on_model("ls", named_later, one, LAUNCH, tmp_path) == ALLOW
+    refused = on_model("ls", named_later, two, OTHER, tmp_path)
+    assert refused["permission"] == "deny" and f"launched on `{LAUNCH}`" in refused["user_message"]
+    assert [e["conversation_id"] for e in settled(event_log)] == [AGENT, named_later]
+
+
+def test_the_setting_in_a_turns_first_command_passes_it_and_settles_the_turn(tmp_path, event_log):
+    """`AGENT_GUARD_MODEL_OK=1` in the first command of a turn on another model passes it and settles the turn as a refusal
+    would, with a `model_ok` line; it settles only its own turn, and in a turn already refused it adds nothing."""
+    one, two, three = TURNS[:3]
+    assert on_model("ls", AGENT, one, LAUNCH, tmp_path) == ALLOW
+    assert on_model("AGENT_GUARD_MODEL_OK=1 ls", AGENT, two, OTHER, tmp_path) == ALLOW
+    assert on_model("ls", AGENT, two, OTHER, tmp_path) == ALLOW
+    assert [e["generation_id"] for e in settled(event_log, "model_ok")] == [two] and settled(event_log) == []
+    assert on_model("ls", AGENT, three, OTHER, tmp_path)["permission"] == "deny"
+    assert on_model("AGENT_GUARD_MODEL_OK=1 ls", AGENT, three, OTHER, tmp_path) == ALLOW
+    assert len(settled(event_log, "model_ok")) == 1 and [e["generation_id"] for e in settled(event_log)] == [three]
+
+
+def test_another_refusal_comes_first_and_a_waiting_message_after(tmp_path, event_log):
+    """A command the hook refuses for another reason is refused with that reason and leaves the turn unsettled, so the
+    next command it would pass is the one the model rule refuses; a waiting inbox message goes to the command after."""
+    one, two = TURNS[:2]
+    inbox = tmp_path / "inbox"
+    assert on_model("ls", AGENT, one, LAUNCH, inbox) == ALLOW
+    environment = on_model("env", AGENT, two, OTHER, inbox)
+    assert environment["permission"] == "deny" and "environment variables' values" in environment["user_message"]
+    assert "Refused once" not in environment["user_message"] and settled(event_log) == []
+    queue(AGENT, "a waiting message", inbox)
+    told = on_model("ls", AGENT, two, OTHER, inbox)
+    assert told["permission"] == "deny" and told["user_message"].startswith("Refused once")
+    assert "a waiting message" not in told["user_message"]
+    delivered = on_model("ls", AGENT, two, OTHER, inbox)
+    assert delivered["permission"] == "deny" and "a waiting message" in delivered["user_message"]
+    assert on_model("ls", AGENT, two, OTHER, inbox) == ALLOW
+
+
+def test_the_launch_model_is_the_first_turns_in_the_file_the_log_rotated_to_and_a_log_that_starts_late_names_what_it_holds(
+        tmp_path, event_log):
+    """The launch turn may sit in the file the log rotated to. A log that starts after the launch (rotated out, or a new
+    machine a wake booted) holds a later turn first, and that turn's model is on record: a turn on any other is refused
+    naming it, and the refusal says to go by the brief."""
+    one, two, three, five, six = (TURNS[i] for i in (0, 1, 2, 4, 5))
+    Path(f"{event_log}.1").write_text(logged(1_000_000_000, AGENT, generation_id=one, model=LAUNCH))
+    event_log.write_text(logged(1_000_003_600, AGENT, generation_id=two, model=OTHER))
+    refused = on_model("ls", AGENT, three, OTHER, tmp_path)
+    assert refused["permission"] == "deny" and f"launched on `{LAUNCH}`" in refused["user_message"]
+
+    late = "bc-a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1"
+    assert on_model("ls", late, five, "late-model", tmp_path) == ALLOW
+    told = on_model("ls", late, six, LAUNCH, tmp_path)["user_message"]
+    assert f"this turn runs on `{LAUNCH}`, and you were launched on `late-model`" in told and "go by your brief" in told
+
+
+def test_a_log_the_rule_cannot_write_refuses_nothing_and_says_so(tmp_path, event_log):
+    """A guard that can't record that a turn was told can't keep the telling to once, so it refuses nothing, and says so:
+    with the launch turn on record in the file the log rotated to and the log itself unwritable, a turn on another model
+    passes, each command saying on stderr why."""
+    Path(f"{event_log}.1").write_text(logged(1_000_000_000, AGENT, generation_id=TURNS[0], model=LAUNCH))
+    event_log.mkdir()
+    event = {"hook_event_name": "beforeShellExecution", "command": "ls", "conversation_id": AGENT,
+             "generation_id": TURNS[1], "model": OTHER}
+    for _ in range(2):
+        run = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                             env={**os.environ, "AGENT_INBOX": str(tmp_path / "inbox"), "AGENT_GUARD_MIN_AVAIL": "0"})
+        assert json.loads(run.stdout) == ALLOW
+        assert "the model rule refuses nothing, since it can't record a turn as told in" in run.stderr
+
+
+FABLE, OPUS, SONNET = "claude-fable-5-2-xhigh", "claude-opus-5-5-high", "claude-sonnet-5-5-high"
+HOLDER = "bc-12121212-1212-4121-8121-121212121212"
+
+
+def coordinator(handle: str, generation: int) -> str:
+    """The id `infra/cursor/launch_coordinator.py` gives `handle`'s coordinator at `generation`."""
+    namespace = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")
+    return f"bc-{uuid.uuid5(namespace, f'{handle}/{generation}')}"
+
+
+@pytest.fixture
+def registry(tmp_path) -> dict[str, str]:
+    """A Slack registry with two handles, `infra` held by HOLDER and `vllm` held by no one, as the hook's environment."""
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps({"handles": [{"handle": "infra", "holder": HOLDER}, {"handle": "vllm"}]}))
+    return {"AGENT_GUARD_REGISTRY": str(path)}
+
+
+def test_every_command_of_a_workers_turn_on_fable_is_refused_each_time_with_the_way_on(tmp_path, event_log, registry):
+    """No worker runs Fable 5.2: every command of its turn on it, at any effort, is refused, not only the first, with the
+    way on; its turns on Opus or Sonnet pass, and so does a turn on Opus after a launch on Fable, which the model rule
+    would otherwise tell to go back to Fable."""
+    for turn, model in ((TURNS[0], FABLE), (TURNS[1], "claude-fable-5-2-medium"), (TURNS[2], "claude-fable-5-2")):
+        for command in ("ls", "echo pushed", "AGENT_GUARD_MODEL_OK=1 ls"):
+            refused = on_model(command, AGENT, turn, model, tmp_path, **registry)
+            text = refused["user_message"]
+            assert refused["permission"] == "deny" and text == refused["agent_message"], (model, command)
+            assert f"this turn runs on `{model}`, and no worker runs Fable 5.2" in text
+            assert "`claude-opus-5-5-high`, or `claude-sonnet-5-5-high` for a fully specified task" in text
+            assert "End this turn now" in text and "what started it" in text and "naming `claude-opus-5-5-high`" in text
+    for turn, model in ((TURNS[3], OPUS), (TURNS[4], SONNET), (TURNS[5], OPUS)):
+        assert on_model("ls", AGENT, turn, model, tmp_path, **registry) == ALLOW, model
+        assert on_model("pwd", AGENT, turn, model, tmp_path, **registry) == ALLOW, model
+    assert settled(event_log) == [] and settled(event_log, "model_ok") == []
+
+
+def test_a_leads_turn_on_fable_passes_and_so_does_a_later_generation_of_a_registered_handle(tmp_path, event_log, registry):
+    """A lead is a registry holder, or launch_coordinator's id for a registered handle, held or not, at a generation from 1
+    to 50; it runs Fable at any effort. A generation past 50, an unregistered handle's coordinator and a lead's child are
+    workers."""
+    for agent in (HOLDER, coordinator("infra", 1), coordinator("vllm", 7), coordinator("infra", 50)):
+        for turn, model in ((TURNS[0], FABLE), (TURNS[1], "claude-fable-5-2-medium")):
+            for command in ("ls", "pwd"):
+                assert on_model(command, agent, turn, model, tmp_path, **registry) == ALLOW, (agent, model)
+    for agent in (coordinator("infra", 51), coordinator("infra", 0), coordinator("comms", 1), PEER):
+        assert on_model("ls", agent, TURNS[0], FABLE, tmp_path, **registry)["permission"] == "deny", agent
+
+
+def test_a_turn_whose_model_the_hook_cannot_read_and_a_registry_it_cannot_read_refuse_nothing(tmp_path, event_log, registry):
+    """The rule must never lock an agent out: a payload with no model, or one that isn't a string, passes; so does a local
+    session on Fable; and while the registry can't be read, a lead can't be told from a worker, so a turn on Fable passes
+    and the hook says why on stderr."""
+    assert on_model("ls", AGENT, TURNS[0], None, tmp_path, **registry) == ALLOW
+    event = {"hook_event_name": "beforeShellExecution", "command": "ls", "conversation_id": AGENT,
+             "generation_id": TURNS[1], "model": ["claude-fable-5-2-xhigh"]}
+    run = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                         env={**os.environ, "AGENT_INBOX": str(tmp_path), "AGENT_GUARD_MIN_AVAIL": "0", **registry})
+    assert json.loads(run.stdout) == ALLOW
+    assert on_model("ls", "56565656-5656-4565-8565-565656565656", TURNS[2], FABLE, tmp_path, **registry) == ALLOW
+    for missing in (tmp_path / "no-registry.json", tmp_path):
+        event = {**event, "generation_id": TURNS[3], "model": FABLE}
+        for _ in range(2):
+            run = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True,
+                                 check=True, env={**os.environ, "AGENT_INBOX": str(tmp_path / "inbox"),
+                                                  "AGENT_GUARD_MIN_AVAIL": "0", "AGENT_GUARD_REGISTRY": str(missing)})
+            assert json.loads(run.stdout) == ALLOW, missing
+            assert "the Fable rule refuses nothing, since it can't read the registry" in run.stderr
+
+
+def test_the_guards_lead_ids_are_launch_coordinators(monkeypatch):
+    """The guard can't import `infra/`, so it keeps launch_coordinator's namespace and id form itself: they agree."""
+    source = (ROOT / "infra/cursor/launch_coordinator.py").read_text()
+    (url,) = re.findall(r'^NAMESPACE = uuid\.uuid5\(uuid\.NAMESPACE_URL, "([^"]+)"\)$', source, re.M)
+    assert "    return f\"bc-{uuid.uuid5(NAMESPACE, f'{handle}/{generation}')}\"\n" in source
+    task_hook = guard_module("task_hook", monkeypatch)
+    assert task_hook.COORDINATORS == uuid.uuid5(uuid.NAMESPACE_URL, url)
+    assert coordinator("infra", 3) == f"bc-{uuid.uuid5(task_hook.COORDINATORS, 'infra/3')}"
 
 
 def test_send_refuses_an_id_the_hook_would_never_deliver_to(tmp_path):
@@ -1843,6 +2096,60 @@ def test_a_name_exported_for_throwaway_commits_is_stopped_before_a_later_merge_i
     assert clones(f"{ahead} {commit}", "verity") == {"permission": "allow"}
 
 
+#: commands that leave PYTHONPATH or RESEARCH_AT_CHECKOUT set in the agent's own shell: the forms the identity rule reads
+#: (`shell_keeps`), in a body, an `eval`, after a comment, beside a subshell or a command substitution that ends first
+CODE_SET_IN_THE_SHELL = [
+    "export PYTHONPATH=/x", "export PYTHONPATH=/x RESEARCH_AT_CHECKOUT=1", "export RESEARCH_AT_CHECKOUT=1",
+    "cd /x && export PYTHONPATH=$HERE/src && pytest tests/test_x.py", "declare -x PYTHONPATH=/x", "typeset -x RESEARCH_AT_CHECKOUT=1",
+    "export PYTHONPATH", "PYTHONPATH=/x", "X=1 RESEARCH_AT_CHECKOUT=1", "PYTHONPATH=/x; export PYTHONPATH", "readonly PYTHONPATH=/x",
+    "set -a; PYTHONPATH=/x; set +a", "command export PYTHONPATH=/x", "export PYTHONPATH=$(pwd)/src", "export PYTHONPATH=`pwd`/src",
+    'export PYTHONPATH="$(pwd)/src:$PYTHONPATH"', "if true; then export PYTHONPATH=/x; fi", "for d in a b; do export PYTHONPATH=$d; done",
+    "f() { export PYTHONPATH=/x; }; f", "{ export PYTHONPATH=/x; }", "eval 'export PYTHONPATH=/x'", "# scratch\nexport PYTHONPATH=/x",
+    "export PYTHONPATH=/x # scratch", "( cd /y ) && export PYTHONPATH=/x", "echo $(date); export RESEARCH_AT_CHECKOUT=1",
+    "export PYTHONPATH=/tmp/scratch-worktree/tools/research/src",
+]
+#: and commands that leave neither there: the names ahead of one command, an `unset`, a read, and every shell that dies with
+#: the command (a carrier's, a subshell's, a pipeline member's, a command substitution's, a script's), and a text the hook
+#: can't split
+CODE_NOT_SET_IN_THE_SHELL = [
+    "PYTHONPATH=/x RESEARCH_AT_CHECKOUT=1 python3 -m research queue ready", "env PYTHONPATH=/x python3 -c pass",
+    "PYTHONPATH=$(pwd)/src python3 -c pass", "PYTHONPATH=`pwd`/src python3 -c pass", "PYTHONPATH=/x \\\n  python3 -c pass",
+    "unset PYTHONPATH RESEARCH_AT_CHECKOUT", 'echo "$PYTHONPATH"', "declare -p PYTHONPATH", "export PYTHONPATH_X=1",
+    "bash -c 'export PYTHONPATH=/x; python3 -c pass'", "bash -lc 'export PYTHONPATH=/x RESEARCH_AT_CHECKOUT=1; research status'",
+    "research run --on auto -- bash -lc 'export PYTHONPATH=.:x; pytest'", "ssh n1 'export PYTHONPATH=/x; pytest'",
+    "( export PYTHONPATH=/x; python3 -c pass )", "cd /x && (export PYTHONPATH=$HERE/src; pytest tests/test_x.py)",
+    "export PYTHONPATH=/x | cat", "export PYTHONPATH=/x &", "echo $(export PYTHONPATH=/x)", "./export_and_run.sh",
+    "tmux send-keys 'export PYTHONPATH=/x' C-m", "bash <<'EOF'\nexport PYTHONPATH=/x\nEOF", 'rg -n "export PYTHONPATH" tools/',
+    "export PYTHONPATH=/x 'unclosed",
+]
+#: what its refusal says to do instead
+CODE_FIX = {"PYTHONPATH": "Put it on the one command instead, `PYTHONPATH=DIR python3 ...`, or run it in a subshell",
+            "RESEARCH_AT_CHECKOUT": "Put it on the one command instead, `RESEARCH_AT_CHECKOUT=1 research ...`, or run it in a subshell"}
+CODE_WHY_AND_UNSET = ("changes which code every later command of this shell runs", "`unset PYTHONPATH RESEARCH_AT_CHECKOUT` clears it")
+
+
+@pytest.mark.parametrize("form", CODE_SET_IN_THE_SHELL)
+def test_a_command_that_leaves_pythonpath_or_research_at_checkout_set_in_the_shell_is_refused(form):
+    """A shell hands both to every later command: an exported PYTHONPATH made a later `research` import a scratch tree's code
+    and, once that tree was gone, an older installed copy, and RESEARCH_AT_CHECKOUT kept it off origin/main's code."""
+    out = answer(form)
+    assert out["permission"] == "deny" and "set in the shell itself" in out["agent_message"], (form, out)
+
+
+@pytest.mark.parametrize("form", CODE_NOT_SET_IN_THE_SHELL)
+def test_naming_pythonpath_on_one_command_unsetting_reading_or_exporting_it_in_a_shell_that_dies_passes(form):
+    """Unlike the identity rule, this one never refuses in doubt: the harm is only in the shell that persists, and carriers,
+    subshells and scripts export PYTHONPATH in their own process as honest work."""
+    assert answer(form) == {"permission": "allow"}, form
+
+
+def test_the_refusal_for_a_code_variable_names_the_fix_and_the_form_it_gives_passes():
+    for name, fix in CODE_FIX.items():
+        message = answer(f"export {name}=1")["agent_message"]
+        assert all(s in message for s in (fix, *CODE_WHY_AND_UNSET, f"`( export {name}=...; cmd )`")), message
+    assert answer("unset PYTHONPATH RESEARCH_AT_CHECKOUT") == answer("PYTHONPATH=/x python3 -c pass") == {"permission": "allow"}
+
+
 def test_a_merge_on_a_vm_that_never_ran_boot_sh_first_gets_the_record_merge_drivers(tmp_path):
     """A cloud worker's VM never runs boot.sh, so its trial `git merge-tree` of a PR onto `next` merged each lean-audit.json
     line by line and showed 359 conflicts the queue never saw."""
@@ -1896,3 +2203,29 @@ def test_a_merge_sets_origin_main_s_merge_drivers_over_an_older_command(tmp_path
                          capture_output=True, text=True, env={**env, "AGENT_GUARD_MIN_AVAIL": "0"}, check=True)
     assert json.loads(out.stdout)["permission"] == "allow", out.stderr
     assert git("config", "--get", "merge.lean-audit.driver") == "python3 main.py %O %A %B %P"
+
+
+def test_a_command_the_hook_cant_split_weighs_nothing_and_says_so(monkeypatch, capsys):
+    shell_hook = guard_module("shell_hook", monkeypatch)
+    assert shell_hook.weight("echo 'unclosed") == 0 and shell_hook.blocks_text("echo 'unclosed") == 0.0
+    err = capsys.readouterr().err
+    assert "shell_hook: a command the hook can't split weighs nothing (No closing quotation)" in err
+    assert "shell_hook: a command the hook can't split blocks for no time (No closing quotation)" in err
+
+
+def test_unreadable_memory_is_not_known_and_said_while_an_empty_inbox_says_nothing(tmp_path, monkeypatch, capsys):
+    shell_hook = guard_module("shell_hook", monkeypatch)
+    monkeypatch.setenv("AGENT_GUARD_MEMINFO", str(tmp_path / "meminfo"))
+    assert shell_hook.available() is None
+    assert f"shell_hook: {tmp_path / 'meminfo'} unread, so memory is not known (FileNotFoundError" in capsys.readouterr().err
+    monkeypatch.setattr(shell_hook, "INBOX", str(tmp_path))
+    assert shell_hook.delivery("bc-x") is None and capsys.readouterr().err == ""
+
+
+def test_a_branch_registry_that_does_not_parse_reads_as_none_registered_and_says_so(tmp_path, monkeypatch, capsys):
+    worktree_guard = guard_module("worktree_guard", monkeypatch)
+    monkeypatch.setattr(worktree_guard, "STATE", tmp_path)
+    assert worktree_guard.registry() == {} and capsys.readouterr().err == ""
+    (tmp_path / "branches.json").write_text("{")
+    assert worktree_guard.registry() == {}
+    assert "branches.json unreadable, read as no branch registered (JSONDecodeError" in capsys.readouterr().err
