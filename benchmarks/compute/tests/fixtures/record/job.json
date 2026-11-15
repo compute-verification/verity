@@ -1,5 +1,6 @@
 {
  "schema": "telemetry/job/v0.2",
+ "made_up": "written by hand to show a record's format, not produced by a verifier or a card: its matmul shapes are the served model's, which the verifier takes, and its totals add up, but its commitments, run id and commit are placeholders and its spread of \u03b5 over the calls is invented",
  "run": {
   "id": "r20000101-000000-aaaa"
  },

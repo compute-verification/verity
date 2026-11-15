@@ -4,9 +4,9 @@ and as one line of JSON (`value`, `unit`, `commit`, `run`), beside its target (`
 accept, is a test instance's (`profile.test_instance`), or that the record holds no Lean verdict of, prints no number
 and exits 1.
 
-    verity bench compute --record DIR                                a run's record in a directory on disk
-    verity bench compute --from RUN                                  a recorded run in our evidence store
-    verity bench compute --record DIR|--from RUN --per-call [--uncredited F] [--top N]   and where the rest of its MACs went
+    verity bench compute --from DIR                          a run's record in a directory on disk
+    verity bench compute --from RUN                          a recorded run in our evidence store
+    verity bench compute --from DIR|RUN --per-call [--uncredited F] [--top N]   and where the rest of its MACs went
 
 The number, for a run whose inference-only policy registers one class of S slots, each P prompt tokens then O output
 tokens, served by a model of L layers, hidden size d, H attention heads of d_h = d / H, H_kv key and value heads, MLP
@@ -35,13 +35,14 @@ passes are not one load of the class. A record that holds no split, as runs befo
 no head.
 
 A run's record is its run directory as `research run` leaves it and the evidence store keeps it: the run's `job.json`,
-and what the run wrote under `out/`. `--record DIR` reads it from the directory DIR, through no store: nothing of
-research's is imported, no credential is looked up and nothing goes over the network. DIR must hold the answer and the
-policy below (exit 2 naming the file it lacks). The run printed is the `run.id` its `job.json` states and the commit its
-`store.conditions` state (`source.commit`, `-dirty` when `source.dirty`), as the store's attempt states them; without
-them, the directory's name and no commit. Nothing is withdrawn from a directory. `--from RUN` reads the record of run
-RUN from the evidence store, through research's client. The two options are separate so that neither is a guess: a
-path that names no directory is refused as a path, and a run id never reads a local file.
+and what the run wrote under `out/`. `--from` takes a directory or a run id (`main`). Given a directory, it reads the
+record from there through no store (`kit.record_dir`): nothing of research's is imported, no credential is looked up
+and nothing goes over the network. DIR must hold the answer and the policy below (exit 2 naming the file it lacks). The
+run printed is the `run.id` its `job.json` states and the commit its `store.conditions` state (`source.commit`,
+`-dirty` when `source.dirty`), as the store's attempt states them; without them, the directory's name and no commit.
+Nothing is withdrawn from a directory. Given a run id (`kit_report.RUN_ID`) that names no directory, it reads that
+run's record from the evidence store, through research's client. Anything else is refused (exit 2). A record whose
+`job.json` says it is made up (``made_up``, as the tests' fixture does) has that printed under the number.
 
 Either way it reads the verifier's side of the record, and nothing the developer's node reports of what it served:
 
@@ -61,13 +62,17 @@ Either way it reads the verifier's side of the record, and nothing the developer
 - `out/pieces/pouw/development.json`, the Pearl+ piece's document (`served_verdicts.py pearlplus`), where the record
   holds it: its ``coin_source`` alone, where the passes' salt coins came from (`coins`).
 
-The line under the number says which coins and parameters the record states the run used (`coins`): the answer's
-sample source (`profile.source_from`), the piece's salt coins (``coin_source``), whether the Lean verifier ran as of
-record (``--of-record`` in `pearlplus-lean-check.json`'s ``argv``), and the answer's draws and δ. Each that the record
-doesn't state is printed as not stated. ``development`` ends the line where the record holds PoUW's development piece
-(`development.json`, whose credit is the piece's own and no row of record) or any of the three is not live; since the
-salt coins are stated only in that piece, every record of today's format reads ``development``. ``challenger`` names a
-challenger session, the auditor's or a local one: the record doesn't say whose. None of them refuses a number.
+The line under the number is the kit's ``ran with: coins COINS; parameters PARAMETERS (DETAIL)`` (`ran_with`), and
+below it the kit's ``a measurement, not an audit`` unless both are deployed. COINS is who drew the coins: the launcher's
+``challenger`` in `out/compute-run.json` (`RAN`, written by `serve.sh`: ``local`` or ``in-process``), else
+``in-process`` where the answer's sample is the node's or the salt coins an in-process challenger's; a record that
+says neither prints ``ran with: not stated`` and, below it, the coins it does state. ``deployed challenger`` is printed
+only where the launcher says so and the sample and salt coins are a challenger's and the Lean verifier ran as of
+record. PARAMETERS is ``deployed`` only where the launcher says ``development`` false. DETAIL is what the record states
+of the rest (`coins`): the answer's draws and δ and scheme, its sample source (`profile.source_from`), the piece's salt
+coins (``coin_source``), and whether the Lean verifier ran as of record (``--of-record`` in
+`pearlplus-lean-check.json`'s ``argv``), each ``not stated`` where the record holds none. None of them refuses a
+number.
 
 The record holds neither the tokens the run served nor the seconds it served them in (both stay on the developer's
 node). So the tokens are the class's, and the capacity share (the credited MACs over the card's rate times the seconds
@@ -96,7 +101,8 @@ sample: the verifier takes it off the records whose cells hold the most MACs a t
 for the whole run. ``--top N`` (default 10) calls are printed, by give-up.
 
 It exits 0 with the number printed, 1 with none (the answer isn't an accept, the record holds no Lean verdict or one
-that isn't the answer's, or the run left no answer) and 2 when the command line, the run or its policy can't be read,
+that isn't the answer's, or the run left no answer: the kit prints ``compute: no number: WHY`` and writes the result
+with no value and why) and 2 when the command line, the run or its policy can't be read,
 or the policy's load is not the benchmark's. A record
 withdrawn whole, or in a part that holds a file read here, is refused before any of it is fetched; a withdrawal of
 other files of it is printed beside the number. Under `research run` the printed document is also `$OUT/compute.json`;
@@ -129,6 +135,7 @@ from typing import Any, NamedTuple
 
 from verity.device import Site, load_card, rate
 from verity_bench import kit
+from verity_bench.kit_report import RUN_ID
 
 __all__ = ["ABSENT", "ANSWER", "DELTA_S", "DEVELOPMENT", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
            "POLICY",
@@ -153,13 +160,18 @@ POLICY = "out/inference-only-policy.json"
 VERDICTS = "out/record/verdicts.json"
 #: the Pearl+ piece's own document (`served_verdicts.py pearlplus`), read for its ``coin_source`` alone
 DEVELOPMENT = "out/pieces/pouw/development.json"
-RECORDS = [ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS, DEVELOPMENT]
+#: the launcher's statement of the coins and parameters it ran with (`serve.sh`), read for its ``challenger`` and
+#: ``development`` alone
+RAN = "out/compute-run.json"
+#: the run's own record of itself: a record directory's run id and commit, and where a record is made up, ``made_up``
+JOB = "job.json"
+RECORDS = [ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS, DEVELOPMENT, RAN, JOB]
 #: the files of `RECORDS` a withdrawal of which leaves the record readable: the file is then neither fetched nor read
-OPTIONAL = frozenset({DEVELOPMENT})
+OPTIONAL = frozenset({DEVELOPMENT, RAN, JOB})
+#: the launcher's ``challenger``, in the kit's words for who drew the coins (`kit.COINS`)
+CHALLENGER = {"local": "local challenger", "in-process": "in-process", "deployed": "deployed challenger"}
 #: the verifier's document, read by `--per-call` alone
 VERIFY = "out/pieces/pouw/verify.json"
-#: the run's own record of itself, where `--record` reads the run's id and commit
-JOB = "job.json"
 #: the files a record directory must hold, and what each is
 REQUIRED = {ANSWER: "the Pearl+ verifier's answer", POLICY: "the run's inference-only policy"}
 #: the causes of the per-call split's give-up, in the order printed
@@ -268,7 +280,8 @@ def opened() -> EvidenceStore:
         from research.store import labels_sync, vocab
         from research.store.local import LocalStore, StoreError
     except ImportError as e:
-        raise Unreadable(f"the evidence store's client isn't installed here ({e})") from e
+        raise Unreadable(f"the evidence store's client isn't installed here ({e}): give --from the run's record "
+                         "directory, or install research (uv sync --all-packages)") from e
     return EvidenceStore(LocalStore(), labels_sync.read_through, StoreError, vocab.WITHDRAWN)
 
 
@@ -342,15 +355,48 @@ def coins(tree: Path) -> dict:
     profile = _held(tree, ANSWER).get("profile") or {}
     argv = _held(tree, LEAN_CHECK).get("argv")
     lean = None if not isinstance(argv, list) else "of record" if "--of-record" in argv else "development"
-    piece = None
-    if (tree / DEVELOPMENT).is_file():
-        try:
-            piece = json.loads((tree / DEVELOPMENT).read_text())
-        except ValueError as e:
-            raise Unreadable(f"the record's {DEVELOPMENT} doesn't read as JSON ({e})") from e
+    piece, ran = _optional(tree, DEVELOPMENT), _optional(tree, RAN)
     sample, salt = profile.get("source_from"), piece.get("coin_source") if isinstance(piece, dict) else None
+    ran = ran if isinstance(ran, dict) else {}
     return {"sample": sample, "salt": salt, "lean": lean, "draws": profile.get("draws"), "delta": profile.get("delta"),
-            "development": piece is not None or not (sample == salt == "challenger" and lean == "of record")}
+            "development": piece is not None or not (sample == salt == "challenger" and lean == "of record"),
+            "challenger": ran.get("challenger"), "parameters": ran.get("development")}
+
+
+def _optional(tree: Path, path: str) -> Any:
+    """The JSON an optional file of the record under `tree` holds; None where it holds no such file, and `Unreadable`,
+    naming it, where it holds one that doesn't read as JSON."""
+    if not (tree / path).is_file():
+        return None
+    try:
+        return json.loads((tree / path).read_text())
+    except ValueError as e:
+        raise Unreadable(f"the record's {path} doesn't read as JSON ({e})") from e
+
+
+def ran_with(doc: dict) -> tuple[str, dict] | None:
+    """The kit's `ran with` line of a document (`kit.ran_with`), from what its record states (`coins`): who drew the
+    coins is the launcher's ``challenger`` (`CHALLENGER`, `RAN`), else ``in-process`` where the sample is the node's or
+    the salt coins an in-process challenger's, and otherwise not stated (None): a challenger sample says no more than
+    that some challenger drew it, so ``deployed challenger`` is printed only where the launcher says so and the coins
+    and the Lean verifier's run are live. The parameters are ``deployed`` only where the launcher says
+    ``development`` false. `Unreadable` where the launcher's word is none of `CHALLENGER`'s or says a deployed
+    challenger the record's coins don't bear out."""
+    c = doc["coins"]
+    detail = ", ".join(f"{said} {v}" if v is not None else f"{unsaid} not stated" for said, unsaid, v in (
+        ("draws", "draws", c["draws"]), ("delta", "delta", c["delta"]), ("scheme", "scheme", doc["scheme"]),
+        ("sample from", "sample source", c["sample"]), ("salt coins from", "salt coins", c["salt"]),
+        ("Lean verdict", "Lean verdict", c["lean"])))
+    if c["challenger"] is not None and c["challenger"] not in CHALLENGER:
+        raise Unreadable(f"the record's {RAN} names the challenger {c['challenger']!r}, not one of "
+                         f"{', '.join(CHALLENGER)}")
+    coins = CHALLENGER.get(c["challenger"]) or ("in-process" if c["sample"] == "node" or c["salt"] == "in-process"
+                                                else None)
+    if coins == "deployed challenger" and not (c["sample"] == c["salt"] == "challenger" and c["lean"] == "of record"):
+        raise Unreadable(f"the record's {RAN} says a deployed challenger and its coins don't: {detail}")
+    if coins is None:
+        return None
+    return kit.ran_with(coins, "deployed" if c["parameters"] is False else "development", detail)
 
 
 def fixed_load() -> dict:
@@ -548,7 +594,16 @@ def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[st
             "epsilon_s": c["epsilon_s"], "delta_s": c["delta_s"], "lean": c["lean"], "coins": coins(tree), "record": record,
             "withdrawn": withdrawn,
             "model": served["model"], "revision": served["revision"], "class": served["class"], "policy_agrees": served["policy_agrees"],
-            "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None, **head}
+            "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None, **head,
+            "made_up": made_up(tree)}
+
+
+def made_up(tree: Path) -> str | None:
+    """What the record under `tree` says of itself where it is made up, not a run's: its `job.json`'s ``made_up``, which
+    a record written by hand (the tests' fixture) states and a run's never does; None where it says nothing."""
+    job = _optional(tree, JOB)
+    said = job.get("made_up") if isinstance(job, dict) else None
+    return str(said) if said else None
 
 
 def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
@@ -619,7 +674,7 @@ def from_dir(record: Path, per_call: bool = False, given: Path | None = None, to
     is the `run.id` its `job.json` states, else the directory's name, and the commit the one its `store.conditions`
     state, else None. `Unreadable` unless it holds every file of `REQUIRED`."""
     if not record.is_dir():
-        raise Unreadable(f"{record} is not a directory: --record names a run's directory, the one holding out/")
+        raise Unreadable(f"{record} is not a directory: --from names a run's directory, the one holding out/")
     for path, what in REQUIRED.items():
         if not (record / path).is_file():
             moved = (record / Path(path).relative_to("out")).is_file()
@@ -662,9 +717,11 @@ def per_call_text(got: dict, model_macs: int) -> list[str]:
 
 
 def coins_text(c: dict) -> str:
-    """The printed line of a document's `coins`: which coins and parameters the record says the run used."""
+    """The printed line of a document's `coins` where the record doesn't say who drew them (`ran_with` None): which
+    coins and parameters it does state."""
     stated = "not stated in the record"
-    return (f"  coins: {c['sample'] or 'sample source ' + stated} sample, "
+    return (f"  coins as the record states them, which doesn't say whose challenger: "
+            f"{c['sample'] or 'sample source ' + stated} sample, "
             + (f"salt coins from {c['salt']}" if c["salt"] else f"salt coins: {stated}")
             + f"; Lean verifier run {'as ' + c['lean'] if c['lean'] else stated}"
             + f"; parameters: draws {c['draws'] if c['draws'] is not None else stated}, "
@@ -678,7 +735,10 @@ def text(doc: dict) -> str:
     lines = [(f"compute: {100 * doc['value']:.2f}% of the served model's MACs ({doc['credited_macs']:,} of "
               f"{doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the {100 * doc['target']:g}% target. "
               "This is what the Pearl+ piece's own answer credits, not PoUW's row in the run's record of verdicts")]
-    lines.append(coins_text(doc["coins"]))
+    if doc["made_up"]:
+        lines.append(f"  a made-up record, not a run's: {doc['made_up']}")
+    if ran_with(doc) is None:
+        lines.append(coins_text(doc["coins"]))
     at = ", ".join(f"{k} {doc[name]}" for k, name in (("ε_s", "epsilon_s"), ("δ_s", "delta_s")) if doc[name] is not None)
     lines.append(f"  {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: Pearl+'s answer accepts"
                  + (f" (scheme {doc['scheme']})" if doc["scheme"] else "")
@@ -709,14 +769,13 @@ def text(doc: dict) -> str:
 
 def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore] = opened) -> int:
     """The command: 0 with the number printed, 1 with none, 2 when the command line, the run or its policy can't be
-    read. `store_of` opens the evidence store, which `--record` never calls."""
+    read. `--from` takes a record's directory, read with nothing of research's (`kit.record_dir`), or a run id
+    (`kit_report.RUN_ID`) that names no directory, fetched through `store_of`, the evidence store, which honors
+    withdrawals of parts of a record (`EvidenceStore.files`)."""
     ap = argparse.ArgumentParser(prog="verity bench compute", description=__doc__.split("\n\n")[0])
-    source = ap.add_mutually_exclusive_group(required=True)
-    source.add_argument("--record", type=Path, metavar="DIR",
-                        help="a run's record in the directory DIR: the run's directory, holding out/ (and job.json, "
-                             "for the run's id and commit), read from disk alone, through no store")
-    source.add_argument("--from", dest="run", metavar="RUN",
-                        help="a recorded run of our evidence store: print from its record there")
+    ap.add_argument("--from", dest="source", metavar="DIR|RUN", required=True,
+                    help="a run's record: its directory (the run's, holding out/ and job.json), read from disk alone, or "
+                         "a run id of our evidence store, read through research's store client")
     ap.add_argument("--per-call", action="store_true",
                     help="also print where the model's MACs the credit leaves out went, by cause and by matmul call")
     ap.add_argument("--uncredited", type=Path, metavar="F",
@@ -727,17 +786,22 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     if (a.uncredited or a.top != 10) and not a.per_call:
         ap.error("--uncredited and --top go with --per-call")
     try:
-        doc = (from_dir(a.record, a.per_call, a.uncredited, a.top) if a.record is not None
-               else from_run(store_of(), a.run, a.per_call, a.uncredited, a.top))
-        measured = amounts(doc)
+        if RUN_ID.fullmatch(a.source) and not Path(a.source).is_dir():
+            doc = from_run(store_of(), a.source, a.per_call, a.uncredited, a.top)
+        else:
+            doc = from_dir(kit.record_dir(a.source), a.per_call, a.uncredited, a.top)
+        measured, said = amounts(doc), ran_with(doc)
+    except kit.NoRecord as e:
+        print(f"compute: {e}", file=sys.stderr)
+        return 2
     except NoNumber as e:
-        print(f"compute: no number: {e}", file=sys.stderr)
-        return 1
+        none = {"value": None, "unit": UNIT, "commit": None, "run": a.source, "target": float(TARGET)}
+        return kit.report("compute", "", none, [{"name": METRIC, "unit": UNIT, "target": float(TARGET)}],
+                          accepted=False, why=str(e))
     except Unreadable as e:
         print(f"compute: {e}", file=sys.stderr)
         return 2
-    kit.report("compute", text(doc), doc, measured)
-    return 0
+    return kit.report("compute", text(doc), doc, measured, ran_with=said, accepted=True)
 
 
 if __name__ == "__main__":
