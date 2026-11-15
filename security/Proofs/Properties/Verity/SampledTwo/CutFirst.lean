@@ -104,10 +104,10 @@ private theorem v2_deployed_spec (j : Json) :
       ⦃⇓? a => ⌜∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed⌝⦄ := by
   cases hx : Spot.OneStageZk.paramsOfJson j
   · exact fun _ => True.intro
-  · exact fun _ => Limits.paramsOfJson_deployed hx
+  · exact fun _ => Limits.paramsParsed_deployed (Spot.OneStageZk.paramsOfJson_parsed hx)
 
 /-- The per-member form's parameters name a challenger key at the deployed LMS parameters, as the one statement's
-do (`Limits.paramsOfJson_deployed`). -/
+do (`Limits.paramsParsed_deployed`). -/
 theorem members_deployed {j : Json} {a : Spot.OneStageZk.Params}
     (h : Spot.OneStageZk.membersParamsOfJson j = .ok a) :
     ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
