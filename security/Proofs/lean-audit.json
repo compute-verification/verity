@@ -268,7 +268,7 @@
   "Proofs.Properties.Verity.SampledTwo.CoinBytes",
   "Proofs.Properties.Verity.SampledTwo.CoinMap",
   "Proofs.Properties.Verity.SampledTwo.CoinMapAgree",
-  "Proofs.Properties.Verity.SampledTwo.CoinMapLaw",
+  "Proofs.Properties.Verity.SampledTwo.CoinMapDistribution",
   "Proofs.Properties.Verity.SampledTwo.CoinStages",
   "Proofs.Properties.Verity.SampledTwo.CouplingOf",
   "Proofs.Properties.Verity.SampledTwo.Cover",
