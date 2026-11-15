@@ -15,11 +15,11 @@ PREFIX = "verity.protocols."
 TRUSTED = ("verifier", "device")
 LANES = {
     "proofs.": "proofs",
-    "accounting.registration.": "proofs",
-    "accounting.pouw.": "compute-accounting",
-    "accounting.certifier.": "network-accounting",
-    "accounting.poub.": "network-accounting",
-    "accounting.pous.": "memory-accounting",
+    "registration.": "proofs",
+    "resource_accounting.compute.": "compute-accounting",
+    "resource_accounting.network.": "network-accounting",
+    "resource_accounting.memory.poub.": "network-accounting",
+    "resource_accounting.memory.pous.": "memory-accounting",
 }
 
 KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
@@ -31,7 +31,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/compiler/replay_chain.py": (
             "proofs.spot.verifier.one_stage.produced", "proofs.spot.verifier.one_stage.registered",
         ),
-        "verity_vllm/pipeline/advice.py": ("accounting.registration.verifier.registration",),
+        "verity_vllm/pipeline/advice.py": ("registration.verifier.registration",),
         "verity_vllm/pipeline/boundary_rows.py": (
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.partition",
             "proofs.spot.verifier.second_stage",
@@ -40,9 +40,9 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.served",
         ),
         "verity_vllm/pipeline/commit_coins.py": (
-            "proofs.spot.device.challenger", "proofs.spot.device.challenger.CoinError",
-            "proofs.spot.device.challenger.LiveOpening", "proofs.spot.device.challenger.live_reason",
-            "proofs.spot.device.remote",
+            "proofs.spot.verifier.challenger.challenger", "proofs.spot.verifier.challenger.challenger.CoinError",
+            "proofs.spot.verifier.challenger.challenger.LiveOpening", "proofs.spot.verifier.challenger.challenger.live_reason",
+            "proofs.spot.verifier.challenger.remote",
         ),
         "verity_vllm/pipeline/edge.py": ("proofs.spot.verifier.one_stage.registered",),
         "verity_vllm/pipeline/expert_rows.py": ("proofs.spot.verifier.one_stage.registered",),
@@ -54,7 +54,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.partition",
         ),
         "verity_vllm/pipeline/registration_log.py": ("proofs.spot.verifier.one_stage.docket",),
-        "verity_vllm/pipeline/serve_day.py": ("accounting.registration.verifier.registration",),
+        "verity_vllm/pipeline/serve_day.py": ("registration.verifier.registration",),
         "verity_vllm/pipeline/serve_tie.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/serving_rows.py": (
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.partition",
@@ -75,88 +75,88 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/compiler/served_rows.py": (
             "proofs.spot.verifier.one_stage.produced", "proofs.spot.verifier.one_stage.registered",
         ),
-        "verity_vllm/protocols/pouw/h1_ranks.py": ("proofs.spot.device.challenger.LiveRecord",),
-        "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.device.challenger.LiveRecord",),
+        "verity_vllm/protocols/pouw/h1_ranks.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
+        "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
     },
     "network-accounting": {
         # Needs: the certifier's advice format (`Advice`, `RequestAdvice`, `Row`, `Source`, `SCHEMA`), which moves out of
         # `verity/` to the adapter by the integrations rule, its release and io-tie headers and ids, the replay step's
         # reference; PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
-        "verity_vllm/pipeline/advice.py": ("accounting.certifier.verifier.advice",),
-        "verity_vllm/pipeline/advice_code/codec.py": ("accounting.certifier.verifier.advice",),
+        "verity_vllm/pipeline/advice.py": ("resource_accounting.network.verifier.advice",),
+        "verity_vllm/pipeline/advice_code/codec.py": ("resource_accounting.network.verifier.advice",),
         "verity_vllm/pipeline/advice_code/derived.py": (
-            "accounting.certifier.verifier.advice.RequestAdvice", "accounting.certifier.verifier.advice.Row",
-            "accounting.certifier.verifier.advice.Source", "accounting.certifier.verifier.advice.StepAdvice",
+            "resource_accounting.network.verifier.advice.RequestAdvice", "resource_accounting.network.verifier.advice.Row",
+            "resource_accounting.network.verifier.advice.Source", "resource_accounting.network.verifier.advice.StepAdvice",
         ),
-        "verity_vllm/pipeline/advice_code/lengths.py": ("accounting.certifier.verifier.advice",),
-        "verity_vllm/pipeline/advice_code/window_code.py": ("accounting.certifier.verifier.arith_encode.CW",),
-        "verity_vllm/pipeline/ids_front.py": ("accounting.certifier.verifier.release",),
-        "verity_vllm/pipeline/serve_admit.py": ("accounting.certifier.verifier.release.read_watermark",),
-        "verity_vllm/pipeline/serve_commit.py": ("accounting.certifier.verifier.charge_chain",),
-        "verity_vllm/pipeline/serve_head.py": ("accounting.certifier.verifier.release",),
-        "verity_vllm/pipeline/serve_protocol.py": ("accounting.certifier.verifier.release",),
+        "verity_vllm/pipeline/advice_code/lengths.py": ("resource_accounting.network.verifier.advice",),
+        "verity_vllm/pipeline/advice_code/window_code.py": ("resource_accounting.network.verifier.arith_encode.CW",),
+        "verity_vllm/pipeline/ids_front.py": ("resource_accounting.network.verifier.release",),
+        "verity_vllm/pipeline/serve_admit.py": ("resource_accounting.network.verifier.release.read_watermark",),
+        "verity_vllm/pipeline/serve_commit.py": ("resource_accounting.network.verifier.charge_chain",),
+        "verity_vllm/pipeline/serve_head.py": ("resource_accounting.network.verifier.release",),
+        "verity_vllm/pipeline/serve_protocol.py": ("resource_accounting.network.verifier.release",),
         "verity_vllm/pipeline/window_advice.py": (
-            "accounting.certifier.verifier.advice", "accounting.certifier.verifier.advice.KINDS",
-            "accounting.certifier.verifier.advice.MalformedAdvice", "accounting.certifier.verifier.advice.Output",
-            "accounting.certifier.verifier.advice.Row", "accounting.certifier.verifier.advice.Source",
-            "accounting.certifier.verifier.advice.StepAdvice", "accounting.certifier.verifier.advice.WIDTH_BITS",
+            "resource_accounting.network.verifier.advice", "resource_accounting.network.verifier.advice.KINDS",
+            "resource_accounting.network.verifier.advice.MalformedAdvice", "resource_accounting.network.verifier.advice.Output",
+            "resource_accounting.network.verifier.advice.Row", "resource_accounting.network.verifier.advice.Source",
+            "resource_accounting.network.verifier.advice.StepAdvice", "resource_accounting.network.verifier.advice.WIDTH_BITS",
         ),
-        "verity_vllm/program/predict/hits.py": ("accounting.certifier.verifier.advice",),
-        "verity_vllm/program/predict/scan_state.py": ("accounting.certifier.verifier.blocks",),
-        "verity_vllm/program/predict/steps.py": ("accounting.certifier.verifier.advice",),
+        "verity_vllm/program/predict/hits.py": ("resource_accounting.network.verifier.advice",),
+        "verity_vllm/program/predict/scan_state.py": ("resource_accounting.network.verifier.blocks",),
+        "verity_vllm/program/predict/steps.py": ("resource_accounting.network.verifier.advice",),
         # The compiler's (`verity_vllm/compiler/`): the replay step's and chain's circuits and row forms, the charge's
         # book and code (`charge_chain`, `arith_encode`), the IO tie's routing, the advice's form (its reader, constants
         # and error) and head_check's circuit helpers (`_Consts`, `_coll`, `ands`), until the certifier's workload side
         # offers them.
         "verity_vllm/compiler/advice_check.py": (
-            "accounting.certifier.verifier.advice.FINISHES", "accounting.certifier.verifier.advice.MalformedAdvice",
-            "accounting.certifier.verifier.advice.VERSION", "accounting.certifier.verifier.advice.WIDTH_BITS",
-            "accounting.certifier.verifier.advice._Reader", "accounting.certifier.verifier.head_check._Consts",
-            "accounting.certifier.verifier.head_check._coll", "accounting.certifier.verifier.head_check.ands",
+            "resource_accounting.network.verifier.advice.FINISHES", "resource_accounting.network.verifier.advice.MalformedAdvice",
+            "resource_accounting.network.verifier.advice.VERSION", "resource_accounting.network.verifier.advice.WIDTH_BITS",
+            "resource_accounting.network.verifier.advice._Reader", "resource_accounting.network.verifier.head_check._Consts",
+            "resource_accounting.network.verifier.head_check._coll", "resource_accounting.network.verifier.head_check.ands",
         ),
         "verity_vllm/compiler/cache_step.py": (
-            "accounting.certifier.verifier.head_check._Consts", "accounting.certifier.verifier.head_check._coll",
-            "accounting.certifier.verifier.head_check.ands",
+            "resource_accounting.network.verifier.head_check._Consts", "resource_accounting.network.verifier.head_check._coll",
+            "resource_accounting.network.verifier.head_check.ands",
         ),
         "verity_vllm/compiler/cache_step_v3.py": (
-            "accounting.certifier.verifier.head_check._Consts", "accounting.certifier.verifier.head_check._coll",
-            "accounting.certifier.verifier.head_check.ands",
+            "resource_accounting.network.verifier.head_check._Consts", "resource_accounting.network.verifier.head_check._coll",
+            "resource_accounting.network.verifier.head_check.ands",
         ),
         "verity_vllm/compiler/compile_slice.py": (
-            "accounting.certifier.verifier.arith_encode", "accounting.certifier.verifier.charge_chain",
+            "resource_accounting.network.verifier.arith_encode", "resource_accounting.network.verifier.charge_chain",
         ),
         "verity_vllm/compiler/compile_slice_v4.py": (
-            "accounting.certifier.verifier.head_check._Consts", "accounting.certifier.verifier.head_check._coll",
-            "accounting.certifier.verifier.head_check.ands",
+            "resource_accounting.network.verifier.head_check._Consts", "resource_accounting.network.verifier.head_check._coll",
+            "resource_accounting.network.verifier.head_check.ands",
         ),
         "verity_vllm/compiler/compile_slice_v5.py": (
-            "accounting.certifier.verifier.head_check._Consts", "accounting.certifier.verifier.head_check._coll",
-            "accounting.certifier.verifier.head_check.ands",
+            "resource_accounting.network.verifier.head_check._Consts", "resource_accounting.network.verifier.head_check._coll",
+            "resource_accounting.network.verifier.head_check.ands",
         ),
         "verity_vllm/compiler/compile_slice_v6.py": (
-            "accounting.certifier.verifier.head_check._Consts", "accounting.certifier.verifier.head_check._coll",
-            "accounting.certifier.verifier.head_check.ands",
+            "resource_accounting.network.verifier.head_check._Consts", "resource_accounting.network.verifier.head_check._coll",
+            "resource_accounting.network.verifier.head_check.ands",
         ),
-        "verity_vllm/compiler/compile_slice_v7.py": ("accounting.certifier.verifier.charge_chain",),
-        "verity_vllm/compiler/served_statics.py": ("accounting.certifier.verifier.head_check",),
+        "verity_vllm/compiler/compile_slice_v7.py": ("resource_accounting.network.verifier.charge_chain",),
+        "verity_vllm/compiler/served_statics.py": ("resource_accounting.network.verifier.head_check",),
         "verity_vllm/compiler/served_tie.py": (
-            "accounting.certifier.verifier.head_check", "accounting.certifier.verifier.io_tie",
+            "resource_accounting.network.verifier.head_check", "resource_accounting.network.verifier.io_tie",
         ),
-        "verity_vllm/protocols/poub/binder.py": ("accounting.poub.verifier.audit.Tiles",),
+        "verity_vllm/protocols/poub/binder.py": ("resource_accounting.memory.poub.verifier.audit.Tiles",),
         "verity_vllm/protocols/poub/remote.py": (
-            "accounting.poub.verifier.audit", "accounting.poub.verifier.codec",
+            "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",
         ),
     },
     "compute-accounting": {
         # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`).
-        "verity_vllm/check/replay/pouw_circuit.py": ("accounting.pouw.verifier.protocol.DomainError",),
+        "verity_vllm/check/replay/pouw_circuit.py": ("resource_accounting.compute.pouw.verifier.protocol.DomainError",),
     },
     "memory-accounting": {
         # `protocols/pous.py` reads the schemes for its refusals, setup's salt draw, and the period's certificate and gaps
         # for its details; the store, its encode and decode and the period are pous's prover's (`weight_store`).
         "verity_vllm/protocols/pous.py": (
-            "accounting.pous.verifier.period", "accounting.pous.verifier.schemes",
-            "accounting.pous.verifier.schemes.p2", "accounting.pous.verifier.setup",
+            "resource_accounting.memory.pous.verifier.period", "resource_accounting.memory.pous.verifier.schemes",
+            "resource_accounting.memory.pous.verifier.schemes.p2", "resource_accounting.memory.pous.verifier.setup",
         ),
     },
 }
