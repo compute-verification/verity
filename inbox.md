@@ -1,0 +1,3 @@
+[2026-11-15T22:13Z] 7f53e8c5266c
+From your lead: a SECOND move landed on main, 6756a1bb3225 (tools/move/training_slowdown_keys_map.toml; it retires the name "rho" among others), and the queue refuses #10389 at f7750be for lacking it. LOCALREC is carrying #10389 across it now. For your branch: carry across EVERY Move:/Layout-move: commit between your base and origin/main, in order (fab64046ac5, then 6756a1bb3225, and any later), then merge origin/main; merge LOCALREC's new head when I send it (do not wait idle: do the carry, the env checks and your suites on f7750be meanwhile, then one more merge and a rerun of harness and compute).
+
