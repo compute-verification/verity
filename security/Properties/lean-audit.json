@@ -1626,6 +1626,9 @@
   "Properties.NetworkPeriod.sampleBoundCharged": {
    "honest": ["Properties.NetworkPeriod.sampleBoundCharged_honest"],
    "nontrivial": "Properties.NetworkPeriod.sampleBoundCharged_nontrivial"
+  },
+  "Properties.Poub.Shared.openingsUnreadUntilSampled": {
+   "honest": ["Properties.Poub.Line.SecurityProofs.lineHeld_honest"]
   }
  },
  "unwitnessed": {
@@ -1923,6 +1926,8 @@
   },
   "Properties.Poub.Shared.openingsUnreadUntilSampled": {
    "type_hash": "6de85e25d5f1ad61e45f3d6a7bbee4c67bcc0c0151bbc84cadd28b273027710f",
+   "missing": "nontrivial",
+   "why": "its conclusion is an equation between two runs of `Shared.run` from coins that agree up to the sampled windows, and no lemma yet shows it fails for a run that reads a later window's coin before that window is sampled; MEM-354, Fri 27 Nov",
    "unfolded_hash": "e2a556570e32e3c401e97ce707293230a0ccd401da66027fd22dd835a642f5ad"
   },
   "Properties.Poub.Shared.recordKeptAfterSample": {
