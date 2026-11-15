@@ -14,15 +14,16 @@ prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
 - `verity/`: the distribution `verity`: what a party, a channel, a device, a protocol and a configuration are
   (`verity/party.py`, `channel.py`, `device.py`, `protocol.py`, `config.py`), the runtime (`verity/runtime/`), the
   circuits (`verity/circuits/`), the commitment schemes (`verity/commitments/`) and the protocols
-  (`verity/protocols/`) by layer: proofs, resource accounting, workload classification and the composite, deployed
-  remote or onsite. `verity/AGENTS.md` has their layout and the import rules. `verity` re-exports nothing.
+  (`verity/protocols/`) by layer: proofs, resource accounting, workload classification, and on top the two
+  deployment patterns, remote and onsite. `verity/AGENTS.md` has their layout and the import rules. `verity`
+  re-exports nothing.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it (`torch/`, and `vllm/` on
   it): an integration, in the Design rules.
 - `hardware/`: the data sheets, TOML only (`cards/`, `nodes/`), which `verity/device.py` reads.
 - `demos/`: one configuration file per demo, which `verity run` reads (`demos/README.md`).
-- `benchmarks/`: the measuring side: reproducible workloads and measurements, and `census/`, data `verity` only takes
-  as parameters.
+- `benchmarks/`: the measuring side: reproducible workloads and measurements, and `benchmarks/census/`, data `verity`
+  only takes as parameters.
 - `tools/`: the `verity` command and the Lean check (`verity/`), the check (`check/`), the settings registry
   (`config/`), the Python held to each Lean (`difftest/`) and the layout's move maps (`move/`).
 - `tests/`: invariants of the whole tree. `artifacts.json` registers every replicated fixture by `art:` id.
@@ -276,7 +277,6 @@ Read the file before the work it names. Skills are in `.agents/skills/`.
 | When you | Read |
 | --- | --- |
 | change code under `verity/`: a protocol, the circuits, the commitments, the runtime or an import | `verity/AGENTS.md` |
-| change the check or its policy | `tools/check/README.md` |
 | change the Lean check or a lock | `tools/verity/lean/README.md` |
 | write, move or run tests, or a suite fails its read guard | the testing skill |
 | prove or state anything in Lean (the edit loop, why two agents never share a writable `.lake`) | the lean-proofs skill |
