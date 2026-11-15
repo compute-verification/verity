@@ -12,7 +12,7 @@ H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104), [x] is u16be len(x) ‖ x and ⟨x
 
 - **Derivation** (RFC 5869 over SHA-512): ``extract(salt, ikm) = HMAC(salt, ikm)``, and
   ``expand(k, s, ctx) = HMAC(k, [LABEL ‖ s] ‖ ⟨ctx⟩ ‖ 0x01)``, HKDF-Expand's first 64-byte block. Every info here starts
-  with a 0x00 byte and every info of `aead.keys` with ``ve``, so no input is shared with the certifier's pair links.
+  with a 0x00 byte and every info of `aead.keys` with ``ve``, so the two derivations share no input.
 - **Imprint** (`imprint`, `check_imprint`): over the cable between a device D and its server S, before D forwards any
   traffic, each sends 64 random bytes; ``K_0 = expand(extract(R_D, R_S), "root", [id_D] ‖ [id_S])``, and the two compare
   ``expand(K_0, "imprint")``. K_0 is secret while nothing else reads the cable during that exchange.

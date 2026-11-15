@@ -41,13 +41,12 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from verity.commitments.randomness import Key
-
 from verity.protocols.accounting.pous.verifier.audit import (
     DEADLINE_NS,
     RTT_ALLOWANCE_NS,
     AuditResult,
     ChallengeReply,
+    Key,
     UnsignedRounds,
 )
 from verity.protocols.accounting.pous.verifier.verifier import VerifierKey

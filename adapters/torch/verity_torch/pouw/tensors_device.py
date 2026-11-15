@@ -21,6 +21,9 @@ def _device(like: Any) -> torch.device | None:
 class TorchTensors:
     """`tensors.Tensors` on torch tensors: a buffer is a tensor, a device a tensor's or a `torch.device`'s spelling."""
 
+    def is_buffer(self, x: Any, /) -> bool:
+        return isinstance(x, torch.Tensor)
+
     def host(self, t: Any, /) -> np.ndarray:
         t = t.detach()
         return t.view(torch.uint8).cpu().numpy().view("<u2") if t.dtype == torch.uint16 else t.cpu().numpy()

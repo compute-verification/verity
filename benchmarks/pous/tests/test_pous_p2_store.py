@@ -379,7 +379,7 @@ def test_generated_with_the_default_generator(gen: tuple[str, str], tmp_path: Pa
     `commit` run whole at `tiny`, where `setup.json` holds that name as `"program"`. The stand-in has no name, and its
     manifest no key, that the default generator's lacks."""
     monkeypatch.syspath_prepend(str(ROOT))
-    mod = importlib.import_module("benchmarks.torch_gpu.p2_stage.served_weights")
+    mod = importlib.import_module("verity.protocols.accounting.pous.prover.served_weights")
     seed, h200 = mod.TEST_SEED, mod.H200
     real = S.Generated(S.GENERATOR, "h200", seed)
     assert real.mod is mod and S.layout_sha512(real.store) == S.LAYOUT_SHA512
