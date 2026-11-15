@@ -32,6 +32,7 @@ axis = "Sites on main that the ratchet lints find, summed over every lint and fi
 better = "lower"
 command = "research run --on auto --cwd source -- uv run python benchmarks/tree/lint_sites.py"
 every = "1d"
+goal = "top/slices-clean"
 
 [[metric]]
 id = "top/lint-sites-allowed"
