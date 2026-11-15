@@ -35,11 +35,16 @@ from . import settings
 ENV = "RESEARCH_LAUNCHER_TREE"
 GIT_OPTS = ("-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false")
 GIT_ENV = {"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
-#: what the launcher runs or reads from the trusted tree: research itself, the queue's client and description, the pool
-#: probe's programs and lean_audit.py
-RUNS = ("tools/research/src/research/launcher.py", "infra/cluster/src/cluster/submit.py", "infra/cluster/src/cluster",
-        "infra/cluster/descriptions/nebius.toml", "tools/check/slot.py", "tools/check/lean_slot.py",
-        "tools/verity/lean/lean_audit.py")
+#: what the launcher runs or reads from the trusted tree: research itself; the queue's client, its description and the kinds
+#: whose wrappers it places; the pool probe's programs; and lean_audit.py with what it loads by path and the pins it signs.
+#: A directory holds all of it. tests/test_launcher_tree.py traces what the launcher opens there, and fails on what this
+#: misses.
+RUNS = ("tools/research/src/research/launcher.py", "tools/research/src/research",
+        "infra/cluster/src/cluster/submit.py", "infra/cluster/src/cluster", "infra/cluster/descriptions/nebius.toml",
+        "infra/cluster/kinds", "tools/check/slot.py", "tools/check/lean_slot.py",
+        "tools/verity/lean/lean_audit.py", "tools/check/common.py", "tools/verity/lean/module_keys.py",
+        "tools/verity/lean/headers.py", "tools/verity/graph/verity_graph/contract.py", "tools/verity/lean/settings.py",
+        "tools/verity/lean/lean-deps.json")
 CURE = f"set ${ENV} to the absolute path of a clean checkout of origin/main, or unset it to launch from the source tree"
 _CHECKED: dict[str, Path] = {}
 

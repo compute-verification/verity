@@ -52,6 +52,11 @@ def checkout(at: Path) -> None:
         git(at, *args)
 
 
+def complete(root: Path) -> None:
+    """An empty file for each of `launcher.RUNS` ``root`` lacks (in a directory, one stub)."""
+    write(root, {f if Path(f).suffix else f"{f}/stub.toml": "" for f in launcher.RUNS if not (root / f).exists()})
+
+
 @pytest.fixture(autouse=True)
 def unchecked():
     getattr(launcher, "_CHECKED", {}).clear()
@@ -79,6 +84,7 @@ def trees(tmp_path, monkeypatch):
         LAUNCHER_PY: trip(marks, "source-launcher"),
         ".gitattributes": "* filter=trip\n",
     })
+    complete(source)
     checkout(source)
     hooks = source / ".git" / "hooks"
     script(hooks / "pre-push", marks, "pre-push")
@@ -100,6 +106,7 @@ def trees(tmp_path, monkeypatch):
                         "    p = pathlib.Path(dest) / 'lean-deps-urls.json'\n    p.write_text(json.dumps({'k': 'trusted'}))\n    return p\n",
         LAUNCHER_PY: "",
     })
+    complete(trusted)
     checkout(trusted)
     return source, trusted, marks
 
@@ -333,6 +340,83 @@ def test_an_untrusted_value_is_refused_before_anything_runs_and_nothing_falls_ba
     (tmp_path / "install" / ".git").mkdir(parents=True)
     at_main.reexec(["--version"], tmp_path / "install", tmp_path / "cache", lambda exe, argv, env: (marks / "reexec").touch())
     assert marked(marks) == []
+
+
+def _modify(at: Path) -> None:
+    f = at if at.is_file() else sorted(p for p in at.rglob("*") if p.is_file())[0]
+    f.write_text(f.read_text() + "\n# changed\n")
+
+
+def _delete(at: Path) -> None:
+    shutil.rmtree(at) if at.is_dir() else at.unlink()
+
+
+@pytest.mark.parametrize("change", [_modify, _delete], ids=["modified", "deleted"])
+@pytest.mark.parametrize("entry", launcher.RUNS)
+def test_each_file_the_launcher_runs_from_the_tree_modified_or_deleted_is_refused(entry, change, trees):
+    source, trusted, _ = trees
+    change(trusted / entry)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv(ENV, str(trusted))
+        why = launcher.refusal(source)
+    assert why and ("is stale" if change is _modify else "lacks") in why and entry in why, why
+
+
+#: what the launcher's helpers read from the trusted tree beside `launcher.RUNS`, by file name, with why it decides nothing
+#: the launcher runs, ships or signs
+DATA = {"lake-manifest.json": "lean_audit's `presigned` keys a Lean package by it only to pick which of the pins to sign",
+        "lean-toolchain": "the same key's other part"}
+#: the tracer of a process: every file it opens, written as JSON under $TRACE_DIR when it exits; on PYTHONPATH as
+#: `sitecustomize`, so each Python the traced one starts traces itself too
+TRACER = """import atexit, json, os, sys
+_opened = set()
+def _audit(event, args):
+    if event == "open" and isinstance(args[0], (str, bytes, os.PathLike)):
+        _opened.add(os.path.realpath(os.fsdecode(args[0])))
+sys.addaudithook(_audit)
+atexit.register(lambda: open(os.path.join(os.environ["TRACE_DIR"], f"{os.getpid()}.json"), "w").write(json.dumps(sorted(_opened))))
+"""
+#: every call by which the launcher runs or reads code of the tree it trusts, with no machine, store or clock
+LAUNCH = """import subprocess, sys
+from pathlib import Path
+from research import auto, cli, remote
+from research.store import remote as store
+tree = Path(sys.argv[1])
+store.load_remote = lambda *a, **k: None
+remote.live_stop = lambda machine, project: (None, "not asked")
+remote.queue_placement(tree, "r1", {"project": "verity", "submitter": "infra", "kind": "agent-test"}, now=0)
+cli.lean_records_urls(tree, ["python3", "tools/verity/lean/lean_changed.py", "--records", "security"])
+auto.read(tree, 1, reach=lambda name: [name], run=lambda argv, data: subprocess.CompletedProcess(argv, 0, b"{}", b""), lean=True,
+          peers=True)
+"""
+
+
+def test_runs_holds_all_the_launcher_loads_or_reads_from_its_tree(tmp_path, monkeypatch):
+    """`launcher.RUNS` is derived, not listed by hand: the launcher's calls that run the trusted tree's code (`cluster submit`,
+    lean_audit.py's `url_file`, the pool probe) run here on this checkout, every Python process they start traced by an
+    audit hook, and each file of this checkout any of them opens, by import, a load by path or a read, must lie under
+    `RUNS` or be named in `DATA`. A helper that starts loading another file fails this test until `RUNS` holds it."""
+    import research
+
+    repo = Path(__file__).resolve().parents[3]
+    hook, traces = tmp_path / "hook", tmp_path / "traces"
+    write(hook, {"sitecustomize.py": TRACER})
+    traces.mkdir()
+    monkeypatch.delenv(ENV, raising=False)
+    monkeypatch.setenv("TRACE_DIR", str(traces))
+    monkeypatch.setenv("PYTHONPYCACHEPREFIX", str(tmp_path / "pycache"))
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join([str(hook), str(Path(research.__file__).parents[1])]))
+    r = subprocess.run([sys.executable, "-c", LAUNCH, str(repo)], cwd=tmp_path, capture_output=True, text=True)
+    assert r.returncode == 0 and "no Lean bundle URLs sent" not in r.stderr, r.stderr[-2000:]
+    outside = [Path(p).resolve() for p in (sys.prefix, sys.base_prefix)]
+    opened = {Path(p).relative_to(repo).as_posix() for t in traces.iterdir() for p in json.loads(t.read_text())
+              if Path(p).is_relative_to(repo) and not any(Path(p).is_relative_to(o) for o in outside)}
+    assert {"infra/cluster/src/cluster/submit.py", "infra/cluster/kinds/infra.toml", "tools/verity/lean/lean_audit.py",
+            "tools/check/slot.py", "tools/check/lean_slot.py"} <= opened, f"the trace saw too little: {sorted(opened)}"
+    missed = sorted(f for f in opened if Path(f).name not in DATA
+                    and not any(f == e or f.startswith(f"{e}/") for e in launcher.RUNS))
+    assert missed == [], f"add to research.launcher.RUNS what the launcher loads or reads from its trusted tree: {missed}"
+    assert [e for e in launcher.RUNS if not (repo / e).exists()] == []
 
 
 def test_unset_at_main_re_executes_origin_mains_copy_exactly_as_before(tmp_path, monkeypatch):
