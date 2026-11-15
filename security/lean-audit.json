@@ -22532,19 +22532,6 @@
    "type_hash": "b6d3047a8903fca2ea78d5e2de43809c771ce17677637ac8a8233af19922cf1f",
    "unfolded_hash": "cf5af8fdc8f8e0d874782d15daa44455b9fc1da1ddfbcd06a423a7cc435ab9ce"
   },
-  "Pous.SecurityProofs.StreamedWipeMeets141GB": {
-   "owner": "@memory-accounting",
-   "signature": ["Pous.SecurityProofs.StreamedWipeMeets141GB : Pous.Guarantees.StreamedWipeMeets141GB"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "b6ab57abe9ed0a1a43be839204bb683d6642ecbde4190d898b4a3ccc1d7b6003",
-   "unfolded_hash": "ec02663e9dfaab487b8528a048ddaf380716db67aaf8ca5f8c7bce5b5fefdff6"
-  },
   "Pous.SecurityProofs.StreamedWipeMeets2600GB": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.StreamedWipeMeets2600GB : Pous.Guarantees.StreamedWipeMeets2600GB"],
@@ -22697,47 +22684,6 @@
    },
    "type_hash": "fef39696ec0fc39f5753e24cff3467284db50b30844bb991e0472f282a53be5e",
    "unfolded_hash": "122557726e2e4da0f8cba7b0dee577519f0612fcc926f4f69040c9c3a7812af2"
-  },
-  "Pous.SecurityProofs.StreamedWipeMeetsServer8H200": {
-   "owner": "@memory-accounting",
-   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsServer8H200 : Pous.Guarantees.StreamedWipeMeetsServer8H200"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "802c01703d13135f027747672be44f2465a6bf2f84cfa2e370ddb9a03b082a06",
-   "unfolded_hash": "e61bec754e013cc9b55d1f54c1fafe4f5301411a833b554fa8fb0c683508be03"
-  },
-  "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBM": {
-   "owner": "@memory-accounting",
-   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBM : Pous.Guarantees.StreamedWipeMeetsServer8H200HBM"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "cb7104e2380aaad0826c74ad18b6c0628359e6b986e04126b81b5132f23762f9",
-   "unfolded_hash": "90f5e3aadbabebe61afc2b366809f6efcf3ada1c7ea0633d46ee59f41ed43d35"
-  },
-  "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM : Pous.Guarantees.StreamedWipeMeetsServer8H200HBMRAM"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "2fcec4ab1ff8fdfc1e629f28e55e09fa2306a8512d6b86a0b3b84c6e35814b0b",
-   "unfolded_hash": "c4f1d79e003cfb66338493e4b8f13253cfacd05f8e7de3c09de6d6c0fc1da14a"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsServerH200": {
    "owner": "@memory-accounting",
@@ -23641,6 +23587,9 @@
    },
    "type_hash": "6ff062884136caa985ff78f67c02092a0639248717098a79bfa4a7ae491640de"
   },
+  "Pouw.SecurityProofs.PearlC.EpsFp4Sm120_8192": {
+   "owner": "@compute-research"
+  },
   "Pouw.SecurityProofs.PearlC.GapDevRev1K": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapDevRev1K : Pouw.Guarantees.PearlC.GapDevRev1K"],
@@ -23657,6 +23606,12 @@
    },
    "type_hash": "0a8890fcaf01ce7d1e337ca97c4acc61b9ce5d93ea331e7e1ac59161ca107529",
    "unfolded_hash": "2d62423e7005c20c4f4c9579795965afd98fe31c6e0c9546ed2d82e95299d63e"
+  },
+  "Pouw.SecurityProofs.PearlC.GapFp4Sm120_16384": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.PearlC.GapFp4Sm120_8192": {
+   "owner": "@compute-accounting"
   },
   "Pouw.SecurityProofs.PearlC.HiddenFlockDevRev1K": {
    "owner": "@compute-accounting",
@@ -23694,6 +23649,12 @@
    },
    "type_hash": "8b186e7cda530e4e93dca82a5790b37609657d8a2b2cbce9c032d97707da6fb7",
    "unfolded_hash": "3517828de98c15cf320853abc916d09411af2c2af981af238caa794b851ecc1c"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192": {
+   "owner": "@compute-accounting"
   },
   "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b": {
    "owner": "@compute-accounting",

@@ -203,11 +203,6 @@
    "digest": "f5b69f5f262a32475519e72979fc884fea1602140d3d6b9a07f4b7282ab185b9",
    "why": "The certificates the bound speaks of: S bits a tick over the capacity window, with the device's on-chip state and its side channels' capacity over a round, within the state bound S₀."
   },
-  "Properties.Registration.Caps": {
-   "owner": "@soundness",
-   "digest": "0b567342c11d996ab6672f6bb4a0aa22dd8a9695136dc28ccd5fbee5528d9a6f",
-   "why": "A scope: the compiler the denotation reads for each builder's digest has the advice cap that builder registers, the reading of the log the check's statement is about."
-  },
   "Properties.Spot.ClassesCover": {
    "owner": "@proofs",
    "digest": "a626c0050b97025f8ee1dcdc0e4f0e81e36d77e3e5cf55a2a2d43325a95dd547",
@@ -1517,14 +1512,6 @@
   "Verity.plain_soundness_of_subprotocols": {
    "honest": ["Verity.plain_soundness_of_subprotocols_honest"],
    "nontrivial": "Verity.plain_soundness_of_subprotocols_nontrivial"
-  },
-  "Properties.Registration.checks": {
-   "honest": ["Properties.Registration.checks_honest"],
-   "nontrivial": "Properties.Registration.checks_nontrivial"
-  },
-  "Properties.Registration.headBinds": {
-   "honest": ["Properties.Registration.headBinds_honest"],
-   "nontrivial": "Properties.Registration.headBinds_nontrivial"
   },
   "Properties.NetworkPeriod.rowsTiedInputWired": {
    "honest": ["Properties.NetworkPeriod.rowsCapPublished_honest"],
@@ -9112,159 +9099,6 @@
    "type_hash": "e824841bab9a5e2fabbd9e4bf6fd13362a8d2c96b6dc3100f09cee5da41e417d",
    "unfolded_hash": "2dbb7142099feb78c5c6c492eb7f8f254ae1005ff1c6f973161977245819a4b2"
   },
-  "Properties.Registration.checks": {
-   "owner": "@proofs",
-   "signature": ["Properties.Registration.checks : Properties.Registration.Checks"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Properties.Registration.Caps", "Verity.Site.Boundary"],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "6ccfe513aaa8b6ebcca0c14faf12a9701743ce2cf6628daa6f82bbd356ed2d2c",
-   "unfolded_hash": "810c12d0cf56ddf54398d9a878c763a7d798f8968e9790ffd7da2ba36890b98f"
-  },
-  "Properties.Registration.checks_honest": {
-   "owner": "@proofs",
-   "signature": [
-    "Properties.Registration.checks_honest :",
-    "  And",
-    "    (Eq",
-    "      (Core.Registration.check Core.Registration.Example.auditor Core.Site.Registration.Composite.onsite",
-    "            Properties.Registration.honestLog).toOption.isSome",
-    "      Bool.true)",
-    "    (And",
-    "      (Verity.Registration.Valid",
-    "        (Properties.Registration.digests",
-    "          (Properties.Registration.names Properties.Registration.noGatesBuilder Properties.Registration.honestLog))",
-    "        (Properties.Site.auditor Core.Registration.Example.auditor)",
-    "        (Properties.Site.composite Core.Site.Registration.Composite.onsite)",
-    "        (Properties.Registration.log Properties.Registration.noGatesBuilder Properties.Registration.honestLog))",
-    "      (And (Properties.Registration.Caps Properties.Registration.noGatesBuilder Properties.Registration.honestLog)",
-    "        ((Properties.Site.site",
-    "              { sheets := List.cons Core.Registration.Example.sheet List.nil, locs := Core.Registration.Example.locs,",
-    "                links := Core.Registration.Example.links }).Boundary",
-    "          (Properties.Site.link { id := \"up0\", ends := { fst := \"node0\", snd := \"cert0\" }, β := 100, latency := 1 }))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Verity.Site.Boundary"],
-    "open": [],
-    "reads": ["Properties.Registration.Caps"]
-   },
-   "type_hash": "7e5b10bcb52bdcd099540742e44baa1725d5d2a88ddde5dffce0a8f2281717cc"
-  },
-  "Properties.Registration.checks_nontrivial": {
-   "owner": "@proofs",
-   "signature": [
-    "Properties.Registration.checks_nontrivial :",
-    "  Not",
-    "    (And",
-    "      (Iff",
-    "        (Eq",
-    "          (Properties.Registration.acceptAllCheck Core.Site.Registration.Composite.remote",
-    "                Properties.Registration.twiceLog).toOption.isSome",
-    "          Bool.true)",
-    "        (Verity.Registration.Valid",
-    "          (Properties.Registration.digests",
-    "            (Properties.Registration.names Properties.Registration.noGatesBuilder Properties.Registration.twiceLog))",
-    "          (Properties.Site.auditor Properties.Site.witnessAuditor)",
-    "          (Properties.Site.composite Core.Site.Registration.Composite.remote)",
-    "          (Properties.Registration.log Properties.Registration.noGatesBuilder Properties.Registration.twiceLog)))",
-    "      (∀ (s : Core.Registration.State),",
-    "        Eq",
-    "            (Properties.Registration.acceptAllCheck Core.Site.Registration.Composite.remote",
-    "              Properties.Registration.twiceLog)",
-    "            (Except.ok s) →",
-    "          Eq (Properties.Registration.view Properties.Registration.noGatesBuilder s.view)",
-    "            (Verity.Registration.view",
-    "              (Properties.Registration.digests",
-    "                (Properties.Registration.names Properties.Registration.noGatesBuilder Properties.Registration.twiceLog))",
-    "              (Properties.Site.composite Core.Site.Registration.Composite.remote)",
-    "              (Properties.Registration.log Properties.Registration.noGatesBuilder Properties.Registration.twiceLog))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a258853efca8962be5b6773d2d3de04f57246cf30c0c5ddc6a9592d15b53df6a"
-  },
-  "Properties.Registration.headBinds": {
-   "owner": "@soundness",
-   "signature": ["Properties.Registration.headBinds : Properties.Registration.HeadBinds"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "4c4fac7fc7cd7ed770ab0b56d3b95239e28e202e447727340938ddd87f519f55",
-   "unfolded_hash": "b24873f774d370383bf19ac823daa0dda931a796650f76fdc1369b80d98aec84"
-  },
-  "Properties.Registration.headBinds_honest": {
-   "owner": "@soundness",
-   "signature": [
-    "Properties.Registration.headBinds_honest :",
-    "  And",
-    "    (Eq",
-    "      (Core.Registration.check Core.Registration.Example.auditor Core.Site.Registration.Composite.onsite",
-    "            Properties.Registration.honestLog).toOption.isSome",
-    "      Bool.true)",
-    "    (Properties.Registration.Chained Core.Site.Registration.Composite.onsite Properties.Registration.honestLog)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "f5f0fc327a9b40c1850becebe51f547f377a43ca5e8facbdb12821b05b828882"
-  },
-  "Properties.Registration.headBinds_nontrivial": {
-   "owner": "@soundness",
-   "signature": [
-    "Properties.Registration.headBinds_nontrivial :",
-    "  Not",
-    "    (And",
-    "      (Eq",
-    "        (Properties.Registration.acceptAllCheck Core.Site.Registration.Composite.remote",
-    "              Properties.Registration.unchainedLog).toOption.isSome",
-    "        Bool.true)",
-    "      (And",
-    "        (Properties.Registration.Chained Core.Site.Registration.Composite.remote Properties.Registration.unchainedLog)",
-    "        (∀ (n n' : Nat),",
-    "          Properties.Registration.Binds Core.Site.Registration.Composite.remote",
-    "            (List.take n Properties.Registration.unchainedLog) (List.take n' Properties.Registration.unchainedLog))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "43c46038764424f2e1223ea7c72ff7f8b032078ab45582c236919ebe92acebb7"
-  },
-  "Properties.Registration.publishesHeads": {
-   "owner": "@soundness",
-   "signature": ["Properties.Registration.publishesHeads : Properties.Registration.PublishesHeads"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "743c27ec5808ef5724baff5cb7d3031432fa567079d2faa79f4f82a411072bb6",
-   "unfolded_hash": "bc0cf5c66e11ecc56a7418488b11d7af535a32c0e6b83d523877d7a73fb4f275"
-  },
   "Properties.Remote.SecurityProofs.acceptComplies": {
    "owner": "@soundness",
    "signature": ["Properties.Remote.SecurityProofs.acceptComplies : Properties.Remote.AcceptComplies"],
@@ -14418,18 +14252,6 @@
    },
    "Properties.Spot.SecurityProofs.sampleMisses": {
     "function": "Spot.Slots.select",
-    "outcome": "accept"
-   },
-   "Properties.Registration.checks": {
-    "function": "Core.Registration.check",
-    "outcome": "none"
-   },
-   "Properties.Registration.publishesHeads": {
-    "function": "Core.Registration.View.toJson",
-    "outcome": "none"
-   },
-   "Properties.Registration.headBinds": {
-    "function": "Core.Registration.check",
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsTiedInputWired": {
@@ -25044,42 +24866,6 @@
    "digest": "b38de3ca310683e71a2a895436c6ee97613c9ff869e3dc5a9f4be536b82b7599",
    "definitions": {
     "Properties.RegisteredCircuit.ScheduledRequirement": "f16cb30c3670a9580f9cd1abdba52f2eb9340152c0283b28a3d421d44f2996d1"
-   }
-  },
-  "Properties.Accounting.Registration.Code": {
-   "digest": "f6e1c105fca27e2a88b99060a3d5cd4d6dd13a24e9cf156ccf13ceafc061ab59",
-   "definitions": {
-    "Properties.Registration.Binds": "8efeafbb1e8601d74de3c9ad1c358186de7b38b8e9dcc76b831b84f448571b44",
-    "Properties.Registration.Chained": "a4881437f0d4bb82f1d8cf20c2de58e1d0ec4e9854ba44ef15b9857ba6d2cd89",
-    "Properties.Registration.Checks": "d4f818454521e9b1168c3a8edabe75ef1798024d3fa6a0d93f000e59df654334",
-    "Properties.Registration.Collision": "f9cc4b979dc0c6fc5c369288adf7409b17e63c5926e50a5ce2d86875bf7ed531",
-    "Properties.Registration.Collision.Holds": "47e57e3dfd0a34b90612548965524828212b19f5fd5ce82053e84429cd788db5",
-    "Properties.Registration.Collision.casesOn": "12ecd1e230c38889d8b7a4174637b1a099ed5e1c9a1fe2cd73252428f6f740ca",
-    "Properties.Registration.Collision.entries": "1fea1822c0419a16e929567f63d76a45d1852aa8004bb0ce60c306ef416d2f3f",
-    "Properties.Registration.Collision.genesis": "9151a05e0278bbbe35d2955b5acddf36263cbb5c85096931db407c9be1d103d9",
-    "Properties.Registration.Collision.rec": "33bb2a36aab8db6ffd3a3282277bf942dcdcd0aa05ad087c166696e5ac0d5b21",
-    "Properties.Registration.HeadBinds": "635b90d2636d513180b9c967bb079f20b99d2f5199a6eaaaa15a50c4f7d34fae",
-    "Properties.Registration.PublishesHeads": "f4f38901cfe4633e103e337f0abac8301f543927e90a6f726814d2cf7ed22f92",
-    "Properties.Registration.Resolves": "860450b0aa37df8e9c1415d31b3a18d6a4a72a8196fffabbf248e7223f0be633",
-    "Properties.Registration.acceptAllCheck": "a2f4345e91bea4a179f38c3417f4f64d5c0d36141bcedfb2ac02cda92d7dca66",
-    "Properties.Registration.builder": "9a30892c21b8dae7b1119f8ac3012e8adcc9e9092b38f2fe0712b060fe8d50cf",
-    "Properties.Registration.dayEntry": "4f053ccfc8f9ef3057c305f3f465ee54073a8ba77bc766e70f5f7bf25e43c76e",
-    "Properties.Registration.declared": "32ab8afb13eb8931c6b6f1745a0c3485f42a6fc9e8801fb21ceafa8b69788db3",
-    "Properties.Registration.digests": "39f95e8f331381520203e03148e3ac28a3a7cb56c16e5187e1cd5d60bdce74ba",
-    "Properties.Registration.entry": "0f50cdb7185bac1bebe52b643d59ea76dc52c739b88286c860b288e8c33e3b42",
-    "Properties.Registration.honestLog": "ab11e4e68c25c2c3d220cee7682d315a933617062d09357d2385d05e9059ffe8",
-    "Properties.Registration.infoEntry": "3cdacd8c7faab5370bbc681f57a63171538cc9f04fcfafb3e1c98f616f568778",
-    "Properties.Registration.item": "b2fef38b03bc55f9b4c7a8537c379a19f88d9476413d5a6de9188d689aa8e600",
-    "Properties.Registration.log": "ee8cb4edbe5c461222a404812afc698e090d9e160c0d971ae5e9c45c7a146284",
-    "Properties.Registration.names": "0e134c25e111eedb63191fd80b09a43c79c90f46c135f6e437d83fdc985d8774",
-    "Properties.Registration.noGates": "f2886becddd9678b9dd407f8bcff4061fafa7adb486d7163bdebb2d9f406205e",
-    "Properties.Registration.noGatesBuilder": "1edd6b5abe66fdbd5400c475fc846d4e63a80daec961380a1864daf70b76731a",
-    "Properties.Registration.search": "91982fa7177af168556c9d85421e95f3af438eb27b48ae0f3e82765727d755fa",
-    "Properties.Registration.siteEntry": "9fd70e41d596195d52f0f2299d159e5542d636e84cad0df2e668e98fcc18000f",
-    "Properties.Registration.theta": "b6bd40872a01be888535b2775a60aba9155745e6297120027f84b8ff0a5931ea",
-    "Properties.Registration.twiceLog": "2bf45855134ae8819e6919ef2a4917c5e51e59fc17376d71347c02e138a28758",
-    "Properties.Registration.unchainedLog": "d76594584ee07c2647843ca702fdfa17e4ecafa3430b70b30d42b2d6f735a582",
-    "Properties.Registration.view": "fb0bbe70f0a511203d83abb1ccd1d575fe25750519992f27b3876cdf127da8d3"
    }
   },
   "Properties.Accounting.Registration.Premises": {
