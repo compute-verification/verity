@@ -339,7 +339,7 @@ def interpreter(tmp_path_factory) -> subprocess.CompletedProcess[str]:
     if absent:
         pytest.skip(f"not installed: {', '.join(absent)}")
     return subprocess.run([sys.executable, "-m", "pytest", INTERPRETER_CASES, "-rA", "-p", "no:cacheprovider",
-                           f"--basetemp={tmp_path_factory.mktemp('interpreter') / 'b'}"], cwd=ROOT,
+                           f"--basetemp={tmp_path_factory.mktemp('interpreter') / 'b'}"], cwd=Path(__file__).resolve().parents[2],
                           env={**os.environ, "TRITON_INTERPRET": "1"}, capture_output=True, text=True)
 
 
