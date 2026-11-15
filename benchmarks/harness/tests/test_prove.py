@@ -609,6 +609,19 @@ def test_the_report_gives_each_sources_share_and_the_totals_with_their_range():
     assert modeled["status"] == "modeled" and modeled["missing"] == [] and modeled["steady_time_share"] < 1.0
 
 
+def test_a_total_whose_every_type_is_steady_or_warm_is_modeled_never_measured():
+    """Only steady-state and warm-session rows, every type priced from a run of its own: the total is still modeled,
+    since a statement proved from warm sessions on one card is not the steady state."""
+
+    both = P.Census.of({**CENSUS, "definitions": {k: CENSUS["definitions"][k] for k in (GEMM64, GEMM32)}})
+    rows = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),)
+    warm = (PF.Warm(P.definition_id(GEMM32), 19, 4, 4, 2.0, 1, 4, "r20261115-000000-0001", "gemm32"),)
+    doc = P.report(PF.Flock(rows, SESSIONS, "art:card", warm=warm).table(both), 1.0)
+    assert sorted(r["source"] for r in doc["rows"]) == [P.STEADY, P.WARM]
+    assert doc["totals"]["status"] == "modeled" and doc["totals"]["missing"] == []
+    assert doc["totals"]["steady_time_share"] < 1.0
+
+
 def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatch):
     """One steady-state type and one type with no figure at three quarters of the blocks: steady-state measurements
     cover all of the time the total prices, and the total is still partial, never measured. It names the type it leaves
@@ -2283,10 +2296,8 @@ class Verifier:
                 {"cpu_s": took * 2, "user_s": took, "maxrss_gib": 1.5})
 
 
-#: a made-up program descriptor of the census type `RMSNORM`, whose `annotations` are in no digest, and a made-up
-#: partition object
+#: a made-up program descriptor of the census type `RMSNORM`, whose `annotations` are in no digest
 PROGRAM = {"schema": "made-up", "program_fn": RMSNORM, "definitions": {"Staged_v1{N=1}": [1, 2]}, "annotations": {"theta": [3]}}
-PARTITION = {"format": "made-up", "program": "p", "query": {"name": "Q_made_up", "version": 1, "params": {"X": 16}}}
 #: the program's file, spelled as no canonical form is
 PROGRAM_FILE = json.dumps(PROGRAM, indent=1).encode()
 
@@ -2299,6 +2310,8 @@ def _sha512(prefix: bytes, obj: object) -> str:
 #: statement's circuit states as `program_sha512`: the digest of its `program_digests`, which no program file has
 PROGRAM_SHA512 = _sha512(b"", {k: v for k, v in PROGRAM.items() if k != "annotations"})
 UNIT_SHA512 = _sha512(b"", {"unit/made-up": hashlib.sha256(b"the staged Definition's id and the row layout").hexdigest()})
+#: a made-up partition object, naming `PROGRAM` as a bound statement's names its Program
+PARTITION = {"format": "made-up", "program": PROGRAM_SHA512, "query": {"name": "Q_made_up", "version": 1, "params": {"X": 16}}}
 
 
 def circuit_text(rule: str = L.PARTITION_V1, size: int = 4000) -> bytes:
@@ -2449,7 +2462,8 @@ def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_label
     A partition file that isn't the bound object, or that the circuit binds nothing for, ends the command before any
     verifier process starts; under the provisional cover the verifier takes no partition object, so the bound cover is
     checked and not handed to it. The program is held to nothing the circuit states: the record says which was handed,
-    and only one that names another Definition than `stage.json`'s `word` is refused. An accept on the provisional
+    and only one that names another Definition than `stage.json`'s `word` is refused; but a held partition under
+    `PARTITION_V1` names its Program, and the program is then held to that digest instead. An accept on the provisional
     cover is labelled as holding no Program to the circuit. The circuit is held to `stage.json`'s `circuit_sha512`."""
 
     def measured(*argv: str) -> dict:
@@ -2466,7 +2480,7 @@ def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_label
 
     tree = kept_proof(tmp_path, rule=L.PARTITION_V1)
     program, partition, circuit, stage = (tree / "stage" / n for n in ("program-word.json", "partition.json", "circuit.txt", "stage.json"))
-    verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 7)
+    verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 8)
 
     # the program: any descriptor is handed on, since the circuit's `program_sha512` is no digest of it; the record
     # says which, by the digest the verifier computes (annotations in none) and the Definition it names
@@ -2489,7 +2503,15 @@ def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_label
     # the bound partition object goes to the verifier; another is refused
     partition.write_text(json.dumps(PARTITION, indent=2))
     doc = measured()
-    assert doc["statement"]["bound"]["held"] == ["partition"] and doc["statement"]["bound"]["withheld"] == []
+    assert doc["statement"]["bound"]["held"] == ["partition", "program"] and doc["statement"]["bound"]["withheld"] == []
+    # under it the program is held to the one the partition object names, not to the stage's word: a bound statement's
+    # population Program names its population, and the verifier refuses any program but the partition's
+    stage.write_text(json.dumps({"word": "Another_v1{N=2}"}))
+    assert measured()["statement"]["bound"]["held"] == ["partition", "program"]
+    stage.unlink()
+    program.write_text(json.dumps(other))
+    refused(r"program-word\.json is not the Program the partition object names: its digest is .*: no verifier was started")
+    program.write_bytes(PROGRAM_FILE)
     assert doc["label"] == f"accepted at --zk, the circuit's partition under {L.PARTITION_V1}"
     assert verifier.calls[-1][verifier.calls[-1].index("--partition") + 1] == "key-partition.json"
     partition.write_text(json.dumps(PARTITION | {"program": "q"}))

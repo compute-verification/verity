@@ -40,9 +40,15 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import IO, Callable
 
-from . import settings
+if __package__:
+    from . import settings
+else:
+    #: the shim's script form has no package to import `research.settings` from: its `get`, which for a declared name (each
+    #: one this file reads is) is ``os.environ.get`` at the call
+    settings = SimpleNamespace(get=lambda name, default=None: os.environ.get(name, default))
 
 PATHS = ("tools/research", "infra/ops", "infra/cluster")
 OPT_OUT = "RESEARCH_AT_CHECKOUT"

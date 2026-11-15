@@ -97,7 +97,9 @@ shell's environment. So it refuses, wherever it is typed, a command that leaves 
 `declare` or `typeset`, an assignment with no command after it. This rule alone refuses in doubt: in a subshell or what a
 carrier runs too, where the name may die with it. The names ahead of one command, an `unset` and a read pass. Not covered: a
 variable the shell held before the guard arrived, one a script exports, and a name the shell builds
-(`GIT_{AUTHOR,COMMITTER}_NAME`, `export "$line"`).
+(`GIT_{AUTHOR,COMMITTER}_NAME`, `export "$line"`). The same reading refuses leaving `PYTHONPATH` or `RESEARCH_AT_CHECKOUT`
+set, which changes which code every later command runs (`kept_code_reason`, CODE_VARIABLES), but only in the shell itself
+(`own_shell`) and never in doubt: what a carrier, a subshell or a script runs passes.
 
 The VM's tmux server stays (kept_session.py): its environment holds the secrets it started with, which a shell that lost
 them takes back from it. So it refuses `tmux kill-server`, and a `tmux kill-session` that would end the session the VM
@@ -1339,6 +1341,56 @@ def shell_identity_reason(command: str) -> str | None:
     return guard().kept_identity_reason(shell_keeps(raw))
 
 
+#: variables that change which code every later command of a shell runs: each name with what it changes and the command
+#: that takes it for one run
+CODE_VARIABLES = {
+    "PYTHONPATH": ("every later `python3` and `research` imports from its directories first, a scratch tree's code among them, "
+                   "and from an older installed copy once that tree is gone", "`PYTHONPATH=DIR python3 ...`"),
+    "RESEARCH_AT_CHECKOUT": ("every later `research` runs the checkout's own copy instead of re-executing from origin/main's code",
+                             "`RESEARCH_AT_CHECKOUT=1 research ...`"),
+}
+SUBSTITUTION = re.compile(r"\$\([^()]*\)|`[^`]*`")
+
+
+def own_shell(text: str) -> list[list[str]]:
+    """The simple commands of `text` that run in the shell reading it, as `words_of` splits them, and what an `eval` among
+    them runs: not what a subshell runs (`( ... )`, a pipeline's member, one sent to the background), a command substitution
+    (`$( ... )`, a backquote, taken out first, innermost first) or a carrier. Each `(` left is marked with a word of its own,
+    which the split would drop with the empty command before it."""
+    while (cut := SUBSTITUTION.sub("_", text)) != text:
+        text = cut
+    out, depth, before = [], 0, ""
+    for words, op in words_of(text.replace("(", " \0 (")):
+        words = [w for w in words if w != "\0"]
+        if depth == 0 and words and not {before.strip("()"), op.strip("()")} & {"|", "|&"} and op.strip("()") != "&":
+            run = unwrap(words)
+            out += own_shell(" ".join(run[1:])) if run[:1] == ["eval"] else [words]
+        depth, before = max(0, depth + op.count("(") - op.count(")")), op
+    return out
+
+
+def kept_code_reason(command: str) -> str | None:
+    """Why this command, which leaves one of CODE_VARIABLES set in the shell that runs it (`shell_keeps` of `own_shell`), may
+    not run, or None. Unlike the identity rule it never refuses in doubt: the harm is only in the shell that persists, and
+    a carrier, a subshell or a script exporting PYTHONPATH in its own process is honest work, so a text the hook can't split
+    passes."""
+    if not any(name in command for name in CODE_VARIABLES):
+        return None
+    try:
+        kept = shell_keeps(own_shell(command))
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split passes the rule for code variables ({e})", file=sys.stderr)
+        return None
+    for name in kept:
+        if name in CODE_VARIABLES:
+            changes, one_run = CODE_VARIABLES[name]
+            return (f"this command leaves `{name}` set in the shell itself, and a name left set changes which code every later "
+                    f"command of this shell runs: {changes}. Put it on the one command instead, {one_run}, or run it in a "
+                    f"subshell, `( export {name}=...; cmd )`; if the shell already holds it, `unset {' '.join(CODE_VARIABLES)}` "
+                    f"clears it.")
+    return None
+
+
 def own_tmux(given: dict[str, str]) -> bool:
     """Whether a `tmux` with these options talks to the VM's own server: it names no socket (`-L NAME`, `-S PATH`), or the
     default one (`-L default`, `-S .../tmux-UID/default`)."""
@@ -1565,7 +1617,7 @@ def main() -> int:
     except Exception:                                   # a bug in the local-work gate must not stop every command
         low = None
     try:
-        low = low or (None if deny else shell_identity_reason(command))
+        low = low or (None if deny else shell_identity_reason(command) or kept_code_reason(command))
         low = low or (None if deny or ("git" not in command and "worktree_guard" not in command)
                       else checkout_reason(command, conversation, cwd))
     except Exception:                                   # nor one in the checkout guard, or in the rule for a name left in the shell
