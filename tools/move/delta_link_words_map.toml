@@ -24,9 +24,10 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, fixtures, patches, the Glossary's
 # older-names row, the retired-words lints' examples), files whose bytes a digest pins (`rename.py` repins a
-# `TRUSTED.sha256` line itself), lock files and the locks' records, and the record text named above.
+# `TRUSTED.sha256` line itself), lock files and the record text named above. A `lean-audit.json` is read, not
+# excluded: `rename.py` leaves its records itself, and `--moves` reads them for `tools/move/delta_link_words_moves.json`.
 exclude = ["tools/move/**", "**/fixtures/**", "**/*.patch", "**/TRUSTED.sha256", "uv.lock",
-           "**/*.lock", "**/lean-audit.json", "GLOSSARY.md", "benchmarks/one_stage/onsite_record.py",
+           "**/*.lock", "GLOSSARY.md", "benchmarks/one_stage/onsite_record.py",
            "security/Proofs/Flock/Soundness/Audit/Influence.lean", "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
            "**/tests/lean/ExfiltrationVectors.lean", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
            "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
