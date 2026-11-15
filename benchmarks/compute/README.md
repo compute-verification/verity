@@ -34,7 +34,7 @@ A record directory is a run's directory as `research run` leaves it and our stor
 relative to it.
 
 - `out/pieces/pouw/pearlplus-answer.json` (required): the Pearl+ verifier's answer. It holds the verdict, the credit
-  in MACs, and the sample's ε_s at δ_s.
+  in MACs, the sample's ε_s at δ_s, and where the sample's coin came from (`profile.source_from`).
 - `out/inference-only-policy.json` (required): the registered policy. It names the served model and the class: its
   slots, prompt tokens and output tokens. The model's MACs are counted from it.
 - `out/pieces/pouw/pearlplus-lean.json` and `out/pieces/pouw/pearlplus-lean-check.json` (optional): the Lean
@@ -51,10 +51,12 @@ A directory missing a required file is refused with exit 2, and the message name
 
 ## What it refuses
 
-It prints no number, and exits 1, unless the Pearl+ answer is an accept with a credit. It also prints none when the
-Lean verifier's verdict, where the record holds one, differs from the answer in verdict, run commitment or credit. It
-exits 2 when a file can't be read, when the policy's model or class can't give the model's MACs, or when the credit is
-more than one load of the class can hold. It reads only the verifier's side of the record, so the tokens and seconds
+It prints no number, and exits 1, unless the Pearl+ answer is an accept with a credit, and its sample is a live
+challenger's coin (`profile.source_from` is `challenger`). A sample drawn on the prover's node, or one whose source the
+answer doesn't state, gives no number: the prover could pick such coins. It also prints none when the Lean verifier's
+verdict, where the record holds one, differs from the answer in verdict, run commitment or credit. It exits 2 when a
+file can't be read, when the policy's model or class can't give the model's MACs, or when the credit is more than one
+load of the class can hold. It reads only the verifier's side of the record, so the tokens and seconds
 the developer's node reports are never part of the number.
 
 ## Files

@@ -13,6 +13,7 @@
   "scheme": "pearl-c-h100-v1-h3"
  },
  "profile": {
-  "delta": "1/100"
+  "delta": "1/100",
+  "source_from": "challenger"
  }
 }

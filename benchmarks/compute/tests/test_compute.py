@@ -246,6 +246,12 @@ def test_pouws_row_in_the_composed_record_is_printed_whatever_it_says(store, tmp
     ({"ANSWER": to("public", "work", "credited", value=-1)}, "Pearl+'s answer accepts and holds no credit in MACs"),
     ({"ANSWER": "not json"}, "the run's Pearl+ verdicts don't read as verdicts"),
     ({"ANSWER": "[]"}, "the run's Pearl+ verdicts don't read as verdicts"),
+    ({"ANSWER": to("profile", "source_from", value="node")},
+     ("Pearl+'s answer samples on 'node' coins, not a live challenger's (profile.source_from): a run whose "
+      "PEARLC_CHALLENGER_GATE is empty draws its coins in-process and claims no verdict")),
+    ({"ANSWER": lambda d: d["profile"].pop("source_from")},
+     "Pearl+'s answer samples on no coin it states, not a live challenger's (profile.source_from)"),
+    ({"ANSWER": lambda d: d.pop("profile")}, "Pearl+'s answer samples on no coin it states"),
     ({"LEAN": to("verdict", value="reject")}, "the Lean verifier's verdict is reject and the answer's accept"),
     ({"LEAN": to("work", "credited", value=CREDITED + 1)},
      f"the Lean verifier's credit is {CREDITED + 1} and the answer's {CREDITED}"),
@@ -520,7 +526,7 @@ def test_capacity_refuses_hardware_it_cannot_read_a_peak_off(tmp_path):
 
 
 def test_an_answer_with_no_delta_writes_the_error_absent_and_says_why(store, tmp_path):
-    store.add(RUN, a_record(tmp_path, ANSWER=lambda d: d.pop("profile")))
+    store.add(RUN, a_record(tmp_path, ANSWER=lambda d: d["profile"].pop("delta")))
     doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN)
     got = {m["name"]: m for m in C.amounts(doc)}["error"]
     assert (got["value"], got["why"], got["inputs"]) == (None, "the answer states no δ_s", [RUN, "delta_s"])
