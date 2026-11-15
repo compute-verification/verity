@@ -265,9 +265,9 @@ def test_the_generators_a_step_may_read_come_back_as_they_were_kept():
     random.seed(7)
     raw = io.BytesIO()
     torch.save(run.plain(run.generators()), raw)
-    drawn = (torch.rand(3).tolist(), np.random.rand(3).tolist(), random.random())
+    sampled = (torch.rand(3).tolist(), np.random.rand(3).tolist(), random.random())
     run.set_generators(torch.load(io.BytesIO(raw.getvalue()), weights_only=True))
-    assert (torch.rand(3).tolist(), np.random.rand(3).tolist(), random.random()) == drawn
+    assert (torch.rand(3).tolist(), np.random.rand(3).tolist(), random.random()) == sampled
 
 
 def test_a_segments_clock_starts_where_the_kept_states_stood(tmp_path):
