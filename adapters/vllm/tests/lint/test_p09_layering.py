@@ -28,7 +28,7 @@ Checked today, against ``allowlists/p09_layering.json``:
 from __future__ import annotations
 
 import ast
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from . import _imports as I
@@ -82,7 +82,7 @@ PACKAGE_OF = {
 def _package(m: str) -> str:
     if m in LEAF_MODULES:
         return _short(m)          # imports nothing from the package (test_leaf_modules_import_nothing): closes no cycle
-    if I.in_group(m, ("verity.definitions",)):
+    if I.in_group(m, ("verity_vllm.definitions",)):
         return "program"          # moved from program/, and held to its package cycles as they stood
     if hit := max((p for p in PACKAGE_OF if m == p or m.startswith(p + ".")), key=len, default=None):
         return PACKAGE_OF[hit]
@@ -263,7 +263,7 @@ def file_violations(src: str, rel: str, module: str = "", is_package: bool = Fal
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out = layer_violations() + cycle_violations()
     for p in R.library_files():

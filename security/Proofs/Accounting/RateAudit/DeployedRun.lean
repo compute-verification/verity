@@ -42,9 +42,9 @@ import Std.Tactic.BVDecide.Normalize.Prop
 import Proofs.Pous.Prob
 
 /-!
-# The deployed session as a run of the remote audit: its routes, and conservation at the same `γ`
+# The deployed session as a run of PoUB: its routes, and conservation at the same `γ`
 
-`Accounting.Remote.Run.ofDeployed` reads a deployed session as a run of the remote audit. Its routes:
+`Accounting.Remote.Run.ofDeployed` reads a deployed session as a run of PoUB. Its routes:
 
 * `Sampled d̄`: an accepting run whose correct receipts cover less than `(1 − d̄)·n·P·N·b` bits holds at most
   `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's sample (`DeployedSession.pr_samples_pooled_le`).
@@ -255,13 +255,13 @@ namespace Accounting.SecurityProofs
 
 open Accounting.Rate Accounting.Remote
 
-/-- **The deployed session meets the remote audit's routes** (`Accounting.Guarantees.RemoteRunRoutes`). -/
+/-- **The deployed session meets PoUB's routes** (`Accounting.Guarantees.RemoteRunRoutes`). -/
 theorem RemoteRunRoutes : Accounting.Guarantees.RemoteRunRoutes := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF hA
   exact ⟨ofDeployed_sampled A tier _ Nd a dbar hn hP hN hb hdbar hab hC,
     ofDeployed_paid_route A tier Nd a hrc ha hab hal hW hF hA⟩
 
-/-- **The deployed session conserves its words as a run of the remote audit, at the same `γ`**
+/-- **The deployed session conserves its words as a run of PoUB, at the same `γ`**
 (`Accounting.Guarantees.RemoteMonitoringPeriodConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
 theorem RemoteMonitoringPeriodConservation : Accounting.Guarantees.RemoteMonitoringPeriodConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF hA
@@ -285,7 +285,7 @@ theorem RemoteMonitoringPeriodConservation : Accounting.Guarantees.RemoteMonitor
   rw [hCr] at h2 eΛ k ⊢
   nlinarith [h2, eΛ, k]
 
-/-- **Each window conserves its words as a run of the remote audit, at the same `γ_w`**
+/-- **Each window conserves its words as a run of PoUB, at the same `γ_w`**
 (`Accounting.Guarantees.RemoteWindowRunConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
 theorem RemoteWindowRunConservation : Accounting.Guarantees.RemoteWindowRunConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A w Nd a dw hP hN hb hrc hdw ha hab hal hC hW hF hA

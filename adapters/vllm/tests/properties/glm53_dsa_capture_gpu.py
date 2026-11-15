@@ -4,7 +4,7 @@
 and `persistent_topk`) and `sparse_mla_split.SparseMlaHeadSplit_v1` (FA3, `FLASH_ATTN_MLA_SPARSE`) at GLM-5.3's statics on one TP8 rank (8 MLA
 heads; the indexer's 32 heads replicated), and the run that settles the RoPE contraction of the two Triton kernels.
 
-One GPU process writes `<out>/glm53_dsa_capture.json`, the property record `glm53_dsa_capture` (`properties.record`), and the two
+One GPU process writes `<out>/glm53_dsa_capture.json`, the property record `glm53_dsa_capture` (`records.property_record`), and the two
 Triton kernels' PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one line per phase, a `ROPE`
 line, then `GLM53-DSA GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else runs when it fails
 (exit 3).  vLLM runs at its defaults, as it serves: `engine.env.served_defaults` clears every switch the process inherited before
@@ -105,20 +105,20 @@ from typing import Any, NamedTuple
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity.circuits.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
 from verity.circuits.ops.fp32 import f32_sub_bits as sub
-from verity.definitions.registry import boolean_rope as BR
-from verity.definitions.registry import dsa
-from verity.definitions.registry import ref_prims as RP
-from verity.definitions.registry import sparse_mla as M
-from verity.definitions.registry import sparse_mla_split as W
+from verity_vllm.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
+from verity_vllm.definitions.registry import boolean_rope as BR
+from verity_vllm.definitions.registry import dsa
+from verity_vllm.definitions.registry import ref_prims as RP
+from verity_vllm.definitions.registry import sparse_mla as M
+from verity_vllm.definitions.registry import sparse_mla_split as W
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
 from verity_vllm.pipeline.cli import MACHINE
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-dsa-capture/v3"
 RECORD = "glm53_dsa_capture.json"
@@ -286,7 +286,7 @@ def logit_rows(q: np.ndarray, w: np.ndarray, k: np.ndarray, ks: np.ndarray) -> t
     `fmaxf(acc, +0)`, then the quad lanes' sums in ascending j (j = 0's product contracted into j = 1's add, `fma(r0, w0, r1 *
     w1)`, then FFMAs), `(s0 + s1) * ks` and `(v0 + v1) + (v2 + v3)`.  An entry whose dot steps flag a non-finite accumulator or an
     e4m3 NaN, or whose logit is NaN, is unresolved."""
-    from verity.definitions.numerics import derived_rows as DR
+    from verity_vllm.definitions.numerics import derived_rows as DR
 
     n, Hh, Dd = q.shape
     relu = np.empty((n, Hh), dtype=np.uint32)
@@ -365,7 +365,7 @@ NEG = np.uint32(0x80000000)
 def rope_forms(x1, x2, c, s) -> dict[str, np.ndarray]:
     """Every candidate contraction (module docstring) of the interleaved RoPE on bf16 words (arrays of one shape): name -> bf16
     words of the even (L_*) or odd (H_*) output."""
-    from verity.definitions.numerics import derived_rows as DR
+    from verity_vllm.definitions.numerics import derived_rows as DR
 
     X1, X2, Cc, Ss = (DR.bf16_to_f32_words(np.asarray(v)) for v in (x1, x2, c, s))
     out = {}
@@ -494,7 +494,7 @@ def index_k_forms(b: np.ndarray, cs: np.ndarray, got: np.ndarray) -> dict[str, A
     """Which contraction of `roped = normed * cos + sign * partner * sin` (kernels.py:392) the probe's bytes are: A (the
     Definition's) = fma(x, cos, RN(+-partner sin)), B = fma(+-partner, sin, RN(x cos)), N = RN(x cos) + RN(+-partner sin), separately
     for even (L) and odd (H) elements; b (launches, D) f32 words, cs (launches, ROPE) bf16 words, got (launches, D) bytes."""
-    from verity.definitions.numerics import derived_rows as DR
+    from verity_vllm.definitions.numerics import derived_rows as DR
 
     half = ROPE // 2
     x = np.asarray(b, dtype=np.uint32)[:, :ROPE]
@@ -630,7 +630,7 @@ def fused_q_call(o: dict[str, Any], cs):
 
 def _rms_info(x: np.ndarray, w: np.ndarray, got: np.ndarray, eps: float) -> dict[str, Any]:
     """Triton `_rms_norm` (kernels.py:25-31), no Definition here: the outputs against f64 sums of an f32 model, in bf16 ulps."""
-    from verity.definitions.numerics import derived_rows as DR
+    from verity_vllm.definitions.numerics import derived_rows as DR
 
     xf = DR.as_f32(DR.bf16_to_f32_words(x)).astype(np.float64)
     r = np.float32(1.0) / np.sqrt((np.mean(xf * xf, axis=1, keepdims=True) + eps).astype(np.float32))
@@ -1002,7 +1002,7 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
-    from verity.definitions.registry import dsa
+    from verity_vllm.definitions.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}
     if not lst:

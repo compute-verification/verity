@@ -23,7 +23,7 @@ same script rather than by rename detection:
    script run on B, so against it the branch's side holds only the branch's own changes, in moved paths and names, and the
    other side only what landed after the move: what conflicts here is real content. (Against B instead, a line the script
    rewrote next to one the branch edited would conflict.)
-4. run the result's own `tools/verity/check/pins.py --regen` at its root, which runs each stale pin's command, and commit what it
+4. run the result's own `pins.py --regen` (`PINS_FILES`) at its root, which runs each stale pin's command, and commit what it
    rewrote (`--no-pins` skips it). A result with a pin still stale, its command failed, is `pins-stale`.
 
 Before the steps, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
@@ -58,7 +58,12 @@ deletes, so no result holds one), `script-failed` (the script's exit code and th
 last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s whole, which drops the
 branch's own entries in them, and its owner re-adds those by hand and leaves the records to the candidate's records run
 (`LOCKS_READD`); `--push-to` pushes it; a pinned `TRUSTED.sha256` in
-conflict there likewise takes `--onto`'s and the pins step regenerates it) or `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
+conflict there likewise takes `--onto`'s and the pins step regenerates it), `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command) or `stale-words` (the result's id, and
+each line of the branch's own, against what it merged last, that still spells a word a crossed move's map renames only in
+the files a block names, in a file no such block names: rename.py's `[[words_in]]`, layout.py's `[rewrite] words_in`; the
+script left it as written, and the result may not build. `words` gives each one's file, line, word and new word, and the
+owner renames each that means the renamed name; nothing rewrites them, `--push-to` pushes nothing, and it takes the place of
+what the result would otherwise be: `clean`, `up-to-date`, `clean-skipped` or `locks-stale`, whose locks it names too). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
 pushes a clean result of one branch to a new branch on `--remote`, never one that skipped a move, and refuses a name that
 already exists there. Exit 0 when every branch is clean or up to date, 1 otherwise.
 
@@ -71,6 +76,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import fcntl
+import fnmatch
 import hashlib
 import json
 import os
@@ -80,6 +86,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 SCRIPT = "tools/move/layout.py"
 #: the arguments the move's script runs with (`--script-arg`; rename.py takes its map as `--map`)
@@ -101,8 +108,10 @@ TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
 #: a move commit's line naming its map, and so its script (`stage.py` writes both kinds, drive's queue `Move:`)
 MOVE_LINE = re.compile(r"^(Move|Layout-move): (tools/move/[\w.-]+\.toml)((?: --no-lock)?)$", re.M)
 LINE_SCRIPT = {"Move": "tools/move/rename.py", "Layout-move": "tools/move/layout.py"}
-#: the result's own list of pins, whose `--regen` runs every stale pin's command
-PINS = "tools/verity/check/pins.py"
+#: the result's own list of pins, whose `--regen` runs every stale pin's command: in the check's directory, `tools/check/`,
+#: or `tools/verity/check/` in a tree from before the move that put it there
+PINS_FILES = ("tools/check/pins.py", "tools/verity/check/pins.py")
+PINS = PINS_FILES[0]
 #: a Lean package's lock: where both sides changed it, the result takes `--onto`'s whole
 LOCK = "lean-audit.json"
 #: what the owner of a result whose locks took `--onto`'s side does before marking it. A records run regenerates the records
@@ -116,7 +125,7 @@ LOCKS_READD = ("re-add by hand each entry the branch's own change put in them (`
 #: `--onto`'s too
 PINNED = "TRUSTED.sha256"
 #: where `--kept` keeps the moves `check_generated` found generated, a file a key (`kept_path`): in the check's cache, at its
-#: default place (`tools/verity/check/common.cache_dir`). On a node that is the one directory every run shares: a run's
+#: default place (the check's `common.cache_dir`). On a node that is the one directory every run shares: a run's
 #: clone, with its `.git`, is removed when the run ends, so a file kept there would never be read
 KEPT_DIR = "~/.cache/verity-check/restack-generated"
 #: whether `check_generated` reads and writes `KEPT_DIR` (`--kept`). Off, as in drive's jobs and in every test that reaches
@@ -135,6 +144,12 @@ CARRIED = ("main", "python", "push_to", "remote", "kept", "dry_run", "no_pins", 
 DRIVERS = "import pathlib, research.clone as c; c.set_drivers(pathlib.Path.cwd())"
 #: git's own merge drivers, which no clone defines: `.gitattributes` gives every `.gitignore` `merge=union`
 GIT_OWN = frozenset({"text", "binary", "union"})
+#: the map a `Layout-move` line's script reads with no `--map` (layout.py's default)
+LAYOUT_MAP = "tools/move/layout_map.toml"
+#: a hunk's header in `git diff -U0`: the old side's line count, the new side's first line and its count
+HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+#: the most `stale_words` lines `line` prints; the JSON holds every one
+WORDS_SHOWN = 40
 
 
 class ScriptFailed(Exception):
@@ -344,9 +359,13 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
                 raise NoRow(p.stderr.decode(errors="replace").strip())
             if p.returncode:
                 raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
-            if limit and os.path.exists(os.path.join(wt, LIMIT_IN)):
-                swap(os.path.join(wt, LIMIT_IN), NO_LIMIT, limit[0])    # the script's file as it left it, with its limit again
             git("add", "-A", cwd=wt)
+            if limit:
+                # the script's file as it left it, with its limit again, wherever a move of the script's own directory put it
+                hits = git("grep", "-l", "-E", f"^{NO_LIMIT.decode()}$", "--", "*.py", cwd=wt, ok=(0, 1)).stdout.decode()
+                for path in hits.split():
+                    swap(os.path.join(wt, path), NO_LIMIT, limit[0])
+                git("add", "-A", cwd=wt)
             restored = [f for f in restored if not f.endswith(ROWS_SUFFIX) or os.path.lexists(os.path.join(wt, f))]
             for path in restored:
                 if path in mine:
@@ -361,13 +380,14 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
 def regen_pins(result: str, python: str, cwd: str | None) -> tuple[str | None, list[str], bool]:
     """Check `result` out in a scratch worktree and run its own `pins.py --regen` at the root: (the tree it leaves, or None when
     it changed nothing, the tail of its output, whether every pin is fresh after). A tree without the list has no pins to run."""
-    if git("cat-file", "-e", f"{result}:{PINS}", cwd=cwd, ok=(0, 128)).returncode:
+    pins = next((p for p in PINS_FILES if not git("cat-file", "-e", f"{result}:{p}", cwd=cwd, ok=(0, 128)).returncode), None)
+    if pins is None:
         return None, [], True
     with tempfile.TemporaryDirectory(prefix="restack-pins-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))
         add_worktree(wt, result, cwd)
         try:
-            p = subprocess.run([python, PINS, "--regen"], cwd=wt, capture_output=True)
+            p = subprocess.run([python, pins, "--regen"], cwd=wt, capture_output=True)
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
             git("add", "-A", cwd=wt)
             tree = out("write-tree", cwd=wt)
@@ -550,7 +570,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             return {**r, "status": "no-row", "step": "script", "files": e.files, "error": str(e)}
         except ScriptFailed as e:
             return {**r, "status": "script-failed", "step": "script", "error": str(e)}
-        ran = True
+        ran = r["ran"] = True
         if tree != tree_of(tip, cwd):
             msg = (f"restack: rerun {shlex.join([SCRIPT, *SCRIPT_ARGS])} from {move[:12]} on {branch}\n\n"
                    f"The layout move's codemod, run at the root of this tree as {move[:12]} was made from {base[:12]}.\n\n"
@@ -597,6 +617,94 @@ def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple
     return found
 
 
+def _glob(path: str, glob: str) -> bool:
+    return fnmatch.fnmatchcase(path, glob) or (glob.startswith("**/") and fnmatch.fnmatchcase(path, glob[3:]))
+
+
+def scoped_words(move: str, script: str, args: tuple[str, ...], cwd: str | None) -> list[tuple[str, str, list[str], re.Pattern]]:
+    """(old word, new word, the globs of the files it is renamed in, its pattern) for each word ``move``'s map, at the move's
+    base, renames only in the files a block names: rename.py's `[[words_in]]`, as the whole word it renames there, and
+    layout.py's `[rewrite] words_in`, a moved directory's name alone between quotes or backticks. A word several blocks rename
+    is one entry, with every block's globs, and the first block's new word, as rename.py takes it. Such a word means another
+    thing in other files, so the script leaves it in a file the branch adds or changes outside its block, where it may mean
+    the renamed name. A word the map renames everywhere ([words], [rewrite] words) that still stands after the script ran was
+    kept on purpose, and a prose map (`scope = "prose"`) renames no code: neither is here."""
+    i = args.index("--map") + 1 if "--map" in args else None
+    path = args[i] if i is not None and i < len(args) else LAYOUT_MAP if script == LINE_SCRIPT["Layout-move"] else None
+    shown = git("show", f"{move}^1:{path}", cwd=cwd, ok=(0, 128)) if path else None
+    data = tomllib.loads(shown.stdout.decode()) if shown and not shown.returncode else {}
+    if data.get("scope") == "prose":
+        return []
+    found: dict[str, tuple[str, list[str], re.Pattern]] = {}
+    for block in data.get("words_in", []):
+        for old, new in block.get("words", {}).items():
+            left = (r"(?<![\w.])" if old.endswith(".") else r"(?<!\w)") if re.match(r"\w", old) else ""
+            right = r"(?!\w)" if re.match(r"\w", old[-1]) else ""
+            found.setdefault(old, (new, [], re.compile(left + re.escape(old) + right)))[1].extend(block.get("files", []))
+    dirs = {k.rstrip("/").rsplit("/", 1)[-1]: v.rstrip("/").rsplit("/", 1)[-1]
+            for k, v in data.get("paths", {}).items() if k.endswith("/")}
+    for glob, names in data.get("rewrite", {}).get("words_in", {}).items():
+        for old in (n.rstrip("/") for n in names):
+            quoted = re.compile(rf"(?<=[\"'`]){re.escape(old)}(?=[\"'`])")
+            found.setdefault(old, (dirs.get(old, "its directory's new name"), [], quoted))[1].append(glob)
+    return [(old, new, globs, pattern) for old, (new, globs, pattern) in found.items()]
+
+
+def own_lines(onto: str, result: str, cwd: str | None):
+    """(path, line number, text) of each line ``result`` adds or changes against ``onto``, the side it merged last: the
+    branch's own lines, in moved paths and names."""
+    p = git("-c", "core.quotePath=false", "diff", "-U0", "-M", "--no-color", "--no-ext-diff", "--no-textconv", onto, result,
+            cwd=cwd)
+    path, n, left = None, 0, 0
+    for raw in p.stdout.decode(errors="replace").splitlines():
+        if left:
+            if raw.startswith("\\"):
+                continue
+            left -= 1
+            if raw.startswith("+"):
+                if path:
+                    yield path, n, raw[1:]
+                n += 1
+        elif raw.startswith("+++ "):
+            path = raw[6:] if raw.startswith("+++ b/") else None
+        elif m := HUNK.match(raw):
+            n, left = int(m[2]), int(m[1] or 1) + int(m[3] or 1)
+
+
+def stale_words(result: str, onto: str, moves: list[tuple[str, str, tuple[str, ...]]], cwd: str | None) -> list[dict]:
+    """Each line of the branch's own in ``result`` (`own_lines`) that still spells a word one of ``moves``, those whose script
+    ran on it, renames only in the files a block of its map names (`scoped_words`), in a file outside every block that renames
+    it: its file, line, word, new word, map and move. A Lean lock's records are its check's to rewrite (`check.py --update`),
+    and `tools/move/`, which the script leaves as the branch has it, holds maps that spell old words by design."""
+    words = [(w, m, args) for m, script, args in moves for w in scoped_words(m, script, args, cwd)]
+    if not words:
+        return []
+    found, seen = [], set()
+    for path, n, text in own_lines(onto, result, cwd):
+        if path.startswith(SCRIPT_DIR + "/") or path.rsplit("/", 1)[-1] == LOCK:
+            continue
+        for (old, new, globs, pattern), move, args in words:
+            if old in text and pattern.search(text) and not any(_glob(path, g) for g in globs) and (path, n, old) not in seen:
+                seen.add((path, n, old))
+                found.append({"file": path, "line": n, "word": old, "new": new, "move": move,
+                              "map": args[args.index("--map") + 1] if "--map" in args else LAYOUT_MAP})
+    return found
+
+
+def stale_error(words: list[dict], result: str) -> str:
+    """What `stale-words` says: the first line counts and names the first word, as one line of a report reads it; then each
+    line, at most `WORDS_SHOWN`, and the fix."""
+    w = words[0]
+    more = f", and {len(words) - 1} more" if len(words) > 1 else ""
+    shown = "".join(f"\n  {x['file']}:{x['line']}: {x['word']} -> {x['new']} ({x['map']}, the move {x['move'][:12]})"
+                    for x in words[:WORDS_SHOWN])
+    return (f"{len(words)} of the branch's own lines still spell a word a crossed move renames only in the files its map "
+            f"names, which its script left as written: {w['file']}:{w['line']} {w['word']} (-> {w['new']}){more}" + shown
+            + (f"\n  and {len(words) - WORDS_SHOWN} more (--json lists every one)" if len(words) > WORDS_SHOWN else "")
+            + f"\nwhere one means the renamed name, rename it on the result {result[:12]} and push that; nothing here rewrote "
+              "them, and nothing is pushed")
+
+
 def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str | None = None, base: str | None = None,
           python: str = sys.executable, cwd: str | None = None, pins: bool = True, main: str | None = None,
           found: bool = False) -> dict:
@@ -611,7 +719,7 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
     The last move has no later one, so it still refuses, with `carry`, the command that carries ``branch`` against the move's
     own commit (`carried_against`: the moves found, or each named up to it)."""
     global SCRIPT, SCRIPT_ARGS
-    head, tip, crossed, skipped, locks = rev(branch, cwd), branch, [], [], []
+    head, tip, crossed, skipped, locks, ran = rev(branch, cwd), branch, [], [], [], []
     if not moves:
         return {"branch": branch, "head": head, "crossed": [], "skipped": [], "status": "no-moves",
                 "plain": {"status": "clean", "files": []}, "error": f"no move to cross: merge {main or onto} as usual"}
@@ -621,6 +729,7 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
         r = restack(tip, move, onto if last else None, base if len(moves) == 1 else None, python, cwd,
                     pins=pins and last, main=main)
         r = {**r, "branch": branch, "head": head, "crossed": crossed, "skipped": skipped}
+        scripted = r.pop("ran", False)
         if found and r["status"] == "based-after" and any(contains(move, move_base(m, cwd), cwd) for m, *_ in moves[i + 1:]):
             skipped = [*skipped, {"move": r["move"], "script": script, "args": list(args)}]
             continue
@@ -632,6 +741,7 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
         if r["status"] not in ("clean", "up-to-date", "locks-stale"):
             return r
         crossed = [*crossed, move]
+        ran += [(move, script, tuple(args))] if scripted else []
         locks += [f for f in r.get("files", []) if r["status"] == "locks-stale" and f not in locks]
         if last:
             break
@@ -642,6 +752,10 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
                       f"{LOCKS_READD}"}
     if skipped and r["status"] in ("clean", "up-to-date"):
         r = {**r, "status": "clean-skipped"}
+    if ran and (words := stale_words(r["result"], r["onto"], ran, cwd)):
+        stale = stale_error(words, r["result"])
+        r = {**r, "status": "stale-words", "words": words,
+             "error": stale + (f"\n{r['error']}" if r["status"] == "locks-stale" else "")}
     return {**r, "crossed": crossed, "skipped": skipped}
 
 
@@ -668,7 +782,7 @@ def line(r: dict) -> str:
     if len(r.get("crossed", [])) > 1 or r["status"] not in ("clean", "up-to-date", "no-moves") and r.get("crossed"):
         plain += (f"; crossed {len(r['crossed'])} move{'s' if len(r['crossed']) != 1 else ''}: "
                   f"{', '.join(c[:12] for c in r['crossed'])}")
-        if r["status"] not in ("clean", "clean-skipped", "up-to-date", "locks-stale"):
+        if r["status"] not in ("clean", "clean-skipped", "up-to-date", "locks-stale", "stale-words"):
             plain += f"; stopped at the move {r['move'][:12]}"
     skipped = "".join(
         f"\n    skipped the move {s['move'][:12]} ({shlex.join([s['script'], *s['args']])}): {r['branch']} is based after its "
@@ -679,7 +793,7 @@ def line(r: dict) -> str:
                     f"with the moves named, which skips none:\n    {shlex.join(r['confirm'])}")
     if r["status"] in ("clean", "clean-skipped", "up-to-date"):
         return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]" + skipped
-    if r["status"] in ("script-failed", "no-row", "pins-stale", "locks-stale", "based-after", "no-moves"):
+    if r["status"] in ("script-failed", "no-row", "pins-stale", "locks-stale", "stale-words", "based-after", "no-moves"):
         at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "no-row", "based-after", "no-moves") else ""
         return f"{r['branch']}: {r['status']}{at}  [{plain}]\n    " + r["error"].replace("\n", "\n    ") + skipped
     return (f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n"

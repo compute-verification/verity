@@ -7,8 +7,8 @@ import struct
 from dataclasses import replace
 
 import pytest
-from verity.hardware import registration
-from verity.protocols.proofs.spot.verifier.one_stage import registration as one_stage
+from verity.protocols.accounting.registration.verifier import registration
+from verity.protocols.proofs.spot.verifier.one_stage import docket as one_stage
 from verity.circuits import partition_object
 from verity.circuits.census import census
 from verity.circuits.codec import program_digest
@@ -104,7 +104,7 @@ def test_a_program_of_registered_definitions_has_census_values_work_and_its_eval
 
 @pytest.mark.slow
 def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_registered_partition(setup):
-    """The sampled proofs sample proof blocks from the Program's partition, which one-stage registers with the Program (the
+    """SPOT samples proof blocks from the Program's partition, which one-stage registers with the Program (the
     record names the query's digest, the partition's and the population). A block's proof blocks are that partition's
     whose gates run there, read with the verifier's copy of the query and held to the record (proofs, review 4): under
     Q_word v1 at X = 16 each linear is 32 units, one a coordinate, so each stage's block rests its `Computed` claim on its

@@ -38,18 +38,18 @@ import numpy as np
 import torch
 from verity.circuits.refs import Coll, PartLog, Refs, array_of, concat
 from verity.circuits.types import Array, Value
-from verity.definitions.registry import dsa
-from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity.definitions.registry.sparse_mla_split import launch_num_splits
+from verity_vllm.definitions.registry import dsa
+from verity_vllm.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
 
-from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
-from verity_vllm.program.frontend.rules.base import (
+from verity_torch.frontend.derive import Alloc, StaticIndex, refuse
+from verity_torch.frontend.rules.base import (
     InPlaceRule,
     OpRule,
     RuleInfo,
     StateRule,
 )
-from verity_vllm.program.frontend.rules.common import known, refuse_cached_prefix, shape
+from verity_torch.frontend.rules.common import known, refuse_cached_prefix, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
     active_target_profile,
@@ -58,7 +58,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     launch_keys_of,
 )
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity_vllm.program.frontend.torch_frontend import _tensor_type
+from verity_torch.frontend.strided_views import _tensor_type
 
 aten = torch.ops.aten
 BF16, F32, E4M3 = torch.bfloat16, torch.float32, torch.float8_e4m3fn
@@ -549,7 +549,8 @@ class DsaIndexerAttnRule(StateRule):
         layer, topk, scale = a["layer_name"], a["topk"], a["scale"]
         if not isinstance(layer, str) or not isinstance(topk, int) or topk < 1 or not _static_float(scale):
             return "layer_name, topk, scale are not static"
-        obs = (_OBSERVED["attention_impls"] or {}).get(layer) or {}
+        impls = _OBSERVED["attention_impls"]    # none before an instantiation observes them, nor for a layer it did not
+        obs = impls[layer] if impls and layer in impls else {}
         sparse_role = "sparse_mla" if obs.get("num_splits") == 1 else "sparse_mla_split"
         if (r := _missing(ctx, [sparse_role] + (["dsa_mqa_logits", "dsa_topk_short_row", "const"] if has else []))):
             return r
@@ -566,7 +567,8 @@ class DsaIndexerAttnRule(StateRule):
         T = len(pos)
         if (r := _prefill_by_dense_mha(layer, T)):
             return r
-        hist = (ctx.state.get("dsa_history") or {}).get(layer)
+        seen = ctx.state.get("dsa_history")    # none before the first layer opens its history
+        hist = seen.get(layer) if seen else None
         table = batched_form() and dsa_table_reads()
         long_roles = (["dsa_history_reads"] + (["dsa_topk_mask_counted", "dsa_topk_index"] if has else [])) if table else (
             ["dsa_butterfly_rows", "dsa_butterfly_rows_pad"]
@@ -612,7 +614,8 @@ class DsaIndexerAttnRule(StateRule):
         _append_rows(ctx, hist, a, has)
         latent = _log(ctx, (layer, "latent"), hist["latent"])
         G = FA3_SPARSE_GEOMETRY[(R, L)]
-        obs = (_OBSERVED["attention_impls"] or {}).get(layer) or {}
+        impls = _OBSERVED["attention_impls"]    # none before an instantiation observes them, nor for a layer it did not
+        obs = impls[layer] if impls and layer in impls else {}
         pinned_one = obs.get("num_splits") == 1
         if pinned_one:
             splits = [1] * T

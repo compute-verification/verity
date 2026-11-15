@@ -18,9 +18,7 @@ from functools import cache
 from typing import Any
 
 from verity_vllm.query.manifest import format as fmt
-from verity_vllm.query.manifest.format import identity_rows
-
-from verity_vllm.query.manifest.format import query_id_digest
+from verity_vllm.query.manifest.format import identity_rows, query_id_digest
 
 FAMILY = "router_softmax"
 MEMBER = "router_softmax"
@@ -62,7 +60,7 @@ def offsets(E: int, TOPK: int, renormalize: bool) -> dict[str, int]:
 def router_fn(E: int, TOPK: int, VPT: int, renormalize: bool) -> Any:
     # inside the function: importing this module loads neither numpy nor the core `verity`
     from verity.circuits.defs import bind
-    from verity.definitions.registry import moe
+    from verity_vllm.definitions.registry import moe
 
     return bind(moe.MoeRouterTopKOrderedNorm if renormalize else moe.MoeRouterTopKOrdered, E=E, TOPK=TOPK, VPT=VPT)
 

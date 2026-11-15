@@ -1,6 +1,7 @@
 """The adapter's fixed cases: case name -> the Hugging Face repo whose `manifests/checkpoints.json` entry the case runs.
 
-`engine_profile.checkpoint_for` resolves a case here first, and a role registered by `add_checkpoint.py` (`role == case`) otherwise.
+`engine_profile.checkpoint_for` resolves a case here first, and a role of the manifest (`role == case`) otherwise: an entry added
+by hand, or by `fp8-checkpoint pin` or `int8-checkpoint pin` for a recipe pin.
 `ACCEPTED` names the accepted record of the cases that have one.
 Imports nothing, so every layer may read it."""
 
@@ -9,7 +10,7 @@ __all__ = ["CASES"]
 CASES = {
     "B0": {"repo": "HuggingFaceTB/SmolLM2-135M"},
     # the second-model cases: SMOL360 = SmolLM2-360M (B0's architecture, larger), QWEN05 = Qwen2.5-0.5B (B1's architecture at head
-    # dim 64); registry configs verity.definitions.registry.b1.{SMOL360,QWEN05}_CONFIG.
+    # dim 64); registry configs verity_vllm.definitions.registry.b1.{SMOL360,QWEN05}_CONFIG.
     "SMOL360": {"repo": "HuggingFaceTB/SmolLM2-360M"},
     "QWEN05": {"repo": "Qwen/Qwen2.5-0.5B"},
     "B1": {"repo": "Qwen/Qwen2.5-1.5B"},

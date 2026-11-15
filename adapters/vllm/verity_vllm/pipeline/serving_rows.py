@@ -1,6 +1,6 @@
 """The serving rows of a Commit: the units of the verifier's partition, read exactly as the replay reads them (committed members
 through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity.commitments.windows.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
+:mod:`verity.commitments.periods.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
@@ -131,13 +131,13 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import history_tables as H, index as IX, row_tables as RTB, step_rows
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.pipeline import chain_rows as CH, chunk_rows as CR, ingress_rows as IR
 from verity_vllm.pipeline import expert_rows as EX, gemm_rows as GM, history_rows as HR
 from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
@@ -676,7 +676,8 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                       list[dict[str, Any]], dict[str, Any], dict[str, str], dict[str, bytes], dict[str, bytes], list[list[list[Any]]],
                       IF.Registered | None]:
     """What `after_commit` commits of ``window``'s members (``rows`` its templates', `population`'s): their words (`read_all`)
-    with each registered read given by reference (`weight_rows.by_reference`) to ``weight_values``, the per-expert cut's
+    with each registered read given by reference (`weight_rows.by_reference`) to ``weight_values``, each port a chain unit
+    holds in its writer's tree given as its writer's (`chain_rows.held_rows`), the per-expert cut's
     ``tables`` (`expert_rows.commit_tables`) and, in a window of history tables (``on``: its partition file's
     ``"histories": true``), the committer's ``histories`` (`commit.history_tables.Histories`), which it appends the
     window's latent rows to, each table from its edge, before it reads the history reads against them. -> (the data, the
@@ -711,6 +712,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                                                       weights, arrivals, values, histories))
         got = [read[m.key] for m in ms]
     data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values)
+    data = CH.held_rows(window, data)
     strings_of: dict[str, bytes] = {}
     if histories is not None:
         hs, strings_of = HR.strings_of(hp, ms, histories, at)

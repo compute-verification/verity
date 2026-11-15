@@ -2,7 +2,9 @@
 from one accepted wipe's answer as `wipe_period.certify` publishes it: at most `foreign_bits` of the declared tiers'
 `memory_bits` hold anything but the fill, except with `eps` plus the wipe's labels' and coins' PRF advantage (SHA-512
 as PRF: not priced, not assumed). `eps` is 2^-128 when the bound covers the session; when it doesn't, `foreign_bits` is
-`memory_bits` and `eps` 0, the vacuous statement.
+`memory_bits` and `eps` 0, the vacuous statement. `verity/wipe/v0` publishes the vacuous statement for every wipe it
+accepts (`wipe_period.uncounted`), since no network certifier signs its evidence's egress count, so a run's own answer
+pools nothing until the check that composes the wipe with the network certifier publishes `certify` at a count.
 
 A deployment of `machines` machines, each wiped every `cadence_s` seconds (`CADENCE_S`, a day, by default) as this one
 was, has T = machines·⌊period/cadence_s⌋ wipes in a period, each on the memory challenger's own live coins, against one
@@ -20,12 +22,13 @@ adaptive prover.
 No number here prices a PRF's advantage, and none assumes it away. The table says so beside each number that is short
 by it, in the same closing words (`UNPRICED`).
 
-`short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
+`short_sessions` is PoUB's too (`poub/verifier/monitoring.py` imports it). The periods and δs are the reporting grid's
 (`verity.protocol`'s `MONITORING_PERIODS` and `DELTAS`), and T is its `block_count`.
 
-A wipe signed `UNCOUNTED` stays vacuous: `counted` refuses every `wipe-egress/v1` record (`REFUSED`), because the memory
-challenger signs its session's times on its monotonic clock and a record's window (`t0_unix_ns`, `t1_unix_ns`) is real
-time handed to the record's writer, so nothing signed says a record covers the wipe's session.
+An uncounted wipe, one whose check was given no egress count, stays vacuous: `counted` refuses every `wipe-egress/v1`
+record (`REFUSED`), because the memory challenger signs its session's times on its raw monotonic clock and a record's
+window (`t0_unix_ns`, `t1_unix_ns`) is real time handed to the record's writer, so nothing signed says a record covers
+the wipe's session.
 
 Both statements leave out (`EXCEPT`) each wipe's labels' and coins' PRF advantage, which is not priced and not assumed;
 δ_net and the egress count's premises, which are premises, not numbers; and what the wipe's own bound doesn't cover
@@ -59,12 +62,12 @@ PRF_TERMS = f"labels' and coins' PRF advantage {UNPRICED}"
 EXCEPT = (f"each wipe's labels' PRF advantage and its coins' PRF advantage {UNPRICED}, δ_net (the network certifier's "
           "error in the egress count) and the egress count's premises (every link leaving the node counted, its window "
           "the wipe's session), with the guarantee's own (every tier declared, no side channel), over the period's wipes")
-REFUSED = (f"the {EGRESS} record is refused. The memory challenger signs its session's times on its monotonic clock "
-           "(CLOCK_MONOTONIC ns, from an unspecified start). The record's window (t0_unix_ns, t1_unix_ns) is real time "
+REFUSED = (f"the {EGRESS} record is refused. The memory challenger signs its session's times on its raw monotonic "
+           "clock (CLOCK_MONOTONIC_RAW ns, from an unspecified start). The record's window (t0_unix_ns, t1_unix_ns) is real time "
            "(Unix ns), handed to the record's writer. So nothing signed says the record covers this wipe's session, and "
-           "comparing the two would compare two clocks. A wipe signed UNCOUNTED stays uncounted until what the memory "
-           "challenger signs ties its session to the span the record counts: until then give no record (no --egress, "
-           "egress=None), and the table is the wipe's as it was signed")
+           "comparing the two would compare two clocks. A wipe whose check was given no egress count stays uncounted "
+           "until what the memory challenger signs ties its session to the span the record counts: until then give no "
+           "record (no --egress, egress=None), and the table is the wipe's as its check answered")
 
 
 def short_sessions(t: int, p: Fraction, delta: Fraction) -> tuple[int, Fraction]:
@@ -96,18 +99,14 @@ def per_wipe(t: int, eps: Fraction) -> dict[str, Any]:
 
 def counted(answer: Mapping[str, Any], egress: Mapping[str, Any]) -> NoReturn:
     """Refused (`REFUSED`) for every `answer` and every `egress` record, a covered one over the session's own real-time
-    window included: no record's count replaces the bound of a wipe signed `UNCOUNTED`."""
+    window included: no record's count replaces the bound of an uncounted wipe."""
     raise ValueError(REFUSED)
 
 
 def memory(profile: Mapping[str, Any]) -> dict[str, Any]:
-    """The declared tiers, whether the wipe is of GPU memory alone, and the devices its prover's store names."""
+    """The declared tiers, by label and bytes, and whether the wipe is of GPU memory alone. It names no device."""
     tiers = [{"tier": t, "bytes": int(b)} for t, b in profile["tiers"]]
-    store = (profile.get("placement") or {}).get("prover_store") or {}
-    devices = [{k: s[k] for k in ("tier", "device", "uuid") if k in s}
-               for s in (store.get("parts") or [store]) if s.get("device")]
-    return {"tiers": tiers, "tier": "+".join(t["tier"] for t in tiers), "hbm_only": [t["tier"] for t in tiers] == [HBM],
-            "devices": devices}
+    return {"tiers": tiers, "tier": "+".join(t["tier"] for t in tiers), "hbm_only": [t["tier"] for t in tiers] == [HBM]}
 
 
 def each(public: Mapping[str, Any]) -> dict[str, Any]:

@@ -1,7 +1,7 @@
 # tools/move
 
 Codemods that move or rename part of the tree and rewrite every reference to it, so a move is one generated commit that
-`tools/verity/check/move_check.py` can certify as a pure move. Each is stdlib and git, run as a file from the repository
+`tools/check/move_check.py` can certify as a pure move. Each is stdlib and git, run as a file from the repository
 root, and refuses a dirty worktree; a second run changes nothing.
 
 | Tool | What it does |
@@ -115,7 +115,10 @@ change did: a path no pass of the rewrite reads stays as written, and its commit
 checks it itself: `layout.py` stops (exit 1) a move after which a Lake package's path to another package (a requirement's
 `path` in a `lakefile.toml`, a path package's `dir` in a `lake-manifest.json`) names no package where it named one
 before, and names the file and the path. A path of any other kind that a move leaves behind is found by the check on
-its candidate.
+its candidate. Both movers give a pin of `tools/check/pins.py` (a JSON pin or a `sha256sum` listing) the new
+digest of a Lake manifest the move rewrites, where it held the old one (`layout.repin_manifests`), and `move_check.py`
+certifies that edit; any other digest a pin holds of a file the move changes is left for the pin's command, and
+`layout.py` stops on a rewrite that would change a digest in a pin file the map rewrites.
 
 Once the moves have landed, each open branch crosses all of them with one command:
 
@@ -127,7 +130,11 @@ result is pushed to the new branch, never over one. It reports `clean`, or where
 own, files of the branch with no row (`no-row`, below), a script that failed (`script-failed`, with the last lines of its
 output: an `__init__.py` with content the move would delete names each file and the fix), pins to regenerate, or Lean
 locks that took the moved `main`'s side whole (`locks-stale`), into which the owner re-adds the branch's own entries by
-hand, leaving the records to the candidate's records run. Its
+hand, leaving the records to the candidate's records run. A word a crossed map renames only in the files a block names
+(`[[words_in]]`, `[rewrite] words_in`) that the branch's own lines still spell in a file no such block names is left as
+written, since there it may mean something else, and the result may not build: the crossing is `stale-words`, never
+`clean`, names each file, line and word, pushes nothing and exits 1, and the owner renames each that means the renamed
+name. Its
 first step merges each move's base into the branch, so
 a branch behind `main` merges `main` up to the window's base before the window: otherwise `restack.py` stops at that
 merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit
@@ -172,4 +179,4 @@ refusal gives the command that carries the branch against the move's own commit,
 Its owner then merges today's `main` into that result, a merge inside the new layout, and checks that the merge's tree
 holds the branch's own files at the new paths.
 
-    uv run tools/verity/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")
+    uv run tools/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")

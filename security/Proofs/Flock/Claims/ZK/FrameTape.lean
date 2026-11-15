@@ -36,19 +36,19 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The frame's samples as the masked prover's tape
 
-The deployed frame samples each rep's pads itself, one read of `drawBytes` bytes at the rep's start (`Frame.drawsWith`,
+The deployed frame samples each rep's pads itself, one read of `sampleBytes` bytes at the rep's start (`Frame.samplesWith`,
 parsed by `Draws.ofBytes`), and the workers read no pads. Read as the masked prover's tape (`FlockComplete.TapeZk`), the
 frames' bytes give the masked prover exactly the frames' pads:
 
-* **The tape of the frames' samples** (`tapeOfDraws`): table `i`'s rep `r`, which is frame rep `rep i r`, reads its `h`,
+* **The tape of the frames' samples** (`tapeOfSamples`): table `i`'s rep `r`, which is frame rep `rep i r`, reads its `h`,
   `μ` and their padding as the words of that frame's bytes, its `τ` salt and its pads tree's leaf salts as the frame's,
   and every other entry from a given tape (the worker's).
-* **Its pads are the frame's** (`padsOf_tapeOfDraws`, `padsOf_drawsAt`): `padsOf` at the rep's layout is the frame's
-  `Draws.ofBytes`, `h_ab` and `w` included, wherever the bytes reach `τ`'s salt, as a frame's samples of `drawBytes` bytes
-  do (`tau_le_drawBytes`); the leaf salts the masked prover commits under are the frame's (`innerSalt_fit`).
-* **At the release** (`cfg_tapeOfDraws`): at a round of frame rep `rep i r`, the configuration's pads and the pads
+* **Its pads are the frame's** (`padsOf_tapeOfSamples`, `padsOf_samplesAt`): `padsOf` at the rep's layout is the frame's
+  `Draws.ofBytes`, `h_ab` and `w` included, wherever the bytes reach `τ`'s salt, as a frame's samples of `sampleBytes` bytes
+  do (`tau_le_sampleBytes`); the leaf salts the masked prover commits under are the frame's (`innerSalt_fit`).
+* **At the release** (`cfg_tapeOfSamples`): at a round of frame rep `rep i r`, the configuration's pads and the pads
   tree's rows are those of the masked prover's table `i`, rep `r`. **At the operating system's bytes**
-  (`padsOf_os`): with `O.release L`'s frames reading the tape's streams (`OsTape`), every stream is `drawBytes` long,
+  (`padsOf_os`): with `O.release L`'s frames reading the tape's streams (`OsTape`), every stream is `sampleBytes` long,
   so the pads agree at every rep with a stream.
 -/
 
@@ -56,7 +56,7 @@ frames' bytes give the masked prover exactly the frames' pads:
 
 namespace Claims.ZKServer
 
-open _root_.Flock.Firewall.Frame (Draws drawBytes codeLen SALT)
+open _root_.Flock.ZkServer.Frame (Draws sampleBytes codeLen SALT)
 
 /-- `n` bytes of exactly `n` bytes are those bytes. -/
 theorem fitBytes_of_size (n : ℕ) (b : ByteArray) (h : b.size = n) : FlockComplete.fitBytes n b = b := by
@@ -67,7 +67,7 @@ theorem fitBytes_of_size (n : ℕ) (b : ByteArray) (h : b.size = n) : FlockCompl
   simp [ByteArray.data_append]
 
 /-- A rep's samples as the masked prover's pads (`zk_veil::Pads`): all but the pads tree's leaf salts. -/
-def drawsPads (d : Draws) : FlockComplete.PadsZk := ⟨d.h, d.mu, d.padH, d.padMu, d.tauSalt⟩
+def samplesPads (d : Draws) : FlockComplete.PadsZk := ⟨d.h, d.mu, d.padH, d.padMu, d.tauSalt⟩
 
 /-- Word `k` of `b` from byte `o` (`Frame.words`' `k`-th). -/
 def wordAt (b : ByteArray) (o k : ℕ) : _root_.Flock.F128 :=
@@ -80,7 +80,7 @@ def tauAt (l : _root_.Flock.Zk.PadLayout) : ℕ := 32 * l.len + 32 * _root_.Floc
 `lay (rep i r)` and bytes `B (rep i r)`. Its `h`, `μ` and their padding are those bytes' words, as `Draws.ofBytes` reads
 them (`h` before `h_ab` and `w` are set, which `padsOf` sets as the frame does), its `τ` salt and leaf `j`'s salt are the
 frame's, and the rest is `t`'s. -/
-def tapeOfDraws (t : FlockComplete.TapeZk) (lay : ℕ → _root_.Flock.Zk.PadLayout) (B : ℕ → ByteArray)
+def tapeOfSamples (t : FlockComplete.TapeZk) (lay : ℕ → _root_.Flock.Zk.PadLayout) (B : ℕ → ByteArray)
     (rep : ℕ → ℕ → ℕ) : FlockComplete.TapeZk :=
   { t with
     h := fun i r => wordAt (B (rep i r)) 0
@@ -98,59 +98,59 @@ theorem tauSalt_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
   simp only [ByteArray.size_extract]
   omega
 
-/-- A rep's samples of `drawBytes` bytes reach the end of `τ`'s salt. -/
-theorem tau_le_drawBytes (l : _root_.Flock.Zk.PadLayout) :
-    tauAt l + _root_.Flock.Zk.TAU_SALT_BYTES ≤ drawBytes l := by
-  unfold tauAt drawBytes
+/-- A rep's samples of `sampleBytes` bytes reach the end of `τ`'s salt. -/
+theorem tau_le_sampleBytes (l : _root_.Flock.Zk.PadLayout) :
+    tauAt l + _root_.Flock.Zk.TAU_SALT_BYTES ≤ sampleBytes l := by
+  unfold tauAt sampleBytes
   omega
 
 /-- **The masked prover's pads are the frame's**: table `i`'s rep `r`'s pads on the tape of the frames' samples, at its
 frame rep's layout, are that frame's samples' pads, wherever its bytes reach the end of `τ`'s salt. -/
-theorem padsOf_tapeOfDraws (t : FlockComplete.TapeZk) (lay : ℕ → _root_.Flock.Zk.PadLayout) (B : ℕ → ByteArray)
+theorem padsOf_tapeOfSamples (t : FlockComplete.TapeZk) (lay : ℕ → _root_.Flock.Zk.PadLayout) (B : ℕ → ByteArray)
     (rep : ℕ → ℕ → ℕ) (i r : ℕ) (hb : tauAt (lay (rep i r)) + _root_.Flock.Zk.TAU_SALT_BYTES ≤ (B (rep i r)).size) :
-    FlockComplete.padsOf (tapeOfDraws t lay B rep) i r (lay (rep i r)) =
-      drawsPads (Draws.ofBytes (lay (rep i r)) (B (rep i r))) := by
-  have ht : FlockComplete.fitBytes _root_.Flock.Zk.TAU_SALT_BYTES ((tapeOfDraws t lay B rep).tauSalt i r) =
+    FlockComplete.padsOf (tapeOfSamples t lay B rep) i r (lay (rep i r)) =
+      samplesPads (Draws.ofBytes (lay (rep i r)) (B (rep i r))) := by
+  have ht : FlockComplete.fitBytes _root_.Flock.Zk.TAU_SALT_BYTES ((tapeOfSamples t lay B rep).tauSalt i r) =
       (Draws.ofBytes (lay (rep i r)) (B (rep i r))).tauSalt :=
     fitBytes_of_size _ _ (tauSalt_size _ _ hb)
   simp only [FlockComplete.padsOf, ht]
   rfl
 
 /-- **The leaf salts the masked prover commits under are the frame's**: at a leaf of the pads tree (`j < codeLen`), on
-samples of `drawBytes` bytes, the masked prover's `fitBytes 192` of its tape's leaf salt (`innerCommitP`) is that salt,
+samples of `sampleBytes` bytes, the masked prover's `fitBytes 192` of its tape's leaf salt (`innerCommitP`) is that salt,
 the frame's leaf `j` salt (`padsRoot`). -/
 theorem innerSalt_fit (t : FlockComplete.TapeZk) (lay : ℕ → _root_.Flock.Zk.PadLayout) (B : ℕ → ByteArray)
-    (rep : ℕ → ℕ → ℕ) (i r j : ℕ) (hs : (B (rep i r)).size = drawBytes (lay (rep i r)))
+    (rep : ℕ → ℕ → ℕ) (i r j : ℕ) (hs : (B (rep i r)).size = sampleBytes (lay (rep i r)))
     (hj : j < codeLen (lay (rep i r))) :
-    FlockComplete.fitBytes 192 ((tapeOfDraws t lay B rep).innerSalt i r j) =
+    FlockComplete.fitBytes 192 ((tapeOfSamples t lay B rep).innerSalt i r j) =
       (Draws.ofBytes (lay (rep i r)) (B (rep i r))).salts.extract (SALT * j) (SALT * j + SALT) := by
   apply fitBytes_of_size
   show ((B (rep i r)).extract _ _ |>.extract _ _).size = _
-  simp only [ByteArray.size_extract, hs, drawBytes, SALT]
+  simp only [ByteArray.size_extract, hs, sampleBytes, SALT]
   omega
 
-/-- **`padsOf_tapeOfDraws` at a release's samples** of `drawBytes` bytes: table `i`'s rep `r`'s pads on the tape of the
-release's samples at `ρ` are its frame rep's samples' pads (`drawsAt`). -/
-theorem padsOf_drawsAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (t : FlockComplete.TapeZk)
-    (rep : ℕ → ℕ → ℕ) (i r : ℕ) (hs : (L.draws ρ (rep i r)).size = drawBytes (L.lay x (rep i r))) :
-    FlockComplete.padsOf (tapeOfDraws t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r)) =
-      drawsPads (L.drawsAt x ρ (rep i r)) :=
-  padsOf_tapeOfDraws t (L.lay x) (L.draws ρ) rep i r (by rw [hs]; exact tau_le_drawBytes _)
+/-- **`padsOf_tapeOfSamples` at a release's samples** of `sampleBytes` bytes: table `i`'s rep `r`'s pads on the tape of the
+release's samples at `ρ` are its frame rep's samples' pads (`samplesAt`). -/
+theorem padsOf_samplesAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (t : FlockComplete.TapeZk)
+    (rep : ℕ → ℕ → ℕ) (i r : ℕ) (hs : (L.draws ρ (rep i r)).size = sampleBytes (L.lay x (rep i r))) :
+    FlockComplete.padsOf (tapeOfSamples t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r)) =
+      samplesPads (L.samplesAt x ρ (rep i r)) :=
+  padsOf_tapeOfSamples t (L.lay x) (L.draws ρ) rep i r (by rw [hs]; exact tau_le_sampleBytes _)
 
 /-- **The release's configuration carries the masked prover's pads**: at a round of frame rep `rep i r`, on samples of
-`drawBytes` bytes, the configuration's pads and the pads tree's two rows are table `i`'s rep `r`'s on the tape of the
+`sampleBytes` bytes, the configuration's pads and the pads tree's two rows are table `i`'s rep `r`'s on the tape of the
 release's samples. -/
-theorem cfg_tapeOfDraws {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (hs : List (Msg × Msg))
+theorem cfg_tapeOfSamples {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (hs : List (Msg × Msg))
     (t : FlockComplete.TapeZk) (rep : ℕ → ℕ → ℕ) (i r : ℕ) (hr : L.rep x hs.length = rep i r)
-    (hz : (L.draws ρ (rep i r)).size = drawBytes (L.lay x (rep i r))) :
-    (L.cfg x ρ hs).h = (FlockComplete.padsOf (tapeOfDraws t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r))).h ∧
+    (hz : (L.draws ρ (rep i r)).size = sampleBytes (L.lay x (rep i r))) :
+    (L.cfg x ρ hs).h = (FlockComplete.padsOf (tapeOfSamples t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r))).h ∧
     (L.cfg x ρ hs).rowH =
-      (FlockComplete.padsOf (tapeOfDraws t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r))).h ++
-        (FlockComplete.padsOf (tapeOfDraws t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r))).padH ∧
+      (FlockComplete.padsOf (tapeOfSamples t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r))).h ++
+        (FlockComplete.padsOf (tapeOfSamples t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r))).padH ∧
     (L.cfg x ρ hs).rowMu =
-      (FlockComplete.padsOf (tapeOfDraws t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r))).mu ++
-        (FlockComplete.padsOf (tapeOfDraws t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r))).padMu := by
-  rw [padsOf_drawsAt L x ρ t rep i r hz]
+      (FlockComplete.padsOf (tapeOfSamples t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r))).mu ++
+        (FlockComplete.padsOf (tapeOfSamples t (L.lay x) (L.draws ρ) rep) i r (L.lay x (rep i r))).padMu := by
+  rw [padsOf_samplesAt L x ρ t rep i r hz]
   unfold LeanRelease.cfg
   rw [hr]
   exact ⟨rfl, rfl, rfl⟩
@@ -159,8 +159,8 @@ theorem cfg_tapeOfDraws {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h
 pads on the tape of those streams are its frame rep's samples' pads, at every frame rep with a stream. -/
 theorem padsOf_os {W R : Type} (L : LeanRelease W R) (x : Msg) (O : OsTape R (L.lay x)) (ρ : R)
     (t : FlockComplete.TapeZk) (rep : ℕ → ℕ → ℕ) (i r : ℕ) (hk : rep i r < O.reps) :
-    FlockComplete.padsOf (tapeOfDraws t (L.lay x) (O.frameBytes ρ) rep) i r (L.lay x (rep i r)) =
-      drawsPads ((O.release L).drawsAt x ρ (rep i r)) :=
-  padsOf_drawsAt (O.release L) x ρ t rep i r (O.frameBytes_size ρ ⟨rep i r, hk⟩)
+    FlockComplete.padsOf (tapeOfSamples t (L.lay x) (O.frameBytes ρ) rep) i r (L.lay x (rep i r)) =
+      samplesPads ((O.release L).samplesAt x ρ (rep i r)) :=
+  padsOf_samplesAt (O.release L) x ρ t rep i r (O.frameBytes_size ρ ⟨rep i r, hk⟩)
 
 end Claims.ZKServer

@@ -42,6 +42,7 @@ public import Proofs.Accounting.ReadUnit.Select
 public import Proofs.Accounting.ReadUnit.Check
 public import Proofs.Accounting.ReadUnit.Deployed
 public import Proofs.Accounting.ReadUnit.Binding
+public import Proofs.Accounting.ReadUnit.BitsPorts
 public import Proofs.Accounting.ReadUnit.Witnesses
 public import Proofs.Accounting.BoundReceipt
 public import Proofs.Accounting.Capacity
@@ -67,6 +68,7 @@ public import Proofs.Accounting.RemoteHeld.DrawMeets
 public import Proofs.Accounting.RemoteHeld.Binding
 public import Proofs.Accounting.RemoteHeld.Sketch
 public import Proofs.Accounting.RemoteHeld.SketchLine
+public import Proofs.Accounting.RemoteHeld.SketchMeets
 public import Proofs.Accounting.RemoteHeld.SketchP2
 public import Proofs.Accounting.RemoteHeld.Line
 public import Proofs.Accounting.RemoteHeld.Subprotocol

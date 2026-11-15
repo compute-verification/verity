@@ -56,7 +56,7 @@ def test_no_configuration_states_a_shape_of_its_own():
     """Each configuration is a served one of b1's, or b1's Definitions at a shape benchmarks/rho states (`models.toml`,
     read through its loader), differing from the base only by that shape and what is no shape (the model's name, the
     norm's epsilon, the QKV bias); and a served configuration whose model rho has a row for has that row's shape."""
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
     served = (b1.B0_CONFIG, b1.B1_CONFIG, b1.SMOL360_CONFIG)
     models = R.rho_models()
     constructed = []
@@ -84,7 +84,7 @@ def test_tiny_layer_matches_flat():
     """b1's layer at tiny shapes (3.9e6 gates), gate by gate: about 40 s of layout lookups. It is the one test holding the
     summaries and whole-in-block to the definitions through a served layer's wiring (σ's replayed references, the norm's
     and RoPE's outputs, LayerPre's tuple, the residual), which the synthetic circuits only imitate."""
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
     C = dict(b1.B0_CONFIG, H=16, NH=1, KVH=1, D=16, I=16, QKV=48, GU=32, V=64, NL=1)
     p = R.layer(C, 1)
     ex = flat.explicit(p, R.GEMM_PRODUCTS)
@@ -105,7 +105,7 @@ def test_smollm2_layer():
     real layer shows, its four GEMMs' products and the MLP input's fan-out, and that they are the `fanout`, `legs` and
     layer products benchmarks/rho reads for the model (its `models.toml` row, and derived from the config's matrices)."""
     import run
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
     C = b1.B0_CONFIG
     m = measure(R.layer(C, 1), R.GEMM_PRODUCTS)
     H, I = C["H"], C["I"]
@@ -117,3 +117,35 @@ def test_smollm2_layer():
     assert (row["fanout"], row["legs"], row["layer_products"]) == (m.a_out, m.a_in, m.products)
     assert (row["derived_fanout"], row["derived_legs"]) == (m.a_out, m.a_in)
     assert (rho["config"]["fanout"], rho["config"]["legs"], rho["config"]["layer_products"]) == (m.a_out, m.a_in, m.products)
+
+
+def test_a_run_of_every_configuration_writes_the_least_s_x_under_the_metrics_id(tmp_path, monkeypatch, capsys):
+    """With every configuration measured (a tiny b1 layer here, beside the Boolean GEMM), the least s_× of the circuits
+    goes into the run's result under the id `metrics.toml` declares, measured; a run of some configurations
+    (`--models`) writes none."""
+    import json
+    import sys
+    import tomllib
+
+    import run
+    from verity_vllm.definitions.registry import b1
+    from verity_bench import kit
+
+    for name in ("OUT", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"commit": None})
+    tiny = dict(b1.B0_CONFIG, H=16, NH=1, KVH=1, D=16, I=16, QKV=48, GU=32, V=64, NL=1)
+    monkeypatch.setattr(R, "configs", lambda: {"tiny": (tiny, "a test's"), "other": (b1.B0_CONFIG, "a test's")})
+    (row,) = tomllib.loads((Path(run.__file__).parent / "metrics.toml").read_text())["metric"]
+    monkeypatch.setattr(sys, "argv", ["run.py", "--models", "tiny", "--out", str(tmp_path / "some")])
+    assert run.main() == 0 and (tmp_path / "some" / "properties.json").is_file()
+    assert not (tmp_path / "some" / "result.json").exists()
+    monkeypatch.setattr(R, "configs", lambda: {"tiny": (tiny, "a test's")})
+    monkeypatch.setattr(sys, "argv", ["run.py", "--out", str(tmp_path / "every")])
+    assert run.main() == 0
+    circuits = json.loads((tmp_path / "every" / "properties.json").read_text())
+    (m,) = json.loads((tmp_path / "every" / "result.json").read_text())["measurements"]
+    assert row["id"] == run.METRIC and len(circuits) == 2
+    assert (m["name"], m["value"], m["unit"], m["mark"]) == (row["id"], min(c["s_x"] for c in circuits), row["unit"],
+                                                             "measured")
+    capsys.readouterr()

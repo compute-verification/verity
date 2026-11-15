@@ -12,14 +12,14 @@ import json
 import numpy as np
 import pytest
 import torch
-from verity.definitions.numerics import flashmla_prefill_twin as PT
-from verity.definitions.numerics import flashmla_twin as T
-from verity.definitions.registry import flashmla as F
-from verity.definitions.registry import flashmla_prefill as P
+from verity_vllm.definitions.numerics import flashmla_prefill_twin as PT
+from verity_vllm.definitions.numerics import flashmla_twin as T
+from verity_vllm.definitions.registry import flashmla as F
+from verity_vllm.definitions.registry import flashmla_prefill as P
 
 from tests import fake_vllm
 from tests.properties import dsv4_flashmla_capture_gpu as X
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 FLIP = (6, 3, 100)
 PFLIP, WFLIP = (2, 5, 300), (1, 3, 77)

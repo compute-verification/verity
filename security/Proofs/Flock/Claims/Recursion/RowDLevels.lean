@@ -234,7 +234,7 @@ theorem ligerito_run_conss {sch : Flock.Schedule} {M : Messages F128} {tIn : F12
   cases ha
   obtain ⟨b, k₃, hb, h⟩ := Flock.RecAlgebra.cm_bind h
   cases hb
-  by_cases cd : src.drawnAll k₁ = true
+  by_cases cd : src.sampledAll k₁ = true
   rotate_left
   · rw [ite_eq_left (by simpa using cd)] at h
     obtain ⟨_, _, h0, _⟩ := Flock.RecAlgebra.cm_bind h

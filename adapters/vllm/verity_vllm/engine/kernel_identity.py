@@ -3,11 +3,11 @@
 Inductor writes every compiled graph piece as a Python *wrapper module* (``<cache>/<xx>/<hash>.py``)
 that embeds the Triton source of each kernel it launches (``async_compile.triton('<name>', '''...''')``)
 and a ``call()`` body that is the launch program of the fused region. The *cache key* of such a
-module depends on the whole Inductor config (so it differs between production and a replay whose
+module depends on the whole Inductor config (so it differs between serving and a replay whose
 ``CompilationConfig`` differs); the *sources* are what actually ran. This module collects, per
 process, the set of generated kernel sources and wrapper programs by content hash. Equality of two
 processes' kernel-source sets (``summary.kernel_set_sha256``, which a run's record pins) is the
-evidence that a replay executed production's generated kernels.
+evidence that a replay executed the served run's generated kernels.
 
 Also collected: Triton's compiled artifacts in ``TRITON_CACHE_DIR`` when it is set: per kernel the
 ``*.cubin`` hash and the hash of the *code* part of its PTX. Triton embeds the path of the Python
@@ -25,10 +25,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 from pathlib import Path
 from typing import Any
+
+from verity_vllm import settings
+from verity_vllm.records.schema_ids import KERNEL_IDENTITY_SCHEMA
+
+__all__ = ["collect", "inductor_cache_dir", "triton_cache_dir"]
 
 _TRITON_SRC = re.compile(r"async_compile\.triton\('([^']+)', '''(.*?)''', device_str=", re.S)
 _AOT_ID = re.compile(r"^# AOT ID: \[(.*?)\]", re.M)
@@ -49,7 +53,7 @@ def sha256_file(p: Path) -> str:
 
 def inductor_cache_dir() -> str:
     """Where this process's Inductor wrappers live (env override or torch's default); raises when torch can't say."""
-    d = os.environ.get("TORCHINDUCTOR_CACHE_DIR")
+    d = settings.raw("TORCHINDUCTOR_CACHE_DIR")
     if d:
         return d
     from torch._inductor.runtime.runtime_utils import cache_dir
@@ -58,7 +62,7 @@ def inductor_cache_dir() -> str:
 
 
 def triton_cache_dir() -> str | None:
-    return os.environ.get("TRITON_CACHE_DIR")
+    return settings.raw("TRITON_CACHE_DIR")
 
 
 _WRAPPER_PATH_LINE = re.compile(r"^# (kernel path|AOT ID|Original path): .*$", re.M)
@@ -161,8 +165,8 @@ def collect(inductor_dir: str | None, triton_dir: str | None = None, *, vllm_cac
                     entry["ptx_code_sha256"] = sha256_bytes(ptx_code(ptx_src).encode())
             cubins.append(entry)
     kernel_pairs = sorted({(k["name"], k["source_sha256"]) for w in wrappers for k in w["kernels"]})
-    doc = {
-        "schema": "verity-vllm/kernel-identity/v1",
+    doc: dict[str, Any] = {
+        "schema": KERNEL_IDENTITY_SCHEMA,
         "inductor_cache_dir": inductor_dir,
         "triton_cache_dir": triton_dir,
         "vllm_compile_cache_dir": vllm_cache_dir,
@@ -200,7 +204,7 @@ def autotune_configs(root: Path, unreadable: dict[str, str]) -> list[dict[str, A
     benchmarked more than one launch configuration (``autotune_pointwise``, pointwise kernels) — the chosen
     ``XBLOCK`` / ``num_warps`` / ``num_stages``. Those are *launch parameters* selected by timing in each
     process, not part of the generated source; a pointwise kernel's per-element arithmetic does not depend on
-    them, but they are the one thing production and replay may legitimately differ in, so they are recorded.
+    them, but they are the one thing serving and replay may legitimately differ in, so they are recorded.
     Each entry: kernel name (from the sibling ``.py``), the kernel module's sha256, the config.
     A file that can't be read or parsed is recorded in ``unreadable`` (path relative to ``root``)."""
     out: list[dict[str, Any]] = []

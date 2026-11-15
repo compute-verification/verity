@@ -290,7 +290,7 @@ def test_a_body_that_reads_a_program_input_or_another_step_is_refused_by_name(tm
 # ------------------------------------------------------------------------------------------------------------------------------ FP8
 @pytest.fixture(scope="module")
 def fp8(tmp_path_factory):
-    from tests.check.test_sampled_replay_fp8 import G, I, _e4m3, _program_fp8
+    from tests.check.test_sampled_replay_fp8 import INTER, G, _e4m3, _program_fp8
     from tests.check.test_sampled_replay_fp8 import H as HF
 
     inst, woff, wbits = _program_fp8()
@@ -298,7 +298,7 @@ def fp8(tmp_path_factory):
     fields = {n: (_e4m3(rng, hi - lo) if wbits[n] == 8 else np.exp2(rng.uniform(-9, -3, hi - lo)).astype(np.float32).view(np.uint32)
                   if wbits[n] == 32 else _bf16(rng, hi - lo, 0.5)) for n, (lo, hi) in woff.items()}
     pdir, man = build_dir(tmp_path_factory.mktemp("fp8"), inst, ["model.layers.0.mlp.act_fn"])
-    return types.SimpleNamespace(inst=inst, woff=woff, fields=fields, pdir=pdir, man=man, G=G, H=HF, I=I)
+    return types.SimpleNamespace(inst=inst, woff=woff, fields=fields, pdir=pdir, man=man, G=G, H=HF, I=INTER)
 
 
 def _fp8_rows(rng, rows, n, edges):
@@ -413,7 +413,7 @@ def test_a_definition_past_the_reference_bound_is_its_row_kernels_alone(dense, m
     assert len(com.errors) == 1 + T and all(f"the row kernel of Gemm_v1{{K={H},N={V}}} declines an instance" in e for e in com.errors)
     assert com.acquired and not any(n.startswith("logits_processor") for _s, n, _t in com.acquired)
     monkeypatch.setattr(CP, "REFERENCE_LEAVES", 12)
-    from verity.definitions.numerics import kernel_registry
+    from verity_vllm.definitions.numerics import kernel_registry
     monkeypatch.delitem(kernel_registry._REGISTERED, ("Bf16DivScalar_v1", "rows"))
     why = " ".join(CB.plan_of(dense.man, dense.pdir).uncovered)
     assert "Bf16DivScalar_v1" in why and "past the reference's bound, and no rows kernel registered" in why

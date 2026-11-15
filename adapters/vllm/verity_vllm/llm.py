@@ -19,6 +19,10 @@ from verity_vllm.engine.class_admission import Admission
 from verity_vllm.engine.profiles import engine_classes as EC
 from verity_vllm.errors import Refused
 
+#: The names the library's other modules and files outside the adapter read here.  Outside the distribution the class is
+#: ``from verity_vllm import LLM``.
+__all__ = ["LLM", "protocol_context", "resolve_options"]
+
 
 @dataclass(frozen=True)
 class Supported:
@@ -149,7 +153,7 @@ def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = Non
                        "Build; use the pinned engine profile")
     bad.extend(PO.refusals(ctx))
     if bad:
-        raise PO.Refused(bad)
+        raise PO.refused(bad)
     return ctx
 
 
@@ -225,7 +229,7 @@ class LLM:
     * ``seed`` (int, default 0): the engine seed.
     * ``protocols`` (str or mapping): protocol options installed on the engine once it is built
       (:mod:`verity_vllm.protocols`), ``"pouw:<scheme>,pous:<scheme>"`` or ``{"pous": "<scheme>"}``; default none.
-      A set the options refuse raises ``ValueError`` before the engine is built.  Sampled proofs runs in the Commit stage
+      A set the options refuse raises ``ValueError`` before the engine is built.  SPOT runs in the Commit stage
       of a row, not here.  Settings an option takes from the engine are filled from this one after the build
       (`protocol_options.from_engine`), and one it can't fill there is refused by name: PoUW's H1
       (``protocols="pouw:eps1-sm120-h1fx1", protocols_config={"pouw": {"rows": T, "steps": S}}``) gets the engine's

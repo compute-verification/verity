@@ -25,10 +25,10 @@ The pieces of `ligeritoPad`'s level 0 that differ from `ligerito`'s:
 
 * **The lane rounds** send no message after the last coin (`foldRoundsNL`). For a post-condition
   that does not read that message, they are the lane rounds (`value_foldRoundsNL_le`).
-* **The extra lanes' coins** (`drawKs`). Each coin `ρ_i` is an affine line `w + ρ_i·X_i` for mutual
-  correlated agreement (`ExtrasGood`, `value_drawKs_extras_le`), and a coin on the restarted
+* **The extra lanes' coins** (`sampleKs`). Each coin `ρ_i` is an affine line `w + ρ_i·X_i` for mutual
+  correlated agreement (`ExtrasGood`, `value_sampleKs_extras_le`), and a coin on the restarted
   claim, an affine function of the coins with a nonzero constant for every list element
-  (`value_drawKs_affine_le`).
+  (`value_sampleKs_affine_le`).
 * **Rep `r`'s list** (`padList`): the row families, witness lanes then the rep's extra lanes, within
   the padded radius of the rep's rows. A family's next-level message is its witness lanes' messages
   folded by the lane challenges plus its extra lanes' weighted by `ρ` (`padFold`).
@@ -49,7 +49,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 
 /-! ## The lane rounds without their last message -/
 
-theorem value_drawK_bind_mono (A : Arith F K) {α β : Type} {p : α → Prop} {p' : β → Prop}
+theorem value_sampleK_bind_mono (A : Arith F K) {α β : Type} {p : α → Prop} {p' : β → Prop}
     {f : K → Game α} {g : K → Game β} (h : ∀ r, value p (f r) ≤ value p' (g r)) :
     value p ((drawK A).bind f) ≤ value p' ((drawK A).bind g) := by
   show value p (Game.coin (Fin 2 → F) fun w => f (A.ofLimbs (w 0) (w 1))) ≤
@@ -65,7 +65,7 @@ theorem value_foldRoundsNL_le (A : Arith F K) :
   | 0, _, _, _, h => absurd h (by norm_num)
   | 1, p, s, q, _ => by
       rw [foldRounds_succ]
-      refine value_drawK_bind_mono A fun r => ?_
+      refine value_sampleK_bind_mono A fun r => ?_
       rw [value_send]
       refine le_iSup_of_le ((0 : K), (0 : K)) ?_
       show value p (Game.ret ([r], q.eval r)) ≤ value _ (Game.ret (r :: [], q.eval r, _))
@@ -74,7 +74,7 @@ theorem value_foldRoundsNL_le (A : Arith F K) :
       exact le_rfl
   | k + 2, p, s, q, _ => by
       rw [foldRounds_succ]
-      refine value_drawK_bind_mono A fun r => ?_
+      refine value_sampleK_bind_mono A fun r => ?_
       show value p (Game.send (K × K) fun msg =>
           (foldRoundsNL A (k + 1) (q.eval r) (fromMsg msg (q.eval r))).bind fun out =>
             Game.ret (r :: out.1, out.2)) ≤ _
@@ -85,8 +85,8 @@ theorem value_foldRoundsNL_le (A : Arith F K) :
 
 /-! ## The extra lanes' coins -/
 
-theorem drawKs_succ (A : Arith F K) (e : ℕ) :
-    drawKs A (e + 1) = (drawK A).bind fun r => (drawKs A e).bind fun rs => Game.ret (Fin.cons r rs) :=
+theorem sampleKs_succ (A : Arith F K) (e : ℕ) :
+    sampleKs A (e + 1) = (drawK A).bind fun r => (sampleKs A e).bind fun rs => Game.ret (Fin.cons r rs) :=
   rfl
 
 omit [DecidableEq K] in
@@ -113,9 +113,9 @@ theorem prCoin_affine_le (a c : K) (ha : a ≠ 0) :
 
 /-- **The restarted claim.** If `a_M ≠ 0` for every list element, the `e` coins make some
 `a_M + Σ_i ρ_i·c_{M,i}` vanish with probability at most `e·|S|/|K|`. -/
-theorem value_drawKs_affine_le (A : Arith F K) (hA : A.Correct) {ι : Type} (S : Finset ι) :
+theorem value_sampleKs_affine_le (A : Arith F K) (hA : A.Correct) {ι : Type} (S : Finset ι) :
     ∀ (e : ℕ) (a : ι → K) (c : ι → Fin e → K), (∀ M ∈ S, a M ≠ 0) →
-      value (fun ρ : Fin e → K => ∃ M ∈ S, a M + ∑ i, ρ i * c M i = 0) (drawKs A e) ≤
+      value (fun ρ : Fin e → K => ∃ M ∈ S, a M + ∑ i, ρ i * c M i = 0) (sampleKs A e) ≤
         ((e * S.card : ℕ) : ℝ≥0∞) / Fintype.card K
   | 0, a, c, ha => by
       show value _ (Game.ret Fin.elim0) ≤ _
@@ -126,8 +126,8 @@ theorem value_drawKs_affine_le (A : Arith F K) (hA : A.Correct) {ι : Type} (S :
         exact ha M hM (by simpa using h)
   | e + 1, a, c, ha => by
       classical
-      rw [drawKs_succ]
-      refine (value_drawK_le A hA _ _ (fun r => ∃ M ∈ S, a M + r * c M 0 = 0)
+      rw [sampleKs_succ]
+      refine (value_sampleK_le A hA _ _ (fun r => ∃ M ∈ S, a M + r * c M 0 = 0)
         ((S.card : ℝ≥0∞) / Fintype.card K) (((e * S.card : ℕ) : ℝ≥0∞) / Fintype.card K) ?_
         fun r hr => ?_).trans ?_
       · calc prCoin (fun r => ∃ M ∈ S, a M + r * c M 0 = 0)
@@ -138,7 +138,7 @@ theorem value_drawKs_affine_le (A : Arith F K) (hA : A.Correct) {ι : Type} (S :
               rw [Finset.sum_const, nsmul_eq_mul, mul_one_div]
       · rw [value_bind_ret]
         push Not at hr
-        refine (value_mono (fun rs h => ?_) _).trans (value_drawKs_affine_le A hA S e
+        refine (value_mono (fun rs h => ?_) _).trans (value_sampleKs_affine_le A hA S e
           (fun M => a M + r * c M 0) (fun M i => c M i.succ) fun M hM => hr M hM)
         obtain ⟨M, hM, h⟩ := h
         refine ⟨M, hM, ?_⟩
@@ -182,20 +182,20 @@ theorem agree_of_extras {ι : Type} [Fintype ι] (code : Submodule K (ι → K))
 
 /-- **The extra lanes' MCA events.** Over the `e` coins, on fixed rows, some coin is an MCA event
 with probability at most `e·ε`. -/
-theorem value_drawKs_extras_le (A : Arith F K) (hA : A.Correct) {ι : Type} [Fintype ι]
+theorem value_sampleKs_extras_le (A : Arith F K) (hA : A.Correct) {ι : Type} [Fintype ι]
     (code : Submodule K (ι → K)) (δ : ℝ) (ε : ℝ≥0∞)
     (hε : ∀ U : Fin 2 → ι → K, prCoin (fun γ : K => IsMCA (AffineLineGenerator K) code γ U δ) ≤ ε) :
     ∀ (e : ℕ) (Xs : Fin e → ι → K) (w : ι → K),
-      value (fun ρ => ¬ ExtrasGood code δ e ρ Xs w) (drawKs A e) ≤ (e : ℝ≥0∞) * ε
+      value (fun ρ => ¬ ExtrasGood code δ e ρ Xs w) (sampleKs A e) ≤ (e : ℝ≥0∞) * ε
   | 0, Xs, w => by
       show value _ (Game.ret Fin.elim0) ≤ _
       simp [ExtrasGood]
   | e + 1, Xs, w => by
-      rw [drawKs_succ]
-      refine (value_drawK_le A hA _ _ (fun r => IsMCA (AffineLineGenerator K) code r ![w, Xs 0] δ)
+      rw [sampleKs_succ]
+      refine (value_sampleK_le A hA _ _ (fun r => IsMCA (AffineLineGenerator K) code r ![w, Xs 0] δ)
         ε ((e : ℝ≥0∞) * ε) (hε _) fun r hr => ?_).trans ?_
       · rw [value_bind_ret]
-        refine (value_mono (fun rs h => ?_) _).trans (value_drawKs_extras_le A hA code δ ε hε e
+        refine (value_mono (fun rs h => ?_) _).trans (value_sampleKs_extras_le A hA code δ ε hε e
           (fun i => Xs i.succ) (fun q => w q + r * Xs 0 q))
         simp only [ExtrasGood, Fin.cons_zero, Fin.cons_succ, not_and] at h
         exact h hr

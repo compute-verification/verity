@@ -49,7 +49,7 @@
 # --challenger-key DIR` each session's coins come from the challenger's own process,
 # `verity/protocols/compose/device/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
 # --challenger-period P --challenger-main FILE` (FILE: `git rev-list --first-parent origin/main`, the auditor's own),
-# from the auditor host's challenger through its gate, its fetched sessions, ledger and pins log there
+# from the auditor device's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
 # CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). The verifier builds
 # the Lean verifier with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
@@ -196,8 +196,8 @@ fi
     nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
       --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
     FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
-    nvcc "${FLAGS[@]}" -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-    nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" benchmarks/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+    nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
+    nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
     wait $K || { tail -40 "$O/kv.ptxas"; exit 4; }
     sha256sum "$B"/*.so > "$O/libs.sha256"
@@ -217,7 +217,7 @@ fi
       --nice=0 -p AllowedCPUs="$PROVER_CPUS" -p MemoryMax="${PROVER_MEM_GB:-300}G" -p MemorySwapMax=0 --
       setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- "${PIN[@]}")
   fi
-  "${PIN[@]}" "$PY" $RS/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
+  "${PIN[@]}" "$PY" verity/protocols/accounting/poub/prover/remote_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
     "${DEV[@]}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
   P=$?
   W=0

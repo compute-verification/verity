@@ -49,6 +49,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.accounting.pous.prover import weight_store as ws
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import run as R
@@ -127,13 +128,15 @@ def wipe_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = m
     try:
         c = wipe_party.commitment_of(commitment)
         signed = None if ev["signed"] is None else wipe_party.signed_of(ev["signed"])
+        egress = ev["egress_mib"]
         server, session = bytes.fromhex(p["server"]), bytes.fromhex(p["session"])
         trusted = [bytes.fromhex(t) for t in p["trusted"]]
     except (KeyError, TypeError, ValueError) as e:
         raise Refused(f"the wipe's case doesn't decode: {type(e).__name__}: {e}") from None
-    _need(wipe_period.case(server, session, trusted, c, signed) == dict(case),
-          "the wipe's case is not the one its decoded commitment, session and params make")
-    return wipe_period.answer(server, session, trusted, c, signed, schemes, protocol)
+    _need(egress is None or type(egress) is int, "the wipe's evidence gives its egress as null or an integer of MiB")
+    _need(wipe_period.case(server, session, trusted, c, signed, egress) == dict(case),
+          "the wipe's case is not the one its decoded commitment, session, egress and params make")
+    return wipe_period.answer(server, session, trusted, c, signed, schemes, protocol, egress_mib=egress)
 
 
 def judged(case: Mapping[str, Any], answer: dict[str, Any], exe: str | os.PathLike | None) -> dict[str, Any]:
@@ -208,9 +211,9 @@ def reencode(repo: str, rev: str, published: R.Setup, point: R.Point, digests: b
     pous.linear_types = SP._linear_types
     try:
         _, _, tensors = pous._plaintext(SP.ENTRY, model)
-        layout, commitment = pous._commit(pous.DEFAULT_SCHEME, tensors)
+        layout, commitment = ws.commit(pous.DEFAULT_SCHEME, tensors)
         _need(commitment == published.commitment, "the snapshot's W is not the one setup committed to")
-        store = pous._encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
+        store = ws.encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
         try:
             _need((store.point.params, store.point.limit_ns) == (point.params, point.limit_ns),
                   f"C* is at {store.point}, not at the run's point {point} (the challenge count aside)")

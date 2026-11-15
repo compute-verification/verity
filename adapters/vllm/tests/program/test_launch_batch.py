@@ -16,13 +16,14 @@ import types
 import pytest
 import torch
 import torch.fx.traceback as fxt
-from verity.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry import tp_allreduce as TA
 
+from verity_vllm.config import workload_file
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline.build import applicability_conditions, run
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.compilations import COMPILATIONS
-from verity_vllm.program.frontend.outcomes import Refuse
+from verity_torch.frontend.outcomes import Refuse
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
 from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -102,7 +103,7 @@ def test_step_982_a_full_graph_decode_reduces_on_flashinfer_mnnvl_at_its_padded_
     uncaptured.  No communicator of vLLM d9105ea80 reads the graph mode, so 32 rows reduce on FlashInfer's MNNVL (under its
     512 KiB), the PIECEWISE steps on symm_mem's multimem.  The FULL graph captures the attention at the padded batch, its 7
     padding rows without keys, which leave FA3's split counts the real batch's."""
-    from verity.definitions.registry.sparse_mla_split import launch_num_splits
+    from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
 
     from verity_vllm.engine.profiles.engine_classes import CLASS_G_LIMITS
     from verity_vllm.program.predict.common import _Launch
@@ -158,7 +159,7 @@ def test_the_batch_lists_a_step_in_admission_order():
 
 
 def test_glm53_b8_every_request_sits_in_its_declared_batch():
-    with open(GLM_B8) as f:
+    with open(workload_file(GLM_B8)) as f:
         w = json.load(f)
     assert LC.batch_dispatch(w)
     reqs = LC._requests(w)
@@ -173,7 +174,7 @@ def test_glm53_b8_every_request_sits_in_its_declared_batch():
 
 
 def test_dsv4_b8_every_request_sits_in_its_declared_batch():
-    with open(DSV4_B8) as f:
+    with open(workload_file(DSV4_B8)) as f:
         w = json.load(f)
     assert LC.batch_dispatch(w)
     reqs = LC._requests(w)

@@ -13,15 +13,15 @@ import json
 import numpy as np
 import pytest
 import torch
-from verity.definitions.numerics import deepgemm_twins as DGT
-from verity.definitions.numerics import fp8_moe_rows as MR
-from verity.definitions.numerics.act_rows import silu_mul_expf_rows
-from verity.definitions.numerics.rows import moe_sum
+from verity_vllm.definitions.numerics import deepgemm_twins as DGT
+from verity_vllm.definitions.numerics import fp8_moe_rows as MR
+from verity_vllm.definitions.numerics.act_rows import silu_mul_expf_rows
+from verity_vllm.definitions.numerics.rows import moe_sum
 
 from tests import fake_vllm
 from tests.properties import glm53_block_fp8_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 K, N, GQ = 256, 200, X.GROUP
 WG, MV = "HopperE4m3QgmmaDot32_v1", "HopperE4m3MmaV2Dot32_v1"

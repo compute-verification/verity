@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from verity.device import load_card, number
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
@@ -28,17 +30,16 @@ CAPACITY_FACTOR = 1
 #: carries config.json's shapes only), so this is the dtype ReferenceLayered states
 EMBED_BITS = 16
 
-def test_the_gpus_read_the_accel_models_card_table():
-    """`CARD` is `Verity.Accel.Sm120.card`'s tensor rate and clock ceiling (its sheet-form `f_max`), and PoUW credits
-    H1's SM120 record's f_max: so the clock term is 0, the server's peak is 8 cards at the table's FP8 rate (7.485e15
-    FLOP/s, not NVIDIA's 8e15 headline at about 2,597 MHz) and the Xeons are 12.6% of it."""
-    lean = (ROOT / "security/Definitions/Core/Accel/Sm120.lean").read_text()
-    sms, tensor = map(int, re.search(r"\| \.tensor => (\d+) \* (\d+)", lean).groups())
-    mhz = re.search(r"def clock : ℚ≥0 := (\d+) \* 10 \^ 6", lean) or re.search(r"f_max = (\d+) MHz", lean)
-    assert T.CARD == {"sms": sms, "tensor": tensor, "clock_hz": int(mhz.group(1)) * 1e6}
-    h1 = (ROOT / "verity/protocols/accounting/pouw/prover/circuit/h1device.py").read_text()
-    sm120 = h1[h1.index("SM120 = Device("):h1.index("SM90 = Device(")]
-    assert T.CREDITED_CLOCK_HZ == int(re.search(r"fmax_mhz=(\d+)", sm120).group(1)) * 1e6
+def test_the_gpus_read_the_card_file():
+    """`CARD` is the RTX PRO 6000 Server Edition's card file's SMs, tensor rate and tensor clock ceiling (its sheet-form
+    `f_max`), and PoUW credits the card file's `clock.sm`: so the clock term is 0, the server's peak is 8 cards at the
+    card's FP8 rate (7.485e15 FLOP/s, not NVIDIA's 8e15 headline at about 2,597 MHz) and the Xeons are 12.6% of it."""
+    card = load_card("rtx-pro-6000-server")
+    assert T.CARD == {"sms": number(card["sm"]["count"]), "tensor": number(card["rate"]["tensor"]),
+                      "clock_hz": number(card["clock"]["tensor"]) * 10**6}
+    sm = card["clock"]["sm"]
+    assert sm["unit"] == "MHz"
+    assert T.CREDITED_CLOCK_HZ == number(sm) * 10**6
     assert T.DEFAULTS["clock_share"] == 0.0
     assert T.DEFAULTS["node_flops"] == pytest.approx(7.4848666e15, rel=1e-8)
     assert T.DEFAULTS["host_share"] == 0.0

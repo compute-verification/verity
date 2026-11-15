@@ -174,6 +174,18 @@ def test_touching_a_step_the_committer_holds_no_layout_for_opens_nothing():
     assert not any(touched.ranges.values()) and not any(touched.nodes.values())
 
 
+@pytest.mark.parametrize("step", [0, 99], ids=["a step with a layout", "a step with none"])
+@pytest.mark.parametrize("name", [7, None, ["runner.sampler"]], ids=["a number", "null", "a list"])
+def test_touching_a_read_whose_member_name_is_no_string_is_refused_whether_or_not_its_step_has_a_layout(step, name):
+    """`verity_vllm.commit.store_dump.touch`: the member's name is parsed (`verity_vllm.commit.opened.meta_by_name`) before the
+    step's layout is looked through, so a name that is no string is refused at a step the committer holds no layout for as well."""
+    com, _rc = commit_steps(STEPS)
+    assert (step in com._layouts) == (step == 0)
+    with SD.touched(com) as touched, pytest.raises(AttributeError, match=f"'{type(name).__name__}' object has no attribute 'partition'"):
+        SD.touch(com, [(step, name, 0, 4)])
+    assert not any(touched.ranges.values()) and not any(touched.nodes.values())
+
+
 def test_a_rows_store_dumps_its_nodes_and_keys_in_full(tmp_path):
     com, rc = commit_steps(STEPS)
     doc = SD.dump(com, rc, tmp_path)

@@ -20,7 +20,7 @@ exit is 1.
 
 The rebuild needs the pinned vLLM (`ops/pod_bootstrap.sh --cpu`) and each row's checkpoint metadata (the derive runs on the meta
 device and reads no weights), so it runs on a CPU pod, never in `check`; the suite's tier is `tests/program/test_derive_neutrality.py`.
-fast: small TP1/TP2 rows, minutes each, run after each landing of main by `tools/verity/check/post_train.py`, whose red names
+fast: small TP1/TP2 rows, minutes each, run after each landing of main by `tools/check/post_train.py`, whose red names
 the row and rings the rows' owner; heavy: GLM-5.3's 8 ranks, about 50 minutes on a 256-CPU pod.
 """
 from __future__ import annotations
@@ -36,6 +36,7 @@ from verity_vllm.config import ROOT, UsageError, option
 from verity_vllm.engine import env as engine_env
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import epoch
+from verity_vllm.records.schema_ids import NEUTRALITY_REPORT_SCHEMA
 
 __all__ = ["Options", "main"]
 
@@ -105,7 +106,7 @@ class Options:
 def main(a: Options) -> int:
     doc = CR.load_index(Path(a.pins))
     out, failed, unpinned = Path(a.out), False, []
-    report: dict[str, Any] = {"schema": "verity-vllm/neutrality/v1", "pins": a.pins, "rows": {}}
+    report: dict[str, Any] = {"schema": NEUTRALITY_REPORT_SCHEMA, "pins": a.pins, "rows": {}}
     out.mkdir(parents=True, exist_ok=True)
     for row in select(doc, a.rows, a.tier):
         pin = doc["rows"][row]

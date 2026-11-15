@@ -78,7 +78,7 @@ def test_a_piece_lowered_only_on_a_constant_operand_is_counted_by_its_stated_and
 def test_a_unit_holding_the_top_p_keep_word_is_sized_by_its_composition():
     """The top-p keep word has no piece but counts its composition (`topp_word.ands`), so a unit holding it is sized off its
     Definition: in range at V = 16, and at V = 256 refused by name, before anything lowers it."""
-    from verity.definitions.registry import sampling as SM
+    from verity_vllm.definitions.registry import sampling as SM
     from verity_flock import topp_word as TW
 
     w = FC.unit_witness(SM.topp_mask_word(16))
@@ -88,7 +88,7 @@ def test_a_unit_holding_the_top_p_keep_word_is_sized_by_its_composition():
 
 
 def test_the_block_read_off_a_definition_is_composes():
-    """Staged on its own rows (a bit row per parameter, one per return field, as `verity.commitments.windows.interface.unit_rows`
+    """Staged on its own rows (a bit row per parameter, one per return field, as `verity.commitments.periods.interface.unit_rows`
     gives them), a unit's block is the one `circuit.unit_block` reads off its Definition: the cells its lowering lays out,
     its slot, its sha512x3 and hm96 slots, and its k_log, which compose raises only by packing more units (up to 2^22)."""
     d = bind(definition("UnitRangeOwnRows", 1, lambda C, a, w: [C.AND(w[i], a[i % 32]) for i in range(1, 2048)],

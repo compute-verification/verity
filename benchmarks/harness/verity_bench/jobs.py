@@ -310,8 +310,16 @@ def _point_command(source: str | Path, item: PlannedPoint, root: Path) -> list[s
     ]
 
 
+def vllm_spec(plan: Plan) -> ResolvedSpec:
+    """A vLLM plan's spec; TypeError on a steady-state plan's, whose points `steady_plan` runs."""
+
+    if not isinstance(plan.spec, ResolvedSpec):
+        raise TypeError(f"{plan.spec.id} is a steady-state spec: steady_plan runs its points")
+    return plan.spec
+
+
 def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
-    spec = plan.spec
+    spec = vllm_spec(plan)
     command = [
         "research", "run",
         "--queue",
@@ -366,7 +374,7 @@ def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign
         *(["--store-read"] if store_read else []),
         *env,
         "--",
-        "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
+        "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/check/slot.py", "--by", "benchmarks",
         "--run-max", f"{minutes * 60:g}",
         "--",
         *job,
@@ -377,7 +385,7 @@ def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Pat
     """The point as a `research run --on NODE` through one of the node's GPU slots (`slot_run`), its GPUs from the node's
     gpu-lease: the queued point's tool, identity and environment."""
 
-    spec = plan.spec
+    spec = vllm_spec(plan)
     minutes = direct_minutes(spec, node)
     # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU job is
     # preemptible, as the queued point's is.

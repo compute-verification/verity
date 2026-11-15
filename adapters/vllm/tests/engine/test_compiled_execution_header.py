@@ -13,10 +13,11 @@ import types
 
 import pytest
 
-torch = pytest.importorskip("torch")
+pytest.importorskip("torch")
 
-from verity_vllm.engine import build as B, vllm_adapter as A  # noqa: E402
-from verity_vllm.program.frontend.target_profile import TargetProfile  # noqa: E402
+from verity_vllm.engine import build as B
+from verity_vllm.engine import vllm_adapter as A
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 
 class _Mode(enum.IntEnum):

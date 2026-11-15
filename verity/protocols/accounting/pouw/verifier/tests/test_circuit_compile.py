@@ -36,7 +36,7 @@ from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 from verity.protocols.proofs.spot.verifier.one_stage import partition as OP
 
-V1, V8, V16, V32 = Value(1), Value(8), Value(16), Value(32)
+V1, V8, V32 = Value(1), Value(8), Value(32)
 M32 = (1 << 32) - 1
 LAYER = ((2048, 21504), (8192, 2048))
 REDUCED = ((2048, 3), (8192, 2))

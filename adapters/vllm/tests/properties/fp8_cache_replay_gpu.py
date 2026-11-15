@@ -67,7 +67,7 @@ LAYERS, EXPERTS = 7, 16
 #: backend reads an FP8 cache with its FP8 kernel at every token below 32 heads a rank; at 32 or more a prefill token reads
 #: a bf16 copy of the rows instead, a path GLM-5.3 on eight cards never takes
 HEADS = 8
-#: ``--weights scaled``: every weight's standard deviation, and the scale beside an FP8 weight sampled uniform on [-1, 1]
+#: ``--weights scaled``: every weight's standard deviation, and the scale beside an FP8 weight uniform on [-1, 1]
 STD = 0.02
 FP8_SCALE = STD * 3 ** 0.5
 #: an arm -> the ``kv_cache_dtype`` its served engine is given (None: vLLM's default, ``auto``)
@@ -166,8 +166,8 @@ def rescale(runner: Any) -> dict[str, int]:
                 p.fill_(1.0)
                 count["norm"] += 1
             elif torch.finfo(p.dtype).bits < 16:
-                draw = torch.empty(p.shape, dtype=torch.float16, device=p.device).uniform_(-1.0, 1.0, generator=gen)
-                p.copy_(draw.to(p.dtype))
+                uniform = torch.empty(p.shape, dtype=torch.float16, device=p.device).uniform_(-1.0, 1.0, generator=gen)
+                p.copy_(uniform.to(p.dtype))
                 count["fp8"] += 1
             else:
                 p.normal_(0.0, STD, generator=gen)
@@ -189,7 +189,7 @@ def kv_layers(model: Any) -> dict[str, Any]:
     and the ``prefix`` of an indexer's key cache, which has no ``layer_name``."""
     out: dict[str, Any] = {}
     for _path, m in model.named_modules():
-        cache = getattr(m, "kv_cache", None)
+        cache: Any = getattr(m, "kv_cache", None)
         name = next((n for n in (getattr(m, "layer_name", None), getattr(m, "prefix", None)) if isinstance(n, str)), None)
         if name is not None and hasattr(cache, "stride") and cache.numel() and name not in out:
             out[name] = m

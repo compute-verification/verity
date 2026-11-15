@@ -17,7 +17,7 @@ work).
 * `RateAuditPartial`: `RateAudit`'s bound, at its floor with `c_enc = rounds · c_root` and its error, for a device that
   may keep part of a word and complete the rest; its honest device is a lemma, `RatePartialHonest`
   (`Security/Proofs/Accounting/Lemmas/RateAudit.lean`).
-* `RatePartialRebuild`: on every run, the bits completed cost `c_word / b` each (the remote audit's route
+* `RatePartialRebuild`: on every run, the bits completed cost `c_word / b` each (PoUB's route
   `Accounting.Remote.Run.Rebuild` at `δ = 0`).
 * `RateOfAuditPartial`: in a joint run, the bandwidth account's reads, with the completions charged as compute through
   W, so a compute account that did `W` of work leaves `F·T − W` for them.
@@ -89,7 +89,7 @@ the device completed, at `c_word = rounds · c_root` per `b` of them, cost at mo
 
   `completed · c_word ≤ b · work`.
 
-**The reading.** It is the remote audit's route `Accounting.Remote.Run.Rebuild` at `δ = 0`
+**The reading.** It is PoUB's route `Accounting.Remote.Run.Rebuild` at `δ = 0`
 (`rebuilt · c_word ≤ b · rebuildWork`, the node-level guarantee) for a run whose node completes
 words as a partial device does: its rebuilt bits (the correct receipts' share) are at most the device's completed bits,
 however it splits them into partial words, and its rebuild work covers the completions' compute. `RateAuditPartial` uses it to turn the compute

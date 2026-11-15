@@ -1,12 +1,12 @@
-"""Draw laws (PROTOCOL.md §16.15, D12): `verify` refuses a session sampled by a sampling design no soundness claim samples by (a bernoulli
-sample, a work sample with or without a closure) at setup, whatever flags it holds, and passes a stratified sample, and at
-hidden outputs a subset sample, on to the session's checks. The statement's form is checked last, once every check has
+"""Sampling designs (PROTOCOL.md §16.15, D12): `verify` refuses a session sampled by a sampling design no soundness claim samples by (a
+bernoulli sample, a work sample with or without a closure) at setup, whatever flags it holds, and passes a stratified sample, and
+at hidden outputs a subset sample, on to the session's checks. The statement's form is checked last, once every check has
 passed, and a session without a sample is refused after that. The statement is
 `test_lean_registered_reads.py`'s honest one (`stage`, every port registered): its program and partition are the ones a
-work sample's law derives from, so a work sample sets up there, where any other statement refuses it at setup before its sampling design
-is read. Each session is a record that names its sample and no proof files: a sample that passes the sampling design check sets up and
-meets the session's files, which it has none of, and so does a session without a sample, in either mode, since its
-refusal comes after every check (its own refusal shows on the statements whose form is covered: `test_lean_zk.py`,
+work sample's sampling design derives from, so a work sample sets up there, where any other statement refuses it at setup before its
+sampling design is read. Each session is a record that names its sample and no proof files: a sample that passes the sampling design
+check sets up and meets the session's files, which it has none of, and so does a session without a sample, in either mode, since
+its refusal comes after every check (its own refusal shows on the statements whose form is covered: `test_lean_zk.py`,
 `test_lean_record_checks.py`, `test_lean_hidden_outputs.py`). Each sample is its own setup (about 10 s), and staging composes the
 circuit (about 30 s), so the module is slow; it is the only test that reaches the sampling design check with a work sample."""
 from __future__ import annotations
@@ -76,14 +76,14 @@ def verdicts(tmp_path_factory):
 @pytest.mark.parametrize("zk", [False, True])
 @pytest.mark.parametrize("name, why", [("work", "a work draw"), ("closure", "a work draw with a closure"),
                                        ("bernoulli", "a bernoulli draw")])
-def test_no_claim_draws_by_these_laws_in_either_mode(verdicts, zk, name, why):
+def test_no_claim_samples_by_these_laws_in_either_mode(verdicts, zk, name, why):
     """At the verifier's own K, work table, program, partition and closure map the work samples set up, and are refused for
-    their law; so is a bernoulli sample."""
+    their sampling design; so is a bernoulli sample."""
     v = verdicts[zk][name]
     assert not v["accepted"] and v["why"] == _law(why), v["why"]
 
 
-def test_a_subset_draw_at_hidden_outputs_passes_the_law_in_either_mode(verdicts):
+def test_a_subset_sample_at_hidden_outputs_passes_the_law_in_either_mode(verdicts):
     """At hidden outputs a plain claim samples a subset (`SoundExecH`), as `--zk` does: the subset sample sets up and meets
     the session's files in either mode, as a stratified sample does without `--zk`. At public outputs, without `--zk`, it is
     refused for its sampling design (`test_lean_session_tables.py`'s `SUBSET`)."""
@@ -92,7 +92,7 @@ def test_a_subset_draw_at_hidden_outputs_passes_the_law_in_either_mode(verdicts)
     assert verdicts[False]["stratified"]["why"].startswith("session files: "), verdicts[False]["stratified"]["why"]
 
 
-def test_a_session_without_a_draw_is_refused_after_every_check(verdicts):
+def test_a_session_without_a_sample_is_refused_after_every_check(verdicts):
     """No soundness claim covers a session without a sample (D12), and `verify` refuses one last, after every check has
     passed, so a session that fails a check keeps that check's reason: here, in either mode, its missing files."""
     for zk in (False, True):

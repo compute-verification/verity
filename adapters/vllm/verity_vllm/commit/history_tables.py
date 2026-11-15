@@ -11,7 +11,7 @@ appends its own rows in position order from the table's length (`Histories.appen
 its tables, and the next window appends from that edge. The window's registration carries each table's root after the
 window's appends (`Histories.entries`), fixed before the window's coins; the verifier recomputes it from the writers'
 public strings and never takes the prover's. The window commits each appended row under the table's salt and string
-(`Histories.salts`, `Histories.strings`; `verity.commitments.windows.rows.commit`'s ``salts_of`` and ``strings_of``), so
+(`Histories.salts`, `Histories.strings`; `verity.commitments.periods.rows.commit`'s ``salts_of`` and ``strings_of``), so
 the leaf is the string the window commits and no row is hashed twice.
 
 Retention is per request: a table keeps every row and salt it holds, `ROW_BYTES` a row a layer beside its tree, until its
@@ -33,7 +33,7 @@ from typing import Any
 from verity.commitments import history as HT
 from verity.commitments import hm96
 
-__all__ = ["Histories", "ROW_BYTES", "SWITCH", "WORDS", "check", "name", "of_request", "on", "release"]
+__all__ = ["Histories", "NAME", "ROW_BYTES", "SWITCH", "WORDS", "check", "name", "of_request", "on", "release"]
 
 #: the registration's engine switch the table-read form is under, off by default
 SWITCH = "dsa_table_reads"

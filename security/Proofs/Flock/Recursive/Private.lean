@@ -35,7 +35,7 @@ import Proofs.Flock.Soundness.ZK.Hiding
 * `regLeaves_hides`: a registration by hm96 leaves hides at `2·n_r·δ`, `ideal_leaves_swap` from each private circuit to the
   ideal leaves and back (on the complement); `recursiveCircuitPrivateLeaves_le` is `recursiveCircuitPrivate_le` with it,
   `RecursiveCircuitPrivateLeaves` that at the gap, and `RecursiveAudit`'s (ii) the same at the ZK server, at the gap
-  (`Proofs.Flock.Recursive.FirewallZK`).
+  (`Proofs.Flock.Recursive.ZkServerZK`).
 * `RanRegisteredRun`: an accepted outcome off the registered program is, by the binding, one whose opening and the
   registrant's collide; with no such outcome reached (`prob_mono_outcome`), accepting off `p` adds nothing to `B`.
 * `RecursiveRanRegistered`: `RecursiveSound`'s three cases; in its bound's, the same argument at each row the run read
@@ -97,8 +97,8 @@ noncomputable def realAt (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → 
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (P : Prog) (w : Wit) (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) (r : Rr) : ℝ≥0∞ :=
   prCoin fun z : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
-    E (reg P r, z.1.1.1, (fun i => Flock.Guarantees.firewallLeaf (msgs P w r z.1.1.1 z.1.1.2 i) (z.1.2 i)),
-      view P w r z.1.1.1 (fun i => Flock.Guarantees.firewallLeaf (msgs P w r z.1.1.1 z.1.1.2 i) (z.1.2 i))
+    E (reg P r, z.1.1.1, (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r z.1.1.1 z.1.1.2 i) (z.1.2 i)),
+      view P w r z.1.1.1 (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r z.1.1.1 z.1.1.2 i) (z.1.2 i))
         z.1.1.2 z.1.2 z.2)
 
 omit [Fintype Rr] [Nonempty Rr] in
@@ -107,9 +107,9 @@ theorem recZK_at (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → Wit → 
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞} (o : Out) (P : Prog) (w : Wit) (r : Rr)
     (hOuter : ∀ a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
-      prCoin (fun q : Ωo => E (view P w r a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)) p y q))
+      prCoin (fun q : Ωo => E (view P w r a (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) p y q))
         ≤ prCoin (fun s : Ωs =>
-            E (sim o (reg P r) a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
+            E (sim o (reg P r) a (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) s)) + εo)
     {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) :
     realAt reg nh msgs view P w E r ≤ idealAt nh sim o E (reg P r) + (εo + nh * δ) ∧
@@ -125,9 +125,9 @@ theorem recursiveCircuitPrivate_le (reg : Prog → Rr → Rv) {ε : ℝ≥0∞} 
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞}
     (hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
-      prCoin (fun q : Ωo => E (view P w r a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)) p y q))
+      prCoin (fun q : Ωo => E (view P w r a (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) p y q))
         ≤ prCoin (fun s : Ωs =>
-            E (sim o (reg P r) a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
+            E (sim o (reg P r) a (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) s)) + εo)
     {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w) (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) :
     Flock.Guarantees.recRealPr reg nh msgs view P w E ≤ Flock.Guarantees.recSimPr reg nh sim o p₀ E + (ε + εo + nh * δ) ∧
@@ -187,13 +187,13 @@ every event `G` of the leaves, at any hm96 hiding bound `δ`. -/
 theorem rowLeaves_swap {nr : ℕ} (rows : Prog → Fin nr → ByteArray)
     {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ) (Q : Prog)
     (G : (Fin nr → ByteArray) → Prop) :
-    prCoin (fun r : Fin nr → ZkView.Salt => G fun i => Flock.Guarantees.firewallLeaf (rows Q i) (r i)) ≤
+    prCoin (fun r : Fin nr → ZkView.Salt => G fun i => Flock.Guarantees.zkServerLeaf (rows Q i) (r i)) ≤
       prCoin (fun u : Fin nr → ZkView.Bits × ZkView.Salt => G fun i => Flock.Guarantees.idealLeaf (u i)) + nr * δ :=
-  calc prCoin (fun r : Fin nr → ZkView.Salt => G fun i => Flock.Guarantees.firewallLeaf (rows Q i) (r i))
+  calc prCoin (fun r : Fin nr → ZkView.Salt => G fun i => Flock.Guarantees.zkServerLeaf (rows Q i) (r i))
       = prCoin (fun p : Unit × (Fin nr → ZkView.Salt) =>
-          G fun i => Flock.Guarantees.firewallLeaf (rows Q i) (p.2 i)) :=
+          G fun i => Flock.Guarantees.zkServerLeaf (rows Q i) (p.2 i)) :=
         (prCoin_congr_equiv (unitProd _)
-          (fun r : Fin nr → ZkView.Salt => G fun i => Flock.Guarantees.firewallLeaf (rows Q i) (r i))).symm
+          (fun r : Fin nr → ZkView.Salt => G fun i => Flock.Guarantees.zkServerLeaf (rows Q i) (r i))).symm
     _ ≤ prCoin (fun p : Unit × (Fin nr → ZkView.Bits × ZkView.Salt) =>
           G fun i => Flock.Guarantees.idealLeaf (p.2 i)) + nr * δ :=
         ideal_leaves_swap ZkView.My ZkView.saltHash hT1 ZkView.leafH nr (Ω := Unit)
@@ -224,10 +224,10 @@ theorem recursiveCircuitPrivateLeaves_le (nr : ℕ) (rows : Prog → Fin nr → 
     (view : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞}
     (hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
-      prCoin (fun q : Ωo => E (view P w r a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)) p y q))
+      prCoin (fun q : Ωo => E (view P w r a (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) p y q))
         ≤ prCoin (fun s : Ωs =>
             E (sim o (Flock.Guarantees.regLeaves rows pub P r) a
-              (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
+              (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) s)) + εo)
     {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w) (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) :
     Flock.Guarantees.recRealPr (Flock.Guarantees.regLeaves rows pub) nh msgs view P w E ≤

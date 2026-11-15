@@ -1,4 +1,4 @@
-"""`gate.sh probe`: before a gate run writes anything to either auditor host, it reads the challenger host's key, pins
+"""`gate.sh probe`: before a gate run writes anything to either auditor device, it reads the challenger host's key, pins
 and ledger and the verifier host's status, and refuses (exit 3, the reason in probe.json) a key that isn't PIN, a used
 period, a period of the lane still open, a host pinned elsewhere or busy, and, before any request, a CIRCUIT that isn't COMMIT's
 and a COMMIT off origin/main's first-parent line (or no line to check it on). A host pinned elsewhere on that line is
@@ -6,7 +6,10 @@ told to rerun at its pin; one pinned off it, to repin. Under DRY=1 nothing reach
 PATH; COMMIT is the head of a throwaway repository whose bare origin's main holds it and its parent.
 
 `gate.sh host`: the run it asks the verifier host for is PACED's paced sessions, or with SESSIONS that many sessions of
-one coin a window, and never both: every verb refuses both forms at once, and `form` does nothing else."""
+one coin a window, and never both: every verb refuses both forms at once, and `form` does nothing else.
+
+The two hosts are CHALLENGER and AUDITOR, by default research@ the addresses the environment holds: a verb that
+finds neither ends naming the variable, before any request."""
 from __future__ import annotations
 
 import hashlib
@@ -20,9 +23,13 @@ from pathlib import Path
 import pytest
 
 GATE = Path(__file__).resolve().parents[1] / "gate.sh"
+AUDITOR, WHATIF, MAIN_LINE = (GATE.parent / n for n in ("auditor.sh", "gate_whatif.sh", "main_line.sh"))
+URL = "https://user:tok@127.0.0.1:9/x.git"
 FP = "SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs"
 PUBLIC = bytes(range(80))
 PIN = hashlib.sha512(PUBLIC).hexdigest()
+#: the two hosts' addresses as the launcher's environment holds them, here documentation addresses
+HOSTS = {"VY_CHALLENGER_1_HOST": "192.0.2.21", "VY_AUDITOR_1_HOST": "192.0.2.22"}
 
 
 def entry(seq: int, kind: str, period: str, lane: str) -> dict:
@@ -151,32 +158,40 @@ def test_no_main_line_to_check_commit_on_refuses_before_any_request(tmp_path, re
     assert calls == []
 
 
-def test_a_refused_fetch_prints_no_userinfo_of_origins_url_anywhere(tmp_path, repo, monkeypatch):
-    """On an agent's VM origin's URL carries a credential as its userinfo: neither the refusal nor any file under $OUT
-    holds it, while the refusal still names the URL without it. A git on PATH ahead of the real one answers origin's URL
-    and fails the fetch from it naming the URL whole, as a git that doesn't redact it would: no git config holds the URL
-    (an agent's VM refuses a remote URL with a credential in it)."""
-    url = "https://user:tok@127.0.0.1:9/x.git"
+def userinfo_origin(tmp_path: Path, monkeypatch) -> None:
+    """A git on PATH ahead of the real one that answers origin's URL with URL, a credential as its userinfo, and fails
+    the fetch from it naming the URL whole, as a git that doesn't redact it would: no git config holds the URL (an
+    agent's VM refuses a remote URL with a credential in it)."""
     stub = tmp_path / "git-stub"
     stub.mkdir()
     (stub / "git").write_text(
-        f'#!/bin/sh\n[ "$1 $2 $3" = "remote get-url origin" ] && {{ echo "{url}"; exit 0; }}\n'
-        f'for a; do [ "$a" = "{url}" ] && {{ echo "fatal: unable to access \'{url}/\': refused" >&2; exit 128; }}; done\n'
+        f'#!/bin/sh\n[ "$1 $2 $3" = "remote get-url origin" ] && {{ echo "{URL}"; exit 0; }}\n'
+        f'for a; do [ "$a" = "{URL}" ] && {{ echo "fatal: unable to access \'{URL}/\': refused" >&2; exit 128; }}; done\n'
         f'exec {shutil.which("git")} "$@"\n')
     (stub / "git").chmod(0o755)
     monkeypatch.setenv("PATH", str(stub), prepend=os.pathsep)
+
+
+def holds_no_userinfo(p: subprocess.CompletedProcess, out: Path) -> bool:
+    texts = (p.stdout, p.stderr, *(f.read_text(errors="replace") for f in out.rglob("*") if f.is_file()))
+    return not any("user" in t or "tok" in t for t in texts)
+
+
+def test_a_refused_fetch_prints_no_userinfo_of_origins_url_anywhere(tmp_path, repo, monkeypatch):
+    """On an agent's VM origin's URL carries a credential as its userinfo: neither the refusal nor any file under $OUT
+    holds it, while the refusal still names the URL without it."""
+    userinfo_origin(tmp_path, monkeypatch)
     p, out, calls = probe(tmp_path, repo)
     assert p.returncode == 3, p.stdout + p.stderr
     assert "can't fetch main's first-parent history from https://127.0.0.1:9/x.git (fetch.probe.log)" in p.stdout
     assert (out / "fetch.probe.log").exists() and calls == []
-    for text in (p.stdout, p.stderr, *(f.read_text(errors="replace") for f in out.rglob("*") if f.is_file())):
-        assert "user" not in text and "tok" not in text
+    assert holds_no_userinfo(p, out)
 
 
 def test_unauth_takes_out_every_urls_userinfo_and_nothing_else(tmp_path):
     """The log is stripped too, whatever git writes into it, for any git version that names the URL whole."""
     lines = "fatal: unable to access 'https://user:tok@h/x.git/': no\nfrom ssh://git@h:22/x and /srv/git/verity.git\n"
-    p = subprocess.run(["bash", "-c", f'source <(sed -n "/^unauth() {{/,/^}}/p" {GATE}); unauth'], input=lines,
+    p = subprocess.run(["bash", "-c", f'source {MAIN_LINE}; unauth'], input=lines,
                        capture_output=True, text=True, check=True)
     assert p.stdout == "fatal: unable to access 'https://h/x.git/': no\nfrom ssh://h:22/x and /srv/git/verity.git\n"
 
@@ -222,6 +237,58 @@ def test_a_run_clone_whose_bare_repository_cant_be_reached_refuses_and_never_rea
     assert calls == [] and not (out / "main.probe.txt").exists()
 
 
+def audit(tmp_path: Path, r: Path, script: Path = AUDITOR) -> tuple[subprocess.CompletedProcess, Path, Path]:
+    """auditor.sh (or gate_whatif.sh) from the clone r's root, as gate.sh's audit and gate_run.sh's whatif run them,
+    against a gate serving an empty ledger and pins log and a uv standing in for the store and auditor_line.py; its
+    result, $OUT and the file of the commands uv got (absent where it got none)."""
+    run, out, bin_, uv = tmp_path / "host-run", tmp_path / "aud-out", tmp_path / "aud-bin", tmp_path / "uv.calls"
+    for d in (run / "out", out, bin_):
+        d.mkdir(parents=True)
+    (bin_ / "ssh").write_text("#!/bin/sh\nexit 0\n")
+    (bin_ / "uv").write_text(f'#!/bin/sh\necho "$*" >> {uv}\necho "--main FILE"\n')
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, "OUT": str(out), "RUN": str(run), "GATE": "research@192.0.2.8", "GATE_KEY": str(tmp_path / "k"),
+           "PERIOD": "ma-remote-coins-8", "PIN": PIN, "COMMIT": git(r, "rev-parse", "HEAD"), "RUN_ART": "art:r",
+           "AUDITOR_ART": "art:a", "PROVER_ART": "art:p"}
+    env["PATH"] = f"{bin_}{os.pathsep}{env['PATH']}"
+    return subprocess.run(["bash", str(script)], cwd=r, env=env, capture_output=True, text=True), out, uv
+
+
+def test_the_auditor_reads_main_from_the_bare_repository_not_its_source_roots_frozen_copy(tmp_path, repo):
+    """The fire's audit runs auditor.sh in the run's clone: its --main is the bare's main, as the probe's is."""
+    parent = git(repo[0], "rev-parse", "HEAD~1")
+    _, clone = run_clone(tmp_path, repo, at=parent)
+    p, out, uv = audit(tmp_path, clone)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert (out / "main.txt").read_text().split() == [repo[1], parent]
+    assert f"main from {tmp_path / 'origin.git'}, 2 first-parent commits" in (out / "fetch.log").read_text()
+    assert f"--main {out / 'main.txt'}" in uv.read_text()
+
+
+def test_an_auditor_whose_bare_repository_cant_be_reached_refuses_and_writes_no_line(tmp_path, repo):
+    """The source root's frozen origin/main holds COMMIT: the auditor refuses rather than check pins against it."""
+    root, clone = run_clone(tmp_path, repo, at=repo[1])
+    gone = tmp_path / "gone.git"
+    git(root, "remote", "set-url", "origin", str(gone))
+    p, out, uv = audit(tmp_path, clone)
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert (f"can't fetch main's first-parent history from {gone} (fetch.log), so no session's pin can be checked on "
+            "it: no line was written") in p.stdout
+    assert not uv.exists() and not (out / "main.txt").exists() and not (out / "auditor_line.json").exists()
+
+
+@pytest.mark.parametrize("script", [AUDITOR, WHATIF], ids=["auditor", "whatif"])
+def test_a_refused_fetch_of_main_by_the_auditor_or_the_whatif_prints_no_userinfo_anywhere(tmp_path, repo, monkeypatch,
+                                                                                            script):
+    userinfo_origin(tmp_path, monkeypatch)
+    p, out, uv = audit(tmp_path, repo[0], script)
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert "can't fetch main's first-parent history from https://127.0.0.1:9/x.git (fetch.log)" in p.stdout
+    assert "--host-bytes" not in (uv.read_text() if uv.exists() else "") and not (out / "main.txt").exists()
+    assert holds_no_userinfo(p, out)
+
+
 def test_a_dry_probe_sends_nothing(tmp_path, repo):
     p, out, calls = probe(tmp_path, repo, dry=True)
     assert p.returncode == 0, p.stdout + p.stderr
@@ -241,7 +308,7 @@ def fire(tmp_path: Path, status: str, lease_by: str) -> tuple[subprocess.Complet
     (bin_ / "ssh").write_text(f'#!/bin/sh\necho "$*" | tr "\\n" " " >> {tmp_path}/calls\necho >> {tmp_path}/calls\n'
                               f'cat {tmp_path}/status\n')
     (bin_ / "ssh").chmod(0o755)
-    env = {**os.environ, "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "PROVER_RUN": "r1",
+    env = {**os.environ, **HOSTS, "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "PROVER_RUN": "r1",
            "PROVER_SSH": "research@n2", "ENGINES": "8", "LEASE_BY": lease_by, "GATE_KEY": str(tmp_path / "key"),
            "COMMIT": "0" * 40, "PERIOD": "ma-remote-coins-9", "PIN": PIN}
     p = subprocess.run(["bash", str(GATE), "fire"], cwd=tmp_path, env=env, capture_output=True, text=True)
@@ -284,9 +351,9 @@ def host(tmp_path: Path, verb: str = "host", **form: str) -> tuple[subprocess.Co
     """gate.sh VERB under DRY=1 with these of FORM's variables and no other: its result, and the requests it would
     have sent, each without its time and its host (None when it wrote no gate.requests). `form` gets no OUT."""
     out = tmp_path / "out"
-    out.mkdir()
-    env = {k: v for k, v in os.environ.items() if k not in FORM + REQUEST + ("OUT",)}
-    env |= {"DRY": "1", "PERIOD": "ma-remote-coins-9", "PIN": PIN, "GATE_KEY": str(tmp_path / "key"),
+    out.mkdir(parents=True)
+    env = {k: v for k, v in os.environ.items() if k not in FORM + REQUEST + ("OUT", "CHALLENGER")}
+    env |= {**HOSTS, "DRY": "1", "PERIOD": "ma-remote-coins-9", "PIN": PIN, "GATE_KEY": str(tmp_path / "key"),
             "COMMIT": "0" * 40, **form}
     if verb != "form":
         env["OUT"] = str(out)
@@ -356,6 +423,24 @@ def test_a_bind_other_than_0_or_1_is_refused_before_any_request(tmp_path, verb, 
         return
     assert p.returncode == 2 and f"BIND is {bind}: 1 binds the store to MODEL's pinned checkpoint, 0 to none" in p.stdout
     assert sent is None
+
+
+@pytest.mark.parametrize("verb", ["probe", "open", "host", "close", "audit", "fire"])
+@pytest.mark.parametrize("unset, given", [("VY_CHALLENGER_1_HOST", "CHALLENGER"), ("VY_AUDITOR_1_HOST", "AUDITOR")])
+def test_a_host_with_no_address_in_the_environment_ends_the_verb_naming_the_variable(tmp_path, verb, unset, given):
+    """The script holds neither host's address: without the variable and without the host given whole, every verb but
+    `form` ends at once, the variable's name in what it prints, and no request is written; with the host given whole
+    the variable isn't read."""
+    p, sent = host(tmp_path, verb, **{unset: ""})
+    assert p.returncode != 0 and f"{unset}: the address of the" in p.stderr and f"or {given} as USER@HOST" in p.stderr
+    assert sent is None
+    p, sent = host(tmp_path / "given", "open", CIRCUIT="ab" * 64, **{unset: "", given: "research@192.0.2.23"})
+    assert p.returncode == 0 and len(sent) == 3, p.stdout + p.stderr
+
+
+def test_form_reads_no_hosts_address(tmp_path):
+    p, sent = host(tmp_path, "form", VY_CHALLENGER_1_HOST="", VY_AUDITOR_1_HOST="")
+    assert p.returncode == 0 and sent is None, p.stdout + p.stderr
 
 
 def test_a_dry_fire_that_cant_read_the_provers_leases_says_so_once_and_writes_every_request(tmp_path, repo):

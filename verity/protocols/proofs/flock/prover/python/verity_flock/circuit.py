@@ -66,7 +66,8 @@ from typing import BinaryIO
 
 import numpy as np
 
-from verity.commitments.windows.interface import K_MAX, K_MIN, MASK_LOG, PACK_LOG, PER_SLOT, SLOT_LOG
+from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
+from verity.commitments.periods.interface import K_MAX, K_MIN, MASK_LOG, PACK_LOG, PER_SLOT, SLOT_LOG
 
 from . import ir_lower as IL
 
@@ -82,7 +83,7 @@ ROW_SCHEMA = "hm96-sha512/row/v1"
 INST_FORMAT = "flock-circuit-inputs"
 #: Each row tree's frame domain: owner ``OWNER``, binding ``identity_digest_sha512(BINDING_TAG, {set, lo, hi, port, schema})``
 #: (64 bytes), so a root is bound to its input set, its range of instances, its port and the port's row schema.
-BINDING_TAG = "verity/flock-circuit/binding/v2"
+BINDING_TAG = FLOCK_CIRCUIT_BINDING
 OWNER = -1
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
 #: identity and swappable: ``hm96-sha512/v1`` (``verity.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over the
@@ -636,7 +637,7 @@ def block_log(rows: list[Port], unit_log: int, unit_packed: bool, stage_logs: li
 
 
 def _unit_ports(definition, cuts: dict | None = None) -> tuple[list[Port], list[Port]]:
-    """``definition``'s rows as `UnitStager` takes them (`verity.commitments.windows.interface.unit_rows`), ``(ins, outs)``: a bit row
+    """``definition``'s rows as `UnitStager` takes them (`verity.commitments.periods.interface.unit_rows`), ``(ins, outs)``: a bit row
     per parameter, or ``k`` of a parameter ``cuts`` cuts ``k`` ways, and one per return field, each whole u16 words."""
     from verity.circuits.evaluation.reference import resolve
 
@@ -747,9 +748,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     the unit's range and ``unit_log`` are that net's slot. A size class's ``definition`` has no templated form.
 
     ``out`` (a binary file, `compose_to`'s): the text is written there, UTF-8, as it is rendered, and only its first two lines
-    (the format line and META) are returned. The unit's netlist goes from `ir_lower.netlist_pieces` into the file and into
-    ``unit_sha256`` a piece at a time; a flat statement's META, which ``unit_sha256`` precedes, is written with stand-ins of
-    its digests' lengths and rewritten in place once the netlist is."""
+    (the format line and META) are returned. The unit's circuit description goes from `ir_lower.netlist_pieces` into the file and
+    into ``unit_sha256`` a piece at a time; a flat statement's META, which ``unit_sha256`` precedes, is written with stand-ins of
+    its digests' lengths and rewritten in place once the circuit description is."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -956,9 +957,9 @@ def _put(out: BinaryIO | None, s: str, h=None) -> None:
 
 
 def _write_netlist(low: IL.Lowering, out: BinaryIO | None = None) -> tuple[str, int]:
-    """The unit's netlist (:func:`_expanded`'s text) rendered a piece at a time (`ir_lower.netlist_pieces`), each piece hashed and
-    written to ``out`` where given, and dropped before the next is rendered: its ``unit_sha256`` (`Lowering.sha256_after`) and
-    its lines."""
+    """The unit's circuit description (:func:`_expanded`'s text) rendered a piece at a time (`ir_lower.netlist_pieces`), each
+    piece hashed and written to ``out`` where given, and dropped before the next is rendered: its ``unit_sha256``
+    (`Lowering.sha256_after`) and its lines."""
     h, lines = hashlib.sha256(), 0
     for piece in IL.netlist_pieces(low.layout, low.name):
         _put(out, piece, h)
@@ -1120,7 +1121,7 @@ def check_shared_reads(meta: dict, n: int, counts: dict | None, refs: dict | Non
         raise ValueError("META: shared_reads without public_inputs (a shared read's position is a public input)")
     rs = meta["shared_reads"]
     if not isinstance(rs, list):
-        raise ValueError("META shared_reads: not a list")  # noqa: TRY004 (one refusal type, the verifier's text)
+        raise ValueError("META shared_reads: not a list")  # one refusal type, the verifier's text
     if not rs:
         raise ValueError("META: shared_reads names no port")
     if counts is None or refs is None:
@@ -1130,7 +1131,7 @@ def check_shared_reads(meta: dict, n: int, counts: dict | None, refs: dict | Non
     seen = set()
     for r in rs:
         if not isinstance(r, dict):
-            raise ValueError("META: a shared read is not an object")  # noqa: TRY004
+            raise ValueError("META: a shared read is not an object")
         port, pos, g = r.get("port"), r.get("position"), r.get("group")
         if (sorted(r) != ["group", "port", "position"] or not isinstance(port, str) or not port or not isinstance(pos, str)
                 or not pos or type(g) is not int or g <= 0):

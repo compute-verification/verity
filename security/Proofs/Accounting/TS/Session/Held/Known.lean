@@ -22,7 +22,7 @@ import Proofs.Flock.Soundness.Registered.Binding
 /-!
 # The known-content tie: a registrant's row at a port the verifier registers at known content is that content, or SHA-512 collides
 
-`flock-verify --registered F` refuses a file whose port named at known content (`Registered.KNOWN_KEY`: each row's
+`verity-verify-proof --registered F` refuses a file whose port named at known content (`Registered.KNOWN_KEY`: each row's
 u16 words and its salt) has a registered root other than the frame-v3-sha512 root of those rows' `hm96-sha512/row/v2`
 leaves (`Registered.checkKnownAll`, run in `FlockVerify.registeredInput`). What that refusal establishes, from the
 verifier's code:

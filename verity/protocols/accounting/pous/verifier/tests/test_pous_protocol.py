@@ -19,6 +19,7 @@ from pous_fakes import Clock
 
 from verity.claims import get as core_claim
 from verity.commitments.randomness import frame
+from verity.protocols.accounting.pous.prover.responder import responder
 from verity.protocols.accounting.pous.verifier import band, dense, primitives, protocol, schemes
 from verity.protocols.accounting.pous.verifier.codec import Geometry
 from verity.protocols.accounting.pous.verifier.labels import salt_value, tag
@@ -135,7 +136,7 @@ def test_audit_through_the_interface(name):
     with pytest.raises(ValueError, match="no certificate"):
         protocol.TimedAudit(sch, vk, key, k=20, experimental=True)
     v = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=Clock(step=1_000))
-    assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
+    assert v.run(responder(sch, blocks.__getitem__)).accepted
     profile = v.profile()
     assert not profile.certified and profile.state_bound_bits is None and "no certificate" in profile.statement()
     wrong = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=Clock(step=1_000))
@@ -466,7 +467,7 @@ def test_a_two_round_audit_gives_its_profile():
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
     v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), k=97, rtt_allowance_ns=224_499,
                           clock=Clock(step=1_000))
-    assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
+    assert v.run(responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
     assert p.certified and p.k == 97 and p.effective_rounds == 2 and p.state_bound_bits == 254_307_274
     assert "passes 97 challenges within 724,499 ns" in p.statement()
@@ -492,7 +493,7 @@ def test_certified_profile_of_one_band12_segment():
     blocks = [rng.randbytes(sch.params.block_bytes) for _ in range(sch.params.blocks)]
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
     v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=Clock(step=1_000))
-    assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
+    assert v.run(responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
     assert p.certified and p.gaps == () and p.effective_rounds == 2
     assert p.state_bound_bits == 254_307_274 == (512 * 524_288 * 18) // 19
@@ -501,7 +502,7 @@ def test_certified_profile_of_one_band12_segment():
     j = p.to_json()
     assert j["schema"] == "verity-pous/storage-profile/v1" and j["certified"] and j["certificate"]["k"] == 111
     late = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=Clock(step=600_000))
-    assert not late.run(protocol.responder(sch, blocks.__getitem__)).accepted
+    assert not late.run(responder(sch, blocks.__getitem__)).accepted
 
 
 def test_many_segments_are_a_gap_not_a_refusal():
@@ -525,7 +526,7 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
             core_claim(c)
         assert "/" not in c and c == c.lower()
     assert protocol.claim("cr/sha-512").kind == "assumption"
-    assert protocol.claim("trusted-host").kind == "assumption"
+    assert protocol.claim("trusted-device").kind == "assumption"
 
 
 def test_p2_is_experimental_and_says_so():
@@ -543,7 +544,7 @@ def test_p2_is_experimental_and_says_so():
         cert = sch.certificate
         assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.call_ns, cert.segments, cert.hypotheses) == (
             "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, ROOT_CALL_NS, 8, ())
-        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "trusted-host"} <= set(
+        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "trusted-device"} <= set(
             cert.claims) and not any("sha-256" in c for c in cert.claims)
         one = schemes.get(name)
         vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
@@ -566,6 +567,18 @@ def test_p2_is_experimental_and_says_so():
         schemes.get("p2-16448/v4", params=P2Params(16448, 21065, 1 << 16, 1, CHACHA8))
     with pytest.raises(ValueError, match="expander"):
         P2Params(128, 173, 8, 1, "chacha20")
+
+
+def test_p2s_capacity_is_handed_in_at_the_proved_value_alone():
+    """`p2.capacities` reads `{root_call_ns}` at `ROOT_CALL_NS`, the certificate's `call_ns`, and refuses another value
+    of it, a value that isn't an integer and any other key set."""
+    assert p2.capacities({"root_call_ns": ROOT_CALL_NS}) == ROOT_CALL_NS == schemes.get("p2-16448/v4").certificate.call_ns
+    for bad in (ROOT_CALL_NS - 1, ROOT_CALL_NS + 1, float(ROOT_CALL_NS), str(ROOT_CALL_NS)):
+        with pytest.raises(ValueError, match="proved at 854029 ns alone"):
+            p2.capacities({"root_call_ns": bad})
+    for bad in ({}, {"root_call_ns": ROOT_CALL_NS, "delta_ns": 500_000}, [ROOT_CALL_NS]):
+        with pytest.raises(ValueError, match="exactly root_call_ns"):
+            p2.capacities(bad)
 
 
 def test_p2_family_certificate_is_the_proved_block_range():

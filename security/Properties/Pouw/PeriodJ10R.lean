@@ -41,17 +41,17 @@ import Mathlib.Topology.Sheaves.Init
 `Properties.Pouw.Period.CheckedCreditPeriod` with served H1's verdict on a window, `Credit.window`, in place of
 `protocol.check`, and with the tiles' sample the sampling block's stratified sample: the window's units are one subcircuit
 of the sampling block, their stratum `s_T` of the block's assignment `σ`, and its `k s_T` units are sampled uniformly
-inside it, independently of the other strata (`FlockSoundness.Audit.Law.stratified σ k hk`,
+inside it, independently of the other strata (`FlockSoundness.Audit.SamplingDesign.stratified σ k hk`,
 `JointStratified`). The period's population is that stratum's size, `N_p = |stratum σ s_T|` (`tileCount`), and its
 sample size is the block's `k s_T`, read from the block's sample, not chosen here.
 
-* `stratum`, `tileCount`, `tileAt`, `tileDraw`: the sampling block's stratum `s` of `σ` (`Law.stratum`, restated:
+* `stratum`, `tileCount`, `tileAt`, `tileDraw`: the sampling block's stratum `s` of `σ` (`SamplingDesign.stratum`, restated:
   the sampling design is `security_proofs`', which `security_properties` may not require); its size; its `t`-th unit in ascending
   order; and the tile stratum's coordinate of the block's sample at a permutation of the stratum, the units of its first
   `k s_T` images.
 * `TileStratumAcceptProb`, proved (`Proofs.Pouw.PeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
   a set `B` of the sampling block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`,
-  which is how `Law.stratified σ k hk`'s coordinate `s_T` misses it (`FlockSoundness.Audit.Law.stratified_proj_escape`,
+  which is how `SamplingDesign.stratified σ k hk`'s coordinate `s_T` misses it (`FlockSoundness.Audit.SamplingDesign.stratified_proj_escape`,
   the per-stratum projection of the joint sample; `tileStratumAcceptProb_eq_proj` joins the two). So the period's tile coin
   is the block's sample restricted to the tile stratum, and the bound below, about the period's game, which samples its
   permutation uniformly, needs no premise to be about that sample.
@@ -113,7 +113,7 @@ and 65,536 (down); such a unit is past Flock's `2^27` until `h1zy` has J10-R lan
 *What it takes that the deployed path doesn't give*, each a named premise.
 * `TileSampleIsCoin`, a code fact once its code exists. The code change: the verifier samples the tiles inside
   the sampling block's stratified sample, the tiles joining the integrity registration as one subcircuit, and reads
-  `k s_T` from it; today `Credit.window` samples by its own work sampling design (`Credit.law`, one stratum a `K` template, the
+  `k s_T` from it; today `Credit.window` samples by its own work sampling design (`Credit.samplingDesign`, one stratum a `K` template, the
   period's committed `k`). `creditDrawn` is the verifier's own sample (`Credit.windowDrawn`, which `windowLayout` holds
   the proofs to), and PouwCheck's `window-drawn` difftest holds it to the Python verifier's `credit._window_drawn`. Its
   reading of the model's uniform permutation as the sample is exact only when the sample's stream is the live coin's own
@@ -143,7 +143,7 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-! ## The sampling block's sample, at the tile stratum -/
 
-/-- **Stratum `s` of the sampling block**: the units its assignment `σ` puts in `s`, `FlockSoundness.Audit.Law.stratum`
+/-- **Stratum `s` of the sampling block**: the units its assignment `σ` puts in `s`, `FlockSoundness.Audit.SamplingDesign.stratum`
 restated (the sampling design is `security_proofs`', which `security_properties` may not require). -/
 def stratum {nB mB : ℕ} (σ : Fin nB → Fin mB) (s : Fin mB) : Finset (Fin nB) := Finset.univ.filter (σ · = s)
 
@@ -162,9 +162,9 @@ noncomputable def tileDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB �
 
 /-- **The tile coordinate at a uniform permutation is the stratum's sample**: it misses a set `B` of the sampling
 block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's size and
-`m_s` its proof blocks in `B`, the factor of `s_T` in `FlockSoundness.Audit.Law.stratified_escape`. Proved:
+`m_s` its proof blocks in `B`, the factor of `s_T` in `FlockSoundness.Audit.SamplingDesign.stratified_escape`. Proved:
 `SecurityProofs.tileStratumAcceptProb` (`Proofs.Pouw.PeriodJ10R.Stratum`). Its twin on the sampling design's side is
-`Law.stratified_proj_escape`: `Law.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
+`SamplingDesign.stratified_proj_escape`: `SamplingDesign.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
 `prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and
 `SecurityProofs.tileStratumAcceptProb_eq_proj` equates the two, so the period's tile coin is the block's sample at the tile
 stratum. -/
@@ -409,7 +409,7 @@ def SharedNoiseLucks {ι K C Ω : Type} [Fintype C] (Sc : Scheme K) (Cd : Declar
 `w_max = 1`, `p = 7/8`, `p0 = ½`, the first, `8(1 + Kρ)/(ρK)`. -/
 noncomputable def j10rRate (K : ℕ) (ρ : ℝ) : ℝ := 8 * (1 + K * ρ) / (ρ * K)
 
-/-- **(L)'s credit over the windows served H1's verdict credits, at J10-R's tile unit.** For every declared circuit
+/-- **(L)'s credit over the windows served H1's verdict credits, at J10-R's tile unit.** For every registered circuit
 `Cd` and scheme `Sc` run as a period of at most `n ≥ 1` windows, each window's `Credit.window` inputs any function of
 the period's coins (`CreditWindows`), over the sampling block's tile stratum `s_T` of `σ` (`N_p = |stratum σ s_T|`,
 `K_d = k s_T ≥ 1`): `CircuitCreditMonitoringPeriod`'s premises at the period's proofs with `Credit.window`'s verdict (`tileRun`,

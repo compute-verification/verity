@@ -1,4 +1,4 @@
-"""The auditor host's verifier service: PoUB's verifier
+"""The auditor device's verifier service: PoUB's verifier
 (`verity/protocols/accounting/poub/verifier/session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
 from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 
@@ -12,7 +12,10 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   which is this file's `gate` as root through one sudoers line, as on the challenger's host
   (`verity/protocols/compose/device/live_challenger/auditor.py`). A lane's own key is forced with the lane's name (`vy-verifier-gate LANE`,
   from `/etc/vy/verifier-gate-keys`, `vy-verifier-setup`), and only such a key starts, replays, stops a run or closes a
-  registration: the run records that name as `by`. A key forced with no name (`-`) reads only: `status`, `fetch`. A lane
+  registration: the run records that name as `by`. A key forced with no name (`-`) reads only: `status`, `fetch`. A party
+  verb (below) answers only a caller from a registered node: the wrapper passes the first word of `SSH_CONNECTION` as
+  `--from`, which sudo would otherwise drop, and the gate holds it to the `addresses` of `/etc/vy/verifier.json`'s
+  `peers` (`node_of`), so every answer of a party goes into a node. A lane
   names a run's parameters and gets a run; it never names code, a path, a host or a node's capacities. Infra's
   `vy-admin` runs the same gate (`sudo vy-verifier-gate VERB ...`, `by` vy-admin).
 - **What runs.** `/opt/vy-verifier/current` -> `/opt/vy-verifier/<commit>`, a root-owned `git archive` of that commit
@@ -63,8 +66,10 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/protocols/accounting/pous/verifier/wipe_party.py`, port 47611) and its block challenger
-  (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--minutes M]` the remote bandwidth audit's P2
-  party (`verity/protocols/accounting/poub/verifier/p2_party.py`, port 47612, with the registration the host names), as
+  (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--session SID] [--minutes M]` PoUB's
+  P2 party (`verity/protocols/accounting/poub/verifier/p2_parties.py`, port 47612, with the registration the host
+  names; with `--session SID`, the session id the auditor gives the memory challenger, it signs the session's close with
+  the block challenger's key and claims SID in its session log, `<root>/parties/pous/`, and keeps the session's case), as
   `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
   and the signed report on its stdout, as a lane's `--challenger-command` expects
   (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
@@ -75,8 +80,8 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   so a forced command that drops the caller's words can't hold a store the caller didn't name. `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
   `party_log wipe|pous|bw [LOG]`, to root on the host alone (`PARTY_LOG_REFUSED` over ssh, to every key), the sessions and each one's stdout as the host kept it (its signed t0 and
   t1). A lane
-  never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
-  count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
+  never names a path, an address or an egress count: a session signs no egress count and its party takes none (the
+  count is evidence the wipe's check takes beside the signed session). A session waits for no verifier unit to run, each party serves one session at a time, and the
   gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
 - **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` in the
   evidence store (a preserved tree of kind `verifier-run/v1`, by the pinned tree's store client) with the credential infra keeps in
@@ -97,7 +102,7 @@ tar (`receive`), refusing the hand-off by a member's name before writing its byt
 a second copy, a file the sums don't list, a listed file it lacks, and a file whose SHA-256 isn't the one the served node
 wrote. Then it runs
 `served_verdicts.sh compose` in the pinned tree on that copy (`compose_env`: the tree built at its pin, `COMPOSE_BUILT`, its
-prebuilt sampled proofs Lean `SAMPLED_EXE` where pin time built it, at this tree's commit and whatever tree served,
+prebuilt SPOT Lean `SAMPLED_EXE` where pin time built it, at this tree's commit and whatever tree served,
 `FOLLOW_ANY_TREE`, the pin line's `on` as the record's `tree_on`) within `COMPOSE_MINUTES`, and answers one JSON line: the
 pin, and its $OUT's files (the final record, the composite's public part and the verdict lines, each in its published
 form), never its serve-dir copy, whose private outputs stay in the removed scratch. One compose runs at a time, none while a
@@ -113,6 +118,7 @@ import fcntl
 import fnmatch
 import gzip
 import hashlib
+import ipaddress
 import json
 import os
 import posixpath
@@ -166,8 +172,8 @@ MODEL_PINS = Path("verity/protocols/accounting/pouw/verifier/lean/check/models.j
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
 PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.verifier.wipe_party", 47611),
            "challenger_party": ("pous", "verity.protocols.accounting.pous.device.challenger_party", 47610),
-           "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_party", 47612)}
-PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
+           "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_parties", 47612)}
+PARTY_FIXED = {"bw_party": ["--registration", "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json"]}
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
 which `bw_party --fixture` holds."""
 SESSION_ID = re.compile(r"[0-9a-f]{64}")
@@ -184,7 +190,7 @@ COMPOSE_BYTES = 64 << 30
 """The most a hand-off may carry, in bytes, over all its files."""
 COMPOSE_ANSWER_BYTES = 64 << 20
 """The most of its $OUT a compose answers with, in bytes; a larger file is named with its size, not sent."""
-SAMPLED_EXE = Path("verity/protocols/proofs/recursion/verifier/recursive/.lake/build/bin/vstar-recursive")
+SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock/verifier/lean/.lake/build/bin/vstar-recursive")
 """Sampled proofs' Lean verifier in the pinned tree, as its pin built it: the record runs it rather than building one."""
 SUM_LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
@@ -636,14 +642,16 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
     `<root>/parties/<name>` (made there, never leaving the host), listening on every address at its port. A lane names
     `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, `bw_party`'s
     `--pous-session SID` (the registration the block challenger's record of PoUS session SID gives, read on this host)
-    or `--fixture` (`PARTY_FIXED`'s), one of them, and nothing of `challenger_party`'s; never a path, an address or an egress count (the
-    session signs UNCOUNTED, which bounds nothing, until the network certifier's count reaches the host)."""
+    or `--fixture` (`PARTY_FIXED`'s), one of them, and `--session SID` (the session id its close is signed under, by the
+    block challenger's key and session log), and nothing of `challenger_party`'s; never a path, an address or an egress
+    count (the session signs none, and `wipe_party` takes none)."""
     name, module, port = PARTIES[verb]
     extra: list[str] = []
     args = list(rest)
     while args:
         flag = args.pop(0)
-        if verb == "bw_party" and flag in ("--pous-session", "--fixture") and extra:
+        held = {"--pous-record", "--registration"} & set(extra)
+        if verb == "bw_party" and flag in ("--pous-session", "--fixture") and held:
             raise Refused("bw_party holds one store: --pous-session SID or --fixture, once")
         if verb == "bw_party" and flag == "--pous-session" and args:
             sid = args.pop(0)
@@ -652,6 +660,12 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
             extra += ["--pous-record", str(host.parties / PARTIES["challenger_party"][0]), "--pous-session", sid]
         elif verb == "bw_party" and flag == "--fixture":
             extra += PARTY_FIXED[verb]
+        elif verb == "bw_party" and flag == "--session" and args and "--session" not in extra:
+            sid = args.pop(0)
+            if not SESSION_ID.fullmatch(sid):
+                raise Refused(f"bw_party --session takes the session id the auditor gives the memory challenger, 64 "
+                              f"lowercase hex digits; got {sid!r}")
+            extra += ["--challenger", str(host.parties / PARTIES["challenger_party"][0]), "--session", sid]
         elif verb == "wipe_party" and flag == "--native" and "--streamer" not in extra:
             extra += ["--streamer", "build"]
         elif verb == "wipe_party" and flag in PARTY_INTS and args and flag not in extra:
@@ -661,11 +675,12 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
                 raise Refused(f"{verb} {flag} takes an integer in [{lo}, {hi}], got {v!r}")
             extra += [flag, v]
         else:
-            takes = {"wipe_party": "[--reads K] [--native] [--threads T]", "bw_party": "--pous-session SID | --fixture"}
+            takes = {"wipe_party": "[--reads K] [--native] [--threads T]",
+                     "bw_party": "(--pous-session SID | --fixture) [--session SID]"}
             raise Refused(f"{verb} takes {takes.get(verb, 'no flags')}; got {flag!r}")
     if "--threads" in extra and "--streamer" not in extra:
         raise Refused("wipe_party --threads sets the native streamer's threads: give --native too")
-    if verb == "bw_party" and not extra:
+    if verb == "bw_party" and not {"--pous-record", "--registration"} & set(extra):
         raise Refused("bw_party names no store: --pous-session SID holds the store the block challenger kept for PoUS "
                       "session SID, --fixture the fixture store's (a key whose forced command drops the caller's words "
                       "gives neither)")
@@ -697,6 +712,24 @@ def exec_party(argv: list[str], sink: BinaryIO, log: Path, minutes: int) -> int:
         if ran_out.is_set():
             out.write(json.dumps({"killed": f"the session's {minutes} min ran out"}).encode() + b"\n")
     return p.returncode
+
+
+CALLER_REFUSED = ("a party serves a registered node only: its ssh caller's address must be one of a peer's `addresses` in "
+                  "/etc/vy/verifier.json, so that every answer of a party goes into the node")
+
+
+def node_of(address: str | None, settings: dict) -> str:
+    """The registered node (`verifier.json`'s `peers`) one of whose `addresses` is `address`, a party's ssh caller's;
+    refused (`CALLER_REFUSED`) when none is, or when the forced command passed no address."""
+    try:
+        ip = ipaddress.ip_address(address or "")
+    except ValueError:
+        raise Refused(CALLER_REFUSED) from None
+    ip = getattr(ip, "ipv4_mapped", None) or ip
+    for name, peer in settings.get("peers", {}).items():
+        if any(ip == ipaddress.ip_address(a) for a in peer.get("addresses", [])):
+            return name
+    raise Refused(CALLER_REFUSED)
 
 
 def gate_party(verb: str, rest: list[str], host: Host, *, by: str, now: datetime, busy: Callable[[], list[str]],
@@ -928,7 +961,7 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
 
 def compose_env(host: Host, scratch: Path, pinned: str, on: str | None, tree: Path = TREE) -> dict[str, str]:
     """`served_verdicts.sh compose`'s environment on the copy in `scratch`: the pinned tree built at its pin (its venv,
-    and its sampled proofs Lean where pin time built it), the record at this tree's commit (and ``on``, the branch infra
+    and its SPOT Lean where pin time built it), the record at this tree's commit (and ``on``, the branch infra
     pinned it from) whatever tree served, every scratch path under `scratch`."""
     env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(host.root), "LANG": "C.UTF-8",
            "D": str(scratch / "serve"), "OUT": str(scratch / "out"), "SERVE_ROOT": str(scratch / "root"),
@@ -1000,7 +1033,7 @@ USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC 
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
          "[--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
          "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] "
-         "| bw_party (--pous-session SID | --fixture) [--minutes M] (the request line on stdin) "
+         "| bw_party (--pous-session SID | --fixture) [--session SID] [--minutes M] (the request line on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
          "| party_log wipe|pous|bw [LOG] (root on the host only)")
 PARTY_LOG_REFUSED = ("party_log is read on the host only (sudo vy-verifier-gate party_log ...), never over ssh: a party's "
@@ -1009,8 +1042,9 @@ PARTY_LOG_REFUSED = ("party_log is read on the host only (sudo vy-verifier-gate 
 
 def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **hooks: Any) -> int:
     """The gate's verbs, their answer on `sink` (stdout); the exit code. A refusal is exit 3 with {"refused": why}.
-    Over ssh (`--ssh WORDS --key NAME`, the forced command's) `by` is NAME, the lane the key was registered for, and a
-    key registered with no lane (`-`) reads only; run by root (vy-admin's sudo) `by` is the sudoer."""
+    Over ssh (`--ssh WORDS --key NAME [--from ADDRESS]`, the forced command's) `by` is NAME, the lane the key was
+    registered for, and a key registered with no lane (`-`) reads only; ADDRESS is the ssh caller's, which a party verb
+    holds to a registered node's (`node_of`). Run by root (vy-admin's sudo) `by` is the sudoer."""
     sink = sink if sink is not None else sys.stdout.buffer
 
     def answer(rc: int, doc: dict) -> int:
@@ -1019,13 +1053,14 @@ def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **h
 
     by = hooks.get("by") or os.environ.get("SUDO_USER") or "root"
     admin = argv[:1] != ["--ssh"]
+    caller = None
     if not admin:
-        if len(argv) == 4 and argv[2] == "--key":
-            key = argv[3]
+        if len(argv) in (4, 6) and argv[2] == "--key" and argv[4:5] in ([], ["--from"]):
+            key, caller = argv[3], (argv[5] if len(argv) == 6 else None)
         elif len(argv) == 2:
             key = READ_ONLY
         else:
-            return answer(3, {"refused": "the gate's forced command is --ssh WORDS --key NAME"})
+            return answer(3, {"refused": "the gate's forced command is --ssh WORDS --key NAME [--from ADDRESS]"})
         if key != READ_ONLY and (not NAME.fullmatch(key) or key in HOST_ACCOUNTS):
             return answer(3, {"refused": f"gate key name {key!r}"})
         by = None if key == READ_ONLY else key
@@ -1075,6 +1110,8 @@ def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **h
             doc = gate_close(rest, host, by=by, busy=busy, close=hooks.get("close") or as_auditor_close, now=now,
                              own=own)
         elif verb in PARTIES:
+            if not admin:
+                node_of(caller, host.settings())
             return gate_party(verb, rest, host, by=by, now=now, busy=busy, own=own, run=hooks.get("party") or exec_party,
                               sink=sink)
         elif verb == "party_log":

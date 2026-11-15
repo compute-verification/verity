@@ -3,8 +3,8 @@ Python mirror, through the difftest harness's `ProtocolPort`.
 
 The mirror and the generator are `period_case.py`'s: `reference` (its `answer`) checks a period in the core interface's
 answer format, `build` makes a period with one change (`EXPECT`, each aimed at one path of the check, or malformed
-parameters, commitments, evidence and cases) in the clock form or, for a change named `rows-…`, the rows form, and
-`case` a small period of either form aimed at a verdict or at a decoding failure (`KINDS`). This module re-exports
+parameters, commitments, evidence and cases), and `case` a small period aimed at a verdict or at a decoding failure
+(`KINDS`). This module re-exports
 what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it samples onsite's certifier cases from
 `build` and answers them with `reference` (`verity/protocols/compose/verifier/lean/tests/reference.py`)."""
 
@@ -23,11 +23,11 @@ from hypothesis import strategies as st
 
 import period_case as PC
 import verity_difftest as D
-from period_case import (ACCEPT, EXPECT, FORMS, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most,
-                         build, clog2, public, reference, verdict_of)
+from period_case import (ACCEPT, EXPECT, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most, build,
+                         clog2, public, reference, verdict_of)
+from verity.protocols.accounting.certifier.verifier import scan_ok
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import Certificate
-from verity.protocols.accounting.certifier.verifier.schedule import SyncSet
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
@@ -39,10 +39,10 @@ TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
 
 
-#: The changes sampled more often than the rest: each form's accepted periods, its honest one and the rows form's tied
-#: audit sampled in part, and its undecided answers, the only undecided ones.
-WEIGHTS = {"honest": 4, "rows-honest": 4, "rows-tied-partial": 2, "rows-tied-sampled": 2, "answer-undecided": 2,
-           "audit-undecided": 2, "rows-answer-undecided": 1, "rows-audit-undecided": 1}
+#: The changes sampled more often than the rest: the accepted periods, the honest one and the tied audit sampled in
+#: part, and the undecided answers, the only undecided ones.
+WEIGHTS = {"rows-honest": 4, "rows-tied-partial": 2, "rows-tied-sampled": 2, "rows-answer-undecided": 2,
+           "rows-audit-undecided": 2}
 
 
 @st.composite
@@ -65,10 +65,15 @@ server = D.server_fixture(PORT)
 
 @pytest.mark.slow
 def test_the_period_check_agrees_with_its_mirror(server):
-    """Lean and the mirror agree on every case, and each change of either form reaches its verdict at least once."""
+    """Lean and the mirror agree on every case, and each change reaches its verdict at least once: a change the run's
+    draw leaves out is replayed once, at seed 0, so adding a change doesn't fail another for its draws."""
     SEEN.clear()
     examples = 1200
     stats = D.run(PORT, examples=examples, server=server)
+    for tag in (tag for tag in EXPECT if not any(SEEN[(tag, v)] for v in (ACCEPT, REJECT, UNDECIDED))):
+        case = build(tag, 0)
+        TAGS[D.canonical(case)] = tag
+        D.replay(PORT, case, server)
     print("\n".join(f"{tag:22} {verdict:10} {k}" for (tag, verdict), k in sorted(SEEN.items())))
     missed = [tag for tag, verdict in EXPECT.items() if not SEEN[(tag, verdict)]]
     assert not missed, (missed, SEEN)
@@ -76,22 +81,10 @@ def test_the_period_check_agrees_with_its_mirror(server):
 
 
 def test_each_verdict_is_the_mirrors(server):
-    """A short run over an honest period, an undecided link-window and a forged certificate, in each form: all three
-    verdicts."""
-    port = dataclasses.replace(PORT, inputs=cases(("honest", "answer-undecided", "cert-forged", "rows-honest",
-                                                   "rows-answer-undecided", "rows-cert-forged")))
+    """A short run over an honest period, an undecided link-window and a forged certificate: all three verdicts."""
+    port = dataclasses.replace(PORT, inputs=cases(("rows-honest", "rows-answer-undecided", "rows-cert-forged")))
     stats = D.run(port, examples=40, server=server)
     assert all(stats.counts.get(v) for v in (ACCEPT, REJECT, UNDECIDED)), stats
-
-
-def test_a_mirror_that_skips_the_ingress_certificate_is_caught(server, monkeypatch):
-    """A mirror that reads only the egress certificate accepts a period whose ingress certificate names another link,
-    and Lean rejects it."""
-    real = PC._certifies
-    monkeypatch.setattr(PC, "_certifies", lambda p, d, w, c: d is INGRESS or real(p, d, w, c))
-    with pytest.raises(D.Mismatch) as x:
-        D.run(dataclasses.replace(PORT, inputs=cases(("cert-link",))), examples=20, server=server)
-    assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
 
 
 def refused_by_lean_alone(case: dict, server, why: str) -> None:
@@ -100,6 +93,17 @@ def refused_by_lean_alone(case: dict, server, why: str) -> None:
         D.replay(PORT, case, server)
     assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT), x.value
     assert why in json.loads(x.value.lean[1])["reason"], x.value
+
+
+def test_a_mirror_that_skips_the_ingress_certificate_is_caught(server, monkeypatch):
+    """A mirror that reads only the egress records' certificates accepts a period whose requests' certificate is forged,
+    and Lean refuses it at the certificates."""
+    real = PC._certifies_on
+    monkeypatch.setattr(PC, "_certifies_on", lambda p, link, d, w, c: d is INGRESS or real(p, link, d, w, c))
+    skipped = [c for n in range(12) if reference(c := build("rows-cert-forged", n, small=True))["verdict"] == ACCEPT]
+    assert skipped
+    for case in skipped:
+        refused_by_lean_alone(case, server, "certificates")
 
 
 def test_a_mirror_that_skips_the_rows_check_is_caught(server, monkeypatch):
@@ -123,6 +127,12 @@ ROWS_REFUSALS = {
     "rows-prog-untied": ("is no compute audit's output",) * 2,
     "rows-prog-unwired": ("is no compute audit's slot entries",) * 2,
     "rows-state-untied": (PC.UNSTATED,) * 2,
+    "rows-answer-tied-unheld": (PC.TIE_UNHELD,) * 2,
+    "rows-state-misindexed": (PC.MISREAD,) * 2,
+    "rows-state-unpinned": (PC.UNPINNED,) * 2,
+    "rows-circuit-swapped": (PC.UNHELD,) * 2,
+    "rows-ok-unheld": (PC.UNOK,) * 2,
+    "rows-one-tick": (f"{PC.UNCOMPUTED}: T = 1: a scan has at least two ticks",) * 2,
 }
 
 
@@ -132,8 +142,11 @@ def test_the_rows_form_refuses_what_it_must(server):
     another window's rows, rows under a schedule whose digest isn't the bound one (one field off, or another response
     cap or none), scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
-    no `SlotEntry_v1` or `SelectEntry_v1` template's entries, and a scan whose state is not its wired audit's
-    `SCAN_STATE`: Lean and the mirror each refuse every one at that check."""
+    no `SlotEntry_v1` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
+    `SCAN_STATE`, a scan whose answer names a tied Input that is no lane's `prog<j>`, a tied audit registered under
+    another Program than the class circuit, a scan whose ok bits are not at the schedule's constants, and one under a
+    schedule of one tick, which has no constants: Lean and the mirror each
+    refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -143,13 +156,13 @@ def test_the_rows_form_refuses_what_it_must(server):
 
 
 def certificates(case: dict) -> list[Certificate]:
-    """A case's certificates, its clock certificates and its row registrations' among them."""
+    """A case's certificates, its row registrations' among them."""
     windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
     regs = [{"key_id": (c := doc["certificate"])["key"], "link": doc["link"], "direction": doc["direction"],
              "window": doc["window"], "digest": c["digest"], "signature": c["signature"]}
             for x in windows for doc in x.get("registrations", [])]
     return [PC._certificate(c, "a certificate") for c in [
-        *(c for x in windows for c in [*x["certificates"], *([x["clock"]] if "clock" in x else [])]), *regs]]
+        *(c for x in windows for c in x["certificates"]), *regs]]
 
 
 def signers(case: dict) -> set[str]:
@@ -158,8 +171,8 @@ def signers(case: dict) -> set[str]:
 
 
 def by_window(case: dict) -> list[tuple[int, list[Certificate]]]:
-    """A case's link-windows by the period's numbers, each with its certificates, its clock certificate and its row
-    registrations' among them."""
+    """A case's execution phases by the period's numbers, each with its certificates, its row registrations' among
+    them."""
     windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
     return [(case["params"]["first"] + i, certificates({"evidence": D.canonical({"windows": [x]}).encode().hex()}))
             for i, x in enumerate(windows)]
@@ -176,8 +189,8 @@ def listed_ids(case: dict) -> list[str]:
 
 
 def weaken(monkeypatch, pick) -> None:
-    """A mirror that holds a certificate or a row registration for the period's link-window `w` to the entry
-    `pick(p, w, key_id)` gives for the key identifier it names, where the mirror picks by the link-window alone
+    """A mirror that holds a certificate or a row registration for the period's execution phase `w` to the entry
+    `pick(p, w, key_id)` gives for the key identifier it names, where the mirror picks by the execution phase alone
     (`PC._entry_at`)."""
     def certifies_on(p, link, d, w, c):
         e = pick(p, w, c.key_id)
@@ -197,16 +210,16 @@ def weaken(monkeypatch, pick) -> None:
     monkeypatch.setattr(PC, "_rows_check", rows_check)
 
 
-def test_a_link_window_picks_its_entry_and_is_signed_at_its_sessions_number(server, monkeypatch):
+def test_an_execution_phase_picks_its_entry_and_is_signed_at_its_sessions_number(server, monkeypatch):
     """The parameters list the certifier's entries, each a key, its session and the start of its stretch, and the
-    period's link-window alone picks the entry its certificates and row registrations are held to: that entry's key,
-    its session, and that session's number for the link-window, the period's less the entry's start. A period of
-    either form whose every signature is the second of two entries' (`second-key`), and one whose link-windows two
-    entries' stretches hold, each link-window signed by its own entry at its own number (`two-stretches`), are
+    period's execution phase alone picks the entry its certificates and row registrations are held to: that entry's key,
+    its session, and that session's number for the execution phase, the period's less the entry's start. A period
+    whose every signature is the second of two entries' (`second-key`), and one whose execution phases two
+    entries' stretches hold, each execution phase signed by its own entry at its own number (`two-stretches`), are
     accepted by Lean with the mirror's public; and a mirror that reads only the first listed entry, or holds a
     certificate to the period's number, refuses what Lean accepts."""
     cases = {(m, n): build(m, n, small=n % 2 == 0)
-             for m in ("second-key", "rows-second-key", "two-stretches", "rows-two-stretches") for n in range(4)}
+             for m in ("rows-second-key", "rows-two-stretches") for n in range(4)}
     for (m, n), case in cases.items():
         ids = listed_ids(case)
         assert len(ids) == 2 and signers(case) == (set(ids) if "two-stretches" in m else {ids[1]}), (m, n)
@@ -228,7 +241,7 @@ def test_a_link_window_picks_its_entry_and_is_signed_at_its_sessions_number(serv
     for skipped in (lambda p, w: p.entries[0] if p.entries[0].start <= w else None,
                     lambda p, w: (e := real(p, w)) and dataclasses.replace(e, start=0)):
         monkeypatch.setattr(PC, "_entry_at", skipped)
-        for m in ("second-key", "rows-second-key"):
+        for m in ("rows-second-key",):
             with pytest.raises(D.Mismatch) as x:
                 D.replay(PORT, cases[m, 0], server)
             assert (x.value.lean[0], x.value.python[0]) == (ACCEPT, REJECT), x.value
@@ -236,17 +249,16 @@ def test_a_link_window_picks_its_entry_and_is_signed_at_its_sessions_number(serv
 
 #: The changes in which a listed entry signs outside its stretch: two listed entries in turn over a period the second's
 #: stretch holds, and one certificate or one row registration under the first.
-OUTSIDE_STRETCH = ("two-signers", "rows-two-signers", "cert-outside-stretch", "rows-cert-outside-stretch",
-                   "rows-reg-outside-stretch")
+OUTSIDE_STRETCH = ("rows-two-signers", "rows-cert-outside-stretch", "rows-reg-outside-stretch")
 
 
 def test_a_mirror_that_looks_the_entry_up_by_the_certificates_id_is_caught(server, monkeypatch):
-    """The link-window picks the entry, and nothing a certificate names does. A period of two listed entries whose
-    link-windows the second's stretch holds, in which the first entry signs too, in its own session at its own number
-    for the link-window (every other signature in `two-signers`, one certificate or one row registration in
+    """The execution phase picks the entry, and nothing a certificate names does. A period of two listed entries whose
+    execution phases the second's stretch holds, in which the first entry signs too, in its own session at its own
+    number for the execution phase (every other signature in `two-signers`, one certificate or one row registration in
     `…-outside-stretch`), is refused by Lean and by the mirror and by name (`PC.OUTSIDE`), though every signature
-    verifies under a listed key in that key's session, and every certificate at that session's number; and a mirror
-    that looks the entry up by the key identifier the certificate names accepts what Lean refuses by that name."""
+    verifies under a listed key in that key's session, and every certificate at that session's number; and a mirror that
+    looks the entry up by the key identifier the certificate names accepts what Lean refuses by that name."""
     cases = {(m, n): build(m, n, small=n % 2 == 0) for m in OUTSIDE_STRETCH for n in range(4)}
     for (m, n), case in cases.items():
         p = PC.params(case["params"])
@@ -267,23 +279,22 @@ def test_a_mirror_that_looks_the_entry_up_by_the_certificates_id_is_caught(serve
         verdict, got = D.replay(PORT, case, server)
         assert verdict == REJECT and PC.OUTSIDE in json.loads(got)["reason"], (m, n, got)
     weaken(monkeypatch, lambda p, w, key_id: next((e for e in p.entries if e.key.key_id == key_id), None))
-    for m in OUTSIDE_STRETCH[:4]:
+    for m in OUTSIDE_STRETCH[:2]:
         for n in range(3):
             refused_by_lean_alone(cases[m, n], server, PC.OUTSIDE)
 
 
 #: The changes that put a certificate or a row registration under the picked entry's key in the other entry's session.
-OTHER_SESSION = ("cert-other-session", "rows-cert-other-session", "rows-reg-other-session")
+OTHER_SESSION = ("rows-cert-other-session", "rows-reg-other-session")
 #: The changes that put a certificate or a row registration under the picked entry at the period's number for the
-#: link-window, not its session's.
-PERIOD_NUMBER = ("cert-period-number", "rows-cert-period-number", "rows-reg-period-number")
+#: execution phase, not its session's.
+PERIOD_NUMBER = ("rows-cert-period-number", "rows-reg-period-number")
 
 
 def test_a_signature_in_another_entrys_session_or_at_the_periods_number_is_refused(server, monkeypatch):
     """An entry's session and numbers are its own: a period of two listed entries, the second's stretch holding its
-    link-windows, in which one certificate (the clock form's egress, ingress or clock certificate, one of the rows
-    form's three records') or one row registration is the second entry's key's in the first entry's session, or names
-    the period's number for its link-window where the session's belongs, is refused by Lean and by the mirror, as no
+    execution phases, in which one certificate (one of the three records') or one row registration is the second entry's key's in the first entry's session, or names
+    the period's number for its execution phase where the session's belongs, is refused by Lean and by the mirror, as no
     unlisted signer's and no listed key's outside its stretch; and a mirror that takes the picked key's certificate in
     any listed session, or at either number, accepts what Lean refuses."""
     for m in (*OTHER_SESSION, *PERIOD_NUMBER):
@@ -318,7 +329,7 @@ def test_a_signature_in_another_entrys_session_or_at_the_periods_number_is_refus
         return (e is not None and c.direction is d and c.link == link and c.window in (w, w - e.start)
                 and c.verify(e.key, e.session))
 
-    for weaker, ms in ((in_any_session, OTHER_SESSION[:2]), (at_either_number, PERIOD_NUMBER[:2])):
+    for weaker, ms in ((in_any_session, OTHER_SESSION[:1]), (at_either_number, PERIOD_NUMBER[:1])):
         monkeypatch.setattr(PC, "_certifies_on", weaker)
         for m in ms:
             for n in range(3):
@@ -326,16 +337,14 @@ def test_a_signature_in_another_entrys_session_or_at_the_periods_number_is_refus
 
 
 #: The changes that put a certificate or a row registration under a key the parameters don't list.
-UNLISTED = ("cert-unlisted", "rows-cert-unlisted", "rows-reg-unlisted")
+UNLISTED = ("rows-cert-unlisted", "rows-reg-unlisted")
 #: The changes to a signature's key or session: a key that isn't listed or another key under the picked entry's
 #: identifier, and another session.
-KEY_AND_SESSION = ("cert-key", "cert-session", "clock-session", "rows-cert-key", "rows-cert-session", "rows-reg-key",
-                   "rows-reg-session")
+KEY_AND_SESSION = ("rows-cert-key", "rows-cert-session", "rows-reg-key", "rows-reg-session")
 
 
 def test_a_signer_that_is_not_listed_is_refused_by_name(server, monkeypatch):
-    """A certificate (the clock form's egress, ingress or clock certificate, one of the rows form's three records') or
-    a row registration whose signer is not one of the listed keys is refused, by Lean and by the mirror and by name
+    """A certificate (one of the three records') or a row registration whose signer is not one of the listed keys is refused, by Lean and by the mirror and by name
     (`PC.UNLISTED`), though its signature verifies under its own key; the changes to a signature's key and session
     still refuse, none of a listed signer's naming it; and a mirror that takes the unlisted key as the picked entry's
     accepts what Lean refuses by that name."""
@@ -368,28 +377,144 @@ def test_a_signer_that_is_not_listed_is_refused_by_name(server, monkeypatch):
 #: The entries the parameters must not list (`PC.bad_entries`), each with what Lean's reason and the mirror's say.
 ENTRIES_REFUSALS = {
     "empty": PC.NO_KEY, "out-of-order": PC.OUT_OF_ORDER, "overlap": PC.OVERLAP, "twice": PC.TWICE,
-    "other-session": PC.ONE_ID, "one-id": PC.ONE_ID, "before": PC.BEFORE, "no-entry": PC.NO_ENTRY,
+    "one-id": PC.TWO_KEYS, "before": PC.BEFORE, "no-entry": PC.NO_ENTRY,
     "key": PC.KEY_NOT_KEYS, "key-too": PC.KEY_NOT_KEYS, "session": PC.SESSION_IN_ENTRY,
     "sessions": PC.SESSIONS_IN_ENTRY}
 
 
 def test_entries_the_parameters_must_not_list_are_refused_by_name(server):
     """Parameters that list no entry; entries out of order, one starting before the one listed before it; two entries
-    with one start, whose stretches would overlap; one key identifier and one session twice, whose link-window n would
-    be two of the period's; two entries with one key identifier, a key in two sessions or another key under its
-    identifier; a period that starts before the first entry's stretch; an entry that is the key alone; or that still
-    name `"key"`, `"session"` or `"sessions"`: each is refused at the parameters by Lean and by the mirror and by
-    name. So is a list or an entry that doesn't read."""
-    for m in ("honest", "rows-honest", "second-key"):
+    with one start, whose stretches would overlap; one key identifier and one session twice, whose execution phase n
+    would be two of the period's; another key under a listed key's identifier; a period that starts before the first entry's stretch; an entry that
+    is the key alone; or that still name `"key"`, `"session"` or `"sessions"`: each is refused at the parameters by Lean
+    and by the mirror and by name. So is a list or an entry that doesn't read."""
+    for m in ("rows-honest", "rows-second-key"):
         case = build(m, 0, small=True)
         bad = PC.bad_entries(case["params"])
-        assert set(ENTRIES_REFUSALS) < set(bad)
+        assert set(ENTRIES_REFUSALS) < set(bad), (m, sorted(bad))
         for name, params in bad.items():
             why = ENTRIES_REFUSALS.get(name, "")
             out = reference(case | {"params": params})
             assert out["verdict"] == REJECT and why in out["reason"], (m, name, out)
             verdict, got = D.replay(PORT, case | {"params": params}, server)
             assert verdict == REJECT and why in json.loads(got)["reason"], (m, name, got)
+
+
+def shown_starts(case: dict) -> list[PC.CertifiedStart]:
+    """The signed starts a case's evidence shows, in its order."""
+    return [PC._start(x, "a start") for x in json.loads(bytes.fromhex(case["evidence"])).get("starts", [])]
+
+
+def with_starts(case: dict, starts: list | None) -> dict:
+    """`case` with its evidence's `"starts"` replaced, or left out (`None`)."""
+    e = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "starts"}
+    return case | {"evidence": D.canonical(e if starts is None else e | {"starts": starts}).encode().hex()}
+
+
+def test_a_key_listed_in_two_sessions_is_held_to_its_signed_starts(server, monkeypatch):
+    """The period reads each listed entry's session's signed start, so a key may be listed in two sessions. A
+    period that two stretches of one key hold between them, each signature in its own stretch's session at that
+    session's number, the second entry starting as many execution phases after the first as its session's signed
+    base is after the first's on the key's life (`restart`), is accepted by Lean with the mirror's public. The same
+    list with the second session's signed base another, every signature still verifying, is refused by Lean and by the
+    mirror and by name (`PC.NOT_SIGNED`); and a mirror that reads the starts' certificates and not their bases accepts
+    what Lean refuses by that name. A key's first listed entry is held to no start: moving every base of a key by one
+    amount changes no verdict."""
+    for n in range(6):
+        for m, want in (("rows-restart", ACCEPT), ("rows-start-not-signed", REJECT)):
+            case = build(m, n, small=n % 2 == 0)
+            p = PC.params(case["params"])
+            first, second = p.entries
+            starts = shown_starts(case)
+            assert first.key == second.key and first.session != second.session, (m, n)
+            assert {PC._entry_at(p, w) for w, _ in by_window(case)} == {first, second}, (m, n)
+            for w, certs in by_window(case):
+                e = PC._entry_at(p, w)
+                assert all(c.window == w - e.start and c.verify(e.key, e.session) for c in certs), (m, n, w)
+            assert [x.refusal(e.key, e.session, p.link, p.schedule.digest) for e, x in zip(p.entries, starts)] == \
+                [None, None], (m, n)
+            L = p.schedule.window * p.schedule.bucket_ms
+            held = (second.start - first.start) * L == starts[1].base_ms - starts[0].base_ms
+            assert held == (want == ACCEPT), (m, n)
+            out = reference(case)
+            verdict, got = D.replay(PORT, case, server)
+            assert out["verdict"] == verdict == want, (m, n, out, got)
+            if want == ACCEPT:
+                assert json.loads(got)["public"] == out["public"], (m, n, got)
+            else:
+                assert PC.NOT_SIGNED in out["reason"] and PC.NOT_SIGNED in json.loads(got)["reason"], (m, n, out, got)
+    monkeypatch.setattr(PC, "_held_to", lambda L, a, xa, e, x: True)
+    for n in range(3):
+        refused_by_lean_alone(build("rows-start-not-signed", n, small=True), server, PC.NOT_SIGNED)
+
+
+def test_a_keys_later_session_is_the_one_after_its_entry_listed_before_it(server, monkeypatch):
+    """A key listed in two sessions has the second's ordinal the first's next (`restart`, accepted above): its device
+    state gives each session it starts the next ordinal, so a session of the key between the two, which the list
+    leaves out, leaves a gap. The same list with the second session's ordinal another, its start still certified and
+    its base where the first puts it (`start-skipped`), is refused by Lean and by the mirror, by name (`PC.SKIPPED`);
+    and a mirror that reads the ordinals' signatures and not their order accepts what Lean refuses by that name."""
+    for n in range(6):
+        case = build("rows-start-skipped", n, small=n % 2 == 0)
+        p = PC.params(case["params"])
+        first, second = p.entries
+        starts = shown_starts(case)
+        assert first.key == second.key and first.session != second.session, n
+        assert [x.refusal(e.key, e.session, p.link, p.schedule.digest) for e, x in zip(p.entries, starts)] == \
+            [None, None], n
+        assert PC._held_to(p.schedule.window * p.schedule.bucket_ms, first, starts[0], second, starts[1]), n
+        assert starts[1].ordinal != starts[0].ordinal + 1, n
+        out = reference(case)
+        verdict, got = D.replay(PORT, case, server)
+        assert out["verdict"] == verdict == REJECT, (n, out, got)
+        assert PC.SKIPPED in out["reason"] and PC.SKIPPED in json.loads(got)["reason"], (n, out, got)
+    monkeypatch.setattr(PC, "_follows", lambda xb, x: True)
+    for n in range(3):
+        refused_by_lean_alone(build("rows-start-skipped", n, small=True), server, PC.SKIPPED)
+
+
+def test_a_start_its_session_did_not_certify_is_refused_by_name(server, monkeypatch):
+    """A period shows one signed start for each listed entry, each its session's certified start as the
+    network certifier's own verifier reads it. A shown start that is no egress certificate of window 0 under the link's
+    start name, that names a key other than its entry's, that names another schedule's digest than the period's, whose
+    base, ordinal and schedule do not open the digest it signs, or whose signature does not verify under its entry's key
+    in its entry's session is refused by Lean and by the mirror, by name (`PC.UNCERTIFIED`) and by the
+    same code. So is evidence that shows a start too few or too many, or none (`PC.STARTS_COUNT`): parameters that
+    list a key again in a session whose start the evidence does not show read, and the period is refused there. A
+    mirror that reads no start accepts what Lean refuses by `PC.UNCERTIFIED`."""
+    codes = Counter()
+    for n in range(48):
+        case = build("rows-start-uncertified", n, small=n % 2 == 0)
+        p = PC.params(case["params"])
+        whys = [x.refusal(e.key, e.session, p.link, p.schedule.digest) for e, x in zip(p.entries, shown_starts(case))]
+        (why,) = [w for w in whys if w is not None]
+        codes[why] += 1
+        out = reference(case)
+        verdict, got = D.replay(PORT, case, server)
+        named_by = f"{PC.UNCERTIFIED} ({why})"
+        assert out["verdict"] == verdict == REJECT, (n, out, got)
+        assert named_by in out["reason"] and named_by in json.loads(got)["reason"], (n, why, out, got)
+    assert set(codes) == set(PC.UNCERTIFIED_BY), codes
+    for m, why in (("rows-start-count", PC.STARTS_COUNT),):
+        for n in range(6):
+            case = build(m, n, small=n % 2 == 0)
+            out = reference(case)
+            verdict, got = D.replay(PORT, case, server)
+            assert out["verdict"] == verdict == REJECT, (m, n, out, got)
+            assert why in out["reason"] and why in json.loads(got)["reason"], (m, n, out, got)
+    case = build("rows-honest", 0, small=True)
+    e = case["params"]["keys"][-1]
+    again = e | {"session": e["session"][:-1] + ("1" if e["session"][-1] == "0" else "0"), "start": e["start"] + 1}
+    restarted = case | {"params": case["params"] | {"keys": [*case["params"]["keys"], again]}}
+    assert len(PC.params(restarted["params"]).entries) == len(shown_starts(restarted)) + 1
+    for bad in (restarted, with_starts(case, None)):
+        out = reference(bad)
+        verdict, got = D.replay(PORT, bad, server)
+        assert out["verdict"] == verdict == REJECT, (out, got)
+        assert PC.STARTS_COUNT in out["reason"] and PC.STARTS_COUNT in json.loads(got)["reason"], (out, got)
+    monkeypatch.setattr(PC, "_start_check", lambda p, starts, i, e, x: None)
+    for n in range(3):
+        refused_by_lean_alone(build("rows-start-uncertified", n, small=True), server, PC.UNCERTIFIED)
 
 
 def test_the_rows_form_accepts_a_wired_state_tied_period(server):
@@ -437,8 +562,10 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
     so the rows form refuses, in Lean and in the mirror and by name, each way a link-window's state tie can fail
     (`PC.UNSTATES`): a `SCAN_STATE` that skips or alters one of the scan's transitions (the scan's state entry, or the
     audit's, at another root or domain), no state entry on either side or the scan's under another name, the state of
-    an audit the scan's `prog` isn't wired to, a root that is no string, and a second state entry at another root on
-    either side; and a mirror that skips the tie accepts what Lean refuses."""
+    an audit the scan's `prog` isn't wired to, a root that is no string, a second state entry at another root on
+    either side, and the audit's held in its window's `activations.values` alone; and a mirror that skips the tie
+    accepts what Lean refuses, on the audit's side (the scan's own state entry broken also leaves its row 0's opening
+    under no root it states, which the mirror then refuses)."""
     unstate = PC.UNSTATES
     for u in unstate:
         monkeypatch.setattr(PC, "UNSTATES", (u,))
@@ -447,10 +574,274 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
             assert PC.UNSTATED in reference(case)["reason"], (u, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and PC.UNSTATED in json.loads(out)["reason"], (u, n, out)
-    monkeypatch.setattr(PC, "UNSTATES", unstate)
+    monkeypatch.setattr(PC, "UNSTATES", ("audit", "audit-root", "audit-extra", "audit-activations"))
     monkeypatch.setattr(PC, "_state_tied", lambda p, audits, reg: True)
     for n in range(2):
         refused_by_lean_alone(build("rows-state-untied", n, small=True), server, PC.UNSTATED)
+
+
+def tied_cases(m: str, kind: str, monkeypatch) -> list[tuple[int, dict, dict]]:
+    """The cases with the change `m` at the one list `kind` of its lists (`PC.TIED_HELD`, `PC.TIED_UNHELD`), over seeds
+    that reach scans of one lane and of two: each seed, its case and its aimed execution phase's scan's schedule."""
+    monkeypatch.setattr(PC, "TIED_HELD" if m == "rows-answer-tied-held" else "TIED_UNHELD", (kind,))
+    out = []
+    for n in range(8):
+        case = build(m, n, small=n % 2 == 0)
+        sched = case["params"]["schedule"]
+        windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
+        want = PC.tied_list(kind, sched["lanes"])
+        assert any(PC.TIED_KEY in x["answer"]["public"] and x["answer"]["public"][PC.TIED_KEY] == want
+                   for x in windows), (kind, n)
+        out.append((n, case, sched))
+    assert {sched["lanes"] for _, _, sched in out} == {1, 2}, (kind, [sched["lanes"] for _, _, sched in out])
+    return out
+
+
+def test_a_scan_whose_answer_names_a_tie_the_check_does_not_wire_is_refused(server, monkeypatch):
+    """One-stage's registration check lets several proof blocks read a run Input only where its verifier names it tied,
+    and its answer's public outputs then name it (`PC.TIED_KEY`): the acceptance rests on a later check that ties the
+    Input's rows to the registrations that computed them. The period check holds one such tie a lane, its `prog<j>`'s
+    (`wired`), so the rows form refuses, in Lean and in the mirror and by name, a list that names anything else
+    (`PC.TIED_UNHELD`), at scans of one lane and of two: beside the lanes' names the name past the last lane's
+    (`prog<lanes>`), another Input's, before or after them, or a lane's registration entry in place of its parameter;
+    another Input's alone; a lane's name without its lane (`prog`, which at one lane is no `prog0`); and what is no
+    list of names (a string, a nested list, a number, null). Each refusal names the entry that is no lane's and the
+    lanes' names, Lean's as the mirror's and then the fix; and a mirror that skips the check accepts what Lean
+    refuses."""
+    kinds = PC.TIED_UNHELD
+    for u in kinds:
+        for n, case, sched in tied_cases("rows-answer-tied-unheld", u, monkeypatch):
+            L, held = sched["lanes"], PC.prog_params(sched["lanes"])
+            bad = {"next": f'names "prog{L}"', "state": 'names "state"', "entry": 'names "scan/prog0"',
+                   "first": 'names "state"', "alone": 'names "state"', "bare": 'names "prog"',
+                   "string": 'is "prog0", no list of names',
+                   "nested": "names " + json.dumps(held, separators=(",", ":")),
+                   "number": "names 0", "null": "is null, no list of names"}[u]
+            mine = reference(case)["reason"]
+            assert PC.TIE_UNHELD in mine and f"{PC.TIED_KEY} {bad}" in mine, (u, n, mine)
+            assert mine.endswith(f"the scan's lanes' {', '.join(held)}"), (u, n, mine)
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and json.loads(out)["reason"].startswith(mine + ". "), (u, n, out, mine)
+    monkeypatch.setattr(PC, "TIED_UNHELD", kinds)
+    monkeypatch.setattr(PC, "tied_input_wired", lambda s, a: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-answer-tied-unheld", n, small=True), server, PC.TIE_UNHELD)
+
+
+def test_a_scan_whose_answer_names_only_its_lanes_tied_is_accepted(server, monkeypatch):
+    """The rows form accepts a scan's answer that names only lanes' `prog<j>` tied, whatever the list's shape
+    (`PC.TIED_HELD`), at scans of one lane and of two: every lane's in the lanes' order, a proper subset of them, the
+    lanes' in another order, one twice, and an empty list, which rests on nothing. Every name there is one the check
+    wires (`wired` holds each lane's), so Lean accepts each with the mirror's public; at one lane `["prog0"]` is the
+    whole list."""
+    for u in PC.TIED_HELD:
+        for n, case, sched in tied_cases("rows-answer-tied-held", u, monkeypatch):
+            out = reference(case)
+            assert out["verdict"] == ACCEPT, (u, n, out)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (u, n, got)
+    assert PC.tied_list("all", 1) == ["prog0"] and PC.tied_list("subset", 2) == ["prog0"]
+    assert PC.tied_list("order", 2) == ["prog1", "prog0"] and PC.tied_list("twice", 2) == ["prog0", "prog1", "prog0"]
+
+
+def test_an_honest_scans_answer_names_its_lanes_tied_or_nothing(server):
+    """Over honest rows periods, each execution phase's scan's answer names its lanes' `prog<j>` tied, every lane's in
+    the lanes' order and nothing else, exactly where several of its units read one slot entry (the schedule's `every`
+    ≥ 2), as one-stage's registration check publishes them, and has no such key where each unit reads its own
+    (`every` = 1): Lean accepts each with the mirror's public, some of either kind and of one lane and of two."""
+    seen = Counter()
+    for n in range(28):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        sched = case["params"]["schedule"]
+        shared = sched["every"] > 1
+        windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
+        want = list(PC.prog_params(sched["lanes"])) if shared else None
+        assert all(x["answer"]["public"].get(PC.TIED_KEY) == want for x in windows), n
+        out = reference(case)
+        assert out["verdict"] == ACCEPT, (n, out)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+        seen[shared, sched["lanes"]] += 1
+    assert all(seen[shared, lanes] for shared in (True, False) for lanes in (1, 2)), seen
+
+
+def test_a_tied_name_is_a_lanes_or_refused():
+    """The mirror's read of an answer's tied Inputs (`PC.tied_input_wired`, `PC.tied_unheld`), at one lane and at
+    two: no public outputs, none under the key, and each list of lanes' names pass (`PC.TIED_HELD`); each list with
+    another name, and each value that is no list of names, is refused (`PC.TIED_UNHELD`), and the refusal names its
+    first entry that is no lane's. At one lane `["prog0"]` passes and `["prog"]` is refused."""
+    for lanes in (1, 2):
+        s = types.SimpleNamespace(lanes=lanes)
+        assert all(PC.tied_input_wired(s, {"public": pub}) for pub in (None, {}, {"bound": 0}, [], "x"))
+        for kind in PC.TIED_HELD:
+            assert PC.tied_input_wired(s, {"public": {PC.TIED_KEY: PC.tied_list(kind, lanes)}}), (lanes, kind)
+        for kind in PC.TIED_UNHELD:
+            a = {"public": {PC.TIED_KEY: PC.tied_list(kind, lanes)}}
+            assert not PC.tied_input_wired(s, a), (lanes, kind)
+            assert PC.tied_unheld(s, a).endswith(f"the scan's lanes' {', '.join(PC.prog_params(lanes))}"), (lanes, kind)
+    one = types.SimpleNamespace(lanes=1)
+    assert PC.tied_input_wired(one, {"public": {PC.TIED_KEY: ["prog0"]}})
+    assert not PC.tied_input_wired(one, {"public": {PC.TIED_KEY: ["prog"]}})
+    assert PC.tied_unheld(one, {"public": {PC.TIED_KEY: ["prog"]}}) == 'names "prog", none of the scan\'s lanes\' prog0'
+    assert PC.tied_unheld(one, {"public": {PC.TIED_KEY: ["prog0", "prog1"]}}) == (
+        'names "prog1", none of the scan\'s lanes\' prog0')
+    two = types.SimpleNamespace(lanes=2)
+    assert PC.tied_unheld(two, {"public": {PC.TIED_KEY: "prog0"}}) == (
+        'is "prog0", no list of names of the scan\'s lanes\' prog0, prog1')
+
+
+def test_a_tied_audit_whose_state_is_in_its_windows_activations_alone_is_refused(server, monkeypatch):
+    """A window circuit's registration commits the scan's state rows its slots read as a per-window value, its window's
+    `activations.values` entry of `SCAN_STATE`, with no `roots` or `registered` entry of it. The check reads an audit's
+    state entry in those two places alone (`stateEntries`), so a period that is honest but for that place, its tied
+    audit's entry there under its own name and at the scan's state's root and domain, is refused at the state tie, in
+    Lean and in the mirror and by name."""
+    monkeypatch.setattr(PC, "UNSTATES", ("audit-activations",))
+    for n in range(3):
+        case = build("rows-state-untied", n, small=n % 2 == 0)
+        c = PC.commitment(bytes.fromhex(case["commitment"]))
+        held = [(i, a["window"]["activations"]["values"]) for i, a in enumerate(c.audits)
+                if "activations" in a["window"]]
+        assert len(held) == 1 and list(held[0][1]) == [PC.SCAN_STATE], (n, held)
+        i, e = held[0][0], held[0][1][PC.SCAN_STATE]
+        assert e["value"] == PC.SCAN_STATE and not PC._states(c.audits[i]), (n, e)
+        assert any(i in PC._tied_audits(c.audits, reg) and PC._states(reg) and all(
+            (s["root"], s["domain"]) == (e["root"], e["domain"]) for s in PC._states(reg)) for reg in c.windows), n
+        out = reference(case)
+        assert out["verdict"] == REJECT and PC.UNSTATED in out["reason"], (n, out)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == REJECT and PC.UNSTATED in json.loads(got)["reason"], (n, got)
+
+
+def test_a_tied_audit_that_runs_another_circuit_is_refused(server, monkeypatch):
+    """The rows form holds each execution phase's tied audits to the class circuit, the parameters' `circuit`: a period
+    whose every tied audit is registered under it passes, and Lean accepts it with the mirror's public; each way the
+    hold can fail (`PC.UNHOLDS`: the aimed phase's tied audit registered under another Program, or the parameters'
+    `circuit` another digest) Lean and the mirror refuse by name; and a mirror that skips the hold accepts what Lean
+    refuses."""
+    for n in range(3):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        c = PC.commitment(bytes.fromhex(case["commitment"]))
+        tied = [i for reg in c.windows for i in PC._tied_audits(c.audits, reg)]
+        assert tied and all(c.audits[i]["program"] == case["params"]["circuit"] for i in tied), (n, c.audits)
+        out = reference(case)
+        assert out["verdict"] == ACCEPT, (n, out)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+    unhold = PC.UNHOLDS
+    for u in unhold:
+        monkeypatch.setattr(PC, "UNHOLDS", (u,))
+        for n in range(3):
+            case = build("rows-circuit-swapped", n, small=n % 2 == 0)
+            assert PC.UNHELD in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNHELD in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "UNHOLDS", unhold)
+    monkeypatch.setattr(PC, "_held", lambda p, audits, reg: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-circuit-swapped", n, small=True), server, PC.UNHELD)
+
+
+def test_a_scan_whose_units_read_their_state_off_the_chain_is_refused(server, monkeypatch):
+    """Ingress unit t reads `sin` at state leaf t and registers its `o1` at leaf t + 1, as the scan's registration
+    states (`PC.state_reads`), so the rows form refuses, in Lean and in the mirror and by name, each way those reads can
+    leave the chain while the state stays tied by root and domain (`PC.MISREADS`): a `sin` at leaf t + 1, an `o1` at
+    leaf t, a run over other units, the two runs swapped, the reads or a run missing or renamed, and a field no
+    natural; and a mirror that skips the reads accepts what Lean refuses."""
+    misreads = PC.MISREADS
+    for u in misreads:
+        monkeypatch.setattr(PC, "MISREADS", (u,))
+        for n in range(3):
+            case = build("rows-state-misindexed", n, small=n % 2 == 0)
+            assert PC.MISREAD in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.MISREAD in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "MISREADS", misreads)
+    monkeypatch.setattr(PC, "_state_read", lambda p, reg: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-state-misindexed", n, small=True), server, PC.MISREAD)
+
+
+def test_a_scan_whose_row_0_is_not_the_empty_state_is_refused(server, monkeypatch):
+    """Row 0 of the scan's state, which no unit computes and the Programs anchored at bucket 0 read, must open to the
+    empty state, so the rows form refuses, in Lean and in the mirror and by name, each way the opening can fail
+    (`PC.UNPINS`): a state tree whose row 0 the prover chose, opened as committed, no opening, another salt or path,
+    another word count, leaf 1's opening, and a field of another type; and a mirror that skips the opening accepts
+    what Lean refuses."""
+    unpins = PC.UNPINS
+    for u in unpins:
+        monkeypatch.setattr(PC, "UNPINS", (u,))
+        for n in range(3):
+            case = build("rows-state-unpinned", n, small=n % 2 == 0)
+            assert PC.UNPINNED in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNPINNED in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "UNPINS", unpins)
+    monkeypatch.setattr(PC, "_state_empty", lambda p, reg: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-state-unpinned", n, small=True), server, PC.UNPINNED)
+
+
+def test_a_scan_whose_ok_bits_are_not_the_schedules_constants_is_refused(server, monkeypatch):
+    """A scan proof block's public word is its ok bit, and a member's ok rows are committed under public salts, so the
+    rows form computes each member's root from the schedule's T and refuses, in Lean and in the mirror and by name,
+    each way an execution phase's scan's registration can name another (`PC.UNOKS`): a member's `<member>/o0` at another
+    root (a tree with a row that is not the ok row, or under other salts), domain or leaf count, with no entry or
+    under another port, named a second time at another root, beside a port ending `/o0` that is no member's, every
+    member at another schedule's constants, a root or domain that is no string, the entries by value under
+    `registered`, and the members of a group of two execution phases' scan (`PC.PAIR`), which the rows form, one
+    execution phase a registration, does not read; and a mirror that skips the comparison accepts what Lean
+    refuses."""
+    unok = PC.UNOKS
+    for u in unok:
+        monkeypatch.setattr(PC, "UNOKS", (u,))
+        for n in range(3):
+            case = build("rows-ok-unheld", n, small=n % 2 == 0)
+            assert PC.UNOK in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNOK in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "UNOKS", unok)
+    monkeypatch.setattr(scan_ok, "held", lambda consts, reg: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-ok-unheld", n, small=True), server, PC.UNOK)
+
+
+def ok_entries(case: dict) -> list[dict[str, tuple]]:
+    """Each execution phase's scan's registration's ok entries, by port: (domain, root, leaves)."""
+    return [{e["port"]: (e.get("domain"), e.get("root"), e.get("leaves")) for e in reg.get("roots", [])
+             if scan_ok.ok_port(e.get("port"))}
+            for reg in json.loads(bytes.fromhex(case["commitment"]))["windows"]]
+
+
+def test_two_members_at_one_root_are_each_held_to_it(server, monkeypatch):
+    """At T = 3 the scan's `ingress-0` and `last` are one proof block of the ingress template each, so their ok bits
+    are at one frame domain and one root under two ports (`rows-ok-equal`): Lean accepts the period with the mirror's
+    public, each port held to its own constant. At that schedule each way of naming another (`PC.UNOKS`) is refused
+    by both, by name, a registration that names one of the two ports and not the other among them: a root another
+    member is at stands for no member but its own."""
+    twins = ("ingress-0/o0", "last/o0")
+    for n in range(4):
+        case = build("rows-ok-equal", n, small=n % 2 == 0)
+        assert case["params"]["schedule"]["window"] == PC.EQUAL_T
+        for at in ok_entries(case):
+            assert sorted(at) == ["egress-0/o0", "first/o0", *twins]
+            assert at[twins[0]] == at[twins[1]] and len(set(at.values())) == 3, at
+        out = reference(case)
+        assert out["verdict"] == ACCEPT, (n, out)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+    real, unok, one_twin = PC._small_schedule, PC.UNOKS, 0
+    monkeypatch.setattr(PC, "_small_schedule", lambda r, small, capped=False, T=None: real(r, small, capped, PC.EQUAL_T))
+    for u in unok:
+        monkeypatch.setattr(PC, "UNOKS", (u,))
+        for n in range(8 if u == "missing" else 2):
+            case = build("rows-ok-unheld", n, small=n % 2 == 0)
+            assert case["params"]["schedule"]["window"] == PC.EQUAL_T
+            one_twin += any(len(set(twins) & set(at)) == 1 and len(at) == 3 for at in ok_entries(case))
+            assert PC.UNOK in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNOK in json.loads(out)["reason"], (u, n, out)
+    assert one_twin, "no case named one of the two ports at one root and not the other"
 
 
 def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
@@ -664,7 +1055,7 @@ def test_each_lanes_prog_is_its_own_chunk():
     entries port, of 2 leaves, of one pinned template of 4 members; not with the lanes swapped, a chunk of other
     leaves, lane 1's tree missing, or another template's chunk 1; and the scan's lane-1 tree alone ties the audit."""
     s = types.SimpleNamespace(schedule=types.SimpleNamespace(window=4, every=2, lanes=2),
-                              audits=[PC.Audit(0, 0, "", 4, 0, (("SlotEntry_v1{KO=1}", 4, PC.SLOT_ENTRY_PINS[0]),))])
+                              audits=[PC.Audit(0, 0, "", 4, (("SlotEntry_v1{KO=1}", 4, PC.SLOT_ENTRY_PINS[0]),))])
 
     def reg(*ports) -> dict:
         return {"roots": [{"port": q, "leaves": n, "root": root, "domain": "d"} for q, root, n in ports]}
@@ -739,29 +1130,9 @@ def test_a_scan_in_the_checker_form_is_refused_by_name(server):
         assert verdict == REJECT and "(the checker form)" in json.loads(out)["reason"], (n, out)
 
 
-def test_a_wide_unit_is_charged_its_committed_bits(server):
-    """The bits a compute audit's incorrect proof blocks are charged are its bound times the most bits one of its
-    Program's units commits, read off the Program, not a proof block's 16-bit public output: over honest clock-form
-    periods whose audits' units commit 8 to 320 bits, each audit is charged `b · bits`, some audit of wide units more
-    than `16 · b`, and Lean's public is the mirror's."""
-    wide = 0
-    for n in range(12):
-        case = build("honest", n)
-        p, out = PC.params(case["params"]), reference(case)
-        assert out["verdict"] == ACCEPT, (n, out)
-        for audit, t in zip(p.audits, out["public"]["audits"]):
-            assert (t["units"], t["faulty_bits"]) == (audit.units, t["wrong_units"] * audit.bits), (n, t, audit)
-            wide += t["faulty_bits"] > 16 * t["wrong_units"]
-        verdict, got = D.replay(PORT, case, server)
-        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
-    assert wide
-
-
-#: The refusals that hold a compute audit to its Program, in either form, each with what Lean's reason and the
-#: mirror's say.
-AUDIT_REFUSALS = {m: why for f in ("", "rows-") for m, why in (
-    (f"{f}audit-program", ("registration: not its Program",) * 2),
-    (f"{f}audit-units", ("not its Program's",) * 2))}
+#: The refusals that hold a compute audit to its Program, each with what Lean's reason and the mirror's say.
+AUDIT_REFUSALS = {"rows-audit-program": ("registration: not its Program",) * 2,
+                  "rows-audit-units": ("not its Program's",) * 2}
 
 
 def test_an_audit_is_held_to_its_program(server):
@@ -774,18 +1145,17 @@ def test_an_audit_is_held_to_its_program(server):
             assert mirror in reference(case)["reason"], (m, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and lean in json.loads(out)["reason"], (m, n, out)
-    for form in ("honest", "rows-honest"):
-        case = build(form, 0, small=True)
-        for bad in PC.bad_audits(case["params"]):
-            broken = case | {"params": bad}
-            assert reference(broken)["reason"].startswith("params:"), (form, reference(broken))
-            verdict, out = D.replay(PORT, broken, server)
-            assert verdict == REJECT and json.loads(out)["reason"].startswith("params:"), (form, bad, out)
+    case = build("rows-honest", 0, small=True)
+    for bad in PC.bad_audits(case["params"]):
+        broken = case | {"params": bad}
+        assert reference(broken)["reason"].startswith("params:"), reference(broken)
+        verdict, out = D.replay(PORT, broken, server)
+        assert verdict == REJECT and json.loads(out)["reason"].startswith("params:"), (bad, out)
 
 
-#: The changes whose answer's profile samples more than its level holds: a compute audit's in each form, the tied
-#: audit's of the aimed scan, and a scan's.
-OVERSAMPLED = ("audit-oversampled", "rows-audit-oversampled", "rows-tied-oversampled", "rows-answer-oversampled")
+#: The changes whose answer's profile samples more than its level holds: a compute audit's, the tied audit's of the
+#: aimed scan, and a scan's.
+OVERSAMPLED = ("rows-audit-oversampled", "rows-tied-oversampled", "rows-answer-oversampled")
 #: The change whose answer's profile samples more of a stratum than the stratum holds, in a level whose total holds: the
 #: aimed scan's tied audit's.
 STRATUM_OVERSAMPLED = "rows-tied-stratum-oversampled"
@@ -817,7 +1187,7 @@ def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
     to the level's though no stratum samples more than it holds. The charge of a tied audit sampled in part would miss
     all three (the last where the strata hold more than the level), the last two as an audit sampled whole with a
     stratum in part. Lean and the mirror each refuse the one answer that carries it, where they read its sample: by the
-    level a compute audit's in either form, tied to a scan or not, and a scan's, sampled `subset:k` or stratified; by
+    level a compute audit's, tied to a scan or not, and a scan's, sampled `subset:k` or stratified; by
     the stratum and by the strata's sizes, above the level's and below, the aimed scan's tied audit's. They refuse it
     before they read the public's bound (with the bound gone too the reason is still the sample's), and for that alone:
     with the level sampled whole instead, in one stratum where the strata's sizes were not the level's, Lean accepts
@@ -825,7 +1195,8 @@ def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
     seen = Counter()
     for m, why in [*((m, PC.OVERSAMPLED) for m in OVERSAMPLED), (STRATUM_OVERSAMPLED, PC.STRATUM_OVERSAMPLED),
                    (STRATA_SIZES, PC.STRATA_SIZES)]:
-        for n in range(4):
+        # seed 5 of `rows-audit-oversampled` aims an audit no scan ties
+        for n in (*range(4), *((5,) if m == "rows-audit-oversampled" else ())):
             case = build(m, n, small=n % 2 == 0)
             c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
             answers = [("audit", x) for x in e["audits"]] + [("scan", w["answer"]) for w in e["windows"]]
@@ -857,10 +1228,64 @@ def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
                                  "above", "below")), seen
 
 
+def test_the_rows_forms_cells_are_the_schedules(server):
+    """The rows form's `cells` are the schedule's own (`Schedule.rowsCells`, `WardenParams.rows_cells`): `egress_cells`
+    for each of the `lanes · m · window` connections the network certifier can carry, so an accepted period's schedules
+    and cells terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for cells that miss its connections; no
+    cells, one connection short or over, and a cell count below `egress_cells` are refused as parameters by Lean and the
+    mirror alike; and a schedule of 4 lanes over a link's 32-bucket execution phase, 5 egress cells a connection,
+    charges 384 bits for each over one such phase (Lean's `#guard`)."""
+    for n in range(4):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        p, out = PC.params(case["params"]), reference(case)
+        s = p.schedule
+        assert list(p.cells) == s.rows_cells(p.windows) == [s.egress_cells] * (s.lanes * p.windows * s.window)
+        term = s.lanes * p.windows * s.window * clog2(s.egress_cells + 1)
+        assert out["verdict"] == ACCEPT and term > 0, (n, out)
+        assert (out["public"]["schedules"], out["public"]["cells"]) == (term, term), (n, out["public"])
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+        for bad in PC.bad_cells(case["params"]):
+            broken = case | {"params": bad}
+            assert reference(broken)["reason"].startswith("params: cells:"), (n, reference(broken))
+            verdict, got = D.replay(PORT, broken, server)
+            assert verdict == REJECT and json.loads(got)["reason"].startswith("params: cells:"), (n, bad, got)
+    four = WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32,
+                        ingress_cells=47, ingress_buckets=12, egress_cells=5, every=16)
+    assert len(four.rows_cells(1)) == 128 and sum(clog2(c + 1) for c in four.rows_cells(1)) == 384
+
+
+def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
+    """The rows form refuses a period whose `lanes · windows · window` connections, the k-th at ordinal k + 1, aren't
+    distinct u32s, or whose cell's B bytes aren't under 2^32 (`rowsWf`): its frames could not name every connection or
+    every payload's length, so its record would not read back (`NetTiming.RowsFormat.Wf`). As parameters it is refused
+    before its cells, which a period that long could never list, by Lean and the mirror alike, and the honest period's
+    schedule passes `rowsWf` up to the last whole period under 2^32. The check refuses it too (`rowsWfCheck`), which the
+    mirror's check shows at an empty period whose B is 2^32, with no entries and so no starts to show: no parameters
+    `params` reads reach it."""
+    fragment = "rows format: a frame's ordinal and payload length are u32s"
+    for n in range(2):
+        case = build("rows-honest", n, small=True)
+        p = PC.params(case["params"])
+        per = p.schedule.lanes * p.schedule.window
+        over = -(-PC.U32 // per)
+        assert PC.rows_wf(p.schedule, p.windows) and PC.rows_wf(p.schedule, (PC.U32 - 1) // per), (n, per)
+        assert not PC.rows_wf(p.schedule, over), (n, per)
+        broken = case | {"params": case["params"] | {"windows": over}}
+        assert reference(broken)["reason"].startswith(f"params: {fragment}"), (n, reference(broken))
+        verdict, out = D.replay(PORT, broken, server)
+        assert verdict == REJECT and json.loads(out)["reason"].startswith(f"params: {fragment}"), (n, out)
+        empty = dataclasses.replace(p, audits=(), windows=0, entries=())
+        for b, refused in ((PC.U32 - 1, False), (PC.U32, True)):
+            q = dataclasses.replace(empty, schedule=dataclasses.replace(p.schedule, cell_bytes=b))
+            got = PC.check(q, PC.Commitment([], [], b""), ([], [], []))
+            assert (got[0] == REJECT and got[1].startswith(fragment)) == refused, (n, b, got)
+
+
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
     """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
-    `check_registration` reads back under the entry its link-window picks: that entry's key, its session, the
-    session's number for the link-window, and the period's schedule."""
+    `check_registration` reads back under the entry its execution phase picks: that entry's key, its session, the
+    session's number for the execution phase, and the period's schedule."""
     for m, n in ((m, n) for m in ("rows-honest", "rows-two-stretches") for n in range(4)):
         case = build(m, n, small=n % 2 == 0)
         p = PC.params(case["params"])
@@ -882,18 +1307,13 @@ def test_a_small_period_reaches_its_verdict(server):
     D.run(dataclasses.replace(PORT, inputs=st.sampled_from(small)), examples=2 * len(small), server=server)
 
 
-@pytest.mark.parametrize("form", FORMS)
-def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
-    """`case(kind, seed, form)` reaches its kind's verdict for each kind, the ones that fail to decode refused where
-    they fail (a digest only once the commitment decodes); an accepted period's eps is its units' deltas summed (the
-    clock form's audits', the rows form's scans' and its tied audits' sampled in part), and its profile names no sync; in
-    the clock form its evidence holds
-    each clock certificate alone, and in the rows form each link-window's three records' certificates and two row
-    registrations, with one scan a link-window, all at one δ, and a schedules term equal to the cells';
-    `cases(seed, form)` is one of each with its answer; and Lean gives every one of them the mirror's answer."""
-    kinds = PC.kinds(form)
-    assert kinds == KINDS, kinds
-    drawn = {(k, s): PC.case(k, s, form) for k in kinds for s in range(6)}
+def test_each_kind_of_case_is_answered_as_lean_answers(server):
+    """`case(kind, seed)` reaches its kind's verdict for each kind, the ones that fail to decode refused where they fail
+    (a digest only once the commitment decodes); an accepted period's eps is its scans' deltas summed with its tied
+    audits' sampled in part, and its profile names no sync; its evidence holds each link-window's three records'
+    certificates and two row registrations, with one scan a link-window, all at one δ, and a schedules term equal to
+    the cells'; `cases(seed)` is one of each with its answer; and Lean gives every one of them the mirror's answer."""
+    drawn = {(k, s): PC.case(k, s) for k in KINDS for s in range(6)}
     answers = {ks: PC.answer(c) for ks, c in drawn.items()}
     assert {ks: a["verdict"] for ks, a in answers.items()} == {(k, s): verdict_of(k) for k, s in drawn}
     assert all(a["reason"].startswith(k.removeprefix("broken-") + ":")
@@ -901,43 +1321,31 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
                for (k, _), a in answers.items() if k.startswith("broken-"))
     accepted = [a["public"] for (k, _), a in answers.items() if k == ACCEPT]
     assert all(isinstance(x["K"], int) and x["eps"] == str(sum(
-        (Fraction(t["delta"]) for t in x.get("scans", x["audits"])), Fraction(0)) + sum(
-        (Fraction(x["audits"][i]["delta"]) for i in (charged(drawn[ks], x) if "scans" in x else ())), Fraction(0)))
+        (Fraction(t["delta"]) for t in x["scans"]), Fraction(0)) + sum(
+        (Fraction(x["audits"][i]["delta"]) for i in charged(drawn[ks], x)), Fraction(0)))
         for ks, a in answers.items() if ks[0] == ACCEPT for x in [a["public"]])
     assert all(sorted(a["profile"]) == ["link", "windows"] for (k, _), a in answers.items() if k == ACCEPT)
     shown = [w for (k, _), c in drawn.items() if k == ACCEPT
              for w in json.loads(bytes.fromhex(c["evidence"]))["windows"]]
-    if form == "clock":
-        assert all(sorted(w["clock"]) == PC.CERTIFICATE_KEYS for w in shown)
-        assert all("scans" not in x for x in accepted)
-    else:
-        assert all(sorted(w) == PC.ROWS_WINDOW_KEYS and len(w["certificates"]) == 3 and len(w["registrations"]) == 2
-                   for w in shown)
-        assert all(x["schedules"] == x["cells"] and len(x["scans"]) == x["windows"]
-                   and len({t["delta"] for t in x["scans"]}) == 1 for x in accepted)
-    assert PC.cases(3, form) == {k: (drawn[k, 3], answers[k, 3]) for k in kinds}
+    assert all(sorted(w) == PC.ROWS_WINDOW_KEYS and len(w["certificates"]) == 3 and len(w["registrations"]) == 2
+               for w in shown)
+    assert all(x["schedules"] == x["cells"] and len(x["scans"]) == x["windows"]
+               and len({t["delta"] for t in x["scans"]}) == 1 for x in accepted)
+    assert PC.cases(3) == {k: (drawn[k, 3], answers[k, 3]) for k in KINDS}
     D.run(dataclasses.replace(PORT, inputs=st.sampled_from(list(drawn.values()))), examples=2 * len(drawn),
           server=server)
 
 
-def test_the_bound_counts_what_it_says():
-    """K's terms on a period worked by hand: 10 units, each committing 16 bits, sampled subset:3 at δ = 1/10 with at
-    most 4 incorrect, 7 cells on one connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3
-    steps; the same audit with units committing 40 bits, its incorrect proof blocks' bits 4 · 40; and eps over audits at
-    δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
-    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 0), 0, 2, "a", (), "",
-               SyncSet((0,), (Fraction(1), Fraction(2))), 3)
-    out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
-    assert (out["schedules"], out["cells"], out["audits"][0]["faulty_sets"], out["audits"][0]["faulty_bits"],
-            out["audits"][0]["jitter"], out["K"]) == (3, 3, 9, 64, 3, 3 + 3 + 9 + 64 + 3)
-    wide = public(dataclasses.replace(p, audits=(PC.Audit(0, 3, "", 10, 40),)), [Facts(10, 3, Fraction(1, 10), 4)])
-    assert (wide["audits"][0]["faulty_bits"], wide["K"]) == (160, 3 + 3 + 9 + 160 + 3)
-    assert [clog2(x) for x in range(6)] == [0, 0, 1, 2, 2, 3]
-    assert [at_most(10, 0), at_most(10, 1), at_most(10, 2), at_most(4, 9), at_most(0, 3)] == [1, 11, 56, 16, 1]
-    assert out["eps"] == "1/10"
-    three = dataclasses.replace(p, audits=(PC.Audit(0, 0, "", 1, 16),) * 3)
-    assert public(three, [Facts(1, 1, Fraction(1, d), 0) for d in (10, 15, 6)])["eps"] == "1/3"
-    assert public(dataclasses.replace(p, audits=()), [])["eps"] == "0"
+def test_the_clock_form_is_refused(server):
+    """Parameters in the clock form, a Σ_sync (`sync_set`) where the rows form has its schedule and scan, are refused as
+    parameters before anything else of them is read, by Lean and by the mirror."""
+    case = build("rows-honest", 0, small=True)
+    params = {k: v for k, v in case["params"].items() if k not in ("schedule", "scan")}
+    clock = case | {"params": params | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}}}
+    out = reference(clock)
+    assert out["verdict"] == REJECT and out["reason"] == f"params: {PC.CLOCK_FORM}", out
+    verdict, got = D.replay(PORT, clock, server)
+    assert verdict == REJECT and json.loads(got)["reason"] == f"params: {PC.CLOCK_FORM}", got
 
 
 def test_the_rows_forms_bound_counts_what_it_says():
@@ -949,17 +1357,19 @@ def test_the_rows_forms_bound_counts_what_it_says():
     8 · 1,136 = 9,088 bits; at w63k4's (8 slot entries of 112 bits) with its tied audit sampled in part with at most 2
     incorrect, K those and its E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's beside
     them."""
-    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", (), "", None, 1, WardenParams(),
+    p = Params((PC.Audit(0, 3, "", 10),), (7, 2), 0, 2, "a", (), "", 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])
     (scan,) = out["scans"]
     assert at_most(20, 3) == 1351 and clog2(1351) == 11
+    assert [clog2(x) for x in range(6)] == [0, 0, 1, 2, 2, 3]
+    assert [at_most(10, 0), at_most(10, 1), at_most(10, 2), at_most(4, 9), at_most(0, 3)] == [1, 11, 56, 16, 1]
     assert (out["schedules"], out["cells"], scan["free"], scan["faulty_sets"], scan["faulty_bits"], scan["jitter"],
             scan["faulty_entries"], out["K"]) == (5, 5, 1120, 11, 3 * 512, 10, 0, 5 + 5 + (1120 + 11 + 3 * 512 + 10))
     assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
     drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
     assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0, 0)])["K"] == 0
-    w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8, 1136),), cells=(), jitter=1,
+    w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8),), cells=(), jitter=1,
                               scan=PC.Scan(32, 0, 300, 512))
     tied = public(w63, [Facts(8, 8, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 8 * 1136, 0)])
     assert (tied["scans"][0]["free"], tied["K"]) == (9088, 9088)

@@ -7,10 +7,10 @@
 //!   flock-ir-block prove    --verifier ADDR --instances FILE --netlist FILE [--tables DIR] [--gpu] [--runs N] [--warm W]
 //!   flock-ir-block selftest --instances FILE --netlist FILE [--tables DIR] [--gpu] [--only CASE]
 //!
-//! Before anything, the instance file is checked against the netlist (`ir_block::cut_map`, `check_cuts`): a cut template's
-//! cut words must be exactly what the native tail computes from the units' words, evaluated here (`ir_tail`, the MUFU
-//! tables under `--tables`, pinned by sha256); a file with a cut word the netlist and tail do not account for is refused.
-//! The instance file is the verifier's own staging of the input set (`verity_flock.ir_lower.stage`), never a producer's.
+//! Before anything, the instance file is checked against the circuit description (`ir_block::cut_map`, `check_cuts`): a cut
+//! template's cut words must be exactly what the native tail computes from the units' words, evaluated here (`ir_tail`, the MUFU
+//! tables under `--tables`, pinned by sha256); a file with a cut word the circuit description and tail do not account for is
+//! refused. The instance file is the verifier's own staging of the input set (`verity_flock.ir_lower.stage`), never a producer's.
 //!
 //! Session: `Hello(Σ)`, `Commit(root_f = Σ, root_B, no publics)`, two verifier points (the regions' claims),
 //! `Link(y = 0, 0)`, then Flock's coins.
@@ -487,8 +487,8 @@ fn run_case(ctx: &Ctx, name: &str, gpu: bool) -> Value {
            "both_reps_required": want.2, "why": v["why"], "prover_stopped": v["prover_stopped"], "reps_ok": reps, "prove_s": v["prove_s"]})
 }
 
-/// Every unit's recorded outputs are the netlist's outputs on its recorded inputs, and every region's claimed value is the
-/// honest witness's multilinear extension at the claim point.
+/// Every unit's recorded outputs are the circuit description's outputs on its recorded inputs, and every region's claimed value
+/// is the honest witness's multilinear extension at the claim point.
 fn precheck(st: &IrStmt, inst: &IrInstances) -> Value {
     use rayon::prelude::*;
     let bad = (0..inst.units).into_par_iter().filter(|&g| st.net.outputs(inst.input(g)) != inst.output(g)).count();

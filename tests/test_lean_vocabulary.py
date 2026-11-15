@@ -169,10 +169,10 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     f"{SITE_PY}::Link": (f"{SITE_LEAN}::Core.Site.Link", "site-difftest", "the Site's port reads the Python's links"),
     f"{SITE_PY}::Registration": (f"{SITE_LEAN}::Core.Site.Registration", "site-difftest",
                                  "the Site's port checks the Python's logs, refusal for refusal"),
-    f"{RA_PY}::Opening": (f"{RA}Window.lean::RemoteAudit.Opening", "remote-audit-difftest", "the remote audit's port"),
-    f"{RA_PY}::Registration": (f"{RA}Window.lean::RemoteAudit.Registration", "remote-audit-difftest", "the remote audit's port"),
-    f"{RA_PY}::Registry": (f"{RA}Registry.lean::RemoteAudit.Registry", "remote-audit-difftest", "the remote audit's port"),
-    f"{RA_PY}::Verdict": (f"{RA}Window.lean::RemoteAudit.Verdict", "remote-audit-difftest", "the remote audit's port"),
+    f"{RA_PY}::Opening": (f"{RA}Window.lean::RemoteAudit.Opening", "remote-audit-difftest", "PoUB's port"),
+    f"{RA_PY}::Registration": (f"{RA}Window.lean::RemoteAudit.Registration", "remote-audit-difftest", "PoUB's port"),
+    f"{RA_PY}::Registry": (f"{RA}Registry.lean::RemoteAudit.Registry", "remote-audit-difftest", "PoUB's port"),
+    f"{RA_PY}::Verdict": (f"{RA}Window.lean::RemoteAudit.Verdict", "remote-audit-difftest", "PoUB's port"),
     f"{MC_PY}device/memory_challenger.py::CoinTree": (f"{MC}Records.lean::MemoryChallenger.CoinTree", "memory-challenger-difftest",
                                                "the memory challenger's port"),
     f"{MC_PY}device/memory_challenger.py::Verdict": (f"{MC}Verdict.lean::MemoryChallenger.Verdict", "memory-challenger-difftest",
@@ -425,7 +425,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 418
+KNOWN_MAX = 415
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -476,7 +476,7 @@ KNOWN: dict[str, str] = {
     "security/Definitions/Accounting/Remote/Draw.lean::Accounting.Remote.Draw.Session":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (memory-accounting)",
     "security/Definitions/Accounting/Remote/Held.lean::Accounting.Remote.Held.Trace":
-        "homonym, a remote audit session's record of the registered blocks in node memory: rename (memory-accounting)",
+        "homonym, a PoUB session's record of the registered blocks in node memory: rename (memory-accounting)",
     "security/Definitions/Accounting/Remote/Node.lean::Accounting.Remote.Node":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: a node's projection (memory-accounting)",
     "security/Definitions/Accounting/Remote/Sketch.lean::Accounting.Remote.Sketch.Coins":
@@ -538,9 +538,9 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.TC.Relation.Witness`: becomes one Core witness (lean)",
     "security/Definitions/Nci/Cover.lean::Nci.Cover.Circuit":
         "duplicate of `Verity.Circuit`: becomes it, with registered parameters (compute-accounting)",
-    "security/Definitions/NetworkCertifier/Run.lean::NetTiming.Program":
+    "security/Definitions/Certifier/Run.lean::NetTiming.Program":
         "homonym, a committed Program's egress prediction: rename (network-accounting)",
-    "security/Definitions/NetworkCertifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
+    "security/Definitions/Certifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
     "security/Definitions/Spot/Exfiltration.lean::Population.Exfil.Strategy":
         "homonym, an adaptive exfiltration strategy, each window's leak and escaping coins from the earlier coins: rename (lean)",
@@ -566,14 +566,8 @@ KNOWN: dict[str, str] = {
         "homonym, a PoUW scheme Π of the game (its checked values and honest reference): rename (compute-accounting)",
     "security/Definitions/Pouw/Game/Defs.lean::Pouw.Transcript":
         "homonym, PoUW's committed transcript of unit commitments: rename (compute-accounting)",
-    "security/Definitions/Pouw/Lead/Layout.lean::Pouw.Lead.Coins":
-        "duplicate of the live coins (`Verity.Coins`): becomes a reading of its public randomness, the certifier's draw for one call of the lead (compute-research)",
-    "security/Definitions/Pouw/Lead/Layout.lean::Pouw.Lead.Layout":
-        "homonym, the lead's call shape and design constants: rename (compute-research)",
     "security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Layout":
         "duplicate of `Pouw.Layout`: becomes a reading of it (compute-accounting)",
-    "security/Definitions/Pouw/Lead/Model.lean::Pouw.Lead.Strategy":
-        "homonym, a prover's play on one call of the lead (its pre-coin tables and `A`'s root, and an execution at each coin value): rename (compute-research)",
     "security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Protocol":
         "homonym, Pearl-C's scheme Π, `Pouw.Protocol` again: rename (compute-accounting)",
     "security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Transcript":
@@ -676,12 +670,12 @@ KNOWN: dict[str, str] = {
         "homonym, a table of benchmark lowerings: rename (compute-accounting)",
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
-    "benchmarks/one_stage/a5_coins.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
-    "benchmarks/pous/p2_v1/store.py::Store":
+    "verity/protocols/proofs/spot/device/challenger_session.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
+    "verity/protocols/accounting/pous/prover/p2/p2_store/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
-    "verity/protocols/accounting/pouw/clear/clear_audit.py::Transcript":
+    "verity/protocols/accounting/pouw/prover/clear/clear_audit.py::Transcript":
         "homonym, what a clear audit's prover publishes: rename (compute-accounting)",
-    "verity/protocols/accounting/pouw/clear/clear_audit.py::Verdict":
+    "verity/protocols/accounting/pouw/prover/clear/clear_audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a client of it (compute-accounting)",
     "benchmarks/pouw/dc/census.py::Device": "homonym, a census family's merged runs: rename (compute-accounting)",
     "benchmarks/pouw/filler/arms.py::Placement": "homonym, a filler arm's placement: rename (compute-accounting)",
@@ -705,13 +699,13 @@ KNOWN: dict[str, str] = {
         "duplicate of the execution block (no canonical yet): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/served_h1/serve.py::Record":
         "homonym, a served request's benchmark row: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/of_record.py::Record":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py::Record":
         "homonym, a check's two verdicts side by side: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/replay_window.py::Window":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py::Window":
         "homonym, one replayed window's checks: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/served_commit.py::Challenger":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/served_zk/statement.py::Statement":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/statement.py::Statement":
         "homonym, a benchmark's statement bench: rename (compute-accounting)",
     "benchmarks/pouw/theory/checked_strip.py::Block":
         "homonym, a block of rows and columns of one design: rename (compute-accounting)",
@@ -732,25 +726,25 @@ KNOWN: dict[str, str] = {
     "benchmarks/rho/rho/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
     "benchmarks/rho/rho/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
-    "benchmarks/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
-    "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
+    "verity/protocols/proofs/spot/prover/cost/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
+    "verity/protocols/proofs/spot/prover/cost/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
     # demos/
     "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
-    "demos/lifecycle/lifecycle.py::Block":
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Block":
         "duplicate of the execution block (no canonical yet): becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Card": "duplicate of `Verity.Accel.Card`: becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Layout":
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Card": "duplicate of `Verity.Accel.Card`: becomes a client of it (top)",
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Layout":
         "duplicate of the Site (`Verity.Site`): becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Link":
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Link":
         "duplicate of the Site (`Verity.Site`): becomes a client of its link (top)",
-    "demos/lifecycle/lifecycle.py::Placement":
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Placement":
         "duplicate of `CircuitRequirement.Placement`: becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Registration":
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
-    "demos/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
+    "tools/verity/cli/tests/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
     # infra/
     "infra/cluster/src/cluster/ledger.py::Ledger": "homonym, the shared machines' spend ledger: rename (infra)",
     "infra/cluster/src/cluster/model.py::Node": "homonym, a shared machine in the cluster's model: rename (infra)",
@@ -762,17 +756,17 @@ KNOWN: dict[str, str] = {
     "adapters/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
     "adapters/vllm/verity_vllm/pipeline/advice_code/codec.py::Record":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (vllm)",
-    "adapters/vllm/verity_vllm/program/frontend/registration.py::Registration":
+    "adapters/torch/verity_torch/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
-    "adapters/vllm/verity_vllm/protocols/pouw/credit_gate.py::Trace":
+    "verity/protocols/accounting/pouw/prover/serving/credit_gate.py::Trace":
         "homonym, one linear call's recorded ops and their writers: rename (vllm)",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1/challenger.py::Ledger":
+    "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py::Ledger":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes it (deleted) (vllm)",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1/window.py::Window":
+    "verity/protocols/accounting/pouw/prover/serving/h1/window.py::Window":
         "duplicate of the execution block (no canonical yet): becomes a client of it (vllm)",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Layout":
+    "verity/protocols/accounting/poub/prover/node_store/interface.py::Layout":
         "duplicate of the Site (`Verity.Site`): becomes its memory leaves by tier (vllm)",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Registration":
+    "verity/protocols/accounting/poub/prover/node_store/interface.py::Registration":
         "duplicate of the registration log (`Verity.Registration`, not yet in Core): becomes a view of its head (vllm)",
     "adapters/vllm/verity_vllm/query/units.py::Program": "homonym, what a query reads: rename (circuits)",
     # tools/
@@ -785,10 +779,6 @@ KNOWN: dict[str, str] = {
     "verity/commitments/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "verity/party.py::Record": "homonym, a party's log entry: rename (proofs)",
-    "verity/protocols/accounting/certifier/device/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":
-        "duplicate of `NetworkCheck.Check.Certificate`: becomes it (deleted; it already requires `network_check`) (network-accounting)",
-    "verity/protocols/accounting/certifier/device/lean/CertifierDevice/Online.lean::CertifierDevice.Link":
-        "homonym, a link's online state: rename (network-accounting)",
     "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "verity/protocols/accounting/certifier/verifier/audit.py::Verdict":
@@ -897,9 +887,9 @@ KNOWN: dict[str, str] = {
     "verity/protocols/accounting/poub/verifier/opening.py::Draw":
         "homonym, a PoUB position draw: rename (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/opening.py::Session":
-        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
+        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit_prover.Store` (folded) (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/opening.py::Store":
-        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
+        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit_prover.Store` (folded) (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/p2.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes it (one opening type, parameterised by codec) (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/p2.py::Registration":
@@ -922,16 +912,16 @@ KNOWN: dict[str, str] = {
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it: the service's admitted log entry (proofs)",
     "verity/protocols/proofs/spot/verifier/service.py::Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
-    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Contract.lean::Flock.ZkServer.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
     "verity/circuits/lean/Circuits/Annot.lean::Flock.Annot.Verdict":
         "homonym, the description-level annotation check's verdict: rename (proofs)",
-    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
-        "homonym, the firewall's release decision: rename (proofs)",
-    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
-        "homonym, the firewall loop's frames: rename (proofs)",
-    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
-        "homonym, the firewall loop's tables: rename (proofs)",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Contract.lean::Flock.ZkServer.Contract.Verdict":
+        "homonym, the ZK server's release decision: rename (proofs)",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Frames.lean::Flock.ZkServer.Frames.Registry":
+        "homonym, the ZK server loop's frames: rename (proofs)",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Level0.lean::Flock.ZkServer.Level0.Registry":
+        "homonym, the ZK server loop's tables: rename (proofs)",
     "verity/protocols/proofs/flock/verifier/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
     "verity/circuits/lean/Circuits/Program.lean::Flock.Program.Node":
         "homonym, a circuit program's node: rename (proofs)",
@@ -964,14 +954,14 @@ KNOWN: dict[str, str] = {
     "verity/commitments/advice.py::Registration":
         "homonym, a hiding commitment to a private partition's rows: rename (`Advice.Committed`) (proofs)",
     "verity/ml/flock/pod/gf2.py::Circuit": "homonym, a pod prover's GF(2) gate recorder: rename (proofs)",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/firewall_transcript.py::Session":
-        "homonym, one inner proof through the firewall: rename (proofs)",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/zk_server_transcript.py::Session":
+        "homonym, one inner proof through the ZK server: rename (proofs)",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_links.py::Link":
         "homonym, a recursion link from a reader to a port, `Flock.RecLinks.Link`'s pair: rename (proofs)",
-    "verity/commitments/windows/interface.py::Circuit":
+    "verity/commitments/periods/interface.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes a reading of it in proof blocks (proofs)",
-    "verity/commitments/windows/interface.py::Opening": "homonym, a template's open read of a table row: rename (proofs)",
-    "verity/commitments/windows/interface.py::Window":
+    "verity/commitments/periods/interface.py::Opening": "homonym, a template's open read of a table row: rename (proofs)",
+    "verity/commitments/periods/interface.py::Window":
         "duplicate of the execution block (no canonical yet): becomes the builder's output for it (proofs)",
     # verity/
     "tools/config/verity_config/verity_settings.py::Registry": "homonym, one distribution's settings from the environment: rename (proofs)",

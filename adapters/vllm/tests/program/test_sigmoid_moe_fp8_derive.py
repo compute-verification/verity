@@ -25,18 +25,18 @@ import torch
 import torch.nn as nn
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics.derived_rows import fp8_group_quant_row
-from verity.definitions.numerics.fp8_moe_rows import (
+from verity_vllm.definitions.numerics.derived_rows import fp8_group_quant_row
+from verity_vllm.definitions.numerics.fp8_moe_rows import (
     moe_expert_fp8_block_row,
     silu_mul_fp8_block_quant_rows,
 )
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-from verity.definitions.registry import fp8_moe
-from verity.definitions.registry import moe as MOE
+from verity_vllm.definitions.registry import fp8_moe
+from verity_vllm.definitions.registry import moe as MOE
 
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.derive import derive_report
+from verity_torch.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_iface as _vi  # noqa: F401  (defines the vllm_iface stand-ins)
@@ -54,7 +54,6 @@ MMAV2_DOT = "HopperE4m3MmaV2Dot32_v1"
 #: GLM-5.3's tuned H200 tile from M = 8 (BLOCK_SIZE_M 16 under SWAP_AB) and its block-FP8 numeric constexprs
 TUNED = {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 128, "GROUP_SIZE_M": 32}
 E, M, TOPK, H, INTER, G, RSF = 8, 2, 2, 128, 128, 128, 2.5
-I = INTER  # the name `tests/query/test_glm53_moe_planes.py` reads
 NV = M * TOPK
 
 
@@ -237,7 +236,7 @@ class _InputQuant(nn.Module):
 
 @pytest.mark.parametrize("ue8m0,family", [(False, "Fp8GroupQuant_v1"), (True, "Fp8GroupQuantUe8m0_v1")])
 def test_per_token_group_fp8_quant_derives_one_row_form_per_row_equal_to_the_twin(ue8m0, family, on_target):
-    from verity.definitions.numerics.deepgemm_twins import ue8m0_group_quant_row
+    from verity_vllm.definitions.numerics.deepgemm_twins import ue8m0_group_quant_row
 
     on_target(H200)
     x = _bf16(np.random.default_rng(6), M, 2 * G)
@@ -435,7 +434,7 @@ def test_the_default_experts_chain_with_the_ue8m0_input_quant_derives_in_one_pro
     """The refusal of the GLM-5.3 rank-0 derive at layer 3's `mlp.experts` (`_C.per_token_group_fp8_quant(use_ue8m0=True)` had no
     registered Definition) cleared: the step's whole chain derives, its input quant `Fp8GroupQuantUe8m0_v1` per token row, and the
     Program's words are the twins'."""
-    from verity.definitions.numerics.deepgemm_twins import ue8m0_group_quant_rows
+    from verity_vllm.definitions.numerics.deepgemm_twins import ue8m0_group_quant_rows
 
     on_target(H200)
     logits, x = _logits(E), _bf16(np.random.default_rng(7), M, H)

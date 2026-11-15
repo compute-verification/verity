@@ -13,7 +13,8 @@ from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import io_request as Q
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, ID_DIGITS, ID_REQUEST_HEAD, PAD, id_request
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
+from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, ID_REQUEST_HEAD, id_request
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import EOF, reasons, records, request, run
 from verity.protocols.accounting.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, WardenParams,
                                                     audit, cells, read_reason, reason_frame)
@@ -45,7 +46,7 @@ def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
     assert WardenParams().lengths is None and PLAIN.lengths is None
     assert WardenParams().digest.hex() == DEFAULT_DIGEST and PLAIN.digest.hex() == PLAIN_DIGEST
     assert LEN.digest != PLAIN.digest and dataclasses.replace(LEN, lengths=None) == PLAIN
-    assert OPTIONAL_FIELDS == ("max_tokens_cap", "lengths", "content", "request_words")
+    assert OPTIONAL_FIELDS == ("max_tokens_cap", "lengths", "content", "request_words", "head_offset", "head_wait")
     assert not set(OPTIONAL_FIELDS) & set(INTEGER_FIELDS)
     assert LEN.reasons == PLAIN.reasons
     capped = dataclasses.replace(PLAIN, max_tokens_cap=4)

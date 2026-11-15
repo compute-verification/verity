@@ -12,14 +12,13 @@ import os
 import re
 import struct
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from verity_vllm.config import checkpoint_entries
 
-__all__ = ["CheckpointIndex", "manifest_entry"]
+__all__ = ["CheckpointIndex", "manifest_entry", "read_safetensors_header"]
 
 #: safetensors dtype -> (numpy view dtype, element bytes)
 _ST_DTYPE = {"BF16": (np.uint16, 2), "F16": (np.float16, 2), "F32": (np.float32, 4), "F64": (np.float64, 8),
@@ -130,14 +129,15 @@ class CheckpointIndex:
     another process on the same files and manifest (`shard_pin`), adopted instead of hashing again."""
 
     def __init__(self, ckpt_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None, revision: str | None = None,
-                 verify_shards: bool = True, pin: dict[str, Any] | None = None, workers: int | None = None):
+                 verify_shards: bool = True, pin: dict[str, Any] | None = None, workers: int | None = None) -> None:
         self.dir = ckpt_dir
         self.tensors: dict[str, tuple[str, str, list[int], int, int]] = {}
         self.shards: list[str] = []
         self.config = {}
         cfg = os.path.join(ckpt_dir, "config.json")
         if os.path.exists(cfg):
-            self.config = json.loads(Path(cfg).read_text())
+            with open(cfg) as f:
+                self.config = json.load(f)
         rules = renames(self.config)
         for fn in shard_names(ckpt_dir):
             hdr, base = read_safetensors_header(os.path.join(ckpt_dir, fn))

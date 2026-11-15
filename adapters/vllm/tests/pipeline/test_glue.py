@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -28,7 +30,7 @@ def test_every_marker_names_a_pinned_model_and_both_seeds_are_marked(marks):
     pinned = G.known()
     assert {m for ms in marks.values() for m in ms} <= pinned
     assert {GLM, DSV4} <= {m for ms in marks.values() for m in ms}
-    assert marks["verity/definitions/registry/dsa.circuit-check.py"] == marks["verity/definitions/registry/dsa.py"] == (GLM,)
+    assert marks["verity_vllm/definitions/registry/dsa.circuit-check.py"] == marks["verity_vllm/definitions/registry/dsa.py"] == (GLM,)
 
 
 def test_a_models_inventory_joins_its_marked_modules(marks, tmp_path, monkeypatch):
@@ -44,7 +46,7 @@ def test_a_models_inventory_joins_its_marked_modules(marks, tmp_path, monkeypatc
 
     monkeypatch.setenv("HF_HOME", str(tmp_path))
     dsv4 = G.inventory(DSV4, marks, sql=None, fetch=None)
-    assert "verity/definitions/registry/mhc.py" in {f["path"] for f in dsv4["files"]}
+    assert "verity_vllm/definitions/registry/mhc.py" in {f["path"] for f in dsv4["files"]}
     assert "deepseek-v4-eager-hopper-tp8-v0" in {m["id"] for m in dsv4["capture_maps"]}
     assert dsv4["model_type"] == "deepseek_v4"
     assert generic.structural_refusal(json.loads(DSV4_CONFIG.read_text())) is None
@@ -139,3 +141,11 @@ def test_a_family_that_states_no_params_counts_none(monkeypatch):
         monkeypatch.setitem(G.FF.FAMILY_FACTS, "toy_type", fam)
         got = G._family("toy_type", GLM)
         assert got is not None and (got["params"], got["arch"], got["facts"], got["shared_with"]) == (count, "toy", 1, [])
+
+
+def test_importing_the_inventory_imports_no_profile_package():
+    """`import verity_vllm.glue` in a fresh process leaves `verity_vllm.observe.fold.profiles` unloaded, so its finder is not yet on
+    `sys.meta_path`: `_profile` imports the package when it is first called."""
+    script = "import sys; import verity_vllm.glue; print('verity_vllm.observe.fold.profiles' in sys.modules)"
+    out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True).stdout
+    assert out.strip() == "False"

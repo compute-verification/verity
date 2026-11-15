@@ -6,7 +6,7 @@ the cost.
 
     python benchmarks/prove_path/served_statics_zk.py cost [--out DIR]
     python benchmarks/prove_path/served_statics_zk.py prove --serve-run DIR --window K --g G [--per N]
-      --bin flock-circuit --lean flock-verify --out DIR [--dry]
+      --bin flock-circuit --lean verity-verify-proof --out DIR [--dry]
 
 * **cost**: a unit's ANDs (`served_statics.size`) and Flock block (``zk_block``) at the compile slice's class, the
   sealed run 9c10's and the served class, at every G dividing P, and the largest G whose unit fits Flock's 2^K_MAX. The
@@ -262,7 +262,7 @@ def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, por
                                         and (live or {}).get("roots") == fv["roots"] and v.ok,
                                         "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}}
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
-    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program --registered"}
+    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program --registered"}
     proved = a0.proved_units(m["header"], live or {})
     timing = {k: (live or {}).get(k) for k in N2.TIMING}
     statement = {name: {"session_s": proc["wall_s"], **{k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest",

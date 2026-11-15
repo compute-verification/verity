@@ -5,15 +5,15 @@ MUFU.RCP table is the library's, and on bits DeepSeek-V4's MUFU.LG2 table is an 
 from __future__ import annotations
 
 import pytest
-from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.program import Program
 from verity.circuits import constants as K
 from verity.circuits import operations as O
-from verity.definitions.registry import b1, dense, hopper
-from verity.definitions.registry import boolean_dsv4_moe as BD
-from verity.definitions.registry import dsv4_moe as D
-from verity.definitions.registry import int8_exact as X
-from verity.definitions.registry import prims as P
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity_vllm.definitions.registry import b1, dense, hopper
+from verity_vllm.definitions.registry import boolean_dsv4_moe as BD
+from verity_vllm.definitions.registry import dsv4_moe as D
+from verity_vllm.definitions.registry import int8_exact as X
+from verity_vllm.definitions.registry import prims as P
 
 
 def test_the_program_tables_are_declared_and_the_library_table_is_not_data():

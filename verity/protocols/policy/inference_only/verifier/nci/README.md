@@ -12,22 +12,35 @@ deployment configuration's table declares the policy's party from, with its test
 - **Commands** (`lake exe`, in `lean/`):
   - `inference-only id | check PARAMS COMMITMENT EVIDENCE | serve`: the core protocol `verity/inference-only/v0`,
     which both composites compose;
+  - `inference-only-rows id | check PARAMS COMMITMENT EVIDENCE [CIRCUIT FILE ...] | serve`: the core protocol
+    `verity/inference-only/rows/v1`, which no system lists;
   - `nci-check [--unrolled] INSTANCE TRUSTED`, or with `--policy [--unrolled] INSTANCE` or
     `--count [--detail] INSTANCE`: the verdict on one instance, as JSON on stdout. `benchmarks/verifier_cost` builds
     and runs it;
+  - `inference-only-record-check CASE`: the record form on one case of its difftest's, such as
+    `lean/scripts/served_record_case.py` writes from a served run's files. It prints two lines, the rate rule's whole
+    verdict (`[S s] check: JSON`, `Record.checkDetail`) and the count's (`[S s] count: JSON`,
+    `RecordCount.checkDetail`), each with the seconds since it started, for the private record only. It checks the
+    record against the Program and the registration log, as the form does, and not the values the record commits
+    or SPOT's openings of its rows. Of the record's `registered` the form reads `params`, `tables`, `reads`, `roots`
+    and `openings`, takes `values` unread, and refuses any other key (`inputs`), `formats` among them.
+    `test_nci_record_check.py` (under "Not here") builds and runs it;
   - the difftests: the other executables `lean/lakefile.toml` declares, each printing its arguments as its `usage:`.
     The Lean check runs each one's main on the data `lean/lean-audit.json` pins (`runs`), which the tests named
     under "Not here" hold to its generator. No other code runs them.
 - **Scripts**: `lean/scripts/nci_reference.py`, the check's Python reference, loaded by path by the tests of
-  `adapters/vllm`, by `demos/lifecycle` and by `benchmarks/verifier_cost`; and the difftests' generators,
+  `adapters/vllm`, by `verity run`'s lifecycle workload (`tools/verity/cli/tests/lifecycle`) and by `benchmarks/verifier_cost`; and the difftests' generators,
   `python scripts/NAME.py CHECKOUT --out DIR`, as `lean/lean-audit.json` runs them (`runs`). The tests of
-  `verity/protocols/proofs/flock/prover` load `desc_difftest_vectors.py` by path.
+  `verity/protocols/proofs/flock/prover` load `desc_difftest_vectors.py` by path. `lean/scripts/served_record_case.py`
+  writes a served run's files as a case for `inference-only-record-check`, with the record reference's verdicts on it
+  (`nci_record_reference.check_detail` and `count`, form-only); its docstring has its options.
 - **Documents**: it reads registration records (`verity/registration/v2`), which `adapters/vllm` writes as the
   check's trusted input. A case and its answer under `verity/inference-only/v0` are one subprotocol's in a
   composite's case, as `benchmarks/one_stage/composite.py` reads them.
 - **Loads from**: the packages at `verity/protocols/proofs/flock/verifier` and `verity/protocols/interface`, and nothing of
   the certifier.
-- **Not here**: its tests, `test_nci_*.py` and `test_inference_only_protocol.py`. They are in
+- **Not here**: its tests, `test_nci_*.py`, `test_inference_only_protocol.py` and
+  `test_inference_only_rows_protocol.py`, which loads `lean/scripts/nci_record_reference.py` by path. They are in
   `../../../../accounting/certifier/verifier/network/tests`, in the suite `verity/protocols/accounting/certifier/verifier/network`, with the
   tests of the certifier's Lean check. The tests of `verity/protocols/compose/verifier/lean` load the second by
   path.
@@ -47,7 +60,7 @@ The inference-only policy is a subprotocol of both composites, onsite and remote
 `NciCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
 interface. Its params are the registered circuit, the budgets and the registration log before the run; its commitment is
 the run's own registration record, which must name the registered circuit and which each composite requires to be the
-record sampled proofs commits to (`Core.Composition.same`); its evidence is the division with θ and θ's
+record SPOT commits to (`Core.Composition.same`); its evidence is the division with θ and θ's
 provenance. That evidence reaches the verifier in the clear: the check doesn't run inside a zero-knowledge
 proof yet.
 
@@ -91,8 +104,9 @@ scenarios register a policy as if it were a subprotocol.
 ## The check
 
 `lean/` is the Lake package `nci_check`, code that reads Programs with the circuit format's decoder (`Circuits.Program`,
-in the package `core_circuits`) and imports nothing else but Lean core and the core interface (`core_protocol`): nothing
-of Flock's verifier.
+in the package `core_circuits`) and imports nothing else but Lean core, the core interface (`core_protocol`) and SPOT's
+verifier (`core_spot`, with Flock's under it), whose readers of a circuit record and a circuit file the record form and
+the rows protocol read them with.
 
 - `nci-check` runs `NciCheck.Baseline.check`: `NciCheck.Desc.check`, which decides `Nci.CompliesRate c α` for a declared
   division aligned to the root's Calls at the cost of the descriptor (one summary per Definition), then each θ entry's
@@ -114,6 +128,12 @@ of Flock's verifier.
   is what `benchmarks/verifier_cost` measures.
 - `inference-only id | check | serve` runs `NciCheck.Baseline.check` as the core protocol `verity/inference-only/v0`,
   the subprotocol of onsite and remote.
+- `inference-only-rows id | check | serve` runs `InferenceOnly.RowsProtocol.protocol`, the core protocol
+  `verity/inference-only/rows/v1`: the check of an execution phase's circuit record, each block counted in the rows of
+  its templates' circuit files, the files its blobs, each read as SPOT's one-stage check reads a circuit file. Its
+  module docstring has its parts, its refusals and what it does not hold.
+  `../../../../accounting/certifier/verifier/network/tests/test_inference_only_rows_protocol.py` holds it to the record
+  form's reference, `lean/scripts/nci_record_reference.py`, behind the protocol's decoders.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
   each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`;
   `../../../../accounting/certifier/verifier/network/tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's

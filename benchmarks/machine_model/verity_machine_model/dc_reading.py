@@ -1,5 +1,5 @@
 """`dc_reading`: the H200's and B200's headline instances in `lean_headline`'s form, exact: each family's readings
-(`reading`), which `benchmarks/pouw/lean_headline_dc.py` writes as Lean.
+(`reading`), which `lean_headline_dc` writes as Lean.
 
 `lean_headline`'s bound (`Whole.headline_of_branches`) for the data-centre families, whose instances its
 `instance()` refuses. The bound is the larger of the folded branch, at w* and φ* on π* with p = 7/8, and the unfolded
@@ -71,7 +71,8 @@ from verity_machine_model.lean_headline import Q, exact
 from verity_machine_model.model import device
 
 #: What other files read of it: `verity_machine_model.lean_headline_dc`, which writes the readings as Lean and also
-#: takes the private `_Exact` and `_and`.
+#: takes the private `_Exact` and `_and`, and two tests in `benchmarks/pouw/tests/` (the data-centre exporter's and
+#: the census cover's).
 __all__ = ["CATCH_ALL", "CATCH_ALLS", "EPS_DEN", "FAMILIES", "JOINT_ISSUE", "SCALAR_REF", "SM90", "Family", "Reading",
            "reading"]
 
@@ -89,7 +90,6 @@ class Family:
     design: str
     sheet: str                           # its data-sheet vector
     measured: str                        # its measured vector
-    fmax: int
     fmax_src: str
     uniform: dict[str, int]              # the uniform writer kinds and ω
     eps: Fraction                        # the sheet's headline target
@@ -107,6 +107,14 @@ class Family:
     def sh(self) -> S.Sheet:
         """The device's data sheet (`sheet.toml`), which `Sheets/H200.lean` and `B200.lean` state too."""
         return S.sheet(self.data)
+
+    @property
+    def fmax(self) -> int:
+        """f_max, MHz: the sheet's (its card file's clock.sm)."""
+        x = self.sh.fmax.value
+        if x.denominator != 1:
+            raise SystemExit(f"{self.key}: f_max {x} MHz isn't whole; the Lean states it as a natural number")
+        return int(x)
 
     @property
     def pipes(self) -> dict[str, tuple[str, Fraction]]:
@@ -127,10 +135,10 @@ class Family:
 # the same reading under (I3) `ScalarRoute` at q = q_T = 3/5 (`accounting-ts-scalar-route`, assumed), the least floor
 # of denominator at most 5 at which the bound reaches its floor (from q ≈ 0.5884 up; at 10/17 it is above it): a twin
 # beside the ½ floor A6 proves, not a replacement. Both are over 1%, so both are held to the measured target.
-SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri", 1980,
+SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri",
               "EPS1 DC's measured f_max at default clocks; the sheet's TOPS are at 1830 MHz", {"UNI": 2},
               Fraction(1, 100), Fraction(3, 100), honest_menu=True, ln_p_m=LH.LN_P_M, twin=Fraction(3, 5))
-SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-ldtm0-l32", "DS-100", "DC-100-ri", 1965,
+SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-ldtm0-l32", "DS-100", "DC-100-ri",
                "the driver's reported maximum (the data sheet gives no clock)", {"UNI": 2}, Fraction(1, 100),
                Fraction(1, 100))
 FAMILIES = (SM90, SM100)

@@ -1,4 +1,4 @@
-"""GPU-truth fixture for `TopPMask_v1{V,S}` (`verity.definitions.registry.topp_split`) across EVERY split geometry the vLLM
+"""GPU-truth fixture for `TopPMask_v1{V,S}` (`verity_vllm.definitions.registry.topp_split`) across EVERY split geometry the vLLM
 d9105ea80 split top-p pipeline can launch (S = 1, 2, 4, 8, 16, 32) with constructed pivot ties -- and the CPU checker the committed
 test uses.
 
@@ -28,7 +28,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -50,7 +50,7 @@ MANIFEST_SEED = 20260920
 def drain_batches(num_sm: int) -> tuple[int, ...]:
     """The drain's batch sizes on a device of `num_sm` SMs, descending: DRAIN_BATCHES plus B and B + 1 for every B at which
     splits_for(B, num_sm) != splits_for(B + 1, num_sm), up to the split pipeline's largest batch."""
-    from verity.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for
+    from verity_vllm.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for
     edges = {b for n in range(1, SPLIT_MAX_BATCH) if splits_for(n, num_sm) != splits_for(n + 1, num_sm) for b in (n, n + 1)}
     return tuple(sorted(set(DRAIN_BATCHES) | edges, reverse=True))
 
@@ -78,7 +78,7 @@ def gen_random(seed: int, V: int) -> np.ndarray:
 def gen_ties(seed: int, V: int, S: int, k: int, keep_frac: float, head: int = 8, group_bias: int | None = None, plateau: float = 3.5) -> tuple[np.ndarray, float]:
     """Row with `k` identical plateau logits at lanes spread over the S slices (+ boundary pairs), and the p that puts the top-p
     boundary `keep_frac` of the way into the plateau.  `group_bias` (0/1) puts every plateau lane on a thread of that Z group."""
-    from verity.definitions.registry.topp_geometry import spt_for
+    from verity_vllm.definitions.registry.topp_geometry import spt_for
     g = CH.generator(seed)
     x = (g.standard_normal(V) * 1.0 - 6.0).astype(f32)             # tail: small mass
     slice_len = (V + S - 1) // S
@@ -269,15 +269,17 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
     F, R = TT._SPLIT_FANOUT, TT._SPLIT_ROUNDS
     record = None
     if record_npz:
-        record = (np.load(record_npz), json.load(open(record_npz + ".json")))
+        record = (np.load(record_npz), json.loads(Path(record_npz + ".json").read_text()))
     cases = build_manifest(seed, with_record=record is not None)
-    o = Path(out); o.mkdir(parents=True, exist_ok=True)
-    arrays: dict[str, np.ndarray] = {}
+    o = Path(out)
+    o.mkdir(parents=True, exist_ok=True)
+    arrays: dict[str, Any] = {}
     summary = []
 
-    def run_pipeline(x_dev: "torch.Tensor", p_dev: "torch.Tensor", S: int, V: int):
+    def run_pipeline(x_dev: torch.Tensor, p_dev: torch.Tensor, S: int, V: int):
         """stats -> 5 steps -> (instrumented mask on a copy | real mask kernel in place); returns (keep_real, keep_probe, zlane, stats, sc)."""
-        stats = x_dev.new_empty((S, 4)); parts = x_dev.new_empty((1, R, S, F, 3))
+        stats = x_dev.new_empty((S, 4))
+        parts = x_dev.new_empty((1, R, S, F, 3))
         TT._topp_sb_stats_kernel[(S,)](x_dev, x_dev.stride(0), stats, x_dev, p_dev, HAS_K=False, VOCAB_SIZE=V, S=S, BLOCK=8192, num_warps=8)
         for r in range(R):
             TT._topp_sb_step_kernel[(S,)](x_dev, x_dev.stride(0), stats, parts, x_dev, p_dev, r, HAS_K=False, S=S, F=F, NUM_ROUNDS=R, VOCAB_SIZE=V, BLOCK=2048, num_warps=8)
@@ -321,10 +323,12 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
             c["temperature"] = record_temperature(c, record)
             c["x_in_sha"] = __import__("hashlib").sha256(x_in.tobytes()).hexdigest()[:16]    # the checker's TemperatureScale model must reproduce it
         c["p"] = float(p)
-        c["kept"] = int(keep_real.sum()); c["z_nunique"] = int(len(zu))
+        c["kept"] = int(keep_real.sum())
+        c["z_nunique"] = int(len(zu))
         c["probe_keep_eq_real"] = None if keep_probe is None else bool(np.array_equal(keep_probe, keep_real))
         c["ties"] = bool(np.nanmax(sc[:, 4]) < np.nanmax(sc[:, 5])) if not np.isnan(sc).all() else None
-        c["numkeep"] = None if np.isnan(sc[0, 4]) else float(sc[0, 4]); c["numdup"] = None if np.isnan(sc[0, 5]) else float(sc[0, 5])
+        c["numkeep"] = None if np.isnan(sc[0, 4]) else float(sc[0, 4])
+        c["numdup"] = None if np.isnan(sc[0, 5]) else float(sc[0, 5])
         summary.append(c)
         print(json.dumps({k: c[k] for k in ("id", "kind", "S", "V", "p", "kept", "z_nunique", "ties", "numkeep", "numdup", "probe_keep_eq_real")}), flush=True)
     # drain: the real entry point on a stacked batch
@@ -337,7 +341,8 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
     X = torch.from_numpy(np.stack([r[0] for r in rows]).view(np.int32).copy()).view(torch.float32).to(dev)
     P = torch.tensor([r[1] for r in rows], dtype=torch.float32, device=dev)
     dc["rows"] = [{"seed": dc["seed"] + b, "S_gen": 16 if b % 2 == 0 else 32, "p": float(rows[b][1])} for b in range(len(rows))]
-    dc["num_sm"] = int(num_sm); dc["batches"] = []
+    dc["num_sm"] = int(num_sm)
+    dc["batches"] = []
     for B in drain_batches(num_sm):
         L = X[:B].clone()
         TT._apply_topp_split(L, None, P[:B], float("-inf"), num_sm)
@@ -363,8 +368,8 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
 
 def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
     """Model vs fixture: masked row (keep), stats, per-lane Z group, drain batches.  Returns the report dict (ok = every check passed)."""
-    from verity.definitions.registry import topp_geometry
-    from verity.definitions.registry import topp_split as TS
+    from verity_vllm.definitions.registry import topp_geometry
+    from verity_vllm.definitions.registry import topp_split as TS
     dd = Path(d)
     man = json.loads((dd / "manifest.json").read_text())
     z = np.load(dd / "fixture.npz")
@@ -452,7 +457,7 @@ class ProduceOptions:
     out: str = option("--out")
     record: str | None = option("--record", default=None)
     seed: int = option("--seed", type=int, default=MANIFEST_SEED)
-    cmd: str = field(default="produce", init=False)
+    cmd: Literal["produce"] = field(default="produce", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -460,13 +465,13 @@ class CheckOptions:
     dir: str = option("--dir")
     record: str | None = option("--record", default=None)
     out: str | None = option("--out", default=None)
-    cmd: str = field(default="check", init=False)
+    cmd: Literal["check"] = field(default="check", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
 class ManifestOptions:
     record: bool = option("--record", default=False, action="store_true")
-    cmd: str = field(default="manifest", init=False)
+    cmd: Literal["manifest"] = field(default="manifest", init=False)
 
 
 COMMANDS = {"produce": ProduceOptions, "check": CheckOptions, "manifest": ManifestOptions}

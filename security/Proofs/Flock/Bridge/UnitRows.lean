@@ -5,6 +5,7 @@ public import Proofs.Flock.Bridge.Statement
 public import Proofs.Flock.Soundness.Discharge.Const.Inst
 public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 public import Proofs.Flock.VBridge.Unit
+public import Properties.Flock.Circuit.UnitInst
 import Proofs.Core.Circuit
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
@@ -39,15 +40,6 @@ theorem castW_wire {N m : ℕ} {q : FlockSoundness.Prog N m} {u : Fin m} {R R' :
   cases e
   rfl
 
-/-- Every unit of the key program has the circuit's template instance rows. -/
-theorem rows_keyProg (u : Fin n) : (Placed.keyProg D.unroll hU n).rows u = Placed.circuitRows D.unroll hU :=
-  Placed.rows_circuitProg _ _ _ _ _ u
-
-/-- **Unit `u` of the key program as an instance of its rows**: the circuit's template instance rows, wired as the
-program wires them. -/
-noncomputable def unitInst (u : Fin n) : (keyPartition D hU n).IsRowsUnit u (Placed.circuitRows D.unroll hU) :=
-  (Const.Prog.castW (rows_keyProg D hU n u) (Const.Prog.rowsWireC (Placed.keyProg D.unroll hU n) u)).toIsRowsUnit _
-
 /-- `unitInst`'s wires are the program's own (`Const.Prog.rowsWireC`). -/
 theorem unitInst_wire (u : Fin n) (c : Fin (Placed.circuitRows D.unroll hU).w) :
     (unitInst D hU n u).wire c = (Const.Prog.rowsWireC (Placed.keyProg D.unroll hU n) u).wire
@@ -58,10 +50,6 @@ theorem unitInst_wire (u : Fin n) (c : Fin (Placed.circuitRows D.unroll hU).w) :
 noncomputable def copyGate (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (c : Fin (Rows.ofNet hU).w) :
     Fin (circuitOf D hU n).N :=
   (unitInst D hU n u).wire ((Rows.ofNet hU).stackCol D.unroll.upv hj c)
-
-/-- **Unit `u`'s constant gate**: the gate on the stack's constant column, which every copy's constant row reads. -/
-noncomputable def constGate (u : Fin n) : Fin (circuitOf D hU n).N :=
-  (unitInst D hU n u).wire (Placed.circuitRows D.unroll hU).one
 
 /-- **A copy's input column is a gate outside its unit.** -/
 theorem copyGate_input (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (c : Fin (Rows.ofNet hU).w)

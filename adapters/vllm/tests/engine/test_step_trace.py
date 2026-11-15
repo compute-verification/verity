@@ -6,9 +6,9 @@ import threading
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.accounting.certifier.verifier import replay_step as RS
 
 from tests.engine.fake_scheduler import FakeRequest, FakeScheduler, drive
-from verity.protocols.accounting.certifier.verifier import replay_step as RS
 from verity_vllm.engine import step_trace as ST
 
 
@@ -51,8 +51,9 @@ class _HeldPath:
 
 
 def _served(path, **kw) -> tuple[FakeScheduler, ST.StepTrace]:
-    trace = ST.StepTrace(path.path if isinstance(path, _HeldPath) else path, **kw)
-    if isinstance(path, _HeldPath):
+    held = isinstance(path, _HeldPath)
+    trace = ST.StepTrace(path.path if held else path, **kw)
+    if held:
         trace.path = path
     sched = FakeScheduler(budget=8, max_seqs=4)
     return sched, trace.install(sched)
@@ -163,6 +164,25 @@ def test_an_abort_from_outside_the_scheduler_is_recorded_as_a_finish(tmp_path):
     assert fin == [{"kind": "finish", "request": "a", "after_step": 2, "reason": "abort", "stop_reason": None, "outside": True}]
 
 
+def _three(a: str, b: str, c: str, **kw) -> list[dict]:
+    """The records of one plan of three requests: ``c`` starts from ``a``'s cached blocks, ``a`` is preempted and resumed, ``b`` and
+    ``a`` finish in a step, and ``c`` is aborted from outside the scheduler."""
+    sched = FakeScheduler(budget=16, max_seqs=4, preempt_at={2: a}, prefix_block=4)
+    trace = ST.StepTrace(**kw).install(sched)
+    drive(sched, {0: [_req(a, 9, [5, 6, 7, 8], 4), _req(b, 4, [5, 6, 7, 2], 4)], 1: [_req(c, 9, [5] * 9, 9)]}, abort_at={5: c})
+    return trace.records
+
+
+def test_every_request_a_record_names_is_named_by_the_traces_request_id():
+    """serve-openai's trace is given a ``request_id`` that takes vLLM's suffix off an id (`serve_commit.advice_trace`): its records
+    are those of a scheduler whose ids carry no suffix, in every place a record names a request."""
+    plain = _three("a", "b", "c")
+    fields = ("rows", "new", "resumed", "cache_hit", "preempted", "emitted", "finished")
+    assert {k for s in ST.steps(plain) for k in fields if s[k]} == set(fields), "the plan names a request in each field of a step"
+    assert {r["kind"] for r in plain} == {"header", "arrive", "step", "finish"}
+    assert _three("a-0", "b-1", "c-2", request_id=lambda rid: rid.split("-")[0]) == plain
+
+
 def test_uninstall_leaves_the_scheduler_as_it_was():
     sched = FakeScheduler()
     before = {n: getattr(sched, n) for n in ("add_request", "schedule", "update_from_output", "finish_requests")}
@@ -229,6 +249,18 @@ def test_an_arrival_after_an_empty_schedule_says_how_many():
     arrive("d", (0,))                           # the engine drained: the schedule that held its last request back still counts
     assert [(r["request"], r["before_step"], r.get("after_empty")) for r in trace.records if r["kind"] == "arrive"] == [
         ("a", 0, None), ("b", 1, 2), ("c", 2, None), ("d", 2, 1)]
+
+
+def test_a_request_added_again_under_an_id_the_scheduler_holds_is_one_arrival():
+    sched = FakeScheduler()
+    trace = ST.StepTrace().install(sched)
+    sched.add_request(_req("a", 3, [5, 2], 4))
+    sched.add_request(_req("a", 3, [5, 2], 4))                  # held: no second record
+    sched.add_request(_req("b", 2, [2], 1))
+    del sched.requests["a"]
+    sched.add_request(_req("a", 3, [5, 2], 4))                  # no longer held: it arrives again
+    assert [r["request"] for r in trace.records if r["kind"] == "arrive"] == ["a", "b", "a"]
+    trace.uninstall()
 
 
 def test_the_header_says_where_the_launch_left_the_context_limit_to_vllm():

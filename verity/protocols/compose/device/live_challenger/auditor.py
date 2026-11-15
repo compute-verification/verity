@@ -1,4 +1,4 @@
-"""The auditor host's challenger service: `serve.py` runs only as the `auditor` user, from a pinned
+"""The auditor device's challenger service: `serve.py` runs only as the `auditor` user, from a pinned
 tree, one session a window, each recorded in a signed append-only ledger before its first coin.
 
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE] [--withhold]
@@ -11,11 +11,6 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     vy-challenger-gate policy-register --name NAME --policy ID --alpha N/D --gamma G
     vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
     vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
-    vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra|drop|token]
-                                          [--requests N] [--tokens N] [--height H]
-                                          ([--in-flight N] [--profile planned|served] [--temperature T] [--top-p P]
-                                           | --traffic varied [--rate R] [--prompt-range LO:HI | --prompts < PROMPTS]
-                                             [--seed S] [--eos-ids ID,...] [--compact B] [--margin M])
     vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--height H]
                                        [--temperature T] [--top-p P] [--watermark]
                                        [--scan [--bucket-ms MS]
@@ -33,7 +28,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   session; it never names code. The admin account `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin),
   and it alone may reserve a window for a lane that has no key of its own (`--for LANE`: the reserve records `for` and
   keeps `by` vy-admin, and the window's prover is LANE). Nothing else runs as `research` there, and nothing runs as
-  `auditor` but the session unit, `reserve`, `admit` and a rehearsal's unit (the certifier's or the warden's).
+  `auditor` but the session unit, `reserve`, `admit` and a rehearsal's unit.
 - **What runs.** `/opt/vy-challenger/current` -> `/opt/vy-challenger/<commit>`, a root-owned `git archive` of that commit
   (`pin.sh`); the commit is the directory's name, and every entry names it (`pinned`). pin.sh pins only a commit on
   origin/main's first-parent history, which it fetches from GitHub itself, and appends `pin_line(commit, main, utc)` to
@@ -79,7 +74,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, within 7811..7899), which
   carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
   such line is refused. The certifier on this host owns that link and counts it (`coin_link.py`,
-  `verity.protocols.accounting.certifier.verifier.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
+  `verity.protocols.accounting.certifier.device.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
   (`coin_link_argv`, `stop_link`), and a link that refuses to start, doesn't listen within `START_SECONDS` (it is
   killed: `first_line`) or ends first (its tunnel did) ends the session (`watch_link`). It listens on another port of this host's loopback, opens `ssh -N -R` from the peer's port to it,
   straight to the peer's own sshd, relays each connection to serve.py re-cut into cells and re-clocked on its grids,
@@ -87,7 +82,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   writes `coin-link.json`, which the `end` entry's `files` seals. The hop from the certifier to the server crosses the
   prover's NIC, so it is the certifier's counted ingress, not a path this side trusts. The challenger side rests on the
   premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`; here the stream reaches the certifier only on
-  this auditor host) and `OneClock` (one clock for both, this host's), named in
+  this auditor device) and `OneClock` (one clock for both, this host's), named in
   `verity/protocols/proofs/spot/verifier/README.md`.
 
   `serve.py --peer`, its own `ssh -R` to the peer, which the prover's sshd decrypts, is the development path alone
@@ -164,48 +159,11 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (its id, α and Γ, read as a period-open reads them), so the policy a period's open names (`--policy-name`) is the
   auditor's own, fixed before any lane's open. `policies` reads the registry.
 
-- **A certifier rehearsal** (`certifier-rehearse`, a lane's own gate key or vy-admin): the network certifier in front of
-  a served endpoint, `benchmarks/network_traces/certifier_serve.py rehearse`, run here, on the auditor's machine, as the
-  auditor's device would. The gate validates the request (`--peer` one of /etc/vy/peers, `--port` the endpoint's on the
-  peer's loopback, `--minutes` 1 to 170, `--tamper` one of `TAMPERS` for a tampering shim instead of an honest one
-  (`certifier_serve.py`'s: `late` holds a window-0 session past every sync, `extra` writes one event more and `drop`
-  one fewer, which the rehearsal's check refuses, and `token` writes window 0's tokens with other bytes, a run it
-  accepts, exit 0, since only the I/O tie refuses it), `--requests` 4 to 400, `--in-flight` 1 to 4 requests sent
-  together and `--tokens` 16 to 64 tokens out of each, each recorded and passed on only when given
-  (`certifier_serve.py`'s 4 and 64 otherwise), `--profile planned|served` N2's profile, planned by default: the planned
-  egress occupancy, or the served profile, whose egress counts derive from the ingress head's, and the sampling
-  and the keys' height below). With `--traffic varied` (recorded only then) the rehearsal runs `certifier_serve.py`'s varied plan:
-  Poisson arrivals of varied prompts as id requests, each ending at the model's EOS or its `max_tokens` (1 to
-  `--tokens`, the cap), and the responses written as id events (each sampled token's id), N2 on the advice profile;
-  its own flags are `--rate` arrivals a second (above 0, at most 8), `--prompt-range LO:HI` (1 to 2048 tokens),
-  `--seed`, `--eos-ids` (at most 8), `--compact B` (8 to 4096: compact egress framing, each sampled token's
-  compact record in a B-byte cell instead of an id event, the certifier PROTOCOL's "Compact records") and `--margin M`
-  (1 to 8: the plan's margin over the probed rates and latencies, 2 otherwise; an endpoint that slows under a load its
-  probes didn't meet needs more), each recorded and passed on only when given (`parse_varied`). `--prompts` sends the
-  caller's own prompts in place of `--prompt-range`'s chat turns: the gate reads them off its stdin as a scan
-  rehearsal's, each of up to 2048 ids (`certifier_prompts`), writes them to `witness/prompts.json` (the request records
-  their count and ids),
-  and request j sends the (j mod n)-th of the n at the same seed's arrivals and `max_tokens`; the plan and the
-  certified I/O in `out/` carry them, as they carry every varied request's prompt. It takes no `--in-flight`,
-  `--profile`, `--temperature` or `--top-p` (its requests are greedy, each with a seed of its own), nor a `--minutes`
-  its arrivals outlast. Each
-  request's `user` is `<run>.j` (`--name`, the run), which the shim forwards the endpoint, so a committing endpoint
-  records each request under the name the certified I/O reads, and the run's id events (or compact records), records
-  and `io.json` are in its `fetch`: `negatives.py tie-run --run TARBALL --ids REQUESTS.jsonl` ties them to the
-  endpoint's committed ids, which refuses `token`. The gate refuses while another rehearsal runs, writes
-  `certifier/<run>/request.json` and starts its unit
-  (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
-  (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
-  rehearsal through it into `out/`, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, why
-  it ended, the SHA-512 of each file of `out/`, and from `out/summary.json` each run's verdict, network verdict, audit,
-  salt and what a second reveal of window 0's salt got). `status RUN` and `fetch RUN` return it. The rehearsal's keys are made in a scratch directory and removed, and `out/` holds no salt. A rehearsal is
-  no window of the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
-  `verify_ledger`'s).
 - **A warden rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell warden
   (`verity.protocols.accounting.certifier.verifier.warden`) as the auditor's device, `benchmarks/network_traces/warden_serve.py
-  rehearse`, with the warden and its client here and the server the peer's endpoint, reached through the same tunnel:
-  client ──cells──▶ warden (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`, `--port` and
-  `--minutes` as a certifier rehearsal's (it takes no `--tamper`: the warden is the device, with no shim to tamper),
+  rehearse`, with the network certifier and its client here and the server the peer's endpoint, reached through a
+  tunnel: client ──cells──▶ network certifier (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`
+  (one of /etc/vy/peers), `--port` (the endpoint's on the peer's loopback), `--minutes` (1 to 170),
   `--requests` 4 to 1700 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
   passed on only when given (`warden_serve.py`'s 256 otherwise), and the sampling and the key's height below. The traffic
   is the gate's (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`), so a request whose `--minutes` is under
@@ -235,23 +193,138 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   endpoint, through the same tunnel, the watermark stream an engine admitting at certified ticks waits on
   (`verity.protocols.accounting.certifier.verifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
   bucket t its server connections lost); the warden reads nothing
-  back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`; it
-  shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
+  back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`. The gate
+  refuses while another rehearsal runs, writes `certifier/<run>/request.json` and starts its unit
+  (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
+  (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
+  rehearsal through it, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, how it
+  ended in one of `ENDED`'s words and the SHA-512 of each file of `out/`; the sentence the word stands for, the peer,
+  the port and for an unruled line the line and the fix, is the witness's `ended.txt`). The end holds no time: when a
+  run ended follows what the peer sent and when. `status RUN` and `fetch RUN` return it. A rehearsal is no window of
+  the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
+  `verify_ledger`'s).
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
-  with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and
-  the check, all the prover's. Its unit publishes to `out/` only what isn't: `deployment.json` (the warden's key,
-  session and schedule), `cells.jsonl` (each link-window's registration, `warden_rows`, and its cost),
-  `certificates.jsonl` (the certificates alone) and a `--window-per-group` run's `groups.json`.
-  `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
-  `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
+  with its certificate), each row registration whole with its cost (`cells.jsonl`, the cells', and `rows.jsonl`,
+  the connection rows', a line a registration), a load's registrations whole (`load.json`), the cells' salts
+  (each registration's rows' and wiring's), the traffic, the client's log, the check, the rehearsal's own output
+  (`rehearse.log`, its stdout and stderr: free text, whose last line prints the registrations' cost) and its
+  tunnels' (`tunnel.log`, what each `ssh` prints: free text, a line for each connection the peer's port refused),
+  all the prover's. Its unit publishes to `out/` only what isn't:
+  `deployment.json` (the network certifier's key, session and schedule, `DEPLOYMENT_PUBLIC`: where the relay listened
+  and reached the peer, and the origin on the device's raw clock, stay in the witness's copy), a `--window-per-group`
+  run's `groups.json`, and of a run its check accepted the lines: `certificates.jsonl`
+  (the records' certificates alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row
+  registration's certificate alone, `ROW_CERTIFICATES`; a certificate's fields are the one list
+  `CERTIFICATE_LINE`), `cells-registrations.jsonl` (each line of `cells.jsonl` as the witness writes it, key for
+  key in its order, less the registration's `wiring` and the line's cost, `ROW_REGISTRATIONS`: the keys published
+  are the one list `ROW_LINE`, each a hiding commitment, a certificate or the schedule's and the execution phase's
+  own structure). Each list holds every published value to its
+  key's form: a constant, the value the run's deployment gives, hex of a fixed length or a count
+  (`deployment_forms`, `in_form`). A line with a key its list doesn't rule, or a value out of its form, fails
+  the rehearsal's end, which says it is not accepted (`unruled`), and none of the lines' files is published. So an
+  accepted end is one whose lines are all in `out/`. A run the check did not accept publishes none
+  of them either, and its end none of the counts a refused execution phase lowers (`ACCEPTED_COUNTS`): which
+  execution phases the signer refused is the traffic's, so no line, no missing certificate and no count says it,
+  and under an accepted check a line that says so is not ruled. Of the connection rows' registrations and a load's,
+  `out/` and the end hold the certificates and nothing else: no root, domain or layout. Of the word that an
+  execution phase has no head, `out/` holds its certificate likewise.
+  `end.json` adds `device` and the check's verdict (`warden_outcome`: whether it accepted, which the end says only
+  of a check that also counted the request's requests and left no line unruled, and the counts
+  `WARDEN_COUNTS` names, each the schedule's or, of an accepted run, of the certificates). How many problems the check
+  found, and its counts of the traffic (the requests and how each ended, the cells, their bits and their lateness),
+  stay in the witness's `check.json`. An accepted end's requests are the request's own number: the gate takes a check
+  that counted another as not accepted and ends the run nonzero (`miscounted`), so the request's `requests` is the
+  count an accepted run served. Of `witness/` the end says nothing, no file's name or size: `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
+- **A relay session** (`relay-session`, a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with
+  the rehearsals): the network certifier's relay kept up here, as the auditor's device, for a served run's own load.
+  The gate sends no request and runs no client: the clients are the served run's, on the peer, and a connection's
+  path is client ──cells──▶ the peer's 127.0.0.1:CLIENT_PORT ──tunnel──▶ the relay (here) ──tunnel──▶ the peer's
+  127.0.0.1:PORT. What follows is the contract a runner of another lane reads.
+  - *The verb.* `relay-session --peer NAME --port PORT --client-port PORT --windows N --minutes M [--bucket-ms MS]
+    [--scan-class CLASS] [--watermark] [--height H]`. `--peer`, `--port`, `--minutes`, `--bucket-ms`, `--scan-class`,
+    `--watermark` and `--height` are a scan rehearsal's, read and bounded by the same code (`parse_warden`). It takes
+    none of a rehearsal's traffic (`--requests`, `--tokens`, `--prompts`, `--window-per-group`, `--temperature`,
+    `--top-p`). The schedule is always the scan's, at the request's tick and class (`scan_schedule`), in the id egress
+    form: the one the certifier's piece reads. `--client-port` is a port of the peer's loopback, 1024 to 65535, not
+    `--port` and none of the challenge links' (`PORTS`). `--windows` is the session's length in execution phases,
+    1 to the most a rehearsal runs (`SESSION_WINDOWS`), fixed at the start.
+  - *Start.* The gate refuses the request while a rehearsal or another session runs, a key whose height can't sign
+    the session's execution phases (`warden_height`: `--height`, the deployed key's by default) and `--minutes`
+    under `session_minutes` (the execution phases' span, the key's generation and the check). It writes
+    `request.json` (the request, `client_port` and `windows` in it) and starts the rehearsal's unit; the reply, at
+    once, is the request with `run` and `unit`.
+  - *How long a session can be.* Its execution phases last windows · T · τ, T the scan's 32 buckets an execution
+    phase and τ its tick (`--bucket-ms`: 100 ms unless given, at most 4000). Two bounds hold it: `--windows` is at
+    most 1119 (`SESSION_WINDOWS`), and `--minutes` at most the gate's 170 (`CERTIFIER_MINUTES`), of which the start
+    and the check take three and the key one second each 4096 of its signatures (`session_minutes`). With the least
+    height that signs the execution phases (`warden_height`: 13 for 1119), the longest session at each tick is
+    - τ = 100 ms (an execution phase 3.2 s): 1119 execution phases, 59 min 40 s, `--minutes 63`;
+    - τ = 200 ms (6.4 s): 1119 execution phases, 119 min 21 s, `--minutes 123`;
+    - τ = 250 ms (8 s): 1119 execution phases, 149 min 12 s, `--minutes 153`;
+    - τ = 280 ms to 4000 ms: the gate's 170 minutes bound it, at the whole execution phases in 167 minutes less the
+      key's seconds, whatever the tick: 313 of them, 166 min 56 s, at 1000 ms; 78, 166 min 24 s, at 4000 ms.
+
+    Up to τ = 279 ms the 1119 execution phases are the bound, 59 min 40 s · τ / 100 ms. At the deployed key's
+    height, 20 (the default), the key takes four minutes more: `--minutes 67` at 100 ms, and from 273 ms the whole
+    execution phases in 162 min 44 s. The relay listens only once its key is made, so a load that must start soon
+    gives the least `--height` its `--windows` need. A load's last connection is admitted `WardenParams.span` + 1
+    buckets before the end ("End", and the runner's "A session").
+  - *The unit* opens one ssh to the peer with the auditor's tunnel key, which carries both forwards: a rehearsal's
+    `-L`, from a free port here to the endpoint's PORT, and a `-R`, from the peer's 127.0.0.1:CLIENT_PORT to the
+    relay's listener, a free port of the loopback here (`forward_argv`). The unit binds that listener itself before
+    it starts the ssh and holds it until the ssh has exited (`held_listener`), so the forward never ends at a port
+    another process could take: a connection made while no relay accepts waits at the session's own socket, where the
+    relay takes it as it starts, or the unit closes it unread, in no record, with the ssh. It then runs
+    `benchmarks/network_traces/warden_serve.py session` on that socket (`--listen-fd`): the key, the relay for exactly
+    `--windows` execution phases, and the check.
+  - *Where a client connects.* 127.0.0.1:CLIENT_PORT on the peer, one TCP connection a request, speaking the
+    relay's cells both ways (the relay's module, named above: `cells` sending, `Shim` reading) at the schedule the
+    deployment names. The port answers only while the unit's ssh is up: a connection refused there is the forward
+    down, and the run's `tunnel.log` says why.
+  - *Ready.* `status RUN` carries `relay`: null until the relay listens, then `{"client": "127.0.0.1:CLIENT_PORT",
+    "deployment": {...}}`, the relay's `deployment.json` as the run publishes it (its key, the session, the schedule,
+    `origin_unix`, `windows`, the run id). Bucket 0 starts at the origin, a few seconds after the relay listens; a
+    connection made before it waits in the relay's queue, which holds the schedule's `queue` and refuses the next.
+  - *End.* The relay stops when its `--windows` execution phases have run, windows · T · τ after the origin. The
+    runner then checks the run, the unit closes the ssh, publishes and writes `end.json`; `status RUN` then carries
+    `end` and `fetch RUN` gives the run. No verb ends a session early: its length is in the deployment before its
+    first execution phase, its key is sized to it and the check counts it. A unit stopped at `--minutes` first is a
+    failed run, as a rehearsal's, and so is one whose unit is stopped (`systemctl stop`, its `RuntimeMaxSec`): the
+    unit's SIGTERM goes to `certifier-run` alone (`KillMode=mixed`), which passes it to the runner and, once the runner
+    has exited, closes the ssh, then the listener, and writes `end.json` (`_Stop`), its rc the runner's or 2 where
+    the runner exited 0.
+  - *What it publishes* is a rehearsal's, by the same code (`warden_outcome`): to `out/`, the relay's key, session
+    and schedule and, of a session its check accepted, each execution phase's certificates and registrations, and
+    in `end.json` the check's verdict and counts;
+    in `witness/`, for the run's own lane and vy-admin alone, the three records, their heads and salts, the
+    cells' salts, the relay's log and the check. The gate holds no traffic and no client's log, so the check
+    (`warden_serve.py check`) reads the records, their certificates, the registrations and the audit, and nothing of
+    what a client received. The request names no number of requests, the clients being the peer's, so nothing
+    holds a session's requests to a count: the end says none. A client holds its own log to the run's `fetch`.
+  - *A connection open at the session's end is cut.* One still in the queue is closed with no cell and is in no
+    record. One admitted at bucket s and cut before s + D has its ingress cells in the record (its request may have
+    been released to the endpoint) and no answer cell, and the check refuses nothing for it. One cut at or after
+    s + D, with no `END` or `FAIL`, makes the check refuse the execution phase of its admission, so the run isn't
+    accepted. A connection admitted by bucket windows · T − span − 1 ends inside the session (`WardenParams.span`:
+    D + ⌊(egress cells − 1) / r⌋ buckets).
+  - *One verdict.* The check's verdict is the whole session's, whichever client a connection was: one connection
+    the relay failed closed, for its client's bytes (ingress past the schedule's bounds, or a malformed cell) or for
+    the endpoint's (an answer late, past its cells, not in the id form, or its connection failing), one refused at a
+    full queue, one cut at or after s + D, or one execution phase the relay faulted, and the run isn't accepted.
+  - *What it establishes.* The session's records cover the connections that crossed the relay, each cell in its
+    bucket. That nothing else reaches the endpoint is not the relay's to say: it is the placement's, and the
+    developer's forward's.
 - **The load** (a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with the
   rehearsals): the demo's weights, plain INT8 as interface 1 generates them from its public seed, sit on this
   host's store disk (`/var/lib/vy-challenger/store`, `Host.store`, its own mount, `auditor`'s) and are relayed to the
   H200 once a serving session. `weights-write [--shape h200|tiny]` writes the shape's stream there once
   (`load_relay.py write`, `WEIGHTS_MINUTES`): a stream already there is read back and kept only when its tensors'
   SHA-256 fold to the pin of interface 1's manifest (`load_relay.STORE_DIGESTS`), else refused and left unrecorded;
-  its end carries the store's record (`store`: written, present or refused). `load-relay` is a warden rehearsal (all
+  its end carries the store's record as `out/store.json` holds it (`store`, `STORE_PUBLIC`: written or present,
+  the shape and what the shape fixes; or the one word it was refused in, `LOAD_REFUSED`), and the record as the
+  write left it and what the write printed (`rehearse.log`) are in its `witness/`. A request the gate refuses for
+  the store says the word too, never the store's path. `load-relay` is a rehearsal of the same kind (all
   of `warden-rehearse`'s flags) with the load first, run by the same warden: the gate refuses it unless the store's
   record of `--shape` is interface 1's (`load_relay.read_store`), `--program` is the reading program's digest and
   `--minutes` covers `load_minutes` (the stream and its witness at `LOAD_RATE`, and `LOAD_READY_S`) and then the
@@ -262,25 +335,26 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `--witness` file on the developer's host and nowhere here: this host never writes a salt. The developer then starts its
   endpoint on the weights the sink wrote, and the warden's one signer (its publisher process) signs the load's 733
   heads in the serving session before its first window, so one key and one session carry the load and the windows;
-  `out/` publishes `load.json` (the load's registrations, which the block record pins) and `load-relay.json` (the
-  relay's counts and the sink's acknowledgements, or why it was refused), and the end carries the relay's and the
-  check's `load` (values and how many registered).
-- **A rehearsal's sampling** (`sampling`, both verbs): `--temperature` 0 to 2 (0 by default) and `--top-p` above 0
+  of the load `out/` publishes nothing, and the end's verdict carries the check's `load` (values and how many
+  registered). The load's registrations (`load.json`, which the block record pins) stay in `witness/`, as the row
+  registrations do, and so does `load-relay.json` (the relay's counts and the sink's acknowledgements, or why it was
+  refused), which varies with the load and which nothing decides on.
+- **A rehearsal's sampling** (`sampling`): `--temperature` 0 to 2 (0 by default) and `--top-p` above 0
   and at most 1 (1 by default), each a plain decimal of at most 4 places, recorded in every request and passed on
   every one (`sampling_argv`), so every request the rehearsal sends carries both: an endpoint applies its own
   generation config (a committing LLAMA32_1B's: temperature 0.6, top_p 0.9) to a request that omits them. The gate
   takes a top_p below 1, which the compile unit refuses while the seeded top-p sampler's split count reads the live
   row count.
-- **A rehearsal's keys** (`--height`, both verbs): LMS (N = 64, W = 1) at a tree height within `REHEARSAL_HEIGHT`, the
+- **A rehearsal's keys** (`--height`): LMS (N = 64, W = 1) at a tree height within `REHEARSAL_HEIGHT`, the
   deployed key's (`lms.DEPLOYED`, 20) by default, so that a rehearsal signs as the deployed device does unless its
-  request says otherwise; recorded in every request and passed on every one. `certifier_serve.load_key` makes each
+  request says otherwise; recorded in every request and passed on every one. `certifier_key.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
-  a certifier rehearsal makes two keys (the certifier's and the challenger's) and a warden rehearsal one, which
-  `warden_minutes` counts. A warden rehearsal's key signs `WARDEN_WINDOW_LEAVES` one-time signatures a link-window,
-  after a load's heads, and its signer refuses every window past its 2^H: so a request whose `warden_windows` its
-  height can't sign is refused, with the least height that can (`warden_height`; the gate's most requests at the
-  scan's schedule take 13). The rehearsal samples each serve's session itself (32 fresh random bytes, `--session`), as
-  the challenger it plays: the challenger here samples none, since a rehearsal is none of its windows.
+  a rehearsal makes one, which `warden_minutes` counts. A warden rehearsal's key signs a load's heads, then its
+  session's start (`START_LEAVES`), then `WARDEN_WINDOW_LEAVES` one-time signatures an execution phase, and its signer
+  refuses every window past its 2^H: so a request whose `warden_windows` its height can't sign is refused, with the
+  least height that can (`warden_height`; the gate's most requests at the scan's schedule take 13). The rehearsal
+  samples each serve's session itself (32 fresh random bytes, `--session`), as the challenger it plays: the challenger
+  here samples none, since a rehearsal is none of its windows.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, a declaration's, `end`'s, and `serve.py`'s record and
 close, `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`,
@@ -291,6 +365,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import functools
 import hashlib
 import io
 import json
@@ -357,35 +432,12 @@ CERTIFIER_RUN = re.compile(r"c\d{8}T\d{6}Z-[0-9a-f]{4}")
 #: a rehearsal's --minutes: at most 170, so that a run stays inside its unit's RuntimeMaxSec=3h (vy-certifier@.service)
 #: with 10 minutes for its tunnels and outcome; an H200 load's 67 then leave about 100 of serving
 CERTIFIER_MINUTES = (1, 170)
-CERTIFIER_REQUESTS = (4, 400)
-CERTIFIER_IN_FLIGHT = (1, 4)
-CERTIFIER_TOKENS = (16, 64)
-#: a certifier rehearsal's tampering shims, each `certifier_serve.py`'s `--tamper` of that name
-TAMPERS = ("late", "extra", "drop", "token", "byte")
-CERTIFIER_PROFILES = ("planned", "served")
-#: a certifier rehearsal's traffic, `certifier_serve.py`'s `--traffic`
-CERTIFIER_TRAFFIC = ("fixed", "varied")
-#: varied traffic's bounds: the most arrivals a second, prompts' lengths in tokens, the largest seed, the most EOS ids
-CERTIFIER_RATE = 8.0
-#: `certifier_serve.py`'s rate when a request gives none
-CERTIFIER_VARIED_RATE = 2.0
-CERTIFIER_PROMPTS = (1, 2048)
-CERTIFIER_SEED = (1 << 32) - 1
-CERTIFIER_EOS = 8
-#: a compact cell's bytes: at least a compact record's (`active.COMPACT_RECORD`), at most an id event's frame
-#: (`certifier_serve.FRAME_BYTES`)
-CERTIFIER_COMPACT = (8, 4096)
-#: a varied plan's `--margin` over the probed rates and latencies (`certifier_serve.varied_plan`'s 2 otherwise)
-CERTIFIER_MARGIN = (1, 8)
-#: varied traffic's flags the gate passes on when given, each (flag, the request's key)
-CERTIFIER_VARIED = (("--tokens", "tokens"), ("--rate", "rate"), ("--prompt-range", "prompt_range"), ("--seed", "seed"),
-                    ("--eos-ids", "eos_ids"), ("--compact", "compact"), ("--margin", "margin"))
 #: a rehearsal's `--temperature` bounds; `--top-p` is above 0 and at most 1, and each is a plain decimal (`DECIMAL`)
 TEMPERATURE = (0.0, 2.0)
 DECIMAL = r"[0-9](\.[0-9]{1,4})?"
 #: a rehearsal's `--height` bounds, the LMS keys' tree height: at most the deployed key's, which is the default
 REHEARSAL_HEIGHT = (10, lms.DEPLOYED.H)
-#: the one-time keys a second `certifier_serve.load_key` makes in its eight processes (16384 in 4.1 s on four cores)
+#: the one-time keys a second `certifier_key.load_key` makes in its eight processes (16384 in 4.1 s on four cores)
 KEYGEN_LEAVES_S = 4096
 #: a warden rehearsal's `--requests` (and a scan rehearsal's on its own `--prompts`, `WARDEN_PROMPT_REQUESTS`): 1700 at
 #: `WARDEN_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s link-windows, past the 745 that
@@ -395,6 +447,9 @@ WARDEN_REQUESTS = (4, 1700)
 #: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
 #: (`warden_serve.Publisher.keep` and `attest`)
 WARDEN_WINDOW_LEAVES = 5
+#: the one-time signature that key gives its session's start, before its first execution phase's (`certify_start`
+#: there)
+START_LEAVES = 1
 #: a warden rehearsal's link-window without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
 #: buckets of 100 ms)
 WARDEN_WINDOW_MS = 60_000
@@ -434,14 +489,122 @@ WARDEN_PROMPT_REQUESTS = (1, WARDEN_REQUESTS[1])
 WARDEN_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
 #: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
-#: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`); everything else
-#: `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's own lane alone.
+#: what a network certifier run publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`)
+#: and the cells' registrations less their private keys (`ROW_REGISTRATIONS`);
+#: everything else `warden_serve.py rehearse` writes, what it prints (`rehearse.log`) and what the run's tunnels
+#: print (`tunnel.log`) are witness and stay in `witness/`, which `fetch` gives the run's own lane alone.
 #: `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the request's
-#: public counts and the scan's schedule alone
-WARDEN_PUBLIC = ("deployment.json", "cells.jsonl", "groups.json", "load.json", "load-relay.json")
+#: public counts and the scan's schedule alone. Of a load, nothing: its registrations (`load.json`, each value's
+#: whole) stay in `witness/`, as the connection rows' registrations do, and so does its relay's `load-relay.json`
+WARDEN_PUBLIC = ("deployment.json", "groups.json")
+#: what `out/` and a session's `status` hold of the relay's `deployment.json`: its key, session and link, the
+#: schedule (`params`, their `digest`, `slack_ms`, `windows`), the start's certificate, the origin as wall time and
+#: the run id. What the file says of the auditor's device stays in `witness/`, where the device's own client reads
+#: it: the origin as the device's raw clock read it (`origin_raw`). Where the relay listened and where it reached the
+#: peer's endpoint are `endpoints.json`'s, in `witness/` whole
+DEPLOYMENT_PUBLIC = ("key", "session", "link", "params", "digest", "slack_ms", "start", "origin_unix", "windows",
+                     "run_id")
+#: a refused store's word, all that `out/` and the end say of why (`load_relay.REFUSALS`, word for word): the
+#: certifier's own nine, of its store, its link's source and its signer, and `sink` for every way the developer's sink
+#: failed, since which way is the developer's to choose. `other` stands for anything that is none of them. The
+#: sentence is the witness's (`check.json`'s problems, `rehearse.log`)
+LOAD_REFUSED = ("digest", "decode", "length", "signer", "no-digests", "no-store", "not-interface-1", "no-record",
+                "store-size", "sink", "other")
+#: a published name of a load's record: a shape's or a model's
+LOAD_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")
+#: the row registrations' files of `witness/`, the cells' and the connection rows' (`connection_rows`), each with
+#: the file of `out/` that holds its lines' certificates, line for line (`row_certificate`). A line is a
+#: registration and its cost; of a connection rows' registration `out/` holds the certificate and nothing else,
+#: and of the word that an execution phase has no head (`ROWS_NO_HEAD`) the same
+ROW_CERTIFICATES = {"cells.jsonl": "cells-certificates.jsonl", "rows.jsonl": "rows-certificates.jsonl"}
+#: the cells' registrations' file of `witness/` with the file of `out/` that holds its lines as the witness writes
+#: them, line for line, less what `ROW_LINE` leaves out (`row_registration`). The connection rows' registrations
+#: aren't among them: `out/` holds their certificates alone
+ROW_REGISTRATIONS = {"cells.jsonl": "cells-registrations.jsonl"}
+#: how `ROW_LINE` rules a key that isn't published: its value is left in `witness/` alone
+WITHHELD = "withheld"
+#: the form of a registration's `value`: the name its own link, direction and execution phase give it
+NAMED = "named"
+
+
+@dataclass(frozen=True)
+class Given:
+    """A published key's form that the run's own deployment gives (`deployment_forms`), under `name` there."""
+
+    name: str
+
+
+#: a key id's form, and the two directions
+KEY_ID = re.compile(r"[0-9a-f]{32}")
+DIRECTIONS = ("ingress", "egress")
+#: the constants of a cells' registration, `warden_rows`' word for word: its format, its rows' schema and a word's
+#: bits
+ROW_FORMAT, ROW_SCHEMA, ROW_WORD_BITS = "verity-network-warden/registration/v2", "hm96-sha512/row/v2", 16
+#: the links a run certifies under, by what follows its deployment's link: the wire's two directions under the link
+#: itself, and the reasons' records under their own name (`warden_serve.CERTIFIED`)
+CERTIFIED_LINKS = ("", "-fails")
+#: a key's parameters as a deployment gives them, in form: the hash's bytes, the Winternitz width and the height,
+#: each within `lms.Params`' own bounds, so that `deployment_forms` reads a signature's length of no other
+KEY_PARAMS = [(64,), (1, 2, 4, 8), tuple(range(1, 31))]
+#: every key of a line of `cells.jsonl` that holds a registration (`warden_serve.Publisher`,
+#: `warden_rows.registration`'s keys), each ruled: left out (`WITHHELD`), an object by its own keys,
+#: or published in the form it names (`in_form`, `Given`, `NAMED`). It is the one list of what `out/` publishes of a
+#: registration, so a key a writer adds is published only once it is written here, and a value only in its key's
+#: form: until then its line fails the gate (`row_registration`). What is public, and why it may be:
+#: - `root`: a hiding commitment, the root over the rows' `hm96` leaves, each row under a fresh salt at the pinned
+#:   key (the named assumption `hash-derived-key`);
+#: - `certificate`: the network certifier's signature over the head's digest, which `cells-certificates.jsonl`
+#:   publishes already;
+#: - every other key: protocol structure. `warden_rows.check_registration` holds each to the one value the
+#:   schedule, the session, the link, the direction and the execution phase give: the format and the rows' schema
+#:   (constants), the value's name, the parameters' digest (the schedule's, in `deployment.json`), the domain and
+#:   the rows' sizes and layout.
+#: The forms leave a value no room to say more than its kind: a constant is its one value; the link, the
+#: schedule's digest, a cell's bytes and an execution phase's buckets are the run's deployment's; a digest, a
+#: root and a domain are 128 lowercase hex digits and a key id 32; a signature is hex of the length the
+#: deployment's key gives; every other number is a count below 2^63.
+#: What is left out: `wiring`, the salted digest of which connection's which cell each slot of a row holds, opened
+#: to the verifier alone; and a line's `cost`, with its two measured times. A line that says the signer refused its
+#: execution phase is no line of this list (`REFUSED_LINE`): which ones were refused is the traffic's
+ROW_LINE = {
+    "registration": {
+        "format": (ROW_FORMAT,), "value": NAMED, "link": Given("link"), "direction": DIRECTIONS, "window": int,
+        "parameters": Given("parameters"), "cell_bytes": Given("cell_bytes"), "rows": int, "words": int,
+        "word_bits": (ROW_WORD_BITS,), "row_schema": (ROW_SCHEMA,), "domain": ROOT, "wiring": WITHHELD,
+        "root": ROOT,
+        "layout": {"buckets": Given("buckets"), "slots": int, "connection_slots": int, "first_bucket": int},
+        "certificate": {"key": KEY_ID, "digest": ROOT, "signature": Given("signature")}},
+    "cost": WITHHELD}
+#: a line of a certificates' file as `out/` holds it (`row_certificate`, `certified_certificate`): a certificate's
+#: fields (`certificate.Certificate`'s), each in its form
+CERTIFICATE_LINE = {
+    "certificate": {"key_id": KEY_ID, "link": Given("links"), "direction": DIRECTIONS, "window": int,
+                    "digest": ROOT, "signature": Given("signature")}}
+#: why a line that says the signer refused its execution phase is published of no run: an end that is not accepted
+#: publishes no line, and a check that accepted counted every execution phase certified
+REFUSED_LINE = ("the line says the signer refused its execution phase, under a check that accepted. No line says so "
+                "in out/: which execution phases were refused is the traffic's, and a run with one is not accepted")
+#: the direction a connection rows' certificate signs, which its registration doesn't name
+#: (`connection_rows.check_registration`)
+ROWS_DIRECTION = "egress"
+#: what a line of `rows.jsonl` holds in place of a registration where its execution phase ends in the network
+#: certifier's word that it has no head (the lengths rows' form 2): the word's record, which `connection_rows.no_head`
+#: calls public, under this key (`connection_rows_run.NO_HEAD`)
+ROWS_NO_HEAD = "no_head"
+#: of the check's `cell_rows`, what an end carries: how many of the cells' registrations it accepted, and of how
+#: many. Its other keys are the registrations' cost
+CELL_ROWS = ("registered", "of")
 WITNESS = "witness"
 #: the shapes of interface 1's weights a store holds and a load relays (`load_relay.SHAPES`)
 LOAD_SHAPES = ("h200", "tiny")
+#: the store's format, `load_relay.STORE_FORMAT`'s word for word
+STORE_FORMAT = "verity-network-certifier/load-store/v1"
+#: a store's record as `out/` and the end hold it (`load_relay.py write`'s, less its tensors' digests), each key in
+#: its form: whether the stream was written or was there (`status`), the store's format, the shape's name and what
+#: the shape fixes: its model's name, the stream's bytes and the fold of its tensors' digests. A refused write's is its
+#: word alone, one of `LOAD_REFUSED`. The record as the write left it, and what the write printed, are the witness's
+STORE_PUBLIC = {"status": ("written", "present"), "format": (STORE_FORMAT,), "shape": LOAD_NAME,
+                "model": LOAD_NAME, "stream_bytes": int, "fold": ROOT}
 #: a load's streams to the H200's sink, each through a tunnel of its own, and how many by default
 LOAD_STREAMS, LOAD_DEFAULT_STREAMS = (1, 8), 4
 #: the link's rate a load's minutes are sized on (about 95 MB/s, measured over 4 streams from this host to
@@ -467,7 +630,7 @@ class Refused(Exception):
     """A request the gate or the session refuses, with why."""
 
 
-#: the auditor host's name, which its records give it
+#: the auditor device's name, which its records give it
 HOST_NAME: str = json.loads((HERE / "host.json").read_text())["name"]
 
 
@@ -1029,6 +1192,14 @@ def peers(host: Host) -> list[str]:
     return [n for n in names if n != host.name]
 
 
+def registered_peer(host: Host, peer: str) -> str:
+    """`peer` when it is one of this device's peers, else a refusal that gives the caller's word back and names none
+    of them: the list is the device's own file (/etc/vy/peers), the names of the machines it reaches."""
+    if peer not in peers(host):
+        raise Refused(f"--peer {peer!r}: not one of this device's peers")
+    return peer
+
+
 def coin_ports(host: Host, peer: str) -> range:
     """The ports of `peer`'s certifier coin link: its line `PEER LO-HI` (or `PEER PORT`) of /etc/vy/coin-ports
     (`Host.coin_ports`), ports within `PORTS` of this host's loopback that the link carries to the same ports of the
@@ -1069,8 +1240,7 @@ def parse_reserve(argv: list[str], host: Host, *, admin: bool = False) -> dict:
         a = p.parse_args(argv)
     except argparse.ArgumentError as e:
         refuse(e)
-    if a.peer not in peers(host):
-        raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
+    registered_peer(host, a.peer)
     coin_ports(host, a.peer)
     if not SCHEME.fullmatch(a.scheme):
         raise Refused(f"--scheme {a.scheme!r}: [a-z0-9/._-], up to 128")
@@ -1315,125 +1485,25 @@ def gate_fetch(session: str, host: Host) -> bytes:
     return buf.getvalue()
 
 
-def parse_certifier(argv: list[str], host: Host) -> dict:
-    """A certifier rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run, the
-    tampering shim if any, how many requests the plan sends, how many tokens each when given, the keys' height and the
-    sampling (`sampling`); on fixed traffic how many in flight when given and N2's profile, on varied traffic (`--traffic
-    varied`, recorded only then) its rate, prompts' lengths or prompts on stdin, seed, EOS ids, compact cells and
-    margin when given (`parse_varied`)."""
-    p = argparse.ArgumentParser(prog="vy-challenger-gate certifier-rehearse", exit_on_error=False, add_help=False,
-                                allow_abbrev=False)
-    p.add_argument("--peer", required=True)
-    p.add_argument("--port", required=True)
-    p.add_argument("--minutes", required=True)
-    p.add_argument("--tamper", default=None)
-    p.add_argument("--requests", default=str(CERTIFIER_REQUESTS[1]))
-    p.add_argument("--in-flight", default=None)
-    p.add_argument("--tokens", default=None)
-    p.add_argument("--profile", default=None)
-    p.add_argument("--traffic", default=CERTIFIER_TRAFFIC[0])
-    for flag, _ in CERTIFIER_VARIED[1:]:
-        p.add_argument(flag, default=None)
-    p.add_argument("--prompts", action="store_true")
-
-    a = _parse_rehearsal(p, argv, host)
-    port = bounded("--port", a.port, 1024, 65535)
-    minutes = bounded("--minutes", a.minutes, *CERTIFIER_MINUTES)
-    requests = bounded("--requests", a.requests, *CERTIFIER_REQUESTS)
-    given = {}
-    if a.tokens is not None:
-        given["tokens"] = bounded("--tokens", a.tokens, *CERTIFIER_TOKENS)
-    if a.tamper is not None and a.tamper not in TAMPERS:
-        raise Refused(f"--tamper {a.tamper!r}: one of {list(TAMPERS)}, or none for an honest shim")
-    if a.traffic not in CERTIFIER_TRAFFIC:
-        raise Refused(f"--traffic {a.traffic!r}: one of {list(CERTIFIER_TRAFFIC)}")
-    req = {"peer": a.peer, "port": port, "minutes": minutes, "tamper": a.tamper, "requests": requests,
-           "height": a.height}
-    if a.traffic == "varied":
-        return req | {"traffic": "varied"} | a.sampling | given | parse_varied(a, minutes, requests)
-    if (flag := next((f for f, k in CERTIFIER_VARIED[1:] if getattr(a, k) is not None),
-                     "--prompts" if a.prompts else None)) is not None:
-        raise Refused(f"{flag}: varied traffic's (--traffic varied)")
-    if a.in_flight is not None:
-        given["in_flight"] = bounded("--in-flight", a.in_flight, *CERTIFIER_IN_FLIGHT)
-    profile = CERTIFIER_PROFILES[0] if a.profile is None else a.profile
-    if profile not in CERTIFIER_PROFILES:
-        raise Refused(f"--profile {profile!r}: one of {list(CERTIFIER_PROFILES)}")
-    return req | {"profile": profile} | a.sampling | given
-
-
-def parse_varied(a: argparse.Namespace, minutes: int, requests: int) -> dict:
-    """Varied traffic's flags, each recorded only when given (`certifier_serve.py`'s 2 a second, 16:1024, seed 0 and
-    the probe's EOS otherwise): `--rate` arrivals a second, above 0 and at most `CERTIFIER_RATE`, a plain decimal;
-    `--prompt-range LO:HI` within `CERTIFIER_PROMPTS`; `--seed` 0 to `CERTIFIER_SEED`; `--eos-ids` at most
-    `CERTIFIER_EOS` token ids, comma-separated; `--compact B`, B within `CERTIFIER_COMPACT`, compact egress records in
-    B-byte cells instead of id events; `--margin M` within `CERTIFIER_MARGIN`, a plain decimal; `--prompts`, the
-    prompts on stdin (`certifier_prompts`) in place of `--prompt-range`'s chat turns. Its requests are greedy, each
-    with a seed of its own, and N2's profile is the advice, so it takes no `--temperature`, `--top-p`, `--in-flight` or
-    `--profile`; and its arrivals must end within `--minutes`."""
-    for flag, v in (("--in-flight", a.in_flight), ("--profile", a.profile)):
-        if v is not None:
-            raise Refused(f"{flag}: fixed traffic's; varied requests arrive at --rate a second and N2's profile is "
-                          f"the advice")
-    if a.sampling != {"temperature": 0.0, "top_p": 1.0}:
-        raise Refused("--temperature, --top-p: fixed traffic's; varied requests are greedy (temperature 0, top_p 1), "
-                      "each with a seed of its own")
-    given: dict = {}
-    if a.rate is not None:
-        if not re.fullmatch(DECIMAL, a.rate) or not 0 < float(a.rate) <= CERTIFIER_RATE:
-            raise Refused(f"--rate {a.rate!r}: above 0, at most {CERTIFIER_RATE:g}")
-        given["rate"] = float(a.rate)
-    if a.prompt_range is not None:
-        lo, hi = CERTIFIER_PROMPTS
-        m = re.fullmatch(r"([1-9][0-9]{0,4}):([1-9][0-9]{0,4})", a.prompt_range)
-        if not m or not lo <= int(m[1]) <= int(m[2]) <= hi:
-            raise Refused(f"--prompt-range {a.prompt_range!r}: LO:HI, {lo} ≤ LO ≤ HI ≤ {hi}")
-        given["prompt_range"] = f"{int(m[1])}:{int(m[2])}"
-    if a.seed is not None:
-        if not re.fullmatch(r"0|[1-9][0-9]{0,9}", a.seed) or int(a.seed) > CERTIFIER_SEED:
-            raise Refused(f"--seed {a.seed!r}: 0 to {CERTIFIER_SEED}")
-        given["seed"] = int(a.seed)
-    if a.eos_ids is not None:
-        one = r"(0|[1-9][0-9]{0,6})"
-        if not re.fullmatch(rf"{one}(,{one}){{0,{CERTIFIER_EOS - 1}}}", a.eos_ids):
-            raise Refused(f"--eos-ids {a.eos_ids!r}: 1 to {CERTIFIER_EOS} token ids, comma-separated")
-        given["eos_ids"] = [int(t) for t in a.eos_ids.split(",")]
-    if a.compact is not None:
-        given["compact"] = bounded("--compact", a.compact, *CERTIFIER_COMPACT)
-    if a.margin is not None:
-        lo, hi = CERTIFIER_MARGIN
-        if not re.fullmatch(DECIMAL, a.margin) or not lo <= float(a.margin) <= hi:
-            raise Refused(f"--margin {a.margin!r}: {lo} to {hi}, a plain decimal")
-        given["margin"] = float(a.margin)
-    if a.prompts:
-        if "prompt_range" in given:
-            raise Refused("--prompt-range: the chat turns' lengths, which --prompts replaces with the prompts on stdin")
-        given["prompts"] = True
-    rate = given.get("rate", CERTIFIER_VARIED_RATE)
-    if (span := requests / rate) > minutes * 60:
-        raise Refused(f"--minutes {minutes}: {requests} requests at {rate:g} a second arrive over {span:g} seconds: "
-                      f"give more --minutes, fewer --requests or a higher --rate")
-    return given
-
-
-def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host) -> argparse.Namespace:
+def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host, *,
+                     sampled: bool = True) -> argparse.Namespace:
     """A rehearsal verb's arguments, with the three every rehearsal takes, `--temperature` and `--top-p`
     (`a.sampling`) and `--height` (`a.height`, the deployed key's by default), refused (with the verb's usage) when they
-    don't parse, `--peer` isn't a peer or the sampling or the height is out of its bounds."""
+    don't parse, `--peer` isn't a peer or the sampling or the height is out of its bounds. A verb that sends no
+    request (a relay session, `sampled` false) takes no sampling: `a.sampling` is empty."""
     def refuse(why: object) -> None:
         raise Refused(f"{p.prog.split()[-1]}: {why}; {' '.join(p.format_usage().split())}")
 
-    p.add_argument("--temperature", default="0")
-    p.add_argument("--top-p", default="1")
+    for flag, default in (("--temperature", "0"), ("--top-p", "1")) if sampled else ():
+        p.add_argument(flag, default=default)
     p.add_argument("--height", default=str(REHEARSAL_HEIGHT[1]))
     p.error = refuse
     try:
         a = p.parse_args(argv)
     except argparse.ArgumentError as e:
         refuse(e)
-    if a.peer not in peers(host):
-        raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
-    a.sampling = sampling(a.temperature, a.top_p)
+    registered_peer(host, a.peer)
+    a.sampling = sampling(a.temperature, a.top_p) if sampled else {}
     a.height = bounded("--height", a.height, *REHEARSAL_HEIGHT)
     return a
 
@@ -1509,9 +1579,15 @@ def warden_windows(requests: int, scan: bool = True, bucket_ms: int = SCAN["--bu
 
 
 def warden_height(windows: int, heads: int = 0) -> int:
-    """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's) and then
-    `windows` link-windows at `WARDEN_WINDOW_LEAVES` each."""
-    return max(REHEARSAL_HEIGHT[0], (heads + WARDEN_WINDOW_LEAVES * windows - 1).bit_length())
+    """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's), then the
+    session's start (`START_LEAVES`) and then `windows` execution phases at `WARDEN_WINDOW_LEAVES` each."""
+    return max(REHEARSAL_HEIGHT[0], (key_signatures(windows, heads) - 1).bit_length())
+
+
+def key_signatures(windows: int, heads: int = 0) -> int:
+    """The one-time signatures a rehearsal of `windows` execution phases takes of its key: a load's `heads`, its
+    session's start and five an execution phase."""
+    return heads + START_LEAVES + WARDEN_WINDOW_LEAVES * windows
 
 
 def load_heads(shape: str) -> int:
@@ -1526,8 +1602,9 @@ def warden_key(windows: int, height: int, what: str, heads: int = 0) -> None:
     if height < (least := warden_height(windows, heads)):
         load = f" after the load's {heads} heads" if heads else ""
         raise Refused(f"--height {height}: {what} take {windows} link-windows, "
-                      f"{heads + WARDEN_WINDOW_LEAVES * windows} one-time signatures ({WARDEN_WINDOW_LEAVES} a "
-                      f"window{load}), past the key's {1 << height}: give --height {least} or more, or fewer --requests")
+                      f"{key_signatures(windows, heads)} one-time signatures (the session's start and "
+                      f"{WARDEN_WINDOW_LEAVES} a window{load}), past the key's {1 << height}: give --height {least} or "
+                      f"more, or fewer --requests")
 
 
 def scan_group_windows(tokens: int) -> int:
@@ -1543,7 +1620,40 @@ def warden_group_minutes(groups: int, tokens: int, height: int = REHEARSAL_HEIGH
     return _minutes(-(-groups * scan_group_windows(tokens) * SCAN["--window"] * bucket_ms // 1000), height)
 
 
-def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
+#: a relay session's `--windows`, its length in execution phases: at most what the gate's longest rehearsal runs
+#: (`warden_windows` of `WARDEN_REQUESTS`' most), so a session's key and records are no larger than a rehearsal's
+SESSION_WINDOWS = (1, warden_windows(WARDEN_REQUESTS[1]))
+
+
+def session_minutes(windows: int, height: int = REHEARSAL_HEIGHT[1],
+                    window_ms: int = SCAN["--window"] * SCAN["--bucket-ms"]) -> int:
+    """The fewest minutes a relay session of `windows` execution phases of `window_ms` takes: `warden_minutes` with
+    their span in place of the arrivals, so its start, its check and its key at `height` as a rehearsal's."""
+    return _minutes(-(-windows * window_ms // 1000), height)
+
+
+def session_request(a: argparse.Namespace, port: int, minutes: int, window_ms: int) -> dict:
+    """A relay session's request, less its schedule's flags: `--client-port`, the port of the peer's loopback its
+    clients connect to (not the endpoint's, and none of the challenge links', which the peer's ssh forwards already),
+    and `--windows` (`SESSION_WINDOWS`) execution phases of `window_ms`, refused when the key at `--height` can't
+    sign them (`warden_height`) or `--minutes` is under `session_minutes` of them."""
+    client = bounded("--client-port", a.client_port, 1024, 65535)
+    if client == port or client in PORTS:
+        raise Refused(f"--client-port {client}: a port of the peer's loopback for the relay's clients, not the "
+                      f"endpoint's --port and none of the challenge links' ({PORTS[0]} to {PORTS[-1]})")
+    windows = bounded("--windows", a.windows, *SESSION_WINDOWS)
+    if a.height < (least := warden_height(windows)):
+        raise Refused(f"--height {a.height}: the key's {1 << a.height} one-time signatures don't sign {windows} "
+                      f"execution phases: give --height {least} or more, or fewer --windows")
+    if minutes < (least := session_minutes(windows, a.height, window_ms)):
+        raise Refused(f"--minutes {minutes}: {windows} execution phases of {window_ms} ms take {least} minutes "
+                      f"(their span, the start, the check and the key at height {a.height}): give --minutes {least} "
+                      f"or more, or fewer --windows")
+    return {"device": "warden", "peer": a.peer, "port": port, "client_port": client, "windows": windows,
+            "minutes": minutes, "height": a.height, "scan": True}
+
+
+def parse_warden(argv: list[str], host: Host, *, load: bool = False, session: bool = False) -> dict:
     """A warden rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
     `warden_minutes` of its requests and height), how many requests its traffic sends, when given the most tokens a
     request asks for (`warden_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic) with, when
@@ -1553,26 +1663,38 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     schedule, prompt ids and tokens), and `--window-per-group` (with `--prompts`) sends them a group a link-window's
     span; `warden_prompts` reads them and checks what depends on them. `--watermark` (recorded only when given) sends
     the endpoint the watermark stream. With `load` (`load-relay`) it is the serving session with its load first
-    (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before the rehearsal's."""
-    p = argparse.ArgumentParser(prog=f"vy-challenger-gate {'load-relay' if load else 'warden-rehearse'}",
-                                exit_on_error=False, add_help=False, allow_abbrev=False)
+    (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before the rehearsal's. With
+    `session` (`relay-session`, the module docstring's "A relay session") it is the relay kept up for clients that
+    aren't its own: none of the traffic's flags or the sampling, always the scan's schedule (``scan``, at
+    `--bucket-ms` and `--scan-class` when given), and `--client-port` and `--windows` (`session_request`)."""
+    verb = "relay-session" if session else "load-relay" if load else "warden-rehearse"
+    p = argparse.ArgumentParser(prog=f"vy-challenger-gate {verb}", exit_on_error=False, add_help=False,
+                                allow_abbrev=False)
+    def traffic(flag: str, **how: Any) -> None:
+        if not session:
+            p.add_argument(flag, **how)
+
     p.add_argument("--peer", required=True)
     p.add_argument("--port", required=True)
     p.add_argument("--minutes", required=True)
-    p.add_argument("--requests", default=None)
-    p.add_argument("--tokens", default=None)
-    p.add_argument("--scan", action="store_true")
+    traffic("--requests", default=None)
+    traffic("--tokens", default=None)
+    traffic("--scan", action="store_true")
     p.add_argument("--bucket-ms", default=None)
-    p.add_argument("--prompts", action="store_true")
+    traffic("--prompts", action="store_true")
     p.add_argument("--scan-class", default=None)
-    p.add_argument("--window-per-group", action="store_true")
+    traffic("--window-per-group", action="store_true")
     p.add_argument("--watermark", action="store_true")
+    if session:
+        p.add_argument("--client-port", required=True)
+        p.add_argument("--windows", required=True)
+        p.set_defaults(scan=True, prompts=False, window_per_group=False)
     if load:
         p.add_argument("--sink-port", required=True)
         p.add_argument("--program", required=True)
         p.add_argument("--shape", default=LOAD_SHAPES[0])
         p.add_argument("--streams", default=str(LOAD_DEFAULT_STREAMS))
-    a = _parse_rehearsal(p, argv, host)
+    a = _parse_rehearsal(p, argv, host, sampled=not session)
     port = bounded("--port", a.port, 1024, 65535)
     minutes = bounded("--minutes", a.minutes, *CERTIFIER_MINUTES)
     if a.prompts and not a.scan:
@@ -1581,13 +1703,16 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
         raise Refused("--bucket-ms: the scan's tick, with --scan")
     if a.window_per_group and not a.prompts:
         raise Refused("--window-per-group: groups of the --prompts")
-    if a.scan_class is not None and not a.prompts:
+    if a.scan_class is not None and not (a.prompts or session):
         raise Refused("--scan-class: the scan's class of the --prompts")
     if a.scan_class is not None and a.scan_class not in SCAN_CLASSES:
         raise Refused(f"--scan-class {a.scan_class!r}: one of {sorted(SCAN_CLASSES)}")
     tick = {} if a.bucket_ms is None else {"bucket_ms": bounded("--bucket-ms", a.bucket_ms, *SCAN_BUCKET_MS)}
     loaded = {"load": parse_load(a, host, port)} if load else {}
     watermark = {"watermark": True} if a.watermark else {}
+    if session:
+        cls = {} if a.scan_class is None else {"scan_class": a.scan_class}
+        return session_request(a, port, minutes, warden_window_ms({"scan": True} | tick)) | tick | cls | watermark
     spent = loaded["load"]["minutes"] if load else 0
     if minutes <= spent:
         raise Refused(f"--minutes {minutes}: the {loaded['load']['shape']} load takes {spent} minutes (its weights "
@@ -1620,9 +1745,7 @@ def _after_load(spent: int) -> str:
 
 def _load_relay():
     """`benchmarks/network_traces/load_relay.py`, the load's store, relay and commit, imported when a verb needs it."""
-    if (here := str((TREE / "benchmarks/network_traces/load_relay.py").parent)) not in sys.path:
-        sys.path.insert(0, here)
-    import load_relay
+    from benchmarks.network_traces import load_relay
     return load_relay
 
 
@@ -1651,8 +1774,9 @@ def parse_load(a: argparse.Namespace, host: Host, port: int) -> dict:
     lr = _load_relay()
     try:
         lr.read_store(host.store, lr.SHAPES[a.shape])
-    except lr.Refused as e:
-        raise Refused(f"the store: {e}") from None
+    except lr.Refused as e:  # its sentence names the store's path on the auditor's device: the caller gets the word
+        raise Refused(f"the store: {e.code} (one of load_relay.REFUSALS' words): weights-write --shape {a.shape} "
+                      "writes the shape's stream and its record") from None
     return {"shape": a.shape, "program": a.program, "sink_port": sink_port, "streams": streams,
             "minutes": load_minutes(a.shape)}
 
@@ -1675,7 +1799,8 @@ def parse_weights(argv: list[str], host: Host) -> dict:
     if a.shape not in LOAD_SHAPES:
         raise Refused(f"--shape {a.shape!r}: one of {list(LOAD_SHAPES)}")
     if not host.store.is_dir():
-        raise Refused(f"no store disk at {host.store}: infra mounts it, auditor's")
+        raise Refused("the store: no-store (one of load_relay.REFUSALS' words): the auditor's device has no store "
+                      "disk, which infra mounts")
     return {"device": "weights", "shape": a.shape, "minutes": WEIGHTS_MINUTES}
 
 
@@ -1726,20 +1851,11 @@ def warden_prompts(req: dict, data: bytes) -> bytes:
     return json.dumps(prompts, separators=(",", ":")).encode()
 
 
-def certifier_prompts(req: dict, data: bytes) -> bytes:
-    """A varied certifier rehearsal's `--prompts` (`prompts_of`, each of `CERTIFIER_PROMPTS` ids, the varied plan's
-    prompt lengths: no scan reads them): request j sends the (j mod n)-th of the n (`certifier_serve.py rehearse
-    --prompts-file`), at the same seed's arrivals and `max_tokens`. The request records their count and ids alone.
-    Returns the prompts' canonical bytes, the witness's `PROMPTS`."""
-    prompts = prompts_of(data, CERTIFIER_PROMPTS)
-    req["prompts"] = {"count": len(prompts), "ids": sum(map(len, prompts))}
-    return json.dumps(prompts, separators=(",", ":")).encode()
-
-
-#: each verb the rehearsal unit runs, its request parser: the two rehearsals, the load (a warden rehearsal with its
-#: load first) and the store's write
-REHEARSALS = {"certifier-rehearse": parse_certifier, "warden-rehearse": parse_warden,
-              "load-relay": lambda argv, host: parse_warden(argv, host, load=True), "weights-write": parse_weights}
+#: each verb the rehearsal unit runs, its request parser: the rehearsal, the load (a rehearsal with its load first),
+#: the store's write and the relay session (the relay of a rehearsal, kept up for clients that aren't its own)
+REHEARSALS = {"warden-rehearse": parse_warden,
+              "load-relay": lambda argv, host: parse_warden(argv, host, load=True), "weights-write": parse_weights,
+              "relay-session": lambda argv, host: parse_warden(argv, host, session=True)}
 
 
 def certifier_runs(host: Host) -> list[str]:
@@ -1749,20 +1865,17 @@ def certifier_runs(host: Host) -> list[str]:
 
 def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token: str, start: Callable[[str], None],
                    own: Callable[[Path], None], active: Callable[[str], bool],
-                   parse: Callable[[list[str], Host], dict] = parse_certifier,
+                   parse: Callable[[list[str], Host], dict],
                    read: Callable[[int], bytes] = lambda n: b"") -> dict:
-    """Validate a rehearsal's request (`parse`: the certifier's or the warden's), refused while another of either runs
+    """Validate a request of the rehearsal unit's (`parse`: its verb's, of `REHEARSALS`), refused while another runs
     (under the gate's lock), and `start` its unit, which runs `certifier-run` as `auditor`. Returns at once: `status
-    RUN` follows it. A `--prompts` request's prompts are `read` off stdin (`warden_prompts`, a certifier's
-    `certifier_prompts`) and written to the run's `witness/` (0700, the file 0600, both `auditor`'s), never to its
-    request."""
+    RUN` follows it. A `--prompts` request's prompts are `read` off stdin (`warden_prompts`) and written to the run's
+    `witness/` (0700, the file 0600, both `auditor`'s), never to its request."""
     req = parse(argv, host)
-    prompts = None if not req.get("prompts") else (
-        warden_prompts if req.get("device") == "warden" else certifier_prompts)(req, read(WARDEN_PROMPTS_BYTES + 1))
+    prompts = None if not req.get("prompts") else warden_prompts(req, read(WARDEN_PROMPTS_BYTES + 1))
     with locked(host.root / "gate.lock"):
         if (running := next((r for r in certifier_runs(host) if active(r)), None)) is not None:
-            raise Refused(f"rehearsal {running} still runs: one at a time, a certifier's or a warden's "
-                          f"(status {running})")
+            raise Refused(f"rehearsal {running} still runs: one at a time (status {running})")
         if not host.certifier.is_dir():
             host.certifier.mkdir(mode=0o755)
             own(host.certifier)
@@ -1783,28 +1896,76 @@ def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token
     return req | {"unit": f"vy-certifier@{run}.service"}
 
 
-def certifier_status(run: str, host: Host, active: Callable[[str], bool]) -> dict:
+#: what a run's request holds that only its own lane and vy-admin are given: the peer, a machine's name, and the lane
+#: that asked. The gate reads both in its own copy, `request.json`
+REQUEST_WITHHELD = ("peer", "by")
+
+
+def certifier_request(run: str, host: Host) -> dict:
+    """A run's request whole, as the gate wrote it: the gate's own read."""
     d = host.certifier / run
     if not CERTIFIER_RUN.fullmatch(run) or not (d / "request.json").is_file():
         raise Refused(f"no certifier rehearsal {run!r}")
+    return json.loads((d / "request.json").read_text())
 
-    def read(path: Path) -> dict | None:
-        return json.loads(path.read_text()) if path.is_file() else None
-    end = read(d / "end.json")
-    return {"run": run, "request": read(d / "request.json"), "end": end, "active": end is None and active(run)}
+
+def public_request(req: dict) -> dict:
+    """A run's request as any key is given it: less `REQUEST_WITHHELD`."""
+    return {k: v for k, v in req.items() if k not in REQUEST_WITHHELD}
+
+
+def certifier_status(run: str, host: Host, active: Callable[[str], bool], *, own: bool = False) -> dict:
+    """A run's request, its end once it has one and whether its unit runs. The request is whole only for the run's
+    `own` lane or vy-admin (the gate's to say); any other key gets `public_request`'s."""
+    d, req = host.certifier / run, certifier_request(run, host)
+    end = json.loads((d / "end.json").read_text()) if (d / "end.json").is_file() else None
+    status = {"run": run, "request": req if own else public_request(req), "end": end,
+              "active": end is None and active(run)}
+    return status | {"relay": session_relay(d, req)} if "client_port" in req else status
+
+
+def public_deployment(path: Path) -> dict | None:
+    """The relay's `deployment.json` at `path` as the gate gives it out, `DEPLOYMENT_PUBLIC`'s keys of it: None of
+    a file that isn't there or isn't a JSON object (one read half-written is not there yet)."""
+    with suppress(OSError, ValueError):
+        doc = json.loads(path.read_text())
+        if isinstance(doc, dict):
+            return {k: doc[k] for k in DEPLOYMENT_PUBLIC if k in doc}
+    return None
+
+
+def session_relay(d: Path, req: dict) -> dict | None:
+    """What a relay session's `status` says of its relay once it listens, None before: where a client connects on
+    the peer, and the relay's `deployment.json` as the run publishes it at its end (`public_deployment`), which is
+    in `witness/` until then."""
+    for at in (d / "out", d / WITNESS):
+        if (deployment := public_deployment(at / "deployment.json")) is not None:
+            return {"client": f"127.0.0.1:{req['client_port']}", "deployment": deployment}
+    return None
 
 
 def certifier_fetch(run: str, host: Host, *, witness: bool = False) -> bytes:
-    """The rehearsal's directory (its request, out/ and end) as a gzipped tar, with a warden rehearsal's `witness/`
-    only when `witness` (the gate's: the run's own lane, or vy-admin)."""
-    certifier_status(run, host, lambda _: False)
-    hidden = f"{run}/{WITNESS}"
+    """The rehearsal's directory (its request, out/ and end) as a gzipped tar, with its `witness/` only when
+    `witness` (the gate's: the run's own lane, or vy-admin). Its `request.json` is `public_request`'s for every
+    key, so what is released of a fetch names no peer; the request whole is `witness/request.json`, with the
+    witness."""
+    req = certifier_request(run, host)
+    d, hidden, request = host.certifier / run, f"{run}/{WITNESS}", f"{run}/request.json"
 
     def keep(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
-        return info if witness or (info.name != hidden and not info.name.startswith(hidden + "/")) else None
+        return info if info.name != request and (
+            witness or (info.name != hidden and not info.name.startswith(hidden + "/"))) else None
+
+    def add(tar: tarfile.TarFile, name: str, data: bytes) -> None:
+        info = tar.gettarinfo(d / "request.json", arcname=name)
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        tar.add(host.certifier / run, arcname=run, filter=keep)
+        tar.add(d, arcname=run, filter=keep)
+        add(tar, request, (json.dumps(public_request(req), indent=1, sort_keys=True) + "\n").encode())
+        if witness:
+            add(tar, f"{hidden}/request.json", (d / "request.json").read_bytes())
     return buf.getvalue()
 
 
@@ -1820,16 +1981,14 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "(a lane's own gate key, or vy-admin) "
          "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
          "| model-key --model M --circuit SHA512 [--weights-root W] (a lane's own gate key, or vy-admin) "
-         "| certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra|drop|token] [--requests N] "
-         "[--in-flight N] [--tokens N] [--profile planned|served] [--temperature T] [--top-p P] "
-         "[--traffic varied [--rate R] [--prompt-range LO:HI | --prompts: the prompts on stdin] [--seed S] "
-         "[--eos-ids ID,...] [--compact B] [--margin M]: no --in-flight, --profile or sampling] "
          "| warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T] "
          "[--top-p P] [--watermark] [--scan [--bucket-ms MS] [--prompts [--window-per-group]]: the prompts on stdin] "
          "(a lane's own gate key, or vy-admin) "
          "| weights-write [--shape h200|tiny] "
          "| load-relay --peer NAME --port PORT --sink-port PORT --program SHA512 --minutes M [--shape h200|tiny] "
          "[--streams N] [warden-rehearse's flags] (a lane's own gate key, or vy-admin) "
+         "| relay-session --peer NAME --port PORT --client-port PORT --windows N --minutes M [--bucket-ms MS] "
+         "[--scan-class CLASS] [--watermark] [--height H] (a lane's own gate key, or vy-admin) "
          "| status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN")
 
 
@@ -1948,8 +2107,8 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
             doc = gate_model_key(rest, host)
         elif verb in REHEARSALS:
             if by is None:
-                what = {"load-relay": "a load", "weights-write": "the store's write"}.get(
-                    verb, f"a {verb.removesuffix('-rehearse')} rehearsal")
+                what = {"load-relay": "a load", "weights-write": "the store's write",
+                        "relay-session": "a relay session"}.get(verb, f"a {verb.removesuffix('-rehearse')} rehearsal")
                 raise Refused(f"this key reads only: {what} is started with a lane's own gate key, or by vy-admin")
             doc = gate_certifier(rest, host, by=by, now=now, token=hooks.get("token") or secrets.token_hex(2),
                                  start=hooks.get("start_certifier") or start_certifier_unit,
@@ -1960,11 +2119,11 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
             return 0, host.models.read_bytes() if host.models.exists() else b""
         elif verb == "policies" and not rest:
             return 0, host.policies.read_bytes() if host.policies.exists() else b""
-        elif verb == "status" and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
-            doc = certifier_status(rest[0], host, hooks.get("certifier_active") or certifier_unit_active)
-        elif verb == "fetch" and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
-            request = certifier_status(rest[0], host, lambda _: False)["request"]
-            return 0, certifier_fetch(rest[0], host, witness=admin or (by is not None and by == request.get("by")))
+        elif verb in ("status", "fetch") and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
+            own = admin or (by is not None and by == certifier_request(rest[0], host).get("by"))
+            if verb == "fetch":
+                return 0, certifier_fetch(rest[0], host, witness=own)
+            doc = certifier_status(rest[0], host, hooks.get("certifier_active") or certifier_unit_active, own=own)
         elif verb == "status" and len(rest) == 1:
             doc = gate_status(rest[0], host, active, now)
         elif verb == "ledger" and not rest:
@@ -2394,30 +2553,6 @@ def tunnel_up(tunnel: subprocess.Popen, port: int, seconds: float = 60.0) -> boo
     return False
 
 
-def certifier_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list[str]:
-    """`certifier_serve.py rehearse` of the request, the endpoint at `url` (the tunnel's local end): the honest shim, or
-    the request's tamper, with N2 on the request's profile (planned for a request written before it had one), the
-    request's in-flight count and tokens only when it has them, and its keys' height (`height_argv`) and sampling
-    (`sampling_argv`) always. A varied
-    request's (`--traffic varied`) passes its varied flags instead when it has them, its prompts (`--prompts-file`, the
-    gate's `PROMPTS` in the run's `witness/`, beside `out`) when it has them, and its run as `--name`, so each
-    request's `user` upstream, `RUN.j`, is no other run's."""
-    varied = req.get("traffic") == "varied"
-    flags = CERTIFIER_VARIED if varied else (("--in-flight", "in_flight"), ("--tokens", "tokens"))
-    given = [w for flag, key in flags if key in req for w in (flag, _flag_value(req[key]))]
-    prompts = ["--prompts-file", str(out.parent / WITNESS / PROMPTS)] if varied and req.get("prompts") else []
-    traffic = ["--traffic", "varied", "--name", req["run"]] if varied else \
-        ["--profile", req.get("profile", CERTIFIER_PROFILES[0])]
-    return [sys.executable, str(tree / "benchmarks/network_traces/certifier_serve.py"), "rehearse",
-            "--upstream", url, "--out", str(out), *height_argv(req), "--requests", str(req["requests"]), *given,
-            *prompts, *sampling_argv(req), *traffic, "--strategies", req["tamper"] or "honest"]
-
-
-def _flag_value(v: object) -> str:
-    """A recorded flag's value as `certifier_serve.py` reads it, EOS ids comma-separated."""
-    return ",".join(map(str, v)) if isinstance(v, list) else str(v)
-
-
 def certifier_env(tree: Path = TREE) -> dict[str, str]:
     """The rehearsal's environment: this unit's PATH (the pinned tree's Lean toolchain first, which builds
     network-records on first use) and the pinned tree for `verity`, since the rehearsal's processes don't run
@@ -2427,7 +2562,7 @@ def certifier_env(tree: Path = TREE) -> dict[str, str]:
 
 
 def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: list[tuple[str, int]] = (),
-                   store: Path | None = None) -> list[str]:
+                   store: Path | None = None, listen: int | None = None, listen_fd: int | None = None) -> list[str]:
     """`warden_serve.py rehearse` of the request: the warden and its client here, the warden's upstream the endpoint
     at `url` (the tunnel's local end), its key at the request's height (`height_argv`), the request's number of
     requests on the gate's traffic (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`),
@@ -2436,11 +2571,20 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     (`--window-per-group`) when the request says so, the watermark stream (`--watermark`) when it says so, and the most
     tokens a request asks for only when the request has it. A `load-relay` request's load goes first: the `store`'s
     stream of its shape relayed to `sinks` (the sink tunnels' local ends) for its program, the endpoint given
-    `LOAD_READY_S` to come up after it."""
+    `LOAD_READY_S` to come up after it. A relay session's request (it has ``client_port``) runs `warden_serve.py
+    session` instead: the relay alone, with no client and no traffic, listening on this host's 127.0.0.1:`listen`
+    (where the peer's clients' forward ends; on the socket it inherits as `listen_fd` when given, `held_listener`'s,
+    and then it binds none) for the request's execution phases, its upstream, key, schedule and watermark as a scan
+    rehearsal's."""
     scan = ["--ids", *scan_schedule(req.get("bucket_ms"), req.get("scan_class"))] if req.get("scan") else []
     prompts = ["--prompts", str(out / PROMPTS)] if req.get("prompts") else []
     grouped = ["--window-per-group"] if req.get("window_per_group") else []
     watermark = ["--watermark"] if req.get("watermark") else []
+    if "client_port" in req:
+        return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "session",
+                "--upstream", url.removeprefix("http://"), "--listen", f"127.0.0.1:{listen}",
+                *([] if listen_fd is None else ["--listen-fd", str(listen_fd)]), "--out", str(out),
+                *height_argv(req), "--windows", str(req["windows"]), *scan[1:], *watermark]
     given = ["--max-tokens", str(req["tokens"])] if "tokens" in req else []
     load = req.get("load")
     loaded = [] if not load else ["--load-store", str(store), "--load-shape", load["shape"], "--load-sinks",
@@ -2455,56 +2599,344 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
 
 def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> list[str]:
     """`load_relay.py write` of a `weights-write` request: its shape's stream into `store` over every core, its record
-    (less the digests) to `out/store.json`."""
+    (less the digests) to `store.json` in `out`, which the unit makes the run's `witness/` (`_weights_run`)."""
     return [sys.executable, str(tree / "benchmarks" / "network_traces" / "load_relay.py"), "write", "--store",
             str(store), "--shape", req["shape"], "--workers", str(os.cpu_count() or 1),
             "--out", str(out / "store.json")]
 
 
-#: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: none is a cell's content or a
-#: connection's own (a load's are its values and how many registered)
-WARDEN_COUNTS = ("requests", "ended", "refused", "failed", "windows", "certified_windows", "certificates",
-                 "signer_refused", "cell_rows", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms",
-                 "load")
+#: the counts of `warden_serve.py check`'s summary a network certifier run's end carries: the schedule's execution
+#: phases, how many were certified and by how many certificates, the registered rows (cut to `CELL_ROWS`), a load's
+#: values and how many registered, and how its failed connections failed in `FAILED`'s words.
+#: None counts the traffic: the requests and how each ended, the cells, their bits, how many kept their bucket and
+#: the ticks' lateness follow what the peer sent and when, and stay in the witness's `check.json`. So does which
+#: execution phases the signer refused (`signer_refused`), which is the traffic's: the end holds no list and no
+#: count of them, and one of them has no certificate, which is all the period check needs to refuse it
+WARDEN_COUNTS = ("failed", "windows", "certified_windows", "certificates", "cell_rows", "load")
+#: of those, the counts that are one fewer for each execution phase the signer refused: how many were certified, by
+#: how many certificates, and how many of the cells' registrations the check accepted. An end holds them only when
+#: it is accepted, where each is the schedule's; an end that is not holds `windows`, `cell_rows`' `of` (twice it)
+#: and a load's counts, which are the schedule's and the store's whatever the peer sent
+ACCEPTED_COUNTS, ACCEPTED_CELL_ROWS = ("certified_windows", "certificates"), ("registered",)
+#: the end's words for how a connection that neither ended nor was refused failed (the verdict's `failed`): the
+#: network certifier's own two outcomes, and `error` for any other. A client's exception is one, and its words are
+#: its connection's own line of `witness/client.json`
+FAILED = ("cut", "fail", "error")
 
 
-def warden_outcome(out: Path, witness: Path) -> dict:
+class Unruled(ValueError):
+    """A line of a row registrations' file that `out/` can't hold as `ROW_LINE` rules it, or a store's record that
+    it can't hold as `STORE_PUBLIC` does."""
+
+
+def in_form(v: object, form: object) -> bool:
+    """Whether `v` is in a published key's `form`: `int`, a count below 2^63; a tuple, one of its values, in its
+    own type; a list, a list as long with each item in its item's form; a pattern, a string it matches whole."""
+    if form is int:
+        return type(v) is int and 0 <= v < 1 << 63
+    if isinstance(form, tuple):
+        return any(type(v) is type(w) and v == w for w in form)
+    if isinstance(form, list):
+        return isinstance(v, list) and len(v) == len(form) and all(map(in_form, v, form))
+    return isinstance(v, str) and form.fullmatch(v) is not None
+
+
+def deployment_forms(path: Path) -> dict:
+    """The forms a run's deployment (the witness's `deployment.json`, at `path`) gives the keys `ROW_LINE` and
+    `CERTIFICATE_LINE` rule `Given`: its `link`, the `links` it certifies under (`CERTIFIED_LINKS`), the schedule's
+    digest (`parameters`), a cell's bytes and an execution phase's `buckets`, each the deployment's one value; and
+    a `signature`, hex of the length its key's parameters give. Empty for a deployment that doesn't read or isn't
+    itself in form: no line is published beside it."""
+    doc = public_deployment(path) or {}
+    link, digest = doc.get("link"), doc.get("digest")
+    params, key = (doc[k] if isinstance(doc.get(k), dict) else {} for k in ("params", "key"))
+    cell_bytes, buckets = params.get("cell_bytes"), params.get("window")
+    if not (in_form(link, LOAD_NAME) and in_form(digest, ROOT) and in_form(cell_bytes, int) and in_form(buckets, int)
+            and in_form(key.get("params"), KEY_PARAMS)):
+        return {}
+    signature = lms.Params(*key["params"]).signature_bytes()
+    links = tuple(link + follows for follows in CERTIFIED_LINKS)
+    return {"link": (link,), "links": links, "parameters": (digest,), "cell_bytes": (cell_bytes,),
+            "buckets": (buckets,), "signature": re.compile("[0-9a-f]{%d}" % (2 * signature))}
+
+
+def load_refused(word: object) -> dict:
+    """A refused load's or store's record as `out/` and the end hold it: its word alone, one of `LOAD_REFUSED`,
+    the last for anything that isn't one of the others."""
+    return {"refused": word if isinstance(word, str) and word in LOAD_REFUSED else LOAD_REFUSED[-1]}
+
+
+def store_public(doc: object) -> dict:
+    """A store's record (`load_relay.py write`'s) as `out/` and the end hold it: a refused write's word
+    (`load_refused`), or `STORE_PUBLIC`'s keys, all of them and no other, each in its form. `Unruled` for any
+    other record, naming the key and what to change: none of it is published."""
+    if isinstance(doc, dict) and "refused" in doc:
+        return load_refused(doc["refused"])
+    if not isinstance(doc, dict) or set(doc) != set(STORE_PUBLIC):
+        keys = sorted(map(str, doc)) if isinstance(doc, dict) else type(doc).__name__
+        raise Unruled(f"the store's record holds {keys}, not STORE_PUBLIC's keys {sorted(STORE_PUBLIC)}. Rule "
+                      f"whether a new key is public, and write its form there ({Path(__file__).name})")
+    for k, form in STORE_PUBLIC.items():
+        if not in_form(doc[k], form):
+            raise Unruled(f"the store's record's {k} isn't in the form STORE_PUBLIC ({Path(__file__).name}) holds "
+                          "it to")
+    return {k: doc[k] for k in STORE_PUBLIC}
+
+
+def failed_words(failed: object) -> list[str]:
+    """A check's `failed` as the end holds it: `FAILED`'s words alone, each once, `error` in place of anything
+    that isn't one of the first two, so the end has no word a client or an endpoint chose."""
+    return sorted({w if isinstance(w, str) and w in FAILED else FAILED[-1]
+                   for w in (failed if isinstance(failed, list) else [failed])})
+
+
+def row_certificate(line: object, given: dict) -> dict:
+    """A row registration's line (`ROW_CERTIFICATES`) as `out/` holds it: its certificate, the key, digest and
+    signature under the link, direction and window its registration names (`certificate.Certificate`'s fields),
+    each in `CERTIFICATE_LINE`'s form under the run's deployment's `given`
+    (`deployment_forms`). Nothing else of the registration, and not the line's cost. A connection
+    rows' line that holds the word in place of a registration (`ROWS_NO_HEAD`) gives the word's certificate in the
+    same fields, each one of the word's public record, and no cost: a reader tells it from a head's by its digest,
+    which is a function of the link, the execution phase and the schedule's digest. `Unruled` for a line that holds
+    no certificate's fields, or one out of its form, and for one that says its execution phase was refused
+    (`REFUSED_LINE`)."""
+    r = _certified(line).get("registration") or line.get(ROWS_NO_HEAD)
+    try:
+        doc = {"certificate": {
+            "key_id": r["certificate"]["key"], "link": r["link"], "direction": r.get("direction", ROWS_DIRECTION),
+            "window": r["window"], "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]}}
+    except (KeyError, TypeError, AttributeError):
+        raise Unruled("the line's registration doesn't hold a certificate's fields") from None
+    return _ruled(doc, CERTIFICATE_LINE, "the line", given, "CERTIFICATE_LINE")
+
+
+def _certified(line: object) -> dict:
+    """`line`, a JSON object that doesn't say its execution phase was refused; `Unruled` for any other."""
+    if not isinstance(line, dict):
+        raise Unruled("the line isn't a JSON object")
+    if "refused" in line:
+        raise Unruled(REFUSED_LINE)
+    return line
+
+
+def certified_certificate(line: object, given: dict) -> dict:
+    """A line of `certified.jsonl` as `out/certificates.jsonl` holds it: its certificate in `CERTIFICATE_LINE`'s
+    forms, without the head and the salt the certificate signs. `Unruled` for a line that holds none, and for one
+    that says its execution phase was refused (`REFUSED_LINE`)."""
+    if "certificate" not in _certified(line):
+        raise Unruled("the line holds no certificate")
+    return _ruled({"certificate": line["certificate"]}, CERTIFICATE_LINE, "the line", given, "CERTIFICATE_LINE")
+
+
+def _ruled(doc: dict, keys: dict, at: str, given: dict, listed: str = "ROW_LINE") -> dict:
+    """`doc` less the keys `keys` leaves out, in its own order; `Unruled` for a key `keys` doesn't name, for a
+    published value that isn't in its key's form (`in_form`; a `Given` key's is the run's deployment's, `given`,
+    and a `NAMED` one's the name `doc`'s own link, direction and execution phase give) and for a value that isn't
+    an object where `keys` lists its keys."""
+    out = {}
+    for k, v in doc.items():
+        rule = keys.get(k)
+        if rule is None:
+            raise Unruled(f"{at} holds the key {k!r}, which {listed} names neither as published nor as left out. "
+                          f"Rule whether it is public, and write it there ({Path(__file__).name}) with its form, "
+                          "or as WITHHELD")
+        if rule == WITHHELD:
+            continue
+        if isinstance(rule, dict):
+            if not isinstance(v, dict):
+                raise Unruled(f"{at}'s {k} isn't an object of the keys {listed} lists for it")
+            out[k] = _ruled(v, rule, f"{at}'s {k}", given, listed)
+            continue
+        if isinstance(rule, Given):
+            if (rule := given.get(rule.name)) is None:
+                raise Unruled(f"{at}'s {k} is held to what the run's deployment.json gives, which gives none: a "
+                              "line is published only beside the deployment that fixes its link, schedule and key")
+        elif rule == NAMED:
+            rule = (f"{doc.get('link')}/{doc.get('direction')}/{doc.get('window')}",)
+        if not in_form(v, rule):
+            raise Unruled(f"{at}'s {k} isn't in the form {listed} ({Path(__file__).name}) holds it to. A published "
+                          "value says no more than its key's kind: write the value in its form, or rule the form "
+                          "there")
+        out[k] = v
+    return out
+
+
+def row_registration(text: str, given: dict) -> str:
+    """A line of a cells' registrations' file (`ROW_REGISTRATIONS`) as `out/` holds it: the line as the witness
+    writes it, key for key in its order, less what `ROW_LINE` leaves out: the registration's `wiring` and the
+    line's cost. So every byte of the line
+    in `witness/` that isn't of a left-out key or beside one is a byte of the public line. Each published value
+    is in its key's form under the run's deployment's `given` (`deployment_forms`). `Unruled`, with what
+    to change, for a line `ROW_LINE` doesn't rule whole, for one that isn't `json.dumps`' own writing of
+    itself, which this couldn't cut to the same bytes, and for one that says its execution phase was refused
+    (`REFUSED_LINE`)."""
+    try:
+        line = json.loads(text)
+    except ValueError:
+        raise Unruled("the line isn't JSON") from None
+    if not isinstance(line, dict) or json.dumps(line) != text:
+        raise Unruled("the line isn't one JSON object as json.dumps writes it by default, so its public keys can't "
+                      "be published byte for byte: write the line so, or teach row_registration "
+                      f"({Path(__file__).name}) the writer's form")
+    return json.dumps(_ruled(_certified(line), ROW_LINE, "the line", given))
+
+
+def warden_outcome(out: Path, witness: Path, requests: int | None = None) -> dict:
     """A warden rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
-    `WARDEN_PUBLIC`'s files copied to `out`, `certified.jsonl`'s certificates without the heads and salts they sign
-    (`out/certificates.jsonl`), each registration's root by value, the check's verdict (`accepted`, how many problems,
-    `WARDEN_COUNTS`), each witness file by name and size alone, and a load's relay (`load-relay.json`: its counts and
-    the sink's acknowledgements, or why it was refused)."""
+    `WARDEN_PUBLIC`'s files copied to `out` (of the deployment, `DEPLOYMENT_PUBLIC`'s keys), the check's verdict
+    (`accepted` and `WARDEN_COUNTS`, its `cell_rows` less the registrations' cost, its `failed` in `FAILED`'s
+    words), and of an accepted run its lines:
+    `certified.jsonl`'s certificates without the heads and salts they sign (`out/certificates.jsonl`), each row
+    registration's certificate without its registration (`ROW_CERTIFICATES`) and each cells' registration less
+    its private keys (`ROW_REGISTRATIONS`, `row_registration`).
+
+    `requests` is the number the request asked the device's own client for, None for a relay session, whose
+    clients are the peer's: a check that accepted and counted another number of requests is not accepted here, and
+    the outcome says both numbers (``miscounted``), so an accepted end's requests are the request's.
+
+    A run that is not accepted publishes no line and none of `ACCEPTED_COUNTS`: which execution phases the signer
+    refused is the traffic's, and a line that says so, a certificate that is missing and a count that is one fewer
+    each tell it. So the lines' files are all written or none, decided after the verdict, and such a run's stay in
+    `witness`. Under an accepted check every execution phase is certified, so a line it doesn't rule
+    (`CERTIFICATE_LINE`, `ROW_LINE`: a key it doesn't name, a value out of its key's form under the run's
+    deployment, `deployment_forms`, or a line that says its execution phase was refused) publishes none of the
+    files either, and the outcome says which line and what to change (``unruled``). Such an outcome is not
+    accepted, as a miscounted one is not: the check accepted beside a line that was refused or is neither a
+    certificate nor a refusal, so this cannot rule, and its verdict holds none of `ACCEPTED_COUNTS`. An accepted
+    outcome is therefore one whose lines are all in `out`.
+
+    Of `witness` itself the outcome says nothing: a file's name says what the run got to, and its size follows
+    what the peer sent."""
     for name in WARDEN_PUBLIC:
-        if (witness / name).is_file():
+        if name == "deployment.json":
+            if (deployment := public_deployment(witness / name)) is not None:
+                (out / name).write_text(json.dumps(deployment, indent=1))
+        elif (witness / name).is_file():
             shutil.copyfile(witness / name, out / name)
-    if (witness / "certified.jsonl").is_file():
-        docs = [json.loads(x) for x in (witness / "certified.jsonl").read_text().splitlines()]
-        (out / "certificates.jsonl").write_text("".join(
-            json.dumps({k: doc[k] for k in ("certificate", "refused") if k in doc}, sort_keys=True) + "\n"
-            for doc in docs))
-    cells = (out / "cells.jsonl").read_text().splitlines() if (out / "cells.jsonl").is_file() else []
-    registrations = {r["value"]: r["root"] for r in (json.loads(x).get("registration") for x in cells) if r}
     try:
         check = json.loads((witness / "check.json").read_text())
     except (OSError, ValueError):
         check = None
-    verdict = None
+    verdict = miscounted = unruled = None
+    accepted = False
     if isinstance(check, dict):
         summary = check.get("summary") or {}
-        verdict = {"accepted": check.get("accepted"), "problems": len(check.get("problems") or []),
-                   **{k: summary[k] for k in WARDEN_COUNTS if k in summary}}
-    sizes = {str(p.relative_to(witness)): p.stat().st_size for p in sorted(witness.rglob("*")) if p.is_file()}
-    try:
-        load = json.loads((out / "load-relay.json").read_text())
-    except (OSError, ValueError):
-        load = None
-    return {"verdict": verdict, "registrations": registrations, "witness": sizes,
-            **({} if load is None else {"load": load})}
+        accepted, counted = check.get("accepted") is True, summary.get("requests")
+        if accepted and requests is not None and not (type(counted) is int and counted == requests):
+            accepted, miscounted = False, (f"check.json accepts and counts {counted!r} requests where the request "
+                                           f"asked for {requests}")
+    if accepted:
+        given, lines = deployment_forms(witness / "deployment.json"), {}
+
+        def certificate(rule: Callable[[object, dict], dict]) -> Callable[[str], str]:
+            def line(x: str) -> str:
+                try:
+                    return json.dumps(rule(json.loads(x), given), sort_keys=True)
+                except ValueError as e:
+                    raise e if isinstance(e, Unruled) else Unruled("the line isn't JSON") from None
+            return line
+
+        published = [("certified.jsonl", "certificates.jsonl", certificate(certified_certificate)),
+                     *((name, public, certificate(row_certificate)) for name, public in ROW_CERTIFICATES.items()),
+                     *((name, public, lambda x: row_registration(x, given))
+                       for name, public in ROW_REGISTRATIONS.items())]
+        for name, public, rule in published:
+            if unruled is None and (witness / name).is_file():
+                lines[public] = []
+                for i, x in enumerate((witness / name).read_text().splitlines(), 1):
+                    try:
+                        lines[public].append(rule(x) + "\n")
+                    except Unruled as e:
+                        unruled = f"{name} line {i}: {e}; out/ holds none of the run's lines"
+                        break
+        if unruled is None:
+            for public, text in lines.items():
+                (out / public).write_text("".join(text))
+        accepted = unruled is None
+    if isinstance(check, dict):
+        counts = WARDEN_COUNTS if accepted else tuple(k for k in WARDEN_COUNTS if k not in ACCEPTED_COUNTS)
+        verdict = {"accepted": accepted, **{k: summary[k] for k in counts if k in summary}}
+        if isinstance(verdict.get("cell_rows"), dict):
+            verdict["cell_rows"] = {k: verdict["cell_rows"][k] for k in CELL_ROWS
+                                    if k in verdict["cell_rows"] and (accepted or k not in ACCEPTED_CELL_ROWS)}
+        if "failed" in verdict:
+            verdict["failed"] = failed_words(verdict["failed"])
+    return {"verdict": verdict, **({} if unruled is None else {"unruled": unruled}),
+            **({} if miscounted is None else {"miscounted": miscounted})}
 
 
-def forward_argv(ssh: list[str], local: int, remote: int) -> list[str]:
-    """The tunnel from this host's 127.0.0.1:`local` to 127.0.0.1:`remote` on the peer `ssh` reaches."""
-    return [*TUNNEL_SSH, "-L", f"127.0.0.1:{local}:127.0.0.1:{remote}", *ssh]
+def forward_argv(ssh: list[str], local: int, remote: int, back: tuple[int, int] | None = None) -> list[str]:
+    """The tunnel from this host's 127.0.0.1:`local` to 127.0.0.1:`remote` on the peer `ssh` reaches, and with `back`
+    (a relay session's: the peer's port, then this host's) the same ssh's forward from the peer's 127.0.0.1:`back[0]`
+    to this host's 127.0.0.1:`back[1]`. `TUNNEL_SSH` exits when the peer refuses either."""
+    reverse = [] if back is None else ["-R", f"127.0.0.1:{back[0]}:127.0.0.1:{back[1]}"]
+    return [*TUNNEL_SSH, "-L", f"127.0.0.1:{local}:127.0.0.1:{remote}", *reverse, *ssh]
+
+
+def held_listener():
+    """A relay session's listener: a socket bound to a free port of this host's loopback and listening. The session's
+    unit opens it before its ssh, whose `-R` ends at that port, hands it to the relay's runner (`warden_serve.py
+    --listen-fd`) and closes it only once that ssh has exited. So a connection the peer makes through the forward
+    while no relay accepts, before the runner serves or after it stops, waits at a socket the session holds and never
+    reaches another process that took the port."""
+    import socket
+    held = socket.socket()
+    held.bind(("127.0.0.1", 0))
+    held.listen()
+    return held
+
+
+def _listening(command: Callable[..., list[str]], listen: int, fd: int) -> Callable[..., list[str]]:
+    """`command` (`warden_command`) for a relay session whose relay listens on this host's 127.0.0.1:`listen`, on the
+    socket it inherits as `fd`."""
+    return lambda *a: command(*a, listen=listen, listen_fd=fd)
+
+
+def _stop_with(tunnel: subprocess.Popen, proc: subprocess.Popen) -> None:
+    """Stops a relay session's runner `proc` once its `tunnel` exits, if it still runs: its clients reach the relay
+    through that ssh alone, so a session nobody can reach ends there and says so, rather than run out its
+    execution phases holding the unit."""
+    tunnel.wait()
+    if proc.poll() is None:
+        with suppress(ProcessLookupError):
+            os.killpg(proc.pid, signal.SIGTERM)
+
+
+#: why a run ended whose unit was stopped (a SIGTERM: `systemctl stop`, or the unit's `RuntimeMaxSec`)
+STOPPED = "stopped by its unit (SIGTERM)"
+
+
+class Stopped(Exception):
+    """The unit was stopped while the run waited for its tunnels, before its runner started."""
+
+
+class _Stop:
+    """`certifier_run`'s SIGTERM handler, which the unit's stop sends to this process alone (`KillMode=mixed`). While
+    `armed` (the tunnels coming up, no runner yet) it ends the run there (`Stopped`); once the runner is started
+    through `start`, it goes to the runner's process group, as `--minutes` does, so the run ends as at its minutes: the
+    runner exits, then the tunnels close, then a session's listener, and the end is written. A signal while neither
+    is only recorded (`signalled`)."""
+
+    def __init__(self) -> None:
+        self.proc: subprocess.Popen | None = None
+        self.armed = self.signalled = False
+
+    def __call__(self, *_) -> None:
+        self.signalled = True
+        if self.proc is not None:
+            with suppress(ProcessLookupError):
+                os.killpg(self.proc.pid, signal.SIGTERM)
+        elif self.armed:
+            self.armed = False
+            raise Stopped
+
+    def start(self, popen: Callable[[], subprocess.Popen]) -> subprocess.Popen:
+        """The runner, `popen()`, which a signal from here on reaches, one that came while it started included."""
+        self.armed = False
+        self.proc = popen()
+        if self.signalled:
+            self()
+        return self.proc
 
 
 def _local_ports(n: int) -> list[int]:
@@ -2515,107 +2947,180 @@ def _local_ports(n: int) -> list[int]:
     return ports
 
 
-def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], datetime],
-                  tunnel_argv: Callable[[list[str], int], list[str]] | None = None,
+def _on_stop(run: Callable[..., dict]) -> Callable[..., dict]:
+    """`run` (`certifier_run`) given its unit's stop, a `_Stop` that is this process's SIGTERM handler while it runs."""
+    @functools.wraps(run)
+    def stoppable(*args, **kwargs) -> dict:
+        stop = _Stop()
+        previous = signal.signal(signal.SIGTERM, stop)
+        try:
+            return run(*args, stop=stop, **kwargs)
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+    return stoppable
+
+
+@_on_stop
+def certifier_run(host: Host, run: str, *, pinned: str,
+                  tunnel_argv: Callable[..., list[str]] | None = None,
                   sink_argv: Callable[[list[str], int, int], list[str]] | None = None,
                   up: Callable[[subprocess.Popen, int], bool] = tunnel_up,
                   command: Callable[..., list[str]] | None = None,
-                  wait: Callable[[subprocess.Popen, float], int] | None = None) -> dict:
-    """Run the requested rehearsal (the module docstring's "A certifier rehearsal", "A warden rehearsal" and "The
-    load"), as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
+                  wait: Callable[[subprocess.Popen, float], int] | None = None, stop: _Stop) -> dict:
+    """Run the requested rehearsal (the module docstring's "A warden rehearsal" and "The load") or relay session ("A
+    relay session": a rehearsal's relay alone, where the same ssh also brings the peer's clients to its listener,
+    `tunnel_argv`'s third argument, and the session is stopped when that ssh exits), as `auditor`: open the tunnel to
+    the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
-    `end.json`. A warden rehearsal writes to `witness/`, and its public outcome (`warden_outcome`) to `out/` and the
-    end. A store's write opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries
-    the store's record."""
+    `end.json`. Every run's own output (`rehearse.log`) and its tunnels' (`tunnel.log`) are free text and go to
+    `witness/`. A network certifier run writes to `witness/` too, and its public outcome (`warden_outcome`) to `out/`
+    and the end, its lines only when its check accepted; such a run's line of its certificates or its cells'
+    registrations that its list doesn't rule (`CERTIFICATE_LINE`, `ROW_LINE`) ends it nonzero, the end saying
+    `unruled` and the witness's `ENDED_WHY` the line and the fix, and so does an accepted check that counted another
+    number of requests than the request's (`miscounted`); the end of either says it is not accepted. A store's write
+    opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries the store's record. A
+    SIGTERM while either runs (its unit's stop, `stop`) still ends it so (`_Stop`), its end's word `stopped`."""
     if not CERTIFIER_RUN.fullmatch(run):
         raise Refused(f"no certifier rehearsal {run!r}")
     d = host.certifier / run
     req = json.loads((d / "request.json").read_text())
-    warden, weights, load = req.get("device") == "warden", req.get("device") == "weights", req.get("load")
-    command = command or (warden_command if warden else weights_command if weights else certifier_command)
+    weights, load = req.get("device") == "weights", req.get("load")
+    if not weights and req.get("device") != "warden":
+        raise Refused(f"rehearsal {run}'s request names no device the rehearsal unit runs: {req.get('device')!r}")
+    command = command or (weights_command if weights else warden_command)
     out = d / "out"
     if out.exists():
         raise Refused(f"certifier rehearsal {run} has run already")
     out.mkdir(mode=0o755)
     if weights:
-        return _weights_run(host, d, req, pinned=pinned, now=now, command=command, wait=wait)
-    work = out
-    if warden:
-        work = d / WITNESS
-        work.mkdir(mode=0o700, exist_ok=True)
+        return _weights_run(host, d, req, pinned=pinned, command=command, wait=wait, stop=stop)
+    work = logs = d / WITNESS
+    logs.mkdir(mode=0o700, exist_ok=True)
     sys.path.insert(0, str(HERE))
     import serve
-    local, *sinks = _local_ports(1 + (load["streams"] if load else 0))
-    ssh = serve.peer_ssh(host.peers, req["peer"])
-    argv = (tunnel_argv or (lambda ssh, local: forward_argv(ssh, local, req["port"])))(ssh, local)
-    rc, why, tunnels = 2, None, []
-    with open(out / "tunnel.log", "wb") as log:
-        tunnels.append(subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
-        for s in sinks:
-            tunnels.append(subprocess.Popen((sink_argv or forward_argv)(ssh, s, load["sink_port"]),
-                                            stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
+    kept = "client_port" in req
+    # a relay session: the same ssh brings the peer's clients to the relay's listener, which this unit holds from
+    # before that ssh starts until it has exited (`held_listener`)
+    held = held_listener() if kept else None
+    rc, word, why, tunnels = 2, None, None, []
     try:
-        if not up(tunnels[0], local):
-            why = f"the tunnel to {req['peer']}'s 127.0.0.1:{req['port']} didn't come up (tunnel.log)"
-        elif not all(up(t, s) for t, s in zip(tunnels[1:], sinks)):
-            why = f"a tunnel to {req['peer']}'s sink at 127.0.0.1:{load['sink_port']} didn't come up (tunnel.log)"
-        else:
+        local, *sinks = _local_ports(1 + (load["streams"] if load else 0))
+        ssh = serve.peer_ssh(host.peers, req["peer"])
+        back = ()
+        if kept:
+            listen = held.getsockname()[1]
+            back, command = ((req["client_port"], listen),), _listening(command, listen, held.fileno())
+        argv = (tunnel_argv or
+                (lambda ssh, local, *back: forward_argv(ssh, local, req["port"], *back)))(ssh, local, *back)
+        with open(logs / "tunnel.log", "wb") as log:
+            tunnels.append(subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
+            for s in sinks:
+                tunnels.append(subprocess.Popen((sink_argv or forward_argv)(ssh, s, load["sink_port"]),
+                                                stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
+        stop.armed = True
+        try:
+            if not up(tunnels[0], local):
+                word, why = "tunnel", f"the tunnel to {req['peer']}'s 127.0.0.1:{req['port']} didn't come up (tunnel.log)"
+            elif not all(up(t, s) for t, s in zip(tunnels[1:], sinks)):
+                word, why = "tunnel", (f"a tunnel to {req['peer']}'s sink at 127.0.0.1:{load['sink_port']} didn't come "
+                                       "up (tunnel.log)")
+        finally:
+            # inside the outer try: a stop up to this disarm is a `Stopped` its except takes, never one raised in its
+            # finally, which would leave the tunnels open and write no end
+            stop.armed = False
+        if why is None:
             to = {"sinks": [("127.0.0.1", s) for s in sinks], "store": host.store} if load else {}
-            with open(out / "rehearse.log", "wb") as log:
-                proc = subprocess.Popen(command(req, work, f"http://127.0.0.1:{local}", **to), stdin=subprocess.DEVNULL,
-                                        stdout=log, stderr=subprocess.STDOUT, env=certifier_env(),
-                                        start_new_session=True)
+            with open(logs / "rehearse.log", "wb") as log:
+                proc = stop.start(lambda: subprocess.Popen(
+                    command(req, work, f"http://127.0.0.1:{local}", **to), stdin=subprocess.DEVNULL, stdout=log,
+                    stderr=subprocess.STDOUT, env=certifier_env(), start_new_session=True,
+                    pass_fds=(held.fileno(),) if kept else ()))
+            if kept:
+                threading.Thread(target=_stop_with, args=(tunnels[0], proc), daemon=True).start()
             rc = (wait or _wait)(proc, req["minutes"] * 60)
-            if rc == -signal.SIGTERM:
-                why = f"stopped at --minutes {req['minutes']}"
+            if stop.signalled:
+                rc, word, why = rc or 2, "stopped", STOPPED
+            elif kept and tunnels[0].poll() is not None:
+                rc, word, why = rc or 2, "tunnel", (
+                    f"the tunnel to {req['peer']} closed before the session ended, and with it the clients' way to "
+                    "the relay and the relay's to the endpoint (tunnel.log)")
+            elif rc == -signal.SIGTERM:
+                word, why = "stopped", f"stopped at --minutes {req['minutes']}"
+    except Stopped:
+        word, why = "stopped", f"{STOPPED} before its runner started"
     finally:
         for tunnel in tunnels:
             tunnel.terminate()
             tunnel.wait()
-    if warden:
-        outcome = {"device": "warden", **warden_outcome(out, work)}
-    else:
-        try:
-            summary = json.loads((out / "summary.json").read_text())
-        except (OSError, ValueError):
-            summary = {}
-        outcome = {"runs": {s: {"verdict": r.get("verdict"),
-                                "network": (r.get("network_verdict") or {}).get("accepted"),
-                                "audit": r.get("audit_accepted"), "salt": r.get("salt_accepted"),
-                                "salt_again": r.get("salt_again")}
-                            for s, r in summary.get("runs", {}).items()}}
-    return _end(d, rc, why, outcome, pinned=pinned, now=now)
+        if kept:
+            held.close()
+    outcome = {"device": "warden", **warden_outcome(out, work, None if kept else req["requests"])}
+    for refusal in ("unruled", "miscounted"):
+        said = outcome.pop(refusal, None)
+        if said is not None:
+            rc, word, why = rc or 2, word or refusal, said if why is None else f"{why}; {said}"
+    if kept and why is None:
+        why = "the session ended" if rc == 0 else f"the session exited {rc}"
+    return _end(d, rc, word, why, outcome, pinned=pinned)
 
 
-def _end(d: Path, rc: int, why: str | None, outcome: dict, *, pinned: str, now: Callable[[], datetime]) -> dict:
-    """A run's `end.json`: its exit, why it ended, `outcome`, and the SHA-512 of each file of `out/`."""
-    out = d / "out"
+#: how a certifier run's end says it ended (`ended`), in one word: its command exited 0 (`ended`) or didn't (`exited`,
+#: the exit beside it in `rc`), it was stopped at the request's minutes (`stopped`), a tunnel to the peer didn't come
+#: up or closed first (`tunnel`), a line of a certificates' or registrations' file or a store's record isn't ruled
+#: (`unruled`: `CERTIFICATE_LINE`, `ROW_LINE`, `STORE_PUBLIC`), or its check accepted and counted another number of
+#: requests than the request asked for (`miscounted`). A network certifier run's end in either of those two words is
+#: not accepted. The sentence a word stands for names the peer, the port
+#: and, for an unruled line, the line and the fix: it is the run's `witness/` file `ENDED_WHY`, and no word of it
+#: is in the end
+ENDED = ("ended", "exited", "stopped", "tunnel", "unruled", "miscounted")
+ENDED_WHY = "ended.txt"
+
+
+def _end(d: Path, rc: int, word: str | None, why: str | None, outcome: dict, *, pinned: str) -> dict:
+    """A run's `end.json`: its exit, how it ended in one of `ENDED`'s words (`word`, or its exit's), `outcome`, and
+    the SHA-512 of each file of `out/`, and no time. The sentence the word stands for (`why`, or its exit's) is written to the
+    run's `witness/` (`ENDED_WHY`), made here for a run that has none."""
+    out, witness = d / "out", d / WITNESS
+    word = word or ("ended" if rc == 0 else "exited")
+    if word not in ENDED:
+        raise ValueError(f"{word!r} is none of ENDED's words: an end says how its run ended in one of them")
+    witness.mkdir(mode=0o700, exist_ok=True)
+    said = why or ("the rehearsal ended" if rc == 0 else f"the rehearsal exited {rc}")
+    (witness / ENDED_WHY).write_text(said + "\n")
     files = {str(p.relative_to(out)): hashlib.sha512(p.read_bytes()).hexdigest()
              for p in sorted(out.rglob("*")) if p.is_file()}
-    end = {"run": d.name, "rc": rc,
-           "ended": why or ("the rehearsal ended" if rc == 0 else f"the rehearsal exited {rc}"),
-           "pinned": pinned, **outcome, "files": files, "ended_utc": utc(now())}
+    end = {"run": d.name, "rc": rc, "ended": word, "pinned": pinned, **outcome, "files": files}
     (d / "end.json").write_text(json.dumps(end, indent=1, sort_keys=True) + "\n")
     return end
 
 
-def _weights_run(host: Host, d: Path, req: dict, *, pinned: str, now: Callable[[], datetime],
+def _weights_run(host: Host, d: Path, req: dict, *, pinned: str,
                  command: Callable[[dict, Path, Path], list[str]],
-                 wait: Callable[[subprocess.Popen, float], int] | None) -> dict:
-    """A `weights-write` run: `command` (`weights_command`) for at most `WEIGHTS_MINUTES`, its end the store's record
-    (`out/store.json`: written, present or refused)."""
-    out, why = d / "out", None
-    with open(out / "rehearse.log", "wb") as log:
-        proc = subprocess.Popen(command(req, out, host.store), stdin=subprocess.DEVNULL, stdout=log,
-                                stderr=subprocess.STDOUT, env=certifier_env(), start_new_session=True)
+                 wait: Callable[[subprocess.Popen, float], int] | None, stop: _Stop) -> dict:
+    """A `weights-write` run: `command` (`weights_command`) for at most `WEIGHTS_MINUTES`, writing to the run's
+    `witness/`, what it prints (`rehearse.log`) with it. Its end is the store's record as `store_public` holds it
+    (written, present or the word it was refused in), which is `out/store.json` too; a record `STORE_PUBLIC`
+    doesn't rule is not published and ends the run nonzero, the end saying `unruled` and the witness's `ENDED_WHY`
+    the key and the fix."""
+    out, witness, word, why, store = d / "out", d / WITNESS, None, None, None
+    witness.mkdir(mode=0o700, exist_ok=True)
+    with open(witness / "rehearse.log", "wb") as log:
+        proc = stop.start(lambda: subprocess.Popen(command(req, witness, host.store), stdin=subprocess.DEVNULL,
+                                                   stdout=log, stderr=subprocess.STDOUT, env=certifier_env(),
+                                                   start_new_session=True))
     rc = (wait or _wait)(proc, req["minutes"] * 60)
-    if rc == -signal.SIGTERM:
-        why = f"stopped at {req['minutes']} minutes"
+    if stop.signalled:
+        rc, word, why = rc or 2, "stopped", STOPPED
+    elif rc == -signal.SIGTERM:
+        word, why = "stopped", f"stopped at {req['minutes']} minutes"
     try:
-        store = json.loads((out / "store.json").read_text())
+        store = store_public(json.loads((witness / "store.json").read_text()))
+        (out / "store.json").write_text(json.dumps(store, indent=1, sort_keys=True) + "\n")
+    except Unruled as e:
+        rc, word, why = rc or 2, word or "unruled", str(e) if why is None else f"{why}; {e}"
     except (OSError, ValueError):
-        store = None
-    return _end(d, rc, why, {"device": "weights", "store": store}, pinned=pinned, now=now)
+        pass
+    return _end(d, rc, word, why, {"device": "weights", "store": store}, pinned=pinned)
 
 
 # --- main ---------------------------------------------------------------------------------------------------------------------
@@ -2645,8 +3150,8 @@ def main(argv: list[str] | None = None) -> int:
             e = run(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
             print(json.dumps({"seq": e["seq"], "session": e["session"], "rc": e["body"]["rc"]}))
         elif argv[:1] == ["certifier-run"] and len(argv) == 2:
-            e = certifier_run(host, argv[1], pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
-            print(json.dumps({k: e[k] for k in ("run", "rc", "ended", "runs", "device") if k in e}))
+            e = certifier_run(host, argv[1], pinned=pinned_commit())
+            print(json.dumps({k: e[k] for k in ("run", "rc", "ended", "device") if k in e}))
         elif argv[:1] in (["model-register"], ["policy-register"]) and len(argv) == 5:
             register = model_register if argv[0] == "model-register" else policy_register
             line = register(host, argv[1:], pinned=pinned_commit(), now=datetime.now(timezone.utc))

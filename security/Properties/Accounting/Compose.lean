@@ -69,7 +69,7 @@ program `p` and query:
 It is stated, not proved: nothing builds a `Declared` from a compiled Program yet, which is the composed statement's
 open faithfulness gap. The extractor that builds one, with this property proved of it, closes it; tying each value to
 its leaf under the weights' or the transcript's root is the extractor's too. The sample conjunct is over the code alone
-and could be proved first (`Select.select`'s subset sample from bytes, `Draw.drawUnits`), beside
+and could be proved first (`Select.select`'s subset sample from bytes, `Draw.sampleUnits`), beside
 `Properties.Spot.DrawMisses`.
 -/
 
@@ -102,7 +102,7 @@ def UnitsOfLayout {ι : Type} (Cd : Accounting.Compose.Declared ι) (Np Kd : ℕ
     (Spot.Partition.units p query = .ok Np →
       ∀ (cm : Option (Array (Int × Array Int))) (L : ℕ) (U : Finset ℕ),
         prob (fun src : Fin L → Fin 256 => ∃ r,
-            Spot.Select.select (.law ("subset:" ++ toString Kd)) p query none cm
+            Spot.Select.select (.samplingDesign ("subset:" ++ toString Kd)) p query none cm
               (Properties.Spot.bytesOf src) = .ok r ∧ ∀ u ∈ U, u ∉ r.2.1) ≤
           prob (fun β : Equiv.Perm (Fin Np) => ∀ t ∈ Pouw.Window.subsetDraw Kd β, t.val ∉ U))
 

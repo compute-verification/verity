@@ -51,7 +51,7 @@ This module imports `Proofs.Flock.SoundAtBridge`, whose imports make `X` a token
 
 open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
 /-- **A window of proofs is sound at `δs + δ` through its Flock sessions**
-(`Accounting.Guarantees.TS.SessionSoundAt`). An unsound proof is accepted, so flock-verify accepted its session
+(`Accounting.Guarantees.TS.SessionSoundAt`). An unsound proof is accepted, so verity-verify-proof accepted its session
 (`AcceptedLive`), and its relation fails at its opening. If every sampled proof block is right at its owned reads,
 `ServedChecksHold` gives the relation at the session's value layer, so that layer isn't the opening:
 `ServedRootsLinked`'s event, at most `δs`. Otherwise some sampled proof block is wrong or off, `RowsSession.BadU`, at most

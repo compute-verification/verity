@@ -1,6 +1,6 @@
-"""The hierarchical VU store: a run's sampled proof blocks kept inside the circuit they came from, and the query that cuts instance sets.
+"""The hierarchical VU store: a run's sampled proof blocks kept inside the circuit they came from, and the query that cuts input sets.
 
-The stored form of a VU export (`vllm-vu-store/v1`); flat instance sets (`vllm-vu-set/v1`) are the output of `extract`, and the
+The stored form of a VU export (`vllm-vu-store/v1`); flat input sets (`vllm-vu-set/v1`) are the output of `extract`, and the
 default extraction is exactly the sets `vu_export` defines.
 
     <out>/store/run.json                               run root, provenance (row, model, serving, run, source, epoch, manifest digest),
@@ -281,7 +281,7 @@ def _operands(root: Path, ev: dict[str, Any], weights: Callable | None) -> list:
 
 def extract(store: str | Path, out_dir: str | Path, *, where: str | None = None, module: str | None = None,
             limits: VX.Limits | None = None, weights: Callable[[str, int, int], np.ndarray | None] | None = None) -> tuple[list[dict], dict[str, int]]:
-    """Flat instance sets of the stored units the query selects, written under `out_dir`: (set summaries, instances by family).
+    """Flat input sets of the stored units the query selects, written under `out_dir`: (set summaries, instances by family).
     No query = the default extraction: every stored unit, the sample's own limits."""
     root = Path(store)
     run = json.loads((root / "run.json").read_text())
@@ -347,7 +347,7 @@ def memory_headroom() -> float | None:
             lim, cur = Path(lim_f).read_text().strip(), int(Path(cur_f).read_text().strip())
         except (OSError, ValueError):
             continue
-        if lim.isdigit() and int(lim) < (1 << 60):
+        if lim.isdecimal() and int(lim) < (1 << 60):
             return max(0.0, 1.0 - cur / int(lim))
     try:
         mi = {ln.split(":")[0]: int(ln.split()[1]) for ln in Path("/proc/meminfo").read_text().splitlines() if ln.split()[1:]}

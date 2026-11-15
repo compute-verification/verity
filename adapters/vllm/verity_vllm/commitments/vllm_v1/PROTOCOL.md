@@ -9,8 +9,8 @@ of the roots serving emits.
 - Reference: `verity_vllm.commitments.vllm_v1` (plain `hashlib`); backends lower it by §8 and bind §9 in their statements. `Scheme(ports)` is the configured
   `verity.commitments.scheme.CommitmentScheme`, with one verifier-held domain per port (§5). `TREE` is the bare
   tree rule.
-- Vectors: `vectors.json`, written by `python -m verity_vllm.commitments.vllm_v1.vectors`. `--check` exits
-  nonzero if the file is stale.
+- Vectors: `vectors.json`, which `adapters/vllm/tests/commitments/vectors.py` renders from the reference; the
+  conformance test fails if the file is stale.
 - Conformance: `adapters/vllm/tests/commitments/test_vllm_v1.py` checks the reference against the
   vectors. `adapters/vllm/tests/commit/test_production_vectors.py` checks vLLM's Python code against them.
 
@@ -182,10 +182,10 @@ covers a parameter the verifier gets wrong, such as N, the chunk size or the lea
 
 **Python**: `verity_vllm/commit/scheme.py` is the integration's one route to this module. Headers, root bindings,
 tags and the tree walk are imported from here; the position leaf and the level fold keep a prefix-once form over
-these tags, with a pluggable hash for benchmarks. Every committer and the opening verifiers (`hidden_stream.py`,
-`native_host.py`, `native_ranges.py`) hash through it, and
-`hashing.py` / `merkle.py` re-export the id-leaf rules of `verity_vllm.commitments.leaves`.
-`adapters/vllm/tests/commit/test_production_vectors.py` checks it against every vector, the weights root included.
+these tags, with a pluggable hash for benchmarks.
+`adapters/vllm/tests/commit/test_production_vectors.py` checks it against the vectors: every hash, leaf, tree, rejection
+and root, the weights root included, and the openings of a semantic and a step tree. The openings of a stream and of a
+thread tree are checked by the reference's own test alone (`adapters/vllm/tests/commitments/test_vllm_v1.py`).
 
 **CUDA** (checked against the vectors by the pod-marked `adapters/vllm/tests/commit/test_scheme_cuda.py`):
 
@@ -347,7 +347,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 - The committers hash with SHA-512: the Python `commit.scheme` rules and the FA2 tap's `Verity_sha_ctx`.
 - They match `vectors_sha512.json` byte for byte.
 
-**Vectors.** `vectors_sha512.json`, written by `python -m verity_vllm.commitments.vllm_v1.vectors_sha512`, covers:
+**Vectors.** `vectors_sha512.json`, which `adapters/vllm/tests/commitments/vectors_sha512.py` renders from the reference, covers:
 - H over the node, lift and empty tags;
 - position, chunk and thread leaves;
 - trees of 0–7 leaves with their paths;

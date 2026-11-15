@@ -8,7 +8,7 @@
 
 ``v1`` is PoUW's window check (`verity/pouw/v1`, `pouw-check`, `PouwCheck/Protocol.lean`), which neither product
 composes since remote's PoUW became its period: its params the verifier's `Params` (``--params``), its commitment the
-window's registration, one-stage's record (``--registration``, written as canonical JSON, whose digest the proof
+window's docket, one-stage's record (``--registration``, written as canonical JSON, whose digest the proof
 system's answer cites), its evidence the service's answer for it (``--answer``). ``period`` is onsite's and remote's
 (`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main, name, sessions}`` (the
 challenger key it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file holds it; its
@@ -24,9 +24,10 @@ The directory, private as `composite.py` reads it (0700, its files 0600: the evi
 ``params.json``, ``commitment.bin`` and ``evidence.json`` (canonical), ``case.json`` (``{params, commitment, evidence,
 blobs}``, the commitment and evidence hex, no blobs: neither protocol reads any) and ``answer.json``: the line ``EXE
 check params.json commitment.bin evidence.json`` prints, the Lean's (``--exe``, its package's ``pouw-check`` or
-``pouw-period``), or without ``--exe`` the Python reference's (`core_check.case`, `period_check.case`, which the
-difftests hold to the Lean). Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when
-it is undecided, as the check does.
+``pouw-period``). ``period`` is answered by the Lean alone: without ``--exe`` its piece is MISSING (below), never the
+Python reference's (`period_check.case_twin`, which the difftests hold to the Lean); ``v1`` without ``--exe`` is
+`core_check.case`'s, which is the Lean's too (`pouw-check serve`, its Python `case_twin` beside it). Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when it is
+undecided, as the check does.
 
 ``--serve-run SERVE_DIR --window K`` takes the inputs from a served run (`served_verdicts.sh`'s serve dir, or its
 ``out/serve``), and names its piece MISSING, with why, wherever the run doesn't hold them (`v1_missing`,
@@ -60,10 +61,11 @@ from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import period_check as PC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity_vllm.protocols.pouw.h1 import answers as A
+from verity.protocols.accounting.pouw.prover.serving.h1 import answers as A
 
 V1, PERIOD = CC.ID, PC.ID
-CASE = {V1: CC.case, PERIOD: PC.case}
+NO_EXE = (f"no {PERIOD} executable (--exe, the pouw-period of PouwCheck/Period.lean's package): the period's case is "
+          "answered by the Lean alone, so with none nothing decides it")
 EXIT = {"accept": 0, "reject": 1, "undecided": 2}
 CASE_FILES = ("params.json", "commitment.bin", "evidence.json", "case.json", "answer.json")
 
@@ -86,10 +88,13 @@ def challenger_key(doc: dict) -> dict:
 
 
 def answer(protocol: str, out: Path, exe: str | None) -> dict:
-    """The protocol's answer on the case in `out`: the Lean's when `exe` is given, else the Python reference's."""
+    """The protocol's answer on the case in `out`, the Lean's: `exe`'s when it is given, else (`v1` only)
+    `core_check.case`'s, `pouw-check serve` with its Python twin beside it."""
     if exe is None:
+        if protocol != V1:
+            raise RuntimeError(NO_EXE)
         case = json.loads((out / "case.json").read_text())
-        return CASE[protocol]({k: case[k] for k in ("params", "commitment", "evidence")})
+        return CC.case({k: case[k] for k in ("params", "commitment", "evidence")})
     p = subprocess.run([exe, "check", *(str(out / f) for f in ("params.json", "commitment.bin", "evidence.json"))],
                        capture_output=True, text=True, check=False)
     said = p.stdout.strip().splitlines()
@@ -272,7 +277,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     if live is None:
         raise Missing(f"no live evidence for window {k}'s rounds (--live-evidence: h1_prove/live.sh on the run's "
                       "--h1-prover dump)")
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
     key = PHC.pinned_key(tree / "key.json", key_sha512)
     ev = PHC.window_evidence(rec, tree, {"root": rec["commitment"]["session"]["root"]},
                              json.loads(statements.read_text()), gzip.decompress(program.read_bytes()),
@@ -283,12 +288,10 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
 
 def close_sessions(ledger: list[str], name: str) -> list[Any]:
     """The sessions the auditor's ledger `ledger` lists in period `name`'s close, in its order, read past any line that
-    isn't an entry (the check refuses that ledger); the empty list when it closes no period `name`."""
+    isn't an entry object (the check refuses that ledger); the empty list when it closes no period `name`. A line that
+    isn't JSON raises: the ledger is the auditor's own, so a broken one is a failed run, not a period to ask about."""
     for x in ledger:
-        try:
-            e = json.loads(x)
-        except (TypeError, ValueError):
-            continue
+        e = json.loads(x)
         body = e.get("body") if isinstance(e, dict) else None
         if isinstance(body, dict) and e.get("kind") == "period-close" and body.get("period") == name:
             return [w.get("session") if isinstance(w, dict) else None for w in body.get("windows") or ()]
@@ -299,7 +302,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("protocol", choices=["v1", "period"])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--exe", help="the protocol's Lean executable (pouw-check, pouw-period); else the Python reference")
+    ap.add_argument("--exe", help="the protocol's Lean executable (pouw-check, pouw-period); without it period's piece "
+                                  "is missing, and v1's is the Python reference's")
     ap.add_argument("--serve-run", type=Path)
     ap.add_argument("--window", type=int)
     for f in ("params", "registration", "answer", "key", "ledger", "pins", "main", "windows"):
@@ -358,7 +362,11 @@ def period_piece(out: Path, params: dict, ledger: list[str], pins: list[str], wi
     """The period's piece in `out`: `windows` as given (`credit.PROVED_KEYS`), or carrying their statements
     (`credit.PERIOD_KEYS`) and put in that form by `proved`, whose reference verdict ``REFERENCE`` prints; its verifier
     runs `run` when given (`answers.Answers` on ``--lean-answers``, its counts a ``LEAN-ANSWERS`` line), else
-    `proofs.verify`."""
+    `proofs.verify`. With no `exe` the piece is MISSING (`NO_EXE`), before any of that runs."""
+    if exe is None:
+        missing(out, PERIOD, NO_EXE)
+        print(f"MISSING {PERIOD}: {NO_EXE}", flush=True)
+        return EXIT["undecided"]
     if isinstance(windows, list) and windows and all(isinstance(w, dict) and "statements" in w for w in windows):
         windows, (_credit, why) = proved(params["key"], ledger, pins, params["main"], params["name"], windows,
                                          **({} if run is None else {"run": run}))

@@ -1,9 +1,9 @@
 """warden-zk: the network certifier's bucket rows read by the proof system. A toy proof block over one row's bits, its
 port registered against the network certifier's signed egress root (`warden_rows`), proved by Flock `prove --zk` behind
-the Lean ZK server and held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through
+the Lean ZK server and held by the Lean verifier's registered reads (`verity-verify-proof verify --zk --registered`), through
 the one-stage audit as `n2_zk.py` proves N2's head checks.
 
-    python benchmarks/network_traces/warden_zk.py prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/network_traces/warden_zk.py prove --run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
       [--units 16] [--dry]
 
 * **The run.** A warden-serve run's directory (`warden_serve.py rehearse`'s): `deployment.json`, the records, and the
@@ -41,7 +41,7 @@ the one-stage audit as `n2_zk.py` proves N2's head checks.
   - ``pad-named``: ``pad``'s rows under the Program's value, which is public: proof block 0's row isn't the Program's;
   - ``swapped``: made for proof blocks 0 and 1 reading each other's cells, in one row when r > 1, so its rows are the
     Program's: the header names the swapped proof blocks' wiring.
-  Each is registered, every proof block sampled by the verifier's Lean (`flock-verify draw --stratified n`), proved
+  Each is registered, every proof block sampled by the verifier's Lean (`verity-verify-proof draw --stratified n`), proved
   `--zk` behind the ZK server (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean `verify --zk --partition
   --program --registered`. ``sender`` and ``receiver`` are to be accepted, the others refused by Lean's registered
   reads.
@@ -64,14 +64,15 @@ from types import SimpleNamespace
 HERE = Path(__file__).resolve().parent
 ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import leak_scan as LS  # noqa: E402
-import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
 from verity.circuits import boolean as BL  # noqa: E402
 from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.types import Array  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import DATA, PAD  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Certificate  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams, cell  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G  # noqa: E402
@@ -114,10 +115,10 @@ def attestation(run: Path, n: int) -> SimpleNamespace:
     how many of them hold the server's bytes (`data_rows`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
-    key, session = ws.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    link, direction = ws.CERTIFIED[ws.EGRESS]
-    records = {r.window: r for r in ws.read_records(run, params)[ws.EGRESS]}
-    cells = {(d["registration"]["window"]): (d, salts, wiring_salt) for d, salts, wiring_salt in ws.read_cells(run)
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    link, direction = RC.CERTIFIED[RC.EGRESS]
+    records = {r.window: r for r in RC.read_records(run, params)[RC.EGRESS]}
+    cells = {(d["registration"]["window"]): (d, salts, wiring_salt) for d, salts, wiring_salt in RC.read_cells(run)
              if "registration" in d and d["registration"]["direction"] == direction.value}
     pads = params.delay * params.slots
     best = None
@@ -236,10 +237,10 @@ def _statement():
 
 def _one_stage():
     sys.path.insert(0, str(ONE_STAGE))
-    import a0
+    from verity.protocols.proofs.spot.prover.audit import template_audit as a0
     import a7
     import a8
-    from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registration as R, verifier as V
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
 
     return SimpleNamespace(**vars(_statement()), a0=a0, a7=a7, a8=a8, D=D, R=R, V=V)
 
@@ -305,7 +306,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
     reads = WR.reads_file({port: WR.port(at.head, at.opening.wiring, at.params, at.units, sg.base),
                            other: value_port(value, sg.base)})
-    (out / "registered.json").write_text(json.dumps(reads, sort_keys=True))
+    (out / "registered.json").write_text(WR.reads_text(reads))
     return {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512,
             "set": set_name, "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
             "salts": got["salts"], "ports": st.ports, "port": port, "committed": {other: value}, "rows": mr.rows,
@@ -321,7 +322,7 @@ TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_
 def firewall(M, m: dict) -> dict:
     """A firewalled prover's environment (`FC_FIREWALL=1`, its Lean frame named by ``FC_FIREWALL_LEAN``)."""
     if not os.environ.get("FC_FIREWALL_LEAN"):
-        raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (flock-verify's flock-firewall)")
+        raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (verity-verify-proof's flock-firewall)")
     return {"FC_FIREWALL": "1", **M.a0.firewall_env(m)}
 
 
@@ -386,7 +387,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
                                         and (live or {}).get("roots") == fv["roots"] and v.ok,
                                         "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}}
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
-    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program --registered"}
+    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program --registered"}
     proved = a0.proved_units(m["header"], live or {})
     timing = {x: (live or {}).get(x) for x in TIMING}
     statement = {name: {"session_s": proc["wall_s"], **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest",
@@ -453,7 +454,7 @@ def prove(a) -> int:
                      "pads": at.pads, "reads": at.reads, "positions": at.positions, "slots": at.slots,
                      "data_rows": at.data_rows, "units_bytes": len(at.units.encode()), "warden_cost": at.cost,
                      "registration": at.registration}
-    summary["warden_costs"] = ws.check_cells(run, at.dep, at.params, ws.read_records(run, at.params))[0]
+    summary["warden_costs"] = RC.check_cells(run, at.dep, at.params, RC.read_records(run, at.params))[0]
     own = member_rows("unsigned", at).own
     c = at.registration["certificate"]
     forged = WR.registration(own.head, Certificate(bytes.fromhex(c["key"]), at.link, at.direction, at.window,

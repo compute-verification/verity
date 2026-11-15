@@ -8,7 +8,7 @@ The network certifier's id egress form takes from the server only the scan's id 
 (`tick_plugin`), answers in HTTP, and a middleware can't take a response's head off. This relay does it for that server:
 a process of the server's side, on its host, between the network certifier and the server.
 
-* **An id request** (a connection's first request, exactly `active.id_request` in the certifier's P + 9-byte cells, its
+* **An id request** (a connection's first request, exactly `id_form.id_request` in the certifier's P + 9-byte cells, its
   release headers aside: `serve_protocol.id_request_fields`) goes to the server as a ``POST /v1/completions`` of the same
   fields with ``return_token_ids``, on a connection of its own, under the release headers it came with, which the tick's
   feed reads. Of the server's streamed chunks only the token ids come back, each one id event written as its chunk
@@ -17,8 +17,9 @@ a process of the server's side, on its host, between the network certifier and t
   trailer and none of the server's text, so the network certifier fails the connection. Once the network certifier's
   side of the connection has ended (closed, or broken), the front closes its connection to the server, whatever the
   server has sent, so the server sees the close as it would on a connection of its own: vLLM's server aborts a request
-  on its connection's close, and one the tick gate dropped (`serve_admit`: a lost release's) gets no chunk and ends no
-  other way. What the network certifier sends after its request is read and dropped.
+  on its connection's close. One the tick gate dropped (`serve_admit`: a lost release's) gets no chunk: the tick's
+  middleware ends it when its watermark line comes (`tick_plugin.TickFeed`), and this close ends it where that line
+  never does. What the network certifier sends after its request is read and dropped.
 * **Every other connection** (``GET /v1/models``, the watermark's ``POST /verity/watermark``, a probe's HTTP) is relayed
   byte for byte, both ways, until both sides have closed.
 
@@ -69,7 +70,7 @@ class Broken(Exception):
 def address(text: str) -> tuple[str, int]:
     """``HOST:PORT`` as (host, port)."""
     host, sep, port = text.rpartition(":")
-    if not (sep and host and port.isdigit()):
+    if not (sep and host and port.isdecimal()):
         raise UsageError(f"an address is HOST:PORT, not {text!r}")
     return host, int(port)
 
@@ -123,7 +124,7 @@ async def token_ids(reader: asyncio.StreamReader) -> AsyncIterator[list[int]]:
         status, *lines = (await reader.readuntil(BLANK))[:-len(BLANK)].decode("latin-1").split("\r\n")
         code = status.split(" ")[1:2]
         if code != ["200"]:
-            raise Broken(f"the server answered {code[0] if code and code[0].isdigit() else 'no status'}")
+            raise Broken(f"the server answered {code[0] if code and code[0].isdecimal() else 'no status'}")
         headers = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines)}
         buf = b""
         async for data in _body(reader, "chunked" in headers.get("transfer-encoding", "").lower()):
@@ -150,7 +151,7 @@ async def _first(reader: asyncio.StreamReader) -> bytes:
         return await reader.read(READ_BYTES)
     line, *fields = head[:-len(BLANK)].split(b"\r\n")
     lengths = [f.partition(b":")[2].strip() for f in fields if f.partition(b":")[0].strip().lower() == b"content-length"]
-    if line != COMPLETIONS or len(lengths) != 1 or not lengths[0].isdigit() or int(lengths[0]) > BODY_BYTES:
+    if line != COMPLETIONS or len(lengths) != 1 or not lengths[0].decode("latin-1").isdecimal() or int(lengths[0]) > BODY_BYTES:
         return head
     try:
         return head + await reader.readexactly(int(lengths[0]))

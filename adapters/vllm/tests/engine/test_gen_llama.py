@@ -14,8 +14,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
+from verity_vllm.config import workload_file
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,
@@ -218,7 +219,7 @@ def test_qwen05_plain_table_is_self_consistent():
 def test_workload_file(case):
     from verity_vllm.pipeline.report import workload_summary
     mod = MODULES[case]
-    path = REPO / "workloads" / WORKLOADS[case]
+    path = workload_file(REPO / "workloads" / WORKLOADS[case])
     doc = json.loads(path.read_text())
     assert doc["schema"] == "verity-vllm/workload/v2" and doc["case"] == case
     assert doc["model"] == mod.REPO_ID and doc["engine"]["revision"] == mod.REVISION
@@ -248,8 +249,8 @@ def test_run_config_dry_run_resolves_the_profile_from_the_case(case, module_name
             st, rest = ln[1:].split("]", 1)
             cmds[st] = shlex.split(rest) if not rest.strip().startswith(("SKIP", "in-process", "write")) else [rest.strip()]
     assert "snapshot_steps=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]" in out       # every step of the 16-token workload
-    cap = cmds["capture"]
-    assert cap[cap.index("--case") + 1] == case and "--verify-weights" in cap and cap[cap.index("--workload") + 1] == wl
+    capture_cmd = cmds["capture"]
+    assert capture_cmd[capture_cmd.index("--case") + 1] == case and "--verify-weights" in capture_cmd and capture_cmd[capture_cmd.index("--workload") + 1] == wl
     for st in ("resolve", "fold", "fold_2"):
         c = cmds[st]
         assert c[c.index("--profile") + 1] == module_name, (st, c)

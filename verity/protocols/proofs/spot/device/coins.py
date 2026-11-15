@@ -13,13 +13,17 @@ bytes it read (`one_stage.verifier.select`).  A sample from the auditor's challe
 (`ChallengerCoins`): one family's coins opened after the prover's commitment, concatenated in order, each checked against
 the challenger's commitment, and extended with the family's next coins, never stretched.  A family's coins follow one
 commitment: the verifier refuses a family whose log shows any other root (`FAMILY_ROOT`), so a second commitment's
-coins are another family's, and a prover that reads a sample and commits again has a sample no verifier takes.  vLLM's legacy replay
+coins are another family's, and a prover that reads a sample and commits again has a sample no verifier takes.  That holds
+of a verifier that names the family and the window's root itself, which nothing here can check: a verifier that read either
+from a file the prover wrote would give the prover its pick among the families it reserved.  So a caller that builds its
+stream again from a prover's hand-off names both from the docket's record and layout and refuses a hand-off that
+names another, as the two-stage commands do (`two_stage.resume`, `stop_audit.resume`).  vLLM's legacy replay
 challenge derives its own (`verity_vllm.commit.challenge.replay_key`, under the domain
 `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
 
 A window's seed salt is a family of its own (`SEED_SALT_FAMILY`), which no sample reads: one coin, released after the
 window's open root, before the window serves (`draw_seed_salt`), and read back by the verifier from the challenger's log
-(`seed_salt_of`).  Every registration of the window names it as a certified input (`one_stage.registration`'s R6), which
+(`seed_salt_of`).  Every docket of the window names it as a certified input (`one_stage.docket`'s R6), which
 the window's circuits may read: a value they would otherwise take as the server's choice.
 """
 
@@ -172,7 +176,7 @@ class ChallengerCoins:
     `remote.RemoteChallenger`): the stream is the concatenation of the coins opened after the prover's commitment, in
     order, with no hash and no derivation, so it passes as `service.Stream`'s `coins`.
 
-    `commit(after)` takes the prover's commitment (its registration's digest, or its run's root, 64 bytes) and fixes the
+    `commit(after)` takes the prover's commitment (its docket's digest, or its run's root, 64 bytes) and fixes the
     family (`label`) before any coin of the stream opens: the first commitment's is `record`, each later one's the next
     of `more`, and a family with a coin open already takes none, since a family's coins follow one commitment
     (`challenger_stream`'s `FAMILY_ROOT`). A read takes the next bytes of the stream, opening
@@ -291,7 +295,7 @@ def challenger_stream(commitment: LiveCommitment, segment: Any, after: bytes,
                       roots: Sequence[bytes] | None = None) -> bytes:
     """The verifier's replay of a sample's coins from the record (`Segment.to_json`): the concatenation of the openings'
     coins, each checked against the challenger's commitment as the family's coin `start + i`, opened after `after`, the
-    prover's commitment the verifier holds (its registration's digest). With `roots`, the family's roots in order as the
+    prover's commitment the verifier holds (its docket's digest). With `roots`, the family's roots in order as the
     challenger's signed release log shows it received them (`remote.trusted_session`), every root is `after`
     (`FAMILY_ROOT`: a family's coins follow one commitment, so a prover that read a sample and committed again in the
     family is refused) and the openings are exactly the coins the family released, from its first, so the prover picked
@@ -346,7 +350,7 @@ DRAW_FORM = ("a draw's coin evidence is {ledger, main, pins, segment, session}: 
 
 
 def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins: Any, verify: Verify) -> bytes:
-    """Lean `Challenger.drawCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
+    """Lean `Challenger.sampleCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
     open root) under `key` released after `after`, read from `coins`, `{ledger, main, pins, segment, session}`, in order.
     The key, the window and the family are the verifier's, so a prover can't sign a ledger of its own; the copy of
     main's history is the evidence's, which `coins_reason` holds to its caller's. The session must be a withheld one
@@ -391,14 +395,17 @@ def coins_reason(key: ChallengerKey, main: Any, coins: Any, window: str, label: 
     (evidence that carries one is refused in form), so whoever wrote it, the session is one signed under the key the
     verifier holds; and the copy of main's history it carries must be the caller's `main`, a list of the same commits
     (`same_main`), so the pin is held to the verifier's copy, here and where `draw_coins` reads the same evidence.
-    `window` is the root the verifier reads from the challenger's signed open of the registration's window
+    `window` is the root the verifier reads from the challenger's signed open of the docket's window
     (`registration.check`'s `window_root`), never the record's or the evidence's. So a prover picks no window: coins
     another window's session released after the same commitment are refused, and a prover with sessions in several
     windows gets one sample, not the best of them. `label` is the verifier's family, never the segment's: a segment of
-    another family is refused, so a prover that reserved several families picks none of them after reading. The session
-    must be a withheld one (`withheld_on`). `service.Stream.outcome` hands the evidence to the Lean verifier, whose run
-    refuses a sample from the challenger without evidence that holds (`Run.run`'s `select`, code `coins`, or `family`
-    where the reason is `FAMILY_ROOT`)."""
+    another family is refused, so a prover that reserved several families picks none of them after reading. Both are
+    the caller's to keep: this function holds the evidence to the `window` and `label` it is given and cannot tell a
+    verifier's own from a prover's, so a caller that builds its stream again from a prover's hand-off names them from
+    the docket's record and layout and refuses a hand-off that names another (`two_stage.resume`,
+    `stop_audit.resume`). The session must be a withheld one (`withheld_on`). `service.Stream.outcome` hands the
+    evidence to the Lean verifier, whose run refuses a sample from the challenger without evidence that holds
+    (`Run.run`'s `select`, code `coins`, or `family` where the reason is `FAMILY_ROOT`)."""
     try:
         stream = draw_coins(key, window, label, after, coins, verify)
     except CoinError as e:
@@ -424,7 +431,7 @@ def draw_seed_salt(coins: ChallengerCoins, window: str) -> bytes:
     `SEED_SALT_FAMILY` (`coins`, over that family of the window's session), opened after the window's open root `window`
     (lowercase hex, from the challenger's signed open) and read whole (`OwnRandomness`), with no derivation. The open
     root is the only root a window has before it serves, so the salt is fixed before the window serves, and no
-    sample reads its family: a sample's coins stay their own family's, released after the registration's commitment.
+    sample reads its family: a sample's coins stay their own family's, released after the docket's commitment.
     Raises `CoinError` for coins of another family, a window root in another form, or a family with a coin open already
     (a window's salt is sampled once, and nothing resamples it)."""
     record = coins.record if isinstance(coins, ChallengerCoins) else None
@@ -499,10 +506,10 @@ def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> li
 def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: int,
                closure: Mapping[int, Sequence[int]] | None = None) -> dict[str, Any]:
     """A sample under a one-stage sampling design: the one-stage sample object over the positions [0, population) (`one_stage.draw`;
-    `check_draw` holds it to the registration and the sampling design), as the Lean verifier's `Flock.Draw.drawWith` samples it from
+    `check_draw` holds it to the docket and the sampling design), as the Lean verifier's `Flock.Draw.drawWith` samples it from
     the same bytes: `subset` and `bernoulli` on one stream (`bernoulli` at the sampling design's NUM/DEN as written), `stratified`
     and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's proof blocks.  With the
-    verifier's closure map (a work sampling design only, as `flock-verify draw --closure`), the sample carries its `closure`
+    verifier's closure map (a work sampling design only, as `verity-verify-proof draw --closure`), the sample carries its `closure`
     (`closure_of`) when that is not empty."""
     problem = law_problem(law, population)
     if problem:

@@ -7,8 +7,8 @@ from typing import Any
 
 from verity.commitments.randomness import Key
 
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.commit import challenge as CH
+from verity_vllm.records import replay_codes as RC
 
 
 def sample(vus: list[dict], per_stratum: int, seed: int, *, targets: list[str] | None = None,

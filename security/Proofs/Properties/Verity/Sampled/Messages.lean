@@ -5,7 +5,7 @@ public import Proofs.Core.Game.TwoRun
 public import Proofs.Flock.Claims.Prob
 
 /-!
-# Sampled proofs' coupling: the messages
+# SPOT's coupling: the messages
 
 `CouplingTarget`'s messages piece: each message the evidence reveals for a round the device opens after its digest, and
 the record the commitment is a digest of, is the most likely one at its digest, but on plays whose chance is at most the

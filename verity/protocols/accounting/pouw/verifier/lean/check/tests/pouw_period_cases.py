@@ -34,13 +34,10 @@ def _hex(x: object) -> str:
 
 
 def listed(ledger: list, name: str) -> list[str]:
-    """The session ids the close of period `name` lists in `ledger`, read past any line a mutation broke: what the
-    auditor's parameters list for an honest period."""
+    """The session ids the close of period `name` lists in `ledger`: what the auditor's parameters list for an honest
+    period. Every ledger `period_instance` makes is lines of JSON, so one that isn't raises."""
     for line in ledger if type(ledger) is list else []:
-        try:
-            e = json.loads(line)
-        except (TypeError, ValueError):
-            continue
+        e = json.loads(line)
         if not isinstance(e, dict):
             continue
         body = e.get("body")

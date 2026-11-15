@@ -13,9 +13,7 @@ import json
 import queue
 import random
 import socket
-import sys
 import threading
-import types
 from collections import deque
 from collections.abc import Iterator, Sequence
 from pathlib import Path
@@ -25,6 +23,7 @@ from typing import Any
 import pytest
 from verity.protocols.accounting.certifier.verifier import release as REL
 
+from tests import fake_vllm
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
@@ -61,7 +60,9 @@ class Sched:
         self.skipped_waiting: deque[Req] = deque()
         self.running: list[Req] = []
         self.finished_req_ids: set[str] = set()
-        self.seqs, self.steps, self.added = seqs, [], []
+        self.seqs = seqs
+        self.steps: list[list[str]] = []
+        self.added: list[str] = []
         self.scheduler_config = SimpleNamespace(policy=policy)
         self.vllm_config = SimpleNamespace(parallel_config=SimpleNamespace(data_parallel_size=dp))
 
@@ -535,8 +536,8 @@ def config(tmp_path: Path) -> dict[str, str]:
                                      "feed": str(tmp_path / "feed.jsonl"), "log": str(tmp_path)})}
 
 
-def asgi(app: Any, scope: dict, body: list[bytes]) -> list[dict]:
-    """Run one ASGI request through ``app``: ``body`` its parts, then a disconnect; returns what it sent."""
+async def request_of(app: Any, scope: dict, body: list[bytes]) -> list[dict]:
+    """One ASGI request through ``app``: ``body`` its parts, then a disconnect; returns what it sent."""
     sent: list[dict] = []
     parts = [{"type": "http.request", "body": b, "more_body": i < len(body) - 1} for i, b in enumerate(body)]
 
@@ -546,8 +547,13 @@ def asgi(app: Any, scope: dict, body: list[bytes]) -> list[dict]:
     async def send(m: dict) -> None:
         sent.append(m)
 
-    asyncio.run(app(scope, receive, send))
+    await app(scope, receive, send)
     return sent
+
+
+def asgi(app: Any, scope: dict, body: list[bytes]) -> list[dict]:
+    """`request_of` in a loop of its own."""
+    return asyncio.run(request_of(app, scope, body))
 
 
 def scope_of(path: str, headers: dict[str, str]) -> dict:
@@ -559,7 +565,8 @@ GREEDY = b'{"prompt": [1], "temperature": 0}'
 
 class App:
     def __init__(self, status: int = 200) -> None:
-        self.status, self.seen = status, []
+        self.status = status
+        self.seen: list[dict] = []
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         self.seen.append(dict(scope["headers"]))
@@ -662,8 +669,8 @@ def test_tick_feed_refuses_a_stochastic_request_without_a_seed(tmp_path, monkeyp
 
     passing = [b'{"prompt": [1], "temperature": 0.8, "seed": 7}', b'{"prompt": [1], "temperature": 0}',
                b'{"temperature": 0.0, "seed": null}', b"not json", b"[1, 2]", b""]
-    for body in passing:
-        assert asgi(feed, scope_of("/v1/chat/completions", {}), [body[:5], body[5:]])[0]["status"] == 200
+    for whole in passing:
+        assert asgi(feed, scope_of("/v1/chat/completions", {}), [whole[:5], whole[5:]])[0]["status"] == 200
     assert asgi(feed, scope_of("/v1/models", {}), [b"{}"])[0]["status"] == 200
     assert app.bodies == [*passing, b"{}"]
 
@@ -721,7 +728,9 @@ class EngineCoreProc:
     """vLLM's ``EngineCoreProc`` as `register`'s hooks drive it."""
 
     def __init__(self, sched: Any) -> None:
-        self.scheduler, self.input_queue, self.aborts_queue = sched, queue.Queue(), queue.Queue()
+        self.scheduler = sched
+        self.input_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+        self.aborts_queue: queue.Queue[Any] = queue.Queue()
         self.running, self.idle_calls = True, 0
 
     def _process_input_queue(self) -> None:
@@ -746,16 +755,13 @@ def plugin(tmp_path, monkeypatch):
     """`register` over stand-ins of vLLM's scheduler and engine core modules; its hooks come off afterwards."""
     for k, v in config(tmp_path).items():
         monkeypatch.setenv(k, v)
-    sched_mod, core_mod = types.ModuleType("vllm.v1.core.sched.scheduler"), types.ModuleType("vllm.v1.engine.core")
 
     class Scheduler(Sched):
         pass
 
-    sched_mod.Scheduler, core_mod.EngineCoreProc = Scheduler, EngineCoreProc
-    for name, mod in (("vllm", types.ModuleType("vllm")), ("vllm.v1", types.ModuleType("vllm.v1")),
-                      ("vllm.v1.core", types.ModuleType("vllm.v1.core")), ("vllm.v1.core.sched", types.ModuleType("vllm.v1.core.sched")),
-                      ("vllm.v1.engine", types.ModuleType("vllm.v1.engine")), (sched_mod.__name__, sched_mod), (core_mod.__name__, core_mod)):
-        monkeypatch.setitem(sys.modules, name, mod)
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm.v1.core.sched.scheduler:Scheduler", Scheduler)
+    fake.set("vllm.v1.engine.core:EngineCoreProc", EngineCoreProc)
     tp.register()
     tp.register()
     try:
@@ -844,6 +850,148 @@ def test_under_vllms_server_the_lost_releases_reach_the_gate_through_the_feed(pl
         ("lost", 0, True), ("lost", 2, False), ("dropped", 2, None)]
 
 
+HEAD = {"type": "http.response.start", "status": 200, "headers": [(b"content-type", b"text/event-stream")]}
+SIZED = {"type": "http.response.start", "status": 200, "headers": [(b"Content-Length", b"4")]}
+NULL = {"type": "http.response.body", "body": b"null"}
+LOST_SAID = "x-verity-release: {n} of run 'ab' was lost on the way to the server, as the watermark says"
+
+
+class Held:
+    """vLLM's server with a request it waits on. It reads the body and sends ``head`` at once, if it has one: a stream's
+    200 head, which vLLM sends before any token, or a whole answer's with its length. From there it waits on the
+    request's disconnect alone, as vLLM's listener beside each handler does, and once it has it sends ``late``: what a
+    handler still sends as it ends."""
+
+    def __init__(self, head: dict | None, late: Sequence[dict] = ()) -> None:
+        self.head, self.late, self.waits, self.ended = head, list(late), 0, 0
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        more = True
+        while more:
+            more = (await receive()).get("more_body", False)
+        if self.head is not None:
+            await send(self.head)
+        self.waits += 1
+        while (await receive())["type"] != "http.disconnect":
+            pass
+        for m in self.late:
+            await send(m)
+        self.ended += 1
+
+
+async def turns(k: int = 16) -> None:
+    """Let the loop run what is ready, k times over. No clock is read: a task that still waits after them waits on
+    something that hasn't come."""
+    loop = asyncio.get_running_loop()
+    for _ in range(k):
+        turn = loop.create_future()
+        loop.call_soon(turn.set_result, None)
+        await turn
+
+
+def numbered(n: int) -> dict:
+    return scope_of("/v1/completions", {"x-verity-release": str(n), "x-verity-release-run": RUN, "x-request-id": f"c{n}"})
+
+
+@pytest.mark.parametrize("head", [None, HEAD, SIZED], ids=["no response begun", "a stream's head gone", "a whole answer's head gone"])
+def test_under_vllms_server_a_lost_releases_request_is_given_its_disconnect_and_answered(tmp_path, monkeypatch, head):
+    """Release 0's request is in vLLM's server, its client's connection open, when a watermark line names it lost, and
+    the middleware ends it: the server gets the request's disconnect. Where the server had begun no response, what it
+    sends after that goes nowhere (a cancelled handler's 200) and the client gets 400 and the sentence serve-openai's
+    frontend says. Where a stream's 200 head had gone, the client gets the stream's end, with no later chunk and no
+    event. Where a whole answer's head had gone with its length, which takes an open gate, its body goes on, and the
+    middleware adds nothing. A client's own close stays the server's to end, and the middleware adds nothing to it."""
+    for k, v in config(tmp_path).items():
+        monkeypatch.setenv(k, v)
+    late = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else
+            [{"type": "http.response.body", "body": b"data: late\n\n", "more_body": True}])
+    app = Held(head, late)
+    feed, sent = tp.TickFeed(app), []
+
+    async def run() -> tuple[bool, bool]:
+        body = [{"type": "http.request", "body": GREEDY, "more_body": False}]
+        never = asyncio.Event()
+
+        async def receive() -> dict:                     # the body, then a connection that stays open
+            if not body:
+                await never.wait()
+            return body.pop(0)
+
+        async def send(m: dict) -> None:
+            sent.append(m)
+
+        call = asyncio.ensure_future(feed(numbered(0), receive, send))
+        await turns()
+        held = app.waits == 1 and not app.ended and not call.done()
+        mark = await request_of(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": RUN}), [line(0, 2, [0]), b""])
+        await turns()
+        done = call.done()
+        call.cancel()
+        await asyncio.wait({call})
+        return held and mark[0]["status"] == 200, done
+
+    held, done = asyncio.run(run())
+    assert held and done and app.ended == 1
+    if head is None:
+        assert [m.get("status") for m in sent] == [400, None] and sent[1]["body"] == LOST_SAID.format(n=0).encode()
+    else:
+        assert sent == [head, NULL if head is SIZED else {"type": "http.response.body", "body": b""}]
+    assert tp.FeedReader(tmp_path / "feed.jsonl")() == [
+        {"key": "c0", "run": RUN, "n": 0, "bucket": None}, {"run": RUN, "t": 0, "n": 2, "lost": [0]}, {"run": RUN, "end": True},
+        *([{"run": RUN, "n": 0, "passed": True}] if head is None else [])]
+    assert feed.served == {}
+    app.late = []
+    assert asgi(feed, numbered(1), [GREEDY]) == ([head] if head else []) and app.ended == 2
+
+
+def test_under_vllms_server_a_request_after_its_lost_line_is_refused_until_the_watermark_breaks(tmp_path, monkeypatch):
+    """The network certifier's stream stays open. Its line names releases 0 and 1 lost while release 1's request is
+    still sending its body, and before release 0's comes. Each is refused with the sentence serve-openai's frontend
+    says, release 0's each time it comes, and reaches neither the server nor the feed. Then a line the reader refuses
+    breaks the stream: the gate is open and adds every request at once, so the middleware forgets the run's lost
+    releases, and release 1's request comes in."""
+    for k, v in config(tmp_path).items():
+        monkeypatch.setenv(k, v)
+    app = App()
+    feed, read = tp.TickFeed(app), tp.FeedReader(tmp_path / "feed.jsonl")
+
+    def into(sent: list[dict]) -> Any:
+        async def send(m: dict) -> None:
+            sent.append(m)
+        return send
+
+    async def run() -> tuple[list[list[dict]], list[dict], int, list[dict], list[dict]]:
+        lines: asyncio.Queue[dict] = asyncio.Queue()
+        parts: asyncio.Queue[dict] = asyncio.Queue()
+        answer: list[dict] = []
+        refused: list[list[dict]] = [[]]
+        stream = asyncio.ensure_future(feed(scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": RUN}), lines.get, into(answer)))
+        slow = asyncio.ensure_future(feed(numbered(1), parts.get, into(refused[0])))
+        parts.put_nowait({"type": "http.request", "body": GREEDY[:9], "more_body": True})
+        await turns()
+        lines.put_nowait({"type": "http.request", "body": line(0, 2, [0, 1]), "more_body": True})
+        await turns()
+        parts.put_nowait({"type": "http.request", "body": GREEDY[9:], "more_body": False})
+        await turns()
+        refused += [await request_of(feed, numbered(0), [GREEDY]) for _ in range(2)]
+        fed, reached = read(), len(app.seen)
+        lines.put_nowait({"type": "http.request", "body": line(1, 3, [1]), "more_body": True})
+        await turns()
+        after = await request_of(feed, numbered(1), [GREEDY])
+        for task in (stream, slow):
+            task.cancel()
+        await asyncio.wait({stream, slow})
+        return refused, fed, reached, answer, after
+
+    refused, fed, reached, answer, after = asyncio.run(run())
+    assert [[m.get("status") for m in r] for r in refused] == [[400, None]] * 3
+    assert [r[1]["body"] for r in refused] == [LOST_SAID.format(n=n).encode() for n in (1, 0, 0)]
+    assert fed == [{"run": RUN, "t": 0, "n": 2, "lost": [0, 1]}] and reached == 0
+    assert answer[0]["status"] == 400 and after[0]["status"] == 200 and len(app.seen) == 1     # release 1 is bucket 0's
+    assert read() == [{"run": RUN, "error": "watermark (1, 3) after (0, 2): its lost releases [1] rise from 2 below n"},
+                      {"key": "c1", "run": RUN, "n": 1, "bucket": None}]
+
+
 # ---------------------------------------------------------------------------------------------------------------- serve-openai
 
 
@@ -853,7 +1001,8 @@ class SchedEngine:
     scheduled request."""
 
     def __init__(self) -> None:
-        self.sched, self.live, self.n = Sched(), {}, 0
+        self.sched, self.n = Sched(), 0
+        self.live: dict[str, str] = {}
 
     def add_request(self, request_id: str, prompt: dict, params: Any) -> None:
         self.n += 1
