@@ -429,6 +429,10 @@
    "digest": "477e26c72bf3b2d1d8683a80d281a64a86eccba692cb26da63c3731d479cb439",
    "why": "The blocks the count is over: each block of G reads at most k gates outside θ, all the blocks at most T between them, and the squares of what G's blocks read sum to at most S."
   },
+  "Slowdown.Cut.UntiedWords": {
+   "owner": "@training",
+   "why": "The untied words the period's count is over: each of at most z gates and read by at most one block, and at most w of them in each block of G."
+  },
   "Slowdown.Cut.ValuesInjective": {
    "owner": "@training",
    "digest": "67876f46d527e13a979ab8be69884864f9d34b6ffcf6e96875eb89fdff2b9f95",
@@ -3025,6 +3029,11 @@
    "issue": "TRN-167",
    "due": "2026-11-30"
   },
+  "Slowdown.Assumptions.PeriodUntiedAtMost": {
+   "owner": "@training",
+   "issue": "TRN-86",
+   "due": "2026-11-30"
+  },
   "Slowdown.Assumptions.PouwSound": {
    "owner": "@lean",
    "digest": "1230a431acfeb9aef741312b9b62d2325e9e14c8a777bc2e8543144cc9b96761",
@@ -4957,6 +4966,11 @@
   "Slowdown.Cut.SecurityProofs.HECharged": {
    "honest": ["Slowdown.Cut.SecurityProofs.HECharged_honest"],
    "nontrivial": "Slowdown.Cut.SecurityProofs.HECharged_nontrivial",
+   "kind": "exclusion"
+  },
+  "Slowdown.Cut.SecurityProofs.HEChargedUntied": {
+   "honest": ["Slowdown.Cut.SecurityProofs.HEChargedUntied_honest"],
+   "nontrivial": "Slowdown.Cut.SecurityProofs.HEChargedUntied_nontrivial",
    "kind": "exclusion"
   }
  },
@@ -24011,6 +24025,39 @@
    "type_hash": "fcc4dd2c4e83208b665166978e16e1421ad28da05e65b027900cb144ad3a1988",
    "unfolded_hash": "605b64b1252a154a8dcc2ff3687f5a272d49700b6800bcb6f6312be947e7b80f"
   },
+  "Slowdown.Cut.SecurityProofs.HEChargedUntied": {
+   "owner": "@training",
+   "signature": ["Slowdown.Cut.SecurityProofs.HEChargedUntied : Slowdown.Cut.Guarantees.HEChargedUntied"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": ["Slowdown.Cut.Assumptions.Exports", "Slowdown.Cut.Assumptions.Hardness"],
+    "domain": ["Slowdown.Cut.NoSharedPair", "Slowdown.Cut.ReadsOn", "Slowdown.Cut.UntiedWords", "Slowdown.Cut.ValuesInjective"],
+    "open": ["Slowdown.Assumptions.PeriodUntiedAtMost"],
+    "reads": []
+   }
+  },
+  "Slowdown.Cut.SecurityProofs.HEChargedUntied_honest": {
+   "owner": "@training",
+   "signature": ["Slowdown.Cut.SecurityProofs.HEChargedUntied_honest : Slowdown.Cut.Guarantees.HEChargedUntied_honest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Slowdown.Cut.Assumptions.Exports", "Slowdown.Cut.Assumptions.Hardness"]
+   }
+  },
+  "Slowdown.Cut.SecurityProofs.HEChargedUntied_nontrivial": {
+   "owner": "@training",
+   "signature": ["Slowdown.Cut.SecurityProofs.HEChargedUntied_nontrivial : Slowdown.Cut.Guarantees.HEChargedUntied_nontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Slowdown.Cut.Assumptions.Exports", "Slowdown.Cut.Assumptions.Hardness"]
+   }
+  },
   "Slowdown.Cut.SecurityProofs.HEShared": {
    "owner": "@training",
    "signature": ["Slowdown.Cut.SecurityProofs.HEShared : Slowdown.Cut.Guarantees.HEShared"],
@@ -28248,7 +28295,8 @@
    "Accounting.Guarantees.B4Via": "unstated: stated in the spec, no theorem proves it yet; Proofs.Accounting.Actual.LinkEnds derives it from B4 only at a Site whose every place is its own link end (b4Via_of_ownLinkEnds), NET-450, Wed 18 Nov",
    "Pous.Guarantees.StreamedWipeMeets96GiB": "unstated: the streamed-label wipe bound at the 96 GiB device, whose guarantee Pous.SecurityProofs.StreamedWipeMeets96GiB left the lock by name because it takes its size premises inline; it is listed again once they are named (owner @memory-accounting).",
    "Accounting.Guarantees.LeakPartsRegistered": "unstated: the registered site's leak bound, whose guarantee Accounting.SecurityProofs.LeakPartsRegistered left the lock by name until its honest lemma concludes RatedOn; it is listed again with that lemma (owner @network-accounting).",
-   "Slowdown.Cut.SecurityProofs.HECharged": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry (ValuesInjective, NoSharedPair), under the named (H) and (E) (security/Definitions/Assumptions.lean), with the fresh-input budget k on a set G of a partition's blocks only: the blocks outside G are charged whole, at the MACs each holds whole, and what all the blocks read outside θ is a total T. It is not about the code of the inference-only policy's check; nothing joins it to a verdict yet."
+   "Slowdown.Cut.SecurityProofs.HECharged": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry (ValuesInjective, NoSharedPair), under the named (H) and (E) (security/Definitions/Assumptions.lean), with the fresh-input budget k on a set G of a partition's blocks only: the blocks outside G are charged whole, at the MACs each holds whole, and what all the blocks read outside θ is a total T. It is not about the code of the inference-only policy's check; nothing joins it to a verdict yet.",
+   "Slowdown.Cut.SecurityProofs.HEChargedUntied": "frozen (no-function): Like HECharged, it is about an arbitrary registered circuit over a monitoring period's coins, its charged work and the values its words carry, under the named (H) and (E) at the circuit with its untied words fresh, and under the period's limit on its untied words, an open premise. It is not about the code of the inference-only policy's check or of PoUW; nothing joins it to a verdict or to PoUW's accept yet."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
