@@ -100,6 +100,38 @@ Some files here still break these rules: a kernel or a store the integration loa
 holds, the exporter of Lean data a guarantee reads. Each moves out to the package that uses it, and none is a pattern
 for a new benchmark.
 
+## The core benchmarks' interface
+
+The core benchmarks take and print the same things in the same form. Each rule is a call of the harness's kit
+(`harness/verity_bench/kit_report.py`, re-exported by `kit`), so a command follows it by calling it.
+
+1. **What a command takes:** `--from DIR`, a run's record as a directory (the run's directory as `research run` leaves
+   it: its `job.json` and `out/`). It is read with nothing of ours: no store, no host, no key and no import of
+   `research`. A run id is taken only where `research` is installed, and is fetched to such a directory first.
+   `kit.record_dir(arg)` gives the directory, and refuses anything else in one line naming the fix (`kit.NoRecord`).
+2. **One line of coins and parameters,** right after the command's first line: `ran with: coins COINS; parameters
+   PARAMETERS (DETAIL)`, and in the document `ran_with: {coins, parameters, detail}`. COINS is `deployed challenger`,
+   `local challenger` (its own process on this machine) or `in-process` (the serve holds the challenger); PARAMETERS
+   is `deployed` or `development`; DETAIL is the command's own words (draws, δ, scheme, key). `kit.ran_with(coins,
+   parameters, detail)` refuses other words. A record that predates the field prints `ran with: not stated`
+   (`ran_with=None`), and `ran_with` null.
+3. **A number only from a run the Lean verifier accepted:** `kit.report(..., accepted=False, why=WHY)` prints
+   `NAME: no number: WHY` first, writes `value` null beside `no_number`, writes each measurement with no value and its
+   why, and returns exit code 1, which `main()` returns; an accepted run returns 0.
+4. **Not an audit:** where the coins are not the deployed challenger's or the parameters are `development`, the line
+   `a measurement, not an audit` is printed under the `ran with` line, and the document holds `audit: false`. The kit
+   derives it from `ran_with`; the command does not choose it.
+5. **Its README's three parts,** under these headings: `## What you may change`, `## What is fixed` and
+   `## How a cheating change is refused`.
+
+`kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=...)` is the command's last step, and the printed
+and written forms are the kit's (`harness/README.md`'s "The kit"). These commands follow the interface; a command's
+row is added in the change that makes it follow, and `harness/tests/test_interface.py` then holds its README's three
+headings and its call of `kit.report` with `ran_with` and `accepted`:
+
+| command | directory | owner |
+|---|---|---|
+
 ## Metrics
 
 Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
