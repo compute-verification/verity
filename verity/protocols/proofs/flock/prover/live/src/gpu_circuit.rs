@@ -252,6 +252,7 @@ unsafe extern "C" {
     fn flock_cuda_hm96_slots(inputs: *const u64, in_words: i32, n: i64, plan: *const u32, useful: i32, tape_words: i32, mid: *const u64,
                              tables: *const u64, slot_log: i32, z: *mut u64, a: *mut u64, b: *mut u64) -> i32;
     fn flock_cuda_circuit_kept(tag: u64) -> i32;
+    fn flock_cuda_arena_stats(reserved: *mut usize, peak: *mut usize) -> i32;
     fn flock_cuda_host_alloc(bytes: usize) -> *mut c_void;
     fn flock_cuda_host_register(p: *mut c_void, bytes: usize) -> i32;
     fn flock_cuda_host_unregister(p: *mut c_void);
@@ -277,6 +278,14 @@ pub enum Reuse {
 /// Whether the device holds a rep 0's level-0 commitment for `tag`.
 pub fn kept(tag: u64) -> bool {
     unsafe { flock_cuda_circuit_kept(tag) != 0 }
+}
+
+/// The device arena's reserved bytes and the most bytes live in it at once since the last call, which restarts that peak at
+/// the bytes live now. Called between prove calls: the arena is not shared across threads.
+pub fn arena_stats() -> (usize, usize) {
+    let (mut reserved, mut peak) = (0, 0);
+    unsafe { flock_cuda_arena_stats(&mut reserved, &mut peak) };
+    (reserved, peak)
 }
 
 /// Salts page-locked for the device's copies, unlocked when dropped; holding them, so they are never freed while locked.
