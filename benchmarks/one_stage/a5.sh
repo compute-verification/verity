@@ -59,10 +59,10 @@ if [ "$WINDOW" = served ] && [ -n "${A5_ROW_DIR:-}" ]; then
   WIN=${A5_WINDOW:?A5_ROW_DIR with WINDOW=served needs A5_WINDOW, the window the Commit committed}
   [ ! -e $WIN/error.txt ] || { echo "a5.sh: the Commit's window failed:"; tail -20 $WIN/error.txt; exit 8; }
 elif [ "$WINDOW" = served ]; then
-  (cd adapters/vllm && $PY -m tests.pipeline.served_rope $S --served) > $O/commit.json 2> $O/commit.err || { tail -20 $O/commit.err; exit 8; }
+  (cd tests/adapters/vllm && $PY -m tests.pipeline.served_rope $S --served) > $O/commit.json 2> $O/commit.err || { tail -20 $O/commit.err; exit 8; }
   WIN=$S/hook
 else
-  [ -n "${A5_ROW_DIR:-}" ] || { (cd adapters/vllm && $PY -m tests.pipeline.served_rope $S) > $O/commit.json 2> $O/commit.err || { tail -20 $O/commit.err; exit 8; }; }
+  [ -n "${A5_ROW_DIR:-}" ] || { (cd tests/adapters/vllm && $PY -m tests.pipeline.served_rope $S) > $O/commit.json 2> $O/commit.err || { tail -20 $O/commit.err; exit 8; }; }
   t0=$(date +%s%N)
   $REPO/.venv/bin/verity-vllm serving-rows $BUNDLE --row-dir $ROWD --partition $PART --out $S/window \
     > $O/serving-rows.log 2>&1 || { tail -20 $O/serving-rows.log; exit 8; }
