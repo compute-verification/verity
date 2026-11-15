@@ -94,7 +94,7 @@ have no capacity (`Covered` at the sinks). Under `B4`'s premises at the trusted 
 `X ∪ sink`, with each certifier's record over `[a, b)` within `K` and each challenger's of `chal` within `c`
 (`RecordsWithin`), what the outside of `X`, the sinks and the trusted devices does during `[a, b)` takes at most
 `2 ^ (∑ K + jitter · buckets · #cert + β° (b − a) + challengerTerm)` values, with `β°` the capacity of the links across
-`X`'s boundary with no certifier, challenger or sink at an end (`uncertifiedCapacity`).
+`X`'s boundary with no certifier, challenger or sink at an end (`uncertifiedLinkCapacity`).
 
 A sink adds nothing, and nothing is asked of what it does, only of its links. What the sinks do is not on the left
 side: this says nothing of what a sink learns. A challenger of `chal` is asked what a certifier is (`TrustedUnits`),
@@ -111,7 +111,7 @@ def LeakParts : Prop :=
     RecordsWithin S cert record a b K → RecordsWithin S chal record a b c →
     (Set.range fun r => (S r).acts (X ∪ sink ∪ (cert ∪ chal))ᶜ (Set.Ico a b)).encard ≤
       ((2 ^ ((∑ y ∈ cert, K y) + jitter * ((Finset.Ico a b).image bucket).card * cert.card +
-        uncertifiedCapacity ends β (cert ∪ chal ∪ sink) X * (b - a) +
+        uncertifiedLinkCapacity ends β (cert ∪ chal ∪ sink) X * (b - a) +
         challengerTerm chal c jitter ((Finset.Ico a b).image bucket).card) : ℕ) : ℕ∞)
 
 /-- **The leak limit at a subtree of a valid registration's Site.** For a valid registration log `l`
@@ -121,7 +121,7 @@ subtree's certifiers with `units`; the location is the subtree's prover places w
 sink. Under `B4`'s premises there, with each trusted device's record over `[a, b)` within `K` (`RecordsWithin`), what
 the outside does during `[a, b)` takes at most `2 ^ (∑ K + jitter · buckets · # + β° (b − a))` values, the sum and the
 count over the certifiers and `units`, with `β°` the capacity of the registered links with exactly one end among the
-subtree's prover places and none of the subtree's auditor's devices at either end (`uncertifiedCapacity` at the
+subtree's prover places and none of the subtree's auditor's devices at either end (`uncertifiedLinkCapacity` at the
 Site's links).
 
 That the sinks are sealed is no premise: a valid log's links join kinds a link may join and end at registered
@@ -165,7 +165,7 @@ def LeakPartsRegistered : Prop :=
           S.placesIn (S.certifiersOf i ∪ units))ᶜ (Set.Ico a b)).encard ≤
         ((2 ^ ((∑ y ∈ S.placesIn (S.certifiersOf i ∪ units), K y) +
           jitter * ((Finset.Ico a b).image bucket).card * (S.placesIn (S.certifiersOf i ∪ units)).card +
-          uncertifiedCapacity S.placeEnds β (S.placesIn (S.auditorsOf pinned i))
+          uncertifiedLinkCapacity S.placeEnds β (S.placesIn (S.auditorsOf pinned i))
             (S.placesIn (S.proverUnder i)) * (b - a)) : ℕ) : ℕ∞)
 
 end Accounting.Guarantees

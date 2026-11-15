@@ -82,7 +82,7 @@ def B4Under {L : Type u} {E : Type v} [LinearOrder L] [Fintype L] [Fintype E] (f
       (Set.range fun r =>
         (S r).seen '' ↑(((S r).record cert record).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)).encard *
         ((2 ^ (jitter * ((Finset.Ico a b).image bucket).card * cert.card +
-          uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
+          uncertifiedLinkCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
 
 /-- **B4 at the places a link may end at, on a registered Site.** For every Site `T`, `B4Under` with the Site's places
 as the leaves, its registered links as the table (`Site.placeEnds`, and the rates `β`, which are the registered ones
