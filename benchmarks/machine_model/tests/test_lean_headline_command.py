@@ -16,8 +16,8 @@ SEVEN = ["Headline/Sm120.lean", "Headline/Sm120Measured.lean", "HeadlineDc/Sm100
 
 @pytest.fixture
 def out(tmp_path, monkeypatch):
-    """A tree of its own for the command to write into: `tmp_path`'s `security/Definitions/Accounting/`."""
-    out = tmp_path / "security" / "Definitions" / "Accounting"
+    """A tree of its own for the command to write into: `tmp_path`'s `security/Definitions/Pouw/`."""
+    out = tmp_path / "security" / "Definitions" / "Pouw"
     monkeypatch.setattr(LH, "ROOT", tmp_path)
     monkeypatch.setattr(LH, "OUT", out / "Headline" / LH.OUT.name)
     monkeypatch.setattr(LH, "OUT_M", out / "Headline" / LH.OUT_M.name)
