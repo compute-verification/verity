@@ -147,7 +147,7 @@ CAP_RULE = "NetTiming.Guarantees.ResponseCapped"
 DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token ids, and a replay block is a request.",
               "skipped_work": "Every block: serving commits every proof block's outputs, and a replay block is a "
                               "request.",
-              "layer_of_token": "Deferred interiors at a layer of a token: serving commits each layer's residual "
+              "layer_of_token": "Interior commitments at a layer of a token: serving commits each layer's residual "
                                 "stream and the K and V a later token reads, and a replay block is one layer of one "
                                 "token."}
 #: the deployment every panel prices: SPOT[Flock]'s three roles, and the network certifier a layer of its own
