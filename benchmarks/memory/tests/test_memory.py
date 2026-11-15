@@ -280,9 +280,9 @@ def test_a_session_that_was_not_accepted_prints_no_number_and_exits_1(store, cap
     assert out == "" and f"memory: no number: {why}" in err
 
 
-def test_a_run_that_left_no_verifiers_record_prints_no_number_and_exits_1(store, capsys):
+def test_a_run_that_left_no_verifiers_record_prints_no_number_and_exits_3(store, capsys):
     store.add(RUN, {"out/probe.json": {}}, rc=3)
-    assert bench(store, "--from", RUN) == 1
+    assert bench(store, "--from", RUN) == 3
     out, err = capsys.readouterr()
     assert out == "" and f"memory: no number: {RUN} left no verifier's record (it ended rc 3)" in err
 
@@ -550,12 +550,12 @@ def test_a_run_that_ran_the_loopback_keeps_its_mark_whatever_it_prints_afterward
     assert printed_out == "" and "out/memory.json doesn't read as this command's document" in err
 
 
-@pytest.mark.parametrize("rc, record, why", [
-    (3, None, "the loopback's processes failed (run.sh exited 3)"),
-    (0, a_record(a_session(accepted=False, failure="late")), "session 0 was not accepted (late)"),
-    (0, None, "the verifier's record doesn't read as one"),
+@pytest.mark.parametrize("rc, record, why, code", [
+    (3, None, "the loopback's processes failed (run.sh exited 3)", 3),
+    (0, a_record(a_session(accepted=False, failure="late")), "session 0 was not accepted (late)", 1),
+    (0, None, "the verifier's record doesn't read as one", 1),
 ])
-def test_a_loopback_whose_session_failed_prints_no_number_and_exits_1(store, capsys, monkeypatch, rc, record, why):
+def test_a_loopback_whose_session_failed_prints_no_number(store, capsys, monkeypatch, rc, record, why, code):
     def launch(argv, **kw):
         if record is not None:
             out = Path(kw["env"]["RESEARCH_RUN_DIR"]) / "out"
@@ -564,7 +564,7 @@ def test_a_loopback_whose_session_failed_prints_no_number_and_exits_1(store, cap
         return SimpleNamespace(returncode=rc)
 
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
-    assert bench(store, "--loopback", run=launch) == 1
+    assert bench(store, "--loopback", run=launch) == code
     text, doc, _ = printed(capsys)
     assert text[0].startswith(f"memory: no number: {why}") and len(text) == 1
     assert (doc["value"], doc["no_number"], doc["loopback"], doc["commit"]) == (None, text[0][19:], True, COMMIT)
@@ -692,7 +692,7 @@ def test_both_forms_or_a_word_that_is_not_one_session_of_windows_starts_nothing_
 
 def test_a_gate_run_that_did_not_launch_prints_no_number_and_waits_for_nothing(store, capsys, monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
-    assert bench(store, "p", run=gate_run(tmp_path, [], rc=3)) == 1
+    assert bench(store, "p", run=gate_run(tmp_path, [], rc=3)) == 3
     out, err = capsys.readouterr()
     assert out == "" and "memory: no number: the gate run did not launch (gate_run.sh exited 3)" in err
     assert store.asked == []
@@ -702,7 +702,7 @@ def test_a_fire_run_that_never_reaches_the_store_prints_no_number(store, capsys,
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(M, "WAIT_MIN", 3)
     waits = []
-    assert bench(store, "p", run=gate_run(tmp_path, []), wait=waits.append) == 1
+    assert bench(store, "p", run=gate_run(tmp_path, []), wait=waits.append) == 3
     out, err = capsys.readouterr()
     assert out == "" and waits == [60, 60, 60] and f"{FIRE} left no record in the store within 3 minutes" in err
 
@@ -710,7 +710,7 @@ def test_a_fire_run_that_never_reaches_the_store_prints_no_number(store, capsys,
 def test_a_fire_run_whose_host_run_failed_prints_no_number(store, capsys, monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     store.add(FIRE, {"out/probe.json": {}}, rc=3)
-    assert bench(store, "p", run=gate_run(tmp_path, [])) == 1
+    assert bench(store, "p", run=gate_run(tmp_path, [])) == 3
     out, err = capsys.readouterr()
     assert out == "" and f"{FIRE} left no verifier's record (it ended rc 3)" in err
 
@@ -1019,22 +1019,30 @@ def test_a_declared_error_at_the_bound_is_preferred_to_the_ledgers_own_and_holds
 
 class Machine:
     """This machine as `--local` asks it, one stand-in for every process it starts: nvidia-smi answers `card` (or fails
-    with `smi_rc`), the bootstrap ends `boot_rc`, and `run.sh` writes `record` as its verifier's and ends `rc`."""
+    with `smi_rc`, or is not installed, `driver` false), the bootstrap ends `boot_rc` having written `boot_fail` to its
+    `bootstrap.fail`, and `run.sh` writes `record` as its verifier's and ends `rc`."""
 
     def __init__(self, *, card: str = "NVIDIA H200, 9.0", smi_rc: int = 0, boot_rc: int = 0, rc: int = 0,
-                 record: dict | None = None) -> None:
+                 record: dict | None = None, driver: bool = True, boot_fail: str | None = None) -> None:
         self.card, self.smi_rc, self.boot_rc, self.rc = card, smi_rc, boot_rc, rc
+        self.driver, self.boot_fail = driver, boot_fail
         self.record = as_local(a_record(a_session(gamma=0.199))) if record is None else record
         self.started: list[tuple[list[str], dict]] = []
 
     def __call__(self, argv, **kw):
         self.started.append((argv, dict(kw.get("env") or {})))
         if argv[0] == "nvidia-smi":
+            if not self.driver:
+                raise FileNotFoundError(2, "No such file or directory", "nvidia-smi")
             return SimpleNamespace(returncode=self.smi_rc, stdout=self.card + "\n" if not self.smi_rc else "",
                                    stderr="" if not self.smi_rc else "NVIDIA-SMI has failed")
         if argv[0] == "git":
             return SimpleNamespace(returncode=0, stdout=COMMIT + "\n" if argv[1] == "rev-parse" else "")
         if argv[1] == str(M.BOOTSTRAP):
+            if self.boot_fail is not None:
+                out = Path(argv[argv.index("--out") + 1])
+                out.mkdir(parents=True, exist_ok=True)
+                (out / "bootstrap.fail").write_text(self.boot_fail)
             return SimpleNamespace(returncode=self.boot_rc)
         out = Path(kw["env"]["RESEARCH_RUN_DIR"]) / "out"
         out.mkdir(parents=True, exist_ok=True)
@@ -1064,7 +1072,7 @@ def test_local_refuses_a_bootstrap_that_touches_files_outside_local_work(store, 
     or reads its tap builds at a fixed path is refused before it runs, with no number and the way out."""
     M.BOOTSTRAP.write_text(f"{M.BOOTSTRAP.read_text()}x {held}/y\n")
     machine = Machine()
-    assert bench(store, "--local", run=machine) == 1
+    assert bench(store, "--local", run=machine) == 3
     assert not [a for a, _ in machine.started if a[1:2] == [str(M.BOOTSTRAP)]] and machine.runs() == []
     text, doc, _ = printed(capsys)
     assert text[0] == f"memory: no number: this tree's bootstrap (pod_bootstrap.sh) {M.OUTSIDE_WORK[held]}, so --local " \
@@ -1246,21 +1254,31 @@ def test_local_refuses_another_session_form(store, capsys, work, monkeypatch, gi
     assert all(f"{k}={v}" in err for k, v in given.items())
 
 
-@pytest.mark.parametrize("machine, why", [
-    (Machine(smi_rc=9), "--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc 9: NVIDIA-SMI has failed)"),
+@pytest.mark.parametrize("machine, why, code", [
+    (Machine(driver=False), "--local serves on an NVIDIA GPU, and there is no nvidia-smi here, so no NVIDIA driver", 3),
+    (Machine(smi_rc=9), "--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc 9: NVIDIA-SMI has failed)",
+     3),
     (Machine(card="NVIDIA L40S, 8.9"), "NVIDIA L40S is compute capability 8.9, and the tree has a Llama 3.2 1B row only "
-                                       "for 9.0 and 12.0"),
-    (Machine(card="NVIDIA H100 80GB HBM3, 9.0"), "the tree has no data sheet for NVIDIA H100 80GB HBM3"),
-    (Machine(boot_rc=3), "the bootstrap failed (pod_bootstrap.sh exited 3"),
-    (Machine(rc=6), "the served session failed (run.sh exited 6)"),
+                                       "for 9.0 and 12.0", 3),
+    (Machine(card="NVIDIA H100 80GB HBM3, 9.0"), "the tree has no data sheet for NVIDIA H100 80GB HBM3 (hardware/nodes/ "
+     "has h200-sxm-141gb-x1, rtx-pro-6000-server-x8 for its cards), and the share is of the card's own sheet", 3),
+    (Machine(boot_rc=3), "the bootstrap failed (pod_bootstrap.sh exited 3, naming no step)", 3),
+    (Machine(boot_rc=3, boot_fail="BOOTSTRAP_FAIL_PIP: x\nBOOTSTRAP_FAIL_NORM_TAP: fatal error: cusparse.h: No such file\n"),
+     "the bootstrap failed at its NORM_TAP step (fatal error: cusparse.h: No such file); its logs are in", 3),
+    (Machine(boot_rc=3, boot_fail="BOOTSTRAP_FAIL_CHECKPOINT: 404 from huggingface.co\n"),
+     "the bootstrap failed at its CHECKPOINT step (404 from huggingface.co)", 3),
+    (Machine(rc=6), "the served session failed (run.sh exited 6)", 3),
     (Machine(record=a_record(a_session(accepted=False, failure="window 2: a receipt doesn't open"))),
-     "session 0 was not accepted (window 2: a receipt doesn't open)"),
-], ids=["no-gpu", "no-row", "no-sheet", "bootstrap", "run-sh", "rejected"])
-def test_a_local_session_that_cannot_run_or_is_not_accepted_prints_no_number_and_exits_1(store, capsys, work, machine,
-                                                                                       why):
-    assert bench(store, "--local", run=machine) == 1
+     "session 0 was not accepted (window 2: a receipt doesn't open)", 1),
+], ids=["no-driver", "no-gpu", "no-row", "no-sheet", "bootstrap", "bootstrap-step", "checkpoint", "run-sh", "rejected"])
+def test_a_local_session_that_cannot_run_exits_3_and_one_not_accepted_exits_1(store, capsys, work, machine, why, code):
+    """Both print no number: an accepted session prints its number and exits 0, one the verifier refused exits 1, and
+    one that never reached a verdict (this machine lacks what it needs, or a process failed) exits 3."""
+    assert bench(store, "--local", run=machine) == code
     text, doc, _ = printed(capsys)
     assert text[0].startswith(f"memory: no number: {why}") and doc["value"] is None and doc["local"] == M.LOCAL
+    if "CHECKPOINT" in why:
+        assert text[0].endswith(": a checkpoint that won't download means Hugging Face can't be reached from here")
 
 
 def test_a_cheating_plan_reaches_run_sh_and_its_refusal_prints_no_number(store, capsys, work, monkeypatch):
@@ -1360,7 +1378,7 @@ def test_from_a_records_directory_reads_it_with_nothing_of_ours(store, capsys, t
     out, err = capsys.readouterr()
     assert out == "" and "its γ at the specification's rate is undecided" in err
     (tree / "out" / "verifier.json").unlink()
-    assert M.main(["--from", str(tree)], store_of=no_store) == 1
+    assert M.main(["--from", str(tree)], store_of=no_store) == 3
     assert f"{tree} holds no verifier's record" in capsys.readouterr().err
 
 

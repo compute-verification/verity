@@ -15,11 +15,18 @@ uv run verity bench memory --local
 
 Both from the clone's root. One Linux machine with one NVIDIA H200 or RTX PRO 6000 (the cards the tree has a row and
 a data sheet for; another needs both, named with `LOCAL_ROW` and `LOCAL_NODE`), the CUDA toolkit
-(`nvcc`, under `/usr/local/cuda*` or `CUDA_HOME`), Lean's `elan` (`tools/verity/lean/setup.sh`; `lake` on the PATH or in
-`~/.elan/bin`) and about 20 GB of disk. vLLM serves Llama 3.2 1B (in int8) on the GPU while a memory audit runs
+(`nvcc`, under `/usr/local/cuda*` or `CUDA_HOME`), Lean (`bash tools/verity/lean/setup.sh
+verity/protocols/accounting/poub/verifier/lean` installs `elan` and the verifier's dependencies; `lake` on the PATH or
+in `~/.elan/bin`) and about 20 GB of disk. `setup.sh`'s build cache is read from our evidence store, so on your machine
+it falls back to building the Lean verifier from source: the first run spends several minutes and about 4 GB of
+memory on that build, and later runs reuse it. An H100 SXM would serve the H200's row (the same compute capability and
+132 SMs), but the tree has no H100 data sheet and the share is of the card's own, so `--local` prints no number for it,
+saying so, before it downloads anything; an H100 PCIe (114 SMs) needs a row of its own too. vLLM serves Llama 3.2 1B (in int8) on the GPU while a memory audit runs
 against it, and the audit's verifier and the random challenges it sends (its coins) run as processes beside it. The
 command prints the share of the GPU's memory read rate that the session leaves uncertified, with its error, as text
-and as one line of JSON, and exits 0; a session the verifier refuses prints `memory: no number: WHY` and exits 1.
+and as one line of JSON, and exits 0. A session the verifier refuses prints `memory: no number: WHY` and exits 1; one
+that never reached a verdict (no NVIDIA driver, no row or data sheet for the card, a failed bootstrap or process)
+prints `memory: no number: WHY` too and exits 3; a command line or a record that can't be read exits 2.
 Lower is better: 0 would mean the whole of the GPU's memory read rate over the session was certified as spent reading
 the audited store. The target is 0.14 at an error of at most 2^-100.
 
@@ -47,13 +54,14 @@ measured against another verifier or other figures, and is not comparable.
 
 - **What it needs from you:** nothing of ours. The first run downloads and builds into `LOCAL_WORK` only (default
   `~/.cache/verity/bench-memory`): a Python environment with the pinned vLLM, the checkpoint, the package caches and
-  the attention taps, by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`, and it removes nothing outside it. A
-  bootstrap that would touch another file of your machine (your package caches, a fixed build path) is refused before
-  it runs:
-  the vLLM wheel from vLLM's index, torch from PyTorch's, and `unsloth/Llama-3.2-1B` at a pinned revision from
-  Hugging Face, which is not gated, so no account or token is needed; the int8 checkpoint is made from it on your
-  machine and checked against its pinned SHA-256s. A machine that can't reach Hugging Face stops there: the command
-  prints "no number: the bootstrap failed" and the bootstrap's log names the download. `VLLM_PY` names an environment
+  the attention taps, by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`, and it removes nothing outside it. It
+  downloads the vLLM wheel from vLLM's index, torch from PyTorch's, and `unsloth/Llama-3.2-1B` at a pinned revision
+  from Hugging Face, which is not gated, so no account or token is needed; the int8 checkpoint is made from it on your
+  machine and checked against its pinned SHA-256s. A bootstrap that would touch another file of your machine (your
+  package caches, a fixed build path) is refused before it runs, and so is today's (it removes `/root/.cache/uv` and
+  `/root/.cache/pip`): until its fix is on `main`, set `VLLM_PY` to a vLLM environment of your own. A failed bootstrap
+  prints "no number: the bootstrap failed at its STEP step (WHY)", the step its `bootstrap.fail` names, and exits 3; a
+  machine that can't reach Hugging Face stops at the `CHECKPOINT` step. `VLLM_PY` names an environment
   of your own instead, `LOCAL_ROW` another row (a card of another capability needs one: `verity-vllm workload`), `GPU`
   the card. With no `gpu-lease` installed, the tree's own lease program keeps its locks in `LOCAL_WORK`. The session
   runs on this process's cores, half to the verifier and half to the prover (`taskset` narrows them; `VERIFIER_CPUS`
@@ -89,9 +97,15 @@ changed verifier or sheet is not a result, and the digests in its `machine` line
 Every pass answers challenges the verifier draws only after the pass's data is fixed, and the verifier checks each
 answer against the store's committed contents and against time. A prover that skips reading part of the store, or
 answers late, is refused: the session isn't accepted, and the command prints `memory: no number: WHY` and exits 1.
-`PLAN=skip:0.0625 uv run verity bench memory --loopback` shows it on the CPU: the prover skips a sixteenth of the store,
-and the verifier refuses the session. A served row runs the honest plan alone (`run.sh` refuses any `PLAN` but `serve`
-before a session starts), so a cheat there is a change to the prover's side above, which the same checks refuse.
+
+- **What you can watch refused:** `PLAN=skip:0.0625 uv run verity bench memory --loopback`, on the CPU. The prover
+  skips a sixteenth of the store, the verifier refuses the session ("session 0 was not accepted (…)"), and the
+  command prints no number and exits 1.
+- **Under `--local`, no cheat is shown.** A served row has the honest plan alone: `run.sh` refuses any `PLAN` but
+  `serve` with exit 3 before any session or verifier starts, so `PLAN=skip:… --local` shows no verifier refusing
+  anything. A cheat on `--local` is a changed prover, which the verifier's checks above refuse when they catch it, or a
+  changed verifier or data sheet, which no check of the session catches: the document's `machine` gives their
+  SHA-256s, and a result whose digests are not `main`'s is not a result.
 
 **Status: active.** The lane's number for a node serving under the audit comes from here.
 
@@ -141,8 +155,10 @@ verity bench memory --local                       vLLM serving Llama 3.2 1B on t
   share is the Python ledger's.
 
 It prints the number as text, then one line of JSON whose first keys are `value`, `unit`, `commit` and `run`, and exits
-0. A session that wasn't accepted, or a run that left no verifier's record, prints no number and exits 1; a command
-line or a run that can't be read exits 2. The text's first line prints the number's error and says how it reads:
+0. A session that wasn't accepted prints no number and exits 1; a command line or a run that can't be read exits 2;
+and where no session ran to a verdict (a run that left no verifier's record, a gate run that didn't launch or never
+reached the store, and under `--local` or `--loopback` a machine that lacks what it needs or a process that failed)
+it prints no number and exits 3. The text's first line prints the number's error and says how it reads:
 δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), δ the session's in its verifier's ledger, the declared
 error the result's `error`, below, holds, with the same words in its unit; the JSON holds it under `error`. A session
 whose error is 1 or more bounds nothing: the first line prints "no bound at this period" with the error in place of
