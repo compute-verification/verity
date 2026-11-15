@@ -74,7 +74,8 @@ exclude = ["fixtures/**",
 include = ["**/fixtures/README.md",
            "**/fixtures/**/README.md",
            "**/lake-manifest.json",
-           "adapters/vllm/manifests/definitions.json"]
+           "adapters/vllm/manifests/definitions.json",
+           "adapters/vllm/manifests/README.md"]
 # the auditor devices' install directories, each a checkout of the tree (`pods/nebius/challenger/`,
 # `pods/nebius/verifier/`): their units name the challenger's service by its path there
 root_prefixes = ["/opt/vy-challenger/current/", "/opt/vy-verifier/current/"]

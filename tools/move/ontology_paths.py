@@ -35,7 +35,7 @@ EXCLUDE = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "adapters/vllm/manifests/**", "adapters/vllm/workloads/**", "adapters/vllm/data/**",
            "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
 INCLUDE = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
-           "adapters/vllm/manifests/definitions.json"]
+           "adapters/vllm/manifests/definitions.json", "adapters/vllm/manifests/README.md"]
 
 
 SPLIT = {
