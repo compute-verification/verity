@@ -146,17 +146,15 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
   `--gpu` proves each session with `prove --gpu` under `gpu-lease 1`; `--plain` proves every unit with Flock's plain protocol,
   each statement a window of its own (the Lean verifier's plain scope: one table, sampled whole by its stratified draw).
-- `layers.sh ROW`: the proof system by layer on A6's Llama-3.2-1B layer and one H200, one row a run: `flock` (every unit,
-  plain), `zk` (every unit, `--zk`, one docket) and `sampled` (the one-stage audit, `LAYERS_K` units), each on a CUDA build of
-  `flock-circuit`. `layers_row.py` prints the row (`LAYERS ROW`: units proved, prover, session verifier and Lean verifier
-  seconds, proof bytes, how many sessions the Lean verifier accepted) and writes it through the harness kit; `layers.txt`
-  holds its coins and parameters. The two-stage audit has no row on this workload: `sampled_two_small.sh` runs its
-  first stage, and its second stage's check stops at `NotImplementedError` (`proofs/spot-two-stage-sound`). A hillclimber
-  may change the prover and how a row drives it: `flock-circuit`'s build, kernels and flags, the chunking of units into
-  statements (`--chunk`), the lease and the parallelism of sessions. Fixed are the workload (the members, their template
-  ids and the stand-in rows' seed), the Lean verifier and its flags, the coins (each session's own challenger, Lean's draw)
-  and, in `sampled`, `k` and δ. A cheat is refused by the Lean verifier: a row counts only where `verity-verify-proof
-  verify` accepted every session against the program and partition the driver derives itself, never the prover's own report.
+- `layers.sh ROW`: the proof system by layer on A6's stand-in values (never served) and one H200, one row a run: `flock`
+  (every unit, plain), `zk` (every unit, `--zk`, one docket) and `sampled` (the one-stage audit, `LAYERS_K` units), each on
+  a CUDA build of `flock-circuit`; `layers.txt` holds its coins and parameters. The served table's rows are
+  `benchmarks/prove_path/run.sh`'s and `a5_llama1b_h200.sh`'s (`verity bench prove layers`). A hillclimber may change the
+  prover and how a row drives it: `flock-circuit`'s build, kernels and flags, the chunking of units into statements
+  (`--chunk`), the lease and the parallelism of sessions. Fixed are the workload (the members, their template ids and the
+  stand-in rows' seed), the Lean verifier and its flags, the coins (each session's own challenger, Lean's draw) and, in
+  `sampled`, `k` and δ. A cheat is refused by the Lean verifier: a row counts only where `verity-verify-proof verify`
+  accepted every session against the program and partition the driver derives itself, never the prover's own report.
 - `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--cases DIR`
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
