@@ -67,7 +67,7 @@ means = "the `verity` command, the check's steps and the test harnesses"
 
 [[tree]]
 path = "tests/"
-means = "invariants of the whole tree"
+means = "every test: invariants of the whole tree at its top, and the tests of X under tests/X, each suite where its pyproject is"
 
 [[tree]]
 path = "AGENTS.md"
@@ -166,14 +166,6 @@ means = "the package, which re-exports nothing"
 [[tree]]
 path = "verity/README.md"
 means = "the distribution's module list"
-
-[[tree]]
-path = "verity/tests/"
-means = "the tests of the flat files, a suite of its own; made with the first of them"
-
-[[tree]]
-path = "verity/pyproject.toml"
-means = "a suite's configuration, where it has one"
 
 # ---- verity/protocols/ ---------------------------------------------------------------------------------------------
 
@@ -277,14 +269,6 @@ means = "the shape every protocol's check has in Lean (Core.Protocol, its comman
 path = "verity/protocols/__init__.py"
 means = "the package"
 
-[[tree]]
-path = "verity/protocols/tests/"
-means = "the tests of verity/protocols' own modules, a suite of its own"
-
-[[tree]]
-path = "verity/protocols/pyproject.toml"
-means = "a suite's configuration, where it has one"
-
 # ---- each group's directory, beside its protocols ------------------------------------------------------------------
 
 [[tree]]
@@ -319,11 +303,7 @@ means = "the package"
 
 [[tree]]
 path = "verity/protocols/NAME/pyproject.toml"
-means = "its distribution or suite"
-
-[[tree]]
-path = "verity/protocols/NAME/tests/"
-means = "its tests, a suite of its own"
+means = "its distribution"
 
 # ---- not in the tree yet -------------------------------------------------------------------------------------------
 
