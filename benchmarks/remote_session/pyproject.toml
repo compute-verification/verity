@@ -57,6 +57,8 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "v
           # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader
           # test_host_read.py imports device.py, which names its ABI beside the reader's and the sketch's constants;
           # test_host_read_flow.py runs host_read.py, whose reference receipts are sketching.py's product
+          # test_recorded_texts.py: the plan keys squaring.py writes into its --out record
+          "benchmarks/property_redteam/squaring.py",
           "verity/protocols/accounting/poub/prover/codec_tensor/reader.py", "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py",
           "verity/protocols/accounting/poub/prover/codec_tensor/sketching.py",
           # test_sass_gate.py: sass_gate.py runs the PoUW harness's mma_gate; test_rows.py checks that rows.sh's
