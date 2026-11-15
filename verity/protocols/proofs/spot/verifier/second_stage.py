@@ -965,7 +965,7 @@ def _key_failure(own: Own, t: str) -> str | None:
     key port (`OPENING_KEY`, else `KEY_WIRES_WHY`), no link does (`KEY_LINKED_WHY`), the writer's output field the wire
     names is a row of the key row's u16 words (`Own.widths`, `KEY_WIDTH_WHY`), the writer's part is before the
     reader's in the interior window (`_pos_of`, `KEY_ORDER_WHY`), and the key's rows give each unit a writer row among
-    the writer's units a replay block (`KEY_BOUNDS_WHY`). That a sampled unit's key is that row's committed value is
+    the writer's units a replay block (`KEY_BOUNDS_WHY`). That a sampled proof block's key is that row's committed value is
     ``second-read``'s (`_read_ok`)."""
     ws = [w for w in own.wires or () if w.template == t and w.port == OPENING_KEY]
     if len(ws) != 1:
@@ -1521,7 +1521,7 @@ def _opened_row(own: Own, registered: set[str], mine: Mapping[str, Any], x: Link
     (`OPENING_KEY`) is either no wire,
     and linked at values the interior docket doesn't register (`registered`: a port of round 1's record then, by
     ``second-links``) or the verifier holds (``own.fixed``, `mine`), or, where the wired key's switch is on
-    (`Own.wired_key`), one wire, whole (`_key_failure`), the key at each sampled unit its writer unit's committed output
+    (`Own.wired_key`), one wire, whole (`_key_failure`), the key at each sampled proof block its writer unit's committed output
     row (``second-read``'s `_read_ok`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference
     statement's reads (`Own.ref_reads`, the template's first), a value the verifier fills, of at least one row, each row
     `VERDICT_ONE_LEAF`. With the switch off, a key the block computes, a wire, is refused: no statement covers it
