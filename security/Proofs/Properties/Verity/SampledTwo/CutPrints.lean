@@ -54,23 +54,23 @@ theorem opensOn_onExecutionPhase {dev : History} {w w' : String} {pk : ByteArray
     (ho : OpensOn dev pk w' id) : OpensOn (onExecutionPhase dev w) pk w' id := ho
 
 /-- The runs on window `w` printing `log` is the history kept to them printing it. -/
-theorem printsLog_onExecutionPhase {dev : History} {w : String} {log : List Release} (h : PrintsOn dev w log) :
-    Verity.Sampled.Lines.PrintsLog (onExecutionPhase dev w) log := by
-  intro pk w' r hr _
+theorem printsLog_onExecutionPhase {W : String → Prop} {dev : History} {w : String} {log : List Release}
+    (h : PrintsOn dev w log) : Verity.Sampled.Lines.PrintsLog W (onExecutionPhase dev w) log := by
+  intro pk w' r _ hr _
   obtain ⟨hr, ho⟩ := List.mem_filter.1 hr
   obtain ⟨h1, -, h3⟩ := h pk r hr (@of_decide_eq_true _ (Classical.propDecidable _) ho)
   exact ⟨h1, h3⟩
 
 /-- **`Lines.read_run` on lines a round's coins are read against** (`Lines.TreeLines`), however the records were held
 to them: `read_run`'s own proof, which reads its records only through `Lines.tree_lines`. -/
-theorem read_run_lines {dev : History} {log : List Release} (hP : Verity.Sampled.Lines.PrintsLog dev log)
-    {pk : ByteArray} {w label : String} {after : ByteArray} {recs : List Json} {r : Properties.Challenger.Run}
-    (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id)
+theorem read_run_lines {W : String → Prop} {dev : History} {log : List Release}
+    (hP : Verity.Sampled.Lines.PrintsLog W dev log) {pk : ByteArray} {w label : String} {after : ByteArray}
+    {recs : List Json} (hw : W w) {r : Properties.Challenger.Run} (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id)
     (hcr : ∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) {ts : Array LoggedTree}
     (hts : coinTreesOf r.log = .ok ts) (hL : Verity.Sampled.Lines.TreeLines recs r.log) {out : List Release}
     (h : Verity.Sampled.readLog label after recs (r.released label after) r.log = some out) :
     List.Forall₂ Verity.Sampled.Lines.ReadOf out log := by
-  obtain ⟨hp, hξ⟩ := hP pk w r hr ho
+  obtain ⟨hp, hξ⟩ := hP pk w r hw hr ho
   obtain ⟨c, roots, -, hroots⟩ := id hcr
   rw [Verity.Sampled.Lines.readLog_head hroots] at h
   have hT := Verity.Sampled.Lines.trees_log hts
@@ -94,8 +94,8 @@ theorem read_on {dev : History} {key : ChallengerKey} {w label : String} {after 
   · obtain rfl : lines = s.log := hl ls s.log hls hlog
     obtain ⟨-, ⟨ts, hts⟩, -⟩ := hP key.pub s hs ho
     rw [hξs] at h
-    exact .inl (read_run_lines (printsLog_onExecutionPhase hP) (mem_onExecutionPhase hs ho) (opensOn_onExecutionPhase ho) hcr hts
-      (hL ts hts) h)
+    exact .inl (read_run_lines (W := fun _ => True) (printsLog_onExecutionPhase hP) trivial (mem_onExecutionPhase hs ho)
+      (opensOn_onExecutionPhase ho) hcr hts (hL ts hts) h)
   · exact .inr b
 
 /-! ## A member's tree less its closing round -/
