@@ -107,27 +107,47 @@ The core benchmarks take and print the same things in the same form. Each rule i
 
 1. **What a command takes:** `--from DIR`, a run's record as a directory (the run's directory as `research run` leaves
    it: its `job.json` and `out/`). It is read with nothing of ours: no store, no host, no key and no import of
-   `research`. A run id is taken only where `research` is installed, and is fetched to such a directory first.
-   `kit.record_dir(arg)` gives the directory, and refuses anything else in one line naming the fix (`kit.NoRecord`).
+   `research`. A run id is taken only where `research` is installed, and is fetched to such a directory first, past
+   the store's withdrawals: a run withdrawn whole, or in a part that holds a file the command reads, is refused with its
+   reason before anything is fetched, and a withdrawal of only other files of it is printed beside the number and is
+   the document's `withdrawn` (`kit.report(..., withdrawn=...)`). `kit.record_dir(arg, paths=...)` gives the directory,
+   and `kit.record(arg, paths=...)` the directory and the withdrawals (`kit.Record`); each refuses anything else in one
+   line naming the fix (`kit.NoRecord`).
 2. **One line of coins and parameters,** right after the command's first line: `ran with: coins COINS; parameters
    PARAMETERS (DETAIL)`, and in the document `ran_with: {coins, parameters, detail}`. COINS is `deployed challenger`,
    `local challenger` (its own process on this machine) or `in-process` (the serve holds the challenger); PARAMETERS
    is `deployed` or `development`; DETAIL is the command's own words (draws, δ, scheme, key). `kit.ran_with(coins,
-   parameters, detail)` refuses other words. A record that predates the field prints `ran with: not stated`
-   (`ran_with=None`), and `ran_with` null.
+   parameters, detail, verified=...)` refuses other words. `verified=True` is passed only where the command itself
+   checked the challenger's signature on the coins against a pinned key. `deployed challenger` without it is the
+   record's own word: the object holds `verified: false`, and the line `coins by the record's own word, not checked` is
+   printed under the audit line. A record that predates the field prints `ran with: not stated` (`ran_with=None`), and
+   `ran_with` null.
 3. **A number only from a run the Lean verifier accepted:** `kit.report(..., accepted=False, why=WHY)` prints
    `NAME: no number: WHY` first, writes `value` null beside `no_number`, writes each measurement with no value and its
    why, and returns exit code 1, which `main()` returns; an accepted run returns 0.
-4. **Not an audit:** where the coins are not the deployed challenger's or the parameters are `development`, the line
-   `a measurement, not an audit` is printed under the `ran with` line, and the document holds `audit: false`. The kit
-   derives it from `ran_with`; the command does not choose it.
+4. **Not an audit:** the document holds `audit: true` only for coins the deployed challenger drew, verified by the
+   command against a pinned key, at `deployed` parameters. Anywhere else the line `a measurement, not an audit` is
+   printed under the `ran with` line, and the document holds `audit: false`. A record's own word about its coins is
+   stated as such and is never an audit. The kit derives it from `ran_with`; the command does not choose it.
 5. **Its README's three parts,** under these headings: `## What you may change`, `## What is fixed` and
    `## How a cheating change is refused`.
+6. **Its numbers on the dashboard:** every number the command prints is also a measurement, written by the kit's writer
+   (`kit.report`'s `measured`), under the `id` of a row of its directory's `metrics.toml` (a variant of one number,
+   such as a clock reading, is that row's `member`), and the row's `goal` is the benchmark's goal. Only a run of ours
+   through `research run` reaches the Metrics tab ("Metrics" below); a person outside gets the print and `result.json`.
 
-`kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=...)` is the command's last step, and the printed
-and written forms are the kit's (`harness/README.md`'s "The kit"). These commands follow the interface; a command's
-row is added in the change that makes it follow, and `harness/tests/test_interface.py` then holds its README's three
-headings and its call of `kit.report` with `ran_with` and `accepted`:
+**A made-up record** (a fixture, a test's record, anything no run left) is reported with `kit.report(...,
+made_up=True)`: the line `a made-up record, not a run's` is printed under the audit line, the document holds
+`made_up: true` and is no audit, and every measurement written from it is marked `modeled` (figures no run measured)
+and carries `made_up: true`, so its `result.json` passed on alone never reads as a run's measurement. A fixture record
+passes `made_up=True` wherever it is reported, whatever its own files say of its coins, parameters or commit.
+
+`kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=...)` is the command's
+last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit"). These commands follow the
+interface; a command's row is added in the change that makes it follow, and `harness/tests/test_interface.py` then
+holds its README's three headings, its call of `kit.report` with `ran_with` and `accepted`, and each measurement name
+its source gives as a row of its `metrics.toml` with a `goal` (rule 6, for a directory the test's `DASHBOARD_NOT_YET`
+doesn't name, each entry saying what it writes that is no row):
 
 | command | directory | owner |
 |---|---|---|
@@ -220,7 +240,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `harness/` | `verity-bench`: its specs and sweeps (`specs/`, one TOML file each), recorded runs and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
-| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`) | maintained |
+| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`); and the share of a served run's drawn units whose proofs the Lean verifier accepted on the auditor's machine (`sampled_accepted.py`) | maintained |
 | `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |

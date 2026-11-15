@@ -1,5 +1,5 @@
 """The registration log's Lean (`core-registration serve`: `Core.Registration.protocol`,
-`verity/registration/log/v1`, in the core interface's package) against its Python
+`verity/registration/log/v1`, in registration's own package) against its Python
 (`verity.protocols.accounting.registration.verifier.registration`). Hypothesis generates a log for
 either composite, from the honest example site, its information and its declaration of day 0 (`EXAMPLE`, the Lean's
 `Core.Registration.Example`) with a few changes (among them a declaration added or changed, so a day is sometimes declared

@@ -42,7 +42,7 @@ RAN_WITH = ("ran with: coins in-process; parameters development (draws 459, delt
             "sample from the serving machine, salt coins from in-process, Lean verdict development)")
 #: the fixture's own statement that it is made up (its `job.json`'s ``made_up``), and the line that prints it
 SAYS = json.loads((RECORD / "job.json").read_text())["made_up"]
-MADE_UP = C.made_up_text(SAYS)
+MADE_UP = [C.kit.kit_report.MADE_UP, C.made_up_text(SAYS)]
 #: the edit that makes the fixture a record that doesn't say it is made up, as a run's, whose result.json is written
 REAL = {"JOB": lambda d: d.pop("made_up")}
 #: the fixture's composed record's reason for PoUW's verdict, and what the printed line says of any verdict but accept
@@ -147,7 +147,7 @@ def no_number(capsys, why: str) -> dict:
     assert err == "" and lines[0].startswith(f"compute: no number: {why}"), (out, err)
     assert lines[1:3] == ["ran with: not stated", "a measurement, not an audit"]
     doc = json.loads(lines[-1])
-    assert lines[3:-1] == ([C.made_up_text(doc["made_up"])] if doc.get("made_up") else [])
+    assert lines[3:-1] == ([C.kit.kit_report.MADE_UP, C.made_up_text(doc["made_up_says"])] if doc.get("made_up") else [])
     assert doc["value"] is None and doc["no_number"] == lines[0].removeprefix("compute: no number: ")
     assert doc["audit"] is False
     return doc
@@ -192,7 +192,7 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
          "is what the Pearl+ verifier's own answer credits, not PoUW's verdict in the run's record of verdicts"),
         RAN_WITH,
         "a measurement, not an audit",
-        MADE_UP,
+        *MADE_UP,
         (f"  {RUN}, commit {COMMIT}: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at ε_s 1/100, δ_s 1/100 "
          f"({C.SAMPLING_ALONE}), and the Lean verifier's verdict is the same"),
         C.RESTS_ON,
@@ -210,7 +210,8 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
     assert list(doc)[:4] == ["value", "unit", "commit", "run"]
     assert (doc["value"], doc["unit"], doc["commit"], doc["run"]) == (SHARE, C.UNIT, COMMIT, RUN)
     assert (doc["credited_macs"], doc["model_macs"], doc["macs"], doc["passes_macs"]) == (CREDITED, TOTAL, MACS, PASSES)
-    assert doc["audit"] is False and doc["ran_with"]["coins"] == "in-process" and doc["made_up"] == SAYS
+    assert doc["audit"] is False and doc["ran_with"]["coins"] == "in-process" and doc["made_up"] is True
+    assert doc["made_up_says"] == SAYS
     assert (doc["target"], doc["met"], doc["lean"], doc["policy_agrees"]) == (0.97, False, True, True)
     assert doc["record"] == {"verdict": "missing", "why": WHY}
     assert C.RESTS_ON == ("  the credit rests on Pearl's conjecture TT_OUT rev1, which this repository's red-team rates "
@@ -268,7 +269,7 @@ def test_pouws_row_in_the_composed_record_is_printed_whatever_it_says(store, tmp
     store.add(RUN, a_record(tmp_path, VERDICTS=verdicts))
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[6] == said and doc["value"] == SHARE
+    assert text[7] == said and doc["value"] == SHARE
 
 
 @pytest.mark.parametrize("edits, why", [
@@ -319,7 +320,7 @@ def test_a_dirty_commit_is_printed_as_one(store, tmp_path, capsys):
     store.add(RUN, a_record(tmp_path), dirty=True)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[4] == (f"  {RUN}, commit {COMMIT}-dirty: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at ε_s 1/100, "
+    assert text[5] == (f"  {RUN}, commit {COMMIT}-dirty: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at ε_s 1/100, "
                        f"δ_s 1/100 ({C.SAMPLING_ALONE}), and the Lean verifier's verdict is the same")
     assert doc["lean"] is True and doc["value"] == SHARE and doc["commit"] == f"{COMMIT}-dirty"
 
@@ -399,7 +400,7 @@ def test_a_withdrawal_of_other_files_of_the_record_is_printed_beside_the_number(
     text, doc, _ = printed(capsys)
     said = f"'the private value of a coin can be recovered (only {OTHERS})', by infra"
     assert doc["withdrawn"] == [said] and doc["value"] == SHARE
-    assert text[7] == f"  part of the run's record was withdrawn, none of it a file read here: {said}"
+    assert text[8] == f"  part of the run's record was withdrawn, none of it a file read here: {said}"
     assert store.fetched == [[*C.RECORDS, C.VERIFY]] and store.pulled == [[RUN, f"art:{RUN}"]]
     # a later withdrawal of the whole record refuses it
     store.withdraw(f"art:{RUN}", "the rest holds private values too")
@@ -455,7 +456,7 @@ def test_a_policy_that_counts_no_macs_of_its_own_still_gives_the_number(store, t
     store.add(RUN, a_record(tmp_path, POLICY=lambda d: (d.pop("n_inputs"), d["class"].pop("positions"))))
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert doc["policy_agrees"] is None and doc["value"] == SHARE and text[7].endswith("LM head 4,202,692,608 MACs")
+    assert doc["policy_agrees"] is None and doc["value"] == SHARE and text[8].endswith("LM head 4,202,692,608 MACs")
 
 
 def test_nothing_the_developers_node_reports_of_what_it_served_is_read(store, tmp_path, capsys):
@@ -504,7 +505,7 @@ def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp
     assert list(doc) == ["value", "unit", "commit", "run", "target", "met", "credited_macs", "model_macs", "macs",
                          "linears_share", "passes_macs", "scheme", "epsilon_s", "delta_s", "lean", "coins", "record",
                          "withdrawn", "model", "revision", "class", "policy_agrees", "tokens", "tokens_from", "wall_s",
-                         "capacity_share", "made_up", "ran_with", "audit"]
+                         "capacity_share", "made_up_says", "ran_with", "audit"]
     # with no number the kit writes the document with no value and why, and the metric alone, with no value and why
     none = tmp_path / "none" / "out"
     monkeypatch.setenv("OUT", str(none))
@@ -646,7 +647,7 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
     assert sum(Fraction(c["macs"]) for c in got["causes"]) == got["give_up"]
     assert [(c["pass"], c["call"], c["linear"]) for c in got["top"]] == [(0, 2, "gate_up"), (0, 6, "gate_up")]
     assert got["top"][1]["causes"] == {"epsilon_macs": "1073741824/25", "rho_macs": "6643777536/625"}
-    assert text[11:] == [
+    assert text[12:] == [
         ("  per call: the model gives up 6,096,318,838 of its MACs (4.34%); by cause, from the verifier's split of "
          "its 256 calls (out/pieces/pouw/verify.json):"),
         "    LM head, which Pearl+ doesn't credit         4,202,692,608 MACs   68.94%",
@@ -841,7 +842,7 @@ def test_a_record_whose_passes_hold_the_lm_heads_calls_counts_the_head_and_drops
     text, doc, err = printed(capsys)
     credited, can = doc["credited_macs"], MACS["linears"] + MACS["lm_head"]
     assert err == "" and doc["lm_head"] == {"calls": 1, "creditable_macs": can, "creditable_share": can / TOTAL}
-    assert text[8] == (f"  Pearl+ credits the linears and the LM head, whose calls the passes hold, {100 * can / TOTAL:.2f}% of "
+    assert text[9] == (f"  Pearl+ credits the linears and the LM head, whose calls the passes hold, {100 * can / TOTAL:.2f}% of "
                        f"the model's MACs at this class: its passes hold {PASSES + HEAD_MACS - HEAD_OUT:,} of them "
                        f"and its credit is {100 * credited / can:.2f}% of them all")
     assert bench(store, "--from", RUN, "--per-call", "--top", "257") == 0
@@ -967,7 +968,7 @@ def test_a_record_directory_with_no_job_is_the_directorys_run_with_no_commit(tmp
     record = a_record(tmp_path, JOB=None)
     assert C.main(["--from", str(record)], store_of=no_store) == 0
     text, doc, _ = printed(capsys)
-    assert (doc["run"], doc["commit"], doc["value"], doc["made_up"]) == ("record", None, SHARE, None)
+    assert (doc["run"], doc["commit"], doc["value"], doc["made_up_says"]) == ("record", None, SHARE, None)
     assert text[3].startswith("  record, commit unknown: Pearl+'s answer accepts")
     dirty = a_record(tmp_path / "dirty", JOB=to("store", "conditions", "source.dirty", value=True))
     assert C.main(["--from", str(dirty)], store_of=no_store) == 0
@@ -1007,16 +1008,19 @@ def test_a_record_directory_writes_the_same_outputs_as_the_store(store, tmp_path
 
 
 @pytest.mark.parametrize("edits, rc", [({}, 0), ({"ANSWER": to("verdict", value="reject")}, 1)])
-def test_a_made_up_record_writes_no_measurement(tmp_path, capsys, monkeypatch, stamped, edits, rc):
-    """The kit's writer marks every entry of result.json measured, from a run: a made-up record writes none, with a
-    number or without, and says so under it; compute.json keeps what it says of itself."""
+def test_a_made_up_record_is_written_as_made_up_never_measured(tmp_path, capsys, monkeypatch, stamped, edits, rc):
+    """A made-up record goes through the kit as made up (`kit.report`'s ``made_up``), with a number or without: its
+    lines under the number, ``made_up`` true in compute.json beside what it says of itself, and each entry of
+    result.json marked modeled and made up, never measured and never an audit's."""
     out = tmp_path / "out"
     monkeypatch.setenv("OUT", str(out))
     assert C.main(["--from", str(a_record(tmp_path, **edits))]) == rc
     text, doc, _ = printed(capsys)
-    assert MADE_UP in text and MADE_UP.endswith("So nothing is written to result.json: its entries are measurements of runs")
-    assert doc["made_up"] == SAYS and json.loads((out / "compute.json").read_text()) == doc
-    assert not (out / "result.json").exists()
+    assert text[3:5] == MADE_UP and text[2] == "a measurement, not an audit"
+    assert (doc["made_up"], doc["made_up_says"], doc["audit"]) == (True, SAYS, False)
+    assert json.loads((out / "compute.json").read_text()) == doc
+    got = json.loads((out / "result.json").read_text())["measurements"]
+    assert got and all((m["mark"], m["made_up"], m["audit"]) == ("modeled", True, False) for m in got)
 
 
 def of_record(argv: list[str]) -> list[str]:
@@ -1076,7 +1080,7 @@ def test_a_challengers_coins_whose_challenger_the_record_does_not_name_are_not_s
         text, doc, _ = printed(capsys)
         salt = "salt coins from challenger" if edits["DEVELOPMENT"] is not None else "salt coins: not stated in the record"
         assert text[1:3] == ["ran with: not stated", "a measurement, not an audit"]
-        assert text[4] == (f"  coins as the record states them, which doesn't say whose challenger: sample from a challenger, "
+        assert text[5] == (f"  coins as the record states them, which doesn't say whose challenger: sample from a challenger, "
                            f"{salt}; Lean verifier run as of record; parameters: draws 459, delta 1/100, development")
         assert doc["ran_with"] is None and doc["audit"] is False and "deployed" not in "\n".join(text)
 
@@ -1123,7 +1127,7 @@ LAUNCHERS = {"none": None, **{f"{who} {said}": ran(**({} if who == "unnamed" els
 
 @pytest.mark.parametrize("launcher", LAUNCHERS)
 @pytest.mark.parametrize("pieces", PIECES)
-def test_no_record_prints_an_audit(tmp_path, capsys, pieces, launcher):
+def test_no_record_prints_an_audit(tmp_path, capsys, local, pieces, launcher):
     """Every shape of the record's pieces against every word the launcher may say: a deployed word exits 2, and
     every other prints ``a measurement, not an audit`` with ``audit`` false and development parameters."""
     edits = PIECES[pieces] | ({} if LAUNCHERS[launcher] is None else {"RAN": LAUNCHERS[launcher]})
@@ -1167,7 +1171,7 @@ def test_a_withdrawn_development_piece_is_read_as_absent_and_a_withdrawn_require
     said = f"{why!r}, by infra"
     assert doc["value"] == SHARE and doc["withdrawn"] == [said] and doc["coins"]["salt"] is None
     assert "sample from the serving machine, salt coins not stated, Lean verdict development" in text[1]
-    assert text[7] == f"  part of the run's record was withdrawn, none of it a file read here: {said}"
+    assert text[8] == f"  part of the run's record was withdrawn, none of it a file read here: {said}"
     assert store.fetched == [[p for p in [*C.RECORDS, C.VERIFY] if p != C.DEVELOPMENT]]
     store.withdraw(f"art:{RUN}", f"private values were published (only {C.LEAN_CHECK}, {C.DEVELOPMENT})")
     assert bench(store, "--from", RUN) == 2
