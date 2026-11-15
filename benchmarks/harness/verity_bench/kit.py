@@ -74,8 +74,10 @@ QUERY = ("name", "uuid", "driver_version", "clocks.sm", "clocks.mem")
 QUERY_TIMEOUT_S = 60
 #: the words of a verdict of record (a verifier's decision, a stage's PASS or FAIL) and of a seal, each in every form a
 #: verdict takes (the verb's and its noun's), which no measurement's verdict uses
-OF_RECORD = frozenset("accept accepts accepted accepting acceptance reject rejects rejected rejecting rejection "
-                      "pass passes passed passing fail fails failed failing failure seal seals sealed sealing".split())
+OF_RECORD = frozenset(["accept", "accepts", "accepted", "accepting", "acceptance",
+                       "reject", "rejects", "rejected", "rejecting", "rejection",
+                       "pass", "passes", "passed", "passing", "fail", "fails", "failed", "failing", "failure",
+                       "seal", "seals", "sealed", "sealing"])
 #: the statuses of a validation the writer writes: whether the run's own gates held (the schema's third, ``not_run``, is a
 #: result with no validation)
 VALIDATION_STATUSES = ("passed", "failed")
@@ -182,17 +184,17 @@ def host_stamp() -> dict:
 
 
 def _order_statistics(n: int, confidence: float) -> tuple[int, int] | None:
-    """The 1-based order statistics (l, u) whose span covers the median with at least `confidence`: the largest l with
-    P(Binomial(n, 1/2) < l) at most (1 - confidence) / 2, and u = n + 1 - l (the 6th and 15th of 20 at 0.95); None when n
-    reps can't bound the median at `confidence`."""
+    """The 1-based order statistics (lo, hi) whose span covers the median with at least `confidence`: the largest lo with
+    P(Binomial(n, 1/2) < lo) at most (1 - confidence) / 2, and hi = n + 1 - lo (the 6th and 15th of 20 at 0.95); None when
+    n reps can't bound the median at `confidence`."""
 
-    tail, l, cdf = (1 - confidence) / 2, 0, 0.0
-    while l < n:
-        nxt = cdf + math.comb(n, l) / 2**n
+    tail, lo, cdf = (1 - confidence) / 2, 0, 0.0
+    while lo < n:
+        nxt = cdf + math.comb(n, lo) / 2**n
         if nxt > tail:
             break
-        cdf, l = nxt, l + 1
-    return (l, n + 1 - l) if l else None
+        cdf, lo = nxt, lo + 1
+    return (lo, n + 1 - lo) if lo else None
 
 
 def paired(arm: Sequence[float], stock: Sequence[float], confidence: float = 0.95) -> dict:
@@ -491,10 +493,9 @@ class Writer:
                              "its own directory")
         if not isinstance(doc.setdefault("measurements", []), list):
             raise ValueError(f"{path}'s measurements aren't a list: the writer appends only to a {RESULT_SCHEMA} result")
-        if self.kind is not None:
-            if doc.setdefault("kind", self.kind) != self.kind:
-                raise ValueError(f"{path} is a {doc['kind']} result, and this writer writes a {self.kind} one: a run "
-                                 "writes one kind of result")
+        if self.kind is not None and doc.setdefault("kind", self.kind) != self.kind:
+            raise ValueError(f"{path} is a {doc['kind']} result, and this writer writes a {self.kind} one: a run "
+                             "writes one kind of result")
         return doc
 
 

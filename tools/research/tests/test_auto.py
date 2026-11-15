@@ -998,6 +998,32 @@ def test_a_named_suites_run_lasts_the_bound_its_workers_stretch(tmp_path):
     assert suite_size.size(repo, [*run, "8"], None)["max_s"] == 14400 + suite_size.SYNC_S
 
 
+def test_suites_are_named_and_picked_as_suites_py_does_where_their_tests_mirror_the_tree(tmp_path):
+    """A suite at `tests/X` is named as `X` names it and picked by `X` (`suite_layout`), and `tests` picks the repository's
+    own, as suites.py's `select` resolves them; so a run naming one is sized by what that suite declares."""
+    from research import suite_size
+
+    repo = _auto_repo(tmp_path)
+    for path, body in {".": '[project]\nname = "verity"\n[tool.uv.workspace]\nmembers = ["adapters/vllm", "tests/adapters/vllm/tests"]\n'
+                            '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+                       "adapters/vllm": '[project]\nname = "verity-vllm"\n',
+                       "tests/adapters/vllm/tests": '[project]\nname = "verity-vllm-tests"\n[tool.pytest.ini_options]\n'
+                                                    '[tool.verity.tests]\nworker_gb = 16\n',
+                       "tests/verity": '[tool.pytest.ini_options]\n',
+                       "verity/protocols/tests": '[tool.pytest.ini_options]\n'}.items():
+        (repo / path).mkdir(parents=True, exist_ok=True)
+        (repo / path / "pyproject.toml").write_text(body)
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    suites = suite_size.declared(repo)
+    assert {s["path"]: s["name"] for s in suites} == {".": "repository", "tests/verity": "verity", "tests/adapters/vllm/tests": "verity-vllm",
+                                                      "verity/protocols/tests": "verity/protocols/tests"}
+    assert [s["path"] for s in suite_size.pick(suites, ["tests"])] == ["."]
+    assert [s["path"] for s in suite_size.pick(suites, ["tests/"])] == ["."]
+    assert [s["path"] for s in suite_size.pick(suites, ["adapters/vllm/tests"])] == ["tests/adapters/vllm/tests"]
+    assert [s["path"] for s in suite_size.pick(suites, ["verity/protocols/tests"])] == ["verity/protocols/tests"]
+    assert [s["path"] for s in suite_size.pick(suites, ["verity-vllm", "verity"])] == ["tests/adapters/vllm/tests", "tests/verity"]
+
+
 def test_a_run_of_many_suites_is_placed_and_counted_in_a_line_by_what_it_reserves(tmp_path, monkeypatch, capsys):
     """A run of many suites holds half of what it plans on in a pool's slot, so half is what a place for it takes of the
     machine's free memory, and what it takes from the runs behind it while it waits in a line. Counted by the whole figure,
