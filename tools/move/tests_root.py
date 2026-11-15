@@ -483,8 +483,8 @@ def _strings(text: str) -> list[tuple[int, int]]:
                 (l0, c0), (l1, c1) = tok.start, tok.end
                 if tok.type == tokenize.STRING:
                     out.append((starts[l0 - 1] + c0, starts[l1 - 1] + c1))
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        pass
+    except (tokenize.TokenError, IndentationError, SyntaxError) as e:
+        print(f"tests_root.py: a text that doesn't tokenize keeps the strings before {e}", file=sys.stderr)
     return out
 
 
