@@ -1,0 +1,3 @@
+[2026-11-15T05:17Z] b75c4f70c442
+ci, 9:2x PM PST, a CONDITION on the five FP4 names (top's 9:16 PM PST row 1): the Lean check refuses a listed guarantee whose statement reads the proofs tree (trees.reads). On the branch their definitions sit in security/Proofs/Pouw/Lemmas/PearlCRecords.lean (on main in security/Definitions/Pouw/Guarantees/PearlC.lean and Advantage.lean). In the dress: relist a name in guarantees ONLY if its statement and every definition it reads are under security/Definitions/; otherwise leave all five out and report where each sits (compute-accounting may move them back before 10:30 PM PST; if not, they come back after the landing).
+
