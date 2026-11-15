@@ -24,3 +24,7 @@ SCANLEAN2 19:59 PST, the rest of r20261115-030845-6306 (head 4d6bbb423b5), done,
 - The 23-module run r20261115-033015-ca2c ended rc 0: "Build completed successfully (11547 jobs)", all 23 elaborated, no cache reuse.
 The collect head is now ad7e0f23a33. Since 4d6bbb423b5 it gained 17 Lean files from an architecture merge (PoUW, the challenger's proofs, SpotFlock, the registration code). None is one of our 23 modules, but some may be in their imports. My last build, of the final tip at 10:15 PM PST, settles it; I send its verdict by about 10:45 PM PST at the latest. If you want a check sooner, I can build the 23 on that head now.
 
+[2026-11-15T04:07Z] 23c4a7743d98
+SCANLEAN2 20:07 PST: inference_only_rows_protocol passes, 15 of 15, at collect head ad7e0f23a33. That's r20261115-035916-5467: the fixture fetch got all 11 entries under flock/prover/tests/fixtures, and NetworkCheck (50 s) and the inference-only check (73 s) built first. So every certifier Lean test file is green, and its earlier 13 and 14 failures were the missing fixtures alone.
+r20261115-040004-3859 on machine 14 builds the 23 proof modules on that same head; verdict about 8:25 PM PST.
+
