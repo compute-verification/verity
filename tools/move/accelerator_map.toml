@@ -11,7 +11,7 @@ words = { "| device" = "| accelerator" }
 
 [[words_in]]
 files = ["security/Definitions/Core/Site.lean", "security/Properties/Core/Site.lean",
-         "verity/protocols/interface/CoreProtocol/Site.lean", "verity/protocols/interface/CoreProtocol/Registration.lean",
+         "verity/protocols/interface/CoreProtocol/Site.lean", "verity/protocols/interface/CoreProtocol/SiteExample.lean",
          "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Registered.lean"]
 words = { ".device" = ".accelerator" }
 
