@@ -77,6 +77,11 @@ def test_a_merge_whose_own_lines_use_the_new_names_lists_nothing(merged):
     assert p.stdout.startswith("0 own lines still spell a name the maps rename; 0 added files")
 
 
+def test_a_result_that_is_no_merge_is_refused_with_the_fix(merged):
+    p = run(merged, "pr^1")
+    assert p.returncode == 1 and "is no merge: commit the merge first" in p.stderr, p.stderr
+
+
 def test_a_map_no_move_line_names_is_applied_with_map(merged):
     """A move commit whose message names its map only in prose is no move to restack.py; `--map` applies its map."""
     git(merged, "checkout", "-q", "main")

@@ -200,6 +200,12 @@ def main() -> int:
             maps.append((spec.rsplit("/", 1)[-1], spec, load(tomllib.loads(text))))
         r = check(head, base, maps)
     else:
+        if not a.result:
+            ap.error("name RESULT, the merge (or --own BASE..HEAD)")
+        if not a.onto and subprocess.run(["git", "rev-parse", "-q", "--verify", f"{a.result}^2"],
+                                         capture_output=True).returncode:
+            raise SystemExit(f"{a.result} is no merge: commit the merge first (git commit --no-edit, once no conflict "
+                             "is left), or name --onto and --head")
         onto = R.rev(a.onto or f"{a.result}^2", None)
         head = R.rev(a.head or f"{a.result}^1", None)
         result = R.rev(a.result, None)
