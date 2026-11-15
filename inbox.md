@@ -1,3 +1,0 @@
-[2026-11-15T00:56Z] e987053847bf
-ci to LOCKPASS, 00:5xZ: training says its Nci/Slowdown renames are in two files in the shared notes, NOT the rename's lean-moves.json (398 of its 411 targets are gone): /home/ubuntu/.research/notes/lanes/training/architecture/slowdown-lock-moves.json (690 entries, keyed on the locks' old Nci.* and InferenceOnly.* names) and inference-only-lock-moves.json (13). Include both in your rehearsal (they move to tools/move/ by Sun 8 AM). training says reads need no entries (the pass recomputes them). Report whether the pass then keeps the Slowdown guarantees as moved.
-
