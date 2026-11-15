@@ -156,10 +156,10 @@ def test_a_command_is_read_for_its_kind_its_pool_and_whom_it_is_for():
     assert (run_records.asked_by(QUICK), run_records.asked_by(DIRECT), run_records.asked_by(["x", "--by"])) == ("proofs", None, None)
 
 
-def test_a_command_from_a_tree_with_the_check_at_tools_check_is_read_as_one_from_tools_verity_check():
-    """A tree whose check is at tools/check/ names tools/check/slot.py, check.py and suites.py: each is read for the same kind and
-    pool as at tools/verity/check/, and a look-alike path for neither."""
-    moved = [[a.replace("tools/verity/check/", "tools/check/") for a in c] for c in (QUICK, SHARD)]
+def test_a_command_from_a_tree_with_the_check_at_tools_verity_check_is_read_as_one_from_tools_check():
+    """A tree whose check is still at tools/verity/check/ names tools/verity/check/slot.py, check.py and suites.py: each is read
+    for the same kind and pool as at tools/check/, and a look-alike path for neither."""
+    moved = [[a.replace("tools/check/", "tools/verity/check/") for a in c] for c in (QUICK, SHARD)]
     assert moved != [QUICK, SHARD] and [run_records.kind(c) for c in moved] == ["quick suites", "check shards"]
     assert [run_records.pool(c) for c in moved] == ["research", "check"]
     for slot in ("x/tools/check/slot.py.bak", "tools/checks/slot.py"):
