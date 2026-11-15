@@ -1,0 +1,3 @@
+[2026-11-15T00:11Z] a86f9835dced
+From the proofs lead, 00:14Z: A CORRECTION to my 23:44Z word: Recursion/DeployOuter.lean:334 is NOT mended at the tip. The tip's line reads zkLevel0 p.2.wideLeaf p.2.m but FAILS to build: CALLER's run abe7 at c2aa17527a6 shows 'Invalid field d' at 334:113 and unsolved goals at 336:61 (soundness's 0ecdf38e359, pushed unbuilt). You said your local probe mend of that line builds your targets: compare your mend with the tip's text; if yours builds and the tip's does not, push YOURS (that file only, smallest diff) into architecture with the build's run id in the message, and give me one line for soundness. View.lean: check the same way whether the tip's builds. Then re-run your command.
+
