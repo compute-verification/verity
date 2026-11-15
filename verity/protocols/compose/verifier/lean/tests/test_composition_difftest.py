@@ -239,7 +239,7 @@ def component_case(draw, C, kind: str | None) -> dict:
     elif C is R.CERTIFIER:
         case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
     elif C is R.INFERENCE_ONLY:
-        case = draw(R.INFERENCE.drawn(draw(st.sampled_from(INFERENCE_CASES[kind]))))
+        case = draw(R.INFERENCE.sampled(draw(st.sampled_from(INFERENCE_CASES[kind]))))
     elif C in (R.WIPE, R.COUNTED_WIPE):
         case = R.WIPE_CASES.case(kind, draw(st.integers(0, 1)))
     elif C is R.HOST_SPAN:
