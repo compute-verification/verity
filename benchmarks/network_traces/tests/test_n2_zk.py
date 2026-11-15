@@ -128,7 +128,7 @@ def test_a_refused_execution_phase_leaves_the_public_summary_the_same_wherever_i
 
     seen = []
     for w in (0, 1):
-        monkeypatch.setattr(n2, "link_windows", refused_at(w))
+        monkeypatch.setattr(n2, "phases", refused_at(w))
         doc, witness = _summary(run, tmp_path / str(w))
         assert doc["members"] == {k: {"certifier_refused": True} for k in doc["members"]} and "windows" not in doc["link"]
         assert witness["members"]["honest"]["issuer_refused"] == [w] and witness["link"]["windows"]
