@@ -602,7 +602,8 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     views are read and no cell: the GPU's graph lowered without its captures' tables, the matrix products as without a `cc`
     (`Matmul()`) and each flash attention op its head Definition at a stand-in block size (`training_attention.STAND_IN`), with
     neither setting read (``training-cc<major>.<minor>-structure``)."""
-    from verity_vllm.program.frontend.rules import DEFAULT_FAMILIES, TORCH_RULES
+    from verity_torch.frontend.rules import TORCH_RULES
+    from verity_vllm.program.frontend.rules import DEFAULT_FAMILIES
 
     if structure and (cc is None or tf32 or deterministic):
         raise ValueError("training_rules: a structure derivation is of a step at a cc, and reads no setting of its kernels")
