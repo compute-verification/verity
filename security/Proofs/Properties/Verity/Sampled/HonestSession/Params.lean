@@ -342,10 +342,11 @@ private theorem sortStrings_of_sorted {as : Array String} (h : as.toList.Pairwis
     _ = as.toList.toArray := by rw [Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted h]
     _ = as := rfl
 
-/-- `keys?` of an object, as its definitional equation, so the walk can expose the `sortStrings` inside it (which `keys?`
-being a plain `def` otherwise hides from the rewriter). -/
-private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
-    Spot.keys? (.obj kvs) = some (Spot.sortStrings (kvs.toArray.map (·.1))) := rfl
+/-- `keys?` of an `mkObj`, as its definitional equation. Keyed on `mkObj` (not `.obj`) so the walk's reducible match
+finds it in the literal objects of `Data/`; it exposes the inner `sortStrings` (over the tree's structurally-reducible key
+array) that `sortStrings_of_sorted` then rewrites away. -/
+private theorem keys?_mkObj (o : List (String × Lean.Json)) :
+    Spot.keys? (Lean.Json.mkObj o) = some (Spot.sortStrings ((Std.TreeMap.Raw.ofList o).toArray.map (·.1))) := rfl
 
 /-! ## v2's parameters, with every field named -/
 
@@ -402,7 +403,7 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     rw [hgc] at hdc
     rw [hgp] at hdp
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, keys?_obj, sortStrings_of_sorted]
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, keys?_mkObj, sortStrings_of_sorted]
       block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
     case f1 => kernel_rfl'            -- own.partition = partitionObj
     case f2 => rw [hpf]               -- own.program = programFile
