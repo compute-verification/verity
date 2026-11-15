@@ -707,10 +707,12 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     assert "; the bandwidth audit: error: " in line["reason"]
 
 
-def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests_on(tmp_path):
+@pytest.mark.parametrize("key", ["trusted-device", "trusted-host"])
+def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests_on(tmp_path, key):
     """The network certifier's answer as its piece writes it when it ran on the gate's machine and the piece's steps on
     the served node: its accept's clause says the piece establishes no trusted-device and gives no bound, and which
-    machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices having placed it."""
+    machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices having placed it. A record
+    made before the premise's rename holds it under its old key, and reads the same."""
     premise = ("unmet: this piece establishes no trusted-device and gives no bound on that ground; the network certifier "
                "ran on 192.0.2.84, not the developer's vy-dc-h200; the chain's checks and samples ran on vy-dc-h200, and "
                "the period check and its proofs' challenges on vy-dc-h200")
@@ -718,7 +720,7 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests
     (d / "answer.json").write_text(json.dumps({
         "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
         "public": {"K": 15764, "eps": "1/100", "windows": 1},
-        "profile": {"placement": {"kind": "not-placed", "trusted-device": premise}}}))
+        "profile": {"placement": {"kind": "not-placed", key: premise}}}))
     (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
     _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                    servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
@@ -4039,7 +4041,7 @@ PEARL_ROW = "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager
 @pytest.mark.parametrize("case", ["equal", "unequal", "died", "untied"])
 def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and_w(tmp_path, case):
     """`served_verdicts.sh served-compare K`, the run's step under PEARLPLUS_TIE once Pearl+'s piece wrote W and before the
-    record, runs served_compare.py with no GPU on the serve dir, the row of record, V3C's class, Pearl+'s scheme, PRED and
+    record, runs served_compare.py with no GPU on the serve dir, the workload of record, V3C's class, Pearl+'s scheme, PRED and
     the row's Build of record, against W in pearlplus/w<k>/, at the run's REV: its verdicts in the serve dir's
     served-compare/, copied to $OUT, its lines published (W's path naming no window) and its exit the step's. One that
     dies before a verdict says NOT EQUAL with its exit and error, and no earlier compare's verdict stands for it; without

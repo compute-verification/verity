@@ -126,11 +126,11 @@ the window's members in order (`ExecutionPhaseOn.reads_toV5`), each `Checked` (`
 vocabulary's openings, which hold wherever each member's deployed commitment opens (`MembersSetUp.opensWith`, at
 the instance's places) and at each member's constants (`constsWith_read`), at the seats' traces side by side. -/
 theorem claimReads (I : ExecutionPhaseInstance d α) (K : ExecutionPhaseConstructions I.base) : I.ClaimReads K where
-  laid θ F W hW := (show MembersSetUp I.base θ F W from (I.executionPhases_some hW).2).laid
-  share θ F W hW := (show MembersSetUp I.base θ F W from (I.executionPhases_some hW).2).toExecutionPhaseOn.share
-  units θ F W hW := (show MembersSetUp I.base θ F W from (I.executionPhases_some hW).2).toExecutionPhaseOn.units
+  laid θ F W hW := (show MembersSetUp I.base I.pinned θ F W from (I.executionPhases_some hW).2).laid
+  share θ F W hW := (show MembersSetUp I.base I.pinned θ F W from (I.executionPhases_some hW).2).toExecutionPhaseOn.share
+  units θ F W hW := (show MembersSetUp I.base I.pinned θ F W from (I.executionPhases_some hW).2).toExecutionPhaseOn.units
   reads θ F W hW hfix c σ _ := by
-    have h : MembersSetUp I.base θ F W := (I.executionPhases_some hW).2
+    have h : MembersSetUp I.base I.pinned θ F W := (I.executionPhases_some hW).2
     exact readsWith_members (I.base.read θ F).first (I.base.read θ F).rest (I.base.Opens θ F c) _
       (seats_members _ _) (h.toExecutionPhaseOn.reads_toV5 _) (fun _ hM => h.checked hfix _ hM)
       (h.opensWith c (I.place θ F c) _) (constsWith_read I.base θ c F)

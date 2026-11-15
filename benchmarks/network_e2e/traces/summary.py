@@ -308,9 +308,9 @@ def own_accept(r: dict) -> float | None:
 #: time there given the network certifier's summary)
 STAGES = (
     ("client send", lambda r: r.get("send_unix"), lambda r, w: r.get("send_unix")),
-    ("network certifier arrival", lambda r: network_certifier_at(r, "arrived"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "arrived"))),
-    ("network certifier admission", lambda r: network_certifier_at(r, "admitted"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "admitted"))),
-    ("network certifier release", lambda r: network_certifier_at(r, "released"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "released"))),
+    ("warden arrival", lambda r: network_certifier_at(r, "arrived"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "arrived"))),
+    ("warden admission", lambda r: network_certifier_at(r, "admitted"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "admitted"))),
+    ("warden release", lambda r: network_certifier_at(r, "released"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "released"))),
     ("server accept", own_accept, lambda r, w: own_accept(r)),
     ("server headers", lambda r: r.get("headers_unix"), lambda r, w: r.get("headers_unix")),
     ("server body", lambda r: r.get("body_unix"), lambda r, w: r.get("body_unix")),
@@ -419,7 +419,7 @@ def late_ticks(w: Path, origin_unix: float, cores: list[int]) -> dict | None:
                 "publish": [p for p in publishes if p[0] < ran and p[0] + p[1] / 1000 > start],
                 "gc": [g for g in t.get("gc", []) if start <= g[0] <= ran],
                 "host": [{"t": h["t"], "load": h.get("load"), "busy": h.get("busy"), "psi_ms": h.get("psi"),
-                          "network_certifier_cores_busy": {c: v for c, v in (h.get("cpus") or {}).items() if int(c) in cores},
+                          "warden_cores_busy": {c: v for c, v in (h.get("cpus") or {}).items() if int(c) in cores},
                           **{k: h["procs"].get(k) for k in ("warden", "client", "publisher") if k in h["procs"]}}
                          for h in near]}
 
@@ -436,8 +436,8 @@ def late_ticks(w: Path, origin_unix: float, cores: list[int]) -> dict | None:
             "publisher": None if pub is None else publisher_pace(pub, n * tau, len(late) * tau),
             "host": {"samples": len(host), "load_1m": series(lambda h: (h.get("load") or [None])[0]),
                      "busy": series(lambda h: (h.get("busy") or [None])[0]), "psi_ms": series(lambda h: h.get("psi")),
-                     "network_certifier_cpu_s": series(lambda h: (h["procs"].get("warden") or {}).get("cpu_s")),
-                     "network_certifier_invol": series(lambda h: (h["procs"].get("warden") or {}).get("invol")),
+                     "warden_cpu_s": series(lambda h: (h["procs"].get("warden") or {}).get("cpu_s")),
+                     "warden_invol": series(lambda h: (h["procs"].get("warden") or {}).get("invol")),
                      "client_cpu_s": series(lambda h: (h["procs"].get("client") or {}).get("cpu_s")),
                      "publisher_cpu_s": series(lambda h: (h["procs"].get("publisher") or {}).get("cpu_s"))},
             "late": [around(i) for i in shown]}

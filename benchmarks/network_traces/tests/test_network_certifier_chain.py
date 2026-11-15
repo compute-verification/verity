@@ -140,7 +140,7 @@ def test_a_network_certifier_runs_certificates_io_and_link_are_its_own(tmp_path)
     assert (got["verdict"], got["why"], got["windows"]) == ("accepted", None, sz.W63.windows)
     assert (private["certified_windows"], private["issuer_refused"], private["problems"]) == (sz.W63.windows, [], 0)
     assert got["public_is_the_records"] is True and got["clock_certificates"] == 0 and got["sync_bits"] == 0.0
-    assert got["warden_run"] == "00" * 32 and got["network_certifier_check"]["accepted"]
+    assert got["warden_run"] == "00" * 32 and got["warden_check"]["accepted"]
     io = WC.io(run)
     assert io["accepted"] and io["requests"] == len(sz.W63.prompts) and not io["violations"]
     assert [r["output"] for r in io["records"]] == [list(r) for r in sz.W63.responses]
@@ -171,7 +171,7 @@ def test_a_network_certifier_runs_certificates_io_and_link_are_its_own(tmp_path)
     (got, private), check = WC.checked(run), WC.RC.check(run / "witness")
     assert got["verdict"] == "refused" and private["rows"][0]["certified"] is False and "rows" not in got
     assert any("responses window 0 isn't certified" in p for p in check["problems"])
-    assert got["network_certifier_check"]["accepted"] is False and "problems" not in got["network_certifier_check"]
+    assert got["warden_check"]["accepted"] is False and "problems" not in got["warden_check"]
     assert got["why"] == WC.REFUSES and private["problems"] == len(check["problems"])
     assert not [p for p in check["problems"] if p in json.dumps(got)]
 
@@ -191,7 +191,7 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
         "the counts only an accepted check's verdict holds are the gate's (auditor.ACCEPTED_COUNTS)")
     run = gate_run(tmp_path)
     check = WC.RC.check(run / "witness")
-    got = WC.certificates(run)["network_certifier_check"]
+    got = WC.certificates(run)["warden_check"]
     assert set(got) <= {"accepted", *G.NETWORK_CERTIFIER_COUNTS} and set(got["cell_rows"]) <= set(G.CELL_ROWS)
     assert {"requests", "ended", "refused", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms",
             "data_bytes", "completion_tokens", "prompt_tokens", "finish_reasons", "arrival_lag_ms", "clocks",
@@ -242,7 +242,7 @@ def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics
     full = {"accepted": True, "summary": {"failed": ["cut"], "windows": 2, "certified_windows": 2, "certificates": 6,
                                           "cell_rows": {"registered": 4, "of": 4},
                                           "load": {"values": 3, "registered": 3, "relayed": True}}}
-    assert listing.undeclared(json.dumps({"network_certifier_check": WC.verdict(full)}).encode()) == {}
+    assert listing.undeclared(json.dumps({"warden_check": WC.verdict(full)}).encode()) == {}
 
 
 def test_a_runs_deployment_is_the_auditors_record_or_refused_naming_its_copy_and_field(tmp_path):
@@ -404,7 +404,7 @@ def test_the_network_certifier_path_requires_every_step_on_one_network_certifier
     Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
     served = cr.report(steps)
     assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.NETWORK_CERTIFIER_SERVED_STUBBED)
-    assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["network_certifier_endpoint_served"]
+    assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["warden_endpoint_served"]
     Path(steps.endpoint).write_text(json.dumps(ep))
 
     def refused(name: str, edit, why: str) -> None:

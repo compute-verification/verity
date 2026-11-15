@@ -298,7 +298,7 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
     ax.set_xscale("log")
     ax.set_xlim(min([0.8, *finite]) / 2, xmax)
     ax.set_ylim(-0.7, len(rows) - 0.3)
-    ax.set_xlabel("the overhead on the target run (∞ drawn at the right edge)")
+    ax.set_xlabel("the overhead on the target run (∞ plotted at the right edge)")
     ax.set_title("The overhead: its lower bound by status, each bound alone, and the attacks beside it", fontsize=11)
     ax.grid(True, axis="x", which="major", alpha=0.3)
     ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.12 - 0.25 / len(rows)), ncol=3)

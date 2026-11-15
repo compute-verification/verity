@@ -130,7 +130,7 @@ noncomputable def DesignData.model {R : Type} (D : DesignData) (n nt nf : ℕ) [
   muF := 0
   muX := 0
 
-/-- A labelled program over `Fin n` from its word production, fold, filler and skippable work. -/
+/-- A labelled program over `Fin n` from its word production, fold, filler and ε_skip work. -/
 noncomputable def labelled (n : ℕ) (nw nf nx ns : Sparse) : Labelled (Fin n) where
   nw := Sparse.counts nw
   nf := Sparse.counts nf

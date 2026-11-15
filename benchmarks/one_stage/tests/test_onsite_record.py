@@ -1394,7 +1394,7 @@ def test_a_case_of_another_period_leaves_the_periods_unfilled(tmp_path):
 
 
 def test_the_record_lists_the_re_proof_inputs_and_which_of_outs_the_run_wrote(tmp_path):
-    """What a later re-proof of the sampled units needs is listed by name, whatever the verdicts: the serve dir's, which
+    """What a later re-proof of the sampled proof blocks needs is listed by name, whatever the verdicts: the serve dir's, which
     the record can't see, by their paths there, naming no window, and OUT's with whether the run wrote each; how each must
     be kept is stated beside them."""
     out = accepted(tmp_path)

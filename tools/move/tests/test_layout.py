@@ -88,6 +88,30 @@ def test_a_second_run_on_the_moved_tree_changes_nothing(moved):
     assert len(json.loads((moved / "tools/research/src/research/store/moves.json").read_text())["moves"]) == 1
 
 
+def test_only_rewrites_the_files_it_lists_and_those_it_moves(tmp_path):
+    """A carry reruns a map on the merge of a later main, over the files the merge brought (`--only FILE`): a file it
+    lists, and one main added at an old path, which moves, are rewritten as the whole move rewrites them; any other file
+    is left as it was, unread."""
+    r = tmp_path / "repo"
+    files = {"census/hardware.json": "{}\n", "census/added.json": "{}\n", "listed.py": 'P = "census/hardware.json"\n',
+             "other.py": 'P = "census/hardware.json"\n', "census/README.md": "see census/hardware.json\n",
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(LIMIT_MAP)
+    (tmp_path / "only.txt").write_text("listed.py\n")
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock",
+                    "--only", str(tmp_path / "only.txt")], check=True, capture_output=True)
+    assert (r / "listed.py").read_text() == 'P = "catalog/census/hardware.json"\n'
+    assert (r / "catalog/census/README.md").read_text() == "see catalog/census/hardware.json\n", "a moved file is rewritten"
+    assert (r / "catalog/census/added.json").exists() and not (r / "census").exists()
+    assert (r / "other.py").read_text() == files["other.py"]
+
+
 def test_a_string_literal_in_rust_or_lean_keeps_its_text_and_only_a_path_in_one_moves(moved):
     rs = (moved / "prover.rs").read_text()
     assert 'const TAG: &str = "sha256 (verity.randomness)";' in rs, "a domain tag is protocol text"

@@ -7,9 +7,9 @@
   from `base + Σ d_k · step_k`), read at round 1's boundary port for that field (`linksOf?`).
 * **Wires** are the record's `wires`, each a reader span and a writer in closed form (`Spot.Wires`): the first
   `Σ wires_r` are the ranks' own, the rest the join's (`wiresOf?`).
-* **Rows** are each declaration's pattern at the units the second sample draws, once per declaration and sampled unit,
+* **Rows** are each declaration's pattern at the units the second sample draws, once per declaration and sampled proof block,
   never unrolled (`rowsOf?`).
-* **Parts** are rank members (`Spot.Ranks.memberOf`): each sampled unit is proved in the session of the rank member that
+* **Parts** are rank members (`Spot.Ranks.memberOf`): each sampled proof block is proved in the session of the rank member that
   holds it, and that session's sample is the sampled block's units in that member.
 * **No interior registration.** This reader drops the interior registration and its four checks (`second-interior-order`,
   `second-interior-names`, `second-return`, `second-inputs`) because every row round 2 opens is in a rank window whose
@@ -90,7 +90,7 @@ each. A port may read several writers, each over its own units (a select's first
 def wiresOf? (rec : Json) : Option (Array Spot.SecondStage.Wire) := do
   pure (distinct ((← patternsOf? rec).map fun w => (⟨w.reader, w.port, w.writer, w.out⟩ : Spot.SecondStage.Wire)))
 
-/-- A declaration's row at a sampled unit: template `template`'s unit `unit` (the joined circuit's), row `row` of its
+/-- A declaration's row at a sampled proof block: template `template`'s unit `unit` (the joined circuit's), row `row` of its
 port `port`, reads `source` of `of`: the leaf of a parameter or boundary field (`out` empty), or the unit of writer
 template `of` at its output port `out`. -/
 structure Row where
@@ -103,7 +103,7 @@ structure Row where
   source : Int
   deriving Repr, BEq
 
-/-- Pattern `p`'s rows at sampled units `sample` (`(template, unit)`): one a sampled unit it covers and row of its
+/-- Pattern `p`'s rows at sampled proof blocks `sample` (`(template, unit)`): one a sampled proof block it covers and row of its
 cut. -/
 def rowsAt (p : Spot.Wires.Wire) (sample : Array (String × Nat)) : Array Row :=
   sample.foldl (fun acc (t, u) =>
@@ -114,7 +114,7 @@ def rowsAt (p : Spot.Wires.Wire) (sample : Array (String × Nat)) : Array Row :=
     else acc) #[]
 
 /-- The rows of the joined record `rec`'s declarations (its wires, boundary reads and registered reads) at the sampled
-units `sample`, `(template, unit)` each: once per declaration and sampled unit, never unrolled. -/
+proof blocks `sample`, `(template, unit)` each: once per declaration and sampled proof block, never unrolled. -/
 def rowsOf? (rec : Json) (sample : Array (String × Nat)) : Option (Array Row) := do
   let reads ← (listOf? (getD rec "registered") "reads").bind (·.mapM readOf?)
   let ps := (← patternsOf? rec) ++ (← boundaryOf? rec) ++ reads
@@ -122,8 +122,8 @@ def rowsOf? (rec : Json) (sample : Array (String × Nat)) : Option (Array Row) :
 
 def sameMember (a b : Spot.Ranks.Member) : Bool := a.rank == b.rank && a.template == b.template && a.index == b.index
 
-/-- The rank members that hold the sampled units `sample` (`(template, unit)`, the joined circuit's units), each once,
-in the order of its first sampled unit (`Spot.Ranks.memberOf`); none where a unit is in no member. -/
+/-- The rank members that hold the sampled proof blocks `sample` (`(template, unit)`, the joined circuit's units), each once,
+in the order of its first sampled proof block (`Spot.Ranks.memberOf`); none where a unit is in no member. -/
 def partsOf? (rs : Spot.Ranks.Ranks) (regs : Array Spot.Ranks.Registered) (sample : Array (String × Nat)) :
     Option (Array Spot.Ranks.Member) := do
   let ms ← sample.mapM fun (t, u) => Spot.Ranks.memberOf rs regs t u
@@ -279,7 +279,7 @@ def writerUnit (ix : Index) (t port : String) (u : Nat) : Option (String × Int)
   pure (w.writer, w.writerAt ((u - w.start) * w.cuts))
 
 /-- Member `m`'s session as `Spot.SecondStage` reads a part's: one block (`sample` `#[0]`), its part `m`'s units in
-its rank's window, the interior its rank's docket record, its sample the sampled units `drawn` of its template in that
+its rank's window, the interior its rank's docket record, its sample the sampled proof blocks `drawn` of its template in that
 window, its links the joined record's `links` of its template, and its wires `wires` (`memberWires`). -/
 def ownFor (g : Given) (links : Array Spot.SecondStage.Link) (m : Spot.Ranks.Member) (drawn : Array Nat)
     (wires : Array Spot.SecondStage.Wire) : Spot.SecondStage.Own :=
@@ -476,11 +476,11 @@ end Example
   codes [stmt "A"] == ["second-read"] && codes [] == ["second-cover"] && codes [stmt "B"] == ["second-order"] &&
     codes [stmt "A", stmt "A"] == ["second-read", "second-order"]
 
-def PARTS_WHY : String := "a sampled unit is in no rank member"
+def PARTS_WHY : String := "a sampled proof block is in no rank member"
 
 /-- Every failure of statements `stmts` over the joined record `rec` and what round 2 holds beside it `g`, its ranks'
 records `records`, served records `served` and registrations `regs` at the serve's root `root`, `logged` whether a
-registration is in the log before the period's challenge, and the sampled units `sample`; when there is none and the
+registration is in the log before the period's challenge, and the sampled proof blocks `sample`; when there is none and the
 form isn't allowed, its refusal. -/
 def failures (allow : Bool) (g : Given) (rec : Json) (records : Array Json) (served : Array (String × String))
     (regs : Array Spot.Ranks.Registered) (root : String) (logged : String → Bool) (sample : Array (String × Nat))

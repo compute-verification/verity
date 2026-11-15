@@ -20,7 +20,7 @@ this file. `Accounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
 * `d2s`, `model`: `dither-2s-licpw-redux-ldtm0-l32` on that machine, its writer kinds every MMA class it times (ω its
   destination's words, A6); `Sm100.d2s`'s vector classes, fold routes, floors and `N_w`.
 * `flatFold`, `flatSkip`, `flat`: ♭ is `Sm100.flat`'s word production and filler, its fold DC-100-ri's (the fold routes'
-  cheapest, cp-red2 on every word), with ε_skip's skippable work at DC-100-ri's 0.814462% (`eps_budget.design_skip` on
+  cheapest, cp-red2 on every word), with ε_skip's free compute at DC-100-ri's 0.814462% (`eps_budget.design_skip` on
   DC-100-ri), at FFMA's price.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 1.000000).
 -/
@@ -112,7 +112,7 @@ noncomputable def model : Model (Fin 52) (Fin 9) (Fin 13) Unit Empty (Fin 14) Un
 /-- ♭'s fold a unit on DC-100-ri: the lane fold for 32768 words, the fold routes' cheapest, cp-red2 on every word. -/
 def flatFold : Sparse := [(0, 536, 1), (8, 512, 1), (22, 16, 1)]
 
-/-- ♭'s skippable work a unit on DC-100-ri, at its FFMA price. -/
+/-- ♭'s free compute a unit on DC-100-ri, at its FFMA price. -/
 def flatSkip : Sparse := [(7, 1445669286395, 165309230717)]
 
 /-- The floor program ♭ on DC-100-ri, labelled. -/

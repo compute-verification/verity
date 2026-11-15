@@ -20,7 +20,7 @@ import Mathlib.Data.Set.Card
   So the guarantee's three scope premises, `Registration.Valid`, `AtLinkEnds` and `RecordsWithin`, hold together at
   an instance. It does not state the limit there: the instance is not shown to meet the guarantee's four physical
   premises.
-* `Records.Toy.acts_injective`, `uncertifiedCapacity_le_sum`, `Records.Toy.outside_exceeds`: a strategy whose one gate
+* `Records.Toy.acts_injective`, `uncertifiedLinkCapacity_le_sum`, `Records.Toy.outside_exceeds`: a strategy whose one gate
   is at the outside and one bit wider than the links' whole capacity a tick does more there, over one tick, than
   `2 ^ β°` values.
 * `LeakPartsRegistered_nontrivial`: that at the example onsite log's Site and the same subtree, every record limit
@@ -32,9 +32,9 @@ import Mathlib.Data.Set.Card
 namespace Accounting
 
 /-- The capacity of the uncertified links across a boundary is at most the links' whole capacity. -/
-theorem uncertifiedCapacity_le_sum {L E : Type*} [Fintype E] (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) :
-    uncertifiedCapacity ends β cert X ≤ ∑ e, β e := by
-  unfold uncertifiedCapacity
+theorem uncertifiedLinkCapacity_le_sum {L E : Type*} [Fintype E] (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) :
+    uncertifiedLinkCapacity ends β cert X ≤ ∑ e, β e := by
+  unfold uncertifiedLinkCapacity
   exact Finset.sum_le_sum_of_subset (Finset.subset_univ _)
 
 end Accounting
@@ -86,7 +86,7 @@ theorem outside_exceeds (S : Site) (hno : ∀ x ∈ S.locs, x.id ≠ Site.outsid
           (Set.Ico 0 1)).encard ≤
       ((2 ^ ((∑ _y ∈ S.placesIn (S.certifiersOf i ∪ ∅), 0) +
         0 * ((Finset.Ico (0 : ℕ) 1).image id).card * (S.placesIn (S.certifiersOf i ∪ ∅)).card +
-        uncertifiedCapacity S.placeEnds β (S.placesIn (S.auditorsOf ∅ i)) (S.placesIn (S.proverUnder i)) *
+        uncertifiedLinkCapacity S.placeEnds β (S.placesIn (S.auditorsOf ∅ i)) (S.placesIn (S.proverUnder i)) *
           (1 - 0)) : ℕ) : ℕ∞)) := by
   intro h
   rw [← Set.image_univ,
@@ -94,7 +94,7 @@ theorem outside_exceeds (S : Site) (hno : ∀ x ∈ S.locs, x.id ≠ Site.outsid
     Set.encard_univ, ENat.card_eq_coe_fintype_card, Fintype.card_fin] at h
   have h2 := (Nat.pow_le_pow_iff_right (by decide : 1 < 2)).1 (ENat.natCast_le_natCast.1 h)
   simp only [Finset.sum_const_zero, Nat.zero_mul, Nat.zero_add, Nat.sub_zero, Nat.mul_one] at h2
-  exact Nat.not_add_one_le_self _ (h2.trans (uncertifiedCapacity_le_sum _ _ _ _))
+  exact Nat.not_add_one_le_self _ (h2.trans (uncertifiedLinkCapacity_le_sum _ _ _ _))
 
 end Accounting.Records.Toy
 
@@ -163,7 +163,7 @@ theorem LeakPartsRegistered_nontrivial (β : Fin (Site.ofLog [Registration.Examp
             ((Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" ∪ ∅), 0) +
         0 * ((Finset.Ico (0 : ℕ) 1).image id).card * ((Site.ofLog [Registration.Example.onsite]).placesIn
           ((Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" ∪ ∅)).card +
-        uncertifiedCapacity (Site.ofLog [Registration.Example.onsite]).placeEnds β
+        uncertifiedLinkCapacity (Site.ofLog [Registration.Example.onsite]).placeEnds β
           ((Site.ofLog [Registration.Example.onsite]).placesIn
             ((Site.ofLog [Registration.Example.onsite]).auditorsOf ∅ "node0"))
           ((Site.ofLog [Registration.Example.onsite]).placesIn

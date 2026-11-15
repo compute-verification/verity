@@ -377,7 +377,7 @@
 # after step 4 and before the record (on a node short of its audit's memory, deferred as under H1_TIE): it audits that
 # commit, held to W (WINDOW-COMMIT), with records_audit's --tie W (V3C-TIE), and the record reads R and that audit's
 # summary from pearlplus/w<k>/tie (`record --window-tie`), where `pearlplus_of_record` holds them to W.
-# Once Pearl+'s piece wrote W, before the record, the served compare holds the serve to the row of record on the CPU
+# Once Pearl+'s piece wrote W, before the record, the served compare holds the serve to the workload of record on the CPU
 # (`served_compare.py`, within SERVED_COMPARE_TIMEOUT, default 30m): PHI, serve.json's φ is ROW_ID's declared φ at REV
 # (`--revision`, which the manifests must pin of the row's model when it isn't the row's own) and lowers
 # the same window circuit at V3C's class cut at Pearl+'s linears; BUILD, PRED is the row's Build of record BUILD_OF_RECORD
@@ -740,7 +740,7 @@ window_tie() {  # under PEARLPLUS_TIE: R, V3c's audit's summary and, once V3c he
     && { [ "$v3c_ok" != 1 ] || cp "$D/$(v3c_record)" "$t/circuit-record.json" 2>/dev/null || true; }
 }
 served_compare() {  # under PEARLPLUS_TIE, once Pearl+'s piece wrote W and before the record, on the CPU: the serve held to
-  # the row of record (served_compare.py), its SERVED-COMPARE line the one the record names (--served-compare)
+  # the workload of record (served_compare.py), its SERVED-COMPARE line the one the record names (--served-compare)
   local dir=${SERVED_COMPARE%/*} rc
   [ -n "$PEARLPLUS_TIE" ] || { say "SERVED-COMPARE: not run: PEARLPLUS_TIE is empty, so no W ties the serve to the row"; return 3; }
   # an earlier compare's verdict never stands for this one's, which can die before it writes its own

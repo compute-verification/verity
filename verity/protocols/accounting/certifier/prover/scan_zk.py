@@ -1891,10 +1891,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                  for i, w in enumerate(m["outputs"]) if (m["base"] + i) in held]
     (vdir / "openings.json").write_text(json.dumps(sent, indent=1))
     for side, s in at.sides.items():
-        (vdir / f"network-certifier-registration-{side}-{at.number}.json").write_text(json.dumps(s.registration, indent=1,
+        (vdir / f"warden-registration-{side}-{at.number}.json").write_text(json.dumps(s.registration, indent=1,
                                                                                       sort_keys=True))
     if kind_of(name) == "tampered":
-        (vdir / f"network-certifier-registration-egress-{at.number}-tampered.json").write_text(
+        (vdir / f"warden-registration-egress-{at.number}-tampered.json").write_text(
             json.dumps(at.tampered.registration, indent=1, sort_keys=True))
     streamed = (out / "receipt.json", out / "segment.json", out / "coins.json") if stream is not None else ()
     for f in (out / "registration.json", pg.partition_file, pg.program_file, out / "draw.json", out / "audit.json",

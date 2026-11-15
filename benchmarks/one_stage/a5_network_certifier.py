@@ -368,8 +368,8 @@ def negatives(at: dict[str, SimpleNamespace], source, rec: dict) -> dict[str, di
         made[f"{name} (registered reads)"] = {"refused": why.startswith("registered reads:") and MADE_FOR[kind] in why,
                                              "why": why, "units": st.units.digest().hex(), "reads": [list(c) for c in st.units.cells[:2]],
                                              "rows": st.positions[:2], "program_rows": e.positions[:2]}
-    return {"prover-root-under-the-network-certifiers-certificate (check_registration)": check,
-            "window-naming-another-network-certifier-root (source)": {"refused": not s["ok"], "codes": s["codes"]},
+    return {"prover-root-under-the-wardens-certificate (check_registration)": check,
+            "window-naming-another-warden-root (source)": {"refused": not s["ok"], "codes": s["codes"]},
             "foreign-read-under-a-crossed-wiring (port)": foreign | {
                 "read": [q2, k2], "opens": [q1, k1], "row": t, "slot": j, "cell_of": HEADER.unpack_from(cell_at(t, j))[1]},
             "duplicate-read (port)": refusal(lambda: port(w, [x.reads[0], x.reads[0]]), f"cell {k0} is read twice")
@@ -484,7 +484,7 @@ def main(argv=None) -> int:
                "accepted": ok and not published.get("error")}
     summary["as_expected"] = expected(a, s, summary["accepted"])
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    print("A5-NETWORK_CERTIFIER " + json.dumps({x: summary[x] for x in ("accepted", "as_expected", "altered", "made_for", "coins")}
+    print("A5-WARDEN " + json.dumps({x: summary[x] for x in ("accepted", "as_expected", "altered", "made_for", "coins")}
                                     | {"draw": s.get("draw"), "audit": (s.get("audit") or {}).get("why")}, sort_keys=True, default=str))
     return 0 if summary["as_expected"] else 1
 
