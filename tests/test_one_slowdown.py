@@ -90,11 +90,11 @@ def reads(texts: dict[str, str], where: Path, package: str) -> dict[str, dict[st
     where it reads nothing by name."""
     inside = where.as_posix() + "/"
     trees = {rel: list(ast.walk(ast.parse(text, filename=rel))) for rel, text in texts.items()
-             if not rel.startswith(inside) and "min_cut" in text}
+             if not rel.removeprefix("tests/").startswith(inside) and "min_cut" in text}
     doors = {fn.name for nodes in trees.values() for fn in nodes
              if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and _loads(list(ast.walk(fn)), package)}
     trees |= {rel: list(ast.walk(ast.parse(text, filename=rel))) for rel, text in texts.items()
-              if rel not in trees and not rel.startswith(inside) and any(d in text for d in doors)}
+              if rel not in trees and not rel.removeprefix("tests/").startswith(inside) and any(d in text for d in doors)}
     out = {}
     for rel, nodes in trees.items():
         opens = _bound_from(_assigned(nodes), doors, lambda e, names: isinstance(e, ast.Name) and e.id in names or
