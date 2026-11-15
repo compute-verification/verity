@@ -289,12 +289,14 @@ verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] 
 | `--recursion` | `benchmarks/recursion_e2e`'s `recursion_e2e.json` | wall, one recursive run's path without Lean's step | the headline's `ok` and `composed` both true |
 
 The directory's files decide its reader, and a flag refuses another command's output. A `prove_path` directory holding
-more than one honest arm is refused: give the arm's directory. A `--flock` or `--zk` row whose `PROVE-PATH` line states
-the other proof prints no number.
+more than one honest arm is refused: give the arm's directory. A `--flock` or `--zk` row whose output states the other
+proof, or none, prints no number, whichever command wrote it.
 
 A row prints its numbers only when its Lean verdict is an accept. Any other row prints none, and says why under the
-table. Its coins and parameters column is the output's own words, and "not stated" where the output says nothing. No
-output yet states development or deployed parameters. The table is followed by its JSON line. Under a research run, or
+table. Its last column is one line, `ran with: coins COINS; parameters PARAMETERS (DETAIL)`: COINS is `deployed
+challenger`, `local challenger` or `in-process` and PARAMETERS `deployed` or `development`, each only where the output
+says so outright, "not stated" for a half it doesn't say, and `ran with: not stated` where it says neither. DETAIL, the
+output's own words, is also the JSON's `detail`. No output yet states development or deployed parameters. The table is followed by its JSON line. Under a research run, or
 with `$OUT` set, it writes `proof-layers.json` and one `prover-seconds` measurement a row, its `member` the layer, through
 the kit's writer.
 

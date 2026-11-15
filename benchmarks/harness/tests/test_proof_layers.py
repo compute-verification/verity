@@ -47,7 +47,7 @@ def prove_path_arm(out: Path, name: str, *, proof: str = "zk", forged: bool = Fa
     return arm
 
 
-def a5_out(root: Path, *, stopped: bool = False) -> Path:
+def a5_out(root: Path, *, stopped: bool = False, **summary: object) -> Path:
     out = root / "out"
     (out / "a5" / "a5").mkdir(parents=True)
     (out / "machine.txt").write_text("ubuntu\nnode\nabc\nrow dir /w/r/llama32-1b__int8__h200__tp1__b4\n")
@@ -62,7 +62,7 @@ def a5_out(root: Path, *, stopped: bool = False) -> Path:
         (out / "a5" / "a5.log").write_text("A5 " + json.dumps(a5) + "\n")
         timing = {"RoPEHead_v1{D=64}": {"lean_verify_s": 8.0, "timing": {"prove_total_s": 20.0, "proof_bytes": [500, 500]}}}
         (out / "a5" / "a5" / "summary.json").write_text(json.dumps({"timing": timing, "population": 112, "arm": "dev",
-                                                                    "draw_counts": a5["draw_counts"]}))
+                                                                    "draw_counts": a5["draw_counts"], **summary}))
     return root
 
 
@@ -73,8 +73,8 @@ def test_an_accepted_recursive_run_gives_its_path_without_leans_step_and_its_rel
     assert row.proof_bytes == 18000000 and "10 releases" in row.bytes_what
     assert row.workload == ("K = 4096, N = 2: N x GemmCoordinate_v2{K,DOT=HopperBF16WgmmaDot16_v1} under "
                             "Q_template_instance (rec_reprice.py)")
-    assert row.coins == ("coins: on the challenger's coin tree (FC_COINS=tree); coin tree from test-os; "
-                         "parameters: not stated")
+    assert row.ran_with == "ran with: not stated"
+    assert row.detail == "inputs.inner: on the challenger's coin tree (FC_COINS=tree); params.tree_from test-os"
 
 
 @pytest.mark.parametrize("composed", [False, None])
@@ -95,7 +95,9 @@ def test_a_prove_path_run_takes_its_honest_arm_and_its_blocks_means(tmp_path):
     assert row.accepted and row.format == PL.PROVE_PATH and row.proof == "zk"
     assert (row.prover_s, row.lean_s, row.proof_bytes) == (3.0, 1.0, 850000.0) and row.prover_unit == "s a block"
     assert row.workload == "arm llama: SiluMul_v2{I=8192} x 2 drawn of 8 units"
-    assert row.coins == "coins: challenger, local; proof: zk; parameters: not stated"
+    assert row.ran_with == ("ran with: coins local challenger; parameters not stated "
+                            "(PROVE-PATH coins challenger; summary.json coins.challenger local)")
+    assert row.detail == "PROVE-PATH coins challenger; summary.json coins.challenger local"
 
 
 def test_the_flock_row_is_the_plain_proofs(tmp_path):
@@ -116,9 +118,23 @@ def test_an_a5_run_reads_its_audit_its_timing_and_states_no_more_of_its_coins_th
     assert (row.prover_s, row.lean_s, row.proof_bytes) == (5.0, 2.0, 250.0)
     assert row.workload == ("row llama32-1b__int8__h200__tp1__b4: RoPEHead_v1{D=64} x 4 drawn of 112 units "
                             "(kind=served commitment=rows-sha512)")
-    assert row.coins == ("coins: a challenger per drawn member (challenger/m0), local or deployed not stated; proof: zk, "
-                         "arm dev; parameters: not stated")
+    assert row.ran_with == "ran with: not stated"
+    assert row.detail == "audit verdicts challenger/m0, a challenger per drawn member"
     assert "replay rc=0 a5 rc=0" in row.notes and "serving stage build PASS 2026-11-15T10:00:00Z" in row.notes
+    assert "arm dev" in row.notes
+
+
+def test_an_a5_row_is_checked_against_the_proof_of_the_layer_it_is_given_as(tmp_path):
+    """A plain a5 out given as ``--zk`` prints no seconds in the zero-knowledge row; its zk out does, with the coins its
+    summary names."""
+
+    plain = PL.read("zk", str(a5_out(tmp_path / "plain", plain=True)))
+    assert plain.proof == "plain" and plain.prover_s is None and "says its proof is plain" in plain.why
+    coins = {"source": "challenger", "challenger": "local"}
+    zk = PL.read("zk", str(a5_out(tmp_path / "zk", coins=coins)))
+    assert zk.accepted and zk.prover_s == 5.0
+    assert zk.ran_with == ('ran with: coins local challenger; parameters not stated '
+                           '(summary.json coins {"challenger": "local", "source": "challenger"})')
 
 
 def test_a_stopped_a5_run_says_where_it_stopped(tmp_path):
@@ -157,3 +173,17 @@ def test_the_command_prints_every_layer_and_writes_a_measurement_a_row(tmp_path,
     assert set(got) == set(PL.LAYERS) and all(m["name"] == PL.MEASUREMENT and m["mark"] == "measured" for m in got.values())
     assert got["recursion"]["value"] == 1202.0 and got["sampling"]["value"] == 5.0
     assert got["flock"]["value"] is None and got["flock"]["why"].startswith("not run")
+    assert got["recursion"]["detail"].startswith("inputs.inner: ") and doc["rows"][3]["ran_with"] == "ran with: not stated"
+    assert "| ran with |" in text and "| ran with: not stated |" in text
+
+
+@pytest.mark.parametrize("out", ["", None])
+def test_an_empty_out_or_run_dir_is_no_place_to_write(tmp_path, monkeypatch, capsys, out):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", "")
+    if out is None:
+        monkeypatch.delenv("OUT", raising=False)
+    else:
+        monkeypatch.setenv("OUT", out)
+    assert PL.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read("flock", None)])) is None
+    assert capsys.readouterr().out == 'text\n{"rows": []}\n' and not any(tmp_path.iterdir())

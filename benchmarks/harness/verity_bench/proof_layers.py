@@ -14,7 +14,9 @@ reader a directory takes is decided by what it holds (`detect`):
   out (`read_a5`).
 
 A row prints its numbers only when the Lean verifier's verdict, as its output states it, is an accept; any other row
-prints none, with why. Its coins and parameters are the output's own words, and "not stated" where it has none.
+prints none, with why. Its ``ran with: coins COINS; parameters PARAMETERS (DETAIL)`` line names only what its output
+says outright (`COINS`, `PARAMETERS`, "not stated" for a half it doesn't say, ``ran with: not stated`` for both), and
+the JSON keeps the output's own words as ``detail``.
 """
 
 from __future__ import annotations
@@ -46,6 +48,9 @@ RUN_ID = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 FETCH = ("out/recursion_e2e.json", "out/*audit.log", "out/*summary.json", "out/summary.txt", "out/verdicts.txt",
          "out/machine.txt", "out/*a5.log")
 NOT_STATED = "not stated"
+#: what a ``ran with:`` line may say a row's coins and parameters were, each only where its output says so outright
+COINS = ("deployed challenger", "local challenger", "in-process")
+PARAMETERS = ("deployed", "development")
 #: a comma that ends a clause of recursion_e2e's ``inputs``, not one inside a Definition's braces
 CLAUSE = re.compile(r",(?![^{]*\})")
 
@@ -72,7 +77,8 @@ class Row:
     lean_what: str = ""
     proof_bytes: float | None = None
     bytes_what: str = ""
-    coins: str = "not run"
+    ran_with: str = "ran with: not stated"
+    detail: str | None = None
     proof: str | None = None
     why: str | None = None
     notes: list[str] = field(default_factory=list)
@@ -80,6 +86,22 @@ class Row:
     def withhold(self, why: str) -> None:
         self.prover_s = self.lean_s = self.proof_bytes = None
         self.why = self.why or why
+
+    def said(self, coins: str | None, parameters: str | None, detail: str | None) -> None:
+        """The row's ``ran with:`` line from what its output states (`COINS`, `PARAMETERS`, None where it doesn't say),
+        and `detail`, the output's own words, beside it."""
+
+        assert coins in (None, *COINS) and parameters in (None, *PARAMETERS)
+        self.detail = detail or None
+        self.ran_with = ("ran with: not stated" if coins is None and parameters is None else
+                         f"ran with: coins {coins or NOT_STATED}; parameters {parameters or NOT_STATED}"
+                         + (f" ({detail})" if detail else ""))
+
+
+def _challenger(source: Any, challenger: Any) -> str | None:
+    """`local challenger` where the output names a challenger and says it was the local one; else None."""
+
+    return "local challenger" if source == "challenger" and challenger == "local" else None
 
 
 # ---- finding a row's output ----------------------------------------------------------------------------------------------
@@ -251,8 +273,8 @@ def read_recursion(d: Path, row: Row) -> None:
     row.proof_bytes = _number(outer.get("proof_bytes"))
     row.bytes_what = f"V*'s {outer.get('statements', '?')} releases summed, mode {found.group(1) if found else '?'}"
     coins = next((c for c in inner if "coin" in c), None)
-    tree = f"; coin tree from {p['tree_from']}" if p.get("tree_from") else ""
-    row.coins = f"coins: {coins or NOT_STATED}{tree}; parameters: {NOT_STATED}"
+    said = ([f"inputs.inner: {coins}"] if coins else []) + ([f"params.tree_from {p['tree_from']}"] if p.get("tree_from") else [])
+    row.said(None, None, "; ".join(said))
 
 
 def read_prove_path(d: Path, row: Row) -> None:
@@ -291,9 +313,10 @@ def read_prove_path(d: Path, row: Row) -> None:
     _per_block(row, [r.get("per_unit") or {} for r in ranks.values()])
     summary = json.loads(_text(arm / "summary.json") or "{}")
     challenger = (summary.get("coins") or {}).get("challenger")
-    coins = f"{pp['coins']}" + (f", {challenger}" if challenger else "") if pp.get("coins") else NOT_STATED
+    said = ([f"PROVE-PATH coins {pp['coins']}"] if pp.get("coins") else []) + (
+        [f"summary.json coins.challenger {challenger}"] if challenger else [])
     row.proof = pp.get("proof")
-    row.coins = f"coins: {coins}; proof: {row.proof or NOT_STATED}; parameters: {NOT_STATED}"
+    row.said(_challenger(pp.get("coins"), challenger), None, "; ".join(said))
 
 
 def read_a5(d: Path, row: Row) -> None:
@@ -333,15 +356,12 @@ def read_a5(d: Path, row: Row) -> None:
     verdicts = ((a5 or {}).get("audit") or {}).get("verdicts") or {}
     challengers = sorted(k for k in verdicts if k.startswith("challenger/"))
     coins = summary.get("coins") or {}
-    if coins.get("source"):
-        said = f"{coins['source']}" + (f", {coins['challenger']}" if coins.get("challenger") else ", local or deployed not stated")
-    elif challengers:
-        said = f"a challenger per drawn member ({', '.join(challengers)}), local or deployed {NOT_STATED}"
-    else:
-        said = NOT_STATED
+    said = (f"summary.json coins {json.dumps(coins, sort_keys=True)}" if coins else
+            f"audit verdicts {', '.join(challengers)}, a challenger per drawn member" if challengers else "")
+    row.said(_challenger(coins.get("source"), coins.get("challenger")), None, said)
     row.proof = "plain" if summary.get("plain") else "zk" if summary else None
-    arm = f", arm {summary['arm']}" if summary.get("arm") else ""
-    row.coins = f"coins: {said}; proof: {row.proof or NOT_STATED}{arm}; parameters: {NOT_STATED}"
+    if summary.get("arm"):
+        row.notes.append(f"arm {summary['arm']}")
 
 
 READERS: dict[str, Callable[[Path, Row], None]] = {RECURSION: read_recursion, PROVE_PATH: read_prove_path, A5: read_a5}
@@ -365,11 +385,12 @@ def read(layer: str, given: str | None, fetcher: Callable[[str], Path] = fetch) 
             raise Unreadable(f"--{layer} takes {' or '.join(ACCEPTS[layer])}'s output, and {d} holds {row.format}'s")
         READERS[row.format](d, row)
     except (Unreadable, OSError, ValueError, KeyError, TypeError) as e:
-        row.status, row.lean, row.workload, row.coins = "unreadable", "not read", "not read", "not read"
+        row.status, row.lean, row.workload = "unreadable", "not read", "not read"
         row.withhold(f"unreadable: {e}")
         return row
-    if row.format == PROVE_PATH and layer in PROOF and row.proof != PROOF[layer]:
-        row.withhold(f"--{layer} is the {PROOF[layer]} proof's row, and this run's PROVE-PATH line says proof {row.proof}")
+    if layer in PROOF and row.proof != PROOF[layer]:
+        row.withhold(f"--{layer} is the {PROOF[layer]} proof's row, and this output "
+                     + (f"says its proof is {row.proof}" if row.proof else "states no proof"))
     if not row.accepted:
         row.withhold(f"the Lean verdict is not an accept ({row.lean})")
     return row
@@ -388,12 +409,12 @@ def render(rows: Sequence[Row]) -> str:
     """The table as text: a row a layer, then why each row without a number has none."""
 
     lines = ["The proof system by layer, each row read from its own run's output (`verity bench prove layers`).", "",
-             "| layer | workload | prover s | Lean verifier | Lean s | proof bytes | coins and parameters |",
+             "| layer | workload | prover s | Lean verifier | Lean s | proof bytes | ran with |",
              "|---|---|---|---|---|---|---|"]
     for r in rows:
         unit = f"{r.prover_unit}: {r.prover_what}" if r.prover_what else r.prover_unit
         lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {_cell(r.prover_s, unit)} | {r.lean} | "
-                     f"{_cell(r.lean_s, r.lean_what)} | {_cell(r.proof_bytes, r.bytes_what, bytes_=True)} | {r.coins} |")
+                     f"{_cell(r.lean_s, r.lean_what)} | {_cell(r.proof_bytes, r.bytes_what, bytes_=True)} | {r.ran_with} |")
     lines += ["", *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in rows if r.why)]
     lines += [f"- {LAYERS[r.layer]}: {n}" for r in rows for n in r.notes]
     return "\n".join(lines).rstrip()
@@ -414,7 +435,8 @@ def measured(rows: Sequence[Row]) -> list[dict[str, Any]]:
                     "inputs": [r.given] if r.given else [],
                     "extra": {"layer": LAYERS[r.layer], "status": r.status, "format": r.format, "workload": r.workload,
                               "prover_what": r.prover_what, "lean": r.lean, "lean_s": r.lean_s, "lean_what": r.lean_what,
-                              "proof_bytes": r.proof_bytes, "bytes_what": r.bytes_what, "coins": r.coins, "proof": r.proof}})
+                              "proof_bytes": r.proof_bytes, "bytes_what": r.bytes_what, "ran_with": r.ran_with, "detail": r.detail,
+                              "proof": r.proof}})
     return out
 
 
@@ -422,16 +444,18 @@ def report(name: str, text: str, doc: Mapping[str, Any], measurements: Iterable[
            mark: str = "measured") -> Path | None:
     """The command's last step: prints `text`, then `doc` as one line of JSON, and where it has a place to write (under a
     research run its ``out/``, else ``$OUT`` where set) writes that line to ``<name>.json`` there and each of
-    `measurements` at `mark` to the run's result (`kit.writer`); with no place it writes nothing. Its signature is the
-    kit's report step's, so a caller moves to that one by its name alone."""
+    `measurements` at `mark` to the run's result (`kit.writer`); with no place it writes nothing, and an empty
+    ``$RESEARCH_RUN_DIR`` or ``$OUT`` is none, never the working directory. Its signature is the kit's report step's, so a
+    caller moves to that one by its name alone."""
 
     print(text)
     line = json.dumps(doc)
     print(line)
-    place = Path(settings.RESEARCH_RUN_DIR) / "out" if settings.is_set("RESEARCH_RUN_DIR") else settings.OUT
-    if place is None:
+    run_dir = str(settings.RESEARCH_RUN_DIR or "") if settings.is_set("RESEARCH_RUN_DIR") else ""
+    out = str(settings.OUT or "") if settings.is_set("OUT") else ""
+    if not (run_dir or out):
         return None
-    place = Path(place)
+    place = Path(run_dir) / "out" if run_dir else Path(out)
     place.mkdir(parents=True, exist_ok=True)
     (place / f"{name}.json").write_text(line + "\n")
     if measurements := list(measurements):
