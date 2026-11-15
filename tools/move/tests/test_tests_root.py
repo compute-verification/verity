@@ -19,7 +19,7 @@ ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COM
        "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 TREE = {
     "pyproject.toml": '[project]\nname = "verity"\nversion = "0"\n\n[tool.uv.workspace]\n'
-                      'members = ["adapters/dist", "tools/plain"]\n\n[tool.uv.sources]\nverity = { workspace = true }\n\n'
+                      'members = ["adapters/dist", "tools/plain", "tools/check"]\n\n[tool.uv.sources]\nverity = { workspace = true }\n\n'
                       '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
     "tests/test_tree.py": "def test_tree():\n    pass\n",
     "verity/__init__.py": "",
@@ -50,6 +50,12 @@ TREE = {
                                    "HELPER = A / \"tests\" / \"helper.py\"\nROOT = Path(__file__).resolve().parents[3]\n"
                                    "CODE = ROOT / \"verity\" / \"a\"\n\n\ndef test_p():\n"
                                    "    assert HELPER.is_file() and (CODE / \"tests/helper.py\").is_file()\n",
+    "tools/check/pyproject.toml": '[project]\nname = "verity-check"\nversion = "0.0.0"\nrequires-python = ">=3.12"\n'
+                                  'dependencies = ["plain"]\n\n[tool.uv]\npackage = false\n\n[tool.uv.sources]\n'
+                                  'plain = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                                  '[tool.verity.tests]\nuntraced = ["tests/test_c.py"]\n',
+    "tools/check/suites.py": "X = 1\n",
+    "tools/check/tests/test_c.py": "def test_c():\n    pass\n",
     "tools/research/src/research/store/moves.json": '{"moves": []}\n',
 }
 
@@ -71,13 +77,15 @@ def repo(tmp_path: Path) -> Path:
 
 def test_the_inventory_names_each_tests_directory_with_its_suite_and_what_the_rule_cant_move_as_stated(tmp_path):
     """Each `X/tests` lands at `tests/X/`, but for a package its modules import as `tests`, which keeps its level; a suite
-    that builds a distribution and a conftest beside a suite's pyproject are snags by name."""
+    that builds a distribution or a member's that stays one and a conftest beside a suite's pyproject are snags by name."""
     inv = TR.inventory(TR.Tree(repo(tmp_path)))
     rows = {r["dir"]: (r["kind"], r["lands"]) for r in inv["rows"]}
     assert rows == {"adapters/dist/tests": ("distribution", "tests/adapters/dist/tests/"),
+                    "tools/check/tests": ("virtual", "tests/tools/check/"),
                     "tools/plain/tests": ("virtual", "tests/tools/plain/"),
                     "verity/a/tests": ("suite-only", "tests/verity/a/")}
     assert inv["snags"]["a suite whose pyproject builds a distribution (split first)"] == ["adapters/dist/tests (dist)"]
+    assert inv["snags"]["a suite of a member that stays one (split first)"] == ["tools/check/tests (verity-check)"]
     assert inv["snags"]["a tests/ package its modules import as `tests` (one level kept)"] == ["adapters/dist/tests"]
     assert "adapters/dist/conftest.py" in inv["snags"][
         "a test-like file outside every tests/ (conftest beside a suite's pyproject, or a module named test_*)"]
@@ -89,7 +97,7 @@ def test_split_moves_a_distributions_suite_to_a_virtual_member_in_its_tests_once
     on (`exports`) stays the distribution's, and the member, which no longer holds it, reads it by name. A rerun splits
     none."""
     r = repo(tmp_path)
-    assert TR.run_split(TR.Tree(r), []) == ["adapters/dist"]
+    assert TR.run_split(TR.Tree(r), []) == ["adapters/dist", "tools/check"]
     member = tomllib.loads((r / "adapters/dist/tests/pyproject.toml").read_text())
     assert member["project"]["name"] == "dist-tests" and member["project"]["dependencies"] == ["dist[x]"]
     assert member["tool"]["uv"] == {"package": False}
@@ -99,13 +107,32 @@ def test_split_moves_a_distributions_suite_to_a_virtual_member_in_its_tests_once
     assert tomllib.loads(dist)["tool"] == {"verity": {"tests": {"exports": ["adapters/dist/dist"]}}}
     assert "# what its dependents read\nexports" in dist
     uv = tomllib.loads((r / "pyproject.toml").read_text())["tool"]["uv"]
-    assert uv["workspace"]["members"] == ["adapters/dist", "adapters/dist/tests", "tools/plain"]
+    assert uv["workspace"]["members"] == ["adapters/dist", "adapters/dist/tests", "tools/plain", "tools/check", "tools/check/tests"]
     assert uv["sources"] == {"verity": {"workspace": True}, "dist": {"workspace": True}}
     assert not (r / "adapters/dist/conftest.py").exists()
     conftest = (r / "adapters/dist/tests/conftest.py").read_text()
     assert conftest.index("OUTER") < conftest.index("INNER") and conftest.count("from __future__") == 1
     assert conftest.startswith("from __future__ import annotations\n")
     assert TR.run_split(TR.Tree(r), []) == []
+
+
+def test_split_moves_the_suite_of_a_member_that_stays_one_to_a_member_with_its_dependencies(tmp_path):
+    """`tools/check` stays a workspace member (`MEMBERS_KEPT`), its project without the suite's tables; its suite's member
+    has its dependencies and sources, nothing installs a virtual member, so it reads `tools/check` by name, and the root
+    names no source for it."""
+    r = repo(tmp_path)
+    TR.run_split(TR.Tree(r), ["verity-check"])
+    kept = tomllib.loads((r / "tools/check/pyproject.toml").read_text())
+    assert kept["project"]["name"] == "verity-check" and "pytest" not in kept["tool"] and "verity" not in kept["tool"]
+    assert kept["tool"]["uv"] == {"package": False, "sources": {"plain": {"workspace": True}}}
+    member = tomllib.loads((r / "tools/check/tests/pyproject.toml").read_text())
+    assert member["project"]["name"] == "verity-check-tests" and member["project"]["dependencies"] == ["plain"]
+    assert member["tool"]["uv"] == {"package": False, "sources": {"plain": {"workspace": True}}}
+    assert member["tool"]["pytest"]["ini_options"] == {"testpaths": ["."]}
+    assert member["tool"]["verity"]["tests"] == {"untraced": ["test_c.py"], "inputs": ["tools/check"]}
+    uv = tomllib.loads((r / "pyproject.toml").read_text())["tool"]["uv"]
+    assert uv["workspace"]["members"][-2:] == ["tools/check", "tools/check/tests"]
+    assert uv["sources"] == {"verity": {"workspace": True}}
 
 
 def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproject_beside_them(tmp_path):
@@ -130,9 +157,10 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
 
     assert TR.main(["maps"], root=r) == 0
     files = tomllib.loads((r / TR.FILES_MAP).read_text())
-    assert files["paths"] == {"adapters/dist/tests/": "tests/adapters/dist/tests/", "tools/plain/tests/": "tests/tools/plain/",
-                              "verity/a/tests/": "tests/verity/a/"}
-    assert "split" not in files and files["rewrite"]["keep_relative"] == [f"{d}*.py" for d in files["paths"]]
+    dirs = {"adapters/dist/tests/": "tests/adapters/dist/tests/", "tools/check/tests/": "tests/tools/check/",
+            "tools/plain/tests/": "tests/tools/plain/", "verity/a/tests/": "tests/verity/a/"}
+    assert files["paths"] == dirs
+    assert "split" not in files and files["rewrite"]["keep_relative"] == [f"{d}*.py" for d in dirs]
     move(TR.FILES_MAP)
     assert TR.main(["suites-map"], root=r) == 0
     suites = tomllib.loads((r / TR.SUITES_MAP).read_text())
@@ -143,6 +171,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     move(TR.SUITES_MAP)
     left = [f for f in git(r, "ls-files").split() if "/tests/" in f and not f.startswith(("tests/", "tools/move/"))]
     assert left == []
+    assert (r / "tests/tools/check/pyproject.toml").is_file() and (r / "tools/check/pyproject.toml").is_file()
     a = tomllib.loads((r / "tests/verity/a/pyproject.toml").read_text())
     assert a["tool"]["pytest"]["ini_options"] == {"testpaths": ["."], "pythonpath": ["../../../verity/a"]}
     assert a["tool"]["verity"]["tests"] == {"untraced": ["test_a.py"], "inputs": ["verity/a"]}
@@ -151,7 +180,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     plain = tomllib.loads((r / "tests/tools/plain/pyproject.toml").read_text())
     assert plain["tool"]["pytest"]["ini_options"] == {"testpaths": ["."], "pythonpath": ["../../../verity/a"]}
     members = tomllib.loads((r / "pyproject.toml").read_text())["tool"]["uv"]["workspace"]["members"]
-    assert members == ["adapters/dist", "tests/adapters/dist/tests", "tests/tools/plain"]
+    assert members == ["adapters/dist", "tests/adapters/dist/tests", "tests/tools/plain", "tools/check", "tests/tools/check"]
     assert TR.main(["anchors", base, "--write"], root=r) == 0
     assert 'CODE = HERE.parents[3] / "adapters" / "dist" / "dist" / "__init__.py"' in (
         r / "tests/adapters/dist/tests/test_d.py").read_text()
@@ -164,3 +193,4 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     assert 'HELPER = A.parents[1] / "tests" / "verity" / "a" / "helper.py"' in p and "assert HELPER.is_file() and" in p
     assert '(CODE.parents[1] / "tests" / "verity" / "a" / "helper.py").is_file()' in p
     assert TR.anchors(TR.Tree(r), base, write=False) == {}
+
