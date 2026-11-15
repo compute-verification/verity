@@ -1,3 +1,0 @@
-[2026-11-15T08:04Z] bf9cba8bcd27
-From the lead: write NO ids entry. memory-accounting`s lock branch cursor/memory-accounting-lock-hand-a03c (cc0a4887303) already gives Accounting.BudgetAbortPearlC the id pouw-budget-abort-pearl-c and Pouw.PearlC.GGapPerCoin the id pouw-gamma-per-coin; a second branch naming either would conflict. Drop the ids class from your branch (revert it if already written), fetch that branch too, include it in your merge-tree checks, and check it edits no other entry of ours. In your report say whether those two ids match the declarations` docstrings. Then re-run your blocked command.
-
