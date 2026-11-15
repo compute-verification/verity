@@ -36,10 +36,11 @@ RESEARCH=$(cd "$ROOT/../../tools/research/src" 2>/dev/null && pwd -P) || { echo 
 [ -d "$CORE/verity/protocols/proofs/spot" ] || { echo "BOOTSTRAP_FAIL_TREE: no verity/protocols/proofs/spot beside $ROOT" >&2; exit 3; }
 export WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
 export FA2=${FA2:-$WORK/cp/fa2} NT=${NT:-$WORK/cp/norm_tap} RT=${RT:-$WORK/cp/router_tap}   # the taps' builds, which step 5 checks
-# The install's caches: under $WORK unless the caller names its own, and step 2 removes only those made here.
+# The install's caches: under $WORK unless the caller names its own. Step 2 removes only those this run created: a cache
+# already at $WORK/.cache/{uv,pip} (another job's, on a shared WORK) is used and left.
 OWN_CACHES=()
-[ -n "${UV_CACHE_DIR:-}" ] || { export UV_CACHE_DIR=$WORK/.cache/uv; OWN_CACHES+=("$UV_CACHE_DIR"); }
-[ -n "${PIP_CACHE_DIR:-}" ] || { export PIP_CACHE_DIR=$WORK/.cache/pip; OWN_CACHES+=("$PIP_CACHE_DIR"); }
+[ -n "${UV_CACHE_DIR:-}" ] || { export UV_CACHE_DIR=$WORK/.cache/uv; [ -e "$UV_CACHE_DIR" ] || OWN_CACHES+=("$UV_CACHE_DIR"); }
+[ -n "${PIP_CACHE_DIR:-}" ] || { export PIP_CACHE_DIR=$WORK/.cache/pip; [ -e "$PIP_CACHE_DIR" ] || OWN_CACHES+=("$PIP_CACHE_DIR"); }
 export HF_HOME=${HF_HOME:-$WORK/hf}
 export PYTHONPATH=$ROOT:$CORE:$RESEARCH${PYTHONPATH:+:$PYTHONPATH}
 export VERITY_TREE=$ROOT
