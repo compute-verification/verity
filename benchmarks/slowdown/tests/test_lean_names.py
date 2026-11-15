@@ -17,16 +17,13 @@ from importlib import import_module
 from pathlib import Path
 
 import slowdown
-from slowdown import lean, min_cut
+from slowdown import lean
 
 CALCULATOR = Path(slowdown.__file__).resolve().parents[1]
 #: a dotted name, each namespace starting with a capital, as a Lean declaration reads
 NAME = re.compile(r"(?:[A-Z][A-Za-z0-9_']*\.)+[A-Za-z_][A-Za-z0-9_']*")
 #: {a cited Lean name no lock lists: why}
-ALLOWED = {
-    min_cut.HE_CHARGED: "stated beside HE and frozen unstated in the lock's shape: no theorem proves it until the count "
-                        "over a set of blocks it follows from is proved",
-}
+ALLOWED: dict[str, str] = {}
 
 
 def listed(locks: tuple[Path, ...] = lean.LOCKS) -> set[str]:
