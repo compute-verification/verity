@@ -683,7 +683,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     def say(done: int, total: int) -> None:
         if done == total or done % max(1, total // 100) == 0:
-            print(f"{a.cmd}: {done}/{total}", file=sys.stderr, flush=True)
+            sys.stderr.write(f"{a.cmd}: {done}/{total}\n")
+            sys.stderr.flush()
 
     if a.cmd == "fixture":
         Path(a.out).write_text(dumps(fixture()))
