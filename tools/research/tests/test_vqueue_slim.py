@@ -24,13 +24,13 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, _reading, decide, meets)
-from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
+from research.vqueue_slim import (BUILD, CARRY_ENV, ENV, SUITE_RUNNER, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
                                   WHOLE, Read, _json, _text, abandon, answers_suites, audit_built, audit_failures, audited,
                                   audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
                                   lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
-                                  step_test, suite_kind, traced_reads, unnamed)
+                                  step_test, suite_kind, suite_reads, traced_reads, unnamed)
 from test_policy import LIVE, TEST
-from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
+from test_landing import CI_TOML, GATED_TREE, LINT_LOG, MIRRORED, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
 from test_vqueue_loop import NEW, PLAN, _check, env  # noqa: F401  (env: the loop's fixture)
 from test_vqueue_loop import _row as _loop_row
@@ -1997,3 +1997,17 @@ def test_combine_takes_the_candidates_state_from_its_table_with_both_verdicts_fa
 def test_combine_refuses_a_state_it_has_no_rule_for():
     with pytest.raises(ValueError, match="no verdict has state 'passed'"):
         combine(Verdict(PASS), Verdict("passed"))
+
+
+def test_a_suite_may_read_the_tests_of_each_path_it_reads_where_they_mirror_the_tree(world):
+    """`suite_reads` is what `suites.inputs_of` lets the suite's guard allow: its directory, its declared inputs and what the
+    members it depends on ship, each with its tests at `tests/X` where the commit has them (`suite_layout.mirrors`)."""
+    sha = world.change(MIRRORED)
+    reads, dirs = suite_reads(world.dev, sha, "tests/adapters/vllm/tests")
+    own = {"tests/adapters/vllm/tests", "hardware", "tools/config/x.py", "adapters/vllm", "tools/research"}
+    assert reads == frozenset(own | {"tests/hardware", "tests/adapters/vllm", "tests/tools/research", "pyproject.toml",
+                                     *SUITE_RUNNER, *ENV})
+    assert {"tests/hardware", "tests/adapters/vllm", "tests/tools/research", "hardware"} <= dirs
+    assert "tools/config/x.py" not in dirs and "tests/tools/config/x.py" not in reads
+    assert suite_reads(world.dev, sha, "tests/verity")[0] == frozenset({"tests/verity", "pyproject.toml", *SUITE_RUNNER, *ENV})
+    assert suite_reads(world.dev, sha, ".") == (None, frozenset())
