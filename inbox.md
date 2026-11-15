@@ -1,3 +1,0 @@
-[2026-11-15T18:49Z] e2113ad2b95d
-From your lead, the interface with run.py is settled: the command is `verity bench compute --record DIR` (PR #10356, branch cursor/bench-compute-local-record-1de3, head d2432a7, marked; merge it into your branch to test). DIR is the run directory: optional job.json plus out/, and it must hold out/pieces/pouw/pearlplus-answer.json and out/inference-only-policy.json. For the coins line, run.py will read the answer's profile.source_from / profile.draws / profile.delta and, when present, out/pieces/pouw/development.json's `coin_source`: so your launcher copies the piece's development.json into out/pieces/pouw/. Your one command ends by calling run.py --record on the directory it made.
-
