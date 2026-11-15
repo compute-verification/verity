@@ -73,7 +73,7 @@ open FlockSoundness FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExe
 /-- **`SampledKSLive`'s file hypotheses hold at the deployed session.** Given that the deployed files parse
 (`Bridge.Assumptions.ServedFilesParse`), there are inputs `I`, a descriptor `D` and a public file `pub` at which every
 hypothesis `SampledKSLiveV2` and `SampledKSLivePub` take of the files holds, and so do `SampledKSLiveV3`'s and its case
-`Bridge.KsScoped` (at one table every draw's `k` is a multiple of the tables): `I`'s files are the deployed ones (their
+`Bridge.KsScoped` (at one table every sample's `k` is a multiple of the tables): `I`'s files are the deployed ones (their
 SHA-512 digests), its tags `verity/flock-circuit`'s with one table and no session tables, untyped, the circuit file
 parses to `D` and `D`'s unit is built, the public file loads at `D` with no shared-row tables, `D` is in `scopeOkH`, no
 two of its ports' published domains are one (`PortRoots.dupId`), and the tags are hidden-output ones (`TagsOkZHJ`). -/

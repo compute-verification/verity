@@ -115,8 +115,10 @@ def parse(doc: object) -> Counter:
 
 
 def files() -> list[str]:
+    """The tracked Python files it reads, outside ``LEFT_OUT``: a tracked symlink is its target's second path, read there."""
     out = subprocess.run(["git", "ls-files", "-z", "--", "*.py"], cwd=ROOT, capture_output=True, check=True).stdout
-    return sorted(p for p in out.decode().split("\0") if p and not p.startswith(LEFT_OUT))
+    return sorted(p for p in out.decode().split("\0")
+                  if p and not p.startswith(LEFT_OUT) and not (ROOT / p).is_symlink())
 
 
 @lru_cache(maxsize=None)
@@ -211,6 +213,9 @@ def test_what_swallows_and_what_does_not() -> None:
 
 
 def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
+    # The check that reads the tree's list is a bookkeeping test, whose failed assertion only warns: a list that
+    # doesn't parse would switch the scan off with nothing red, so the tree's list is parsed here, where it fails.
+    allowed()
     assert parse({"entries": [{"file": "a.py", "count": 2}]}) == Counter({"a.py": 2})
     for bad in ({"file": "a.py", "count": 0}, {"file": "a.py", "count": True}, {"file": "a.py", "registry": True},
                 {"file": "a.py", "count": 1, "rule": "x"}):

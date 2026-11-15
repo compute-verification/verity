@@ -132,6 +132,16 @@ def test_a_row_keeps_its_verifier_cpus_and_their_seconds(monkeypatch, tmp_path):
     assert row["verifier_cpus"] == "44-47"
 
 
+def test_a_row_says_which_unit_kernel_its_sessions_ran(monkeypatch, tmp_path):
+    walked, host = {"buckets": [{"unit_walk": True}, {"unit_walk": True}]}, {"buckets": [{"unit_walk": False}]}
+    assert SR.unit_walk([walked, walked]) == [True]
+    assert SR.unit_walk([host, None, {}]) == [False]
+    assert SR.unit_walk([walked, host]) == [False, True]
+    assert SR.unit_walk([{"buckets": [{"t.total": 1.0}]}, {"accepted": True}]) == []
+    rc, row = run(monkeypatch, tmp_path)
+    assert (rc, row["unit_walk"]) == (0, [])
+
+
 def test_one_refused_session_voids_the_row_and_the_run(monkeypatch, tmp_path, capsys):
     rc, row = run(monkeypatch, tmp_path, refuse={4})
     assert (rc, row["statements_per_s"], row["accepted"], row["refused_n"]) == (1, None, 8, 1)
@@ -330,7 +340,7 @@ def test_a_templated_statements_lean_verdict_is_under_its_statement(monkeypatch,
             pass
 
     monkeypatch.setattr(SR, "Lean", Lean)
-    run(monkeypatch, tmp_path, "--lean", "flock-verify", tmpl_unit=tmp_path / "unit.placed")
+    run(monkeypatch, tmp_path, "--lean", "verity-verify-proof", tmpl_unit=tmp_path / "unit.placed")
     assert got == [SR.FC.TMPL_STATEMENT]
 
 

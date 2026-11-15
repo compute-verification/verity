@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.boolean_scalar`'s Boolean versions of `ref_prims`' `I64ToI32_v1`, `F32MaxRef_v1` and
+"""`verity_vllm.definitions.registry.boolean_scalar`'s Boolean versions of `ref_prims`' `I64ToI32_v1`, `F32MaxRef_v1` and
 `F32Sqrt_v1`: each is Boolean, names its word primitive, and agrees with it on edge and random words (both zeros, the
 infinities, NaNs with either sign and payload, subnormals, every binade's ends, the i32 range's edges); their gate counts are
 pinned. `F32Sqrt_v2` is held on every one of the 2^32 words by `benchmarks/f32_exhaustive/run.py boolean F32Sqrt`."""
@@ -6,13 +6,12 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.evaluation import bits as BS
-from verity.definitions.boolean import boolean_version
-from verity.definitions.registry import boolean_scalar as BR
-from verity.definitions.registry import ref_prims as RP
+from verity.circuits.ops.boolean.versions import boolean_version
+from verity_vllm.definitions.registry import boolean_scalar as BR
+from verity_vllm.definitions.registry import ref_prims as RP
 
 #: id -> (And, Xor, Not gates)
 PINS = {"I64ToI32_v2": (63, 94, 3), "F32MaxRef_v2": (167, 371, 46), "F32Sqrt_v2": (967, 1714, 145)}
@@ -57,7 +56,8 @@ def test_f32_max_ref_on_every_pair_of_edges_neighbours_and_random_pairs() -> Non
     pairs over all words."""
     rng = np.random.default_rng(20261104)
     w = np.array(F32_EDGES + _binades()[::7], dtype=np.uint64)
-    a, b = np.repeat(w, len(w)), np.tile(w, len(w))
+    a: np.ndarray = np.repeat(w, len(w))
+    b = np.tile(w, len(w))
     r = rng.integers(0, 1 << 32, 1 << 14, dtype=np.uint64)
     near = (r + rng.integers(-2, 3, len(r)).astype(np.uint64)) & np.uint64(M32)
     _agree(BR.F32MaxRef, np.concatenate([a, r, r]), np.concatenate([b, near, rng.permutation(r)]))

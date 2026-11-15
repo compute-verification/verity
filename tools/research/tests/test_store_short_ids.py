@@ -38,7 +38,7 @@ def test_short_ids_resolve_in_positionals_refs_and_member_lists(st, capsys):
     assert main(["snapshot", "--name", "s", "--members", f"{sa},{sb}", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["members"] == sorted([a, b])
 
-    assert main(["select", "--where", f"meta.n=1", "--ids"]) == 0      # an unrelated `=` token passes through untouched
+    assert main(["select", "--where", "meta.n=1", "--ids"]) == 0      # an unrelated `=` token passes through untouched
     assert capsys.readouterr().out.split() == [a]
 
 

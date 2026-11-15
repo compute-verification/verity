@@ -29,10 +29,16 @@ Encoding of arguments
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
-SCHEMA = "verity-capture/log/v1"
+from verity_vllm.records.schema_ids import CAPTURE_LOG_SCHEMA
+
+__all__ = ["DispatchEnter", "DispatchExit", "Event", "Note", "Root", "RunEnd", "RunHeader", "SampleEnd", "StepEnd",
+           "StepLink", "StepStart", "StorageAlloc", "StorageFree", "TritonLaunch", "ViewDesc", "views_in"]
+
+SCHEMA = CAPTURE_LOG_SCHEMA
 
 # torch dtype name (without the "torch." prefix) -> bytes per element.  The pure side never imports torch.
 DTYPE_BYTES: dict[str, int] = {
@@ -93,7 +99,7 @@ class ViewDesc:
         return {"$v": [self.alloc, self.offset, list(self.shape), list(self.strides), self.dtype, self.device]}
 
     @staticmethod
-    def from_json(d: dict) -> "ViewDesc":
+    def from_json(d: dict) -> ViewDesc:
         a, o, sh, st, dt, dev = d["$v"]
         return ViewDesc(int(a), int(o), tuple(sh), tuple(st), dt, dev)
 
@@ -165,9 +171,9 @@ class StepStart:
     positions: list[int]                   # per token row
     seq_lens: dict[str, int]               # request -> tokens in the KV cache after this step
     num_computed: dict[str, int]           # request -> tokens already in the KV cache before this step
-    block_tables: dict[str, list[int]]     # request -> physical block ids (positions 0..seq_len-1)
+    block_tables: dict[str, list[int]]     # request -> KV page ids (positions 0..seq_len-1)
     block_size: int
-    slot_mapping: list[int]                # per token row: KV slot = block * block_size + offset
+    slot_mapping: list[int]                # per token row: KV slot = page * block_size + offset
     logits_rows: list[tuple[str, int]]     # per logits row: (request_id, position whose logits are sampled)
     logits_indices: list[int]              # per logits row: the token row it gathers hidden states from
     num_reqs: int
@@ -181,7 +187,7 @@ class StepStart:
     # slot mapping, that index the SAME physical tensors (log Note: kv_cache[layers.0] and kv_cache[layers.1] at one offset).
     # `block_tables`/`slot_mapping` above are group 0's; with several groups the storage identity of a layer's KV rows is
     # decided by ITS group -- recorded here, one entry per group, in the runner's group order:
-    #   {"layers": [layer names], "block_size": int, "block_tables": {request -> block ids}, "slot_mapping": [per token row]}
+    #   {"layers": [layer names], "block_size": int, "block_tables": {request -> page ids}, "slot_mapping": [per token row]}
     # None (old logs) or a single entry: one group, the legacy fields are complete.
     kv_groups: list[dict] | None = None
 

@@ -1,6 +1,6 @@
 """The frontend rule for the STOCHASTIC token select: `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p,
 pos, S)` -> one `GumbelTopPTokenSelect_v2{V,S}(logits_row, top_p, seed, pos, temp, Const32[S])` per logits row
-(verity.definitions.registry.sampling).
+(verity_vllm.definitions.registry.sampling).
 
 What the op stands for (vLLM d9105ea80 `Sampler.sample` for a request whose `SamplingParams` are temperature T > 0, top_p < 1, top_k 0,
 an explicit `seed`, no penalties / logit bias / min_p / logprobs):
@@ -23,13 +23,15 @@ from __future__ import annotations
 import struct
 
 import torch
-
-from verity.circuits.refs import Coll
+from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, rows_of, shape
+from verity_vllm.definitions.registry.sampling import SPLIT_COUNTS
+
+from verity_torch.frontend.rules.base import OpRule, RuleInfo
+from verity_torch.frontend.rules.common import dtype_is, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+from verity_torch.frontend.strided_views import _tensor_type
+from verity_torch.frontend.value_types import shape_of
 
 BF16 = torch.bfloat16
 
@@ -84,7 +86,6 @@ class GumbelTopPTokenSelectRule(OpRule):
             return f"top_p {top_p!r} is not a static number in (0, 1]"
         if isinstance(pos, bool) or not isinstance(pos, int) or pos < 0:
             return f"pos {pos!r} is not a static non-negative int"
-        from verity.definitions.registry.sampling import SPLIT_COUNTS
         if isinstance(S, bool) or not isinstance(S, int) or S not in SPLIT_COUNTS:
             return f"S {S!r} is not a launched split count {SPLIT_COUNTS} (the registered constant)"
         return True
@@ -111,7 +112,6 @@ class GumbelTopPTokenSelectRule(OpRule):
             temp_c = ctx.call(ctx.kind("const", node, W=32, BITS=tbits), node=node, rule=self, name=f"{hint}/temperature")
             s_c = ctx.call(ctx.kind("const", node, W=32, BITS=int(S)), node=node, rule=self, name=f"{hint}/splits")
             outs.append(ctx.call(fn, r, topp_c, seed_c, pos_c, temp_c, s_c, node=node, rule=self, name=f"{hint}[{i}]"))
-        from verity.circuits.refs import array_of
         out = array_of(outs).reshape(_tensor_type(lead, 32)) if lead else outs[0]
         ctx.define(node, out)
         ctx.record(self, node, {"V": V, "S": f"Const32[{int(S)}] (the registered split count)",

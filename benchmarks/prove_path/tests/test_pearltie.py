@@ -1,11 +1,11 @@
 """Pearl+'s tie end to end on a toy: Pearl+'s window record W over a window's passes and the window circuit, cut at its
-linears, that audits them, registered as the remote composite reads them (the audited window's registration R chained
+linears, that audits them, registered as the remote composite reads them (the audited window's docket R chained
 right after W, each of Pearl+'s values an output value of W's).
 
 **The toy** (`toy`): a one-layer bf16 Llama of hidden 128 (two heads of 64, one KV head) and vocabulary 512 on the H200, at
 class (1 slot, prompts of 27, 2 outputs), cut at its linears (`window_class.PearlTables`, each y handed on in rows of 64
 words). So the window has 2 rounds, round 0 the prompt's 27 rows and round 1 one decode row, of 4 calls each (q/k/v, o,
-gate/up and down), and its 895 units of 58 templates are proof blocks C-Flock's composer takes.
+gate/up and down), and its 895 units of 58 templates are proof blocks Flock's composer takes.
 
 * **Pearl+'s passes**, a pass a round: each call's A rows (its x widened to FP32, then zero rows up to m₁₆) and y (its value
   widened) as the circuit's proof blocks make them (`window_rows.Rows.value`), committed as Pearl+'s reference commits them
@@ -14,7 +14,7 @@ gate/up and down), and its 895 units of 58 templates are proof blocks C-Flock's 
   fields W and the verdict's W check read.
 * **W**, Pearl+'s window record over them (`pearl_c.window.record`), which Pearl+'s verdict holds to the roots its passes
   credited (`verify_run.tie`).
-* **R**, the audited window's registration, as window-commit makes it: the cut circuit's units filled from the same
+* **R**, the audited window's docket, as window-commit makes it: the cut circuit's units filled from the same
   values, its values W's rebuilt from the rows its proof blocks make (`pearl_c.window.reuse`), recorded, committed and
   written through `interface.Window` as a v2 record chained right after W.
 
@@ -24,22 +24,22 @@ accepts W, and `reuse` makes each value W's entry.
 one bit flipped, differs from W at that value's root alone. The verdict's W check refuses it on the honest passes and
 `reuse` refuses it. On the flipped passes the verdict accepts W' (it is their record), and `reuse` still refuses it: the
 proof blocks don't make that row. Its reader is the one proof block of a template of its own, which `stratified:1` always
-draws, and its Definition on its input gives the honest row, so a prover who records W''s row instead has a proof block
+samples, and its Definition on its input gives the honest row, so a prover who records W''s row instead has a proof block
 whose proof fails.
 
 **Records** (opt-in, `VERITY_PROVE_PATH_REMOTETIE`: the window's record, commit and write take a minute): R registers the
-circuit's values at W's entries and nothing else, chained right after W, and its sampling design draws a reader of every
-value, each value's readers templates of their own. `records_audit.tie_of` with no prefix ties the audit to W (each value
+circuit's values at W's entries and nothing else, chained right after W, and its sampling design samples a reader of every
+value, each value's readers templates of their own. `window_tie.tie_of` ties the audit to W as its audit does (each value
 by its own name, in ``row-seg/v1`` rows of 32-bit words), and R1-R7 (`registration.check`) accept R on the log [W] and
 refuse it on [W'] (R6, and R7 at the flipped value's root). An R' written by hand after W' is accepted on [W']: no record
 holds a row, so the flipped row is refused by its reader's proof alone.
 
 **Lean** (opt-in as the records, on a machine with Lean's toolchain): one-stage's Lean verifier (`served_cases.V1_LEAN`) on
-a5's v1 case of R with the tie's params accepts R on [W], refuses its registration on [W'], and accepts R' on [W']. The
+a5's v1 case of R with the tie's params accepts R on [W], refuses its docket on [W'], and accepts R' on [W']. The
 case's verdict of record is an accepting stand-in reporting R's values' roots as their readers opened them; the proofs of
 a sample of R's proof blocks, through both one-stage verifiers, are `records_audit.py audit --tie W`'s.
 
-Pearl+'s verdict is the prover's development verifier: it reads the prover's salt key and opens drawn rows in the clear,
+Pearl+'s verdict is the prover's development verifier: it reads the prover's salt key and opens sampled rows in the clear,
 values the one-stage proof hides once tied.
 """
 from __future__ import annotations
@@ -53,6 +53,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import settings
+import window_tie as WT
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WRS
@@ -60,21 +61,19 @@ from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
-from verity_vllm.protocols.pouw.pearl_c import window as PWR
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
-from verity.protocols.pouw.verifier.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registered as G, registration as REG
+from verity.protocols.accounting.pouw.verifier.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-import records_audit as RA  # noqa: E402
+HERE = (Path(__file__).resolve().parent)
 
-ROOT = HERE.parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 ONE_STAGE = ROOT / "benchmarks" / "one_stage"
 H200 = {"compute_capability": [9, 0], "num_sms": 132}
 CONFIG = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 128, "intermediate_size": 256,
@@ -90,7 +89,7 @@ KEY, SALT_KEY = bytes(range(32)), bytes(range(64, 96))
 SALT = bytes(range(100, 164))
 #: the audited window's run root
 RUN = "ab" * 64
-LAW = D.parse_design("stratified:1")
+SAMPLING_DESIGN = D.parse_design("stratified:1")
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped bit: round 1's o-projection's (call 1) A row 0, its first word's high half (the BF16 of x's first element)
 FLIP = (PEARL.a(1, 1), 0, 1)
@@ -200,8 +199,7 @@ def _verify_run():
     return sys.modules[name]
 
 
-@pytest.fixture(scope="module")
-def toy() -> SimpleNamespace:
+def make_toy() -> SimpleNamespace:
     """The toy's cut window circuit, its honest rows from one served slot (a prompt of 27, 2 outputs), each of Pearl+'s
     values as its proof blocks make it, and Pearl+'s passes committing those values with their W."""
     reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=H200), default_seed=7)
@@ -219,6 +217,11 @@ def toy() -> SimpleNamespace:
             pearl[PEARL.a(s, call)] = rows.value(PEARL.a(s, call), PEARL.a_rows(CLASS, s), np.zeros(2 * k, np.uint16))
             pearl[PEARL.y(s, call)] = rows.value(PEARL.y(s, call), PEARL.rows(CLASS, s), np.zeros(2 * n, np.uint16))
     return SimpleNamespace(low=low, values=values, slots=slots, rows=rows, **vars(_window(c, pearl)))
+
+
+@pytest.fixture(scope="module")
+def toy() -> SimpleNamespace:
+    return make_toy()
 
 
 def _reuse(toy, W: dict, manifests: list[dict] | None = None) -> dict:
@@ -276,7 +279,7 @@ def test_a_w_whose_root_isnt_the_credited_one_is_refused_and_its_row_is_off_its_
         _reuse(toy, flipped.W, flipped.manifests)
     (tid, port, u), = [k for k, v in _reads(c).items() if v == FLIP[:2]]
     assert c.units[tid] == 1 and "ROUND=1" in tid and "CALL=1" in tid and port == "o0" and u == 0
-    assert D.stratum_k(LAW["k"], c.units[tid], sum(c.units.values())) == 1
+    assert D.stratum_k(SAMPLING_DESIGN["k"], c.units[tid], sum(c.units.values())) == 1
     j = next(j for j, r in toy.low.programs[0].arows.items() if (r.tid, r.unit) == (tid, u))
     x = toy.slots[0].operand(toy.low.fn.body.nodes[j].args[0])
     got = np.asarray(evaluate_batch(toy.rows.fns[tid], x[None])).astype("<u4").view("<u2").reshape(-1)
@@ -288,14 +291,14 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     """The toy's window recorded, committed and written as window-commit writes it after W (R in its
     ``registration.json``), and the verifier's own window and circuit record from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
-    win = IF.Window(c, RUN, LAW, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS)
+    win = IF.Window(c, RUN, SAMPLING_DESIGN, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS)
     win.supply(G)
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()}}}
     win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.W))
-    mine, doc = IF.of_records(out, LAW, RA.catalog_resolve)
+    mine, doc = IF.of_records(out, SAMPLING_DESIGN, WT.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine, doc=doc,
                            leaf_layer=CS.leaf_layer(publics))
@@ -308,10 +311,10 @@ def _by_hand(written, W: dict) -> dict:
 
 
 def _check(written, W: dict, R: dict):
-    """R1-R7 on ``R`` against the verifier's own window, tied to ``W`` as records_audit ties it (`tie_of`, no prefix)."""
-    tied, _pins = RA.tie_of(written.doc, W, None)
+    """R1-R7 on ``R`` against the verifier's own window, tied to ``W`` as the window's audit ties it (`window_tie.tie_of`)."""
+    tied, _pins = WT.tie_of(written.doc, W)
     mine = written.mine
-    return REG.check(R, mine.program, mine.query, LAW, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (),
+    return REG.check(R, mine.program, mine.query, SAMPLING_DESIGN, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (),
                      tied["log"], registered=tied["registered"], outputs=tied["outputs"], schemas=tied["schemas"],
                      window_root=RUN)
 
@@ -320,7 +323,7 @@ def _check(written, W: dict, R: dict):
 @RECORDS
 def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_another_root(toy, written):
     """R registers the 16 values at W's entries and nothing else, chained right after W; its sampling design (R1 holds it to
-    the verifier's own) draws a reader of every value, each value's readers templates of their own. R1-R7 tied to W accept
+    the verifier's own) samples a reader of every value, each value's readers templates of their own. R1-R7 tied to W accept
     it, and tied to W' refuse it: it is chained after W (``R6-previous``), and of its values only the flipped one's root is
     not the one W' registers (``R7-held``)."""
     R, W = written.R, toy.W
@@ -350,6 +353,15 @@ def test_the_records_accept_a_flipped_row_on_its_own_w_so_only_its_readers_proof
     assert list(_check(written, toy.W, R2).codes) != []
 
 
+@pytest.fixture(autouse=True, scope="module")
+def _no_scope():
+    """The toy's Lean checks run under no memory limit of their own (`served_cases.NO_SCOPE`), as on a development
+    host: a test's host may make no scope."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("CHECK_SCOPE", "none")
+        yield
+
+
 def _one_stage() -> SimpleNamespace:
     """`served_cases` and `replay` of ``benchmarks/one_stage`` (`replay` under the name its own tests load it by)."""
     if str(ONE_STAGE) not in sys.path:
@@ -369,9 +381,9 @@ def _v1_case(one, written, W: dict, R: dict) -> dict:
     verifier's params): `_check`'s params; a stratified sample's first proof blocks of each stratum, the verifier's
     receipt of R, and a verdict of record that accepted, reporting R's values' roots as the ones its readers opened
     against, standing in for their proofs."""
-    mine, (tied, _pins) = written.mine, RA.tie_of(written.doc, W, None)
+    mine, (tied, _pins) = written.mine, WT.tie_of(written.doc, W)
     program, query = mine.program, mine.query
-    drawn = D.derive(program, query, LAW)
+    drawn = D.derive(program, query, SAMPLING_DESIGN)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
     draw = {**drawn, "population": P.units(program, query), "units": units}
     proved = D.proved(draw)
@@ -380,7 +392,7 @@ def _v1_case(one, written, W: dict, R: dict) -> dict:
                 "receipt": REG.receipt(R, "v", received="2000-01-01T00:00:00Z"), "served": None, "session_roots": None,
                 "sessions": [], "statement": {},
                 "verdicts": {"lean": {"accepted": True, "of_record": True, "registered": opened}}}
-    params = one.RP.params(program, query, LAW, CS.expected_ports(mine), written.leaf_layer, "1/20", log=tied["log"],
+    params = one.RP.params(program, query, SAMPLING_DESIGN, CS.expected_ports(mine), written.leaf_layer, "1/20", log=tied["log"],
                            registered=tied["registered"], scheme=CS.SCHEME, outputs=tied["outputs"], schemas=tied["schemas"])
     params |= {"window_root": RUN}
     return {"commitment": canonical_json(R).hex(), "evidence": canonical_json(evidence).hex(),
@@ -398,7 +410,7 @@ def lean() -> SimpleNamespace:
 @RECORDS
 def test_one_stage_s_lean_accepts_r_on_w_and_refuses_it_on_a_w_of_another_root(toy, written, lean, tmp_path):
     """One-stage's Lean verifier accepts R tied to W (its log record reader takes Pearl+'s W, and its R1-R7 take each value
-    as W's 32-bit ``row-seg/v1`` entry) and names R's digest; tied to W' it refuses R's registration; and it accepts R'
+    as W's 32-bit ``row-seg/v1`` entry) and names R's digest; tied to W' it refuses R's docket; and it accepts R'
     tied to W', as R1-R7 do."""
     SC, flipped = lean.one.SC, _flipped(toy)
     got, _ = SC.lean_answer(lean.v1, _v1_case(lean.one, written, toy.W, written.R), tmp_path)

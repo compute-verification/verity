@@ -23,13 +23,13 @@ import numpy as np
 import pytest
 from verity.circuits import bind
 from verity.circuits.evaluation import evaluate_call
-from verity.definitions.registry import b1
-from verity.definitions.registry import hopper as H
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import hopper as H
+from verity_vllm.definitions.registry import prims as P
 
 from tests.program.crosscheck import _standalone
-from tests.program.test_composition import REPO
 
+REPO = Path(__file__).resolve().parents[2]
 FIX = REPO / "fixtures"
 W11 = FIX / "W11-40f0cebeb670-20260907T1800Z"
 W11R = FIX / "W11R-40f0cebeb670-20260907T1802Z"
@@ -64,7 +64,7 @@ def _gemm_fixtures():
     _need(GEMM_FIX, "B1 GEMM fixtures (RTX 4090 eager)")
     for d in sorted(p for p in GEMM_FIX.iterdir() if p.is_dir()):
         f = json.loads((d / "fixture.json").read_text())
-        x = np.fromfile(d / "x.u16", dtype="<u2")
+        x: np.ndarray = np.fromfile(d / "x.u16", dtype="<u2")
         if f["x_arg_cols"] is not None:
             lo, hi = f["x_arg_cols"]
             x = x[lo:hi]
@@ -205,9 +205,9 @@ def test_attention_on_ampere_captured_calls(T, layer, heads, recorded_cross):
     locally); the two differ on the recorded number of words. T = 100/193/300 are held-out positions (composition.md §3:
     2/4/5 FA2 blocks, the last-visited one partial; 1/2/3 FA3 blocks)."""
     _need(W11 / "natural" / "index.json", "W11 attention fixtures")
-    from verity.definitions.numerics import fa2_model as FA2
-    from verity.definitions.numerics import fa3_model as FA3
-    from verity.definitions.numerics.fa2_relation import tables_dir
+    from verity_vllm.definitions.numerics import fa2_model as FA2
+    from verity_vllm.definitions.numerics import fa3_model as FA3
+    from verity_vllm.definitions.numerics.fa2_relation import tables_dir
     try:
         FA3.lib()
     except Exception as e:  # noqa: BLE001
@@ -233,7 +233,7 @@ def test_attention_on_ampere_captured_calls(T, layer, heads, recorded_cross):
 
 @pytest.mark.parametrize("case,N", [("n_cols_64", 64), ("n_cols_1024", 1024), ("n_cols_2048", 2048), ("n_cols_3072", 3072)])
 def test_heldout_rmsnorm_width_triton(case, N):
-    """`RMSNormTriton_v1{N}` at widths never used in development (576 and 1536 were): 8 production rows each (W11R stress
+    """`RMSNormTriton_v1{N}` at widths never used in development (576 and 1536 were): 8 rows of the kernel on hardware each (W11R stress
     `n_cols`, RTX 4090). Predicted exact — the body's chunk/lane structure is a function of N."""
     _need(W11R / "stress" / "index.json", "W11R stress fixtures")
     idx = json.loads((W11R / "stress" / "index.json").read_text())

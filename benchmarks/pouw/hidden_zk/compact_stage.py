@@ -406,7 +406,7 @@ class CompactLayout(IL.LoweredUnit):
         return render(tok, (start + ntok - 1)[1::2])
 
     def pieces(self, name: str, workers: int | None = None) -> Iterator[bytes | memoryview]:
-        """``ir_lower.netlist(lay, name)``'s text, as bytes in pieces."""
+        """``ir_lower.circuit_description(lay, name)``'s text, as bytes in pieces."""
         head = [IL.FORMAT, name, self.n_rows, self.const]
         for groups in (self.in_groups, self.out_groups):
             head.append(len(groups))

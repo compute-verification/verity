@@ -63,7 +63,7 @@ Open (stated so the red team can aim at them):
 * `RemoteWorkFloor` is the remote form's conclusion taken as a premise. At the served check it isn't needed:
   `Properties.Pouw.Served.ServedFreed` composes `ServedWork` itself;
 * `CertifierSeesImports` counts bits (`Prover.ext`) surely, while the certifier's guarantee
-  (`NetTiming.Guarantees.PeriodLeakAccepted`) bounds the information an accepted period carries out (at most `2^K`
+  (`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`) bounds the information an accepted period carries out (at most `2^K`
   values) in Accounting's device vocabulary, but with the period's error `n (δ + ε_ks + ε_bind + ε_tap)`: the step
   from one to the other is open;
 * `OutsourceWithinEgressPeriod` is claimed where the coins stay in the certifier's boundary (`CoinsConfidential`);

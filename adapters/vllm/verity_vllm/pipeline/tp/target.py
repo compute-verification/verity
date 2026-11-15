@@ -8,7 +8,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.engine import env as engine_env, served
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import served
 
 
 def apply(target: Any, execution: str | None) -> tuple[dict[str, str], dict[str, Any]]:
@@ -27,10 +28,12 @@ def apply(target: Any, execution: str | None) -> tuple[dict[str, str], dict[str,
 def extension(target: Any, want: str | None) -> str | None:
     """The engine's `worker_extension_cls`: `want`, else `engine.int8_ranks.EXTENSION` when ``target`` serves int8 parts (its ranks
     import it before they build the model), else None."""
-    if want is None and getattr(target, "int8_parts", ()):
+    if want is not None:
+        return want
+    if getattr(target, "int8_parts", ()):
         from verity_vllm.engine.int8_ranks import EXTENSION
         return EXTENSION
-    return want
+    return None
 
 
 def as_json(target: Any) -> dict | None:
@@ -45,7 +48,7 @@ def rank_mismatches(worker: Any, target: Any) -> dict[str, Any]:
     from verity_vllm.engine import vllm_adapter as va
 
     llm = SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=worker.vllm_config), collective_rpc=lambda fn, *a, **k: [fn(worker)])
-    eng = SimpleNamespace(target=target, llm=llm, model=worker.get_model())
+    eng: Any = SimpleNamespace(target=target, llm=llm, model=worker.get_model())
     return {"rank": int(get_tensor_model_parallel_rank()), "mismatches": va.target_mismatches(eng)}
 
 

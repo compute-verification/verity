@@ -5,6 +5,10 @@ from __future__ import annotations
 import json
 
 import pytest
+from verity.commitments import domains
+from verity.errors import InvalidArtifact
+
+from verity_vllm.commitments import leaves as L
 
 from verity_vllm.commitments.leaves import (
     LeafOpening,
@@ -20,7 +24,7 @@ from verity_vllm.commitments.leaves import (
     tree_depth,
     verify_opening,
 )
-from verity.errors import InvalidArtifact
+
 
 def _values(n: int) -> list[LeafValue]:
     return [LeafValue(f"row/{i:03d}", "bfloat16", (4,), bytes([i, 0, i, 1, i, 2, i, 3])) for i in range(n)]
@@ -98,3 +102,11 @@ def test_shape_text_and_empty_root() -> None:
         shape_text((True,))
     assert LeafTree({}, "empty").root == empty_root()
     assert leaf_hash("x", "bfloat16", (2,), b"ab") == leaf_hash("x", "bfloat16", "[2]", b"ab")
+
+
+def test_the_tags_are_the_tables_and_their_bytes_dont_move() -> None:
+    assert L.LEAF_TAG is domains.VLLM_LEAF and L.LEAF_TAG == "verity-vllm/leaf/v1"
+    assert L.NODE_TAG is domains.VLLM_NODE and L.NODE_TAG == "verity-vllm/node/v1"
+    assert L.LIFT_TAG is domains.VLLM_LIFT and L.LIFT_TAG == "verity-vllm/lift/v1"
+    assert L.IDS_TAG is domains.VLLM_IDS and L.IDS_TAG == "verity-vllm/ids/v1"
+    assert L.EMPTY_TAG is domains.VLLM_EMPTY and L.EMPTY_TAG == "verity-vllm/empty/v1"

@@ -7,7 +7,7 @@ each scheduler, commits the same rows under the same rows-sha512 roots, and ever
 
 `ab` serves SERVE-OPENAI-ARGS (``--run-id``, ``--admit release-order``, a bench row, the Commit's options, ``--window-steps
 1``) twice, synchronously and then with ``--async-scheduling``, each a `serve` of this module in its own process, and sends
-each the same ``--batches`` loads of ``demos/vllm/serve_load.py --fixed``: ``--requests`` requests of ``--prompt-ids``
+each the same ``--batches`` loads of ``adapters/vllm/tools/served_run/serve_load.py --fixed``: ``--requests`` requests of ``--prompt-ids``
 ids for one step, the learn-only warm-up's static shape (`serve_learn.shape_of`), each batch its own release run and seed.
 A step's rows-sha512 root binds its salt key, fresh from the OS generator in a served run, the run id and the row's
 Program, so `serve` runs serve-openai with the step keys derived from ``--row-key-seed`` (`fixed_row_keys`) and the bench
@@ -26,7 +26,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-LOAD = Path(__file__).resolve().parents[4] / "demos" / "vllm" / "serve_load.py"
+LOAD = Path(__file__).resolve().parents[2] / "tools" / "served_run" / "serve_load.py"
 
 
 def fixed_row_keys(seed: str) -> None:
@@ -96,13 +96,15 @@ def arm(name: str, out: Path, a: argparse.Namespace) -> Path:
             *a.serve, "--out", str(d), "--port", str(port), *(["--async-scheduling"] if name == "async" else [])]
     with open(d / "serve.log", "w") as log:
         srv = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        for line in srv.stdout:
+        lines = srv.stdout
+        assert lines is not None
+        for line in lines:
             log.write(line)
             if "SERVE-OPENAI listening" in line:
                 break
         else:
             raise RuntimeError(f"{name}: serve-openai exited {srv.wait()} before it listened ({d / 'serve.log'})")
-        drain = threading.Thread(target=lambda: log.writelines(srv.stdout))
+        drain = threading.Thread(target=lambda: log.writelines(lines))
         drain.start()
         for b in range(1, a.batches + 1):
             subprocess.run([sys.executable, str(LOAD), "--port", str(port), "--model", model, "--fixed", str(a.requests),

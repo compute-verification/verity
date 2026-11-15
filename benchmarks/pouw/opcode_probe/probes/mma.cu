@@ -263,16 +263,16 @@ static const OpProbe PROBES[] = {
      .iters = 4096, .note = "2:4 sparse NVFP4 m16n8k128, UE4M3 unit scales: 16384 MACs an instruction"},
     {.name = "qmma_e4m3_data", .kernel = (const void*)qmma_e4m3_data, .tpb = TPB,
      .expect = "QMMA.16832.F32.E4M3.E4M3=8", .iters = 4096,
-     .note = "QMMA E4M3 on the sweep's drawn integer operands: a data-dependent-clock check"},
+     .note = "QMMA E4M3 on the sweep's sampled integer operands: a data-dependent-clock check"},
     {.name = "omma_mxf4_data", .kernel = (const void*)omma_mxf4_data, .tpb = TPB, .expect = OMMA ".E8=8", .iters = 4096,
-     .note = "MXFP4 on drawn E2M1 operands and UE8M0 mix scales: a data-dependent-clock check"},
+     .note = "MXFP4 on sampled E2M1 operands and UE8M0 mix scales: a data-dependent-clock check"},
     {.name = "omma_nvf4_data", .kernel = (const void*)omma_nvf4_data, .tpb = TPB, .expect = OMMA ".UE4M3.4X=8",
-     .iters = 4096, .note = "NVFP4 on drawn E2M1 operands and UE4M3 mix scales: a data-dependent-clock check"},
+     .iters = 4096, .note = "NVFP4 on sampled E2M1 operands and UE4M3 mix scales: a data-dependent-clock check"},
     {.name = "omma_sp_mxf4_data", .kernel = (const void*)omma_sp_mxf4_data, .tpb = TPB, .expect = OMMA_SP ".E8=8",
-     .iters = 4096, .note = "2:4 sparse MXFP4 on drawn operands and UE8M0 mix scales: a data-dependent-clock check"},
+     .iters = 4096, .note = "2:4 sparse MXFP4 on sampled operands and UE8M0 mix scales: a data-dependent-clock check"},
     {.name = "omma_sp_nvf4_data", .kernel = (const void*)omma_sp_nvf4_data, .tpb = TPB,
      .expect = OMMA_SP ".UE4M3.4X=8", .iters = 4096,
-     .note = "2:4 sparse NVFP4 on drawn operands and UE4M3 mix scales: a data-dependent-clock check"},
+     .note = "2:4 sparse NVFP4 on sampled operands and UE4M3 mix scales: a data-dependent-clock check"},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

@@ -55,7 +55,7 @@ pairwise distinct (`PortRoots.dupId`) and roots that fix their domains (`PortRoo
 
 The restriction is the deployed check's own: a misshaped value's leaf is the leaf of an opening `commitDep` passes only
 by a SHA-512 collision (`leaf_misshaped_dep`, `encPortH_ne_misshaped`), and so is a leaf under a salt of another length
-once the path has a level, `2 ≤ nl` units (`leaf_salt`).
+(`leaf_salt`): `commitDep` refuses data shorter than the salt (`pathOf`).
 
 At the session's binding (`vbOf`), `transports_shaped` reads a registered opening of a wire with a row through
 `opens_commitDep`; `transportsLiveCS` is `Bridge.TransportsLiveC`'s conclusion at canonical openings, `RowsOk` circuit
@@ -70,7 +70,7 @@ namespace Flock.Bridge
 open Claims Claims.Sampling
 open FlockSoundness.Refine FlockSoundness.Binding
 open FlockSoundness.Discharge.Layout (BitVal RowShaped rowEncP)
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 
 /-- A row's bits as the deployed data carries them, one byte each. -/
 def bitMsg (b : List Bool) : Msg := b.map fun x => if x then 1 else 0
@@ -88,7 +88,12 @@ theorem saltOf_dataOf (hy : y.length = saltLen) (i : ℕ) (x : Bool) : saltOf �
 
 theorem pathOf_dataOf (hy : y.length = saltLen) (hs : ∀ z ∈ s, z.size = 64) (i : ℕ) (x : Bool) :
     pathOf s.length ⟨i, x, dataOf y s b⟩ = SamplingDeploy.pathMsg s := by
-  simp only [pathOf, dataOf, List.append_assoc]
+  have hl : saltLen ≤ (dataOf y s b).length := by
+    simp only [dataOf, List.length_append, hy]
+    omega
+  show (if saltLen ≤ (dataOf y s b).length then ((dataOf y s b).drop saltLen).take (64 * s.length) else [0]) = _
+  rw [ite_eq_left hl]
+  simp only [dataOf, List.append_assoc]
   rw [List.drop_left' hy]
   exact List.take_left' (by rw [SamplingDeploy.pathMsg_length s hs])
 
@@ -103,10 +108,11 @@ theorem bitsOf_dataOf (hy : y.length = saltLen) (hs : ∀ z ∈ s, z.size = 64) 
 
 end Data
 
-/-- The length of a deployed opening's salt: `saltLen` bytes once its path has a level, since the path follows it. -/
-theorem saltOf_length {d : ℕ} {o : Opening Bool} (h : (pathOf d o).length = 64 * d) (hd : 1 ≤ d) :
+/-- The length of a deployed opening's salt: `saltLen` bytes wherever its path is whole levels, since data shorter
+than the salt has no such path (`saltLen_le_of_pathOf`). -/
+theorem saltOf_length {d k : ℕ} {o : Opening Bool} (h : (pathOf d o).length = 64 * k) :
     (saltOf o).length = saltLen := by
-  simp only [pathOf, List.length_take, List.length_drop] at h
+  have hl := saltLen_le_of_pathOf h
   simp only [saltOf, List.length_take]
   omega
 
@@ -341,19 +347,18 @@ theorem pathOf_length_of_opens (C : Verity.Boolean.Circuit) (rows : Fin C.N → 
   rw [size_bytes] at h2
   exact h2
 
-/-- **The deployed check refuses a salt of another length**: once the path has a level (`2 ≤ nl` units), the leaf of
-a game opening `(r, y)` whose salt isn't `saltLen` bytes is the leaf of an opening the deployed check passes only by a
-SHA-512 collision. -/
+/-- **The deployed check refuses a salt of another length**: the leaf of a game opening `(r, y)` whose salt isn't
+`saltLen` bytes is the leaf of an opening the deployed check passes only by a SHA-512 collision. -/
 theorem leaf_salt (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) (roots : List Msg) (o : Opening Bool)
     (h : (commitDep C rows c pub nl roots).Opens sha512Msg roots o = true)
-    (hd : 1 ≤ Flock.log2ceil nl) {r y : Msg} (hy : y.length ≠ saltLen)
+    {r y : Msg} (hy : y.length ≠ saltLen)
     (hl : H512 (hm96Input r y) =
       H512 (hm96Input (rowDep C rows c (placeOf C rows) (bitsOf (Flock.log2ceil nl)) o) (saltOf o))) :
     Collides (hm96Pair r y (rowDep C rows c (placeOf C rows) (bitsOf (Flock.log2ceil nl)) o) (saltOf o)) := by
   refine hm96Pair_spec_salt _ _ _ _ (fun e => hy ?_) hl
   rw [e]
-  exact saltOf_length (pathOf_length_of_opens C rows c pub nl roots o h) hd
+  exact saltOf_length (pathOf_length_of_opens C rows c pub nl roots o h)
 
 /-- **The deployed check refuses a misshaped value**: at a position whose row has its port's bits, `16 w` of them, a
 game opening of a value that isn't `RowShaped` of the row's width has the leaf of a deployed opening's row only by a
@@ -442,7 +447,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge FlockSoundness.Discharge.Composed
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
+  {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Discharge.Layout.scopeOkH c = true)
   (hU : Built c.unit) {pub : Flock.Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
   (hpt : pub.tables = none)
@@ -600,7 +605,7 @@ def TransportsLiveCS : Prop :=
     (_hrows : Bridge.RowsOk D.unroll) (_hdup : Flock.PortRoots.dupId D.unroll pub = false)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -608,7 +613,7 @@ def TransportsLiveCS : Prop :=
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr))),
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr))),
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
@@ -617,7 +622,7 @@ def TransportsLiveCS : Prop :=
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
-          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+          fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
       (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map fun r =>

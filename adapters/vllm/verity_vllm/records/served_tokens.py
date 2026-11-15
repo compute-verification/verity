@@ -1,22 +1,22 @@
 """The driver's served tokens of one run (`capture/tokens.json`), as the global match's chronology check (G6) reads them.
 
-Three writers write it: the one-process capture (`pipeline.m1_capture`), the TP capture (`pipeline.tp.capture`) and the TP
+Three writers write it: the one-process capture (`pipeline.match_capture`), the TP capture (`pipeline.tp.capture`) and the TP
 Match arms (`pipeline.tp.match`).  Each writes `requests`, and per request its `request_id` and `generated_token_ids`; those are
 required here.  Only the one-process capture writes the realized schedule, the served and executed lengths and the scheduler's
 `lag`, so on a TP record they are None and G6 has no driver claim to hold them to.  The prompt and the cap are the Program's,
 which both read instead, so they are not typed here.
 
-    t = ServedTokens.load(os.path.join(oracle_dir, "capture", "tokens.json"))
+    t = ServedTokens.of(json.loads(text), "capture/tokens.json")
 """
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from verity_vllm.records.fields import RecordError, objects, optional, present, required
+
+__all__ = ["ServedRequest", "ServedTokens"]
 
 
 @dataclass(frozen=True)
@@ -65,8 +65,3 @@ class ServedTokens:
         lag = optional(doc, "lag", where, Mapping)
         return cls(where=where, requests=tuple(ServedRequest.of(r, where, f"requests[{i}]") for i, r in enumerate(reqs)),
                    lag=None if lag is None else present(lag, "value", where, int, "lag.value"))
-
-    @classmethod
-    def load(cls, path: str | Path) -> ServedTokens:
-        with open(path) as f:
-            return cls.of(json.load(f), str(path))

@@ -11,7 +11,7 @@ A Build vouches for its own device only.  What the served Program binds is the d
   * the Triton kernels' compile target (`inductor_templates.FLAGS`).
 
 A device without one of them is refused with every missing binding by name (`device_of`), never bound to another device's.  A served
-target is held to its card file first (`card_of`: `engine.profiles.devices.CARD`, `verity.hardware.cards`): a device whose compute
+target is held to its card file first (`card_of`: `engine.profiles.devices.CARD`, `verity.device.load_card`): a device whose compute
 capability or SM count is not its card's is refused, naming each field, both values and the card file.  Only a target
 `engine.profiles.devices.NO_CARD` lists is held to none, and any other is refused.
 
@@ -26,25 +26,28 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
+from verity.device import load_card
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import fa3_model as FA3
+from verity_vllm.definitions.registry import attention_vocab
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import fa2_split as W
+from verity_vllm.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.registry import inductor as IR
+from verity_vllm.definitions.registry.hopper import Fa3InvSum
+from verity_vllm.definitions.registry.prims import Fa2InvSum
 from verity_vllm.engine.profiles.devices import CARD, NO_CARD
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget, gemm_target_for
-from verity.hardware.cards import load
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import fa3_model as FA3
-from verity.definitions.registry import attention_vocab
-from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import fa2_split as W
-from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import inductor as IR
-from verity.definitions.registry.hopper import Fa3InvSum
-from verity.definitions.registry.prims import Fa2InvSum
+from verity_vllm.program.frontend.gemm_targets import (
+    UnregisteredGemmTarget,
+    gemm_target_for,
+)
 
 #: the FLASH_ATTN version each step family's served attention Definitions model
 ATTENTION = {"hopper": 3, "blackwell_consumer": 2, "blackwell": 2}
@@ -84,7 +87,7 @@ def device_of(cc: Any, sms: int, *, card: str | None = None, attention: list[dic
         fam, dot = gt.key, TG.DOTS[gt.dot]
     except UnregisteredGemmTarget:
         missing.append(f"the cuBLAS GEMMs' k16 step (no registered GEMM target at cc {cc[0]}.{cc[1]})")
-    want = ATTENTION.get(fam)
+    want = ATTENTION.get(fam) if fam is not None else None
     got = [(a.get("backend"), a.get("fa_version")) for a in attention] if attention is not None else [(BACKEND, want)]
     if want is None or got != [(BACKEND, want)]:
         missing.append(f"attention {', '.join(f'{b} (FA{v})' if v else str(b) for b, v in got)}: the served attention Definitions are "
@@ -106,20 +109,20 @@ def card_of(name: str) -> str | None:
     if name in NO_CARD:
         return None
     raise Unmodelled(f"device {name!r} is in neither engine.profiles.devices.CARD ({sorted(CARD)}) nor NO_CARD ({sorted(NO_CARD)}): "
-                     "add its card under verity/hardware/cards/ and map it in CARD")
+                     "add its card under hardware/cards/ and map it in CARD")
 
 
 def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
     """Refuse a device whose compute capability or SM count is not that of card `sku` (its `arch` and `sm.count`)."""
-    c = load(sku)
+    c = load_card(sku)
     arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", c["arch"])
     if arch is None:
-        raise Unmodelled(f"verity/hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
+        raise Unmodelled(f"hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
     fields = (("compute capability", f"{cc[0]}.{cc[1]}", f"{arch[1]}.{arch[2]}"),
               ("SM count", str(sms), str(c["sm"]["count"]["value"])))
     off = [f"{name} {got}, the card's {want}" for name, got, want in fields if got != want]
     if off:
-        raise Unmodelled(f"the device is not its registered card verity/hardware/cards/{sku}.toml: " + "; ".join(off))
+        raise Unmodelled(f"the device is not its registered card hardware/cards/{sku}.toml: " + "; ".join(off))
 
 
 # ------------------------------------------------------------------------------------------------------------- FA3 (cc 9.0)
@@ -195,7 +198,11 @@ def launch(device: DeviceBindings, qlens: list[int], klens: list[int], heads: tu
                 for q, k, ns in zip(qlens, klens, sp["NS"])]
         return sp["NS"], rows, {"fa3": {"BM": sp["BM"], "BN": sp["BN"], "static_splits": sp["static"]}}
     full = mode == "FULL"
+    # `device_of` binds no FA2 device without its max_model_len; one built without it fails where the split count reads it
     la = fa2_launch(qlens, NH=NH, KVH=KVH, D=D, sms=device.sms, batch=padded if full else len(qlens),
-                    max_seqlen_k=device.max_model_len if full else max(klens))
+                    max_seqlen_k=cast(int, device.max_model_len) if full else max(klens))
     rows = [fa2_attention_rows(q, k, la, NH=NH, KVH=KVH, D=D, dot=device.dot) for q, k in zip(qlens, klens)]
     return [la["NS"]] * len(qlens), rows, {"fa2": la}
+
+
+__all__ = ["DeviceBindings", "card_of", "device_of", "launch"]

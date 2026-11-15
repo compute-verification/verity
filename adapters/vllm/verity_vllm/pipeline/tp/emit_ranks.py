@@ -2,11 +2,12 @@
 
 After rank t has derived and written its own files, every rank r in R gets its files from t's derivation
 (`program.frontend.relabel.rank_report`), written by the writer that writes t's (`build._write_program`), into
-`DIR/rank<r>/<name of --out>`.  A rank's directory appears by one rename of a complete directory; a rank whose relabel refused or
-raised has none, and its error is in `<--out>.relabel.json` (beside the template's directory, which stays a plain derive's), so the
-row derives that rank for real.  A relabeled rank's `result.json` and `construction_manifest.json` carry `relabeled_from` and the
-template's telemetry (the rank spent no wall time or memory of its own), and its `inputs.json` is the template's trace: the process
-that wrote these bytes read what that trace lists."""
+`DIR/rank<r>/<name of --out>`.  A rank's directory appears by one rename of a complete directory; a rank whose relabel refused,
+raised or never ran (the template's derive failed) has none, one an earlier relabel into the same root left neither, and its error
+is in `<--out>.relabel.json` (beside the template's directory, which stays a plain derive's), so the row derives that rank for
+real.  A relabeled rank's `result.json` and `construction_manifest.json` carry `relabeled_from` and the template's telemetry (the
+rank spent no wall time or memory of its own), and its `inputs.json` is the template's trace: the process that wrote these bytes
+read what that trace lists."""
 from __future__ import annotations
 
 import copy
@@ -16,10 +17,13 @@ import resource
 import shutil
 import time
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
-SCHEMA = "verity-vllm/build-relabel/v1"
+from verity_vllm.records.schema_ids import BUILD_RELABEL_SCHEMA
+
+SCHEMA = BUILD_RELABEL_SCHEMA
 
 
 @dataclass
@@ -56,7 +60,11 @@ def emit(e: Emit, out: str, pre: dict, session, *, shards: Callable[[int], list[
     """Every rank of `e`: its report from the template's `session` (re-emitted in `context()`, the derive's contexts), then `post`
     (the Boolean lowering when the target's IR is boolean), written by `write(dir, res, rep, rank=r)` with `res` = the template's
     `pre` (its `res` before its own writer ran) at rank r: `tp.rank`, `model_pin.rank` and `tp.embedding_shards` (`shards(r)`)."""
-    from verity_vllm.program.frontend.relabel import RelabelRefused, rank_report, shard_map
+    from verity_vllm.program.frontend.relabel import (
+        RelabelRefused,
+        rank_report,
+        shard_map,
+    )
     for r in e.ranks:
         rep = None                                           # the previous rank's report: freed before this rank's is built
         t0, dst = time.time(), e.dir_of(out, r)
@@ -80,6 +88,7 @@ def emit(e: Emit, out: str, pre: dict, session, *, shards: Callable[[int], list[
             rec["ok"] = True
         except Exception as ex:  # noqa: BLE001 -- any failure: this rank is derived for real
             shutil.rmtree(tmp, ignore_errors=True)
+            shutil.rmtree(dst, ignore_errors=True)           # one an earlier relabel into this root left: not this derivation's
             rec["error"] = f"{type(ex).__name__}: {ex}"[:4000]
             rec["traceback_tail"] = traceback.format_exc()[-3000:]
         rec["secs"], rec["max_rss_mb"] = round(time.time() - t0, 2), _rss_mb()
@@ -88,14 +97,15 @@ def emit(e: Emit, out: str, pre: dict, session, *, shards: Callable[[int], list[
 
 def finish(e: Emit, out: str, res: dict, write_manifest: Callable[[str, dict], None]) -> None:
     """After the template's own `result.json`: each written rank's `inputs.json`, `result.json` and `construction_manifest.json`, then
-    its directory renamed into place; `<out>.relabel.json` last."""
+    its directory renamed into place; a rank that is not ok is left no directory; `<out>.relabel.json` last."""
     by_rank = {rec["rank"]: rec for rec in e.report}
     for r, tmp, dst, res_r in e.pending:
         try:
             shutil.copyfile(os.path.join(out, "inputs.json"), os.path.join(tmp, "inputs.json"))
             res_r["wall_secs_total"], res_r["max_rss_mb"] = res.get("wall_secs_total"), res.get("max_rss_mb")
             res_r["relabeled_from"] = {"rank": res["tp"]["rank"], "dir": out}
-            json.dump(res_r, open(os.path.join(tmp, "result.json"), "w"), indent=1, default=str)
+            with open(os.path.join(tmp, "result.json"), "w") as f:
+                json.dump(res_r, f, indent=1, default=str)
             write_manifest(tmp, res_r)
             shutil.rmtree(dst, ignore_errors=True)
             os.replace(tmp, dst)
@@ -103,10 +113,13 @@ def finish(e: Emit, out: str, res: dict, write_manifest: Callable[[str, dict], N
             shutil.rmtree(tmp, ignore_errors=True)
             by_rank[r].update(ok=False, error=f"{type(ex).__name__}: {ex}"[:4000])
     for r in e.ranks:
-        by_rank.setdefault(r, {"rank": r, "dir": e.dir_of(out, r), "ok": False, "error": "the template's derive failed: no relabel ran"})
+        rec = by_rank.setdefault(r, {"rank": r, "dir": e.dir_of(out, r), "ok": False, "error": "the template's derive failed: no relabel ran"})
+        if not rec["ok"]:
+            shutil.rmtree(rec["dir"], ignore_errors=True)
     doc = {"schema": SCHEMA, "template": {"dir": out, "world": res.get("tp", {}).get("world"), "rank": res.get("tp", {}).get("rank"),
                                           "ok": res.get("ok") is True}, "root": e.root, "ranks": [by_rank[r] for r in e.ranks]}
-    json.dump(doc, open(f"{os.path.normpath(out)}.relabel.json", "w"), indent=1)
+    with open(f"{os.path.normpath(out)}.relabel.json", "w") as f:
+        json.dump(doc, f, indent=1)
 
 
 def read_report(out: str) -> dict:

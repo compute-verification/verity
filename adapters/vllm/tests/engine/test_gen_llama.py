@@ -4,9 +4,8 @@ no hand-written static field beyond the repo id and the pinned revision.  Laptop
 at MAX_POS 131072 dominates)."""
 from __future__ import annotations
 
-import importlib
-
 import hashlib
+import importlib
 import json
 import shlex
 import subprocess
@@ -15,20 +14,36 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity_vllm.definitions.registry import b1
 
-from verity_vllm.program import model as analytic
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart, TritonLaunch
+from verity_vllm.config import workload_file
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepEnd,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+)
 from verity_vllm.observe.fold.patterns import GemmLaunch, members
 from verity_vllm.observe.fold.profiles import gen_llama_patterns as GP
 from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Shared,
+    StepContext,
+    Unsupported,
+    resolve_step,
+)
+from verity_vllm.observe.fold.tree import step_events
+from verity_vllm.program import model as analytic
 
 L = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B")
 Q = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN05")
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, StepContext, Unsupported, resolve_step
-from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.observe.events import ViewDesc
-from verity.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"
@@ -117,7 +132,6 @@ def test_profile_is_discovered_by_case_and_shares_the_base_patterns(case, module
     # the ada record pins all five vLLM keys; Llama's shapes hit (2048, 2048) only (the others are Qwen3-class)
     assert set(prof.notes["pins"]["gemm_tuned_ada"]) == {"N=2048,K=2048", "N=2048,K=6144", "N=4096,K=2048", "N=12288,K=2048", "N=151936,K=2048"}
     assert GP.GemmLaunchTuned.name not in base_names                                             # the base profile is untouched
-    assert prof.kernel_allowlist is BASE.PROFILE.kernel_allowlist                                # the frozen census allowlist, referenced
     pins = prof.notes["pins"]
     assert pins["gemm"] == BASE.PROFILE.notes["pins"]["gemm"] and pins["rms_norm"] == BASE.PROFILE.notes["pins"]["rms_norm"]
     assert pins["attention"]["kBlockN"] == mod.C["BN"] == 128 and pins["kv_cache"] == BASE.PROFILE.notes["pins"]["kv_cache"]
@@ -204,7 +218,7 @@ def test_qwen05_plain_table_is_self_consistent():
 def test_workload_file(case):
     from verity_vllm.pipeline.report import workload_summary
     mod = MODULES[case]
-    path = REPO / "workloads" / WORKLOADS[case]
+    path = workload_file(REPO / "workloads" / WORKLOADS[case])
     doc = json.loads(path.read_text())
     assert doc["schema"] == "verity-vllm/workload/v2" and doc["case"] == case
     assert doc["model"] == mod.REPO_ID and doc["engine"]["revision"] == mod.REVISION
@@ -234,8 +248,8 @@ def test_run_config_dry_run_resolves_the_profile_from_the_case(case, module_name
             st, rest = ln[1:].split("]", 1)
             cmds[st] = shlex.split(rest) if not rest.strip().startswith(("SKIP", "in-process", "write")) else [rest.strip()]
     assert "snapshot_steps=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]" in out       # every step of the 16-token workload
-    cap = cmds["capture"]
-    assert cap[cap.index("--case") + 1] == case and "--verify-weights" in cap and cap[cap.index("--workload") + 1] == wl
+    capture_cmd = cmds["capture"]
+    assert capture_cmd[capture_cmd.index("--case") + 1] == case and "--verify-weights" in capture_cmd and capture_cmd[capture_cmd.index("--workload") + 1] == wl
     for st in ("resolve", "fold", "fold_2"):
         c = cmds[st]
         assert c[c.index("--profile") + 1] == module_name, (st, c)

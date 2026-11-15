@@ -19,10 +19,14 @@ import hashlib
 import os
 from dataclasses import replace
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available() or not os.environ.get("NATIVE_COLLECT_BUILD"),
                                 reason="needs a GPU and the JIT-built native_collect extension (NATIVE_COLLECT_BUILD)")
@@ -41,9 +45,11 @@ ENV = ("VERITY_RETAIN", "VERITY_WINDOW_MB", "VERITY_WINDOW_SLOTS", "VERITY_STAGI
 
 
 class _Runner:
+    committer: Any                                              # the committer under test, once `committer()` has built it
+
     def __init__(self) -> None:
         self.committer = None
-        self.tensors: list[tuple[str, object]] = []
+        self.tensors: list[tuple[str, torch.Tensor]] = []
         self.input_batch = None
 
     def execute_model(self, scheduler_output, *a, **kw):
@@ -59,7 +65,7 @@ class _Sched:
         self.req_ids = [f"r{i}" for i in range(len(kv))]
         self.num_scheduled_tokens = dict.fromkeys(self.req_ids, 1)
         self.total_num_scheduled_tokens = len(kv)
-        self.scheduled_new_reqs = []
+        self.scheduled_new_reqs: list[object] = []
         self.scheduled_cached_reqs = SimpleNamespace(req_ids=self.req_ids, num_computed_tokens=list(kv))
 
 
@@ -85,7 +91,7 @@ def step_tensors(kv: tuple[int, ...]) -> list[tuple[str, torch.Tensor]]:
     """One decode step's tensors, odd-sized so window boundaries fall inside them; the hidden plane is sized by every request's KV
     blocks, so steps differ in length. The values are a function of the geometry."""
     ntok, seed = len(kv), sum(kv)
-    shapes = [("model.embed_tokens/in", torch.int32, (ntok,))]
+    shapes: list[tuple[str, torch.dtype, tuple[int, ...]]] = [("model.embed_tokens/in", torch.int32, (ntok,))]
     for layer in range(LAYERS):
         shapes += [(f"model.layers.{layer}.self_attn.qkv_proj", torch.bfloat16, (ntok, 3 * H)),
                    (f"fa2.m1/L{layer}/acc", torch.float32, (sum(-(-k // BN) for k in kv), 4)),

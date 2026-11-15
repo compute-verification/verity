@@ -1,6 +1,6 @@
 """`research queue stats`: a landed PR's time from its ready mark to `main`, split into queue, rework, machine, check and land."""
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from research import queue_stats as qs
 
@@ -19,7 +19,7 @@ research queue drive: landed #1 #2 #3 on `main` at bbbbbbbbbbbb (check r20261019
 
 
 def utc(s: str) -> datetime:
-    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+    return datetime.fromisoformat(s).replace(tzinfo=UTC)
 
 
 def test_each_landed_pr_is_split_into_its_five_steps(tmp_path):

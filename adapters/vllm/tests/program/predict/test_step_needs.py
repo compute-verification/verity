@@ -1,10 +1,14 @@
 """`predict.step_needs`: what `dsa` calls for one engine step, counted without building the Program, each refusal in its place."""
 from __future__ import annotations
 
+import json
 from collections import Counter
 
 import pytest
 
+from verity_vllm.config import row_file
+from verity_vllm.program.predict import step_needs
+from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.step_needs import StepNeeds, workload_phi
 
 CLASS_G_ROW = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
@@ -25,7 +29,27 @@ def test_class_g_steps_need_no_refusal(S):
     assert not _gaps(S.step(256, 256, [(256, 1024)], [], 1, {"greedy": 1}, False))
 
 
-def test_production_sizes_refuse_by_name(S):
+def test_a_row_that_pins_no_revision_has_no_snapshot_dir_to_write(tmp_path, monkeypatch):
+    """`workload_phi` writes the pinned config.json where `score.phi_of` looks for it, under the row's revision: a row whose
+    engine block pins none names no dir, which is `os.path.join`'s TypeError."""
+    w = json.loads(row_file(CLASS_G_ROW).read_text())
+    (bare := tmp_path / "row.json").write_text(json.dumps({**w, "engine": {k: v for k, v in w["engine"].items() if k != "revision"}}))
+    monkeypatch.setattr(step_needs, "row_file", lambda row: bare)
+    monkeypatch.setattr(step_needs.tempfile, "mkdtemp", lambda prefix: str(tmp_path))
+    with pytest.raises(TypeError, match="NoneType"):
+        workload_phi(CLASS_G_ROW, "GLM53")
+
+
+def test_a_device_named_by_no_str_names_no_tuned_file(S):
+    """The tuned fused-MoE file a step's expert GEMMs take their tile from is named by φ's `device_name`: one that is no str
+    has no name to put in it, an AttributeError, and is no missing file's refusal."""
+    doc = S.phi.to_json()
+    numbered = StepNeeds(Phi.from_json({**doc, "target": {**doc["target"], "device_name": 200}}))
+    with pytest.raises(AttributeError, match="'int' object has no attribute 'replace'"):
+        numbered.step(8, 8, [], [100 + i for i in range(8)], 8, {"greedy": 8}, True)
+
+
+def test_sizes_past_class_g_refuse_by_name(S):
     """Past class G's limits each refusal `dsa` would raise is its own Need, and the step's other calls are still counted: a row
     past INDEX_TOPK keys refuses its top-k (the radix selection) but keeps its logits, the 8,192-token launch has no captured
     all-reduce (vLLM's NCCL route), a 2,000-row prefill takes the dense-MHA backend and one past INDEX_TOPK keys the sparse-MQA
@@ -65,17 +89,17 @@ def test_a_step_counts_the_decoders_calls(M, S):
     from verity_vllm.program.predict import dsa
     from verity_vllm.program.predict.build import build_program
     seen: Counter[str] = Counter()
-    orig = dsa._Model.call
+    orig = dsa._Calls.call
 
     def call(self, fn, *refs):
         seen[fn.id] += 1
         return orig(self, fn, *refs)
 
-    dsa._Model.call = call
+    dsa._Calls.call = call
     try:
         build_program(S.phi, "step", M=M, pos0=8)
     finally:
-        dsa._Model.call = orig
+        dsa._Calls.call = orig
     need = S.step(M, M, [(M, 0)], [], 1, {"greedy": 1}, False)
     assert not _gaps(need)
     assert Counter({n.id: c for n, c in need.items()}) == Counter({k: v for k, v in seen.items() if not k.startswith("Const")})

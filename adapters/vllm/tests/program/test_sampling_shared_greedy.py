@@ -8,13 +8,14 @@ import random
 import re
 
 import pytest
+from verity_vllm.definitions.registry import sampling as SM
+from verity_vllm.definitions.registry import sampling_vocab
 
-from verity.circuits.evaluation import evaluate
-from verity.circuits.defs import bind
-from verity.definitions.registry import sampling as SM
-from verity.definitions.registry import sampling_vocab
+from verity.circuits import word as W
 from verity.circuits.cut import call_scope
-from verity.definitions import word as W
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.layout import resolve
 
 PAIRS = [(SM.GumbelTokenSelect, SM.GumbelTokenSelectSharedGreedy), (SM.GumbelTopPTokenSelect, SM.GumbelTopPTokenSelectSharedGreedy)]
 SPECIAL_TEMPS = [0x00000000, 0x80000000, 0x3F800000, 0xBF800000, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00000, 0x7F800001,
@@ -30,7 +31,6 @@ def _canon(fn, table: dict) -> tuple[int, ...]:
         g = c.gate(lo + j)
         ops = tuple(ids[o - lo] if lo <= o < lo + n else table.setdefault(("in", o), len(table)) for o in g.operands)
         ids[j] = table.setdefault((g.prim.id, ops), len(table))
-    from verity.circuits.layout import resolve
     return tuple(ids[resolve(call, r) - lo] for r in fn.body.ret)
 
 
@@ -92,8 +92,16 @@ def test_new_ids_carry_no_version_in_their_names():
 def test_the_target_binds_the_select_in_the_vocabulary_and_the_fold(construction, shared):
     """`TargetProfile.sampler_construction` (None = `shared-greedy`) at the vocabulary role the frontend rule asks for and at the fold's
     top-p select (`TokenSelectGumbelTopP._stage3`, the record's declared target); the rule: tests/program/test_derive_stochastic.py."""
-    from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, ViewDesc
-    from verity_vllm.observe.fold.patterns.sampling import SCRATCH_TOPP_SELECT, TokenSelectGumbelTopP
+    from verity_vllm.observe.events import (
+        DispatchEnter,
+        DispatchExit,
+        RunHeader,
+        ViewDesc,
+    )
+    from verity_vllm.observe.fold.patterns.sampling import (
+        SCRATCH_TOPP_SELECT,
+        TokenSelectGumbelTopP,
+    )
     from verity_vllm.observe.fold.resolver import StepContext
     from verity_vllm.observe.fold.tree import TreeNode
     from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
@@ -107,6 +115,6 @@ def test_the_target_binds_the_select_in_the_vocabulary_and_the_fold(construction
     node = TreeNode(DispatchEnter(1, None, 0, "sample", "aten.gather.default", "aten::gather(Tensor self, int dim, Tensor index, *, bool "
                                   "sparse_grad=False) -> Tensor", [local_argmax, 1, idx], {}, 7, None), DispatchExit(1, out))
     header = RunHeader("verity-capture/log/v1", "2026-09-28T00:00:00Z", "toy", {"target": tp.to_json()} if construction else {}, {}, {})
-    stage2 = {"local_argmax": local_argmax, "bf16": logits, "S": 4, "kernels": (), "specs": [("r0", 5, 7, 0.8, 0.9)]}
-    ctx = StepContext(header, None, None, [], {}, {}, None, scratch={SCRATCH_TOPP_SELECT: {"stage2": {idx.alloc: stage2}}})
+    second_stage = {"local_argmax": local_argmax, "bf16": logits, "S": 4, "kernels": (), "specs": [("r0", 5, 7, 0.8, 0.9)]}
+    ctx = StepContext(header, None, None, [], {}, {}, None, scratch={SCRATCH_TOPP_SELECT: {"winning_block": {idx.alloc: second_stage}}})
     assert TokenSelectGumbelTopP()._stage3(node, ctx).spec.id == bind(select, V=V).id

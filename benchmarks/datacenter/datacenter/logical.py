@@ -1,6 +1,6 @@
 """The logical layer's objects: a Program, its values, its inputs, and the commitments the values sit under.
 
-The circuit is a `verity.circuits` `Program`, the format the rest of Verity reads: the sampled proofs partition it into
+The circuit is a `verity.circuits` `Program`, the format the rest of Verity reads: SPOT partitions it into
 proof blocks, PoUW's compiler rewrites its matmuls into tile units, the census counts it and memory accounting derives its
 requirement from it. It is Boolean, its semantics And, Xor and Not on bits, built constructively from registered
 Definitions (`verity/circuits/PROTOCOL.md`):
@@ -18,7 +18,7 @@ the same rows.
 
 A Program holds only gates. Its root body is its step structure: an input node for each parameter, bound per run or at
 registration (`program.bindings`), then its Calls. The accounting layer reads it at that grain, the census's
-(`verity.definitions.circuits.census`):
+(`verity.circuits.census`):
 
 - a *node* is a root node, named by its parameter or by the `name` its Call was given (`names`);
 - a *value* (`Value`) is a census value: a run of one node's output leaves that the same Calls read, which is what moves
@@ -46,10 +46,10 @@ from typing import Any
 
 import numpy as np
 
-from verity.hardware import registration
+from verity.protocols.accounting.registration.verifier import registration
 from verity.circuits import boolean as BL
 from verity.circuits import types as T
-from verity.definitions.circuits.census import PRECISION, PRODUCTS, census, family
+from verity.circuits.census import PRECISION, PRODUCTS, census, family
 from verity.circuits.codec import program_digest
 from verity.circuits.cut import WIRING
 from verity.circuits.defs import PrimitiveDefinition
@@ -114,7 +114,8 @@ def census_of(program: Program, boolean: bool = False) -> dict:
     """The Program's census/v1 (one step), computed once; with `boolean` its Boolean work too, or `census.NoBooleanWork`."""
     memo = _census.setdefault(program, {})
     if boolean not in memo:
-        from verity.definitions.boolean import boolean_version
+        from verity.circuits.ops.boolean.versions import boolean_version
+        import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
         memo[boolean] = census(program, digest=program_digest(program), boolean=boolean and boolean_version)
     return memo[boolean]
 

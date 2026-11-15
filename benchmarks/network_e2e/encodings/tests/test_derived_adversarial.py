@@ -95,7 +95,7 @@ def test_a_collision_in_the_key_derives_the_same_advice(case, monkeypatch) -> No
 
 
 def test_a_verifier_on_a_different_key_accepts_the_provers_residual(case, monkeypatch) -> None:
-    """The prover (`residual`) and the compile unit (`reconstruct`, through `rebuild`) both look prefixes up by the key.
+    """The prover (`residual`) and the compile slice's proof block (`reconstruct`, through `rebuild`) both look prefixes up by the key.
     A verifier whose key collides differently still rebuilds the prover's residual into the same advice: what is
     derived depends on the tokens, never on the key's collisions."""
     cfg, adv, order, held, res = case

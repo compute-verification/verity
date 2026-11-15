@@ -24,7 +24,7 @@ PARTS = {"model.layers.0.self_attn.q_proj.weight": RNG.integers(0, 1 << 16, (4, 
          "model.layers.0.self_attn.v_proj.weight": RNG.integers(0, 1 << 16, (2, 8), dtype=np.uint16),
          "model.norm.weight": RNG.integers(0, 1 << 16, (8,), dtype=np.uint16)}
 QKV = "model.layers.0.self_attn.qkv_proj.weight"
-COS_SIN = np.arange(8, dtype=np.float32)
+COS_SIN: np.ndarray = np.arange(8, dtype=np.float32)
 
 
 def _shard(path, tensors):
@@ -81,7 +81,7 @@ def test_every_servable_tensor_opens_against_the_committed_root_and_is_served_as
     assert wc["equal"] is True and wc["why"] is None, wc
     assert wc["servable"] == 4 and wc["opened"] == 3 and wc["opened_by_source"] == {"checkpoint": 2, "bundle": 1}
     assert [u["name"] for u in wc["unopened"]] == ["model.unknown.weight"] and wc["mismatched_n"] == 0
-    consumed = set()
+    consumed: set[str] = set()
     rd = CPU.provider(words, "model.", consumed)
     assert np.array_equal(rd("model." + QKV, 0, 64), _served()[QKV][1].reshape(-1)) and rd("model." + QKV, 0, 65) is None
     assert np.array_equal(rd("model.rotary_emb.cos_sin_cache", 0, 8), COS_SIN.view(np.uint32))
@@ -417,22 +417,22 @@ def test_a_keep_replays_only_under_the_draw_it_was_kept_for(tmp_path, monkeypatc
     site = C2.ReplaySources(args=SimpleNamespace(replay_draw="uniform"), out=out, pair=1, com=None, rc=None, row={}, reqs=[], sampling={}, tokens={},
                             manifest=None, stop_of_record={}, ids_full={}, versions={}, components={}, vc_result=None, weights_of=None,
                             weights_check=None, tl=None)
-    drawn = {"picks": [tuple(p) for p in slim["picks"]]}
+    drawn: dict[str, list] = {"picks": [tuple(p) for p in slim["picks"]]}
     monkeypatch.setattr(C2, "plan", lambda s: {"replay": drawn})
-    CPU.kept_draw(site, slim)
+    CPU.kept_sample(site, slim)
     drawn["picks"] = drawn["picks"][::-1]
-    with pytest.raises(CPU.Refused, match=r"shares 2 of the keep's 2 picks \(2 drawn\); the record draws by 'uniform'"):
-        CPU.kept_draw(site, slim)
+    with pytest.raises(CPU.Refused, match=r"shares 2 of the keep's 2 picks \(2 sampled\); the record samples by 'uniform'"):
+        CPU.kept_sample(site, slim)
     drawn["picks"] = [["r0", 9, 9, "model.embed_tokens"], *slim["picks"][:1]]
     with pytest.raises(CPU.Refused, match=r"shares 1 of the keep's 2 picks"):
-        CPU.kept_draw(site, slim)
+        CPU.kept_sample(site, slim)
 
     def lacks(s):
         raise KeyError("tree node 1 of step 0 level 0 is not in the slim dumped store")
 
     monkeypatch.setattr(C2, "plan", lacks)
     with pytest.raises(CPU.Refused, match="reads what the keep does not hold .*tree node 1 of step 0"):
-        CPU.kept_draw(site, slim)
+        CPU.kept_sample(site, slim)
 
 
 def test_the_replay_s_engine_of_record_is_the_commit_engine_s(tmp_path):

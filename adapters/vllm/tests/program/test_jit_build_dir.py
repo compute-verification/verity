@@ -13,8 +13,7 @@ import types
 from pathlib import Path
 
 import pytest
-
-from verity.definitions.numerics import _jit
+from verity_vllm.definitions.numerics import _jit
 
 REPO = Path(__file__).resolve().parents[4]
 TWINS = (("libtc_model.so", "tc_model.cpp"), ("librms_triton_model.so", "rms_triton_model.cpp"), ("libfa2_model.so", "fa2_model.cpp"))
@@ -56,7 +55,13 @@ def test_every_cpp_model_loads_as_a_model_naming_every_file_its_build_compiles(m
     """circuit-check keys a check that called a C++ model on the files its `_jit.Model` names (`circuit_check.cache.MODEL`),
     wherever the library was built.  So each model's library is a `Model` naming its build's sources, those hold every file a
     source includes, every file of `cpp/` is some model's, and nothing here loads a library with ctypes but as a `_jit.Model`."""
-    from verity.definitions.numerics import cpu_model, dense_rows, fa2_model, fa3_model, rms_triton_model
+    from verity_vllm.definitions.numerics import (
+        cpu_model,
+        dense_rows,
+        fa2_model,
+        fa3_model,
+        rms_triton_model,
+    )
 
     built: dict[str, tuple[Path, ...]] = {}
 
@@ -120,7 +125,7 @@ def test_a_models_every_call_raises_its_sources_whatever_its_build_directory(tmp
 
 
 def test_no_twin_library_resolves_under_the_checkout():
-    from verity.definitions.numerics import cpu_model, fa2_model, rms_triton_model
+    from verity_vllm.definitions.numerics import cpu_model, fa2_model, rms_triton_model
     for lib in (cpu_model.LIB, fa2_model.LIB, rms_triton_model.LIB):
         assert not Path(lib).resolve().is_relative_to(REPO.resolve()), f"{lib} is inside the checkout {REPO}"
 
@@ -157,7 +162,7 @@ def test_concurrent_first_users_resolve_one_path_compile_once_and_load_it(tmp_pa
     def first_user() -> None:
         go.wait()
         lib = _jit.atomic_build(_jit.lib_path("libtc_model.so"), [src], compile_to)
-        ctypes.CDLL(str(lib)).tc_records
+        _ = ctypes.CDLL(str(lib)).tc_records
         loaded.put(str(lib))
 
     users = [ctx.Process(target=first_user) for _ in range(6)]

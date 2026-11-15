@@ -6,10 +6,10 @@ import json
 
 import numpy as np
 import pytest
+from verity_vllm.definitions.numerics import cpu_model as CM
 
 from verity_vllm.config import ROOT
 from verity_vllm.pipeline import cli
-from verity.definitions.numerics import cpu_model as CM
 from verity_vllm.program import gemm_target_correspondence as G
 
 CONFIGS = ROOT / "verity_vllm" / "engine" / "profiles" / "hf_configs"
@@ -68,7 +68,8 @@ def _capture(tmp_path, cc, *, bias_mode=None, flip=False, M=6, K=64, N=40, x=Non
     gpu, _ = CM.gemm_model(hopper, x, w, b, CM.GemmModelSpec(hopper.name, bias_mode=bias_mode or 0), want_f32=False)
     if flip:
         gpu[2, 3] ^= 1
-    np.savez(tmp_path / "w_0.npz", w=w, cols=np.arange(N), **({"b": b} if b is not None else {}))
+    arrays: dict = {"w": w, "cols": np.arange(N), **({"b": b} if b is not None else {})}
+    np.savez(tmp_path / "w_0.npz", **arrays)
     np.savez(tmp_path / "case_0.npz", x=x, gpu=gpu, rows=np.arange(M))
     case = {"i": 0, "config": "SYNTH", "tp": 1, "shape": "o_proj", "K": K, "N": N, "family": "randn", "M": M, "w_file": "w_0.npz",
             "bias": b is not None, "kernels": ["synthetic"], "gpu_deterministic_rerun": True, "rows_evaluated": M, "cols_evaluated": N,
@@ -113,7 +114,7 @@ def test_a_bias_case_reports_the_epilogue_that_holds(tmp_path):
 def test_the_cli_parses_both_phases_and_requires_a_seed():
     opts = cli.parse("gemm-correspondence", ["check", "--dir", "d", "--out", "o"])
     assert isinstance(opts, G.CheckOptions) and opts.crosscheck == 256
-    cap = cli.parse("gemm-correspondence", ["capture", "--configs", "a.json", "--seed", "13", "--dir", "d"])
-    assert cap.cmd == "capture" and cap.tp == "1" and cap.max_cols == 4096
+    capture = cli.parse("gemm-correspondence", ["capture", "--configs", "a.json", "--seed", "13", "--dir", "d"])
+    assert capture.cmd == "capture" and capture.tp == "1" and capture.max_cols == 4096
     with pytest.raises(SystemExit):
         cli.parse("gemm-correspondence", ["capture", "--configs", "a.json", "--dir", "d"])

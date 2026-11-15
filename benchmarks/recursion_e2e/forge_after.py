@@ -1,10 +1,10 @@
 """forge-after: V*'s three forgeries that the prover's ZK server stops before release (coef, dirs, message), made after an
-honest firewalled prove instead, and put to the Lean verifier.
+honest prove through the ZK server instead, and put to the Lean verifier.
 
     python3 benchmarks/recursion_e2e/forge_after.py --work FLOCK_WORK --tag TAG --run-out LEAN_OUT [--bin NAME=PATH ...] [--kinds K,..]
 
 ``run.py``'s ``forge-after`` step runs it after the lean step (``--run-out``: that step's out/, whose ``lean/own-<stmt>.txt``
-it reuses) with 85's flock-verify; ``forge_after.sh`` runs it over an earlier run's data.
+it reuses) with the Lean verifier 85 built; ``forge_after.sh`` runs it over an earlier run's data.
 
 A forgery staged before proving (`rec_vstage --forge`) puts a wrong row in the prover's ``inst.bin``, and the ZK server refuses
 to release a proof of it, so Lean never sees a release. Here the release is an honest one pod 85 already proved behind the
@@ -18,7 +18,7 @@ the row's own salt, so that the proved row and the verifier's registered row dif
   read paths, and the port's root in ``registered.json``. Only the release's binding is left to refuse it.
 
 Each case, and each statement's unmodified copy (the control, which must accept), is verified as pod 85's STEP=lean
-verifies it (`flock-verify verify --zk --registered` with its ``--rec-*`` flags), with each binary given. The run's
+verifies it (the Lean verifier's `verify --zk --registered` with its ``--rec-*`` flags), with each binary given. The run's
 ``out/lean/own-<stmt>.txt`` holds 85's own flags for the binary it built; another binary's are derived here as 85 derives
 them. Nothing under FLOCK_WORK is written. Writes ``$OUT/forge-after.json`` and prints one line per verify.
 """
@@ -34,6 +34,19 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import settings as RS
+from verity_flock import circuit as FC
+from verity_flock import rec_bindings as RB
+from verity_flock import rec_outer as O
+from verity_flock import rec_vstage as VS
+from verity_flock import rec_vstar as V
+
+from verity.commitments import hm96
+from verity.commitments.frame_v3 import BitRowLeaf, FrameV3
+from verity.commitments.frame_v3 import Port as FPort
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.rowleaf import row_leaf
+from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 
 CASES = {"coef": ("L0", "coef"), "dirs": ("L0", "dirs"), "message": ("alg-p0", "m0")}
 VERIFIER_FILES = ("circuit.txt", "pub.bin", "program.json", "partition.json", "registered.json")
@@ -46,13 +59,10 @@ def header(data: bytes) -> tuple[dict, int]:
 
 
 def table_rows(inst: bytes, text: str, port: str, n: int) -> tuple[list[list[int]], list[bytes]]:
-    from verity_flock import rec_vstage as S
-    from verity_flock import rec_vstar as V
-
     words = {p[0]: p[1] for p in json.loads(text.split("\n", 2)[1][5:])["ports"]}[port]
     rows, salts = [], []
     for r in range(n):
-        at, st = S._offsets(inst, text, port, r)
+        at, st = VS._offsets(inst, text, port, r)
         rows.append([int.from_bytes(inst[at + 2 * w:at + 2 * w + 2], "little") for w in range(words)])
         salts.append(inst[st:st + V.SALT])
     return rows, salts
@@ -60,10 +70,6 @@ def table_rows(inst: bytes, text: str, port: str, n: int) -> tuple[list[list[int
 
 def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     """`out/<case>` (honest, bc, stmt, value: the module docstring) from the statement `stmt`; what each changed."""
-    from verity.protocols.spot.verifier.one_stage import registered as RG
-    from verity_flock import rec_outer as O
-    from verity_flock import circuit as FC
-
     text = (stmt / "circuit.txt").read_text()
     inst, pub = (stmt / "inst.bin").read_bytes(), (stmt / "pub.bin").read_bytes()
     reads = json.loads((stmt / "registered.json").read_text())
@@ -108,7 +114,9 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     rec["stmt"] = {"pub.bin": f"row 0's b || c and the header's frame_v3 root of {port}",
                    "frame_root": [fv["roots"][port][:16], ph_s["frame_v3"]["roots"][port][:16]]}
     def skip(why):
-        return (shutil.rmtree(out / "value"), rec.__setitem__("value", {"skipped": why}), rec)[-1]
+        shutil.rmtree(out / "value")
+        rec["value"] = {"skipped": why}
+        return rec
     if sorted(pos) != list(range(int(port_["leaves"]))):
         return skip(f"the table reads positions {pos}, not all {port_['leaves']} of the value's rows")
     meta = json.loads(text.split("\n", 2)[1][5:])
@@ -136,14 +144,6 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
 
 def frame_root(text: str, fv: dict, port: str, bcs: list[bytes]) -> str:
     """The header's frame-v3-sha512 root of `port` over its table rows' `b || c` (`circuit.statement`)."""
-    from verity.commitments import hm96
-    from verity.commitments.frame_v3 import BitRowLeaf, FrameV3
-    from verity.commitments.frame_v3 import Port as FPort
-    from verity.commitments.indexed import RangeIndexedDomain
-    from verity.commitments.merkle import CommitmentDomain
-    from verity.commitments.rowleaf import row_leaf
-    from verity_flock import circuit as FC
-
     p = {q.name: q for q in FC._meta_ports(json.loads(text.split("\n", 2)[1][5:]))}[port]
     dom = CommitmentDomain(bytes.fromhex(fv["bindings"][port]), FC.OWNER, RangeIndexedDomain(0, len(bcs)), hash="sha512")
     if dom.domain_id.hex() != fv["domain_ids"][port]:
@@ -156,9 +156,6 @@ def frame_root(text: str, fv: dict, port: str, bcs: list[bytes]) -> str:
 def own_flags(binary: Path, dd: Path, n: str, stmts: dict[str, Path], o: Path) -> dict[str, list[str]]:
     """85's own flags for each statement (STEP=oprove's python block, which STEP=lean verifies with), derived with
     `binary`."""
-    from verity_flock import rec_bindings as RB
-    from verity_flock import rec_vstage as VS
-
     o.mkdir(parents=True, exist_ok=True)
     st = dd / "stage"
     with (o / "rec-inner.json").open("w") as f:
@@ -207,7 +204,7 @@ def main() -> int:
     ap.add_argument("--work", required=True, type=Path)
     ap.add_argument("--tag", required=True)
     ap.add_argument("--run-out", required=True, type=Path, help="the out/ of the run whose lean step verified FLOCK_WORK")
-    ap.add_argument("--bin", action="append", default=[], help="NAME=PATH: a flock-verify; NAME=run uses the run's own flags")
+    ap.add_argument("--bin", action="append", default=[], help="NAME=PATH: a Lean verifier binary; NAME=run uses the run's own flags")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--kinds", default=",".join(CASES), help=f"of {', '.join(CASES)} (comma or space separated)")
     a = ap.parse_args()

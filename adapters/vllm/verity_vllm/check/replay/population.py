@@ -6,25 +6,37 @@ from __future__ import annotations
 import hashlib
 import re
 from collections import Counter
-from typing import Any, Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any
 
-from verity_vllm.query.manifest import format as RM
-from verity_vllm.check.replay import replay_codes as RC
-from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
-from verity.definitions.numerics.rows import EVALUATORS
-from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
+from verity_vllm.definitions.numerics.rows import EVALUATORS
+
 from verity_vllm.check.replay.delegate import DELEGATES
-from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex, const_word, node_runs
-from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH
+from verity_vllm.check.replay.index import (
+    _MOE_LAYER_RE,
+    SAMPLER_OP,
+    ProgramIndex,
+    const_word,
+    file_args,
+    node_runs,
+    plane_copies,
+)
+from verity_vllm.check.replay.opening import CommittedStore, bound_identity
+from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
+from verity_vllm.query.manifest import format as RM
+from verity_vllm.records import replay_codes as RC
+from verity_vllm.records.replay_codes import NOT_YET, why_class
+from verity_vllm.records.schema_ids import MOE_PLANE_ALIAS_CHECK_SCHEMA
 
+__all__ = ["phase_anchor", "population", "split_not_executed"]
 
 #: the attention families whose ROW the replay evaluates; their block interiors are Q_fine_v1 units
 ATTENTION_ROW_FAMILIES = ("Attention_v3", "Attention_v2", "Attention_v4", "Attention_v5", "Attention_v18", "AttentionSoftcap_v2")
 
 
 def _phase(step: int, last_step: int) -> str:
-    """Phase axis of the stratum key.  `last_step` = the request's LAST EXECUTED step: cap - 1, or -- under an executed
+    """Phase axis of the stratum key.  `last_step` = the request's LAST EXECUTED step: max_tokens - 1, or -- under an executed
     prefix -- n_exec - 1, the lag step of an EOS-stopped request (the executed prefix's boundary), so that request's
     `last` stratum exists and is sampled deterministically like every other request's; steps past it are 'not-executed' (split out of the
     pool by name, never a 'last' or a 'mid')."""
@@ -39,26 +51,27 @@ def _phase(step: int, last_step: int) -> str:
 
 def phase_anchor(pi_n_steps: int, ep: dict | None) -> dict[str, Any]:
     """The step the `last` phase of a request is anchored to, NAMED: n_exec - 1 under a fault-free executed prefix that
-    stops before the cap (the lag step), else cap - 1.  On the record per request (`strata_keys.phase_anchor`)."""
-    cap_last = int(pi_n_steps) - 1
+    stops before max_tokens (the lag step), else max_tokens - 1.  On the record per request (`strata_keys.phase_anchor`)."""
+    program_last = int(pi_n_steps) - 1
     if ep and not ep.get("faults") and int(ep["n_exec"]) < int(ep["cap"]):
         n_exec, lag = int(ep["n_exec"]), int(ep.get("lag") or 0)
         # under LAG 0 the last executed step is the EOS step, not a lag step -- the text says which
         last_is = "the lag step" if lag > 0 else "the EOS step (LAG 0: no lag step)"
-        return {"last_step": n_exec - 1, "anchor": "n_exec - 1", "cap_last_step": cap_last, "n_exec": n_exec,
+        return {"last_step": n_exec - 1, "anchor": "n_exec - 1", "cap_last_step": program_last, "n_exec": n_exec,
                 "lag_step": (n_exec - 1 if lag > 0 else None),
                 "why": (f"the request stopped at a_r {ep.get('a_r')} under LAG {lag}: steps [{n_exec}, {int(ep['cap'])}) are not executed; "
                         f"its last EXECUTED step {n_exec - 1} is {last_is} -- the `last` stratum is anchored there, not at the cap")}
     if ep and not ep.get("faults"):
-        # an EOS stop at a_r = cap - LAG under LAG > 0 has n_exec == cap: the cap anchors, AND its last step IS a lag
-        # step -- the flag follows the STOP (a_r < cap and LAG > 0), not n_exec < cap.
-        n_exec, a_r, lag = int(ep["n_exec"]), int(ep.get("a_r") if ep.get("a_r") is not None else ep["cap"]), int(ep.get("lag") or 0)
+        # an EOS stop at a_r = max_tokens - LAG under LAG > 0 has n_exec == max_tokens: max_tokens' last step anchors, AND it IS
+        # a lag step -- the flag follows the STOP (a_r < max_tokens and LAG > 0), not n_exec < max_tokens.
+        stop = ep.get("a_r")
+        n_exec, a_r, lag = int(ep["n_exec"]), int(stop if stop is not None else ep["cap"]), int(ep.get("lag") or 0)
         eos_stop_lag = a_r < int(ep["cap"]) and lag > 0
-        return {"last_step": cap_last, "anchor": "cap - 1", "cap_last_step": cap_last, "n_exec": n_exec,
+        return {"last_step": program_last, "anchor": "cap - 1", "cap_last_step": program_last, "n_exec": n_exec,
                 "lag_step": (n_exec - 1 if eos_stop_lag else None),
                 "why": (f"the request stopped at a_r {a_r} under LAG {lag} and its executed prefix reaches the cap (n_exec {n_exec} == cap): the cap "
                         f"anchors and its last step {n_exec - 1} is the lag step" if eos_stop_lag else "the request ran to its cap")}
-    return {"last_step": cap_last, "anchor": "cap - 1", "cap_last_step": cap_last, "n_exec": None,
+    return {"last_step": program_last, "anchor": "cap - 1", "cap_last_step": program_last, "n_exec": None,
             "lag_step": None, "why": ("no executed prefix" if not ep else "executed prefix has faults: the cap anchors")}
 
 
@@ -71,7 +84,11 @@ def _lifetime(engine_step: int, ring_slots: int | None) -> str:
     return "recycled-window" if int(engine_step) >= int(ring_slots) else "fresh-window"
 
 
-def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict[str, Any]:
+#: how many identical pairs, and how many planes it could not read, `moe_plane_alias_check` names
+ALIAS_NAMED = 12
+
+
+def moe_plane_alias_check(store: CommittedStore) -> dict[str, Any]:
     """[FLUSH-03 fact of record] per (request, step, MoE layer) with BOTH planes committed: the committed `up` bytes differ
     from the committed `down` bytes.  Before FLUSH-03 the gather collector committed the same layer's down plane under the up name (vLLM's
     TritonExperts carves intermediate_cache1 = up and intermediate_cache3 = down out of ONE workspace; with no flush between the layer's two
@@ -89,12 +106,15 @@ def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict
             continue
         rng = None
         for e in es:                                                            # the bound request-local range (every invocation under the key)
-            r = (e.get("identity") or {}).get("element_range") or [0, None]
+            r = bound_identity(e).get("element_range") or [0, None]
             if r[1] is not None:
                 rng = (int(r[0]), int(r[1])) if rng is None else (min(rng[0], int(r[0])), max(rng[1], int(r[1])))
         if rng is not None:
             layers.setdefault((rid, int(step), int(m.group(1))), {})[mem] = rng
-    compared, identical, errors, per_layer = 0, [], [], {}
+    compared = 0
+    identical: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    per_layer: dict[str, dict[str, int]] = {}
     widths: dict[str, set[int]] = {"up": set(), "down": set()}
     for (rid, step, layer), mems in sorted(layers.items()):
         if "up" not in mems or "down" not in mems:
@@ -104,7 +124,7 @@ def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict
             lo, hi = mems[mem]
             w, why = store.words(rid, step, f"moe/L{layer}", mem, lo, hi)
             if w is None:
-                if len(errors) < max_named:
+                if len(errors) < ALIAS_NAMED:
                     errors.append({"request_id": rid, "step": step, "layer": layer, "plane": mem, "why": str(why)[:200]})
                 break
             got[mem] = w.tobytes()
@@ -117,12 +137,12 @@ def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict
         pl["compared"] += 1
         if n > 0 and got["up"][:n] == got["down"][:n]:
             pl["identical"] += 1
-            if len(identical) < max_named:
+            if len(identical) < ALIAS_NAMED:
                 identical.append({"request_id": rid, "step": step, "layer": layer, "bytes_compared": n,
                                   "sha256": hashlib.sha256(got["up"][:n]).hexdigest()[:16]})
     n_ident = sum(v["identical"] for v in per_layer.values())
     result = None if compared == 0 else (n_ident == 0)
-    return {"schema": "verity-sweep/moe-plane-alias-check/v1", "result": result, "compared": compared, "identical_n": n_ident,
+    return {"schema": MOE_PLANE_ALIAS_CHECK_SCHEMA, "result": result, "compared": compared, "identical_n": n_ident,
             "identical": identical, "read_errors_n": len(errors), "read_errors": errors, "per_layer": per_layer,
             "plane_words": {k: sorted(v) for k, v in widths.items()},
             "rule": "for every (request, step, MoE layer) with both planes committed: committed up bytes != committed down bytes over their common "
@@ -139,7 +159,7 @@ def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int
     composable interior whose own inputs have that defect (bounded by INTERIOR_DEPTH).  Derived from the Program rows alone (families +
     member claims), never from the collector's emissions.  Empty when every interior input composes (Gemm_v1 under BiasAdd_v1)."""
     out: set[str] = set()
-    for group in r.get("args") or []:
+    for group in file_args(r):
         for sl in node_runs(group):
             a, lo, hi = int(sl[1]), int(sl[2]), int(sl[3])
             if pi.member_at(a, lo, hi) is not None:
@@ -148,7 +168,7 @@ def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int
             if const_word(pr) is not None:
                 continue                                                         # a Program constant (Const32/64[..]): read from the text, nothing to compose
             pd = pi.describe(pr) if pr is not None else None
-            if pd is None or pd["members"]:
+            if pr is None or pd is None or pd["members"]:
                 continue                                                         # unmodelled / a member-straddling slice: a replay-time fault, not a name
             pf = pd["family"]
             if pf not in EVALUATORS and pf not in DELEGATES:
@@ -172,12 +192,14 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
     evaluable or not, so `query_population` can reconcile the replay's reach against Q(P) identity by identity (a row with no member --
     structure, interior -- produces no identity and is not recorded).
     `last_step`: the request's last EXECUTED step (`phase_anchor(...)["last_step"]`: n_exec - 1 under an executed prefix,
-    the lag step of an EOS-stopped request); None = the cap's last step.  The POPULATION is the same either way (every row is enumerated);
+    the lag step of an EOS-stopped request); None = max_tokens' last step.  The POPULATION is the same either way (every row is enumerated);
     only the phase label of the stratum key moves.
     `codes`: an accumulator, not-evaluable reason -> its structured code (`replay_codes.reason_code`), what the verdict reads.
     `recomputed`: the rows of a warm request's Program that compute its prefix-cache hit (`recomputed_prefix.prefix_rows`), which
     serving never ran for it: its replay's own, counted by family and in no stratum."""
-    vus, not_ev, not_ev_fam = [], Counter(), Counter()
+    vus: list[dict[str, Any]] = []
+    not_ev: Counter[str] = Counter()
+    not_ev_fam: Counter[str] = Counter()
     last = pi.n_steps - 1 if last_step is None else int(last_step)
 
     def _not_ev(why: str, cls: str, fam: str, *, domain: bool = False, tags: tuple[str, ...] = ()) -> None:
@@ -194,7 +216,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
         # produced it -- the sampler op, a plane description (`plane_kind`) / a plane copy (MOE-TP-02), else the member's own family
         # (`manifest_format.alias_family`: a rank-local partial vs an instance output) -- never parsed back out of the op_path string
         keys = [(str(d["op_path"]), str(m[0]), "moe_block_stream" if d.get("plane_kind") else None) for m in d["members"]] \
-            + [(str(c["op_path"]), str(c["member"]), "moe_block_stream") for c in d.get("copies") or []]
+            + [(str(c["op_path"]), str(c["member"]), "moe_block_stream") for c in plane_copies(d)]
         for op, mem, mfam in keys:
             k = (rid, int(d["step"]), op, mem)
             a = addresses.get(k)
@@ -241,7 +263,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
             elif d.get("plane"):
                 # a plane PRODUCER (router / expert GEMM / sum) whose relation has no evaluator in this version: its
                 # plane IS read -- as the committed input of the rows it feeds (up -> the act SiluMul, sum -> the next fused norm) -- but
-                # the plane's own production is not re-evaluated.  Named under the moe_block_stream class so the verdict's (B)-conditioned
+                # the plane's own output is not re-evaluated.  Named under the moe_block_stream class so the verdict's (B)-conditioned
                 # population-gap rule keeps gating it until the evaluator lands (unit 2), never a silent 'no evaluator' domain exclusion.
                 w = (f"no registered evaluator for {fam}: moe_block_stream plane producer ({d['plane']} plane read as its consumers' committed input; "
                      f"evaluator = MAN-06f v3 unit 2)")
@@ -261,7 +283,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
         if not d["members"]:                                                     # an evaluable family whose row has no
             not_ev_fam[f"{fam} (interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor)"] += 1
             continue                                                             # committed member of its own: the pre-bias Gemm under a BiasAdd,
-                                                                                 # the pre-cap logits Gemm -- interior, no VU, counted by name
+                                                                                 # the logits Gemm before its softcap -- interior, no VU, counted by name
         ife = _interior_feeders_without_evaluator(pi, r)
         if ife:
             # the VU's input is an INTERIOR (uncommitted) value of a fused producer
@@ -281,7 +303,8 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
         # sampled deterministically (the cell holds one row group); only a mid-phase single-identity fault is sampled with probability
         # n / (steps in the phase) -- targets (`--replay-target`) pin those for the negatives of record
         life = _lifetime(arrive + st, ring_slots)
-        sspec = _stratum_spec(fam, r["spec"], d.get("statics") or {})
+        statics = d.get("statics")                                               # a description that states none has no static
+        sspec = _stratum_spec(fam, r["spec"], statics if statics else {})
         vus.append({"i": int(r["i"]), "spec": r["spec"], "family": fam, "request_id": rid, "step": st, "phase": _phase(st, last), "rank": int(rank),
                     "op_path": d["op_path"], "lifetime": life, "stratum": f"{sspec}|{rid}|rank{int(rank)}|{_phase(st, last)}|{d['op_path']}|{life}"})
     return vus, not_ev, not_ev_fam
@@ -327,24 +350,24 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
     no default, so a caller passing the Commit's own count cannot put 'match record' on the record by omission -- an own count must be
     labelled as such by the caller, and (a) then faults on `linked`.  [ONE mechanism] with `served` (the request's served token ids of
     record) and `eos_ids` (the Program's declared EOS ids) the class is DERIVED FROM r_t: `rule` (default Continuation_v1's
-    `executed_prefix_by_rule`) runs the recurrence over the served list, `n_exec = |{t : r_t = 1}|`, and the arithmetic `min(a_r + LAG, cap)`
-    is demoted to a CHECK (a disagreement is a fault by name); the rule's own problems (served past the first EOS, a last served token that is no declared EOS, over the cap) are
+    `executed_prefix_by_rule`) runs the recurrence over the served list, `n_exec = |{t : r_t = 1}|`, and the arithmetic `min(a_r + LAG, max_tokens)`
+    is demoted to a CHECK (a disagreement is a fault by name); the rule's own problems (served past the first EOS, a last served token that is no declared EOS, past max_tokens) are
     faults.  Without `served` the arithmetic is the mechanism and is NAMED as such in `mechanism` (never silently the same thing)."""
-    a_r, lag, cap, arrive = int(a_r), int(lag), int(cap), int(arrive)
+    a_r, lag, max_tokens, arrive = int(a_r), int(lag), int(cap), int(arrive)
     faults: list[str] = []
     if account_missing:
-        # FIRST, so the verdict names the cause: a Match account leg the link needs is not beside the Commit
+        # FIRST, so the verdict names the cause: a Match account file the link needs is not beside the Commit
         # (e.g. match/capture/ moved to /vault under a queued Commit).  Still fail-closed -- (a) and (b) below fault too --
         # but an operator reads 'input missing: restore tokens.json' and not 'the Program's executed prefix is wrong'.
-        faults.append(f"Match account leg(s) missing beside the Commit: {', '.join(str(x) for x in account_missing)} -- the link cannot hold on a "
+        faults.append(f"Match account file(s) missing beside the Commit: {', '.join(str(x) for x in account_missing)} -- the link cannot hold on a "
                       "missing input (restore the Match record's file(s) and re-run the Commit; not a verdict on the Program) (executed-prefix conditions (a), (b))")
     if not isinstance(a_r_source, str) or not a_r_source.strip():
         faults.append("a_r_source unstated: the record must name where a_r was read (executed-prefix condition (a))")
     if lag not in (0, 1):
         faults.append(f"LAG {lag} outside the supported profile domain {{0, 1}}")
-    if a_r < 0 or a_r > cap:
-        faults.append(f"served length a_r {a_r} outside [0, cap {cap}]")
-    n_exec = cap if a_r >= cap else min(a_r + lag, cap)                        # the arithmetic: the mechanism without a served list, else the CHECK
+    if a_r < 0 or a_r > max_tokens:
+        faults.append(f"served length a_r {a_r} outside [0, max_tokens {max_tokens}]")
+    n_exec = max_tokens if a_r >= max_tokens else min(a_r + lag, max_tokens)                    # the arithmetic: the mechanism without a served list, else the CHECK
     mechanism, by_rule = MECH_ARITH_NO_SERVED, None
     if served is not None:
         rule = rule or executed_prefix_by_rule
@@ -352,19 +375,20 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
         if len(served_l) != a_r:
             faults.append(f"served list of {len(served_l)} token(s) != a_r {a_r} ({a_r_source}): the recurrence would run over another prefix than the record's")
         if lag in (0, 1):
-            blk = rule(served_l, cap=cap, A=lag, eos=[int(e) for e in (eos_ids or ())])
+            blk = rule(served_l, cap=max_tokens, A=lag, eos=[int(e) for e in (eos_ids or ())])
             by_rule = {k: blk.get(k) for k in ("executed_prefix_len", "eos_step", "lag_steps", "first_eos_index", "served_past_first_eos", "cap_exhausted", "eos_stop", "problems")}
-            for pr in blk.get("problems") or []:
+            problems = blk.get("problems")                                       # a rule that states none found none
+            for pr in (problems if problems else []):
                 faults.append(f"Continuation_v1 rule: {pr}")
-            if not blk.get("problems") and len(served_l) == a_r:
+            if not problems and len(served_l) == a_r:
                 n_rule = int(blk["executed_prefix_len"])
                 if n_rule != n_exec:
-                    faults.append(f"the arithmetic min(a_r + LAG, cap) = {n_exec} disagrees with the recurrence |{{t : r_t = 1}}| = {n_rule} (R3: the rule is the mechanism, "
+                    faults.append(f"the arithmetic min(a_r + LAG, max_tokens) = {n_exec} disagrees with the recurrence |{{t : r_t = 1}}| = {n_rule} (R3: the rule is the mechanism, "
                                   "the arithmetic the check)")
                 n_exec = n_rule
             mechanism = MECH_RECURRENCE
-    if a_r < cap and eos_declared is not True:
-        faults.append(f"a_r {a_r} < cap {cap} but served token a_r-1 is not asserted a declared EOS id (eos_declared={eos_declared}): "
+    if a_r < max_tokens and eos_declared is not True:
+        faults.append(f"a_r {a_r} < max_tokens {max_tokens} but served token a_r-1 is not asserted a declared EOS id (eos_declared={eos_declared}): "
                       "an early stop the Program's stop rule does not explain -- the not-executed class is NOT applicable, FAIL by name")
     if linked is not True:                                                       # (a)
         faults.append(f"a_r is not linked to the served output and the Match account (linked={linked}): C2 boundary linkage + tokens_equal + G6 "
@@ -376,8 +400,8 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
         faults.append(f"LAG rule not attested (declared == record_attests == tokens.json required; lag_attested={lag_attested}) (condition (b))")
     if int(rows_past_stop) > 0:                                                  # (c)
         faults.append(f"execution past the stop: {int(rows_past_stop)} committed row(s) of the request at steps >= arrival {arrive} + n_exec {n_exec} (condition (c))")
-    return {"request_id": str(rid), "a_r": a_r, "a_r_source": a_r_source, "lag": lag, "cap": cap, "arrive": arrive, "n_exec": int(n_exec),
-            "executed_prefix": int(n_exec), "steps_not_executed": [int(n_exec), cap] if n_exec < cap else None, "eos_declared": eos_declared,
+    return {"request_id": str(rid), "a_r": a_r, "a_r_source": a_r_source, "lag": lag, "cap": max_tokens, "arrive": arrive, "n_exec": int(n_exec),
+            "executed_prefix": int(n_exec), "steps_not_executed": [int(n_exec), max_tokens] if n_exec < max_tokens else None, "eos_declared": eos_declared,
             "served_len_commit": served_len_commit, "linked": linked, "lag_attested": lag_attested, "rows_past_stop": int(rows_past_stop),
             "account_missing": [str(x) for x in (account_missing or ())],
             # a faulted request produced NO class: the mechanism is 'not classified', never 'recurrence' beside a fault

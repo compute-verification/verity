@@ -11,7 +11,6 @@ failure message carries its fix.
  - P2: opened values;
  - P3: one evaluator;
  - P4: one result;
- - P5: properties;
  - P6: one CLI;
  - P7: declared inputs;
  - P8: facts;
@@ -33,6 +32,13 @@ failure message carries its fix.
  the record), never dropped with `pass`, `continue` or a default. A guard never fails open: a handler that skips what it
  can't read, or puts a default where a value was, shrinks the evidence a verdict is decided on and leaves no trace of it.
  `tests/lint/test_repo_silent_excepts.py` holds every other area to the same rule (below).
+- **Decimal reads** (`test_isdecimal.py`, no allowlist): in `verity_vllm/`, a string is asked whether it is a number
+ with `str.isdecimal`, never with `str.isdigit` or `str.isnumeric`. `int` reads the decimal digits and no other digit
+ (`"²".isdigit()` is true, and `int("²")` raises), so a line that asks `isdigit` and then calls `int` raises `int`'s
+ bare `ValueError` where it has an answer of its own for "no number", and a line that calls no `int` takes `²` for a
+ number. `bytes` has no `isdecimal`: a place that reads bytes asks their latin-1 text
+ (`b.decode("latin-1").isdecimal()`), which answers as `b.isdigit()` does. `tests/test_decimal_reads.py` holds one case
+ for each kind of place: one that refuses by name, one that answers None, one that sorts, one that reads bytes.
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
 - **vLLM's surface** (`test_vllm_surface.py`, list `vllm_surface.py`): every vLLM module the library imports whole, and
@@ -55,6 +61,10 @@ failure message carries its fix.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
  the same change. An entry allowing more than is found fails as stale: delete it or lower its count. So an allowlist
  only shrinks, and every failure prints the exact entry lines.
+- **What the lints keep** (`conftest.py`, held by `test_caches.py`): the rules share one parsed tree of each library
+ file, in `functools` caches of this directory's modules. They are emptied when a test process leaves this directory, so
+ a process that goes on to other tests does not hold the parsed library, which its cyclic collector would walk in every
+ full collection. `conftest.py` finds a cache where a module names it at its top level: cache a top-level function.
 
 **The rule on every change: no growth.** No PR adds a ratchet
 exception or raises a recorded count: against the commit below it (in a candidate, its `Queue: #N` merge against the merge
@@ -75,16 +85,16 @@ the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `t
 tracked file outside this lint's own), except that it counts findings per (file, rule), an entry
 `{"file", "rule", "count"}` pooled by rule, and a count above what a tree finds doesn't fail: its list may hold the findings of
 queued PRs that a tree doesn't have yet, and `python3 tests/lint/test_repo_ruff.py --prune` lowers what a tree no
-longer finds. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
+longer finds. Exempt are reverts and pure moves that `tools/check/move_check.py` certifies. A feature
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `adapters/vllm/tools/ratchet_gate.py` holds the
-rule off the merge gate (`tools/verity/check/policy.toml`'s `off_gate`): it is the check's `ratchet-gate` step, which each
+rule off the merge gate (`tools/check/policy.toml`'s `off_gate`): it is the check's `ratchet-gate` step, which each
 candidate's check runs as the step's base has it, judging each `Queue: #N` merge above that base against the one below. It
 fails a merge that grows a ratchet (naming the entries it added) or on whose tree the base's lints find what its lists don't
 cover (naming each violation). Before a PR's candidate, only the ready mark's preflight runs it, on the PR's merge within the
 preflight's budget, and prints what it fails as a warning without refusing the mark (`PREFLIGHT_RATCHET` in
 `tools/research/src/research/queue.py`): the gate tells a new violation by its text, so a moved line, or a cycle through a
 module the PR adds, can read as new. Its red never holds `main`
-(`tools/verity/check/drive.toml`'s `warn_steps`): the verified queue rings the owner of each merge it fails, who fixes it
+(`tools/check/drive.toml`'s `warn_steps`): the verified queue rings the owner of each merge it fails, who fixes it
 forward in their next PR.
 It lints the PR's own Python too: ruff, under its base's root `ruff.toml`, on each `*.py` file the PR adds or modifies
 outside this lint's files, before and after, and a PR whose (file, rule) count grows fails, naming each new finding
@@ -137,3 +147,21 @@ To retire an entry, fix what it allows and delete it: its rule's stale-entry che
 `test_no_new*` tests are the ones the gate runs, under the Python that runs it (with the pinned ruff, for the ruff lint), so
 `test_ratchet.py` holds every lint to having one that takes no fixture, to a `NAME` that is a string literal, and to
 importing only the standard library and this directory.
+
+**What other code reads from these tests.** A test imports five modules of this directory, of `tests/regression/` and of
+`tests/` itself from outside that directory. Three name what they offer in `__all__`: `tests.fake_vllm` (`install`,
+`FakeVllm`, `Module`, `Unset`: vLLM stood in for a test), `tests.regression.store_io` (`fetch`, `reachable`,
+`StoreUnavailable`: a fixture read from the evidence store, which `verity/circuits/evaluate`'s difftest loads by path too)
+and `tests.regression.checks.attempt_provenance` (`DEFAULT_QUERY`). Two are this directory's: `_imports`, for `core` and
+`core_less_definitions` (which modules of `verity` are core), which `conftest.py`'s guard and the four boundary tests of
+`tests/program/` read, and `vllm_surface`, for `SURFACE` (what the library imports from vLLM), which the stand-in is
+built from and `tests/test_fake_vllm.py` imports entry by entry. `core` answers from a table of prefixes, and
+`test_core_modules.py` warns on a row that names no package or module of the tree. Two files run as
+commands: `python -m tests.regression.rebaseline run`, from `verity_vllm/ops/epoch_row.sh`, and
+`tests/lint/merge_allowlist.py`, git's merge driver for the lists (`.gitattributes`).
+The check runs `tests/regression` by its marks: the T0 tier in `check`, and the checks marked `rebuild` once per landing
+(`tools/check/post_train.py`). Read by path: from each lint the gate reads `NAME`, its `test_no_new*` tests and its
+list, and for P9 `_imports.LAYER` and `test_p09_layering.PACKAGE_OF`; the public export rewrites each lint's list,
+`tests/census_roots.txt` and `tests/dead_code_keep.json` (`tools/check/public_export.py`); and
+`benchmarks/census/workloads.json` names files of `tests/regression/expected/`. A change to one of these names, commands
+or formats changes its reader in the same PR.

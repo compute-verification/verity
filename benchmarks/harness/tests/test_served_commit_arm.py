@@ -175,15 +175,17 @@ def test_ready_gives_the_committer_the_private_engines_fields_from_llms_public_n
     arm = _ready(monkeypatch, llm)
     com = arm.committer
     assert (com.engine.llm, com.engine.runner, com.engine.model) == (vllm, runner, runner.model)
+    assert com.engine.vllm_config is vllm.llm_engine.vllm_config
     assert arm.source.noted is runner.model and arm.source.attached is com
-    private = SimpleNamespace(llm=vllm, cp={"repo": repo, "revision": revision, "local_path": "/hf/snapshots/4e20de3624"})
+    private = SimpleNamespace(llm=vllm, vllm_config=vllm.llm_engine.vllm_config,
+                              cp={"repo": repo, "revision": revision, "local_path": "/hf/snapshots/4e20de3624"})
     assert _geo_digest(com.engine) == _geo_digest(private)
     assert com.envelope == {"batch": 8, "max_prompt": 2048, "max_new": 1, "max_num_batched_tokens": 2048, "max_model_len": 4096}
     assert arm.windows == {"windows": {"envelope": com.envelope}} and com.kw["commit_scheme"] == "rows-sha512"
 
 
 def test_a_local_checkpoint_commits_under_vllms_model_path_without_the_private_engine(monkeypatch):
-    from verity_bench.vllm.runner import _DirectLLM
+    from verity_bench.vllm.engine import _DirectLLM
 
     runner = _Runner()
     direct = _DirectLLM(_vllm(runner), {})
@@ -206,7 +208,7 @@ def _prof_module(monkeypatch) -> tuple[ModuleType, list[str]]:
 
 
 def test_the_stock_profiling_arm_ranges_the_runner_of_a_local_checkpoint_without_the_private_engine(monkeypatch):
-    from verity_bench.vllm.runner import _DirectLLM
+    from verity_bench.vllm.engine import _DirectLLM
 
     prof, ranges = _prof_module(monkeypatch)
     runner = _Runner()

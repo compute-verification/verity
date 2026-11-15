@@ -70,7 +70,7 @@ namespace Flock.Bridge
 open Claims Claims.Sampling
 open FlockSoundness.Refine FlockSoundness.Binding
 open FlockSoundness.Discharge.Layout (BitVal RowShaped)
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 
 /-! ## The data at a leaf map -/
 
@@ -89,7 +89,12 @@ theorem saltOf_dataOfL (hy : y.length = saltLen) (i : ℕ) (x : Bool) : saltOf �
 
 theorem pathOf_dataOfL (hy : y.length = saltLen) (hs : ∀ z ∈ s, z.size = 64) (i : ℕ) (x : Bool) :
     pathOf s.length ⟨i, x, dataOfL y s k b⟩ = SamplingDeploy.pathMsg s := by
-  simp only [pathOf, dataOfL, List.append_assoc]
+  have hl : saltLen ≤ (dataOfL y s k b).length := by
+    simp only [dataOfL, List.length_append, hy]
+    omega
+  show (if saltLen ≤ (dataOfL y s k b).length then ((dataOfL y s k b).drop saltLen).take (64 * s.length) else [0]) = _
+  rw [ite_eq_left hl]
+  simp only [dataOfL, List.append_assoc]
   rw [List.drop_left' hy]
   exact List.take_left' (by rw [SamplingDeploy.pathMsg_length s hs])
 
@@ -335,7 +340,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.ZkReg (rsZHJS rsZHJS_computes)
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
+  {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Discharge.Layout.scopeOkH c = true)
   (hU : Built c.unit) {pub : Flock.Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 

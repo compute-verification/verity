@@ -58,11 +58,19 @@ def test_the_commit_takes_the_planned_facts_as_they_were_derived(planned):
     assert OC.promote_handed_down(copy.deepcopy(man), got)["rows"] >= 1, "the synthetic step hands model/out down to the fused norm"
 
 
+def _another_program(a: types.SimpleNamespace) -> None:
+    a.program_digest = "q" * 64
+
+
+def _programs_under_a_root(a: types.SimpleNamespace) -> None:
+    a.programs_root, a.program_dir = a.program_dir, None
+
+
 @pytest.mark.parametrize("perturb, field", [
     (lambda a: Path(a.required_manifest).write_text(Path(a.required_manifest).read_text() + " "), "required_manifest_sha256"),
     (lambda a: Path(a.workload).write_text(Path(a.workload).read_text().replace('"max_tokens": 2', '"max_tokens": 3')), "workload_sha256"),
-    (lambda a: setattr(a, "program_digest", "q" * 64), "program_digest"),
-    (lambda a: (setattr(a, "programs_root", a.program_dir), setattr(a, "program_dir", None)), "program_dir"),
+    (_another_program, "program_digest"),
+    (_programs_under_a_root, "program_dir"),
 ])
 def test_a_plan_keyed_otherwise_is_recomputed_by_the_commit_with_the_reason(planned, perturb, field):
     """A plan whose inputs are not the Commit's (another manifest, workload, Program, or the Programs read another way) is never used:
@@ -127,7 +135,12 @@ def test_the_plan_stage_plans_the_inputs_the_commit_stage_passes(tmp_path, monke
     r.I, r.O, r.config_run = 256, 32, True
     _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
     wor: list[str] = []
-    monkeypatch.setattr(r, "weights_of_record", lambda stage="commit": wor.append(stage) or ["--weights-of-record", "w.json"])
+
+    def weights_of_record(stage: str = "commit") -> list[str]:
+        wor.append(stage)
+        return ["--weights-of-record", "w.json"]
+
+    monkeypatch.setattr(r, "weights_of_record", weights_of_record)
     ran: dict[str, list[str]] = {}
 
     def run_tl(stage, to, log, cmd, *extra):
@@ -181,6 +194,27 @@ def test_a_failed_plan_that_is_not_required_leaves_no_plan_and_does_not_stop(tmp
     monkeypatch.setattr(r, "run_tl", run_tl)
     RP.plan(r, required=False)
     assert not Path(RP.path(r)).exists() and "plan FAIL" in (Path(r.d) / "stages.txt").read_text()
+
+
+@pytest.mark.parametrize(("manifest", "why"), [(False, "no manifest of record"), (True, "no Build Programs (instances.json.gz)")])
+def test_a_plan_with_nothing_to_plan_passes_says_what_it_lacks_and_starts_nothing(tmp_path, monkeypatch, manifest, why):
+    """Without a manifest of record, or without the Build's Programs, a Commit takes nothing from a plan: the stage passes with the
+    one it lacks named, leaves no plan of an earlier attempt and starts no process."""
+    r, built = _row_with_build(tmp_path, monkeypatch)
+    (Path(r.d) / "build_request" / "instances.json.gz").unlink()
+    if manifest:
+        _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
+    Path(RP.path(r)).parent.mkdir(parents=True)
+    Path(RP.path(r)).write_text("{}")
+    started: list[str] = []
+    monkeypatch.setattr(r, "weights_of_record", lambda stage="commit": started.append(f"weights of record at {stage}"))
+    monkeypatch.setattr(r, "run_tl", lambda stage, to, log, cmd, *extra: started.append(stage))
+    RP.plan(r)
+    assert started == [] and built == [] and not Path(RP.path(r)).exists()
+    stages = (Path(r.d) / "stages.txt").read_text().splitlines()
+    assert len(stages) == 1 and stages[0].startswith("plan PASS ") and stages[0].endswith(f" nothing to plan: {why}")
+    end = json.loads((Path(r.d) / "timeline.jsonl").read_text().splitlines()[-1])
+    assert (end["stage"], end["ev"], end["ok"], end["planned"]) == ("stage.plan", "end", "PASS", False)
 
 
 @pytest.mark.parametrize("stages, config_run, planned", [("build", True, [False]), ("build,plan", True, [True]), ("build,commit", True, []),

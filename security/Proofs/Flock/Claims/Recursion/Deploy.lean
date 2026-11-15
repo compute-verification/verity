@@ -3,6 +3,7 @@ module
 public import Mathlib.Data.UInt
 public import Proofs.Flock.Claims.Complete.Zk.Coins
 public import Proofs.Flock.Claims.Recursion.DeployOuter
+public import Proofs.Flock.Claims.KOf
 public import Proofs.Flock.Claims.Recursion.Scope
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -40,7 +41,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The compiled verifier in public-coin form (`RecDeploy.V`) and its record (`deployRec`)
 
-The shipped recursive verifier is the inner session, then `flock-verify verify --zk` once per V* part with that part's
+The shipped recursive verifier is the inner session, then `verity-verify-proof verify --zk` once per V* part with that part's
 recursive inputs (`--rec-inner`, `--rec-part J`, `--rec-bindings`, the inner statement's files, the inner session's
 record and the challenger's live-coin part's transcript). `RecDeploy.V` is that as one `Claims.Verifier` over Flock's live coins
 (`FlockDeploy.Coin`):
@@ -72,7 +73,7 @@ record and the challenger's live-coin part's transcript). `RecDeploy.V` is that 
   prover's, and so are V*'s shared rows (`--rec-rows`: `acc0`, `rec-top-L<l>` and `rec-c<k>`, registrations of the
   prover's values), one set for every part. So the prover sends them, after the inner rounds and before any V*
   session, as the staging round's message (`encStage`); the challenger's live-coin part's transcript of the inner rounds is the
-  verifier's own (`Brings.tr`). The deployed composer (`flock-verify rec-compose`) accepts only where every part was
+  verifier's own (`Brings.tr`). The deployed composer (`verity-verify-proof rec-compose`) accepts only where every part was
   checked against one staged rows file and one set of every other input the parts share, each part at its own index
   (`ComposeParts.composed_parts`: each part is then `partRaw`'s form, up to a SHA-512 collision). That the parts'
   sessions are one run of `V` is the open condition C10 `OneRun` (`ComposeParts`), which needs the service's
@@ -87,7 +88,7 @@ record and the challenger's live-coin part's transcript). `RecDeploy.V` is that 
 `next_rej`, `next_coin` and `next_sess` are the steps; `next_decide_sha512` is the acceptance theorem: at a session's
 decision, the compiled verifier accepts the session exactly when it is the session's last round and the deployed
 `Zk.verify` at the part's recursive setup accepts the record and proof files with the custody checks
-(`FlockDeploy.checks`) and the verdict's last refusals (`fullDrawO`: `RecSetup.fullDraw`, `RecSetup.innerDrawn`), the part's statement
+(`FlockDeploy.checks`) and the verdict's last refusals (`fullSampleO`: `RecSetup.fullSample`, `RecSetup.innerSampled`), the part's statement
 being the one the prover staged (`ract_sess`). `next_acc`: the whole run
 accepts only at the last session's last round, where the outer verifier accepts.
 
@@ -194,35 +195,35 @@ structure XR where
   shape : RecVStar.Inner
   dims : RecVStar.Inner
 
-/-- The sample `FlockDeploy.drawOfJ` reads off a record whose `unit_draw` is `u`, rebuilt (`Flock.norm`), or none where it
+/-- The sample `FlockDeploy.sampleOfJ` reads off a record whose `unit_draw` is `u`, rebuilt (`Flock.norm`), or none where it
 is absent or `null`. -/
-def drawOfU : Option Json → Option Json
+def sampleOfU : Option Json → Option Json
   | some .null => none
   | some d => some (Flock.norm d)
   | none => none
 
-/-- **The session's sample is the statement's at one table**: at one table the setup reads the session's `unitDraw` back
+/-- **The session's sample is the statement's at one table**: at one table the setup reads the session's `unitSample` back
 from the public file's header, so this is where the two can differ; at several tables the setup sets it to the sample. -/
-def drawTiedB (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt) : Bool :=
-  sts.size != 1 || FlockDeploy.drawEq (drawOfU spec.unitDraw) s.read.draw
+def sampleTiedB (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt) : Bool :=
+  sts.size != 1 || FlockDeploy.sampleEq (sampleOfU spec.unitSample) s.read.draw
 
-theorem drawTiedB_iff {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} :
-    drawTiedB s spec sts = true ↔ (sts.size = 1 → FlockDeploy.drawEq (drawOfU spec.unitDraw) s.read.draw = true) := by
-  unfold drawTiedB
+theorem sampleTiedB_iff {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} :
+    sampleTiedB s spec sts = true ↔ (sts.size = 1 → FlockDeploy.sampleEq (sampleOfU spec.unitSample) s.read.draw = true) := by
+  unfold sampleTiedB
   by_cases h : sts.size = 1 <;> simp [h]
 
 /-- **Flock's own checks on the inner statement**: Flock's plain verifier sets it up (`FlockDeploy.setupOf false`), its
 statement check passes (`Readable.Read.check`, `ProvedScope.check`), it carries a sample, the inner session's record's
 (`Raw.draw`): the recursion's inner session is sampled, and the compiled verifier refuses a session over an inner
-session whose record holds none (`RecSetup.innerDrawn`, `noInnerDraw`), and at one table the public file's header
-carries that sample (`drawTiedB`): the deployed verifier refuses a record whose sample is not the session's (`Draw.check`,
+session whose record holds none (`RecSetup.innerSampled`, `noInnerSample`), and at one table the public file's header
+carries that sample (`sampleTiedB`): the deployed verifier refuses a record whose sample is not the session's (`Draw.check`,
 U1, in `Record.check`), and at one table the session's is the header's. -/
 def innerOk (inner : Claims.Msg) : Except String Unit :=
   match FlockDeploy.setupOf false inner with
   | some (s, spec, sts) => do
     s.read.check
-    if s.read.draw.isNone then throw RecSetup.noInnerDraw
-    if !drawTiedB s spec sts then throw "U1: the record's unit draw is not the statement's"
+    if s.read.draw.isNone then throw RecSetup.noInnerSample
+    if !sampleTiedB s spec sts then throw "U1: the record's unit draw is not the statement's"
   | none => .error "rec: Flock's verifier does not set the inner statement up"
 
 /-- A part's circuit, as the setup parses it (`ProvedScope.circuitOf`) at its session's tags. -/
@@ -441,7 +442,7 @@ def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Cla
   registration := r.w.registration
   innerStatement := some r.innerRaw.statement
   innerTables := some r.innerRaw.tables
-  innerDraw := r.innerRaw.draw
+  innerSample := r.innerRaw.draw
   recLinks := r.w.links
   innerProgram := r.innerRaw.program
 
@@ -462,7 +463,12 @@ noncomputable def staged (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg ×
 `N₀`, weight, waits and truncation. No check reads the `--zk` leaf counts, left `0` here; the record's are
 `numsZk`'s. -/
 noncomputable def numsOf (xO : Claims.Msg) : Claims.Recursion.Nums :=
-  ⟨εtableO xO, N₀O xO, weightO xO, VO.k xO, Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, 0, 0⟩
+  ⟨εtableO xO, N₀Oq xO, weightO xO, VO.k xO, Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, 0, 0⟩
+
+theorem numsOf_N₀ (xO : Claims.Msg) : ((numsOf xO).N₀ : ℝ) = N₀O xO := N₀Oq_cast xO
+
+theorem numsOf_k (xO : Claims.Msg) : (numsOf xO).k = ⌈4 * N₀O xO / Real.exp 1⌉₊ := by
+  rw [Claims.Recursion.Nums.k_eq, numsOf_N₀]
 
 open Classical in
 /-- Inner rounds at which part `s`'s staged statement sets up, when there are any. -/
@@ -753,7 +759,7 @@ def outerSlotsO (x : Claims.Msg) : List (ℕ × ℕ) :=
 def rhoSlotsO (x : Claims.Msg) : List ℕ :=
   match setupO x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      match Zk.schedule sts[q / 2]!.m with
+      match Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m with
       | .ok (sch, _) =>
         [FlockComplete.repStartZk spec sts q + FlockComplete.piopRoundsZk spec sts[q / 2]! + (sch.k0 + 2)]
       | .error _ => []
@@ -763,7 +769,7 @@ def rhoSlotsO (x : Claims.Msg) : List ℕ :=
 def betaSlotsO (x : Claims.Msg) : List ℕ :=
   match setupO x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      match Zk.schedule sts[q / 2]!.m with
+      match Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m with
       | .ok (sch, _) =>
         [FlockComplete.repStartZk spec sts q + FlockComplete.piopRoundsZk spec sts[q / 2]! +
           (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 2]
@@ -917,7 +923,7 @@ theorem next_acc (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eval
 
 /-- **The acceptance theorem: at SHA-512 a session's decision is the shipped recursive check's.** Where session `s`'s
 outer verifier decides, the compiled verifier accepts the session (`.acc` at the last session, `.msg []` before it)
-exactly when this is the session's last round and the deployed `flock-verify verify --zk` with part `s`'s recursive
+exactly when this is the session's last round and the deployed `verity-verify-proof verify --zk` with part `s`'s recursive
 inputs, `Zk.verify` at the statement's recursive setup (`actO_decide`, `RecIns.setup`), accepts the record and proof
 files with the custody checks and the verdict's last refusals; else it refuses. The statement is the part's as the prover
 staged it (`ract_sess`). -/
@@ -927,7 +933,7 @@ theorem next_decide_sha512 {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
     (ha : actO xO as' cs' = .decide i spec sts link c₁ mids f) :
     ((next IV st x as cs).eval sha512).1 = (if s + 1 = nS x then .acc else .msg []) ↔
       j + 1 = VO.k xO ∧ Zk.verify spec (tabsOf sts) f.record f.proofs = .ok () ∧
-        checks true i spec xO link c₁ mids f = .ok () ∧ fullDrawO xO f = true := by
+        checks true i spec xO link c₁ mids f = .ok () ∧ fullSampleO xO f = true := by
   rw [next_sess sha512 h]
   simp only
   rcases nextO_decide_out sha512 ha with ho | ho
@@ -935,7 +941,7 @@ theorem next_decide_sha512 {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
     rw [ho]
     by_cases hj : j + 1 = VO.k xO <;> by_cases hl : s + 1 = nS x <;> simp [sessOut, hj, hl, hv]
   · have hv : ¬ (Zk.verify spec (tabsOf sts) f.record f.proofs = .ok () ∧
-        checks true i spec xO link c₁ mids f = .ok () ∧ fullDrawO xO f = true) := fun hv => by
+        checks true i spec xO link c₁ mids f = .ok () ∧ fullSampleO xO f = true) := fun hv => by
       have := (nextO_decide_sha512 ha).2 hv
       rw [ho] at this
       cases this

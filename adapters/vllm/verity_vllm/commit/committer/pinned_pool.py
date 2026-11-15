@@ -11,14 +11,23 @@ from __future__ import annotations
 
 import ctypes
 import errno
+import mmap
 import os
+import sys
 import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from verity_vllm import settings
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
+
 BLOCK_BYTES = 64 << 20
-PINNED_EXACT = os.environ.get("VERITY_PINNED_EXACT", "1") != "0"
+# Off at "0" alone: every other string is on, and none is refused.  The registry's `flag` reads `false`, `no` and `off` as off and
+# raises on a string that is no flag, here at import, so in every module that imports this one.
+PINNED_EXACT = settings.raw("VERITY_PINNED_EXACT") != "0"
 _PAGE = 4096
 # Growing the exact pool is page faulting: every page of a fresh shared mapping is allocated and zeroed when it is first touched, which
 # `cudaHostRegister` does one page at a time on the calling thread.  On the leased node (a VM: first touch also faults on the host) that
@@ -71,8 +80,6 @@ def _populate(ranges: list[tuple[int, int]], threads: int, times: dict[str, floa
 
 def _shared_map(nbytes: int) -> tuple[Any, Any]:
     """A fresh MAP_SHARED|MAP_ANONYMOUS mapping of the page-rounded size and its uint8 view (see `_pinned_block` for why shared)."""
-    import mmap
-
     import torch
 
     mm = mmap.mmap(-1, _page_round(nbytes), flags=mmap.MAP_SHARED | mmap.MAP_ANONYMOUS)
@@ -216,8 +223,6 @@ class PinnedPool:
         self._ready = []
         self._returned.clear()
         self.deferred_unmaps = 0
-        import sys
-
         for o in owners:
             if hasattr(o, "close"):
                 # torch.frombuffer holds ONE reference to the mmap object from the tensor's storage (every view shares it) and no buffer
@@ -230,12 +235,14 @@ class PinnedPool:
                     self.deferred_unmaps += 1
         return n
 
-    def __del__(self) -> None:  # pragma: no cover -- ordering: unregister BEFORE the owners are freed
+    def __del__(self) -> None:
+        """Unregister before the owners are freed.  Nothing can catch what a collection raises, so a release that fails here is logged
+        with its traceback and the blocks stay registered until the process exits."""
         try:
             if self.mode in EXACT_MODES:
                 self.release()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.warning("pinned pool: the release at collection failed; its blocks stay registered", exc_info=True)
 
     def _fresh(self, nbytes: int) -> Any:
         t0 = time.perf_counter()

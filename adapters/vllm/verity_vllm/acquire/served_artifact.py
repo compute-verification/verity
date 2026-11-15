@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.log import write
 
 #: a winner's fields that are not its config (Inductor drops them on load)
 TIMING = ("time_taken_ms",)
@@ -52,7 +53,7 @@ def differences(pinned: dict[str, Any], loaded: dict[str, Any], parts: tuple[str
     """Each kernel or winner whose config `loaded` does not share with `pinned`, by name."""
     out = []
     for part in parts:
-        a, b = pinned.get(part) or {}, loaded.get(part) or {}
+        a, b = (held if held else {} for held in (pinned.get(part), loaded.get(part)))
         for k in sorted(set(a) | set(b)):
             if a.get(k) != b.get(k):
                 out.append(f"{part} {k}: pinned {a.get(k, 'absent')}, loaded {b.get(k, 'absent')}")
@@ -103,9 +104,12 @@ def main(a: SeedOptions | CheckOptions) -> int:
         art = pinned(json.load(f))
     if a.cmd == "seed":
         n = seed(art, a.inductor_dir)
-        print(f"[served-pin] seeded {n} autotune winners of artifact {art['digest'][:16]} -> {a.inductor_dir}")
+        write(f"[served-pin] seeded {n} autotune winners of artifact {art['digest'][:16]} -> {a.inductor_dir}")
         return 0
     diff = differences(art, {"winners": winners(a.inductor_dir)}, ("winners",))
-    print(f"[served-pin] {a.inductor_dir}: winners {'equal to' if not diff else 'not'} artifact {art['digest'][:16]}'s"
+    write(f"[served-pin] {a.inductor_dir}: winners {'equal to' if not diff else 'not'} artifact {art['digest'][:16]}'s"
           + "".join(f"\n  {d}" for d in diff[:20]))
     return 3 if diff else 0
+
+
+__all__ = ["COMMANDS", "PARTS", "artifact_of", "differences", "main", "pinned", "seed", "winners"]

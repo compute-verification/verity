@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import auditor_line as al  # noqa: E402
 import gate_whatif as gw  # noqa: E402
-from verity.protocols.poub.verifier.session import verifier  # noqa: E402
-from verity.protocols.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
 from test_challengers import PINS, analysed, host  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 
@@ -30,7 +30,7 @@ def loop(rtt: int, passes: list[int], *, tau: int = MS // 2, gap: int = MS // 5)
     """The record of a k = 1 session whose every exchange with the challenger is `rtt` ns, half each way, and whose
     passes take `passes`: verifier.json's session, the challenger's release log and the prover's session. chal_0's fetch
     holds the loop until it returns, then chal_1's; at root g the verifier asks openings coin g, and chal_(g+2) behind
-    it, once it has sent window g's boundary, draws for d after the reply and sends the boundary s after that."""
+    it, once it has sent window g's boundary, samples for d after the reply and sends the boundary s after that."""
     n, h = len(passes), rtt // 2
     c0, po, fsync, ps, d, s = 40_000, 30_000, 2 * MS, 20_000, 300_000, 100_000
     R, A, D, C, b = [0] * n, [0] * n, [0] * n, [0] * n, [0] * n
@@ -133,7 +133,7 @@ def test_a_record_of_another_loop_is_refused_by_name(broken):
 
 def test_a_host_runs_replay_at_its_own_round_trip_is_its_line_of_record_and_its_peer_is_the_records(
         host, tmp_path, monkeypatch):
-    """A gate run of one honest paced session whose verifier ran on the auditor host, in the form gate run 7's record
+    """A gate run of one honest paced session whose verifier ran on the auditor device, in the form gate run 7's record
     has: its verifier.json names no challenger peer, the request.json beside out/ does (--challenger-peer
     auditor-host), its own `peer` being the audited node. The line of record `whatif` reads (`auditor_line`'s, as
     auditor_line.py writes it) takes the peer from that record, the session is of record and credited, and its replay

@@ -22,7 +22,7 @@ computes (`Served`).
 Every other unit holds its Definition's function of the window's values:
 - a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
-  prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `SelectCollect_v1` its
+  prompt bound its token and the slot it carries (`io_shell.feed_reference`), each token select's `SelectCollect_v1` its
   second row, the select collected on from the lane's head (`io_shell.collect_reference`), and the last position's
   `SelectEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's group units each group's first maximum above -inf of its logits and its index in the group
@@ -51,25 +51,25 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
-from verity.definitions.numerics.rows import ROWS
-from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
-from verity.definitions.registry import io_shell as IO
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
+from verity_vllm.definitions.numerics.rows import ROWS
+from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
+from verity_vllm.definitions.registry import io_shell as IO
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
 from verity_vllm.check.replay.checks import check_rows
-from verity_vllm.protocols.pouw.h1 import registered as H1R
+from verity.protocols.accounting.pouw.prover.serving import registered_commit, registered_salts
 from verity_vllm.query.manifest import format as RM
 
 from . import scan_state as SS
 from . import window_weights as WW
-from .window_builder import WEIGHTS
-from .window_circuit import Lowered, WindowClass, _spans
+from .window_builder import WEIGHTS, _spans
+from .window_circuit import Lowered, WindowClass
 
 #: a unit's source: its node's served value, the class Program's value at a node the engine didn't compute, or its
 #: Definition's function of the window's values. It follows occupancy and lengths, so it is the committer's own bookkeeping
@@ -156,7 +156,7 @@ class Slot:
     None for an empty slot; ``cut`` the nodes a circuit cut at its linears takes as registered (`Lowered.cut`), whose
     served value is taken under any statics of its Definition and at every prompt position, a pruned one's too
     (`Served`'s ``cut``). Each node's value (its return fields) and source, each
-    position's token and, below the class's prompt cap, the slot its `TokenFeed_v1` reads and the one it carries on."""
+    position's token and, below the class's prompt bound, the slot its `TokenFeed_v1` reads and the one it carries on."""
 
     def __init__(self, fn: Any, cls: WindowClass, row: Sequence[int], weights: Weights, served: Served | None = None,
                  cut: Collection[int] = frozenset()) -> None:
@@ -164,7 +164,7 @@ class Slot:
         self.row = [int(x) & 0xFFFFFFFF for x in row]
         if len(self.row) != cls.prompt + 2:
             raise ValueError(f"a slot's row is (occupancy, prompt length, {cls.prompt} ids), not {len(self.row)} words")
-        if served is not None and served.LP != self.row[1]:
+        if served is not None and self.row[1] != served.LP:
             raise ValueError(f"the served request's {served.LP} prompt ids, its slot row's {self.row[1]}")
         sig = dict(fn.signature()[0])
         self.params = [n for n, _ in fn.signature()[0]]
@@ -191,29 +191,32 @@ class Slot:
         if served is not None and served[0] != descriptor_id(node.fn) and j not in self.cut:
             pin = f"its Definition's value on its operands (served as {served[0]})"
         got = None if served is None else served[1]
-        want = self._evaluate(node, fields, what) if got is None or pin else None
-        if got is not None:
-            if len(got) != len(fields):
-                raise ValueError(f"{what}: served as {len(got)} members, not its {len(fields)} return fields")
-            got = [_cast(a, ty, f"{what}, served") for a, ty in zip(got, fields)]
-            if want is not None and not all(np.array_equal(a, b) for a, b in zip(got, want)):
-                raise ValueError(f"{what}: served as {got[0][:4].tolist()}..., not {pin}")
-        self.values.append(got if got is not None else want)
-        self.source.append(SERVED if got is not None else COMPUTED)
+        if got is None:
+            self.values.append(self._evaluate(node, fields, what))
+            self.source.append(COMPUTED)
+            return
+        want = self._evaluate(node, fields, what) if pin else None
+        if len(got) != len(fields):
+            raise ValueError(f"{what}: served as {len(got)} members, not its {len(fields)} return fields")
+        got = [_cast(a, ty, f"{what}, served") for a, ty in zip(got, fields)]
+        if want is not None and not all(np.array_equal(a, b) for a, b in zip(got, want)):
+            raise ValueError(f"{what}: served as {got[0][:4].tolist()}..., not {pin}")
+        self.values.append(got)
+        self.source.append(SERVED)
 
     def _token(self, p: int, tok: Any) -> None:
-        """Position ``p``'s token (`window_circuit._Program._token`): the first position's its slot row's first id, below the
-        prompt cap `TokenFeed_v1`'s of the slot carried and the previous select, past it the previous select."""
+        """Position ``p``'s token (`window_lowering._Program._token`): the first position's its slot row's first id, below the
+        prompt bound `TokenFeed_v1`'s of the slot carried and the previous select, past it the previous select."""
         NP = self.cls.prompt
-        if p == 0:
-            slot, sel = self.row[1:], None
-        else:
-            sel = int(self.operand(tok)[0])
-            slot = self.carried[-1]
+        sel = None if p == 0 else int(self.operand(tok)[0])
+        slot = self.row[1:] if p == 0 else self.carried[-1]
+        nxt: list[int] | None = None
         if p < NP:
+            assert slot is not None, f"position {p} is one of the {NP} prompt positions, and position {p - 1} carried no slot"
             t, nxt = IO.feed_reference(slot, sel, NP)
         else:
-            t, slot, nxt = sel, None, None
+            assert sel is not None, "position 0 is past the prompt positions, and no select comes before it"
+            t, slot = sel, None
         self.tokens.append(int(t))
         self.slots.append(slot)
         self.carried.append(nxt)
@@ -326,7 +329,7 @@ def _fold_narrowed(ops: dict[tuple[str, tuple[str, ...]], list[Mapping[str, Any]
     -> the ops folded into. A narrowed op with no such op beside it stays, for the prefill's check to name."""
     out = []
     for o in [o for o in ops if o[1] and all(_NARROWED.fullmatch(m) for m in o[1])]:
-        w = (o[0], tuple(_NARROWED.fullmatch(m)[1] for m in o[1]))
+        w = (o[0], tuple(x[1] for x in map(_NARROWED.fullmatch, o[1]) if x))
         if len(ops.get(w, ())) != 1:
             continue
         rows, end = sorted(ops.pop(o), key=lambda d: int(d["row"])), ops[w][0]
@@ -445,7 +448,7 @@ class Served:
             raise ValueError(f"position {p}'s node {k} is {descriptor_id(node.fn)}, served as {d['spec']} ({d['op_path']})")
         members = list(d["members"])
         if len(members) > 1:
-            if not all(str(m[0]).isdigit() for m in members):
+            if not all(str(m[0]).isdecimal() for m in members):
                 raise ValueError(f"{d['op_path']}: members {[m[0] for m in members]}, not its return fields by index")
             members.sort(key=lambda m: int(m[0]))
         step, op = int(d["step"]), str(d["op_path"])
@@ -551,8 +554,10 @@ class Rows:
                 ins["salt"][r.unit] = _be_words(table.salts[t])
                 ins["path"][r.unit] = _be_words(table.path(t))
             if feed is not None:
-                self._put(*feed, "o0", _i32([t]), EVALUATED)
-                self._put(*feed, "o1", _i32(S.carried[p]), EVALUATED)
+                (tid, unit), nxt = feed, S.carried[p]
+                assert nxt is not None, f"{P.name}: position {p} has a token feed unit, and its slot carries nothing on"
+                self._put(tid, unit, "o0", _i32([t]), EVALUATED)
+                self._put(tid, unit, "o1", _i32(nxt), EVALUATED)
         picks = []
         for j, (groups, x0) in P.selects.items():
             logits = S.operand(nodes[j].args[0])
@@ -567,7 +572,8 @@ class Rows:
                 lo += C
             if lo != len(logits):
                 raise ValueError(f"node {j}: group units of {lo} logits, not its {len(logits)}")
-            self._put(*x0, "o0", logits[:1].astype(np.uint16).reshape(1, 1), EVALUATED)
+            xt, xu = x0
+            self._put(xt, xu, "o0", logits[:1].astype(np.uint16).reshape(1, 1), EVALUATED)
             picks.append(int(S.values[j][0][0]))
         self._scan(P, S, picks)
         for j, (plan, calls) in P.heads.items():
@@ -591,10 +597,12 @@ class Rows:
         for p, tok in enumerate(picks):
             a = IO.collect_reference(a, tok, KO, p == 0)
             if p < len(P.collects):
-                self._put(*P.collects[p], "o1", _i32(a), EVALUATED)
+                ct, cu = P.collects[p]
+                self._put(ct, cu, "o1", _i32(a), EVALUATED)
         e = P.entry.bindings
         entry = IO.entry_reference(S.row[0], a, KO, e["IDB"], e["NP"], e["STOP"])
-        self._put(*P.entry_unit, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
+        et, eu = P.entry_unit
+        self._put(et, eu, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
 
     def _heads(self, node: Any, plan: Any, calls: Sequence[tuple[str, int]], S: Slot) -> None:
         """An attention cut by key block: every Call but its last (whose output is the node's) its Definition on the node's
@@ -639,8 +647,8 @@ class Rows:
         an output row ties (`interface.Read`), its unit's output row, or a read of an input row a node's value gives (a cut
         linear's y, which the window commits by reference from this value), and every other row ``empty`` (a row's words).
         Refused where a read of ``param`` fills another input or reads past its rows, or two units make one row two ways."""
-        empty = np.asarray(empty, dtype=np.uint16)
-        out, made = np.tile(empty, (rows, 1)), np.zeros(rows, dtype=bool)
+        blank = np.asarray(empty, dtype=np.uint16)
+        out, made = np.tile(blank, (rows, 1)), np.zeros(rows, dtype=bool)
         for r in self.circuit.registered.reads if self.circuit.registered else ():
             if r.param != param:
                 continue
@@ -654,8 +662,8 @@ class Rows:
                                  "an input row a node's value gives")
             leaf = r.source(np.arange(r.units))
             at, got = leaf // len(empty), have[r.at:r.at + r.units]
-            if (leaf % len(empty)).any() or (at >= rows).any():
-                raise ValueError(f"{r.reader} {r.port} reads {param!r} off its {rows} rows of {len(empty)} words")
+            if (leaf % len(blank)).any() or (at >= rows).any():
+                raise ValueError(f"{r.reader} {r.port} reads {param!r} off its {rows} rows of {len(blank)} words")
             fresh = ~made[at]
             out[at[fresh]], made[at] = got[fresh], True
             if not np.array_equal(out[at], got):
@@ -712,7 +720,7 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], k
         raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {IS.state_bits(cls.scan)} "
                          f"bits, not {bits.shape}")
     words = (bits.reshape(cls.buckets, -1, 16) << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
-    return H1R.commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
+    return registered_commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
 
 
 def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], key: bytes, index: int, *,
@@ -735,7 +743,7 @@ def index_salt(key: bytes, index: int) -> bytes:
     takes, so the committer samples it again from its key alone."""
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
-    return H1R.salts(key, INDEX_NONCE + index, 1)
+    return registered_salts(key, INDEX_NONCE + index, 1)
 
 
 __all__ = ["COMPUTED", "EVALUATED", "FORMS", "INDEX_NONCE", "Rows", "SERVED", "SOURCES", "STATE_NONCE", "Served",

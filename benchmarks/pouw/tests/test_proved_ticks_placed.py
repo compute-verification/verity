@@ -11,8 +11,8 @@ from datacenter import (FLEET_CLOSED, Assumption, Cadence, Computed, Credit, Dat
                         Plan, Zone, account, ands, crossings, names, place, register)
 from datacenter.logical import census_of
 from datacenter.models import s8_grid
-from verity.protocols.pouw.prover.circuit import compile as pouw
-from verity.protocols.pouw.prover.circuit import h1tile
+from verity.protocols.accounting.pouw.prover.circuit import compile as pouw
+from verity.protocols.accounting.pouw.prover.circuit import h1tile
 
 EPOCH = Interval(0, 16)
 HBM, RESIDUAL = 6.4e10, 8e6

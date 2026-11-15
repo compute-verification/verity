@@ -1,5 +1,5 @@
 """Every table a primitive reads by index is declared (`PrimitiveDefinition.tables`): the guard
-(`verity.definitions.circuits.operations.program_data`) sees a table only through its primitive's declaration, so an undeclared one passes it.
+(`verity.circuits.operations.program_data`) sees a table only through its primitive's declaration, so an undeclared one passes it.
 
 A primitive reads a table when its evaluator reaches an indexable constant (one it closes over, or a global or module
 attribute of the code it calls) or a memoized loader that returns anything but a word, or when Flock's lowering of it reads
@@ -25,12 +25,12 @@ from circuit_check import sidecars as SC
 from circuit_check import targets as TG
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.types import Array
-from verity.definitions.ops.prims import F32
+from verity.circuits.ops.prims import F32
 from verity_flock import fp as FP
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
-from verity.definitions.registry import lifted as L
-from verity.definitions import registry as R
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions import registry as R
 
 #: the fewest entries an indexable constant has to be a table
 MIN_ENTRIES = 16
@@ -104,6 +104,7 @@ def _loaded(p: PrimitiveDefinition, loaders: list) -> set[tuple[int, str | None]
         return set()
     assert not any(isinstance(t, Array) for _n, t in p.params), f"{p.id}: an array parameter (WORDS covers words only)"
     reads: set[tuple[int, str | None]] = set()
+    refused: list[Exception] = []
 
     def recorder(w):
         def call(*a, **k):
@@ -130,8 +131,9 @@ def _loaded(p: PrimitiveDefinition, loaders: list) -> set[tuple[int, str | None]
         for ws in itertools.product(WORDS, repeat=len(masks)):
             try:
                 p.evaluate(*(x & m for x, m in zip(ws, masks)))
-            except Exception:  # noqa: BLE001  (an input it refuses still shows what it read)
-                pass
+            except Exception as e:  # noqa: BLE001  (an input it refuses still shows what it read)
+                refused.append(e)
+    assert len(refused) < len(WORDS) ** len(masks), f"{p.id} refuses every word of WORDS: {refused[0]!r}"
     return reads
 
 

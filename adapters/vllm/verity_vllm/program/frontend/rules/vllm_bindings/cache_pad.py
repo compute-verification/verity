@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Value
-from verity_vllm.program.frontend.derive import refuse
-from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import dtype_is, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16
 
+from verity_torch.frontend.derive import refuse
+from verity_torch.frontend.rules.base import RuleInfo, StateRule
+from verity_torch.frontend.rules.common import dtype_is, known, shape
+from verity_torch.frontend.rules.bindings.operands import BF16
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
 # -- the padded engine's step-boundary cache clear over implicit KV state ----------------------------------------------------
 
@@ -30,17 +30,16 @@ class CachePadRule(StateRule):
                     evidence_domain="structural; numerics: SelectBf16_v1 (exact-model-tested) per K/V word")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.vllm_iface import targets_for
         return targets_for("unified_cache_pad")
 
     def applies(self, node, ctx):
         live, zero, slot = node.args[:3]
-        from verity_vllm.program.frontend.rules.padding import _bit_value, _static_bit
+        from verity_torch.frontend.rules.padding import _bit_value, _static_bit
         if _bit_value(ctx, live) is None and _static_bit(ctx, live) is None:
             return "live is neither a bool value collection nor a statically known bool tensor"
         if not isinstance(zero, torch.fx.Node) or not isinstance(ctx.val(zero), Coll) or not dtype_is(ctx, zero, BF16):
             return "zero is not a bf16 value collection"
-        if int(torch.Size(shape(ctx, zero)).numel()) != 1:
+        if int(torch.Size(known(shape(ctx, zero))).numel()) != 1:
             return f"zero has {shape(ctx, zero)} elements, not one"
         if not isinstance(slot, int):
             return "slot is not static"
@@ -50,13 +49,16 @@ class CachePadRule(StateRule):
         return True
 
     def emit(self, node, ctx):
-        from verity_vllm.program.frontend.rules.padding import _materialize_bits, _scalar_of
+        from verity_torch.frontend.rules.padding import (
+            _materialize_bits,
+            _scalar_of,
+        )
         live, zero, slot = node.args[:3]
         mp = ctx.module_path(node)
         hist = ctx.state["kv_history"]
         owner = ctx.state.get("kv_owner", {})
         c = _materialize_bits(ctx, live, self, node)
-        cflat = c.reshape(Array(int(torch.Size(shape(ctx, live)).numel()), Value(1)))
+        cflat = c.reshape(Array(int(torch.Size(known(shape(ctx, live))).numel()), Value(1)))
         if cflat.type.n != 1:
             refuse("shape", node, mp, f"live has {cflat.type.n} elements; the step's cache clear is keyed on one bit")
         zc = ctx.coll(zero)

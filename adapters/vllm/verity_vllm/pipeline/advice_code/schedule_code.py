@@ -25,7 +25,6 @@ from verity_vllm.pipeline.advice_code import codec as V
 from verity_vllm.pipeline.advice_code import kept as KP
 from verity_vllm.pipeline.advice_code import replay as R
 from verity_vllm.pipeline.advice_code import schedule as S
-from verity_vllm.pipeline.advice_code import window_code as CV
 from verity_vllm.pipeline.advice_code.codec import AdviceCodeError, Record, Registered
 
 __all__ = ["decode", "encode", "Schedule"]
@@ -47,8 +46,9 @@ def _schedule(record: Record, order: list[int], rp: R.Replay, kept: list[tuple[i
 
 
 def encode(schedule: Schedule, record: Record, reg: Registered, *, check: bool = True) -> bytes:
-    """The schedule's v1 string under the record; refuses a schedule v1 can't carry: one that isn't the replay's
-    under its arrival order and kept counts. `check` decodes the string back and holds it to the schedule."""
+    """The schedule's v1 string under the record; refuses a schedule v1 can't carry (one that isn't the replay's
+    under its arrival order and kept counts) and a string over ℓ, which no reader reads (`codec.Registered.packed`).
+    `check` decodes the string back and holds it to the schedule."""
     def run() -> bytes:
         if type(schedule) is not Schedule:
             raise AdviceCodeError(f"v1 encodes a Schedule here, not a {type(schedule).__name__}")
@@ -78,7 +78,7 @@ def encode(schedule: Schedule, record: Record, reg: Registered, *, check: bool =
             rp, decisions, looks = V.replay_record(record, reg, engine, order, lambda i, k: k >= first[i], kept)
         wins = V._residual(record, reg, order, rp, decisions, looks, V.windows(record, reg.T), emitted)
         terms = V.kept_terms(record, reg, order, rp, emitted)
-        data = CV.pack(V.string_of(wins, reg, V.length_tails(record, reg), terms)[0])[0]
+        data = reg.packed(*V.string_of(wins, reg, V.length_tails(record, reg), terms))
         if check:
             m = R.compare(rp.steps, theirs)
             if m.first_mismatch is not None:

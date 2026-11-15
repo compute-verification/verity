@@ -2,10 +2,10 @@
 node): the transfer-gate unit is the registered AllReduce2_v1 with a port a rank, its sums bit for bit; each rank's chunk
 c<k> reads both ranks' registered partials of request q's collective k at the token rows, under their owners' salts, and
 they open the roots each
-owner's registration names at the positions the verifier's own reads name; the registration passes the verifier's check with every
-transfer-gate unit proved; each rank's provenance is the verifier's read of both registrations; the negatives (a peer's
+owner's docket names at the positions the verifier's own reads name; the docket passes the verifier's check with every
+transfer-gate unit proved; each rank's provenance is the verifier's read of both dockets; the negatives (a peer's
 partial under another root, the rank's own as its peer's, another request's as its peer's, a partial under another TP
-run's domain, the other rank's registration, ports built before the peer registered, and each way of moving a bit through
+run's domain, the other rank's docket, ports built before the peer registered, and each way of moving a bit through
 the received partial) are refused by name; and each refused run's window changes only rank 1's received port of q0c0."""
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ import pytest
 
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
-from verity.protocols.certifier.verifier import warden_rows as WR
-from verity.protocols.spot.verifier.one_stage import draw as D, verifier as V
-from verity.definitions.registry.b1_tp2 import AllReduce2
-from verity.commitments.windows import rows as SR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
+from verity_vllm.definitions.registry.b1_tp2 import AllReduce2
+from verity.commitments.periods import rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -109,7 +109,7 @@ def test_each_chunk_opens_both_ranks_registered_partials_at_the_token_rows(tmp_p
     assert len({b for t in parts.values() for req in t for v in req for b in v.bcs}) == len(AT.RANKS) * Q * K * T
 
 
-def test_the_registration_proves_every_transfer_gate_unit_beside_the_drawn_rest(tmp_path, parts) -> None:
+def test_the_registration_proves_every_transfer_gate_unit_beside_the_sampled_rest(tmp_path, parts) -> None:
     mine, c, regs, _wins = committed(tmp_path, parts)
     for r in AT.RANKS:
         tg, rid = mine[r].members[0].template, mine[r].members[-1].template
@@ -158,7 +158,7 @@ def test_ports_need_every_ranks_registration(tmp_path, parts) -> None:
 @pytest.mark.parametrize("kind", sorted(AT.TRANSFERS))
 def test_a_refused_runs_window_moves_the_bit_through_rank_1s_received_partial_only(tmp_path, parts, kind) -> None:
     """``--altered`` / ``--made-for``'s windows: rank 1's q0c0 ``part0`` (rank 0's embedding partial of request 0, as rank 1
-    received it) made for that read, its sums the rows it read (the circuit holds), the registration's checks passing; only the verifier's
+    received it) made for that read, its sums the rows it read (the circuit holds), the docket's checks passing; only the verifier's
     port refuses it, by `TRANSFERS`' reason, and every other port of both ranks opens."""
     mine, c, regs, wins = committed(tmp_path, parts, altered=kind == "altered", made=None if kind == "altered" else kind)
     for r in AT.RANKS:
@@ -234,7 +234,7 @@ AFRESH = "registered-reads-leaving-a-port-committed-afresh"
 
 
 def test_a5s_bound_port_negatives_bind_one_port_at_another_root_or_leave_it_out(tmp_path, monkeypatch) -> None:
-    """Where a chunk's file binds its other ports to the registration's roots (`registered.bind_ports`), a5's negatives add
+    """Where a chunk's file binds its other ports to the docket's roots (`registered.bind_ports`), a5's negatives add
     its first bound port at another root and that port left out, each with every other port as honest: Lean is to refuse
     the one port the negative changes, by its reason. The port committed afresh keeps the bound ports, and with no
     record declaring it registered its reason is the complete check's."""

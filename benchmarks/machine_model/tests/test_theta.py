@@ -175,7 +175,7 @@ def test_a_ceiling_is_read_from_the_card_file_and_from_nowhere_else(tmp_path):
         assert f"{c['sku']}.toml, rate.tensor: " in t.rates[T.INT8].source
         h, sha = card(data, "host"), t.rates["host.sha512"]
         assert sha.sheet == pytest.approx(h["clock"]["turbo"]["value"] * 1e9 * 8 / 1036, rel=1e-12)
-        assert sha.source.startswith(f"verity/hardware/cards/{h['sku']}.toml, clock.turbo: ")
+        assert sha.source.startswith(f"hardware/cards/{h['sku']}.toml, clock.turbo: ")
     assert card(SM120, "host")["cpu"]["priority_cores"]["value"] == 8 and "(cpu.priority_cores, 8 a socket)" in \
         T.theta(SM120).rates["host.sha512"].what
     shutil.copytree(SM90, tmp_path / "d", ignore=shutil.ignore_patterns("census", "vectors", "designs"))
@@ -191,7 +191,7 @@ def test_a_ceiling_is_read_from_the_card_file_and_from_nowhere_else(tmp_path):
     with pytest.raises(SystemExit, match="h200-sxm-141gb.toml has no entry rate.warp"):
         T.theta(tmp_path / "d")
     p.write_text(text.replace('card = "rate.issue"\n', 'card = "host:rate.amx"\n', 1))
-    assert T.theta(tmp_path / "d").rates["issue"].source.startswith("verity/hardware/cards/xeon-platinum-8468-2s.toml")
+    assert T.theta(tmp_path / "d").rates["issue"].source.startswith("hardware/cards/xeon-platinum-8468-2s.toml")
     p.write_text(text.replace('card = "rate.issue"\n', 'card = "nic:rate.issue"\n', 1))
     with pytest.raises(SystemExit, match="nic:rate.issue names no card"):
         T.theta(tmp_path / "d")

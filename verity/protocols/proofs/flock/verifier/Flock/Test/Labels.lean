@@ -1,0 +1,42 @@
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+/-!
+`RecVStar.checkLabels` on a population of four units: a sampled table's statement must label its instances with the units its
+sample proves, at one table and at two (each table's part of the sample, `tableSample`, as `Stmt.setupTables` builds it).
+-/
+
+@[expose] public section
+
+namespace Flock.Test.Labels
+
+open Lean (Json)
+open Flock.RecVStar
+
+def n (x : Nat) : Json := Lean.toJson x
+
+def subset (units : List Nat) : Json := Json.mkObj [("law", "subset"), ("population", (n 4)), ("k", n units.length),
+  ("units", Json.arr (units.toArray.map n))]
+
+def stmt (labels : List Nat) : Stmt :=
+  { (default : Stmt) with pub := { (default : Public) with
+      header := Json.mkObj [("units", Json.mkObj [("indices", Json.arr (labels.toArray.map n))])] } }
+
+def ok (draw : Option Json) (count : Nat) (labels : List (List Nat)) : Bool :=
+  (checkLabels draw count (labels.toArray.map stmt)).isOk
+
+#guard tableSample (subset [0, 1, 2, 3]) 2 1 == subset [2, 3]
+#guard tableSample (subset [1, 3]) 1 0 == subset [1, 3]
+
+#guard ok (some (subset [1, 3])) 1 [[1, 3]]
+#guard !ok (some (subset [1, 3])) 1 [[0, 1]]
+#guard !ok (some (subset [1, 3])) 1 [[3, 1]]
+#guard !ok (some (subset [1, 3])) 1 [[1]]
+#guard ok (some (subset [0, 1, 2, 3])) 2 [[0, 1], [2, 3]]
+#guard !ok (some (subset [0, 1, 2, 3])) 2 [[0, 1], [0, 1]]
+#guard !ok (some (subset [0, 1, 2, 3])) 2 [[0, 1], [3, 4]]
+#guard ok none 1 [[5, 6]]
+
+end Flock.Test.Labels

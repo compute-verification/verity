@@ -72,7 +72,7 @@ theorem loadPublic_noPorts {c : Circuit} {pi : HmIn.Ports} {f : ByteArray} {pop 
       simp only [pure, Except.pure, throw, throwThe, MonadExceptOf.throw, Except.bind, imp_self, reduceCtorEq,
         false_implies]
 
-theorem drawn_noPorts {c : Circuit} {pi : HmIn.Ports} {pop : Public} {d : Json} (he : pi.ports.isEmpty = true) :
+theorem sampled_noPorts {c : Circuit} {pi : HmIn.Ports} {pop : Public} {d : Json} (he : pi.ports.isEmpty = true) :
     HmIn.drawn c pi pop d = HmOut.drawn c pop d := by
   simp only [HmIn.drawn, HmOut.drawn, he, ↓reduceIte]
 
@@ -108,7 +108,7 @@ theorem setupHidden_spec' (h : Stmt.setupHidden tags cf pf coins tables draw par
       pub := by
         refine ⟨_, this, fun hd => ?_, fun d' hd => ?_⟩
         · first | exact absurd hd (Option.some_ne_none _) | rfl
-        · first | exact absurd hd.symm (Option.some_ne_none _) | (cases hd; rw [← drawn_noPorts he]; assumption)
+        · first | exact absurd hd.symm (Option.some_ne_none _) | (cases hd; rw [← sampled_noPorts he]; assumption)
       checkPublic := by assumption
       n := rfl
       blocksReal := rfl

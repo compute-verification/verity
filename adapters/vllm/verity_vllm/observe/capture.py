@@ -28,12 +28,12 @@ Snapshots (evidence path, `--snapshot-steps`): after every recorded dispatcher c
 step, every non-root tensor argument / output is copied D2H (async, pinned arena, stream-ordered right after the
 call) as the raw bytes of the storage range the view spans; the files are content-addressed (sha256) under
 `values/<step>/` with an index in `snapshots.json`.  Tensors larger than `snapshot_max_bytes` whose one dimension
-equals the KV cache's block count are snapshotted per (leading index, block-in-use) sub-view; other oversize
-tensors are listed in the index as skipped.  `snapshot_max_bytes_op` (optional, lower) is the cap applied at
+equals the KV cache's page count are snapshotted per (leading index, page-in-use) sub-view; other oversize
+tensors are listed in the index as skipped.  `snapshot_max_bytes_op` (optional, lower) is the limit applied at
 dispatcher-call events only: a large buffer produced by a Triton launch is then copied once, at the launch (where the
 Compute's output snapshot is looked up), and not again at every aten view / custom-op call that touches it (the
 pinned copies of one step are the capture's peak host memory; OLMoE's fused-MoE intermediates at a 2048-token
-prefill are 64 MiB x ~23 events x 16 layers).  Skipped entries record which cap applied.
+prefill are 64 MiB x ~23 events x 16 layers).  Skipped entries record which limit applied.
 """
 
 from __future__ import annotations
@@ -41,59 +41,52 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import torch
 
-from verity_vllm.observe.events import (Event, Note, Root, RunEnd, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc,
-                     ViewDesc)
-from verity_vllm.observe.log import LogWriter
-from verity_vllm.observe.observer import EmptyMode, ModuleNamer, Observer, Recorder, reenter_impl_name
-from verity_vllm.observe.storage import StorageAdapter
-from verity_vllm.observe import triton_adapter
-
 from verity_vllm.engine import hooks
 from verity_vllm.engine.build import Engine
-from verity_vllm.observe.pinned import DEVICE_BACKED, IDENTITY_ALIAS_OPS, PinnedArena, device_backed, spanned_bytes, storage_bytes_view
 from verity_vllm.engine.run_facts import model_config_subset, profile_manifest
+from verity_vllm.observe import triton_adapter
+from verity_vllm.observe.capture_types import ObserverConfig, _Step
+from verity_vllm.observe.events import (
+    SCHEMA,
+    Event,
+    Note,
+    Root,
+    RunEnd,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    ViewDesc,
+)
+from verity_vllm.observe.log import LogWriter
+from verity_vllm.observe.observer import (
+    EmptyMode,
+    ModuleNamer,
+    Observer,
+    Recorder,
+    reenter_impl_name,
+)
+from verity_vllm.observe.pinned import (
+    DEVICE_BACKED,
+    IDENTITY_ALIAS_OPS,
+    PinnedArena,
+    device_backed,
+    spanned_bytes,
+    storage_bytes_view,
+)
+from verity_vllm.observe.storage import StorageAdapter
+from verity_vllm.records.schema_ids import CAPTURE_SNAPSHOTS_SCHEMA
 
-
-SCHEMA = "verity-capture/log/v1"
-
-
-@dataclass
-class ObserverConfig:
-    mode: str = "record"                 # "none" (baseline timing only) | "empty" (EmptyMode) | "record"
-    reenter: bool = True
-    triton: bool = True
-    module_hooks: bool = True
-    write_log: bool = True               # False: build every event, discard the buffer at step end (M0 rungs c-f)
-    snapshot_steps: frozenset = frozenset()
-    snapshot_dir: Path | None = None
-    snapshot_max_bytes: int = 32 << 20
-    snapshot_max_bytes_op: int | None = None   # cap at dispatcher-call events (None: snapshot_max_bytes); Triton launches keep the full cap
-    arena_bytes: int = 1 << 30
-
-
-@dataclass
-class _Step:
-    step: int
-    events: list[Event] = field(default_factory=list)
-    forward_s: float = 0.0
-    sample_s: float = 0.0
-    t_wall0: float = 0.0
-    wall_s: float = 0.0
-    facts: dict = field(default_factory=dict)
-    input_ids_view: ViewDesc | None = None
-    positions_view: ViewDesc | None = None
-    sampled_view: ViewDesc | None = None
-    logits_view: ViewDesc | None = None
-    sampled_shape: tuple[int, int] = (0, 0)
-    event: Any = None
-    n_snap: int = 0
+__all__ = ["Capture", "ObserverConfig", "make_header"]
 
 
 class Capture:
@@ -156,7 +149,7 @@ class Capture:
     def install(self) -> None:
         if self.installed:
             return
-        runner, model, cfg = self.runner, self.model, self.cfg
+        model, cfg = self.model, self.cfg
         if self.header is not None:
             self._write(self.header)
         self._install_roots()
@@ -412,7 +405,6 @@ class Capture:
             slot_src = None
             if sm:
                 first = next(iter(sm.values()))
-                st.facts["slot_mapping_distinct"] = len({id(v) for v in sm.values()})
                 st.facts["slot_mapping_layer"] = next(iter(sm.keys()))
                 slot_src = first[:num_tokens]
                 slots = self._pin("slots", num_tokens, first.dtype)
@@ -482,7 +474,7 @@ class Capture:
         # non-snapshot steps: the deferred write happens at the next execute_model; keep the buffer
 
     def _end_timing_only(self, st: _Step) -> None:
-        """M0 rungs (a)/(b): no facts, no events; only the per-step timing."""
+        """The overhead ladder's rungs (a)/(b): no facts, no events; only the per-step timing."""
         st.wall_s = time.perf_counter() - st.t_wall0
         self.step_times.append({"step": st.step, "forward_s": st.forward_s, "sample_s": st.sample_s, "wall_s": st.wall_s,
                                 "num_reqs": len(st.facts.get("sched_req_ids", [])), "events": 0, "snapshots": 0})
@@ -557,7 +549,7 @@ class Capture:
                 tables: dict[str, list[int]] = {rid: [] for rid in req_ids}
                 key = f"block_tables_g{g}"
                 if max(nb_g, default=0) and key in self._pin_cache:
-                    host = self._pin_cache[key][: n * max(nb_g)].view(n, max(nb_g)).tolist()
+                    host: Any = self._pin_cache[key][: n * max(nb_g)].view(n, max(nb_g)).tolist()   # a list here, a tensor for the sampled ids
                     for i in range(n):
                         tables[req_ids[i]] = [int(b) for b in host[i][: nb_g[i]]]
                 skey = f"slots_g{g}"
@@ -610,8 +602,8 @@ class Capture:
         self._write(start)
         for r in roots:
             self._write(r)
-        for l in links:
-            self._write(l)
+        for link in links:
+            self._write(link)
         for ev in st.events:
             self._write(ev)
         for e in pending:
@@ -682,13 +674,13 @@ class Capture:
                 blocks = self._blocks_in_use()
                 lead = [()] if bdim == 0 else [(k,) for k in range(int(t.shape[0]))] if bdim == 1 else None
                 if lead is not None and blocks:
-                    for l in lead:
+                    for leading in lead:
                         for b in blocks:
                             v = t
-                            for k in l:
+                            for k in leading:
                                 v = v.select(0, k)
                             v = v.select(0, b)
-                            self._snap_tensor(eid, path, v, sub={"dim": bdim, "index": list(l) + [b]}, cap=cap)
+                            self._snap_tensor(eid, path, v, sub={"dim": bdim, "index": list(leading) + [b]}, cap=cap)
                     return
             why = f"spanned bytes {nbytes} > snapshot_max_bytes {cap}"
             if cap != full:
@@ -698,7 +690,9 @@ class Capture:
                                      "skipped": why})
             return
         src = storage_bytes_view(t, off, nbytes)
+        assert self._arena is not None
         if self._snap_pending and not self._arena.fits(nbytes):
+            assert self._cur is not None
             self._flush_snapshots(self._cur)
         host = self._arena.take(nbytes)
         host.copy_(src, non_blocking=True)
@@ -711,7 +705,7 @@ class Capture:
             self._cur.n_snap += 1
 
     def _blocks_in_use(self) -> list[int]:
-        """The physical KV blocks of every request scheduled in the current step (read once per snapshot step from the
+        """The KV pages of every request scheduled in the current step (read once per snapshot step from the
         runner's block table, whose staged writes are applied at the start of execute_model; this read synchronises,
         which is allowed in snapshot steps only)."""
         if self._kv_blocks_in_step or self._cur is None:
@@ -720,8 +714,8 @@ class Capture:
             bt = self.runner.block_tables
             rs = self.runner.req_states
             blocks: set[int] = set()
-            # [r8 E-cleanup, hybrid KV cache] the blocks of EVERY KV-cache group: with several groups the physical tensors
-            # are shared and a group-1 layer's rows live in group-1 blocks (group 0 alone left them un-snapshotted)
+            # [r8 E-cleanup, hybrid KV cache] the pages of EVERY KV-cache group: with several groups the physical tensors
+            # are shared and a group-1 layer's rows live in group-1 pages (group 0 alone left them un-snapshotted)
             for g in range(int(bt.num_kv_cache_groups or 1)):
                 for rid in self._cur.facts.get("sched_req_ids", []):
                     ri = rs.req_id_to_index.get(rid)
@@ -738,6 +732,7 @@ class Capture:
 
     def _flush_snapshots(self, st: _Step) -> None:
         """Wait for the step's copies and write them out: at a snapshot step's end, and whenever they fill the pinned arena mid-step."""
+        assert self._arena is not None and self.cfg.snapshot_dir is not None
         t0 = time.perf_counter()
         torch.cuda.synchronize()
         self.timing["sync_s"] += (t1 := time.perf_counter()) - t0
@@ -766,14 +761,14 @@ class Capture:
         self.timing["snapshot_s"] += time.perf_counter() - t1
 
     def _write_snapshot_index(self) -> None:
-        p = Path(self.cfg.snapshot_dir) / "snapshots.json"
-        p.write_text(json.dumps({"schema": "verity-capture/snapshots/v1", "layout": "spanned-storage-bytes",
-                                 "note": "file = raw bytes of the storage range [byte_offset, byte_offset+nbytes) the view spans, "
-                                         "copied D2H stream-ordered right after the call; content-addressed (sha256) so identical "
-                                         "bytes share a file; 'sub' = sub-view (dim, index) of an oversize KV-cache tensor",
-                                 "steps": sorted(self.cfg.snapshot_steps), "total_bytes": self._snap_bytes,
-                                 "snapshot_max_bytes": self.cfg.snapshot_max_bytes, "snapshot_max_bytes_op": self.cfg.snapshot_max_bytes_op,
-                                 "entries": self._snap_index}, separators=(",", ":")))
+        assert self.cfg.snapshot_dir is not None
+        index = {"schema": CAPTURE_SNAPSHOTS_SCHEMA, "layout": "spanned-storage-bytes",
+                 "note": "file = raw bytes of the storage range [byte_offset, byte_offset+nbytes) the view spans, "
+                         "copied D2H stream-ordered right after the call; content-addressed (sha256) so identical "
+                         "bytes share a file; 'sub' = sub-view (dim, index) of an oversize KV-cache tensor",
+                 "steps": sorted(self.cfg.snapshot_steps), "total_bytes": self._snap_bytes, "snapshot_max_bytes": self.cfg.snapshot_max_bytes,
+                 "snapshot_max_bytes_op": self.cfg.snapshot_max_bytes_op, "entries": self._snap_index}
+        (Path(self.cfg.snapshot_dir) / "snapshots.json").write_text(json.dumps(index, separators=(",", ":")))
 
 
 def make_header(engine: Engine, workload: dict, *, adapter_revision: str, wheel_sha256: str | None = None,
@@ -781,10 +776,10 @@ def make_header(engine: Engine, workload: dict, *, adapter_revision: str, wheel_
     manifest, pid, notes = profile_manifest(engine, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256,
                                             vllm_commit=vllm_commit, sampling=workload["sampling"])
     notes["reenter_impls"] = {op: reenter_impl_name(op) for op in ("vllm.unified_attention_with_output", "vllm.unified_kv_cache_update")}
-    notes["phases"] = "forward = inside the model's root forward; other = the runner's input preparation / post-forward work inside " \
-                      "execute_model; sample = runner.sample (lm_head GEMM + sampler)"
-    notes["observer_sync"] = "no observer-issued synchronisation; step facts + sampled ids are copied D2H asynchronously behind a " \
-                             "CUDA event and read at the next step start; torch.cuda.synchronize only at the end of snapshot steps"
+    notes["phases"] = ("forward = inside the model's root forward; other = the runner's input preparation / post-forward work inside "
+                       "execute_model; sample = runner.sample (lm_head GEMM + sampler)")
+    notes["observer_sync"] = ("no observer-issued synchronisation; step facts + sampled ids are copied D2H asynchronously behind a "
+                              "CUDA event and read at the next step start; torch.cuda.synchronize only at the end of snapshot steps")
     if extra_notes:
         notes.update(extra_notes)
     model = {"repo": engine.cp["repo"], "revision": engine.cp["revision"], "local_path": engine.cp.get("local_path"),

@@ -1,4 +1,4 @@
-"""`verity.definitions.circuits.stacking` (property/v1) on small synthetic Programs with their census/v1: an exact int8 Program passes,
+"""`verity.circuits.stacking` (property/v1) on small synthetic Programs with their census/v1: an exact int8 Program passes,
 and a clamping, wrapping, FP-smuggling, reinterpreting, carry-computing, gather-heavy, too wide or input-holding one fails with
 its reason, or has its carries budgeted. The red team's attacks (benchmarks/property_redteam) are
 cases here."""
@@ -14,16 +14,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.definitions.circuits import stacking as P
-from verity.definitions.circuits.census import census
+from verity.circuits import stacking as P
+from verity.circuits.census import census
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, _Widths
-from verity.definitions.ops import fp32, prims, scalar
-from verity.definitions.ops.s8 import S32LowByte
+from verity.circuits.ops import fp32, prims, scalar
+from verity.circuits.ops.s8 import S32LowByte
 from verity.circuits.ports import In, Leaves, Out, Ports
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, Strided, array_of, concat, tuple_of
-from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, s32_value, s32_word
+from verity.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, s32_value, s32_word
 from verity.circuits.types import Array, Tuple as TupleT, Value
 
 S8, S16, S32, BIT = Value(8), Value(16), Value(32), Value(1)
@@ -746,7 +746,7 @@ def test_the_range_rules_hold_on_the_evaluator():
     ranges = [None, (0, 0), (0, 0x42FE0000), (0x3F800000, 0x7F800000), (0x7F800000, 0x7F800000), (P.S32[0], -1),
               (0x7F800001, 0x7FFFFFFF), (-5, 5), (P.S32[0], 0x42FE0000)]
 
-    def draws(r):
+    def samples(r):
         if r is None:
             return [v - (1 << 32) if v >> 31 else v for v in special] + [rng.randrange(*P.S32) for _ in range(40)]
         return [r[0], r[1]] + [s for s in (v - (1 << 32) if v >> 31 else v for v in special) if r[0] <= s <= r[1]] + [
@@ -759,8 +759,8 @@ def test_the_range_rules_hold_on_the_evaluator():
                 out = rule(a, b)
                 if out is None:
                     continue
-                for x in draws(a):
-                    for y in draws(b):
+                for x in samples(a):
+                    for y in samples(b):
                         z = prim.evaluate(x & 0xFFFFFFFF, y & 0xFFFFFFFF)
                         assert out[0] <= s32_value(z) <= out[1], (prim.id, a, b, hex(x), hex(y), hex(z), out)
 

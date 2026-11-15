@@ -1,4 +1,4 @@
-"""`pouw:ncp-v2` beside sampled proofs, end to end on a small model (CPU).
+"""`pouw:ncp-v2` beside SPOT, end to end on a small model (CPU).
 
 A two-request Program, lowered at its PoUW site by the Build's `pouw_circuit.lower`:
 Embedding → RMSNorm → up_proj (the PoUW linear, 64 → 16) → logits → TokenSelect, over a 16-token prefill and one decode
@@ -18,7 +18,7 @@ template by the IR reference, and each sampled Y strip linked to the weight side
   and an A strip that is not the quantized input are each rejected, each committed by a prover that commits and opens its
   wrong values and recomputes its root.
 - Without the delegate the PoUW rows are not evaluable, so the run fails closed.
-- Every other PoUW scheme stays refused beside sampled proofs.
+- Every other PoUW scheme stays refused beside SPOT.
 """
 from __future__ import annotations
 
@@ -29,10 +29,13 @@ import random
 import numpy as np
 import pytest
 import torch
-from verity.protocols.pouw.prover.circuit import anchors as CA
-from verity.protocols.pouw.prover.circuit import plan as CPL
-from verity.protocols.pouw.prover.circuit import reference as CR
-from verity.protocols.pouw.verifier.coins import Challenger
+from verity.protocols.accounting.pouw.prover.circuit import anchors as CA
+from verity.protocols.accounting.pouw.prover.circuit import plan as CPL
+from verity.protocols.accounting.pouw.prover.circuit import reference as CR
+from verity.protocols.accounting.pouw.prover.serving import LayerRows
+from verity.protocols.accounting.pouw.prover.serving import circuit as PC
+from verity.protocols.accounting.pouw.prover.serving import native as PN
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
 
 from verity_vllm import protocols as PO
 from verity_vllm.check.replay import driver as SR
@@ -40,8 +43,6 @@ from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import pouw_circuit as RC
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import circuit as PC
-from verity_vllm.protocols.pouw import native as PN
 from verity_vllm.query.required import Q_MODULE_BODY_ID
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
@@ -80,7 +81,7 @@ def _program(bias: bool | str = False):
         woff[n] = (off, off + c)
         off += c
     wtype = "{" + ", ".join(f"{n}: {t}" for n, _c, t in fields) + "}"
-    rows = []
+    rows: list[dict] = []
 
     def add(spec, name, args):
         rows.append({"i": len(rows), "spec": spec, "form": "call", "name": name, "args": args})
@@ -310,9 +311,9 @@ def test_the_build_lowers_only_the_pouw_site():
 def test_the_rows_native_evaluation_is_the_registered_definition():
     """`NcpLinearRow_v1` (`program.registry.pouw_rows`) evaluated by the IR reference is what the replay computes natively, on rows at
     three scales, a row of subnormals and a zero row."""
-    from verity.circuits.evaluation import evaluate
     from verity.circuits.defs import bind
-    from verity.definitions.registry import pouw_rows
+    from verity.circuits.evaluation import evaluate
+    from verity_vllm.definitions.registry import pouw_rows
     rng = np.random.default_rng(1)
     d = bind(pouw_rows.NcpLinearRow, K=H, N=NU)
     for scale in (1e-3, 1.0, 50.0, 1e-39, 0.0):
@@ -413,8 +414,8 @@ def test_a_wrong_x_strip_is_rejected(world):
 
 
 @pytest.mark.slow
-def test_wrong_tile_words_are_rejected_whatever_the_draw(world):
-    """Word 7 of every tile of the first call, committed and opened wrong: every call draws a tile, at K = 1 too."""
+def test_wrong_tile_words_are_rejected_whatever_the_sample(world):
+    """Word 7 of every tile of the first call, committed and opened wrong: every call samples a tile, at K = 1 too."""
     records, where = RC.tamper_tiles(world.records)
     for k in (None, 1):
         _rep, pw, _issues = _verdict(world, records, _recommitted(world, records), k)
@@ -423,8 +424,8 @@ def test_wrong_tile_words_are_rejected_whatever_the_draw(world):
 
 
 @pytest.mark.slow
-def test_a_smaller_budget_draws_fewer_units_and_names_its_k(world):
-    """At K = 1 each call draws its share of the window's budget, at least one tile (the tile stratum's floor)."""
+def test_a_smaller_budget_samples_fewer_units_and_names_its_k(world):
+    """At K = 1 each call samples its share of the window's budget, at least one tile (the tile stratum's floor)."""
     _rep, pw, _issues = _verdict(world, k=1)
     assert pw["result"] is True and pw["law"] == "work K=1" and pw["proved_by_role"]["tile"] == 2, pw
 
@@ -598,9 +599,9 @@ def test_the_start_forward_setting_is_a_non_negative_integer_for_the_circuit_exe
 def test_the_transcript_holds_every_calls_inputs_and_regenerates_each_call(which, request):
     """`transcript_dir`'s call data (`save_calls`) with the weight's rows from the weights of record re-commits every call to its
     live leaf: the data a verifier needs to open the calls off the serving host."""
-    from verity_vllm.protocols.pouw import native as PN
+    from verity.protocols.accounting.pouw.prover.serving import native as PN
     w = request.getfixturevalue(which)
-    calls = PC.load_calls(w.tdir / PC.CALLS_DATA_FILE, lambda weight: pouw._LayerRows(w.w_up))
+    calls = PC.load_calls(w.tdir / PC.CALLS_DATA_FILE, lambda weight: LayerRows(w.w_up))
     assert [i for i, _s, _c in calls] == [r.index for r in w.records] and {s for _i, s, _c in calls} == {"ncp-v2"}
     assert [PC.call_leaf(PN.commit_call(i, s, c)).hex() for i, s, c in calls] == [PC.call_leaf(r).hex() for r in w.records]
 
@@ -608,7 +609,7 @@ def test_the_transcript_holds_every_calls_inputs_and_regenerates_each_call(which
 @pytest.fixture(scope="module")
 def device_world(tmp_path_factory):
     """`world` with the setting ``device: cuda``, the serving kernel's CPU twin (`ncp2_fast.cuh`) standing in for the GPU."""
-    from verity_vllm.protocols.pouw import device as PD
+    from verity.protocols.accounting.pouw.prover.serving import device as PD
 
     if PD.compiler() is None and not os.environ.get("VERITY_SUITE_ROOT"):
         pytest.skip("needs a C++ compiler (required under check)")

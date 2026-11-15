@@ -4,7 +4,8 @@
 A sampled proof block at K is proved on K's template, `h1window.template(K, h1window.tile_unit(K, TILE))` (its unit in
 `weights.chunks` (K) chunks past `weights.CHUNK_MAX`, `h1window._chunked`, as the Program declares it), one of the declared
 Program's ``TILES``. It is lowered by Flock's `class_statement.UnitStager`, as ``benchmarks/pouw/h1_prove/stage.py``
-lowers it (`h1unit.Shape.stager`, under ``HZ_STAGE``, ``fast`` by default), and bound to the window's Program and
+lowers it (H1's lowering, `prover.lowering.h1unit`'s `Shape.stager`: the flat statement, staged by Flock's library), and
+bound to the window's Program and
 partition: ``{"program": its program_digest, "partition": the digest of its Q_template_instances partition object}``,
 its templates by ascending K, the object core's credit verifies a statement under (`credit.partition_of`). The file's
 SHA-512 is what the period-open commits for ``k<K>``, and core's credit refuses a statement whose circuit file hashes
@@ -15,7 +16,8 @@ its rows named as credit's ``--registered`` file reads them, its public row with
 
 With ``--live T,S`` the manifest's ``files`` also holds ``live``: the SHA-512 of the circuit file of the window's live
 Program's template, `live.template_v2(T)` bound to `live.program_v2(T, S, PREFIX)` (PREFIX the declared Program's,
-`credit._prefix`) and its `live.query_v2` partition, lowered as ``h1_prove/live.py`` lowers it (`live_stager`), which is
+`credit._prefix`) and its `live.query_v2` partition, lowered as ``h1_prove/live.py`` lowers it (`prover.lowering.live`'s
+`live_stager`), which is
 what core's credit verifies each round's ``live@<s>`` on (``circuit_files["live"]``). T is the period's rows and S the
 window's rounds. Past T = `live.PIECE_ROWS` it is the piece's, `live.template_rows(T, PIECE_ROWS)` bound to
 `live.program_rows` (a V3 prefill round at T 8,192 is 128 pieces of 64 rows). It takes seconds.
@@ -44,14 +46,14 @@ import argparse
 import gzip
 import hashlib
 import json
-import os
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from types import ModuleType
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
-H1_PROVE = HERE.parents[3] / "benchmarks" / "pouw" / "h1_prove"
 #: the statement's name, `h1_prove/stage.py`'s
 NAME = "unit/pouw-h1-tile"
 MANIFEST = "circuit-files.json"
@@ -78,11 +80,11 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     (`h1window.tile_unit`) or J10-R's (`h1tile.PouwH1Tile5`, serve-openai's pouw setting ``unit`` j10r). ValueError when
     neither is one of the descriptor's definitions, or (with core's credit) the partition is not the one core's credit
     verifies statements under."""
-    from verity.protocols.pouw.verifier import credit as CR
-    from verity.protocols.pouw.prover.circuit import h1tile as HT
-    from verity.protocols.pouw.prover.circuit import h1window as HW
     from verity.circuits import partition_object as PO
     from verity.circuits.codec import descriptor_id
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     program, desc = hashlib.sha512(descriptor).hexdigest(), json.loads(descriptor)
     tile = tuple(layout["tile"])
 
@@ -97,7 +99,8 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     if missing:
         raise ValueError(f"K = {missing}'s template (h1window.template over v1's or J10-R's tile_unit at {list(tile)}) "
                          "is not one of the declared Program's definitions, so no circuit file of it is the Program's")
-    ids, j10r = {k: g[0] for k, g in got.items()}, {k for k, g in got.items() if g[1]}
+    found = {k: g for k, g in got.items() if g is not None}
+    ids, j10r = {k: g[0] for k, g in found.items()}, {k for k, g in found.items() if g[1]}
     part = PO.build(desc, PO.template_instances_query([ids[k] for k in sorted(ids)]))
     if part["program"] != program:
         raise ValueError(f"the descriptor's program_digest {part['program'][:16]}... is not its SHA-512 {program[:16]}...")
@@ -119,46 +122,41 @@ def lower(k: int, tile: tuple[int, int], bind: dict, path: Path, j10r: bool = Fa
 
 
 def _lower(k: int, r: int, c: int, bind: dict, path: Path, j10r: bool = False) -> None:
-    """`h1_prove/stage.py`'s build of the statement's circuit, at R × C (J10-R's with `j10r`), bound to `bind`, written
-    to `path`."""
-    sys.path.insert(0, str(H1_PROVE))
-    sys.path.insert(0, str(H1_PROVE.parent / "hidden_zk"))
-    if os.environ.get("HZ_STAGE", "fast") == "fast":
-        import fast_stage
-        fast_stage.install(path.parent / f".scratch-k{k}")
-    import h1unit as U
+    """`h1_prove/stage.py`'s build of the statement's circuit (`h1unit.Shape.stager`, flat, staged by Flock's library),
+    at R × C (J10-R's with `j10r`), bound to `bind`, written to `path`."""
+    from verity.protocols.accounting.pouw.prover.lowering import h1unit as U
     U.Shape(k, r, c, j10r).stager(NAME, circuit=path, bind=bind)
 
 
-def _h1_live():
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("h1_prove_live", H1_PROVE / "live.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def stagers() -> ModuleType:
+    """`prover.lowering.stagers`: the stagers ``h1_prove/drawn.py`` hands drawn's ``stage`` (``recomposed``,
+    ``file_stager``)."""
+    from verity.protocols.accounting.pouw.prover.lowering import stagers as S
+    return S
 
 
 def live_part(T: int, S: int, prefix: str) -> dict:
     """The partition object of the live Program a window of S rounds at T rows under `prefix` proves on: v2's, or past
-    `live.PIECE_ROWS` rows the pieced one (``h1_prove/live.py``'s `program_of`)."""
-    from verity.protocols.spot.verifier.one_stage import partition as P
-    return P.partition(*_h1_live().program_of({"T": T, "S": S, "prefix": prefix}))
+    `live.PIECE_ROWS` rows the pieced one (`prover.lowering.live.program_of`)."""
+    from verity.protocols.accounting.pouw.prover.lowering import live as LV
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+    return P.partition(*LV.program_of({"T": T, "S": S, "prefix": prefix}))
 
 
 def lower_live(T: int, part: dict, path: Path) -> None:
-    """``h1_prove/live.py``'s lowering of the live template at T rows (a piece's past `live.PIECE_ROWS`), bound to `part`,
-    written to `path`."""
-    module = _h1_live()
-    r, p = module.form({"T": T})
-    module.live_stager(T, path, part, None if p == 1 else r)
+    """`prover.lowering.live`'s lowering of the live template at T rows (a piece's past `live.PIECE_ROWS`), bound to
+    `part`, written to `path`."""
+    from verity.protocols.accounting.pouw.prover.lowering import live as LV
+    r, p = LV.form({"T": T})
+    LV.live_stager(T, path, part, None if p == 1 else r)
 
 
 def rebuilt(descriptor: bytes) -> Any:
     """The declared window Program rebuilt from its descriptor's layout (`credit.layout_of`, its prefix `credit.shape_of`'s),
     each K's template held to the descriptor's by its descriptor id, which names every binding. ValueError otherwise."""
-    from verity.protocols.pouw.verifier import credit as CR
-    from verity.protocols.pouw.prover.circuit import h1window as HW
     from verity.circuits.codec import descriptor_id
+    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     layout, why = CR.layout_of(descriptor)
     if why is not None:
         raise ValueError(f"the declared Program's layout: {why[1]}")
@@ -178,9 +176,10 @@ def leaf_bound(win: Any, k: int, kind: str) -> tuple[Any, bytes, dict, dict]:
     """K's leaf statement ``kind`` of the window Program `win`: its Definition (`h1window.leaf_unit`), its leaf Program's
     descriptor (`served.descriptor`), its partition object and what its file is bound to, ``{"partition",
     "program"}``."""
-    from verity.protocols.pouw.prover.circuit import h1window as HW
-    from verity.protocols.spot.verifier.one_stage import partition as P
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
     program, query = HW.leaf_program(win, k, kind)
     part = P.partition(program, query)
     desc = SV.descriptor(program)
@@ -201,14 +200,11 @@ def lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
 
 def _lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
     """K's leaf statement ``kind`` (`leaf_bound`) as the flat statement on `drawn_rows.leaf_rows`, its output
-    `drawn_rows.LEAF_OUT_ROWS`, lowered under ``HZ_STAGE`` (``fast`` by default) and written to `path`."""
+    `drawn_rows.LEAF_OUT_ROWS`, staged by Flock's library and written to `path`."""
     from verity_flock import class_statement as CS
-    from verity_vllm.protocols.pouw.h1 import drawn_rows as D
-    if os.environ.get("HZ_STAGE", "fast") == "fast":
-        sys.path.insert(0, str(H1_PROVE.parent / "hidden_zk"))
-        import fast_stage
-        fast_stage.install(path.parent / f".scratch-{kind}{k}")
-    from verity.protocols.pouw.verifier import credit as CR
+
+    from verity.protocols.accounting.pouw.prover.serving.h1 import sampled_rows as D
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     descriptor = gzip.decompress(program.read_bytes())
     defn, _desc, _part, bind = leaf_bound(rebuilt(descriptor), k, kind)
     tile = CR.layout_of(descriptor)[0]["tile"]
@@ -222,13 +218,16 @@ def leaf_files(program_dir: Path, out: Path, descriptor: bytes, ks: Sequence[int
     descriptor written beside it (`drawn_rows.LEAF_PROGRAM`): ``files`` (each file's SHA-512 and ``leaf_programs``), each
     statement's bind (``leaf_binds``) and Definition id (``templates``). ValueError when credit derives another leaf
     Program or partition at K, or refuses the K (`credit.lanes_shape`)."""
+    from verity.protocols.accounting.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
+
     from tests.protocols.pouw_h1_rehearsal import PROGRAM
-    from verity.protocols.pouw.verifier import credit as CR
-    from verity.protocols.pouw.verifier import leaf_lanes as LL
-    from verity_vllm.protocols.pouw.h1 import drawn_rows as D
+    from verity.protocols.accounting.pouw.prover.serving.h1 import sampled_rows as D
     layout, _why = CR.layout_of(descriptor)
     shape, win = CR.shape_of(descriptor), rebuilt(descriptor)
-    files, binds, templates = {CR.LEAF_PROGRAMS: {}}, {}, {}
+    files: dict[str, Any] = {CR.LEAF_PROGRAMS: {}}
+    binds: dict[str, dict] = {}
+    templates: dict[str, str] = {}
     for k in ks:
         if why := CR.lanes_shape(layout, shape, k):
             raise ValueError(f"K = {k}: {why}")
@@ -269,8 +268,8 @@ def build(program_dir: Path, out: Path, lower: Lower = lower, live: tuple[int, i
         kept = {}
     files, extra = {}, {}
     if live is not None:
-        from verity.protocols.pouw.verifier import credit as CR
-        from verity.protocols.spot.verifier.one_stage import partition as P
+        from verity.protocols.accounting.pouw.verifier import credit as CR
+        from verity.protocols.proofs.spot.verifier.one_stage import partition as P
         T, S = live
         part = live_part(T, S, CR._prefix(descriptor))
         extra["live_bind"] = {"T": T, "S": S, "partition": P.digest(part), "program": part["program"]}

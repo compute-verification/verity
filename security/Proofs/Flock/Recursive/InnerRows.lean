@@ -144,10 +144,10 @@ theorem pub_digest_size {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     exact Hidden.pop_digest_sizeW hload hi hq
   | some d =>
     have hdrawn : HmRow.drawn { st.c with outPorts := #[] } pop d = .ok st.pub := hsome d rfl
-    obtain ⟨D, hD, hpn, hn, -⟩ := Layout.drawn_spec hdrawn
+    obtain ⟨D, hD, hpn, hn, -⟩ := Layout.sampled_spec hdrawn
     have hlt := Layout.proved_lt_population hD
     have hr : i < D.proved.size := hn ▸ hi
-    exact (congrArg ByteArray.size (Hidden.drawn_digestW hload hdrawn hD hlt hr hq)).trans
+    exact (congrArg ByteArray.size (Hidden.sampled_digestW hload hdrawn hD hlt hr hq)).trans
       (Hidden.pop_digest_sizeW hload (by rw [← hpn]; exact hlt _ (Array.getElem_mem hr)) hq)
 
 /-- **A site's row commits its table's `b ‖ c`**: in a satisfying witness of an accepted statement whose regions
@@ -160,8 +160,8 @@ theorem site_commit {T : Model.Statement} (a : HiddenExec.AcceptedH T)
     {g q : ℕ} (hg : g < a.st.c.g) (hq : q < a.st.c.ports.size)
     (hsz : ∀ g' ≤ g, (Layout.bcChunk a.st.c a.st.pub o.val g' q).size = 128) :
     Binding.commitString (Hidden.Any.rowMsg a.st.c.ports[q]!
-        (Hm.bytesOf (Hm.blockBit T z o) (2 * a.st.c.ports[q]!.words) (Typed.msgCol a.st.c g q)))
-      (Hm.bytesOf (Hm.blockBit T z o) 192 (Hm.saltCol a.st.c g q)) =
+        (Hm.bytesOf (Hm.chunkBit T z o) (2 * a.st.c.ports[q]!.words) (Typed.msgCol a.st.c g q)))
+      (Hm.bytesOf (Hm.chunkBit T z o) 192 (Hm.saltCol a.st.c g q)) =
       (Layout.bcChunk a.st.c a.st.pub o.val g q).data.toList := by
   obtain ⟨hty, ⟨ls, hls⟩, -⟩ := Hidden.Committed.check a.ht a.committed
   have hcom := HiddenExec.bc_site_commitH a (Hidden.check_upv_pos hty hls) hrf hz o hg hq
@@ -205,7 +205,7 @@ theorem unit_commit {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     (L : FlockSoundness.Layout st) {z : Model.Witness st.m} (hz : (L.model (Refine.regionsOf st)).Satisfies z)
     {i q : ℕ} (hi : i < st.pub.n) (hq : q < st.c.ports.size) {f : ℕ → Bool}
     (hf : ∀ (h : i / st.c.g < 2 ^ (L.model (Refine.regionsOf st)).nbl) (y : ℕ), y < 2 ^ st.c.kLog →
-      Hm.blockBit (L.model (Refine.regionsOf st)) z ⟨i / st.c.g, h⟩ y = f y) :
+      Hm.chunkBit (L.model (Refine.regionsOf st)) z ⟨i / st.c.g, h⟩ y = f y) :
     Binding.commitString (Hidden.Any.rowMsg st.c.ports[q]!
         (Hm.bytesOf f (2 * st.c.ports[q]!.words) (Typed.msgCol st.c (i % st.c.g) q)))
       (Hm.bytesOf f 192 (Hm.saltCol st.c (i % st.c.g) q)) = (st.pub.digest i q st.c.ports.size).data.toList := by
@@ -231,9 +231,9 @@ theorem unit_commit {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
       unfold Layout.bcChunk Circuit.instOf
       simp only [hin g' hg', ↓reduceIte]
   have key : Binding.commitString (Hidden.Any.rowMsg st.c.ports[q]!
-        (Hm.bytesOf (Hm.blockBit (L.model (Refine.regionsOf st)) z ⟨i / st.c.g, hob⟩) (2 * st.c.ports[q]!.words)
+        (Hm.bytesOf (Hm.chunkBit (L.model (Refine.regionsOf st)) z ⟨i / st.c.g, hob⟩) (2 * st.c.ports[q]!.words)
           (Typed.msgCol st.c (i % st.c.g) q)))
-      (Hm.bytesOf (Hm.blockBit (L.model (Refine.regionsOf st)) z ⟨i / st.c.g, hob⟩) 192
+      (Hm.bytesOf (Hm.chunkBit (L.model (Refine.regionsOf st)) z ⟨i / st.c.g, hob⟩) 192
         (Hm.saltCol st.c (i % st.c.g) q)) =
       (Layout.bcChunk st.c st.pub (i / st.c.g) (i % st.c.g) q).data.toList :=
     site_commit ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, Hidden.setupHidden_specCC hd,
@@ -310,7 +310,7 @@ theorem rows_commit_check {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (h
   refine eq_of_data ((commitString_data _ _).symm.trans ?_)
   have hk : p.sts[j]!.c.kLog = st.c.kLog := by rw [e!, hst]
   refine unit_commit ht' hd hrf L hsat hi hq fun h y hy => ?_
-  refine (Hm.blockBit_of_lt (L.model (Refine.regionsOf st)) (zOf p.sts.size w j st.m) ⟨i / st.c.g, h⟩ hy).trans ?_
+  refine (Hm.chunkBit_of_lt (L.model (Refine.regionsOf st)) (zOf p.sts.size w j st.m) ⟨i / st.c.g, h⟩ hy).trans ?_
   show FlockSoundness.bit (toZ (w.hid.getD ((i / st.c.g * 2 ^ st.c.kLog + y) * p.sts.size + j) false)) =
     w.hid.getD ((i / st.c.g * 2 ^ p.sts[j]!.c.kLog + y) * p.sts.size + j) false
   rw [bit_toZ, hk]

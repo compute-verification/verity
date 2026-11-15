@@ -250,7 +250,7 @@ theorem seg_msgBit {p b t : ℕ} (hs : SegRow c.ports[p]!) (hb : b < 2 * c.ports
       (HmNets.wordBit (8 * (b % 128) + t)) = .row i := by
   obtain ⟨hj, h1, -, hm⟩ := seg_byte hs hb
   rw [SegShape.msgBit_seg hs.1 hj (Nat.le_add_right _ _) h1,
-    blockBit_wordBit (Nat.mod_lt b (by norm_num : 0 < 128)) ht]
+    chunkBit_wordBit (Nat.mod_lt b (by norm_num : 0 < 128)) ht]
   unfold SegShape.segVal
   dsimp only
   rw [if_pos (by omega)]
@@ -377,9 +377,9 @@ theorem deltaMsgCol_injK {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.
     have hw' := wordBit_lt (Nat.mod_lt b' (by norm_num : 0 < 128)) ht'
     rw [deltaMsgCol_segP R hp hs hkc ht, deltaMsgCol_segP R hp' hs' hkc' ht'] at h
     obtain ⟨rfl, rfl, hkk, ho⟩ := shaPos_inj R hg hp hkc (by omega) hg' hp' hkc' (by omega) h
-    have hbb := blockBit_wordBit (Nat.mod_lt b (by norm_num : 0 < 128)) ht
+    have hbb := chunkBit_wordBit (Nat.mod_lt b (by norm_num : 0 < 128)) ht
     rw [show HmNets.wordBit (8 * (b % 128) + t) = HmNets.wordBit (8 * (b' % 128) + t') by omega,
-      blockBit_wordBit (Nat.mod_lt b' (by norm_num : 0 < 128)) ht'] at hbb
+      chunkBit_wordBit (Nat.mod_lt b' (by norm_num : 0 < 128)) ht'] at hbb
     obtain ⟨hob, htt⟩ := Prod.mk.inj hbb
     obtain ⟨hj, hi⟩ := seg_k_inj hs hb hb' hkk
     exact ⟨rfl, rfl, by omega, htt.symm⟩
@@ -512,8 +512,8 @@ unsegmented or row-seg output rows and input rows of any kind: at template insta
 theorem msg_copyP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outRowPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
-    blockBit (L.model regs) z o (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) =
-      blockBit (L.model regs) z o (outSrc st.c g j k t) := by
+    chunkBit (L.model regs) z o (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) =
+      chunkBit (L.model regs) z o (outSrc st.c g j k t) := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
   obtain ⟨hp, hb, ht8⟩ := hrows.bound hj hk ht
   obtain ⟨n, s, off, hn, hat, -, l, name, hl, hself⟩ := msg_atK R hg hp (hrows.2 j hj).2 hb ht8
@@ -600,8 +600,8 @@ include L L0 F0 hda hrows
 theorem msg_copyF {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
-    blockBit (L.model regs) z o (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) =
-      blockBit (L.model regs) z o (outSrc st.c g j k t) :=
+    chunkBit (L.model regs) z o (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) =
+      chunkBit (L.model regs) z o (outSrc st.c g j k t) :=
   msg_copyP L L0 F0 hda hrows.toP hz o hg (by rw [hrows.size]; exact hj) hk ht
 
 /-- `sat_flatP` at one output row per output port. -/

@@ -87,12 +87,12 @@ steward/lease.json                   REMOTE ONLY, not a store record: the stewar
                                      PUT only (research/steward.py); the store never reads, lists or indexes it
 packs/labels/latest.{tar.gz,json}    REMOTE ONLY, not a store record: the labels pack (§8), replaced in place
 live/<run id>/<seq>.json             REMOTE ONLY, not a store record: a running check's live record, a new immutable object per
-                                     write with the run's custody key (tools/verity/check/live.py, read by `verity ci`); the store
+                                     write with the run's custody key (tools/check/live.py, read by `verity ci`); the store
                                      never reads, lists or indexes it, and gc leaves it
 ~~~
 
 Python API: `research.store.local.LocalStore(root=None, *, config_path=None, repo=None)` (root from `$RESEARCH_STORE`, config
-per §7, repo = `$RESEARCH_REPO` or the nearest ancestor of cwd holding `fixtures/artifacts.json`). Methods: `put_artifact`,
+per §7, repo = `$RESEARCH_REPO` or the nearest ancestor of cwd holding `artifacts.json`). Methods: `put_artifact`,
 `put_manifest`, `get_manifest`, `has_local`, `fetch`, `where`, `put_attempt`, `get_attempt`, `push_attempt`, `add_label`,
 `labels`, `snapshot`, `verify`, `push`, `reindex`, `index`, `remote`. Errors: `StoreError` > `NotFound`, `AttemptExists`,
 `IntegrityError`; `remote.RemoteConflict`, `remote.ConfigError`. A file payload fetched without `to` is returned as its
@@ -225,7 +225,7 @@ from research.store.tool import Tool
 TC_PROBE = Tool(
     name="tc_probe", version="1",
     command=["python", "benchmarks/tc_probe/tc_probe.py"],
-    closure=["benchmarks/tc_probe/**", "verity/definitions/silicon/**"],   # repo-relative globs -> file manifest at run time
+    closure=["benchmarks/tc_probe/**", "verity/circuits/silicon/**"],   # repo-relative globs -> file manifest at run time
     key_params=["instruction", "families", "seed", "n_random", "replay_golden"],
     key_conditions=["hw.family"],
     param_artifacts=["replay_golden", "replay_instances"],  # path-valued params: identity = content, never pathname
@@ -338,7 +338,7 @@ A pod gets a short-lived, bucket-scoped credential instead of the parent R2 key 
 remote holds the manifest and every blob at the right size, its content checked by `etag-md5` or `etag-multipart` (`push`'s HEAD) or `sha256-readback`
 (`verify`), and `replicas.verified` says which. A missing `[remote]` makes the store local-only; a present but unusable one is
 `ConfigError`, so a broken vault never looks like no vault. `fetch` reads local objects, then the repo replica
-(`fixtures/artifacts.json`), then the remote, checking every byte. The detail of all four, with the minting paths and the push
+(`artifacts.json`), then the remote, checking every byte. The detail of all four, with the minting paths and the push
 algorithm: `remote-replicas/README.md`.
 
 ### 7.2 Remote-first: write-through, verdicts, refresh, parity
@@ -464,7 +464,9 @@ prints the table; the groups are:
   agent's delegation target (`task:<sha512>`), by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
-  `staged` on `ckpt:<repo>@<revision>`, when a host finished staging a checkpoint's weights (`verity-vllm records staged`).
+  `staged` on `ckpt:<repo>@<revision>`, when a host finished staging a checkpoint's weights (`verity-vllm records staged`);
+  `goals_dump` on the `drv:` of `research goals show --json`, by `research velocity`'s save: one copy of the Goals page's
+  `art:` id, its `ts` the minute it was taken (`research.velocity`).
 - **approach** — the registry's labels on `approach/v1` records (`research/approaches.py`; `tools/research/README.md`).
 
 Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and
@@ -494,13 +496,13 @@ research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json 
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
 research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
-                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs;
+                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the parts that fail;
                                               exit 4: WITHDRAWN (§7.4)
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data vocab-check [--json]            what in labels/ is off the vocabulary, read-only (`vocab_check.py`)
 research data evict --target-free-gb N [--runs] [--dry-run] [--json]   free local disk of copies PRESERVED on the remote (`evict.py`, `sealed.py`)
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
-                                              re-register every fixtures/artifacts.json entry whose bytes changed (§7)
+                                              re-register every artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                               make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
 research data export [--repo DIR] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]

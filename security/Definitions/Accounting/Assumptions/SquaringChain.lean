@@ -11,7 +11,7 @@ falsified `EncodeChainHardness`: two named `Prop`s, each taken as a hypothesis, 
 conjectures: each sits under `shape.conjectures` with a falsification test that runs, and every claim
 resting on them is conditional. Both are priced in the model's nonlinear units (`Gates.nonlinear`: its budgeted units
 and its data products, every operation but a linear map whose coefficients are fixed before the coins), the units the
-stacking property caps (`Gates.Property`), so `E` is the encoder's multiplicative complexity in the gate model.
+stacking property bounds (`Gates.Property`), so `E` is the encoder's multiplicative complexity in the gate model.
 
 * `SquaringFloor F e ε`: one squaring mod `p`, from a word's canonical bytes to `L = n/8` byte-format limbs congruent
   to its square, right on more than `ε` of the words, costs at least `e` nonlinear units, at `ε ≥ 2^−64` and
