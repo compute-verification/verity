@@ -551,15 +551,18 @@ def test_an_interface_that_reads_no_rate_is_registered_without_a_capacity() -> N
 @pytest.mark.parametrize("composite", ["onsite", "remote"])
 def test_a_link_states_no_capacity_only_with_its_reason(composite: str) -> None:
     """`kind` refuses a link that states no capacity and says no reason, and a link at a capacity of 0 whatever it
-    says, and takes a link with no capacity that says why no certifier splits it. Onsite, `uncertified` refuses a bare
-    boundary link that says no reason and takes it with one; remote takes both. A site with a link that says a reason
-    is not mediated."""
+    says, and takes a link with no capacity that says why no certifier splits it, but at a host a certifier splits:
+    onsite, where `cert0` splits `node0`, it refuses that link too. Onsite, `uncertified` refuses a bare boundary link
+    that says no reason and takes it with one; remote takes both. A site with a link that says a reason is not
+    mediated."""
     log, auditor = grown(composite), AUDITOR[composite]
     unrated, bare = Link("u9", ("node0", OUTSIDE), None, 1), Link("u9", ("node0", OUTSIDE), 1, 1)
     assert refusal(log, log.entry(links=[unrated]), auditor) == "kind"
     assert refusal(log, log.entry(links=[replace(bare, beta=0, unmediated="a stand-in")]), auditor) == "kind"
     assert refusal(log, log.entry(links=[bare]), auditor) == ("uncertified" if composite == "onsite" else None)
-    for k in (replace(unrated, unmediated="a stand-in"), replace(bare, unmediated="a stand-in")):
+    stand_in = replace(unrated, unmediated="a stand-in")
+    assert refusal(log, log.entry(links=[stand_in]), auditor) == ("kind" if composite == "onsite" else None)
+    for k in ((stand_in,) if composite == "remote" else ()) + (replace(bare, unmediated="a stand-in"),):
         assert refusal(log, entry := log.entry(links=[k]), auditor) is None
         assert Site.of_log(log).mediated and not check(log.append(entry), auditor).mediated
 

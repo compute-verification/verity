@@ -437,7 +437,7 @@ def later : List (Entry × Option Refusal) :=
    (next [] [link "l9" ("node0", "node0") 1 1], some .kind),
    (next [{ vm0 with parent := some "node0" }], some .kind),
    (next [] [{ id := "u9", ends := ("node0", outside), β := none, latency := 1 }], some .kind),
-   (next [] [{ id := "u9", ends := ("node0", outside), β := none, latency := 1, unmediated := some "no line rate" }],
+   (next [] [{ id := "u9", ends := ("node0", outside), β := some 1, latency := 1, unmediated := some "a stand-in" }],
      none),
    (next [] [] [{ sheetA with figures := stated "sim-int8-z" 1000 64000 }], some .sheetDigest),
    (next [] [] [{ sheetA with figures := stated "sim-int8-a" 1050 60000 }], none),
@@ -490,6 +490,15 @@ theorem gpu0_device :
 theorem onsite_refusals :
     later.map (fun x => x.1.refusal digests auditor .onsite (Site.ofLog [onsite]) (head digests .onsite [onsite])) =
       later.map (·.2) := by
+  decide +kernel
+
+/-- A link to the outside that states no rate, though it says why no certifier splits it: onsite, where `cert0` splits
+`node0`, `kind` refuses it, the certifier's rate being its host's links' summed; the remote site, with no certifier,
+takes it. -/
+theorem unrated_at_certifier :
+    let e := next [] [{ id := "u9", ends := ("node0", outside), β := none, latency := 1, unmediated := some "a stand-in" }]
+    e.refusal digests auditor .onsite (Site.ofLog [onsite]) (head digests .onsite [onsite]) = some .kind ∧
+      e.refusal digests auditor .remote (Site.ofLog [remote]) (head digests .remote [remote]) = none := by
   decide +kernel
 
 /-- The remote site refuses each case as the onsite site does, but accepts a bare uplink and a host no challenger
