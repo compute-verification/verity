@@ -59,8 +59,25 @@ meta partial def constTainted (c : Name) : M Bool := do
   cfg.taint.modify (·.insert c r)
   return r
 
+/-- Whether reducing `e` to weak head normal form would force `Array.qsort` (`Spot.sortStrings`, `Spot.keys?`), whose
+well-founded recursion the kernel cannot reduce, so the walk must rewrite the sort away (a rule such as
+`sortStrings_of_sorted`) rather than hand `e` to the kernel. A sort buried inside a JSON object or array is a value no
+field read forces, so this does not descend into the arguments of `Json.mkObj`/`.obj`/`.arr`; only a sort in a position
+the reduction forces (the head of `e`, or of an argument it eliminates) counts. Folded into `exprTainted`, so every
+kernel site the walk guards with it (`kwhnf`, `Kernel.isDefEqGuarded`) skips such an `e` alike. -/
+meta partial def reachesSlow (e : Expr) : Bool :=
+  let e := e.consumeMData
+  let fn := e.getAppFn
+  match fn with
+  | .const c _ =>
+    if c == ``Array.qsort || c == `Spot.sortStrings || c == `Spot.keys? then true
+    else if c == ``Lean.Json.mkObj || c == ``Lean.Json.obj || c == ``Lean.Json.arr then false
+    else e.getAppArgs.any reachesSlow
+  | _ => e.getAppArgs.any reachesSlow
+
 meta partial def exprTainted (e : Expr) : M Bool := do
   let cfg ← read
+  if reachesSlow e then return true
   if e.getUsedConstants.any cfg.shallow.contains then return true
   if ← e.getUsedConstants.anyM constTainted then return true
   for fv in (collectFVars {} e).fvarIds do
@@ -68,7 +85,9 @@ meta partial def exprTainted (e : Expr) : M Bool := do
       if b then return true
     else
       let b ← match ← fv.getValue? with
-        | some v => exprTainted (← instantiateMVars v)
+        | some v => do
+          let v ← instantiateMVars v
+          if reachesSlow v then pure true else exprTainted v
         | none => pure false
       cfg.ftaint.modify (·.insert fv b)
       if b then return true
@@ -77,6 +96,7 @@ meta partial def exprTainted (e : Expr) : M Bool := do
 /-- The first constant that taints `e`, through let-bound variables. -/
 meta partial def taintReason (e : Expr) : M (Option Name) := do
   let cfg ← read
+  if reachesSlow e then return some ``Array.qsort
   for c in e.getUsedConstants do
     if cfg.shallow.contains c then return some c
     if ← constTainted c then return some c
@@ -238,6 +258,7 @@ meta partial def ruleAt (e : Expr) : M (Option (Expr × Expr)) := do
     try
       let (_, _, p) ← openAbstractMVarsResult ar
       let (mvs, _, ty) ← forallMetaTelescopeReducing (← inferType p)
+      let ty ← instantiateMVars ty
       let some (_, l, r) := ty.eq? | do s.restore; continue
       unless l.getAppFn.isConst && e.getAppFn.isConst && l.getAppFn.constName! == e.getAppFn.constName! do
         s.restore; continue
@@ -266,6 +287,7 @@ meta partial def rewriteIn (e : Expr) : M (Option (Expr × Expr)) := do
       try
         let (_, _, p) ← openAbstractMVarsResult ar
         let (mvs, _, ty) ← forallMetaTelescopeReducing (← inferType p)
+        let ty ← instantiateMVars ty
         let some (_, l, r) := ty.eq? | do s.restore; continue
         let ea ← withReducible (kabstract e l)
         if !ea.hasLooseBVars then
