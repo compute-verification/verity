@@ -227,6 +227,6 @@ def test_a_sudo_that_refuses_the_bundle_reads_stops_the_pacer_rather_than_readin
     (tmp_path / "bin").mkdir()
     (tmp_path / "bin" / "sudo").write_text('#!/bin/sh\necho "sudo: a password is required" >&2\nexit 1\n')
     (tmp_path / "bin" / "sudo").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}:{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(tmp_path / "bin"), prepend=os.pathsep)
     with pytest.raises(SystemExit, match="sudo refuses /usr/bin/find to this login.*nothing released"):
         mod.bundles_gb()

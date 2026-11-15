@@ -959,7 +959,7 @@ def test_a_preempted_job_can_still_publish_its_attempt():
         assert t.count("RESEARCH_STORE: /workspace/jobs/store") == tasks, f.name    # the pod's own home dies with the pod
 
 
-def test_backfill_takes_its_credentials_on_stdin_only(tmp_path):
+def test_backfill_takes_its_credentials_on_stdin_only(tmp_path, monkeypatch):
     """Run under a sudo that refuses, as a locked node's does (and so never the machine's own): the exit trap still removes the
     credentials file, through its plain `rm`."""
     import os
@@ -972,8 +972,9 @@ def test_backfill_takes_its_credentials_on_stdin_only(tmp_path):
     tmp.mkdir()
     (bin_dir / "sudo").write_text('#!/bin/sh\necho "sudo: a password is required" >&2\nexit 1\n')
     (bin_dir / "sudo").chmod(0o755)
-    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "TMPDIR": str(tmp)}
-    r = subprocess.run(["bash", str(script)], input="only-one-line\n", capture_output=True, text=True, env=env)
+    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
+    monkeypatch.setenv("TMPDIR", str(tmp))
+    r = subprocess.run(["bash", str(script)], input="only-one-line\n", capture_output=True, text=True)
     assert r.returncode == 2 and "want the 4 credential lines on stdin" in r.stderr
     assert list(tmp.iterdir()) == []
 

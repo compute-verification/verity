@@ -162,7 +162,7 @@ def test_the_bundle_command_is_release_pys_rule_and_fails_rather_than_reading_ze
     assert "if [ -x /usr/local/sbin/vy-sudo ]; then sudo -n -l /usr/local/sbin/vy-sudo du-bundles" in cmd
 
 
-def test_a_locked_node_whose_sudo_refuses_du_bundles_is_a_failed_read_not_zero_bundles(tmp_path):
+def test_a_locked_node_whose_sudo_refuses_du_bundles_is_a_failed_read_not_zero_bundles(tmp_path, monkeypatch):
     """A lock-out leaves `sudo -n true` passing whatever else it refuses: the read runs du-bundles only where sudo grants it."""
     import os
     import subprocess
@@ -170,14 +170,14 @@ def test_a_locked_node_whose_sudo_refuses_du_bundles_is_a_failed_read_not_zero_b
     bin_dir.mkdir()
     vy.write_text(f"#!/bin/sh\nprintf '13000000000\\t{BUNDLE_A}\\n'\n")
     vy.chmod(0o755)
-    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
     cmd = status.COMMANDS["bundles"].replace(status.VY_SUDO, str(vy))
     for granted, want in ((True, (0, 1)), (False, (1, 0))):
         grant = f'"-n -l {vy} du-bundles") exit 0 ;; "-n {vy} du-bundles") exec "{vy}" du-bundles ;;' if granted else ""
         (bin_dir / "sudo").write_text(f'#!/bin/sh\ncase "$*" in "-n true") exit 0 ;; {grant} esac\n'
                                       'echo "sudo: a password is required" >&2\nexit 1\n')
         (bin_dir / "sudo").chmod(0o755)
-        r = subprocess.run(["sh", "-c", cmd], capture_output=True, text=True, env=env)
+        r = subprocess.run(["sh", "-c", cmd], capture_output=True, text=True)
         assert (r.returncode, status.bundles(r.stdout)["count"]) == want, (granted, r.stderr)
 
 
