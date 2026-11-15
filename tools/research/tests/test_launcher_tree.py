@@ -349,9 +349,11 @@ def test_unset_at_main_re_executes_origin_mains_copy_exactly_as_before(tmp_path,
     (tmp_path / "repo" / ".git").mkdir(parents=True)
     calls = []
     at_main.reexec(["queue", "vqueue", "--once"], tmp_path / "repo", tmp_path / "cache", lambda *a: calls.append(a))
-    path = f"{wt / 'tools/research/src'}{os.pathsep}/elsewhere"
-    assert calls == [(sys.executable, [sys.executable, "-m", "research", "queue", "vqueue", "--once"],
-                      {**os.environ, at_main.OPT_OUT: "1", "PYTHONPATH": path})]
+    want = {**os.environ, at_main.OPT_OUT: "1", "PYTHONPATH": f"{wt / 'tools/research/src'}{os.pathsep}/elsewhere"}
+    [(exe, argv, got)] = calls
+    assert (exe, argv) == (sys.executable, [sys.executable, "-m", "research", "queue", "vqueue", "--once"])
+    differ = sorted(k for k in got.keys() | want.keys() if got.get(k) != want.get(k))
+    assert differ == []
     monkeypatch.setenv(at_main.OPT_OUT, "1")
     at_main.reexec(["status"], tmp_path / "repo", tmp_path / "cache", lambda *a: calls.append(a))
     assert len(calls) == 1
