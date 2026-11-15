@@ -28,7 +28,7 @@ REGISTRY = Registry(
     S("VLLM_PY", str, None, VALUE,
       "--local's vLLM interpreter, a Python with vLLM installed, which serves the checkpoint and fetches it"),
     S("ARENA_GIB", str, None, VALUE,
-      "--local's weights arena, whole GiB, the store; unset, `UTIL` of the card's memory less 14 GiB (`arena_of`)"),
-    S("UTIL", str, None, VALUE, "--local's vLLM share of the card (`--util`); unset, 0.8"),
+      "--local's weights arena, whole GiB, the store; unset, `UTIL` of the card's memory less 12 GiB (`arena_of`)"),
+    S("UTIL", str, None, VALUE, "--local's vLLM share of the card (`--util`); unset, 0.88"),
     S("GPU", str, None, VALUE, "--local's card, an index nvidia-smi gives; unset, the first nvidia-smi names, and the lease's choice"),
 )

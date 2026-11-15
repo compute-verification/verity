@@ -144,8 +144,9 @@ WINDOWED = ("UNPACED", "SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES")
 ENGINE_ARGS, NODE_ARGS = "--step-hz 2 --align-steps", "--decode-s 60 --warm-openings 2773 --wait-s 1800"
 LATENESS = {"JITTER_MS": "50", "QUANTILE": "max"}
 #: vLLM's share of the card, and the GiB of it the arena leaves vLLM for its KV cache and activations: the node run's
-#: 62 GiB arena on a 96 GiB card at 0.8 (`arena_of`)
-UTIL, VLLM_ROOM_GIB = 0.8, 14
+#: 112 GiB of an H200's 141 and 72 of an RTX PRO 6000's 96 (`arena_of`); vLLM keeps VLLM_ROOM_GIB of its share for
+#: the served model's cache and activations, and the prover's context takes what is outside the share
+UTIL, VLLM_ROOM_GIB = 0.88, 12
 #: the least share of the card's memory a --local store may be: a session that read less read a request's bytes and
 #: not the card's, and its share is not this benchmark's
 STORE_MIN = 0.5
@@ -542,7 +543,7 @@ def thirds() -> tuple[str, str, str]:
 
 def arena_of(hbm_bytes: int) -> tuple[int, float]:
     """The engine's weights arena in whole GiB and vLLM's share of the card: ARENA_GIB and UTIL where set, else
-    floor(`UTIL` × the card's GiB) − `VLLM_ROOM_GIB`, which is the node run's 62 GiB on a 96 GiB RTX PRO 6000."""
+    floor(`UTIL` × the card's GiB) − `VLLM_ROOM_GIB`: 112 GiB on an H200."""
     try:
         util = float(SETTINGS.UTIL or UTIL)
         arena = int(SETTINGS.ARENA_GIB or math.floor(util * hbm_bytes / 2 ** 30) - VLLM_ROOM_GIB)

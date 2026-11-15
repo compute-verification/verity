@@ -1034,7 +1034,7 @@ def test_a_declared_error_at_the_bound_is_preferred_to_the_ledgers_own_and_holds
 
 
 #: a --local store: the arena `arena_of` gives an H200, which the store guard takes
-ARENA = 98
+ARENA = 112
 
 
 def a_local_record(*sessions: dict, arena: int = ARENA) -> dict:
@@ -1103,7 +1103,7 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
                                                                                    str(snap))
     assert machine.fetches() == [[str(tmp_path / "vllm" / "python"), "-c", M.FETCH, pin["repo"], pin["revision"],
                                   *sorted(pin["files"])]]
-    assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {ARENA} --util 0.8"
+    assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {ARENA} --util 0.88"
     assert env["NODE_ARGS"] == f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap}"
     assert (env["PACED"], env["PACE_PASS_MS"]) == ("1:1000:2773:7", "0"), "run.sh passes the form, once"
     assert env["VERIFIER_ARGS"] == (f"--node {env['RESEARCH_RUN_DIR']}/{M.NODE_FILE} "
@@ -1118,28 +1118,28 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
     text, doc, err = printed(capsys)
     assert text[0].startswith("memory: 0.199 of the node's memory read rate is left uncertified by this session")
     assert doc["audit"] is False and doc["ran_with"]["coins"] == "local challenger"
-    assert doc["ran_with"]["detail"].startswith(f"an arena of {ARENA} GiB at vLLM's 0.8 of the card, the store "
-                                                "105.23 GB of its ")
+    assert doc["ran_with"]["detail"].startswith(f"an arena of {ARENA} GiB at vLLM's 0.88 of the card, the store "
+                                                f"{ARENA * GIB / 1e9:.2f} GB of its ")
     assert "; paced: 7 credited stretches of 1,000 ms, 12 groups a stretch at 85 ms a pass" in doc["ran_with"]["detail"]
     assert text[1] == f"  {M.LOCAL}" and doc["local"] == M.LOCAL
     assert text[2] == (f"  card: NVIDIA H200, the verifier's node one card of hardware/nodes/h200-sxm-141gb-x1.toml; "
                        f"data sheets sha256 {M.digest(M.SHEETS)[:16]}, verifier sha256 {M.digest(M.VERIFIER)[:16]}")
     assert text[3] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
-    assert doc["machine"] == {"card": "NVIDIA H200", "sheet": "h200-sxm-141gb-x1", "arena_gib": ARENA, "util": 0.8,
+    assert doc["machine"] == {"card": "NVIDIA H200", "sheet": "h200-sxm-141gb-x1", "arena_gib": ARENA, "util": 0.88,
                               "sheet_sha256": M.digest(M.SHEETS), "verifier_sha256": M.digest(M.VERIFIER)}
     assert (doc["loopback"], doc["value"], doc["commit"]) == (False, 0.199, COMMIT)
     assert [(r["value"], r["why"]) for r in doc["beside"]] == [(None, M.NO_STORE)] * 2 and store.asked == []
     assert f"a {ARENA} GiB arena of its 141 GiB" in err
 
 
-@pytest.mark.parametrize("card, arena", [("NVIDIA H200, 9.0", 98),
-                                         ("NVIDIA RTX PRO 6000 Blackwell Server Edition, 12.0", 62)])
+@pytest.mark.parametrize("card, arena", [("NVIDIA H200, 9.0", 112),
+                                         ("NVIDIA RTX PRO 6000 Blackwell Server Edition, 12.0", 72)])
 def test_the_arena_is_most_of_the_cards_memory_from_its_sheet(store, work, card, arena):
-    """floor(0.8 × the card's GiB) − 14: the node run's own 62 GiB on the RTX PRO 6000."""
+    """floor(0.88 × the card's GiB) − 12: 112 GiB on an H200, 72 on an RTX PRO 6000."""
     machine = Machine(card=card, record=a_local_record(a_session(gamma=0.199), arena=arena))
     assert bench(store, "--local", run=machine) == 0
     ((_, env),) = machine.runs()
-    assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {arena} --util 0.8"
+    assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {arena} --util 0.88"
 
 
 def test_the_arena_vllm_py_gpu_and_cores_are_the_persons_to_set(store, capsys, work, monkeypatch, tmp_path):

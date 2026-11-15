@@ -96,14 +96,22 @@ them as not read, with that reason.
 ## What you may change
 
 The prover's side, which is all of what the audit treats as untrusted. What lowers the share is the bytes the card
-reads for the store in each stretch against what it could read:
+reads for the store in each stretch against what it could read.
+
+On one card the share is mostly the timing term. The verifier gives each pass group's answer a deadline A: the slowest
+pass, gap and round trip its calibration measured (at `QUANTILE`) plus twice `JITTER_MS`, against the median pass that
+paces the session, so steadier passes lower it most (the prover on cores no CPU quota throttles, and no pass far
+slower than the median). The sample term is next; it falls with more draws a stretch, which the fixed form sets. The
+`ran with` line prints the lateness allowed and the pass.
 
 - the pass that reads the arena, and its pacing against the verifier's coins
   (`verity/protocols/accounting/poub/prover/remote_session/session.cu`, `benchmarks/remote_session/node.py`);
 - how the arena is encoded and decoded on the GPU (`verity/protocols/accounting/poub/prover/word_codec/kv.cu`), and
   how the engine serves from it (`benchmarks/remote_session/engine.py`);
-- the arena's size: `ARENA_GIB` (default 0.8 of the card's memory less 14 GiB, `arena_of`; 98 GiB on an H200, 62 on
-  an RTX PRO 6000) and vLLM's share `UTIL` (default 0.8). The document says what it was.
+- the arena's size: `ARENA_GIB` (default 0.88 of the card's memory less 12 GiB, `arena_of`; 112 GiB on an H200, 72
+  on an RTX PRO 6000) and vLLM's share `UTIL` (default 0.88). The document says what it was;
+- the deadline's margin: `JITTER_MS` (default 50) and `QUANTILE` (default `max`). A smaller A charges less to timing
+  and leaves a slow pass less room before it misses its deadline.
 
 ## What is fixed
 
