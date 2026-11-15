@@ -27,7 +27,11 @@ the Lean verifier has not decided them; a recorded run's (`--from`, `PERIOD`) pr
 verifier and its coins run on the machine being measured, this is a measurement to improve on, not an audit:** the
 second line of the text and the JSON's `local` say so. Lower is better: 0 would mean the whole of the GPU's memory
 read rate over the session was certified as spent reading the audited store. The target is 0.14 at an error of at most
-2^-100.
+2^-100. The error is priced against one prover: one that makes at most 2^80 SHA-512 compressions over the session on
+any hardware it reaches (`audit.QUERIES_LOG2`), never the node's own hash rate, and the parameters line names it. A
+session registers the receipt kind's default 16 sketch rows, at which the sketch term alone keeps the error far above
+2^-100 against that prover; the registration's 64 rows (`node.py --rows 64`), which `run.sh` doesn't yet pass, bring
+the term below it.
 
 The share is of the one card's read rate and its host's, at the figures of the tree's data sheets: the verifier's node
 is one card of the card's node sheet (`hardware/nodes/`), handed to it as `--node`. The text's next lines name the

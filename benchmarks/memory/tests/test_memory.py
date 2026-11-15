@@ -1064,6 +1064,20 @@ def test_local_row_vllm_py_and_gpu_are_the_persons_to_set(store, capsys, work, m
     assert machine.started[0][0][-2:] == ["-i", "3"]
 
 
+def test_the_parameters_line_names_the_coins_the_form_and_the_prover_the_error_is_priced_against():
+    v = {"registration": {"rows": 16}}
+    vs = {"challenger": {"challenger": "local"}, "samples": 2773, "delta": 2 ** -101, "windows": 7,
+          "window_ns": 10 ** 9, "allowance_ns": 2 * 10 ** 6, "ledger": {"sketch_failure": {"queries_log2": 80}}}
+    p = M.parameters(v, vs)
+    assert p == {"coins": "local", "rows": 16, "samples": 2773, "delta": 2 ** -101, "windows": 7, "window_ms": 1000.0,
+                 "allowance_ms": 2.0, "budget_log2": 80}
+    line = M.parameters_line(p)
+    assert line.startswith(f"parameters: coins from {M.COINS['local']}; 16 rows; 2773 openings a window; δ = 2^-101.0")
+    assert line.endswith("7 windows of 1,000 ms; lateness allowed 2 ms; the error against a prover of 2^80 SHA-512 "
+                         "compressions on any hardware")
+    assert M.parameters_line(M.parameters({}, {})).endswith("a prover of SHA-512 compressions not stated")
+
+
 def test_local_runs_the_one_session_form_on_this_process_cores(store, capsys, work, monkeypatch):
     """Its numbers compare because every `--local` session has one form, and its cores are this machine's, not the
     team node's that `run.sh` assumes; the person's own VERIFIER_CPUS and PROVER_CPUS win."""

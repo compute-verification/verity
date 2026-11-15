@@ -297,13 +297,15 @@ def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict
 def parameters(v: dict, vs: dict) -> dict:
     """What session `vs` of the verifier's record `v` ran with, as its record states it: where its coins came from
     (the verifier's `--challenger`), the store's rows, the openings a window, δ a window, and the windows, their
-    length and the lateness allowed. None where the record states none."""
+    length and the lateness allowed, and the prover its error is priced against: `budget_log2`, the log2 of the SHA-512
+    compressions it may make on any hardware (`audit.QUERIES_LOG2`). None where the record states none."""
     def ns(x):
         return x / 1e6 if isinstance(x, (int, float)) and not isinstance(x, bool) else None
 
     return {"coins": (vs.get("challenger") or {}).get("challenger"), "rows": (v.get("registration") or {}).get("rows"),
             "samples": vs.get("samples"), "delta": vs.get("delta"), "windows": vs.get("windows"),
-            "window_ms": ns(vs.get("window_ns")), "allowance_ms": ns(vs.get("allowance_ns"))}
+            "window_ms": ns(vs.get("window_ns")), "allowance_ms": ns(vs.get("allowance_ns")),
+            "budget_log2": ((vs.get("ledger") or {}).get("sketch_failure") or {}).get("queries_log2")}
 
 
 def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None,
@@ -740,7 +742,9 @@ def parameters_line(p: dict) -> str:
             f"{p.get('rows') or 'no'} rows; {p.get('samples') or 'no'} openings a window; δ = "
             + (f"2^{math.log2(delta):.1f}" if isinstance(delta, (int, float)) and delta > 0 else "not stated")
             + f" a window; {p.get('windows') or 'no'} windows of {ms(p.get('window_ms'))}; lateness allowed "
-            f"{ms(p.get('allowance_ms'))}")
+            f"{ms(p.get('allowance_ms'))}; the error against a prover of "
+            + ("SHA-512 compressions not stated" if p.get("budget_log2") is None
+               else f"2^{p['budget_log2']} SHA-512 compressions on any hardware"))
 
 
 def _no_store():
