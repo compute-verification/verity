@@ -668,7 +668,7 @@ def test_the_writer_refuses_a_file_outside_the_result_or_named_twice_and_a_finge
         other.mkdir()
         text = json.dumps({"schema": kit.RESULT_SCHEMA, "run_id": RUN, key: held})
         (other / kit.RESULT).write_text(text)
-        for call in (lambda: kit.writer(other).fingerprint(), lambda: kit.writer(other).artifact("x")):
+        for call in (lambda other=other: kit.writer(other).fingerprint(), lambda other=other: kit.writer(other).artifact("x")):
             with pytest.raises(ValueError, match=f"{key} (isn't an object|aren't a list of paths)"):
                 call()
         assert (other / kit.RESULT).read_text() == text
