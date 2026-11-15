@@ -31,10 +31,12 @@ SITES = {
     "squaring.plans.keys": ("benchmarks/property_redteam/squaring.py", "main", "{seam_limb"),
 }
 
-#: sha256 of each site's text as main's records carry it
+#: sha256 of each site's text as main's records carry it, but where a move renamed a cited id on purpose
 PINS = {
-    "auditor_line.CONDITIONAL_ON": "eef1b8a66ff509654c9c447dd2a7be62e861b8a0ef29d04ffda4a09bef108036",
-    "auditor_line.GROUNDED": "a8fadc4ae80a462b2ca23eb8883f540a30e5cfc398a5737fa59c8680c401606d",
+    # `tools/move/device_tokens_map.toml` (`5fd12da779d`) renamed the assumption's id trusted-host to trusted-device
+    # wherever a string holds it: these two cite the new id, and differ from main's by that word alone
+    "auditor_line.CONDITIONAL_ON": "39cda10a9dfcebf0072503b7b55abeeb82ffac02373744da65d0ecc87248eceb",
+    "auditor_line.GROUNDED": "e323302f4027b0752544dd4bdfa9d81dd63ab17cfa17cbbb8c5b28ec7bf287af",
     "auditor_line.PREMISES": "9e01ee2d90f0c1488b589082d6cfedd974f8ed030b7fd17828721527de87dbdf",
     "auditor_line.UNBOUND": "996c0a8ea6e56c8e9c310174e0b13f65879bfe26530b228c3a9c97907227f705",
     "auditor_line.analyse.no_credit": "cc2761511a943b54459836ef8adda004b2990619447713a0c184e638aea1f1c9",
