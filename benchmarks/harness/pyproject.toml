@@ -153,9 +153,11 @@ tests = ["tests/test_bench.py", "tests/test_bench_engines.py", "tests/test_bench
 paths = ["verity/protocols/accounting/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_prove.py", "tests/test_served_table.py",
-         "tests/test_steady_launch.py", "tests/test_steady_node.py", "tests/test_steady_node_kept.py",
-         "tests/test_steady_node_refusals.py", "tests/test_steady_point.py", "tests/test_steady_runs.py"]
+tests = ["tests/test_breakdown.py", "tests/test_overhead_command.py", "tests/test_overhead_node.py",
+         "tests/test_overhead_points.py", "tests/test_overhead_store.py", "tests/test_prove.py",
+         "tests/test_served_table.py", "tests/test_steady_launch.py", "tests/test_steady_node.py",
+         "tests/test_steady_node_kept.py", "tests/test_steady_node_refusals.py", "tests/test_steady_point.py",
+         "tests/test_steady_runs.py"]
 paths = ["artifacts.json"]
 
 [[tool.verity.tests.reads]]
