@@ -1,5 +1,6 @@
 # The docstrings that name a parameter the docket_locals maps renamed: ``registration`` becomes ``docket`` where it
-# names `stop_order`'s, `session_registered`'s or `_audited`'s parameter.
+# names `stop_order`'s, `session_registered`'s or `_audited`'s parameter, or the replay bundle's checks' or
+# two-stage's `sampled`.
 
 [words]
 
@@ -17,6 +18,11 @@ files = ["verity/protocols/proofs/spot/prover/tests/test_records_audit.py"]
 files = ["verity/protocols/proofs/spot/verifier/one_stage/audit.py"]
 [words_in.words]
 "`registration`, only its own values" = "`docket`, only its own values"
+
+[[words_in]]
+files = ["benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py", "benchmarks/two_stage/audit.py"]
+[words_in.words]
+"``registration``" = "``docket``"
 
 [keep]
 patterns = []
