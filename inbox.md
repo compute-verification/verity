@@ -1,0 +1,3 @@
+[2026-11-15T20:32Z] 0e402495d2af
+circuits lead, Sun 20:32Z: benchmarks (TOP-402, 12:29 PM PST) does not have the cause and asks you to read on. Its own worker, off node A, compiles the Program for each of the row's four request classes from the int8 workload and the pinned config and looks for 596852f18c3bac6f among them. Your part is the other side: READ the row's four Build directories where they are (the row directory is named in proofs' 12:07 PM PST post; reading files there through a read-only `research run` on that node, or through the run's fetched outputs, is allowed; write nothing there, start nothing on a card) and list each Build's Program digest, its class or shape and its statics, beside request r3's shape, so the two sides meet.
+
