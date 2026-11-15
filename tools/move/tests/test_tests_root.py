@@ -47,7 +47,7 @@ TREE = {
     "tools/plain/pyproject.toml": '[project]\nname = "plain"\nversion = "0"\n\n[tool.uv]\npackage = false\n\n'
                                   '[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = ["../../verity/a"]\n',
     "tools/plain/tests/test_p.py": "from pathlib import Path\n\nA = Path(__file__).resolve().parents[3] / \"verity\" / \"a\"\n"
-                                   "HELPER = A / \"tests\" / \"helper.py\"\nROOT = Path(__file__).resolve().parents[3]\n"
+                                   "HELPER = A / \"tests\" / \"helper.py\"\nKEPT_DIR = A / \"tests\"\nROOT = Path(__file__).resolve().parents[3]\n"
                                    "CODE = ROOT / \"verity\" / \"a\"\n\n\ndef test_p():\n"
                                    "    assert HELPER.is_file() and (CODE / \"tests/helper.py\").is_file()\n",
     "tools/check/pyproject.toml": '[project]\nname = "verity-check"\nversion = "0.0.0"\nrequires-python = ">=3.12"\n'
@@ -56,8 +56,18 @@ TREE = {
                                   '[tool.verity.tests]\nuntraced = ["tests/test_c.py"]\n',
     "tools/check/suites.py": "X = 1\n",
     "tools/check/tests/test_c.py": "def test_c():\n    pass\n",
+    "verity/a/runner.py": "import sys\nfrom pathlib import Path\n\nKEPT = Path(__file__).resolve().parent / \"tests\"\n"
+                          "sys.path.insert(0, str(KEPT))\nimport kept  # noqa: E402\n",
+    "verity/a/tests/kept.py": "from kept_helper import K\n",
+    "verity/a/tests/kept_helper.py": "K = 1\n",
+    "verity/a/tests/data.json": "{}\n",
+    "verity/a/tests/test_kept.py": "from pathlib import Path\n\nimport kept\n\nHERE = Path(__file__).resolve().parent\n"
+                                   "DATA = HERE / \"data.json\"\n\n\ndef test_kept():\n    assert kept.K and DATA.is_file()\n",
     "tools/research/src/research/store/moves.json": '{"moves": []}\n',
 }
+#: the toy's files under a tests/ that code outside the tests runs (`tests_root.KEEP_FILES`)
+KEEP = {"verity/a/tests/kept.py": "`verity/a/runner.py` imports it", "verity/a/tests/kept_helper.py": "`kept.py` imports it",
+        "verity/gone/tests/x.py": "a file no longer there drops out"}
 
 
 def git(r: Path, *args: str) -> str:
@@ -75,9 +85,11 @@ def repo(tmp_path: Path) -> Path:
     return r
 
 
-def test_the_inventory_names_each_tests_directory_with_its_suite_and_what_the_rule_cant_move_as_stated(tmp_path):
+def test_the_inventory_names_each_tests_directory_with_its_suite_and_what_the_rule_cant_move_as_stated(tmp_path, monkeypatch):
     """Each `X/tests` lands at `tests/X/`, but for a package its modules import as `tests`, which keeps its level; a suite
-    that builds a distribution or a member's that stays one and a conftest beside a suite's pyproject are snags by name."""
+    that builds a distribution or a member's that stays one, a conftest beside a suite's pyproject and each kept file are
+    snags by name."""
+    monkeypatch.setattr(TR, "KEEP_FILES", KEEP)
     inv = TR.inventory(TR.Tree(repo(tmp_path)))
     rows = {r["dir"]: (r["kind"], r["lands"]) for r in inv["rows"]}
     assert rows == {"adapters/dist/tests": ("distribution", "tests/adapters/dist/tests/"),
@@ -86,6 +98,8 @@ def test_the_inventory_names_each_tests_directory_with_its_suite_and_what_the_ru
                     "verity/a/tests": ("suite-only", "tests/verity/a/")}
     assert inv["snags"]["a suite whose pyproject builds a distribution (split first)"] == ["adapters/dist/tests (dist)"]
     assert inv["snags"]["a suite of a member that stays one (split first)"] == ["tools/check/tests (verity-check)"]
+    assert inv["snags"]["a file under a tests/ that is no test (kept where it is)"] == [
+        "verity/a/tests/kept.py: `verity/a/runner.py` imports it", "verity/a/tests/kept_helper.py: `kept.py` imports it"]
     assert inv["snags"]["a tests/ package its modules import as `tests` (one level kept)"] == ["adapters/dist/tests"]
     assert "adapters/dist/conftest.py" in inv["snags"][
         "a test-like file outside every tests/ (conftest beside a suite's pyproject, or a module named test_*)"]
@@ -135,12 +149,15 @@ def test_split_moves_the_suite_of_a_member_that_stays_one_to_a_member_with_its_d
     assert uv["sources"] == {"verity": {"workspace": True}}
 
 
-def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproject_beside_them(tmp_path):
+def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproject_beside_them(tmp_path, monkeypatch):
     """After `split`, `maps`, its move, `suites-map`, its move and `anchors`: every test is under `tests/`, each suite's
     pyproject beside its tests collects them from its own directory and puts the same directories on its path, a suite
     whose own directory held more than its tests reads it still, and a reference through `Path(__file__)` or a name bound
     to it still reaches what it did: a test's to its code, a test's to another's tests, and code's to its tests, in
-    parentheses where a call or a subscript follows it."""
+    parentheses where a call or a subscript follows it. A kept file stays (`[keep_files]`, a row to itself): code that
+    imports it is as it was, a reference to its directory from outside it means it, and its suite's tests, which imported
+    it from beside them, find it on the suite's `pythonpath`."""
+    monkeypatch.setattr(TR, "KEEP_FILES", KEEP)
     r = repo(tmp_path)
     TR.run_split(TR.Tree(r), [])
     git(r, "commit", "-q", "-m", "split")
@@ -159,8 +176,10 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     files = tomllib.loads((r / TR.FILES_MAP).read_text())
     dirs = {"adapters/dist/tests/": "tests/adapters/dist/tests/", "tools/check/tests/": "tests/tools/check/",
             "tools/plain/tests/": "tests/tools/plain/", "verity/a/tests/": "tests/verity/a/"}
-    assert files["paths"] == dirs
-    assert "split" not in files and files["rewrite"]["keep_relative"] == [f"{d}*.py" for d in dirs]
+    assert files["paths"] == {**dirs, "verity/a/tests/kept.py": "verity/a/tests/kept.py",
+                              "verity/a/tests/kept_helper.py": "verity/a/tests/kept_helper.py"}
+    assert files["keep_files"] == {p: why for p, why in KEEP.items() if "gone" not in p}
+    assert files["rewrite"]["keep_relative"] == [f"{d}*.py" for d in dirs]
     move(TR.FILES_MAP)
     assert TR.main(["suites-map"], root=r) == 0
     suites = tomllib.loads((r / TR.SUITES_MAP).read_text())
@@ -170,7 +189,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     assert "add_inputs" not in suites["pyproject"]["tests/tools/plain/pyproject.toml"]
     move(TR.SUITES_MAP)
     left = [f for f in git(r, "ls-files").split() if "/tests/" in f and not f.startswith(("tests/", "tools/move/"))]
-    assert left == []
+    assert left == ["verity/a/tests/kept.py", "verity/a/tests/kept_helper.py"]
     assert (r / "tests/tools/check/pyproject.toml").is_file() and (r / "tools/check/pyproject.toml").is_file()
     a = tomllib.loads((r / "tests/verity/a/pyproject.toml").read_text())
     assert a["tool"]["pytest"]["ini_options"] == {"testpaths": ["."], "pythonpath": ["../../../verity/a"]}
@@ -192,5 +211,23 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     p = (r / "tests/tools/plain/test_p.py").read_text()
     assert 'HELPER = A.parents[1] / "tests" / "verity" / "a" / "helper.py"' in p and "assert HELPER.is_file() and" in p
     assert '(CODE.parents[1] / "tests" / "verity" / "a" / "helper.py").is_file()' in p
+    assert 'KEPT_DIR = A / "tests"\n' in p
+    assert 'HERE = Path(__file__).resolve().parent\nDATA = HERE / "data.json"' in (r / "tests/verity/a/test_kept.py").read_text()
+    assert (r / "tests/verity/a/data.json").is_file()
+    assert (r / "verity/a/runner.py").read_text() == TREE["verity/a/runner.py"]
+    a = tomllib.loads((r / "tests/verity/a/pyproject.toml").read_text())
+    assert a["tool"]["pytest"]["ini_options"]["pythonpath"] == ["../../../verity/a", "../../../verity/a/tests"]
     assert TR.anchors(TR.Tree(r), base, write=False) == {}
 
+
+def test_maps_stop_on_a_kept_module_whose_import_beside_it_would_move(tmp_path, monkeypatch):
+    """A kept module imports a module beside it that isn't kept: `maps` stops and names it, rather than leave the import
+    to fail where its reader runs it."""
+    monkeypatch.setattr(TR, "KEEP_FILES", {"verity/a/tests/kept.py": "`verity/a/runner.py` imports it"})
+    r = repo(tmp_path)
+    try:
+        TR.main(["maps"], root=r)
+    except SystemExit as e:
+        assert "verity/a/tests/kept.py imports verity/a/tests/kept_helper.py" in str(e) and "KEEP_FILES" in str(e)
+    else:
+        raise AssertionError("maps took a kept module whose import beside it moves")
