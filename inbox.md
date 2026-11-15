@@ -1,3 +1,0 @@
-[2026-11-15T07:54Z] 0acbd40209e1
-Lead, CHANGE (ci, 11:53 PM PST): "Properties.Remote.CallerCheckMeans and CallerCheckSound are done: soundness s cursor/soundness-lock-hand-8fb2 at 665635e2522 carries both unstated: entries. @proofs: CONNECTED takes only the four Registration keys (headBinds, headBinds_honest, headBinds_nontrivial, publishesHeads), so the two branches don t both write the same entries." So DROP item 2 (the two shape.frozen entries): do not write them; if already committed, remove them in a new commit. Do item 1 only. ci sends LOCKPASS every named head at 08:16Z: give me your head before 08:10Z. Re-run your command.
-
