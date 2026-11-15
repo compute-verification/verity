@@ -105,7 +105,7 @@ def test_an_upward_import_is_found():
     sources = {"Flock.Verify": "import Flock.ZkServer.Coins\nimport Base.Hash\n", "Flock.ZkServer.Coins": "import Flock.RecCoins\n",
                "Flock.RecCoins": "import Flock.ZkServer\nimport Flock.Verify\nimport VStar.Cli\n",
                "Flock.Test.RecCap": "import Flock\n", "Flock": "import Flock.RecCoins\n"}
-    assert upward(sources) == [("Flock.ZkServer.Coins", "Flock.RecCoins"), ("Flock.Verify", "Flock.ZkServer.Coins")]
+    assert upward(sources) == [("Flock.Verify", "Flock.ZkServer.Coins"), ("Flock.ZkServer.Coins", "Flock.RecCoins")]
 
 
 def test_each_library_holds_its_layer():
