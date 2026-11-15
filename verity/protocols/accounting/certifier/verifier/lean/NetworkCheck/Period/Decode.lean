@@ -11,7 +11,6 @@ public import InferenceOnlyCheck.Desc
 public import InferenceOnlyCheck.DefinitionDigest
 public import NetworkCheck.Period.ConnectionRows
 public import NetworkCheck.Period.Start
-public import Spot.Record
 meta import NetworkCheck.Check
 meta import NetworkCheck.Clocks
 meta import NetworkCheck.ScanOk
@@ -23,7 +22,6 @@ meta import InferenceOnlyCheck.Desc
 meta import InferenceOnlyCheck.DefinitionDigest
 meta import NetworkCheck.Period.ConnectionRows
 meta import NetworkCheck.Period.Start
-meta import Spot.Record
 
 /-! The period check's structures and their decoding, which `NetworkCheck.Period` reads: its parameters, commitment,
 evidence, facts and public, and the decoding of each from its JSON. The check and its bound are in
