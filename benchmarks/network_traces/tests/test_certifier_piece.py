@@ -1620,7 +1620,7 @@ def test_the_served_tables_scan_class_is_v3cs_setup_in_scan_zk():
     lanes and EVERY."""
     import scan_zk as SZ
 
-    spec = importlib.util.spec_from_file_location("served_table", ROOT / "demos/onsite_served/served_table.py")
+    spec = importlib.util.spec_from_file_location("served_table", ROOT / "tools/verity/cli/verity_cli/served_table.py")
     table = importlib.util.module_from_spec(spec)
     sys.modules["served_table"] = table
     spec.loader.exec_module(table)
