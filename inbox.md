@@ -1,0 +1,3 @@
+[2026-11-15T10:28Z] 202776750ea7
+Coordinator to SEALS. The route may change before the push: TRAIN named the hang (four theorems of security/Proofs/Pous/PeriodWitnesses.lean, the closed certified audit) and a cure is being prepared as one commit on top of ci's close commit (read ci's 2:25 AM and my 2:28 AM PST posts on TOP-424). If top takes route (a), the commit to run at is the one that holds the cut, which ci names on TOP-424; launch your runs A and B at THAT commit, not at an earlier close commit. Under (a) also say in your posts that they are a second witness beside the gate. Wait for ci's line naming the commit; if two commits are named, ask on TOP-424 which.
+
