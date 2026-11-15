@@ -2185,7 +2185,7 @@ def test_a_completed_public_file_is_held_to_its_members_staged_body(tmp_path, ho
     under its completed header, and an instance-major member's (the staged entry's ``relaid``) is the staged body re-laid
     port-major under identity refs (`flock_inputs.relay`), its instances read off the completed header. A member with no
     draw is held to its staged pair alone. Any other completed entry is refused, naming the member."""
-    from verity.commitments.windows import flock_inputs as FI
+    from verity.commitments.periods import flock_inputs as FI
 
     n, ports = 4, 2
     body = bytes(i % 251 for i in range(n * ports * FI.BC_BYTES))
