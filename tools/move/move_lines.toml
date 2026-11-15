@@ -107,3 +107,62 @@ reason = "The move ran rename.py by the map it adds, as its message says and no 
 ["35d39c1bdd330674510beb8b3a780fb788b03e88"]
 line = "Layout-move: tools/move/pouw_serving_torch_map.toml --no-lock"
 reason = "The move ran layout.py with --no-lock by the map it adds, as its message says and no move line does."
+
+["79a57ee4f6109541abeff5ce8bcdee07045c4248"]
+line = "Move: tools/move/dither_draw_map.toml"
+reason = "The commit ran rename.py with a word map, as its subject says, where its trailer names layout.py, which refuses the map."
+
+["6640ad12f3d32518944439c27f28d8da058ddea9"]
+line = "Layout-move: tools/move/two_stage_audit_map.toml --no-lock"
+reason = "The move left uv.lock as it was, as its message says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["d0e029f4670003ac1c6d883de9511173d4a31eb7"]
+line = "Layout-move: tools/move/demo_dirs_map.toml --no-lock"
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py, which refuses a path map."
+
+["48c45b3a2f5469afce0ad6b1fb185df0a5e35b93"]
+line = "Layout-move: tools/move/commitments_periods_map.toml --no-lock"
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py, which refuses a path map."
+
+["ac7fe4b7472ad49eb66c85842877c164c2f4d8e8"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py, which refuses a path map."
+
+["922443c0f7b04d60866c98ed4c32dee2c86e7d33"]
+line = "Layout-move: tools/move/docket_paths_map.toml --no-lock"
+hand = ["verity/protocols/accounting/certifier/prover/scan_zk.py"]
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py; it was kept to the files its message names, and left as its parent had it the one other file layout.py rewrites."
+
+["2ea5e3d0e4c416aaaf0aba26b68f71702f55445b"]
+line = "Layout-move: tools/move/pouw_serving_map.toml --no-lock"
+hand = ["adapters/vllm/tests/protocols/test_credit_gate_outside.py", "adapters/vllm/tests/protocols/test_pouw_h1_records.py", "adapters/vllm/tests/protocols/test_pouw_h1_records_device.py", "adapters/vllm/tests/protocols/test_pouw_h1_weight_roots.py", "verity/protocols/accounting/pouw/prover/tests/test_credit_gate_outside.py", "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records.py", "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records_device.py", "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_weight_roots.py"]
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py; it was kept to the one line its message names, and left as its parent had them the adapter tests the map moves."
+
+["9f71545ac43a5e68da77b80ac46a581b3deef24c"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+hand = ["tools/research/src/research/store/moves.json", "verity/protocols/accounting/certifier/prover/pyproject.toml"]
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py; it left out the map's ledger record in moves.json and its rewrite of the certifier's suite inputs, as its message says."
+
+["85f22cb11aa0d59d5c4a0add92bfe4d22a068aa9"]
+hand = ["verity/protocols/proofs/spot/verifier/one_stage/caller.py"]
+reason = "The commit also rewrapped by hand caller.py's docstring opening, which rename.py's rewrite joined into one line."
+
+["b2196c5098099b4d46179a3579455fd098bf1be2"]
+hand = ["adapters/vllm/tests/test_messages.py", "benchmarks/network_traces/kind_scan.py", "benchmarks/network_traces/tests/test_kind_scan.py", "benchmarks/one_stage/onsite_record.py", "benchmarks/one_stage/tests/test_onsite_record.py"]
+reason = "The rerun was kept to the files its message names, and left as its parent had them the other files its script rewrites."
+
+["8b98edb1e6f3227328c878b3258e98f1ea851a33"]
+hand = ["adapters/vllm/tests/pipeline/test_serve_openai.py", "benchmarks/network_e2e/chain.py", "benchmarks/network_e2e/encodings/arith_vectors.py", "benchmarks/network_e2e/encodings/derived.py", "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/tests/test_replay.py", "benchmarks/network_e2e/encodings/tests/test_v1.py", "benchmarks/network_e2e/encodings/v1.py", "benchmarks/network_e2e/traces/README.md", "benchmarks/network_e2e/traces/admit_release.py", "benchmarks/network_e2e/traces/corpus.py", "benchmarks/network_e2e/traces/host_sample.py", "benchmarks/network_e2e/traces/join.sh", "benchmarks/network_e2e/traces/pyproject.toml", "benchmarks/network_e2e/traces/run.sh", "benchmarks/network_e2e/traces/summary.py", "benchmarks/network_e2e/traces/tests/test_arrival_order.py", "benchmarks/network_e2e/traces/tests/test_tick_corpus.py", "benchmarks/network_e2e/traces/tests/test_warden_probes.py", "benchmarks/network_e2e/traces/warden_probe.py", "benchmarks/network_traces/README.md", "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/chain_record.py", "benchmarks/network_traces/chain_record.sh", "benchmarks/network_traces/demo_stub.py", "benchmarks/network_traces/negatives.py", "benchmarks/network_traces/pyproject.toml", "benchmarks/network_traces/scan_zk.sh", "benchmarks/network_traces/served_session.py", "benchmarks/network_traces/tests/test_certifier_piece.py", "benchmarks/network_traces/tests/test_chain_record.py", "benchmarks/network_traces/tests/test_demo_stub.py", "benchmarks/network_traces/tests/test_kept_scan.py", "benchmarks/network_traces/tests/test_negatives.py", "benchmarks/network_traces/tests/test_out_request_values.py", "benchmarks/network_traces/tests/test_served_session.py", "benchmarks/network_traces/tests/test_warden_chain.py", "benchmarks/network_traces/tests/test_wipe_gate.py", "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/warden_zk.sh", "benchmarks/network_traces/wipe_gate.sh", "benchmarks/one_stage/a5_tp.sh", "benchmarks/one_stage/a5_warden.py", "benchmarks/one_stage/tests/test_a5_warden.py", "benchmarks/one_stage/tests/test_warden_replay.py", "benchmarks/one_stage/warden_replay.py", "security/Definitions/Certifier/Tap.lean", "security/Proofs/Certifier/README.md", "security/Proofs/Certifier/Tap.lean", "security/Proofs/Certifier/Warden.lean", "security/Proofs/Properties/Certifier/Check/TransferBlocks.lean", "security/lean-audit.json", "verity/protocols/accounting/certifier/device/program/lean/NetworkCertifier/Rows.lean", "verity/protocols/accounting/certifier/device/released_keys.json", "verity/protocols/accounting/certifier/device/runner_parts.py", "verity/protocols/accounting/certifier/device/tests/test_load_relay.py", "verity/protocols/accounting/certifier/device/tests/test_warden_serve.py", "verity/protocols/accounting/certifier/device/tests/test_warden_serve_phase10.py", "verity/protocols/accounting/certifier/device/warden_serve.py", "verity/protocols/accounting/certifier/prover/egress_zk.py", "verity/protocols/accounting/certifier/prover/ingress_scan.py", "verity/protocols/accounting/certifier/prover/io_ids.py", "verity/protocols/accounting/certifier/prover/n2_tie_zk.py", "verity/protocols/accounting/certifier/prover/n2_zk.py", "verity/protocols/accounting/certifier/prover/scan_period.py", "verity/protocols/accounting/certifier/prover/scan_zk.py", "verity/protocols/accounting/certifier/prover/tests/test_egress_zk.py", "verity/protocols/accounting/certifier/prover/tests/test_n2_tie_zk.py", "verity/protocols/accounting/certifier/prover/tests/test_scan_zk.py", "verity/protocols/accounting/certifier/prover/tests/test_warden_zk.py", "verity/protocols/accounting/certifier/prover/warden_zk.py", "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.py", "verity/protocols/accounting/certifier/verifier/io_request.py", "verity/protocols/accounting/certifier/verifier/io_tie.py", "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean", "verity/protocols/accounting/certifier/verifier/service.py", "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py", "verity/protocols/accounting/certifier/verifier/tests/standin.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_egress.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_ingress_scan.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_request.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie_adversarial.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie_phase4.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_pacer.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_service.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_tie_service.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_transfer_blocks_lean.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_warden.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_warden_rows.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_warden_rows_phase11.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_warden_rows_replay.py", "verity/protocols/accounting/certifier/verifier/tie_service.py", "verity/protocols/accounting/certifier/verifier/warden.py", "verity/protocols/accounting/certifier/verifier/warden_rows.py", "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/tests/test_auditor_load.py", "verity/protocols/compose/device/live_challenger/tests/test_auditor_warden.py", "verity/protocols/compose/device/live_challenger/tests/test_auditor_warden_serve.py"]
+reason = "The rerun was kept to the files its message names, and left as its parent had them the other files its script rewrites."
+
+["9e7c7f3c10e1d8e89748570e24ec17a4548ea1a7"]
+move = false
+reason = "The rename ran by a copy of law_lean_map.toml narrowed by hand to the five files its message names, which no commit holds; the map at its parent names paths its parent lacks, and rename.py refuses it there."
+
+["5751da8f37e8c64431cae54835d3d0c81d58eca5"]
+move = false
+reason = "The rename ran by a copy of inference_only_map.toml narrowed by hand to the fourteen files its message names, which no commit holds; the map at its parent names paths its parent lacks, and rename.py refuses it there."
+
+["6b2dae730f06053c576435fe828128e24166656d"]
+move = false
+reason = "The rename ran by a copy of theta_map.toml narrowed by hand to the three Lean files its message names, which no commit holds; the map at its parent names paths its parent lacks, and rename.py refuses it there."

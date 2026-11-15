@@ -140,15 +140,12 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_sample(tmp_pa
         return str(tmp_path / f"{name}.json")
 
     structured = {"leaked": [], "control": {"holds_all": True}}
-    (tmp_path / "witness.json").write_text(json.dumps({"members": {"honest": {"received": {
-        "verifier_found": ["head egress 45 @320"], "structured": {"head egress 45 @320": "across"}}}}}))
-    steps.n2_witness = [str(tmp_path / "witness.json")]
     steps.n2 = [run("honest", {"windows": [window] * 2, "network": {"accepted": True}, "received": structured}, [1, 2]),
                 run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [1, 2])]
     got = cr.report(steps)
     n2s = got["steps"]["n2"]
     assert got["verdict"] == "accepted" and got["negatives_refused"] == {"n2/moved": "escaped the draw"}
-    assert n2s["members"]["honest"]["structured"] == {"head egress 45 @320": "across"}
+    assert not {"structured", "prove_s", "verify_s"} & set(n2s["members"]["honest"])
     assert n2s["members"]["moved"]["escaped_the_draw"] == {"incorrect_windows": [0], "drawn": [1, 2]}
     assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
     assert n2s["eps_at_delta"]["incorrect_at_delta"]["0.5"] == 1

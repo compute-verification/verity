@@ -61,7 +61,7 @@ SUPPRESSED = "import sys  # noqa: F401"
 MOVE_CHECK = """\
 import importlib.util, subprocess, sys
 from pathlib import Path
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 for path in ("tools/move/rename.py", "tools/check/pins.py"):
     spec = importlib.util.spec_from_file_location(Path(path).stem, ROOT / path)
     spec.loader.exec_module(importlib.util.module_from_spec(spec))
