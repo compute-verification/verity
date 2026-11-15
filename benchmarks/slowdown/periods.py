@@ -75,8 +75,8 @@ LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provis
 PERIOD_BOUND = "Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod"
 #: the per-block statement the remote cuts cite (`Remote.CITES`), whose premises the period statement's others are
 PER_BLOCK_BOUND = Remote.CITES[0]
-PERIOD_PREMISES = {"InferenceOnly.Assumptions.PouwPerWindow": "`ε'` and `p/ε'`",
-                   "InferenceOnly.Assumptions.SampledPerWindow": "the escape share and its tail",
+PERIOD_PREMISES = {"Slowdown.Assumptions.PouwPerExecutionPhase": "`ε'` and `p/ε'`",
+                   "Slowdown.Assumptions.SampledPerExecutionPhase": "the escape share and its tail",
                    "Slowdown.Assumptions.IdentitySchedule": "same",
                    "Slowdown.Assumptions.UnmonitoredAtMost": "`s`",
                    "Slowdown.Assumptions.CheatingAtMost": "`χ`"}
