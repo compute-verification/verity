@@ -150,14 +150,16 @@ as its own one no line names that is the same build made before, as a tick cut o
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
 Lean, a lock or a spec) it starts the candidate's records run instead (`vqueue_records.start`: drive's lock run, on drive's
 machines, on its tree), logged (`regenerate`), and the candidate is staged, its check waiting; a tick that stages one builds
-its batch of PRs with no Lean change too, on the same base.  One after a Commit of its tick (`vqueue.Build.after`) is built
+its batch of PRs with no Lean change too, on the same base.  Under `--lean-stages` N above 1, while fewer than N are staged
+the tick's Lean batch is staged on the top staged one's tip, its records run its own (`vqueue.Snapshot.lean_stages`).  One after a Commit of its tick (`vqueue.Build.after`) is built
 on the candidate that Commit put on main's chain, whose check's record, as started, it reads as its base's; it is built
 nowhere, and nothing is logged, when the Commit put none there.  Every check starts at one seam (`Loop._enqueue`: the
 enqueue, its line and the run beside it).
 A candidate holding a heavy PR (`World.heavy`), or every candidate and `main`'s own check while the heavy file holds `*`,
 runs its records run, and, where the check gates, the shard of its check that audits `vqueue_slim.HEAVY_PART`, on
 `--heavy-on`'s machines alone, its other shards on theirs (`Loop._heavy_on`); a records run's resend after a machine's fault
-stays on them, as a check started again does.
+stays on them, as a check started again does.  Under `--lean-stages` above 1 each such run takes one of those machines, the
+first no other candidate's heavy run in flight holds, so two staged Lean batches' heavy parts run on two machines.
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what follows `main` moving
 (`Landing._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.  A push that
 took but raised logs no advance done: the drop of a passed candidate as on `main` logs it then (`Loop._reached`).  Outside
@@ -206,7 +208,8 @@ never writes drive's state, its priority file, `next`, `checked` or a label, but
 
 On a node it runs as vy-vqueue (tools/research/src/research/pods/nebius/vqueue/loop.sh): one `--once` tick a pass, from ci's
 pinned tree in the loop's own clone, with its args file's flags and the node's log, state, lock, priority and freeze files, and
-`--dry-run` or `--shadow` as its mode says, neither when live.  `--batch`, `--depth` and `--lean` default to 16, 3 and 3.
+`--dry-run` or `--shadow` as its mode says, neither when live.  `--batch`, `--depth`, `--lean` and `--lean-stages` default to
+16, 3, 3 and 1.
 """
 from __future__ import annotations
 
@@ -295,6 +298,8 @@ INTERVAL_S = 60
 #: the most members a candidate holds, candidates stacked at once and members of a Lean batch, each with a Lean change that
 #: compiles (a spec's or Lean source's, not a lock's alone: `World._judge`), unless pinned (`PINS`)
 BATCH, DEPTH, LEAN = 16, 3, 3
+#: the most Lean batches staged at once, each after the first on the one staged before it (`vqueue.Snapshot.lean_stages`)
+LEAN_STAGES = 1
 #: the clone's refs the loop fetches into, none of drive's
 NS = "refs/vqueue"
 MAIN = f"{NS}/main"
@@ -2611,14 +2616,18 @@ class Loop:
                  g2_read_s: float = G2_READ_S, g2_fresh: int = G2_FRESH, after: list[str] | None = None,
                  clock: Callable[[], float] = time.monotonic,
                  peak: Callable[[], float] = _peak_gb, timing: Callable[[str], None] = print,
-                 left_out: Callable[[Snapshot], list[Leave]] | None = vqueue.left_out):
+                 left_out: Callable[[Snapshot], list[Leave]] | None = vqueue.left_out, lean_stages: int = LEAN_STAGES):
         if gate not in GATES or gate in CHECKS and (slim is None or not _sharded(slim, shards)):
             raise ValueError(f"gate {gate!r} with {shards} shard(s){'' if slim is not None else ' and no run beside a check'}: "
                              f"a gate is one of {', '.join(GATES)}, and `{CHECK_GATE}` (`{VERDICT_GATE}` too) is the run "
                              "beside each check (`research.vqueue_slim`) as one shard or more")
         self.world, self.log_path, self.decide, self.shadow, self.dry_run = world, Path(log), decide, shadow, dry_run
         self.batch, self.depth, self.lean, self.pending_s, self.slim = batch, depth, lean, pending_s, slim
-        self.gate, self.shards = gate, shards
+        self.lean_stages, self.gate, self.shards = lean_stages, gate, shards
+        #: under `lean_stages` above 1, the records and check records of the candidates this tick's snapshot read, by sha, and
+        #: the `--heavy-on` machine each heavy launch of the tick took (`_heavy_on`)
+        self._flying: dict[str, Past] = {}
+        self._took: dict[str, str] = {}
         #: whether graph2's verdict is read in shadow where the check gates (`--no-graph2-shadow` turns it off): each read
         #: lists every task of a candidate's check and pulls each pending task's results, which the check's gate never needs
         self.graph2_shadow = graph2_shadow or gate not in CHECKS
@@ -2664,6 +2673,7 @@ class Loop:
             whole = Past.read(self.log_path, 0)
             builds |= {sha: r for sha, r in whole.builds().items() if sha in older}
         mine = {sha for name, sha in refs.items() if name == sha[:12] and sha in builds}
+        self._flying, self._took = {sha: whole if sha in older else past for sha in mine}, {}
         foreign = {name: sha for name, sha in refs.items() if sha not in mine or name != sha[:12]}
         cands, judged, wrote, regen = [], {}, [], {}
         bases = {sha: builds[sha].get("base") or "" for sha in mine}
@@ -2737,7 +2747,7 @@ class Loop:
                                            lean=h not in gone and w._judge(main, h)[0],
                                            move=bool(getattr(w.open().get(m), "move", "")),
                                            scripts=vqueue.meets(f, MOVE_SCRIPTS)) for m, h in sorted(flying)),
-                        records=self.records is not None)
+                        records=self.records is not None, lean_stages=self.lean_stages)
         steps.lap("chain")
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried),
                     dict(w.unauthenticated), riding=riding)
@@ -3477,11 +3487,28 @@ class Loop:
     def _heavy_on(self, line: dict) -> str:
         """The machines the heavy runs of the candidate of ``line`` take, `World.heavy_on`, when a member of it is a heavy PR or
         the heavy file names every candidate (`World.heavy`, read at each launch), `main`'s own check then too; "" else, and
-        when no machines are named."""
+        when no machines are named.  Under `lean_stages` above 1, with more than one named, the first of them no heavy run of
+        another candidate in flight holds (its records run's or its check's not yet judged, or one this tick launched), so
+        two staged Lean batches take two machines; all of them while each is held."""
         if not (on := getattr(self.world, "heavy_on", "")):
             return ""
         prs, every = self.world.heavy()
-        return on if every or set(line.get("members") or ()) & prs else ""
+        if not (every or set(line.get("members") or ()) & prs):
+            return ""
+        if self.lean_stages < 2 or "," not in on:
+            return on
+        own = {line.get("sha"), line.get("repairs"), line.get("replaces")} - {None}
+        held = {m for sha, m in self._took.items() if sha not in own}
+        for sha, p in self._flying.items():
+            if sha not in own:
+                for rec, key in ((p.regenerated(sha)[1], "on"), (p.slim(sha)[1], "heavy_on")):
+                    if isinstance(rec, dict) and "verdict" not in rec and rec.get(key):
+                        held.update(str(rec[key]).split(","))
+        free = [m for m in on.split(",") if m not in held]
+        if not free:
+            return on
+        self._took[line.get("sha") or ""] = free[0]
+        return free[0]
 
     def _audit_from(self, d: Landing, main: str, line: dict, below: dict | None, lent: Lent | None) -> str | None:
         """The candidate whose check's verdict on lean-audit the check of ``line`` takes in place of running it
@@ -4410,6 +4437,11 @@ def main(argv: list[str]) -> int:
                                                            f"changing a Lean input with no Lean change waits, of the first "
                                                            f"in rank, whether or not another PR waits; 0: only pinned ones "
                                                            f"open one, which take no limit (--pins-file) (default {LEAN})")
+    ap.add_argument("--lean-stages", type=int, default=LEAN_STAGES, metavar="N",
+                    help=f"the most Lean candidates staged at once, each with its own records run: the second is staged on "
+                         f"the first's tip, goes onto main's chain after it, its heavy runs on a --heavy-on machine the "
+                         f"first's don't hold, and is dropped and built again when the first is dropped (default "
+                         f"{LEAN_STAGES}: one at a time)")
     ap.add_argument("--wide-file", type=Path, default=WIDE,
                     help=f"the PRs whose Lean change is wide, one number a line, read each tick as --priority-file is: a "
                          f"candidate taking one takes no other member --lean counts, and one stacked on a candidate holding "
@@ -4537,6 +4569,7 @@ def main(argv: list[str]) -> int:
             return _after_landing(world, a.after_landing)
         after = None if a.shadow or a.dry_run else [sys.executable, "-m", "research", "queue", "vqueue", *argv]
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
+                    lean_stages=max(1, a.lean_stages),
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
                     shards=a.shards, records=None if a.no_records else vqueue_records, graph2_shadow=not a.no_graph2_shadow,
                     after=after)

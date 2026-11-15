@@ -38,9 +38,11 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
 A batch with a member that changes Lean, a lock or a spec (`Ready.lean`) has its lock records regenerated before its check, as
 drive's lock run regenerated them once such a change landed (`Build.records`): it is staged off main's chain, its members
 merged onto the chain's top, and its records run, drive's lock run on that tree, runs there (`Candidate.waits`).  Nothing is
-built on a staged batch and it counts toward no `depth`, so the chain goes on filling with batches of PRs with no Lean change
-while the run runs; only no second Lean batch is staged meanwhile, and no PR changing a Lean input (`Ready.lean_input`) is
-taken until the staged batch is on the chain, so none built beside it changes the Lean inputs of the top it goes onto.  Once
+built on a staged batch but the next Lean batch, and it counts toward no `depth`, so the chain goes on filling with batches of
+PRs with no Lean change while the run runs; only no second Lean batch is staged meanwhile (up to `Snapshot.lean_stages`, each
+on the one staged before it, which it follows onto the chain and whose drop drops it), and no PR changing a Lean input
+(`Ready.lean_input`) is taken until the staged batch is on the chain, so none built beside it changes the Lean inputs of the
+top it goes onto.  Once
 the run passed and the chain has room, the batch goes onto the chain's top (`Commit`): as staged when that top is still its
 base, else its members merged again onto it, and checked there with its records included, on a records commit of what the
 run regenerated, whatever its records change of what a guarantee says, or as built when it regenerated nothing.  Records
@@ -90,7 +92,7 @@ from __future__ import annotations
 
 import functools
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 
 from .store.tool import glob_re
@@ -224,6 +226,8 @@ class Snapshot:
     launch_tries: int = 3          # readings of launch-only infra (`Failed.launch`) on a lone member before it is set aside
                                    # as for any other infra; a candidate of several is never split for it
     records: bool = False          # a Lean batch's records are regenerated before its check (`Build.records`); off, they aren't
+    lean_stages: int = 1           # with ``records``, the most Lean batches staged at once, each after the first on the one
+                                   # staged before it (`decide`)
     left: tuple[tuple[int, str, str], ...] = ()  # each other open PR into `main`, as (number, head, why the queue doesn't
                                    # take it now): what a candidate's drop for a member that left `ready` says
     wide: frozenset[int] = frozenset()  # the PRs whose Lean change is wide: one of them that `lean` counts (`Ready.lean`)
@@ -406,14 +410,17 @@ def decide(s: Snapshot) -> list[Action]:
     member, when that is no longer the top.  Beside a staged
     batch, one kept or the one this tick stages, the tick's other batch takes no Lean PR, so one is staged at a time, nor a
     PR changing a Lean input (`Ready.lean_input`), so its records carry onto the top it goes onto, nor a lone PR set aside
-    (`_aside`), which goes behind it as behind any PR waiting.
+    (`_aside`), which goes behind it as behind any PR waiting.  With `Snapshot.lean_stages` above 1, while fewer are staged
+    the tick's Lean batch is staged on the top staged batch, its records run beside that one's: it goes onto the chain only
+    after the batch it sits on, a refusal of its records waits for that one's run, and that one's drop (but on `main` or
+    for its own repair) drops it, built again on what is left.
 
     A red or a member set aside drops its candidate and every one above it, a refused records run drops its staged batch, and
     a member others took from the queue drops its own candidate and every one above it, or its staged batch (`_chain`); in
     the same tick each is built again (`_restack`), in order on what is left of the chain, without the suspects, the ejected,
     the members set aside and the members not ready at the heads they were built at: no other member leaves, and each keeps
-    its place.  One with a Lean member is staged again off the chain (`Build.records`) while no other batch stays staged,
-    else its members wait for a Lean batch as any Lean PR does, and the rest go on the chain's top."""
+    its place.  One with a Lean member is staged again off the chain (`Build.records`) while fewer than `lean_stages` stay
+    staged, else its members wait for a Lean batch as any Lean PR does, and the rest go on the chain's top."""
     return _decide(s, None)
 
 
@@ -495,13 +502,20 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             acts += [Drop(d.sha, BASE_FAILED) for d in chain[k + 1:]]
             chain, rest = chain[:k], [*chain[k:], *rest]
         break
-    kept, passed = [], []
-    for c in staged:
-        first, got = _first(s, c, ready)
+    kept, passed, under = [], [], _beneath(s)
+    for c in _ordered(staged, under):
+        u = under(c)
+        if s.lean_stages > 1 and u is not None and _lean(u) and u.sha in {
+                a.sha for a in acts if isinstance(a, Drop) and a.why != ON_MAIN}:
+            acts.append(Drop(c.sha, BASE_DROPPED))
+            rest.append(c)
+            continue
+        on_staged = u is not None and u.sha in {k.sha for k in kept}
+        first, got = _first(s, c, ready, on_staged and (u.records is None or u.records.state != PASS))
         acts += first
         if got is None:
             kept.append(c)
-            passed += [c] if c.records is not None and c.records.state == PASS and not first else []
+            passed += [c] if c.records is not None and c.records.state == PASS and not first and not on_staged else []
         else:
             ejected, out = ejected | got[0], out | got[1]
             rest.append(c)
@@ -530,10 +544,12 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
     scripts = any(built[m].scripts for d in chain for m in d.members if m in built)
     outcomes, room, priority = _outcomes(s, acts), len(chain) < s.depth, max(s.depth - len(chain), 0)
     busy = landed | ejected | {m for d in (*chain, *kept) for m in d.members}
-    pool = [r for r in _pool(ready, busy, bool(kept)) if not (r.move and scripts) and _crossing(r, moves)]
+    stack = s.records and 0 < len(kept) < s.lean_stages
+    pool = [r for r in _pool(ready, busy, bool(kept) and not stack) if not (r.move and scripts) and _crossing(r, moves)]
     lean, why = _next(s, pool, outcomes, chain, built)
     lean = _moves_last(lean, ready)
-    builds = [Build(lean, base, priority, s.records, after)] if lean and (s.records or room) else []
+    builds = ([Build(lean, kept[-1].sha, priority, True) if stack else Build(lean, base, priority, s.records, after)]
+              if lean and (s.records or room) else [])
     plain: tuple[int, ...] = ()
     if room and (s.records or not lean):
         beside = bool(kept or lean)
@@ -550,7 +566,8 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
 def _pool(ready: dict[int, Ready], busy: set[int], staged: bool) -> list[Ready]:
     """The PRs a batch may take, in rank order: ready, merging onto `main`, and in no candidate on main's chain, on `main` or
     staged (``busy``); beside a staged batch (``staged``: one kept, or the one this tick stages), no Lean PR and no PR
-    changing a Lean input (`Ready.lean_input`): one Lean batch is staged at a time, and no batch built beside it changes the
+    changing a Lean input (`Ready.lean_input`): one Lean batch is staged at a time (the next, under `Snapshot.lean_stages`, is
+    staged on it, from a pool taken with ``staged`` off), and no batch built beside it changes the
     Lean inputs (`vqueue_slim.lean_key`) of the chain's top it goes onto, so its records carry there rather than its records
     run starting again (`Commit`)."""
     return sorted((r for r in ready.values() if r.number not in busy and not r.conflict
@@ -600,15 +617,15 @@ def _leaving(s: Snapshot, leaves: list[Leave] | None, acts: list[Action], chain:
             continue
         cause, why = (("in flight", f"a candidate holds it at {holds[r.number][:12]}, an older head: its new head waits for "
                                     "that one to leave the chain") if r.number in holds else
-                      blocked or _left(s, r, newest, ready, bool(kept), tried))
+                      blocked or _left(s, r, newest, ready, len(kept), tried))
         leaves.append(Leave(r.number, r.head, cause, why))
     return acts
 
 
-def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Ready], kept: bool, t: _Tried
+def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Ready], kept: int, t: _Tried
           ) -> tuple[str, str]:
-    """Why a tick that tried ``t`` built ready PR ``r`` into no candidate (``newest``: `_newest` of the ready PRs; ``kept``: a
-    staged batch stays staged), as a `Leave`'s (cause, why)."""
+    """Why a tick that tried ``t`` built ready PR ``r`` into no candidate (``newest``: `_newest` of the ready PRs; ``kept``: how
+    many staged batches stay staged), as a `Leave`'s (cause, why)."""
     o = newest.get(r.number)
     full = ("chain full", f"main's chain is full at --depth {s.depth}")
     aside = ("set aside", "set aside after its check kept erring: it goes behind the PRs waiting")
@@ -618,6 +635,9 @@ def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Re
         return "move", "a candidate on main's chain changes `tools/move/`'s scripts: no move is built on it"
     if not _crossing(r, t.moves):
         return ADVANCED_TO_MOVE if not _crossing(r, t.hold) else MOVE_ON_CHAIN
+    if r.lean and kept >= s.lean_stages > 1:
+        return "Lean batch staged", (f"it is a Lean change, and {kept} Lean batches are staged: at most {s.lean_stages} are "
+                                     "staged at once (--lean-stages)")
     if r.lean and kept:
         return "Lean batch staged", "it is a Lean change, and a Lean batch is staged: one is staged at a time"
     if r.lean_input and not r.lean and (kept or t.lean and s.records):
@@ -742,7 +762,7 @@ def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]
             if c.sha not in done:
                 done.add(c.sha)
                 acts.append(Drop(c.sha, why))
-                todo += [(d, BASE_DROPPED) for d in above.get(c.sha, ())]
+                todo += [(d, BASE_DROPPED) for d in above.get(c.sha, ()) if not (c.waits and d.waits)]
 
     on_main: list[Candidate] = []
     c = by_sha.get(s.main)
@@ -795,6 +815,37 @@ def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]
     for c in rest:
         drop(c, "not on main's chain: its bases make a cycle")
     return chain, landed, staged, cut
+
+
+def _beneath(s: Snapshot) -> Callable[[Candidate], Candidate | None]:
+    """The candidate a candidate of ``s`` sits on: its base's, or, for a base another candidate `repairs`, that one's (its
+    records commit, or its members merged again elsewhere), followed through repairs; None on `main` or on a sha no
+    candidate has."""
+    by_sha = {c.sha: c for c in sorted(s.candidates, key=lambda c: c.sha, reverse=True)}
+    fixes = {c.repairs: c for c in sorted(s.candidates, key=lambda c: c.sha) if c.repairs}
+
+    def under(c: Candidate) -> Candidate | None:
+        u, seen = by_sha.get(c.base) or fixes.get(c.base), {c.sha}
+        while u is not None and u.sha in fixes and u.sha not in seen:
+            seen.add(u.sha)
+            u = fixes[u.sha]
+        return u
+    return under
+
+
+def _ordered(staged: list[Candidate], under: Callable[[Candidate], Candidate | None]) -> list[Candidate]:
+    """``staged`` in their order, but each after the staged batch it sits on (`_beneath`)."""
+    out, todo = [], list(staged)
+    while todo:
+        c = next((c for c in todo if under(c) not in todo), todo[0])
+        out.append(c)
+        todo.remove(c)
+    return out
+
+
+def _lean(c: Candidate) -> bool:
+    """Whether ``c`` is or holds a Lean batch: staged, its records run started, or built for a staged batch (`repairs`)."""
+    return c.waits or c.records is not None or c.repairs is not None
 
 
 def _ranks(c: Candidate, ready: dict[int, Ready]) -> list[tuple[int, int, int]]:
@@ -900,7 +951,7 @@ def _rerun(c1: Candidate, built: dict[int, Ready]) -> Rerun | None:
     return Rerun(c1.sha, keys)
 
 
-def _first(s: Snapshot, c: Candidate, ready: dict[int, Ready]
+def _first(s: Snapshot, c: Candidate, ready: dict[int, Ready], below: bool = False
            ) -> tuple[list[Action], tuple[set[int], set[int]] | None]:
     """What staged batch ``c`` calls for, with the PRs it ejects and those its rebuild leaves out (`_restack`): None while it
     stays staged.  Its run is launched (`Regenerate`; once more when it ended in infra); while it runs nothing happens, and
@@ -909,7 +960,8 @@ def _first(s: Snapshot, c: Candidate, ready: dict[int, Ready]
     in the next batch.  A run that failed or ended in infra twice refuses its records: infra is rung of infra, its Lean
     members are ejected, and it is dropped, an outcome suspecting them.  A member no longer marked at the head it was built
     at (its owner withdrew the mark, pushed or closed it) is suspected whatever its change, and, as `_failed` reads one,
-    isn't ejected."""
+    isn't ejected.  With ``below`` (it is staged on a staged batch whose records run hasn't passed), a refusal waits for that
+    run, whose refusal would blame its own members: the batch stays staged."""
     r = c.records
     if r is None or (r.state == INFRA and r.starts < 2):
         return [Regenerate(c.sha)], None
@@ -918,7 +970,7 @@ def _first(s: Snapshot, c: Candidate, ready: dict[int, Ready]
     if r.state == PASS and c.held is not None and s.now is not None and s.now - c.held > s.pending_s:
         return [Drop(c.sha, f"its records commit is still held {s.pending_s / 3600:g} h after it was first: its members are "
                             "built again")], (set(), set(c.members))
-    if r.state == PASS:
+    if r.state == PASS or below:
         return [], None
     said = f"refused its records: {r.why}" if r.state == FAIL else f"ended in infra twice: {r.why}"
     heads = dict(zip(c.members, c.heads))
@@ -1014,10 +1066,10 @@ def _restack(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], rest:
     ``out`` (on `main`, ejected, suspected or set aside), those not ready at the heads they were built at, and those a
     candidate below or a staged batch kept (``staged``) holds; one with none left is not built.  ``chain`` gains each, as a
     candidate at its old sha, which a Build on it names, but for one with a Lean member: that one is staged off the chain,
-    its records run first (`Build.records`), and those after it go on the chain's top as before; while another batch stays
-    staged it is not built, and its members wait for a Lean batch, as one is staged at a time.  On a move, in flight below
-    it or advanced to this tick (``hold``: the moves' heads), each keeps only the members that cross it (`_crossing`, as
-    `decide` builds there): the rest wait in the pool until it is on `main`.  What it stages."""
+    its records run first (`Build.records`), on the top staged batch when one stays staged, and those after it go on the
+    chain's top as before; while `lean_stages` batches stay staged it is not built, and its members wait for a Lean batch.
+    On a move, in flight below it or advanced to this tick (``hold``: the moves' heads), each keeps only the members that
+    cross it (`_crossing`, as `decide` builds there): the rest wait in the pool until it is on `main`.  What it stages."""
     base, below = chain[-1].sha if chain else main, {m for c in [*chain, *staged] for m in c.members}
     built = {**ready, **{r.number: r for r in s.flying}}
     again: list[Candidate] = []
@@ -1029,12 +1081,13 @@ def _restack(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], rest:
             continue
         members, heads = tuple(m for m, _ in keep), tuple(h for _, h in keep)
         records = s.records and any(ready[m].lean for m in members)
-        if records and (staged or again):
+        if records and len(staged) + len(again) >= s.lean_stages:
             continue
-        acts.append(Build(members, base, max(s.depth - len(chain), 0), records, replaces=c.sha))
+        on = ([*staged, *again][-1].sha if staged or again else base) if records else base
+        acts.append(Build(members, on, max(s.depth - len(chain), 0), records, replaces=c.sha))
         below.update(members)
         if records:
-            again.append(Candidate(c.sha, base, members, heads, waits=True))
+            again.append(Candidate(c.sha, on, members, heads, waits=True))
             continue
         chain.append(Candidate(c.sha, base, members, heads))
         base = c.sha
@@ -1084,8 +1137,9 @@ def _wide(r: Ready, wide: frozenset[int]) -> bool:
 
 def _next(s: Snapshot, pool: list[Ready], outcomes: list[Outcome], chain: list[Candidate],
           built: dict[int, Ready]) -> tuple[tuple[int, ...], str]:
-    """The Lean batch to open on ``chain``'s top from ``pool`` (in rank order), and why it is none while its PRs wait for a top
-    it may go on ('' otherwise; ``built``: the chain's members as built).  It holds Lean PRs only, whether or not a PR with
+    """The Lean batch to open on ``chain``'s top from ``pool`` (in rank order), or on the top staged batch's
+    (`Snapshot.lean_stages`), and why it is none while its PRs wait for a top it may go on ('' otherwise; ``built``: the
+    chain's members as built).  It holds Lean PRs only, whether or not a PR with
     no Lean change waits: while a pinned one (`Snapshot.pinned`) that a batch may take (`_takes`) waits, the pinned ones alone,
     up to `batch` and under no `lean` limit; else the first in rank, up to `lean`, so at 0 none but a pinned one set aside.  A
     lone one set aside opens a batch only in its turn, behind every PR of ``pool`` a batch may take and every one set aside
@@ -1096,7 +1150,8 @@ def _next(s: Snapshot, pool: list[Ready], outcomes: list[Outcome], chain: list[C
     while the chain holds a wide Lean change; nor, with a records run, while it holds a lone PR set aside before at its
     head (`_told`) that changes a Lean input: when its check errs again it leaves the chain, and a batch staged on it is
     staged again; nor, with no records run (`Snapshot.records` off: it takes the tick's build and a place on the chain), on
-    a top candidate holding a Lean change, so at most every second build is one."""
+    a top candidate holding a Lean change, so at most every second build is one.  A staged batch holding a wide one doesn't
+    keep one from being staged on it (`Snapshot.lean_stages`): its records run, on a machine of its own, is what that is for."""
     newest = _newest(outcomes, {r.number: r.head for r in pool})
     leans = {r.number: r for r in pool if r.lean}
     pinned = [r for r in leans.values() if r.number in s.pinned]
