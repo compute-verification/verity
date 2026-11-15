@@ -5517,10 +5517,6 @@
    "type_hash": "a3671a8a99f4c7b653b5751bd24cb714a5764f731e9563fa3b20b1072228a5e2",
    "unfolded_hash": "37f7bcfaa7774cf93391a95b1efaeb42ee1e0c7e21a08707ff16fe72a6f93659"
   },
-  "Pous.SecurityProofs.StreamedWipeMeets96GiB": {
-   "type_hash": "610f906d2a73a8612b035d1cfe33141715f61fda55f081c36162e0dc9afda003",
-   "unfolded_hash": "b24681fedb18fcf7edf16c7e3d7629f1084cb7ce61bff8fffe131a75278f0117"
-  },
   "Pous.SecurityProofs.StreamedWipeMeetsFamily": {
    "type_hash": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255",
    "unfolded_hash": "2c44dfafca4dd9b61448620c3a735030c19a6af6381c8051349eb0bd3474d68e"
@@ -23129,19 +23125,6 @@
    "type_hash": "a3671a8a99f4c7b653b5751bd24cb714a5764f731e9563fa3b20b1072228a5e2",
    "unfolded_hash": "37f7bcfaa7774cf93391a95b1efaeb42ee1e0c7e21a08707ff16fe72a6f93659"
   },
-  "Pous.SecurityProofs.StreamedWipeMeets96GiB": {
-   "owner": "@memory-accounting",
-   "signature": ["Pous.SecurityProofs.StreamedWipeMeets96GiB : Pous.Guarantees.StreamedWipeMeets96GiB"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "610f906d2a73a8612b035d1cfe33141715f61fda55f081c36162e0dc9afda003",
-   "unfolded_hash": "b24681fedb18fcf7edf16c7e3d7629f1084cb7ce61bff8fffe131a75278f0117"
-  },
   "Pous.SecurityProofs.StreamedWipeMeetsDisk": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.StreamedWipeMeetsDisk : Pous.Guarantees.StreamedWipeMeetsDisk"],
@@ -27765,7 +27748,6 @@
    "Accounting.SecurityProofs.Bridge.CommOfMonitoringPeriodLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's period of sampled audits (RealizesCommOfMonitoringPeriodLeakAccepted), from MonitoringPeriodLeakAccepted's per-window conjunct and the union bound over the windows: the verdicts and the claim are fields of the run (security/Definitions/Compose/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointPeriodLive": "frozen (no-function): The union bound over a period played as a causal game (Verity.Game, R5): each audit's per-period guarantee, at an error that is a function of the strategy, is a hypothesis over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (security/Definitions/Compose/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Pous.SecurityProofs.StreamedWipeMeetsFamily": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Pous.SecurityProofs.StreamedWipeMeets96GiB": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.SnapshotFresh": "frozen (no-function): tag freshness, a counting fact about uniform functions (security/Definitions/Pous/Guarantees/Obligation.lean): an injective snapshot's values and the values off it are a uniform pair; it is about no function of the code.",
    "Pous.SecurityProofs.P2ContentAbsorbs": "frozen (no-function): an identity of P2's abstract encoder in the ring model (encBlock, security/Definitions/Pous/P2/Cost.lean): a block's offset absorbs its content, so over a uniform offset a block's code has one distribution for every content fixed before it; it is about no function of the code.",
    "Pous.SecurityProofs.ObligationOfRoundSecure": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the mutable store (security/Definitions/Pous/P2/Mutable.lean), with a payload and responder fixed by the other tags' keys, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure.",
@@ -27985,7 +27967,9 @@
    "Verity.Guarantees.RegistrationSound_honest": "unstated: RegistrationSound's premise holding at a log with a device and a boundary link, stated with RegistrationSound; no theorem proves it, and it is restated and listed with RegistrationSound once that is.",
    "Verity.Guarantees.RegistrationSound_nontrivial": "unstated: the view of a log whose device names no sheet failing the registered facts, stated with RegistrationSound; no theorem proves it, and it is restated and listed with RegistrationSound once that is.",
    "Accounting.Guarantees.B4UnderId": "unstated: stated in the spec and proved by Accounting.SecurityProofs.B4UnderId in Proofs.Accounting.Actual.LinkEnds, listed as a guarantee after the landing, NET-450, Wed 18 Nov",
-   "Accounting.Guarantees.B4Via": "unstated: stated in the spec, no theorem proves it yet; Proofs.Accounting.Actual.LinkEnds derives it from B4 only at a Site whose every place is its own link end (b4Via_of_ownLinkEnds), NET-450, Wed 18 Nov"
+   "Accounting.Guarantees.B4Via": "unstated: stated in the spec, no theorem proves it yet; Proofs.Accounting.Actual.LinkEnds derives it from B4 only at a Site whose every place is its own link end (b4Via_of_ownLinkEnds), NET-450, Wed 18 Nov",
+   "Pous.Guarantees.StreamedWipeMeets96GiB": "unstated: the streamed-label wipe bound at the 96 GiB device, whose guarantee Pous.SecurityProofs.StreamedWipeMeets96GiB left the lock by name because it takes its size premises inline; it is listed again once they are named (owner @memory-accounting).",
+   "Accounting.Guarantees.LeakPartsRegistered": "unstated: the registered site's leak bound, whose guarantee Accounting.SecurityProofs.LeakPartsRegistered left the lock by name until its honest lemma concludes RatedOn; it is listed again with that lemma (owner @network-accounting)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -29175,9 +29159,6 @@
    },
    "Pous.SecurityProofs.StreamedWipeMeets2600GB": {
     "instLENat.le (instHAdd.hAdd E 8600000000) q": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pous.SecurityProofs.StreamedWipeMeets96GiB": {
-    "instLENat.le (instHAdd.hAdd 43401774781 E) q": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.SecurityProofs.StreamedWipeMeetsFamily": {
     "instLENat.le (instHPow.hPow 2 19) n": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
