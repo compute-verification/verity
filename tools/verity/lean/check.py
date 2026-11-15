@@ -1445,8 +1445,6 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     `premises.open` lists the open premises it takes and each one resting on a read (`on_read`) that its statement reads,
     whoever else takes it; such an entry's `why` fails when no guarantee reads its `Prop` without taking it."""
     fails = []
-    if free := unowned_lock(policy) and not owner:
-        ticket = None
     allowed = set(policy.get("axioms", STANDARD))
     own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
     by_axiom: dict[str, list[str]] = {}
@@ -1542,7 +1540,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     listed = listed_premises(policy) | dict.fromkeys(cited)
     for name, rec in sorted(policy.get("guarantees", {}).items()):
         who = (rec or {}).get("owner") or owner or (ticket.get("owner") if update and ticket else None)
-        if not who and not free:
+        if not who:
             fails.append(Failure("guarantees.no-owner", name, f"guarantees: {name} has no owner: write \"owner\": \"@lane\" "
                                  f"in its entry, the handle of the lane that answers for it, or run `check.py --update "
                                  f"--owner @lane`"))
@@ -2856,7 +2854,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     premised in its place.  Under an update, a premise that doesn't unfold counts as listed, since the update adds it."""
     assumed, opened, fails, out, opens = policy.get("assumptions", {}), policy.get("open", {}), [], {}, {}
     domained, domains, cited, cover = policy.get("domain", {}), {}, cited or {}, cover or {}
-    declared_in, seed, free = assumption_homes(policy), policy.get("open_seed"), unowned_lock(policy) and not owner
+    declared_in, seed = assumption_homes(policy), policy.get("open_seed")
     home = " or ".join(declared_in)
     if not isinstance(opened, dict):
         fails.append(Failure("open.form", None, "open: `open` is {premise: {owner, digest[, issue], due}}"))
@@ -3024,12 +3022,12 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
             ticket = {k: rec[k] for k in ("issue", "due") if k in (rec or {})} if section == "open" else \
                 {k: v for k, v in (issue_of(a, who) or {}).items() if k in ("issue", "due")}
             if held:
-                if not (isinstance(rec["why"], str) and rec["why"].strip() and "\n" not in rec["why"] and (free or (
-                        OPEN_ISSUE.fullmatch(str(ticket.get("issue"))) and OPEN_DUE.fullmatch(str(ticket.get("due")))))):
+                if not (isinstance(rec["why"], str) and rec["why"].strip() and "\n" not in rec["why"] and
+                        OPEN_ISSUE.fullmatch(str(ticket.get("issue"))) and OPEN_DUE.fullmatch(str(ticket.get("due")))):
                     fails.append(Failure("open.form", a, f"open: {a}'s entry, which gives a `why`, gives the `issue` that "
                                          f"discharges it as a Linear key (TEAM-N), its `due` as a date (YYYY-MM-DD) and "
                                          f"its `why` as one line naming a statement that holds it without taking it"))
-            elif not ticket and not (free and section == "open"):
+            elif not ticket:
                 fails.append(unlisted(a, premised[a], entry))
                 continue
             elif ticket and not (("issue" not in ticket or OPEN_ISSUE.fullmatch(str(ticket["issue"])))
@@ -3037,7 +3035,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                 fails.append(Failure("open.form", a, f"open: {a}'s entry gives its `due` as a date (YYYY-MM-DD) and its "
                                      f"`issue`, when it has one, as a Linear key (TEAM-N)"))
             entry |= ticket | ({"why": rec["why"]} if held else {})
-        if not who and not free:
+        if not who:
             fails.append(Failure(f"{kind}.no-owner", a, f"{kind}: {a} has no owner: write \"owner\": \"@lane\" in its "
                                  f"entry, or run `check.py --update --owner @lane`"))
         elif who and not OWNER.fullmatch(who):
@@ -3065,7 +3063,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                 fails.append(Failure("domain.unlisted", d, f"domain: {d}, the statement of {cited[d]}, another listed "
                                      f"guarantee, is a premise of {', '.join(sorted(by))} the lock doesn't list; run "
                                      f"`check.py --update`, which lists it under `domain` citing {cited[d]}"))
-            elif not mine and not free:
+            elif not mine:
                 fails.append(Failure("domain.no-owner", d, f"domain: {d} has no owner: write \"owner\": \"@lane\" in "
                                      f"its entry, or run `check.py --update --owner @lane`"))
             continue
@@ -3077,7 +3075,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                 fails.append(unlisted(d, by, entry))
                 continue
             opens[d] = entry | {k: ticket[k] for k in ("issue", "due") if k in ticket}
-            if not mine and not free:
+            if not mine:
                 fails.append(Failure("open.no-owner", d, f"open: {d} has no owner: write \"owner\": \"@lane\" in its "
                                      f"entry, or under its `open_seed` entry"))
             continue
@@ -3663,31 +3661,6 @@ def reaches(function: str, reached: set[str]) -> bool:
 def unowned(rec: dict | None) -> dict:
     """A guarantee's record without its `owner`: what the build writes and the audit compares."""
     return {k: v for k, v in (rec or {}).items() if k != "owner"}
-
-
-#: a lane's bookkeeping in a lock: who answers for an entry and, for an open premise, the issue that discharges it and its
-#: due date (`LANE_FIELDS`, on an entry of `LANE_ENTRIES`' sections), and the sections that hold their defaults
-LANE_FIELDS, LANE_ENTRIES = ("owner", "issue", "due"), ("guarantees", "assumptions", "domain", "open")
-LANE_SECTIONS = ("default_owner", "open_default_issue", "open_seed")
-
-
-def unowned_lock(policy: dict) -> bool:
-    """Whether ``policy`` is an unowned lock: it lists a guarantee or a premise and holds none of a lane's bookkeeping
-    (`LANE_FIELDS`, `LANE_SECTIONS`), as the lock of a tree with no lanes does.  It is read from the lock's content, so a
-    lock with one such field is owned and held to every rule.  On an unowned lock no entry owes an owner, an `open` entry
-    is its digest (and its `why`, `on_read`) alone, and neither `--update` nor `--bookkeeping warn` writes an owner, an
-    issue or a date into it.  A run given `--owner` reads the lock as owned, and owns it (`judge`)."""
-    entries = [r for s in LANE_ENTRIES if isinstance(sec := policy.get(s), dict) for r in sec.values()]
-    return bool(entries) and not any(k in policy for k in LANE_SECTIONS) and not any(
-        f in r for r in entries if isinstance(r, dict) for f in LANE_FIELDS)
-
-
-def unowned_at(pkg: Path) -> bool:
-    """Whether ``pkg``'s lock is an unowned one (`unowned_lock`).  Not one the audit can't read, which it reports."""
-    try:
-        return isinstance(policy := load(pkg), dict) and unowned_lock(policy)
-    except (OSError, ValueError):
-        return False
 
 
 def restated(base: dict, side: dict) -> list[str]:
@@ -6040,7 +6013,7 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
     def sources() -> dict[str, Path]:
         return {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
 
-    if bookkeeping is not None and fails and not update and not unowned_lock(policy):
+    if bookkeeping is not None and fails and not update:
         ticket = bookkeeping_ticket(policy, bookkeeping)
         fixed = repaired(policy, facts, files, fails, ticket)
         mine = {id(f) for f in on_lock}
@@ -6520,8 +6493,6 @@ def main(argv: list[str]) -> int:
                     Path(doc).unlink(missing_ok=True)    # the sidecar first, so a crash between leaves a miss
             if a.regenerate and rep.get("regenerated") and rep["failures"]:
                 rep["settled"], rep["failures"] = rep["failures"], []
-            if unowned_at(pkg):
-                rep["unowned"] = True
             reports[pkg] = reported(rep)
             n = sum(rep.get("declarations", {}).values())
             head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
@@ -6534,7 +6505,7 @@ def main(argv: list[str]) -> int:
                          "; built in the sandbox" + ("" if rep.get("bound") else ", not bound: outside --tree"))
             if "inline_debt" in rep:
                 head += f"; inline debt {rep['inline_debt'][0]} ({rep['inline_debt'][1]} premises)"
-            print(head + ("; unowned" if rep.get("unowned") else ""), flush=True)
+            print(head, flush=True)
             if c := rep.get("replay", {}).get("closure"):
                 print(f"  closure: {c['checked']} modules checked, {c['reused']} reused, of the {c['modules']} the package "
                       f"imports ({c['loaded_unchecked']} of those reused loaded beside them, the rest imported); its own: "

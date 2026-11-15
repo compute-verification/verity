@@ -30,8 +30,7 @@ from verity_machine_model.dc_reading import (
 )
 from verity_machine_model.lean_headline import Q
 
-#: What other files read of it: the command, and its test in `benchmarks/pouw/tests/` through
-#: `benchmarks/pouw/lean_headline_dc.py`, which also gives it `LH` and `Q`.
+#: What other files read of it: the command and its test, and its own test in `benchmarks/pouw/tests/`.
 __all__ = ["OUT", "main", "render_measured", "write"]
 
 OUT = LH.ROOT / "security" / "Definitions" / "Accounting" / "HeadlineDc"
@@ -150,7 +149,7 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"`classes`: the {nk} instruction classes of the {fam.sheet} census, in the order `Fin {nk}` indexes them."
         + (f" `{CATCH_ALL[fam.key]}` is A2's catch-all: every warp instruction no other class names counts there, at its "
            f"issue slot alone." if fam.key in CATCH_ALL else ""),
-        (f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}), `{S.relative_path(fam.sh)}` as "
+        (f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}), {S.cited(fam.sh)} as "
          f"`{_as_written(fam.sh.lean)}` states it: f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor class's dense MACs a warp "
          f"instruction ({SHAPES[fam.ns]}) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
          f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()}, each at its width (the Programming "

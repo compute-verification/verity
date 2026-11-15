@@ -92,7 +92,8 @@ def touched(source: Path, names: list[str], rev: str) -> list[str] | None:
     try:
         r = subprocess.run([sys.executable, SUITES_PY, *names, "--changed", rev, "--list"], cwd=source, capture_output=True, text=True,
                            timeout=120)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"suite_size: suites.py --list did not run, so the suites touched are not known ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
     line = next((x for x in r.stdout.splitlines() if x.startswith("suites: the change from ") and " touches " in x), None)
     if r.returncode != 0 or line is None:
@@ -113,7 +114,8 @@ def declared(source: Path) -> list[dict]:
     for f in filter(None, files):
         try:
             data = tomllib.loads((source / f).read_text())
-        except (OSError, tomllib.TOMLDecodeError):
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            print(f"suite_size: {f} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if "pytest" not in data.get("tool", {}):
             continue

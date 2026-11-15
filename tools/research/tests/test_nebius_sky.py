@@ -135,18 +135,17 @@ def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
 
     text = (SKY / "jobs" / "config-run.yaml").read_text()
     run = textwrap.dedent(text.split("\n---\n")[3].split("\nrun: |\n", 1)[1].split("\n\nconfig:", 1)[0]) + "\n"
-    try:
+    if importlib.util.find_spec("yaml") is not None:
         import yaml
         assert [d for d in yaml.safe_load_all(text) if d and d.get("name") == "replay"][0]["run"] == run
-    except ImportError:
-        pass
     assert subprocess.run(["bash", "-n"], input=run, text=True).returncode == 0
     body = run.split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0]
     n2 = (SKY.parent / "n2_commit.sh").read_text()
     assert n2.split("discard_kept_bundles() {", 1)[1].split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0] == body
     assert 'then discard_kept_bundles "$row_dir"; fi' in n2 and "rm -rf \"$row_dir\"/commit/replay_bundle_p" not in n2
     (tmp_path / "discard.py").write_text(body)
-    sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+    def sha(p):
+        return hashlib.sha256(p.read_bytes()).hexdigest()
 
     def row(name: str, pairs=(0,), keep: dict[int, dict] | None = None) -> Path:
         """A replayed row with a sealed bundle per pair, and for each pair in `keep` its slim keep, slim.json fields overridden."""
@@ -173,7 +172,8 @@ def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
         assert out.splitlines() == [ln.split(" ", 1)[1] for ln in (r / "row.log").read_text().splitlines()]
         return out.splitlines()
 
-    bundle = lambda r, p=0: r / "commit" / f"replay_bundle_p{p}"
+    def bundle(r, p=0):
+        return r / "commit" / f"replay_bundle_p{p}"
     r = row("kept-whole", keep={0: {}})
     [line] = discard(r)
     assert not bundle(r).exists() and "deleted" in line and (r / "commit" / "replay_slim_p0" / "slim.json").is_file()
@@ -1081,7 +1081,7 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     unit_nodes = {n for f in files if f["path"] == "/etc/systemd/system/vy-store-evict-research.service" for n in f["nodes"]}
     assert set(src_conf[0]["nodes"]) == unit_nodes and "vy-nebius-cpu-12" in unit_nodes
     for u in ("store_evict.service", "store_evict.timer", "store_evict_research.service", "store_evict_research.timer"):
-        assert f'"$SRC/$u"' in (SKY / "cluster_up.sh").read_text() and f'src = "tools/research/src/research/pods/nebius/sky/{u}"' in deploy
+        assert '"$SRC/$u"' in (SKY / "cluster_up.sh").read_text() and f'src = "tools/research/src/research/pods/nebius/sky/{u}"' in deploy
     assert 'ExecCondition=/bin/grep -qs "timed False" /workspace/pouw/fill/status.txt' in (SKY / "store_evict_timed.conf").read_text()
     assert deploy.count('path = "/usr/local/bin/vy-store-evict"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict.sh"\nmode = "755"\n') == 2, \
         "a fresh install gets the repository's mode (644), which systemd can't exec (203/EXEC)"
@@ -1154,7 +1154,8 @@ def test_researchs_store_eviction_prunes_the_pycache_of_sources_that_are_gone(tm
     live, src = tmp_path / "src" / "live" / "pkg", tmp_path / "src"
     live.mkdir(parents=True)
     pyc = tmp_path / "pycache"
-    mirror = lambda p: pyc / str(p).lstrip("/")
+    def mirror(p):
+        return pyc / str(p).lstrip("/")
     for d, n in ((live, 2), (src / "gone" / "pkg", 3), (live / "removed", 1)):
         mirror(d).mkdir(parents=True)
         for i in range(n):
@@ -1318,7 +1319,8 @@ def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
         assert set(f["nodes"]) == holds_runs, "the collector runs on every node of deploy.toml that holds research runs"
     cond = re.search(r"^ExecCondition=/bin/sh -c '(.*)'$", unit, re.M)[1]
     status = tmp_path / "status.txt"
-    gate = lambda: subprocess.run(["sh", "-c", cond.replace("/workspace/pouw/fill/status.txt", str(status))]).returncode
+    def gate():
+        return subprocess.run(["sh", "-c", cond.replace("/workspace/pouw/fill/status.txt", str(status))]).returncode
     assert gate() == 0, "node 1 has no fill status: it runs"
     status.write_text("2026-10-19T06:40:00Z free GPUs 0/8, timed True, window waiting False\n")
     assert gate() != 0, "node 2 inside a timed window: skipped"
@@ -1423,15 +1425,27 @@ def test_a_clean_up_pass_runs_mains_copy_and_never_a_snapshot_a_run_shipped(tmp_
         assert not w["out"].exists() and not w["ls"].exists(), "nothing ran, and no snapshot was looked for"
 
 
-def test_the_collector_takes_unpreserved_runs_on_node_2_alone(tmp_path):
+def test_the_collector_takes_unpreserved_runs_on_node_2_and_cpu_1_to_15_alone(tmp_path):
     """`--unpreserved-runs` deletes a run's only copy, so the unit passes it only where a tracked drop-in says so, which
-    deploy.toml installs on vy-nebius-2 and nowhere else."""
+    deploy.toml installs on vy-nebius-2 and vy-nebius-cpu-1 to cpu-15, each with the unit and the code it runs, and on no other
+    machine: no other entry installs it or writes its path, and no other file of the nodes' sets the switch."""
     import shlex
     import subprocess
     import tomllib
     conf = "tools/research/src/research/pods/nebius/sky/retention_gc_unpreserved.conf"
-    got = [(f["path"], f["nodes"]) for f in tomllib.loads((SKY.parent / "deploy.toml").read_text())["file"] if f.get("src") == conf]
-    assert got == [("/etc/systemd/system/vy-retention-gc.service.d/20-unpreserved-runs.conf", ["vy-nebius-2"])]
+    dropin = "/etc/systemd/system/vy-retention-gc.service.d/20-unpreserved-runs.conf"
+    takers = ["vy-nebius-2"] + [f"vy-nebius-cpu-{i}" for i in range(1, 16)]
+    doc = tomllib.loads((SKY.parent / "deploy.toml").read_text())
+    entries = doc["file"] + doc["tree"]
+    got = [(f["path"], f["nodes"]) for f in entries if f.get("src") == conf or f["path"] == dropin]
+    assert got == [(dropin, takers)], "the drop-in, once, on vy-nebius-2 and cpu-1 to cpu-15 and on no other machine"
+    assert not set(takers) - set(doc["nodes"]), f"{sorted(set(takers) - set(doc['nodes']))} have no [nodes] table"
+    for needed in ("/etc/systemd/system/vy-retention-gc.service", "/etc/systemd/system/vy-retention-gc.timer", "/usr/local/lib/vy-monitoring/clean-up"):
+        on = {n for f in entries if f["path"] == needed for n in f["nodes"]}
+        assert not set(takers) - on, f"{sorted(set(takers) - on)} get the drop-in without {needed}"
+    switch = [p.relative_to(SKY.parent).as_posix() for p in sorted(SKY.parent.rglob("*"))
+              if p.is_file() and "VY_GC_UNPRESERVED_RUNS=1" in p.read_text(errors="replace")]
+    assert switch == ["sky/retention_gc_unpreserved.conf"], f"{switch}: only the drop-in sets the switch"
     sets = [ln for ln in (SKY / "retention_gc_unpreserved.conf").read_text().splitlines() if ln and not ln.startswith("#")]
     assert sets == ["[Service]", "Environment=VY_GC_UNPRESERVED_RUNS=1"], "it sets the switch and replaces nothing of the unit"
     assert "unpreserved" not in "".join((SKY / u).read_text() for u in CLEAN_UP_UNITS if u != "retention_gc.service")

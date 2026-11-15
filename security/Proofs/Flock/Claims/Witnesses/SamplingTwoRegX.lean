@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.SamplingTwoRegX
+public import Definitions.Claims.SamplingTwoServedX
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoRegMiss
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.ZK.NonVacuous
@@ -12,7 +13,9 @@ import Proofs.Flock.Claims.ZK.NonVacuous
 (`Witnesses.SamplingTwo`: `sksL`, which accepts after one round, samples nothing and opens nothing, with the two-stage
 design `toyTwo`), its silent prover and any hash: `CompiledTwo.KSRegTwoX_fails`, `CompiledTwo.HeadlineTwoX_fails` and
 `CompiledTwo.MissTwoX_fails` over the spec, and at coins `Bool` and SHA-512 (`FlockDeploy.sha512`) the nontrivial
-lemmas of `CompilerKSRegTwoX`, `CompilerHeadlineTwoX` and `CompilerMissTwoX`.
+lemmas of `CompilerKSRegTwoX`, `CompilerHeadlineTwoX` and `CompilerMissTwoX`. The bound on what the committed trace
+serves, `CompiledTwo.ExfilRegTwoX`, has the committed form as its first part, so it fails there too
+(`CompiledTwo.ExfilRegTwoX_fails`).
 
 * `sksLTwo`'s boundary trace read at the statement opens nothing (`sksL_regValX`), so its one proof block is incorrect
   there at any interior (`toy_wrongInAt`): the footprint is outside `M̄_0` at every interior (`sksLTwo_notMX`), the
@@ -116,6 +119,12 @@ open Claims.Witness.SamplingGeneric
 theorem CompiledTwo.KSRegTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
     ∃ (A : Arg Coin) (L : CompiledTwo Coin A), ¬ L.KSRegTwoX H :=
   ⟨_, _, compiledTwoKSRegX_fails H⟩
+
+/-- **`CompiledTwo.ExfilRegTwoX` fails** at some compiled two-stage verifier: its first part is the committed form
+(`KSRegTwoX`), which fails at `sksLTwo`. -/
+theorem CompiledTwo.ExfilRegTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    (H : Msg → Msg) : ∃ (A : Arg Coin) (L : CompiledTwo Coin A), ¬ L.ExfilRegTwoX H :=
+  ⟨_, sksLTwo Coin, fun h => compiledTwoKSRegX_fails H h.1⟩
 
 /-- **`CompiledTwo.HeadlineTwoX` fails** at some compiled two-stage verifier. -/
 theorem CompiledTwo.HeadlineTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]

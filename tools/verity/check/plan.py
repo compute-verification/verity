@@ -592,7 +592,8 @@ def on_machine(machine: str, commit: str, d: Path, packs: list[tuple[str | None,
     """`--on MACHINE`: plan ``commit`` on MACHINE, a check node, where the keys are that machine's (its interpreter, base image,
     the toolchains it has, and its check slots' caches), as a `research run --wait` of a worktree of ``commit`` (`--source`,
     `--cwd source`, in `REMOTE_POOL`): this checkout's plan.py and verdicts.py, sent with the run, plan that tree (`--tree .`) in its own
-    environment (`DECLARED`), on the packs gathered here, sent too, since a run on a node can't fetch the store's blobs.  Its
+    environment (`DECLARED`), on the packs gathered here, sent too, since a run on a node can't fetch the store's blobs.  It
+    stays on MACHINE (`--stay`), whose keys it plans by.  Its
     shell is no login shell: a profile's variables (the locale, a `VERITY_*` switch) would key every part unlike a check's.  The
     plan comes back from the run's `REMOTE_OUT` to ``out``.  Returns the run's exit, 2 when it launched none."""
     if machine == "auto" or "," in machine:
@@ -610,7 +611,7 @@ def on_machine(machine: str, commit: str, d: Path, packs: list[tuple[str | None,
     sends = [HERE / "plan.py", HERE / "verdicts.py", HERE / "settings.py", *(send / n for _, n in names)]
     _git("worktree", "add", "-q", "--detach", str(tree), commit, repo=ROOT)
     try:
-        r = run([sys.executable, "-m", "research", "run", "--on", machine, "--project", REMOTE_PROJECT, "--source", str(tree),
+        r = run([sys.executable, "-m", "research", "run", "--on", machine, "--stay", "--project", REMOTE_PROJECT, "--source", str(tree),
                  "--cwd", "source", "--pool", REMOTE_POOL, "--as", SETTINGS.RESEARCH_LANE or "ci",
                  "--timeout", str(REMOTE_TIMEOUT_S), "--wait", "--declared-output", REMOTE_OUT,
                  *(x for f in sends for x in ("--send", str(f))), "--", "bash", "-c", cmd],

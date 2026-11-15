@@ -104,13 +104,9 @@ def counted(answer: Mapping[str, Any], egress: Mapping[str, Any]) -> NoReturn:
 
 
 def memory(profile: Mapping[str, Any]) -> dict[str, Any]:
-    """The declared tiers, whether the wipe is of GPU memory alone, and the devices its prover's store names."""
+    """The declared tiers, by label and bytes, and whether the wipe is of GPU memory alone. It names no device."""
     tiers = [{"tier": t, "bytes": int(b)} for t, b in profile["tiers"]]
-    store = (profile.get("placement") or {}).get("prover_store") or {}
-    devices = [{k: s[k] for k in ("tier", "device", "uuid") if k in s}
-               for s in (store.get("parts") or [store]) if s.get("device")]
-    return {"tiers": tiers, "tier": "+".join(t["tier"] for t in tiers), "hbm_only": [t["tier"] for t in tiers] == [HBM],
-            "devices": devices}
+    return {"tiers": tiers, "tier": "+".join(t["tier"] for t in tiers), "hbm_only": [t["tier"] for t in tiers] == [HBM]}
 
 
 def each(public: Mapping[str, Any]) -> dict[str, Any]:

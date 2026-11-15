@@ -13,7 +13,7 @@ kind = "unmonitored"
 # Nci.Guarantees.DampenerRemote's terms, each at benchmarks/nci/tiers.py's DEFAULTS (tests/test_envelopes.py holds them).
 # PoUW: residual, clock_share, host, eps_w, eps_agg, window_delta_*; detection: identities, lag_s (and, sampled, the rest).
 # window_delta_coin (delta_s, the per-window delta), window_delta_crypto (delta_bind + delta_ks, assumed at twice it:
-# neither has a deployed bound) and SPOT's p_evade are not set here: the registry reads the per-window delta from
+# neither has a deployed bound), window_ks and SPOT's p_evade are not set here: the registry reads the per-window delta from
 # core (rho/params.py).
 [regime.remote]
 kind = "remote"
@@ -24,6 +24,7 @@ eps_w = { value = 0.00744, low = 6e-4, high = 0.00917, source = "benchmarks/nci/
 eps_agg = { value = 1e-4, low = 1e-6, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg: a chosen slack. CertificateSlack holds at any eps' with failure probability p/eps' (Markov over the windows), p being PouwSound's per-window failure delta_s + delta_bind + delta_ks. Only delta_s has a value, 2^-40: PoUW's binding (delta_bind) has no deployed bound and ProofSystemSound (delta_ks) is undischarged, so p is assumed; at 3 x 2^-40 the failure probability is 2.7e-8", status = "assumed" }
 identities = { value = 1, unit = "identity", low = 1, high = 1000, source = "benchmarks/nci/tiers.py DEFAULTS identities: detection is terminal (J = 1); high: identities a detection doesn't end", status = "assumed" }
 lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "benchmarks/nci/tiers.py DEFAULTS lag_s: a window plus the verdict delay", status = "assumed" }
+window_s = { value = 3600, unit = "s", source = "a window, one round of the deployment's live coins (Nci.Guarantees.DampenerRemotePeriod sums its knowledge error over the period's windows): the hour lag_s assumes; no data states a window's length", status = "assumed" }
 
 # tiers T5: SPOT at 1% on top of serve-time commitments, today's sparse-sample cost. step_bits, the output bits
 # an accepted incorrect proof block injects, is not set here: a block's outputs fit its Definition's public size class,

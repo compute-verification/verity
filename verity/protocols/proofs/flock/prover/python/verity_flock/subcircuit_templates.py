@@ -25,7 +25,7 @@ Its served RMSNorms (vLLM's width-8 CUDA kernels, ``registry.cuda_rmsnorm``) are
 ``RMSNormFusedCudaVector8_v1{N, EPS, BLOCK}`` on ``rmsnorm-fused-cuda``'s ports, and ``rmsnorm-cuda-vec8``,
 ``RMSNormCudaVector8_v1{N, EPS, BLOCK}`` on ``rmsnorm-triton``'s; BLOCK is the launch's block, which the token count picks.
 The served fused norm binds ``RMSNormFusedCudaVector8_v3``, v1's words with its sum of squares stated as batches (its unit
-netlist orders the same gates differently, so it has no pins here); ``rmsnorm-fused-cuda-vec8`` keeps v1.
+circuit description orders the same gates differently, so it has no pins here); ``rmsnorm-fused-cuda-vec8`` keeps v1.
 
 The registered compiler's dead-free Definitions (``registry.dead_free``) have templates of their own: ``rmsnorm-triton-v5``,
 ``RMSNormTriton_v5{N, EPS}`` on ``rmsnorm-triton``'s ports, and ``attention-head-v18``, ``AttentionHead_v18{T, D, BN, DOT, INV,

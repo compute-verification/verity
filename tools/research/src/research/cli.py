@@ -14,7 +14,7 @@
                                                  # a machine that can start no run is passed over, and the launch says which and why;
                                                  # where it went and why is kept with the run: `inspect` prints it on the VM that launched
                                                  # it, and the machine's request.json holds it (`auto`)
-  research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
+  research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--env-host MACHINE ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
@@ -59,7 +59,8 @@
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
   research queue status|ready|judge|review|eject|vqueue|... [--shadow]  # the verified queue: candidates of ready PRs merged on `main`,
-                                                 # `main` fast-forwarded only to one with no new failure (research/queue.py, vqueue.py)
+                                                 # `main` fast-forwarded only to one with no new failure, or under --gate verdict to
+                                                 # a plain one on its land verdicts and the quick tier (research/queue.py, vqueue.py)
   research goals show|set|confirm|done|remove|replace|priority|audit ...   # the Goals page, written with this agent's Cursor identity
                                                  # (research/goals.py)
   research velocity [--since TIME] [--until TIME] [--line|--json] ...    # the velocity score, read from records: goals moved,
@@ -85,6 +86,8 @@
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
   research deploy drift [--on N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
                                                  # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (`ops deploy`, verity_ops/deploy.py)
+  research deploy roll PATH --by WHO [--on N ...] [--keys-only] [--apply]   # a file made from the register of machines
+                                                 # (/etc/vy/peers), put on every node that lists it: each node takes the list's key first, then each file, one node at a time
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
   research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
@@ -122,7 +125,9 @@ tree other runs of the commit share), `--cwd clone` (or `clone/SUB`) in a privat
 outside the run dir and removed when the workload exits (research/clone.py), an absolute --cwd as given; job.json run.cwd /
 run.cwd_basis record it.  A `--cwd source` workload that builds Lean waits for the tree's lock (research/treelock.py, job.json
 run.lean_tree_lock), so two Lean builds never share a `.lake` at once.  It exits with the workload's status; with
---require-result, a zero exit and a missing or invalid result.json exits 65 instead.  Harness flags pass through unchanged
+--require-result, a zero exit and a missing or invalid result.json exits 65 instead.  So a workload shell script that pipes
+without `pipefail`, which exits with the pipe's last command's status, is refused (exit 2) unless --allow-pipe (research/pipefail.py).
+Harness flags pass through unchanged
 (--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).  `run` and `fetch --all` refuse
 (exit 3) while the runs root's filesystem has less than $RESEARCH_DISK_FLOOR_GB free (default 1.5; 0 turns it off), and name the
 eviction that frees it (runs.disk_floor_refusal).
@@ -155,7 +160,7 @@ from pathlib import Path
 
 from . import clone
 from . import compare as C
-from . import record, remote, result, treelock
+from . import pipefail, record, remote, result, treelock
 from . import runs as R
 from . import waitcap
 from .timefmt import both
@@ -215,12 +220,13 @@ def cmd_run(argv: list[str]) -> int:
 
 def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     started = time.monotonic()                   # --wait's cap counts the launch too: it bounds the whole tool call
-    if "--" not in argv:
+    asks_help = "--" not in argv and not {"-h", "--help"}.isdisjoint(argv)
+    if "--" not in argv and not asks_help:
         print("research run: the workload command goes after `--`", file=sys.stderr)
         return 2
-    i = argv.index("--")
+    i = argv.index("--") if "--" in argv else len(argv)
     opts, command = argv[:i], argv[i + 1 :]
-    if not command:
+    if not command and not asks_help:
         print("research run: empty command after `--`", file=sys.stderr)
         return 2
     ap = argparse.ArgumentParser(prog="research run", add_help=True, allow_abbrev=False, description=__doc__.split("\n\n")[1])
@@ -231,9 +237,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's `spill`: every CPU node); the "
                          "launch says where it went and when it should start. A machine that can start no run takes none, and one "
                          "that refuses the launch for that is passed over for the next, the launch saying which and why. A run "
-                         "sent to a pool that waits there on memory asks again and moves to a pool that would start it now, "
-                         "while the VM that launched it is up and holds its asker: a VM holds only so many alive at a time "
-                         "(research/asker.py's MAX_ASKERS; the launch and `research status RUN` say)")
+                         "that waits in a pool's line, whatever on, asks again and moves to a pool where a place has stood 2 "
+                         "min, while the VM that launched it is up and holds its asker: a VM holds only so many alive at a time "
+                         "(research/asker.py's MAX_ASKERS; the launch and `research status RUN` say). So does a run sent by "
+                         "name to a machine's research pool (--pool research), unless --stay")
     ap.add_argument("--accept-wait", action="store_true",
                     help="with --on auto: queue the run though it isn't expected to start within 10 minutes "
                          "(research/auto.py's START_WITHIN_MIN). Such a launch is warned in one line, or refused once "
@@ -243,7 +250,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="with --on: ship this file to $RESEARCH_RUN_DIR/inputs/")
     ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or, with --on, on the machine), recorded as "
-                                                                                 "the attempt's params.env (values of secret-named keys redacted)")
+                                                                                 "the attempt's params.env (values of secret-named keys, "
+                                                                                 "of keys ending in _HOST and of FLEET_JUMP redacted)")
+    ap.add_argument("--env-host", action="append", default=[], metavar="MACHINE",
+                    help="an --env <MACHINE>_HOST=<its host> read here from the register (`research pods env MACHINE`), so the "
+                         "launch names the machine and never its address; repeatable, and an --env of the same key decides")
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--wait", action="store_true",
                     help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused), for at most "
@@ -285,6 +296,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "machine's own slot.py, `main`'s as installed there, and by its source's only where the machine has none")
     ap.add_argument("--pool-wait", type=float, default=None, metavar="S",
                     help="with --pool: how long to wait in the pool's line for a slot before exiting 75 unrun (default 4 h)")
+    ap.add_argument("--stay", action="store_true",
+                    help="with --on MACHINE: this machine and no other. Without it, a run in MACHINE's research pool that "
+                         "asks no GPUs carries a pair and leaves an asker, which moves it to another machine's research pool "
+                         "where a place has stood, as it does a run `--on auto` placed (research/asker.py). Say it for a run "
+                         "that fills or reads that machine's own caches, or whose output its caller reads there by its run id")
     ap.add_argument("--as", dest="lane", default=os.environ.get("RESEARCH_LANE"), metavar="LANE",
                     help="with --pool: the lane the slot names; with --mem-limit-gb: who states it (default $RESEARCH_LANE)")
     q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
@@ -354,8 +370,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "would preserve them. REASON says what does instead; it is printed and recorded in job.json (default "
                          "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
+    ap.add_argument("--allow-pipe", action="store_true",
+                    help="run a workload whose shell script pipes without `pipefail` (`bash -lc 'a | tee f'`), which is refused "
+                         "otherwise: the run's exit code is then the pipe's last command's, whatever failed before it "
+                         "(research/pipefail.py)")
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
+    if not ns.claimed and not ns.allow_pipe and (why := pipefail.refusal(command)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 2
     if ns.id is not None and not ns.claimed:
         from .store import ids as store_ids
 
@@ -364,6 +387,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                   "attempt, so nothing the run writes, its coins included, would be preserved; omit --id to get one",
                   file=sys.stderr)
             return 2
+    if ns.env_host:
+        from .pods import registry
+
+        try:
+            hosts = registry.host_env(ns.env_host)
+        except remote.Refused as e:
+            print(f"research run: --env-host: {e}", file=sys.stderr)
+            return 2
+        ns.env = [*(f"{k}={v}" for k, v in hosts.items()), *ns.env]
     if ns.job_namespaces is None:
         ns.job_namespaces = ()
     else:
@@ -395,6 +427,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if ns.accept_wait and ns.on != "auto":
         print("research run: --accept-wait is for --on auto, whose launch it lets queue past its 10 minutes", file=sys.stderr)
         return 2
+    if ns.stay and (ns.on in (None, "auto") or ns.queue):
+        print("research run: --stay is for --on MACHINE, a machine named by its name: `--on auto` and the queue choose one",
+              file=sys.stderr)
+        return 2
     if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
@@ -404,8 +440,72 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     return _run_placed(ns, harness_opts, command, clones)
 
 
+def _named_asks(ns: argparse.Namespace, command: list[str]) -> dict | None:
+    """What a run sent by name to the pool `--on auto` spills to (`--on MACHINE --pool research`) asks of `auto`, for its
+    launch's asker to ask it again (research.asker): a slot of any size, as slot.py gives it one on MACHINE, its --mem-gb and
+    its Lean pool. None for a run that stays: one whose launch says `--stay`, one that asks GPUs (`auto` reads none), and
+    one in any other pool (`auto` reads none)."""
+    from . import auto
+
+    if ns.stay or ns.pool != auto.SPILL_POOL or ns.gpus:
+        return None
+    return {"cpus": 1, "mem_gb": ns.mem_gb or 0, "lean": auto.lean_pool(command, ns.env)}
+
+
 def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[str], clones: list[Path]) -> int:
-    """`research run` once its place is settled: here, on --on's machine, on the queue's, or where `--on auto` sent it."""
+    """`research run` once its place is settled: here, on --on's machine, on the queue's, or where `--on auto` sent it. A run dir
+    it took (`_take_run_dir`) that no run wrote in is removed as it returns. A run not claimed takes SIGTERM as SystemExit (exit
+    143) until then, so a launcher stopped that way removes it too; the handler it had before is put back. SIGKILL leaves it.
+    A machine whose request or run dir of the id is another launch's (remote.RunIdTaken) has the run dir here removed; a launch
+    that picked its id and was not booked under it by the queue then starts over from where it began with a new id, at most
+    FRESH_ID_TRIES times, and any other is refused (exit 3)."""
+    import signal
+    import threading
+
+    own = not ns.claimed and threading.current_thread() is threading.main_thread()
+    before = signal.signal(signal.SIGTERM, _exit_on_sigterm) if own else None
+    start = None if ns.claimed or ns.id or ns.queue else copy.deepcopy(ns)
+    tried = 0
+    try:
+        while True:
+            try:
+                return _run_placed_in(ns, list(harness_opts), list(command), clones)
+            except remote.RunIdTaken as e:
+                tried += 1
+                if (taken := getattr(ns, "taken_dir", None)) is not None:
+                    (taken / "remote.json").unlink(missing_ok=True)
+                    R.drop_run_dir(taken)
+                if start is None or tried >= R.FRESH_ID_TRIES:
+                    print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
+                    return 3
+                print(f"research run --on {ns.on}: run id {ns.id} is another launch's there; launching again with a new id",
+                      file=sys.stderr)
+                vars(ns).clear()
+                vars(ns).update(vars(copy.deepcopy(start)))
+    except R.RunDirTaken as e:
+        print(f"research run: {e}", file=sys.stderr)
+        return 2
+    finally:
+        if (taken := getattr(ns, "taken_dir", None)) is not None:
+            R.drop_run_dir(taken)
+        if own:
+            signal.signal(signal.SIGTERM, signal.SIG_DFL if before is None else before)
+
+
+def _exit_on_sigterm(signum: int, _frame: object) -> None:
+    raise SystemExit(128 + signum)
+
+
+def _take_run_dir(ns: argparse.Namespace, root: Path) -> Path:
+    """The run's dir, made now (`runs.take_run_dir`: --id's, else a fresh id's) and kept on `ns` with its id, so each step of
+    the launch that needs it before the next gets the same one."""
+    if getattr(ns, "taken_dir", None) is None:
+        ns.taken_dir = R.take_run_dir(root, ns.id)
+        ns.id = ns.taken_dir.name
+    return ns.taken_dir
+
+
+def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: list[str], clones: list[Path]) -> int:
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
@@ -431,9 +531,10 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         try:
             timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
             wait_s = ns.pool_wait if ns.pool_wait is not None else slot_only.POOL_WAIT_S
-            if asks := getattr(ns, "asks", None):
-                # a run `--on auto` placed carries a pair, its own id, so its late twin can take it from this line (research.asker)
-                ns.id = ns.id or R.new_run_id()
+            if asks := getattr(ns, "asks", None) or _named_asks(ns, command):
+                # a run that may move carries a pair, its own id, so its late twin can take it from this line (research.asker)
+                _take_run_dir(ns, R.runs_root(ns.runs_dir))
+                ns.asks = asks
                 asks["wait_s"] = wait_s
             command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s, twin=ns.id if asks else None)
             if budget := getattr(ns, "budget_gb", None):       # slot.py's own option, before the `--` that ends them
@@ -516,10 +617,10 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     if not ns.claimed and (why := R.disk_floor_refusal(root)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 3
-    run_id = ns.id or R.new_run_id()
-    run_dir = root / run_id
     if ns.on:
-        return _run_remote(ns, run_id, run_dir, harness_opts, command)
+        return _run_remote(ns, root, harness_opts, command)
+    run_dir = root / ns.id if ns.claimed else _take_run_dir(ns, root)     # a claimed run's dir is its launch request's
+    run_id = run_dir.name
     job_pw = job_dir = None
     if ns.job_user:
         from . import jobuser
@@ -546,7 +647,7 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     if ns.claimed and not env_map:
         env_map = _request_env(ns.remote_json)
     workload_env = {**result.env_defaults(os.environ), **env_map}   # every job's defaults, under --env, which still decides
-    if run_dir.exists() and ((run_dir / "job.json").exists() or not ns.claimed):
+    if ns.claimed and (run_dir / "job.json").exists():
         print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
     hp = _harness_parser("research run")
@@ -578,7 +679,7 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         a.cwd = str(run_dir)
     source_root = Path.cwd()
     tree_lock = treelock.lock_path(root, source_root) if cwd_basis == "source" and treelock.builds_lean(command) else None
-    run_dir.mkdir(parents=True, exist_ok=ns.claimed)
+    run_dir.mkdir(parents=True, exist_ok=True)
     _place_dirty_capture(prep, run_dir)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
     if ns.claimed and remote_info is not None:
@@ -1070,7 +1171,7 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     if ns.campaign:
         env_out["RESEARCH_CAMPAIGN"] = ns.campaign
     conds = None
-    capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir is made after this returns
+    capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir holds nothing yet
     try:
         hint = json.loads(ns.source_identity) if ns.source_identity else None
         shipped = getattr(a, "tree_sha", None)
@@ -1367,7 +1468,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     from .pods.lease import RUN_MARGIN_S
 
     root = R.runs_root(ns.runs_dir)
-    run_id = ns.id or R.new_run_id()
+    run_id = _take_run_dir(ns, root).name           # before the queue books the job under it
     given_max = ns.max_min * 60 if ns.max_min is not None else timeout
     spec = {"project": ns.project, "submitter": os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-",
             "class": ns.queue_class, "kind": ns.queue_kind, "question": ns.question or None, "gpus": ns.gpus,
@@ -1401,7 +1502,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         print(f"research run: {why}", file=sys.stderr)
         return 2
     harness_opts = ["--project", ns.project, *harness_opts]
-    return _run_remote(ns, run_id, root / run_id, harness_opts, command, queue=placed)
+    return _run_remote(ns, root, harness_opts, command, queue=placed)
 
 
 #: a Lean records run (`lean_changed.py --records PKG`), which `_run_remote` sends the URLs of the Lean bundles its node may restore
@@ -1432,13 +1533,9 @@ def lean_records_urls(source: Path | None, command: list[str]) -> Path | None:
     return urls
 
 
-def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str],
-                queue: dict | None = None) -> int:
+def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], command: list[str], queue: dict | None = None) -> int:
     if not ns.project:
         print("research run --on: --project is required (the machine is bound to a project)", file=sys.stderr)
-        return 2
-    if run_dir.exists():
-        print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
     env = {}
     for kv in ns.env:
@@ -1478,6 +1575,8 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         harness_args += ["--scratch", s]
     if ns.campaign:
         harness_args += ["--campaign", ns.campaign]
+    run_dir = _take_run_dir(ns, root)
+    run_id = run_dir.name
     custody = ns.custody_r2 is not False
     if not custody:
         print(f"research run --on {ns.on}: --no-custody-r2: this run's records stay on the machine until `research fetch --all {run_id}`",
@@ -1491,8 +1590,10 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
                 preflight_tool=ns.preflight, job_user=ns.job_user, job_namespaces=ns.job_namespaces,
                 gpus=None if queue else ns.gpus, store_read=ns.store_read, mem_limit=_stated_limit(ns))
     try:
-        rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, source=source, sends=[*sends, *([urls] if urls else [])],
-                            queue=queue, auto=getattr(ns, "placed", None), **what)
+        rec = remote.launch(run_id=run_id, local_dir=run_dir, taken=True, machine_name=ns.on, source=source,
+                            sends=[*sends, *([urls] if urls else [])], queue=queue, auto=getattr(ns, "placed", None), **what)
+    except remote.RunIdTaken:
+        raise
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         ns.cannot_start = str(e) if isinstance(e, remote.CannotStart) else None
@@ -1558,8 +1659,9 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = wa
         rec = fetch(run_dir)
         s = R.summarize(run_dir)
         if s["state"] in R.ENDED and not asker.started(s) and (twin := moved(run_dir)):
-            print(f"research: run {run_id} left its line without starting ({s['state']}); its late twin {twin.name} is the run "
-                  "now, and this waits for it", file=sys.stderr)
+            on = (remote._read_json(twin / "remote.json") or {}).get("machine")
+            print(f"research: run {run_id} left its line without starting ({s['state']}); its late twin {twin.name}"
+                  f"{f' on {on}' if on else ''} is the run now, and this waits for it", file=sys.stderr)
             run_id, run_dir = twin.name, twin
             continue
         if s["state"] in R.ENDED:
@@ -1654,8 +1756,8 @@ def cmd_cancel(argv: list[str]) -> int:
                                                                      "manual cancel; the runner SIGKILLs what is left 20 s later "
                                                                      "(remote.cancel). A run that hasn't started, held on "
                                                                      "its machine (disk-hold, cpu-hold), is withdrawn: its hold "
-                                                                     "ends and refused.json records it Withdrawn. A run `--on "
-                                                                     "auto` that has a late twin on another machine is cancelled "
+                                                                     "ends and refused.json records it Withdrawn. A run that "
+                                                                     "has a late twin on another machine is cancelled "
                                                                      "with it: whichever of the two is left")
     ap.add_argument("ref", help="a run id or prefix under the runs root; a full run id another VM launched is found on its machine")
     ap.add_argument("--reason", required=True)
@@ -1673,7 +1775,7 @@ def cmd_cancel(argv: list[str]) -> int:
 
     dirs = [run_dir]
     if tw := asker.twin(run_dir):
-        # a run `--on auto` moved, or may move, to its late twin: the cancel is of the run, so of whichever of the two is left
+        # a run that moved, or may move, to its late twin: the cancel is of the run, so of whichever of the two is left
         try:
             dirs.append(_run_dir(root, tw["run"], tw["machine"], unique=True))
         except (FileNotFoundError, LookupError, remote.Refused) as e:

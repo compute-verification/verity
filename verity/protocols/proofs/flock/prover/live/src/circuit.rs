@@ -54,7 +54,7 @@ use rayon::prelude::*;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
-use crate::{chunk::log2ceil, ir_block::{IrUnitNet, Row2, Row4, Row8, RowRead, RowWord}, lookup::LookupNet};
+use crate::{chunk::log2ceil, ir_block::{IrUnitNet, Row2, Row4, Row8, RowRead, RowWord, UnitSched}, lookup::LookupNet};
 
 pub const FORMAT: &str = "flock-circuit";
 pub const INST_FORMAT: &str = "flock-circuit-inputs";
@@ -2657,6 +2657,144 @@ pub fn unit_ab_into_at(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>],
     ok
 }
 
+/// A 32 x 32 bit transpose as a warp does it, lane `i` holding `m[i]`: five rounds, each lane trading a masked half with
+/// lane `i ^ j` for `j` = 16, 8, 4, 2, 1. Afterwards bit i of `m[j]` is what bit j of `m[i]` was.
+pub(crate) fn transpose32(m: &mut [u32; 32]) {
+    const MASK: [u32; 5] = [0x0000_ffff, 0x00ff_00ff, 0x0f0f_0f0f, 0x3333_3333, 0x5555_5555];
+    for (k, mask) in MASK.into_iter().enumerate() {
+        let (j, was) = (16 >> k, *m);
+        for (i, x) in m.iter_mut().enumerate() {
+            let y = was[i ^ j];
+            *x = if i & j != 0 { (*x & !mask) | ((y & !mask) >> j) } else { (*x & mask) | ((y & mask) << j) };
+        }
+    }
+}
+
+/// The unit slots' z, a and b as the device's level walk leaves them in the witness (`fc_unit_walk`, prove_circuit.cuh), on the
+/// host and by the device's steps on the device's arrays: 256 slots a pass, a row four `u64` (bit l of word g slot 64 g + l's),
+/// in arrays nothing zeroed. The input rows from the slots' input words by `rows.own`, and the constant's (`fc_walk_seed`);
+/// each level's rows from `rows`' columns, every one read before any is written, as a launch runs them at once
+/// (`fc_walk_row`); then every 32 rows of 32 slots transposed into those slots' words (`fc_walk_slots`). The answer is z's,
+/// a's and b's `u32` words, `uw32` a slot, zero past the unit's rows: a's and b's are [`unit_ab_into`]'s, and z is a & b
+/// where every assertion holds.
+pub fn unit_walk_words(net: &IrUnitNet, sched: &UnitSched, rows: &crate::ir_block::WalkRows, uw32: usize, ins: &[Vec<F128>]) -> [Vec<u32>; 3] {
+    const UNITS: usize = 256;
+    const POISON: [u64; 4] = [0xa5a5_a5a5_a5a5_a5a5; 4];
+    let (u, cp, first) = (net.useful, net.const_pos, net.in_words * WORD);
+    assert!(u <= 32 * uw32, "unit_walk_words: the unit's rows are more than a slot's");
+    assert!(rows.own.len() == first && rows.st.len() == sched.order.len() + 1, "unit_walk_words: the rows are not this net's");
+    let mut out = [vec![0u32; uw32 * ins.len()], vec![0u32; uw32 * ins.len()], vec![0u32; uw32 * ins.len()]];
+    let fold = |z: &[[u64; 4]], cols: &[u32], i: u32| {
+        cols.iter().fold(([0u64; 4], 0u64), |(mut x, o), &c| {
+            if c == i {
+                return (x, !o);
+            }
+            x.iter_mut().zip(z[c as usize]).for_each(|(x, w)| *x ^= w);
+            (x, o)
+        })
+    };
+    for (pass, grp) in ins.chunks(UNITS).enumerate() {
+        let (mut z, mut a, mut b) = (vec![POISON; u], vec![POISON; u], vec![POISON; u]);
+        for w in 0..2 * net.in_words {
+            let word = |slot: usize| grp.get(slot).map_or(0, |x| if w % 2 == 0 { x[w / 2].lo } else { x[w / 2].hi });
+            for t in 0..64 {
+                let i = 64 * w + t;
+                for g in 0..4 {
+                    let bits = (0..64).fold(0u64, |v, l| v | ((word(64 * g + l) >> t) & 1) << l);
+                    let zv = if rows.own[i] & 1 != 0 { bits } else { 0 };
+                    (z[i][g], a[i][g], b[i][g]) = (zv, zv, if rows.own[i] & 2 != 0 { zv } else { 0 });
+                }
+            }
+        }
+        (z[cp], a[cp], b[cp]) = ([!0; 4], [!0; 4], [!0; 4]);
+        for l in 0..sched.levels() {
+            let (k0, k1) = (sched.level_off[l] as usize, sched.level_off[l + 1] as usize);
+            let level: Vec<(usize, [[u64; 4]; 3])> = (k0..k1).into_par_iter().with_min_len(256).map(|k| {
+                let (i, s, m, e) = (sched.order[k], rows.st[k] as usize, rows.mid[k] as usize, rows.st[k + 1] as usize);
+                let ((x, oa), (y, ob)) = (fold(&z, &rows.cols[s..m], i), fold(&z, &rows.cols[m..e], i));
+                let zi: [u64; 4] = std::array::from_fn(|g| x[g] & y[g]);
+                (i as usize, [zi, std::array::from_fn(|g| x[g] ^ (zi[g] & oa)), std::array::from_fn(|g| y[g] ^ (zi[g] & ob))])
+            }).collect();
+            for (i, [zi, ai, bi]) in level {
+                (z[i], a[i], b[i]) = (zi, ai, bi);
+            }
+        }
+        for (v, dst) in [&z, &a, &b].into_iter().zip(out.iter_mut()) {
+            for q in 0..UNITS / 32 {
+                for rb in 0..u.div_ceil(32) {
+                    let mut t: [u32; 32] = std::array::from_fn(|lane| v.get(32 * rb + lane).map_or(0, |w| (w[q / 2] >> (32 * (q % 2))) as u32));
+                    transpose32(&mut t);
+                    for (lane, &w) in t.iter().enumerate() {
+                        let slot = UNITS * pass + 32 * q + lane;
+                        if slot < ins.len() {
+                            dst[uw32 * slot + rb] = w;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// [`unit_ab_into`]'s words by the walk a device kernel takes, on the host: 32 slots a lane group (a row's `u32`, bit l slot
+/// l's), the rows a level of `sched` at a time ([`IrUnitNet::eval_wide`]'s row, read from the earlier levels' z), then every
+/// 32 rows of a and of b transposed ([`transpose32`]) into the group's slots, zero past the rows. The same `out` and the same
+/// answer as [`unit_ab_into`], word for word. None: the net has no one-pass form ([`IrUnitNet::one_pass`]), which a level
+/// walk needs as `eval_wide` does.
+pub fn unit_ab_levels(net: &IrUnitNet, sched: &UnitSched, uw: usize, ins: &[Vec<F128>], out: &mut [u64]) -> Option<bool> {
+    assert_eq!(out.len(), 4 * uw * ins.len(), "unit_ab_levels: out is not 4 * uw words per slot");
+    if !net.one_pass() {
+        return None;
+    }
+    let (u, cp, first) = (net.useful, net.const_pos, net.in_words * WORD);
+    assert!(u <= uw * WORD, "unit_ab_levels: the unit's rows are more than a slot's");
+    assert_eq!(sched.order.len(), cp - first, "unit_ab_levels: the schedule is not this net's");
+    let own = |rows: &crate::ir_block::Rows, i: usize| rows.row(i) == [i as u32].as_slice();
+    // row i's XOR over z, whose entry i is still 0, and all ones where it reads column i an odd number of times
+    let fold = |row: &[u32], i: u32, z: &[u32]| row.iter().fold((0u32, 0u32), |(x, o), &c| (x ^ z[c as usize], o ^ 0u32.wrapping_sub(u32::from(c == i))));
+    Some(out.par_chunks_mut(32 * 4 * uw).zip(ins.par_chunks(32)).all(|(dst, grp)| {
+        let (mut z, mut a, mut b) = (vec![0u32; u], vec![0u32; u], vec![0u32; u]);
+        for i in 0..first {
+            if own(&net.a, i) {
+                z[i] = lane_bits(grp, i) as u32;
+                a[i] = z[i];
+            }
+            if own(&net.b, i) {
+                b[i] = z[i];
+            }
+        }
+        (z[cp], a[cp], b[cp]) = (!0, !0, !0);
+        for l in 0..sched.levels() {
+            for &i in sched.level(l) {
+                let ((x, oa), (y, ob)) = (fold(net.a.row(i as usize), i, &z), fold(net.b.row(i as usize), i, &z));
+                let zi = x & y;
+                (z[i as usize], a[i as usize], b[i as usize]) = (zi, x ^ (zi & oa), y ^ (zi & ob));
+            }
+        }
+        let used = u32::MAX >> (32 - grp.len());
+        let ok = z.iter().zip(&a).zip(&b).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
+        if ok {
+            for (side, v) in [&a, &b].into_iter().enumerate() {
+                for (rb, rows) in v.chunks(32).enumerate() {
+                    let mut t = [0u32; 32];
+                    t[..rows.len()].copy_from_slice(rows);
+                    transpose32(&mut t);
+                    for (l, &w) in t.iter().enumerate().take(grp.len()) {
+                        let at = 4 * uw * l + 2 * uw * side + rb / 2;
+                        dst[at] = if rb % 2 == 0 { u64::from(w) } else { dst[at] | (u64::from(w) << 32) };
+                    }
+                }
+                for l in 0..grp.len() {
+                    let at = 4 * uw * l + 2 * uw * side;
+                    dst[at + u.div_ceil(64)..at + 2 * uw].fill(0);
+                }
+            }
+        }
+        ok
+    }))
+}
+
 /// Circuit `ni`'s slots (`net`, not a lookup's) from their input words `ins`: `(slot, z, a, b)`, `uw` words each, `n` lane
 /// groups a pass.
 #[allow(clippy::type_complexity)]
@@ -3832,6 +3970,173 @@ mod tests {
                 assert!(unit_zab(net, 0, uw, &ins, wide) == want_zab, "{slots} slots, {wide} groups a pass: the slots' z, a, b words");
             }
         }
+    }
+
+    #[test]
+    fn transpose32_is_the_bit_transpose() {
+        let mut s = 0x7e57_0f32_1a2b_3c4du64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s as u32 };
+        for _ in 0..8 {
+            let m: [u32; 32] = std::array::from_fn(|_| r());
+            let mut t = m;
+            transpose32(&mut t);
+            for i in 0..32 {
+                for j in 0..32 {
+                    assert_eq!((t[j] >> i) & 1, (m[i] >> j) & 1, "bit {i} of word {j}");
+                }
+            }
+        }
+    }
+
+    /// A one-pass net of `useful` rows whose assertions hold where input column 0 is 0: after the input words, rows of a
+    /// few earlier columns or the constant (the row before among them where `chain`, so each row is a level), repeats and
+    /// the row's own column twice among them, and (not where `chain`) copies each followed by an assertion that the copy is
+    /// the column. The row before the constant asserts that input column 0 is 0.
+    fn walk_net(seed: u64, in_words: usize, useful: usize, chain: bool) -> IrUnitNet {
+        use crate::ir_block::{RowWrite, Rows};
+        fn next(s: &mut u64, m: usize) -> usize {
+            *s ^= *s << 13;
+            *s ^= *s >> 7;
+            *s ^= *s << 17;
+            (*s % m as u64) as usize
+        }
+        let (mut s, first, cp) = (seed, in_words * WORD, useful - 1);
+        let (mut a, mut b) = (Rows::with_rows(useful), Rows::with_rows(useful));
+        let mut i = 0;
+        while i < useful {
+            let (ra, rb) = if i == cp {
+                (vec![cp], vec![cp])
+            } else if i < first {
+                if i % 5 == 4 { (vec![], vec![]) } else { (vec![i], vec![i]) }
+            } else if i == cp - 1 {
+                (vec![0, i], vec![cp])
+            } else if !chain && i + 2 < cp && next(&mut s, 6) == 0 {
+                let c = next(&mut s, i);
+                a.push_row(&[c]);
+                b.push_row(&[cp]);
+                i += 1;
+                (vec![c, i - 1, i], vec![cp])
+            } else {
+                let (na, nb, kind) = (2 + next(&mut s, 5), 1 + next(&mut s, 5), next(&mut s, 4));
+                let mut pick = |n: usize| -> Vec<usize> { (0..n).map(|_| if next(&mut s, 9) == 0 { cp } else { next(&mut s, i) }).collect() };
+                let (mut ra, mut rb) = (pick(na), pick(nb));
+                match kind {
+                    0 => { ra.push(ra[0]); rb.push(rb[0]); }
+                    1 => ra.extend([i, i]),
+                    _ => {}
+                }
+                if chain {
+                    ra.push(i - 1);
+                }
+                (ra, rb)
+            };
+            a.push_row(&ra);
+            b.push_row(&rb);
+            i += 1;
+        }
+        IrUnitNet { name: "t".into(), useful, const_pos: cp, in_groups: vec![], out_groups: vec![], in_words, out_cols: vec![], a, b,
+                    unit_log: useful.next_power_of_two().trailing_zeros().max(7) as usize, sha256: [0; 32], leaves: None, cut: None,
+                    order: None, pass: Default::default() }
+    }
+
+    #[test]
+    fn unit_walk_words_are_unit_ab_into() {
+        use crate::ir_block::{RowWrite, WalkRows, schedule};
+        let mut s = 0x0dd5_eed5_ca1e_d0c5u64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        let n = 10;
+        let table: &'static [u32] = Box::leak((0..1u32 << n).map(|_| r() as u32 & 0x7fff_ffff).collect::<Vec<_>>().into_boxed_slice());
+        let (lookup, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
+        let nets = [walk_net(1, 1, 300, false), walk_net(0x5eed, 2, 4099, false), walk_net(77, 3, 40_001, false), walk_net(9, 1, 2600, true), lookup];
+        for (k, net) in nets.iter().enumerate() {
+            let sched = schedule(net);
+            let rows = WalkRows::of(net, &sched).unwrap_or_else(|| panic!("net {k} has no walk"));
+            let (first, cp) = (net.in_words * WORD, net.const_pos);
+            // every scheduled row's columns are its A row then its B row, and the input rows' own columns are marked
+            assert_eq!(rows.cols.len(), net.a.nnz() + net.b.nnz() - 2 - rows.own.iter().map(|o| o.count_ones() as usize).sum::<usize>());
+            for (j, &i) in sched.order.iter().enumerate() {
+                let (st, mid, end) = (rows.st[j] as usize, rows.mid[j] as usize, rows.st[j + 1] as usize);
+                assert!(rows.cols[st..mid] == *net.a.row(i as usize) && rows.cols[mid..end] == *net.b.row(i as usize), "net {k}, row {i}");
+            }
+            assert!((0..first).all(|i| rows.own[i] == u32::from(net.a.row(i) == [i as u32]) | u32::from(net.b.row(i) == [i as u32]) << 1));
+            assert!(k == 4 || (rows.own.contains(&0) && rows.own.contains(&3)), "net {k}: no input row empty, or none its own");
+            let uw = 1usize << (net.unit_log - 7);
+            // a pass is 256 slots: under one, exactly one, and a second pass whose last group is short
+            for slots in [1, 33, 100, 255, 256, 257, 300] {
+                // input column 0 is 0 in every slot, so the nets' last assertion holds
+                let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|w| F128::new(r() & !u64::from(w == 0), r())).collect()).collect();
+                let mut want = vec![0xa5a5_a5a5_a5a5_a5a5u64; 4 * uw * slots];
+                assert!(unit_ab_into(net, 0, uw, &ins, &mut want), "net {k}, {slots} slots: z = a & b");
+                let [z, a, b] = unit_walk_words(net, &sched, &rows, 4 * uw, &ins);
+                let half = |w: &[u64], j: usize| (w[j / 2] >> (32 * (j % 2))) as u32;
+                for x in 0..slots {
+                    let (wa, wb) = (&want[4 * uw * x..4 * uw * x + 2 * uw], &want[4 * uw * x + 2 * uw..4 * uw * (x + 1)]);
+                    for j in 0..4 * uw {
+                        let at = 4 * uw * x + j;
+                        assert!(a[at] == half(wa, j) && b[at] == half(wb, j), "net {k}, {slots} slots: slot {x}'s word {j} of a or b");
+                        assert_eq!(z[at], a[at] & b[at], "net {k}, {slots} slots: slot {x}'s word {j} of z");
+                    }
+                }
+                assert!(z.chunks(4 * uw).all(|w| w.iter().any(|&x| x != 0)), "net {k}: a slot's z says nothing");
+            }
+        }
+        // no walk for a net with a row reading a later column, or for a cut unit's two-phase schedule
+        let mut fwd = walk_net(5, 1, 400, false);
+        let row: Vec<usize> = fwd.a.row_cols(WORD + 3).chain([WORD + 8]).collect();
+        fwd.a = fwd.a.with_row(WORD + 3, &row);
+        assert!(WalkRows::of(&fwd, &schedule(&fwd)).is_none());
+        let mut cut = schedule(&nets[0]);
+        cut.late_rows.push(0);
+        assert!(WalkRows::of(&nets[0], &cut).is_none());
+    }
+
+    #[test]
+    fn unit_ab_levels_is_unit_ab_into() {
+        use crate::ir_block::{RowWrite, schedule};
+        let mut s = 0x1e7e_15ab_0ddc_0ffeu64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        let n = 10;
+        let table: &'static [u32] = Box::leak((0..1u32 << n).map(|_| r() as u32 & 0x7fff_ffff).collect::<Vec<_>>().into_boxed_slice());
+        let (lookup, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
+        let nets = [walk_net(1, 1, 300, false), walk_net(0x5eed, 2, 4099, false), walk_net(77, 3, 40_001, false), walk_net(9, 1, 2600, true), lookup];
+        let mut deepest = 0;
+        for (k, net) in nets.iter().enumerate() {
+            let sched = schedule(net);
+            deepest = deepest.max(sched.levels());
+            let slot = 1usize << (net.unit_log - 7);
+            for (slots, uw) in [(1, slot), (31, slot), (32, slot), (33, 2 * slot), (64, slot), (100, slot), (131, slot)] {
+                // input column 0 is 0 in every slot, so the nets' last assertion holds
+                let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|w| F128::new(r() & !u64::from(w == 0), r())).collect()).collect();
+                let (mut want, mut got) = (vec![0xa5a5_a5a5_a5a5_a5a5u64; 4 * uw * slots], vec![0x5a5a_5a5a_5a5a_5a5au64; 4 * uw * slots]);
+                assert!(unit_ab_into(net, 0, uw, &ins, &mut want), "net {k}, {slots} slots: z = a & b");
+                assert_eq!(unit_ab_levels(net, &sched, uw, &ins, &mut got), Some(true), "net {k}, {slots} slots: the level walk's z = a & b");
+                assert!(got == want, "net {k}, {slots} slots of {uw} words: the level walk's packed a, b words");
+                assert!(want.chunks(4 * uw).all(|w| w[..2 * uw] != w[2 * uw..] && w.iter().any(|&x| x != 0)), "net {k}: a slot's words say nothing");
+                if k == 3 || (k == 4 && slots >= 64) {
+                    // a failed assertion (the chain's in one slot, the lookup's in most) fails the walk, as it fails the host's
+                    let mut ins = ins.clone();
+                    if k == 3 {
+                        ins[slots - 1][0].lo |= 1;
+                    }
+                    let mut bad = net.clone();
+                    if k == 4 {
+                        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a.row(i).is_empty() && !bad.b.row(i).is_empty()).unwrap();
+                        bad.b = bad.b.with_row(i, &[bad.const_pos]);
+                        let row: Vec<usize> = bad.a.row_cols(i).chain([i]).collect();
+                        bad.a = bad.a.with_row(i, &row);
+                    }
+                    assert!(!unit_ab_into(&bad, 0, uw, &ins, &mut want), "net {k}, {slots} slots: a failed assertion");
+                    assert_eq!(unit_ab_levels(&bad, &schedule(&bad), uw, &ins, &mut got), Some(false), "net {k}, {slots} slots: a failed assertion");
+                }
+            }
+        }
+        assert!(deepest >= 2048, "no net as deep as a unit the device leaves to the host: {deepest} levels");
+        // a row reading a later column has no level walk
+        let mut fwd = walk_net(5, 1, 400, false);
+        let row: Vec<usize> = fwd.a.row_cols(WORD + 3).chain([WORD + 8]).collect();
+        fwd.a = fwd.a.with_row(WORD + 3, &row);
+        let ins = vec![vec![F128::ZERO; 1]; 3];
+        assert_eq!(unit_ab_levels(&fwd, &schedule(&nets[0]), 4, &ins, &mut vec![0u64; 4 * 4 * 3]), None);
     }
 
     #[test]
