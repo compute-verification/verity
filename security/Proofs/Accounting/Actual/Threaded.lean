@@ -10,7 +10,7 @@ public import Proofs.Slowdown.Threads
 `ThreadedThrottled`'s proof with the declared division replaced by the windows. `ServerBlocksAt`, at the cuts `min(kω, t)`,
 divides the developer's region over `[0, t)` into `n ⌈t/ω⌉` windows of at most `Φ_X ω ≤ Γ` gates, each reading in the
 containment's image at most the state at its start plus `β_X ω`, so at most `K = R + r ω` (`serverBlocks_small`). Pulled back
-through the containment (`InferenceOnly.SecurityProofs.pull`), the windows divide the reference circuit into pieces no larger whose
+through the containment (`InferenceOnly.SecurityProofs.pull`), the windows divide the reference training algorithm into pieces no larger whose
 fresh input bits are at most their windows' reads in the image (`InferenceOnly.SecurityProofs.freshInput_pull_le_readsIn`, which needs
 no condition on the baselines), each small at `(Γ, K)`, and Theorem 1 (`Slowdown.SecurityProofs.ThreadedReads`) bounds each
 piece's counted multiplications by `K Λ(K) / b_a`; every counted multiplication lies in one piece (`card_M_eq_sum`).
@@ -32,7 +32,7 @@ namespace Accounting.SecurityProofs.Actual
 
 open Verity InferenceOnly Finset
 
-/-- Every counted multiplication lies in exactly one unit of a division of the reference circuit. -/
+/-- Every counted multiplication lies in exactly one unit of a division of the reference training algorithm. -/
 theorem card_M_eq_sum {c : RegisteredCircuit} (T : Threading c) {m : ℕ} (Q : Partition c.D m) :
     T.M.card = ∑ u, (T.mults (Q.gates u)).card := by
   classical

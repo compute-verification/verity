@@ -158,7 +158,7 @@ theorem Valid.sheets_accepted {l : Registration} (h : Valid D A c l) :
 
 /-- **Every device of a valid log's Site names a registered sheet's digest.** -/
 theorem Valid.devices_named {l : Registration} (h : Valid D A c l) :
-    ∀ x ∈ (Site.ofLog l).locs, x.kind = .device → x.sheet ∈ (Site.ofLog l).sheets.map D.sheet := by
+    ∀ x ∈ (Site.ofLog l).locs, x.kind = .accelerator → x.sheet ∈ (Site.ofLog l).sheets.map D.sheet := by
   induction l using List.reverseRecOn with
   | nil => simp
   | append_singleton l e ih =>
@@ -390,7 +390,7 @@ theorem RegistrationSound_nontrivial : Guarantees.RegistrationSound_nontrivial :
   unfold Guarantees.RegistrationSound_nontrivial
   rintro ⟨hd, -⟩
   obtain ⟨k, hk, -⟩ :=
-    hd { id := "gpu9", kind := .device } (by simp [view, Witness.unnamed, Site.ofLog, Entry.added]) rfl
+    hd { id := "gpu9", kind := .accelerator } (by simp [view, Witness.unnamed, Site.ofLog, Entry.added]) rfl
   simp [view, Witness.unnamed, Site.ofLog, Site.sheet?, Entry.added] at hk
 
 end Verity.SecurityProofs

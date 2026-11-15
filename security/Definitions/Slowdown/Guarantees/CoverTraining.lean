@@ -13,7 +13,7 @@ public import Definitions.Slowdown.Assumptions.CoverTraining
 The cover theorem (`Slowdown.Cover.Guarantees`) bounds what a block of a circuit of bits finishes. This guarantee
 joins it to the inference-only policy at `(c, k)`, `InferenceOnly.Complies c k`, through a reference training circuit
 `r` that the declared circuit `d` contains: `d`'s wiring is the prover's, so the premises are on `r`, and `d` reaches
-`r` through containment with its registered information free of the reference circuit's fresh input
+`r` through containment with its registered information free of the reference training algorithm's fresh input
 (`ThetaRegistered`). The premises of the cover theorem (`UpdateHardness`, the upstream certificate) are on `r`'s circuit
 bit by bit (`Circuit.ofDecl r`), where a block is a set of bits.
 
@@ -36,7 +36,7 @@ namespace Slowdown.Cover.Guarantees
 
 /-- **Training through a compliant declaration pays the cover theorem's factor**: a declaration `d` that contains a
 reference training circuit `r` and complies at `(Γ, α)` (`CompliesRate`), with its registered information free of the
-reference circuit's fresh input (`ThetaRegistered`), has `α₀ b size(r) ≤ (α² Γ + b α) size(d)` when the counted
+reference training algorithm's fresh input (`ThetaRegistered`), has `α₀ b size(r) ≤ (α² Γ + b α) size(d)` when the counted
 products of `r`'s bit view are a fraction `α₀` of `r`'s gates, under `UpdateHardness` at the block size
 `s ≥ w₀ Γ + α Γ + width(θ)` (no gate of `r` wider than `w₀`) and the upstream certificate at depth `D` with
 `α Γ < b D`. -/
