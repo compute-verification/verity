@@ -308,8 +308,8 @@ def sample_accounting(samples_seen: dict[str, list[dict]], workload: str | Path 
 
     Returns the ledger + the list of PROBLEMS (each a FAIL reason by name) and whether the lag slot was EXERCISED on this record at all
     (when it was not, the record half of 'RNG advances iff r_t' stays 'stated, not measured on this record', said so)."""
-    out: dict = {"convention": "sample k of a request = its k-th sampled row (k from 0) = slot t = k + 1 at pos = prompt_len - 1 + k, keyed Philox(seed, pos); "
-                               "expected samples = {pos of slot t : r_t = 1} under the Program's stop rule (EOS at slot t < C -> min(A, C - t) lag slot(s))",
+    out: dict = {"convention": "draw k of a request = its k-th sampled row (k from 0) = slot t = k + 1 at pos = prompt_len - 1 + k, keyed Philox(seed, pos); "
+                               "expected draws = {pos of slot t : r_t = 1} under the Program's stop rule (EOS at slot t < C -> min(A, C - t) lag slot(s))",
                  "requests": {}, "problems": [], "lag_slot_exercised": False, "requests_with_eos_before_cap": 0, "requests_at_cap": 0,
                  "requests_unjudged": 0, "stop_rule": {}, "measured": None}
     wl_req: dict[str, dict] = {}
@@ -397,8 +397,8 @@ def sample_accounting(samples_seen: dict[str, list[dict]], workload: str | Path 
         n_lag = 0                                                 # the lag slots the rule expects: none unless an EOS is served early
         if t_eos is None or t_eos >= T:
             ent["finish"] = "length" if t_eos is None else "eos-at-cap"
-            ent["lag_slot"] = ("not scheduled: the request ran to its max_tokens (nothing is scheduled past the length bound)" if t_eos is None else
-                               f"not scheduled: the EOS is served at the last slot {t_eos} (no slot after it)")
+            ent["lag_slot"] = ("not scheduled: the request ran to its cap (nothing is scheduled past the length bound)" if t_eos is None else
+                               f"not scheduled: the EOS is served at the cap slot {t_eos} (no slot after it)")
             out["requests_at_cap"] += 1
         else:
             profile: Any = lag                                    # the rule leaves an early EOS unjudged without the profile: never None here
@@ -426,12 +426,12 @@ def sample_accounting(samples_seen: dict[str, list[dict]], workload: str | Path 
                          f"{expected[0]}..{expected[-1]}): a deleted step" + (" -- the lag slot did not sample" if t_eos is not None and t_eos < T and missing[-1] == expected[-1] else ""))
         out["requests"][rid] = ent
     n_ex = out["requests_with_eos_before_cap"]
-    out["measured"] = (f"R5 MEASURED on this record: {n_ex} request(s) stopped at EOS before max_tokens; the sampled positions of every request equal "
-                       f"the rule's executed set as an ordered set (EOS at slot t -> exactly min(A={lag}, C - t) lag sample(s), none after)"
+    out["measured"] = (f"R5 MEASURED on this record: {n_ex} request(s) stopped at EOS before the cap; the drawn positions of every request equal "
+                       f"the rule's executed set as an ordered set (EOS at slot t -> exactly min(A={lag}, C - t) lag draw(s), none after)"
                        if out["lag_slot_exercised"] and not probs else
-                       ("R5 NOT MEASURED on this record: no request stopped at EOS before its max_tokens (every request ran to its length bound: no lag "
-                        "slot was scheduled) -- the ledger checks sampled positions == the executed set {prompt_len - 1 + k : k < max_tokens} as an ordered "
-                        "set, one sample per step; the lag-slot half stays stated by construction (rng.advances_iff_executed), not measured here"
+                       ("R5 NOT MEASURED on this record: no request stopped at EOS before its cap (every request ran to its length bound: no lag "
+                        "slot was scheduled) -- the ledger checks drawn positions == the executed set {prompt_len - 1 + k : k < cap} as an ordered "
+                        "set, one draw per step; the lag-slot half stays stated by construction (rng.advances_iff_executed), not measured here"
                         if not out["lag_slot_exercised"] and not probs else
                         f"R5 FAILS on this record: {len(probs)} ledger problem(s) named in reasons"))
     return out
@@ -737,12 +737,12 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
             # (executed, unserved) samples Philox(seed, L - 1 + n) with n served slots (slot t = n + 1 at pos L - 1 + (t - 1), the record's pos fact)
             # and nothing else moves; a wrong pos on a device row is a mismatch by name above
             "rng": {"kind": "counter (Philox4x32-10 word 0), key (seed_lo, seed_hi), counter (pos_lo, pos_hi, 0, 0) -- tl.randint(seed, pos)",
-                    "state": "none: the sample of a row is a pure function of (seed, pos, lane); no sample is consumed or advanced by another row",
-                    "advances_iff_executed": "a row's sample exists iff the row executed (r_t = 1) at its own pos; an EOS-stopped request's lag "
-                                             "slot samples at pos prompt_len - 1 + n (n = its served slots; the record's pos of slot t is prompt_len - 1 + (t - 1)) and no later "
-                                             "pos is sampled; the served rows' samples are unchanged",
+                    "state": "none: the draw of a row is a pure function of (seed, pos, lane); no draw is consumed or advanced by another row",
+                    "advances_iff_executed": "a row's draw exists iff the row executed (r_t = 1) at its own pos; an EOS-stopped request's lag "
+                                             "slot draws at pos prompt_len - 1 + n (n = its served slots; the record's pos of slot t is prompt_len - 1 + (t - 1)) and no later "
+                                             "pos is drawn; the served rows' draws are unchanged",
                     "checked_here": "declared pos/seed (Program request facts) == device pos/seed (kernel-consumed pos_ptr/seeds_ptr snapshot) "
-                                    "at every value-checked row (device_facts_checked); the sample LEDGER below (rng_advances_iff_run)",
+                                    "at every value-checked row (device_facts_checked); the draw LEDGER below (rng_advances_iff_run)",
                     # R5's record half, MEASURED per request: the ledger of every sampled row (snapshot or not)
                     "rng_advances_iff_run": ledger},
             "sampling": dict(given if given else {}),
