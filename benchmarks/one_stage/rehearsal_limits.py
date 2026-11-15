@@ -32,7 +32,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT / "adapters/vllm"), str(HERE), str(ROOT / "benchmarks/prove_path")]
+sys.path[:0] = [str(ROOT), str(ROOT / "adapters/vllm"), str(HERE)]
 
 
 def held(slots: int, k: int, gamma: int, refused: type[Exception]) -> dict:
@@ -49,7 +49,7 @@ def main(argv: list[str]) -> int:
     phi, cls_arg, scheme, policy, out = argv[:5]
     rejects = "--rejects" in argv[5:]
 
-    import prove_path as PP
+    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
     import served_cases as SC
     from verity.circuits import codec
     from verity.circuits.types import type_from_json

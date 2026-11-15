@@ -87,7 +87,7 @@ theorem into_pull_into_computed (u : Fin n) {a : Fin C.N} (ha : a ∈ C.into ((p
 end Pull
 
 theorem freshInput_pull {c d : RegisteredCircuit} (M : Containment c.D d.D)
-    (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M)) {n : ℕ} (P : Partition d.D n)
+    (hB : Assumptions.ThetaRegistered c d (Slowdown.PartialContainment.ofContainment M)) {n : ℕ} (P : Partition d.D n)
     (u : Fin n) : freshInput c ((pull M P).gates u) ≤ freshInput d (P.gates u) := by
   unfold freshInput
   rw [width_map (M := M)]
