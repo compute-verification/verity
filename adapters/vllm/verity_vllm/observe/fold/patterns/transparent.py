@@ -179,9 +179,10 @@ class TransparentTritonMetadata:
     integer aten ops → `Transparent(noop)`.  A launch with any floating-point pointer is not covered (a compute pattern
     must explain it).
 
-    In a step that verifies draft tokens (`step_verifies_drafts`), `DRAFT_METADATA_KERNELS` are refused by name: there
-    `_combine_sampled_and_draft_tokens_kernel` writes the draft ids into the input ids and
-    `_get_num_sampled_and_rejected_kernel` reads the accept test's counts, values that no pattern folds yet."""
+    In a step that verifies draft tokens (`step_verifies_drafts`) no integer-only launch is taken as metadata: each is
+    refused by name, since there one may carry draft ids (`_combine_sampled_and_draft_tokens_kernel` writes them into the
+    input ids) or accepted counts (`_get_num_sampled_and_rejected_kernel` reads the accept test's), values that no pattern
+    folds yet."""
 
     name = "transparent.triton_metadata"
 
@@ -192,16 +193,11 @@ class TransparentTritonMetadata:
         if not views or not all(is_int(v) for v in views):
             return None
         name = triton_name(node)
-        if name in DRAFT_METADATA_KERNELS and step_verifies_drafts(ctx):
-            return unsupported(node, f"{name} in a step that verifies draft tokens: the draft ids and the accepted counts it "
-                               "carries are values, not the step's public metadata", kernel=name,
+        if step_verifies_drafts(ctx):
+            return unsupported(node, f"{name}: an integer-only launch in a step that verifies draft tokens, where it may carry "
+                               "draft ids or accepted counts, which are values, and no pattern folds them yet", kernel=name,
                                logits_rows=len(ctx.start.logits_rows), requests=ctx.start.num_reqs)
         return Transparent("noop", (node.id,), hint=f"{name}: integer metadata kernel", kernels=(name,), pattern=self.name)
-
-
-#: the model runner's integer-only launches (vLLM V2 `gpu/input_batch.py`) that carry draft ids or accepted counts in a step
-#: that verifies draft tokens
-DRAFT_METADATA_KERNELS = frozenset({"_combine_sampled_and_draft_tokens_kernel", "_get_num_sampled_and_rejected_kernel"})
 
 
 def step_verifies_drafts(ctx: StepContext) -> bool:

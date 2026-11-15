@@ -1034,17 +1034,22 @@ def _with_draft_metadata(events, k):
     return [events[0], combine, *events[1:at], counts, *events[at:]]
 
 
+def _noop(root_id, name):
+    return Transparent("noop", (root_id,), hint=f"{name}: integer metadata kernel", kernels=(name,), pattern="transparent.triton_metadata")
+
+
 @pytest.mark.parametrize("k", [0, 5])
-def test_a_step_without_drafts_folds_the_draft_metadata_kernels_as_today(k):
-    """A step that verifies no draft token (one logits row a request), on an engine that drafts none (k = 0) or five: each of the two launches is the integer metadata noop it was before the refusal, and every other root of the step
-    resolves as it does without them."""
+def test_a_step_without_drafts_folds_its_integer_launches_as_today(k):
+    """A step that verifies no draft token (one logits row a request), on an engine that drafts none (k = 0) or five: the
+    two draft kernels and the slot mappings are each the integer metadata noop they were before the refusal, and every
+    other root of the step resolves as it does without the two."""
     events, start = decode_step(metadata_kernel=True)
     se, se0 = step_events(_with_draft_metadata(events, k)), step_events(events)
     res, res0 = resolve_step(se, context(start, se.sample)), resolve_step(se0, context(start, se0.sample))
     meta = {root.id: r for root, r in zip(se.roots, res) if root.id >= 9000}
-    assert meta == {i: Transparent("noop", (i,), hint=f"{n}: integer metadata kernel", kernels=(n,), pattern="transparent.triton_metadata")
-                    for i, n in zip(sorted(meta), DRAFT_KERNELS)}
+    assert meta == {i: _noop(i, n) for i, n in zip(sorted(meta), DRAFT_KERNELS)}
     assert [r for root, r in zip(se.roots, res) if root.id < 9000] == res0
+    assert res0[0] == _noop(se0.roots[0].id, "_compute_slot_mappings_kernel")
     assert not [r for r in res if isinstance(r, Unsupported)]
 
 
@@ -1066,18 +1071,17 @@ def _draft_step(k=5, requests=2):
     return se, resolve_step(se, context(start))
 
 
-def test_a_step_with_drafts_refuses_the_draft_metadata_kernels_by_name():
-    """With draft tokens in the step, the combine writes draft ids into the input ids and the counts kernel reads the accept
-    test's counts: both are refused, naming the kernel, the step's logits rows and its requests; the slot mappings, which
-    carry neither, stay the integer metadata noop."""
+def test_a_step_with_drafts_refuses_every_integer_launch_by_name():
+    """With draft tokens in the step, no integer-only launch is metadata: the combine (draft ids into the input ids), the
+    counts kernel (the accept test's counts) and the slot mappings alike are each refused, naming the kernel, the step's
+    logits rows and its requests."""
     se, res = _draft_step()
     by_kernel = {root.op.rsplit(".", 1)[-1]: r for root, r in zip(se.roots, res)}
-    assert by_kernel["_compute_slot_mappings_kernel"].pattern == "transparent.triton_metadata"
-    for name in DRAFT_KERNELS:
-        u = by_kernel[name]
+    assert set(by_kernel) == {"_compute_slot_mappings_kernel", *DRAFT_KERNELS}
+    for name, u in by_kernel.items():
         assert isinstance(u, Unsupported), u
-        assert u.reason == (f"{name} in a step that verifies draft tokens: the draft ids and the accepted counts it carries are "
-                            "values, not the step's public metadata")
+        assert u.reason == (f"{name}: an integer-only launch in a step that verifies draft tokens, where it may carry draft ids "
+                            "or accepted counts, which are values, and no pattern folds them yet")
         assert (u.detail["kernel"], u.detail["logits_rows"], u.detail["requests"]) == (name, 12, 2)
 
 
@@ -1089,7 +1093,7 @@ def test_whether_a_step_has_drafts_is_read_from_its_row_counts_alone():
     res2 = resolve_step(dataclasses.replace(se, start=other), context(other))
     assert [(type(r), getattr(r, "reason", None)) for r in res2] == [(type(r), getattr(r, "reason", None)) for r in res]
     se1, res1 = _draft_step(k=1, requests=1)
-    assert sum(isinstance(r, Unsupported) for r in res1) == 2
+    assert sum(isinstance(r, Unsupported) for r in res1) == 3
 
 
 def test_a_mixed_steps_first_prefill_argmax_is_integer_metadata():
