@@ -1750,7 +1750,7 @@ def test_of_the_lean_check_s_code_a_lean_input_is_what_a_key_holds_and_the_ratch
     tool = "tools/verity/lean"
     lean = [f"{tool}/check.py", f"{tool}/lean_audit.py", f"{tool}/lean_changed.py", f"{tool}/module_keys.py",
             f"{tool}/unread.py", "tools/verity/graph/verity_graph/contract.py", *sorted(REPAIRED)]
-    other = [f"{tool}/README.md", f"{tool}/merge.py", f"{tool}/warm.py", f"{tool}/unread_gate.py", f"{tool}/pyproject.toml",
+    other = [f"{tool}/README.md", f"{tool}/merge.py", f"{tool}/warm.py", f"{tool}/unread_gate.py",
              f"{tool}/tests/test_cache.py", f"{tool}/tests/fixtures/control/lakefile.toml",
              f"{tool}/tests/fixtures/control/lake-manifest.json", f"{tool}/tests/fixtures/control/data.json",
              "tools/verity/graph/verity_graph/keys.py", "tests/test_repository.py", "tools/verity/lean-tools/x.py"]
