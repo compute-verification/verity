@@ -46,6 +46,8 @@ relative to it.
 - `out/record/verdicts.json` (optional): the run's composed record. PoUW's row is printed beside the number.
 - `out/pieces/pouw/verify.json` (optional): the Pearl+ verifier's document. Its per-call split says whether the
   passes hold the LM head's calls, and `--per-call` prints it.
+- `out/pieces/pouw/development.json` (optional): the Pearl+ piece's own document. Only its `coin_source`, where the
+  passes' salt coins came from, is read, for the coins line below.
 - `job.json` (optional): the run's own record of itself. The command prints its `run.id` as the run, and the commit
   its `store.conditions` name (`source.commit`, with `-dirty` when `source.dirty`). Without it the run is the
   directory's name and the commit is unknown.
@@ -81,7 +83,13 @@ client's work; the command itself writes only the two files named below.
 - **Hardware:** none. It runs on any machine, in seconds: with `--record` on any clone, with `--from` on one that can
   read the evidence store. The GPU work is the recorded run's.
 - **What it prints:** the number as text and as one line of JSON (`value`, `unit`, `commit`, `run`), beside its
-  target. With `--per-call`, also where the MACs the credit leaves out went, by cause and by matmul call (the top N
+  target. The first line says the number is what the Pearl+ piece's own answer credits, not PoUW's row in the run's
+  record of verdicts. The line under it (`coins` in the JSON) says which coins and parameters the record states the
+  run used: the answer's sample source (`profile.source_from`: `challenger` or `node`), the passes' salt coins
+  (`development.json`'s `coin_source`: `challenger` or `in-process`), whether the Lean verifier ran as of record
+  (`--of-record` in `pearlplus-lean-check.json`'s `argv`), and the answer's draws and δ. What the record doesn't state
+  it prints as not stated, and it ends the line with `development` unless all three state live coins. It never refuses
+  on them. With `--per-call`, also where the MACs the credit leaves out went, by cause and by matmul call (the top N
   calls, 10 by default), from the Pearl+ verifier's split of its credit (the record's `verify.json`, or the file
   `--uncredited` names).
 - **What it writes:** two files where `OUT` names a directory, as it does under `research run`, and otherwise

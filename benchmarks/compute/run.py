@@ -631,9 +631,9 @@ def coins_text(c: dict) -> str:
 def text(doc: dict) -> str:
     """The printed lines of a document: the number, what accepted it, and what it is made of."""
     macs, cls, tokens, record = doc["macs"], doc["class"], doc["tokens"], doc["record"]
-    lines = [(f"compute: {100 * doc['value']:.2f}% of the served model's MACs are credited by Pearl+ "
-              f"({doc['credited_macs']:,} of {doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the "
-              f"{100 * doc['target']:g}% target")]
+    lines = [(f"compute: {100 * doc['value']:.2f}% of the served model's MACs ({doc['credited_macs']:,} of "
+              f"{doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the {100 * doc['target']:g}% target. "
+              "This is what the Pearl+ piece's own answer credits, not PoUW's row in the run's record of verdicts")]
     lines.append(coins_text(doc["coins"]))
     at = ", ".join(f"{k} {doc[name]}" for k, name in (("ε_s", "epsilon_s"), ("δ_s", "delta_s")) if doc[name] is not None)
     lines.append(f"  {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: Pearl+'s answer accepts"

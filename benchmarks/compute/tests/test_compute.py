@@ -159,8 +159,8 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
     text, doc, err = printed(capsys)
     assert err == ""
     assert text == [
-        ("compute: 75.00% of the served model's MACs are credited by Pearl+ (105,449,127,936 of 140,598,837,248), "
-         "below the 97% target"),
+        ("compute: 75.00% of the served model's MACs (105,449,127,936 of 140,598,837,248), below the 97% target. This "
+         "is what the Pearl+ piece's own answer credits, not PoUW's row in the run's record of verdicts"),
         f"  coins: node sample, salt coins from in-process; Lean verifier run as development; {PARAMETERS}",
         (f"  {RUN}, commit {COMMIT}: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at ε_s 1/100, δ_s 1/100 "
          f"(sampling's alone: the assumption's gap and δ, and binding, are not in them), and the Lean verifier's "
@@ -210,7 +210,7 @@ def test_the_number_is_held_to_the_target_exactly(store, tmp_path, capsys, monke
     store.add(RUN, a_record(tmp_path))
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[0].endswith("at or above the 75% target") and doc["met"] is True and doc["target"] == 0.75
+    assert "at or above the 75% target. " in text[0] and doc["met"] is True and doc["target"] == 0.75
     under = tmp_path / "under"
     under.mkdir()
     one_less = a_record(under, ANSWER=to("public", "work", "credited", value=CREDITED - 1),
@@ -218,7 +218,7 @@ def test_the_number_is_held_to_the_target_exactly(store, tmp_path, capsys, monke
     store.add(RUN, one_less)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[0].startswith("compute: 75.00% ") and text[0].endswith("below the 75% target") and doc["met"] is False
+    assert text[0].startswith("compute: 75.00% ") and ", below the 75% target. " in text[0] and doc["met"] is False
 
 
 @pytest.mark.parametrize("verdicts, said", [
