@@ -165,7 +165,7 @@ def _word16(v: int, n: int) -> np.ndarray:
     return np.array([[(v >> i) & 1 for i in range(16)]] * n, np.uint8)
 
 
-@pytest.mark.skipif(bool(CW.stand_ins()), reason="the selects and the check are class_select's, not on this tree yet")
+@pytest.mark.skipif("class_select" in CW.stand_ins(), reason="the selects and the check are class_select's, not on this tree yet")
 @pytest.mark.parametrize("stop_at", [1, 3, None])
 def test_a_request_that_stops_early_commits_zeros_past_its_stop_and_the_check_accepts_it_alone(stop_at):
     """On rows of a small V, O = 4 steps of made-up logits, the first select and the later ones wired as the window wires
@@ -186,9 +186,13 @@ def test_a_request_that_stops_early_commits_zeros_past_its_stop_and_the_check_ac
         return [np.asarray(evaluate_batch(u.defn, row[None, u.lanes[0]:u.lanes[1]], kernel="reference")).reshape(1, -1)
                 for u in plan[:-1]]
 
+    k = O.bit_length()
+
     def split(out):
-        flat = np.asarray(out).reshape(-1)
-        return flat[0] | flat[1] << 16, flat[2:18], flat[18:34], flat[34] | flat[35] << 16
+        """(o0, o1, o2, o3): the ids as integers, the bit and the count as integers."""
+        flat = [int(x) for x in np.asarray(out).reshape(-1)]
+        return (flat[0] | flat[1] << 16, flat[2], sum(b << i for i, b in enumerate(flat[3:3 + k])),
+                flat[3 + k] | flat[4 + k] << 16)
 
     outs = []
     state: tuple = ()
@@ -196,17 +200,17 @@ def test_a_request_that_stops_early_commits_zeros_past_its_stop_and_the_check_ac
         fn = (CW.first_select if s == 0 else CW.live_select)(Vs, N, O, stops, mml)
         got = split(evaluate_batch(fn, rows[None, s, -N:], *chunks(rows[s]), request, *state, kernel="reference"))
         outs.append(got)
-        state = (got[2][None, :], got[1][None, :])
+        state = (_word16(got[2], 1), _word16(got[1], 1))
     served = [int(o[0]) for o in outs]
     assert served == [*tokens[:n], *[0] * (O - n)]
     assert [int(o[3]) for o in outs] == [*tokens[:n - 1], *[0] * (O - n + 1)]
-    count = sum(int(b) << i for i, b in enumerate(outs[-1][2]))
-    assert count == n and int(outs[-1][1][0]) == 0
+    assert [o[2] for o in outs] == [min(s + 1, n) for s in range(O)]
+    assert [o[1] for o in outs] == [int(s + 1 < n) for s in range(O)]
     check = CW.class_check(Vs, N, P, O, stops, mml)
 
     def verdict(ids, cnt):
         return int(np.asarray(evaluate_batch(check, rows[None, -1, -N:], *chunks(rows[-1]), np.array([ids], np.uint32), request,
-                                             _word16(cnt, 1), outs[-1][1][None, :], kernel="reference")).reshape(-1)[0])
+                                             _word16(cnt, 1), _word16(outs[-1][1], 1), kernel="reference")).reshape(-1)[0])
 
     assert verdict(served, n) == 1
     if n < O:
