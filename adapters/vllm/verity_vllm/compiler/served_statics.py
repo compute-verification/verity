@@ -151,7 +151,7 @@ def statics_bits(S, programs: Sequence[Program]) -> list[int]:
         prog = list(prog or ())
         if len(prog) > S.R:
             raise ValueError(f"a step of {len(prog)} rows is over R = {S.R}")
-        slot = {"valid": [], "start": [], "n": []}
+        slot: dict[str, list] = {"valid": [], "start": [], "n": []}
         for k in range(S.R):
             start, n = prog[k] if k < len(prog) else (0, 0)
             slot["valid"].append(ST._bits_int(int(k < len(prog)), 1))

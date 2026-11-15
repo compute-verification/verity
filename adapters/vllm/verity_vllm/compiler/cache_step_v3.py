@@ -302,6 +302,7 @@ class Stream:
             if got != self.walk(c.r, c.a):
                 raise AssertionError(f"{c}: the memo's {got}, the pool's {self.walk(c.r, c.a)}")
             fields, self._fields = self._fields, None
+            assert fields is not None
             self.slots.append(Slot(1, *fields, 0, 0, 0, 0, 0, len(self.slots) + 1, use=0))
             self.memos += 1
             return got
@@ -921,7 +922,7 @@ def arguments(S, alpha: int, gamma: int, head: int, tail: int, slots: Sequence[S
     Z = widths(S)
     if len(slots) > S.NS or len(entries) > S.NE:
         raise ValueError(f"{len(slots)} slots or {len(entries)} entries past the class's {S.NS} and {S.NE}")
-    sl = list(slots) + [Slot(*[0] * 11, use=0)] * (S.NS - len(slots))
+    sl = list(slots) + [Slot(*(0,) * 11, use=0)] * (S.NS - len(slots))
     en = [(1, *e) for e in entries] + [(0, 0, 0, 0, 0, 0)] * (S.NE - len(entries))
     return [_bits(alpha, 128), _bits(gamma, 128), _bits(head, Z.NW), _bits(tail, Z.NW),
             [x.start for x in sl], [q for x in sl for q in _bits(x.kind, 3)], [q for x in sl for q in _bits(x.r, S.RW)],

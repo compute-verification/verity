@@ -280,10 +280,10 @@ def reference(S: SimpleNamespace, st: State, inp: Inputs) -> Out:
 
     shift = 0
     if not run and not wait and arr:
-        a = arr[0]
-        if not arrival_ok(a):
+        first = arr[0]
+        if not arrival_ok(first):
             return Out(False)
-        wait, shift, taken = [as_req(a)], 1, 1
+        wait, shift, taken = [as_req(first)], 1, 1
     sched: dict[int, int] = {}
     victims: list[dict] = []
     preempted = False
@@ -322,7 +322,7 @@ def reference(S: SimpleNamespace, st: State, inp: Inputs) -> Out:
     k = 0
     looked = [0] * (S.W + S.A)
     if not preempted:
-        def admit(r: dict, c: int, ask: bool) -> int:
+        def admit(r: dict, c: int, ask: int | None) -> int:
             """0: the loop ends here; 1: r is admitted; 2: refused (ok = 0). Reads bit `ask`'s index when asked."""
             nonlocal free, budget, used
             if budget <= 0 or len(run) >= S.M:
@@ -648,6 +648,7 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
     used = [ZERO] * AC
     taken = [ZERO] * AC
     taken[0] = forced
+    cands: list
     adm, looked, cands = [], [], []
     tap.update(run_n=run_n, cnt0=cnt0, cands=cands)
     if derive is not None:
@@ -730,7 +731,8 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
 
     # close and update
     stage("update")
-    outs = {k: [] for k in ("row_valid", "row_id", "row_kind", "row_start", "row_n")}
+    outs: dict[str, list] = {k: [] for k in ("row_valid", "row_id", "row_kind", "row_start", "row_n")}
+    upd: list
     keep, nxt, upd = [], [], []
     tap.update(slots=slots, update=upd)
     for p, s in enumerate(slots):

@@ -85,6 +85,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Sequence
 from types import SimpleNamespace
+from typing import Any
 
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean import memcheck as MC
@@ -382,7 +383,7 @@ class _Bus(V4._Bus):
         self.nc[p] = RS._sel(C, x["leave"].inv(), self.nc[p])
         return list(ret)
 
-    def finish(self, tap) -> tuple[object, object, list]:
+    def finish(self, tap) -> tuple[Any, Any, list]:
         """(1 iff an active step's bounds hold, 1 iff every result no record carries is zero, the next slot row)."""
         C, S = self.C, self.S
         upd = tap["update"]
@@ -800,7 +801,7 @@ def reference(S, sl: CS.Slice, delta: int = COINS[2], counts: Sequence[int] | No
     stm = sc.stream
     got = touched_counts(S, stm)
     counts = got if counts is None else list(counts)
-    by = {}
+    by: dict[int, list] = {}
     for x in stm.entries():
         by.setdefault(x[0], []).append(x)
     where = set(dense(S))
@@ -815,7 +816,8 @@ def reference(S, sl: CS.Slice, delta: int = COINS[2], counts: Sequence[int] | No
     rnum = V4.request_numbers(sl)
     last = sc.states[-1]
     rq = tuple(rnum[x[0]] for x in last.running) + (0,) * (S.R - len(last.running))
-    cout = list(RC.encode(last, Sc)) + list(RC.encode_window(sc.window, Sc)) + _encode_pool(S, *sc.pools[-1], rq)
+    nc, fl = sc.pools[-1]
+    cout = list(RC.encode(last, Sc)) + list(RC.encode_window(sc.window, Sc)) + _encode_pool(S, nc, fl, rq)
     return SimpleNamespace(srv=srv, cout=cout, chk=checked(S, sc, counts), counts=counts, scan=sc)
 
 
@@ -830,7 +832,7 @@ def checked(S, sc, counts: Sequence[int]) -> list[int]:
     for i in range(4):
         out += [b for w in wit for v in w[i] for b in bits(v, CW)]
     stm = sc.stream
-    slots = list(stm.slots) + [V3S.Slot(*[0] * 11, use=0)] * (S.NS - len(stm.slots))
+    slots = list(stm.slots) + [V3S.Slot(*(0,) * 11, use=0)] * (S.NS - len(stm.slots))
     out += [x.start for x in slots]
     out += [b for x in slots for b in bits(x.kind, 3)] + [b for x in slots for b in bits(x.r, S3.RW)]
     out += [b for x in slots for b in bits(x.a, CW)] + [b for x in slots for b in bits(x.b, CW)]
