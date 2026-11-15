@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Registration.View
-public import CoreProtocol.Registration
+public import RegistrationLog
 public import Properties.Core.Site
 public import Properties.Accounting.Registration.Premises
 
