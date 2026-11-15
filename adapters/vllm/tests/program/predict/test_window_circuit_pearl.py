@@ -15,7 +15,7 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Array, Value
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.protocols.accounting.pouw.prover.schemes import SCHEMES
 from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR

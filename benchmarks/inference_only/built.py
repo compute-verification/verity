@@ -138,7 +138,7 @@ def divisions(doc: Mapping[str, Any], pins: Mapping[str, str], gates: Mapping[st
     the largest block's fresh bits, and what that block's fresh bits are."""
     from verity_vllm.program.predict import block_counts as BC
 
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
 
     units = {t: int(n) for t, n in doc["templates"]}
     lays = {t: IF.layout(BC.resolve(t)) for t in units}

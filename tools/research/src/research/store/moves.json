@@ -2803,6 +2803,11 @@
       "paths": {
         "tools/verity/check/": "tools/check/"
       }
+    },
+    {
+      "paths": {
+        "verity/commitments/windows/": "verity/commitments/periods/"
+      }
     }
   ]
 }

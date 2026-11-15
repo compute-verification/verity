@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.circuits.codec import descriptor_id
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.weights_of_record import weight_param

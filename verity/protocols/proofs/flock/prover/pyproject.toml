@@ -258,7 +258,7 @@ paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/accounting/certifier",
     "verity/protocols/accounting/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/windows",
+    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods",
 ]
 
 [[tool.verity.tests.reads]]
@@ -274,7 +274,7 @@ tests = ["tests/test_rec_inner_stage.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/proofs/flock/prover/python/verity_flock/templates",
-    "verity/commitments/windows",
+    "verity/commitments/periods",
 ]
 
 [[tool.verity.tests.reads]]

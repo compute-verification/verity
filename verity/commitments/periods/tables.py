@@ -11,7 +11,7 @@ from typing import Any
 
 from verity.commitments import row_table as RT
 
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 
 __all__ = ["check_row_tables", "registered_reads", "reported_reads"]
 

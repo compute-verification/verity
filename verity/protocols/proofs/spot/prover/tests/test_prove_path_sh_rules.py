@@ -19,7 +19,7 @@ import json
 import re
 from pathlib import Path
 
-from verity.commitments.windows.population import population_program
+from verity.commitments.periods.population import population_program
 from verity.protocols.proofs.spot.verifier import service as S
 from verity_vllm.pipeline import serving_rows as SRW
 

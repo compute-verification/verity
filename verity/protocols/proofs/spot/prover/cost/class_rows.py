@@ -95,7 +95,7 @@ def main(argv=None) -> int:
     sys.path.insert(0, str(Path.cwd() / "adapters/vllm"))
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.steps import Registered
     from verity_vllm.program.predict.phi import Phi
 

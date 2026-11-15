@@ -263,7 +263,7 @@ def kinds_of(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roo
              fresh: int) -> dict[str, int]:
     """A block's ``fresh`` bits at ``pins`` and ``roots`` by kind (`KINDS`): what `block_counts.fresh` drops by when the
     record's registered parameters of that kind are held too, each at a root of its own (`kind_of`)."""
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict import block_counts as BC
 
     reg = IF.declarations(doc)[2]
@@ -635,7 +635,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     pol = json.loads(a.policy.read_text()) if a.policy.is_file() else None
     doc = json.loads(a.circuit.read_text()) if a.circuit.is_file() else None
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.window_weights import WeightsRegistration
 
     pins = (dict(WeightsRegistration.of(json.loads(a.pins.read_text()), str(a.pins)).roots)

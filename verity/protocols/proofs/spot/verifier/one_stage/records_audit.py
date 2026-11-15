@@ -1,4 +1,4 @@
-"""A window's audit from its records alone: what an integration hands Verity (`verity.commitments.windows.interface`), and nothing else.
+"""A window's audit from its records alone: what an integration hands Verity (`verity.commitments.periods.interface`), and nothing else.
 
 The records, every one in the window's directory but the advice's opening:
 
@@ -194,7 +194,7 @@ from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
-from verity.commitments.windows import history as HW, interface as IF  # noqa: E402
+from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
 #: which outbound connections take theirs

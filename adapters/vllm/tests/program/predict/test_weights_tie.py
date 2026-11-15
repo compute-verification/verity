@@ -34,8 +34,8 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.circuits.codec import descriptor_id
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.gates.sha512 import IV
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 
 DESIGN, CAP = D.parse_design("work:613"), 16
 EMBED = "model.embed_tokens.weight"

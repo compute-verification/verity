@@ -34,7 +34,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.commitments.windows import links as LK, rows as CS
+from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.engine import sampler_capture as SC
 from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT
 

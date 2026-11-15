@@ -112,7 +112,7 @@ inputs = [
     "verity/protocols/accounting/pouw/verifier/window.py",
     "verity/protocol.py",
     "verity/channel.py",
-    "verity/commitments/windows",
+    "verity/commitments/periods",
     "verity/circuits",
     "verity/circuits/kernels",
     "verity/commitments",
