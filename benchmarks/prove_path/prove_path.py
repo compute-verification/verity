@@ -266,6 +266,8 @@ class I2Compiler:
     compiled: dict = field(default_factory=dict, compare=False, repr=False)
     #: with ``own``, each compiled Program by digest, with its names (`naming.Named`), until `own_builds` writes it
     builds: dict = field(default_factory=dict, compare=False, repr=False)
+    #: each compiled request's unit by its Program's digest, whose trace dir (`steps.trace_dir`) a refusal names
+    units: dict = field(default_factory=dict, compare=False, repr=False)
 
     @functools.cached_property
     def digest(self) -> str:
@@ -289,6 +291,7 @@ class I2Compiler:
                 raise ValueError(f"I2 refuses the advice: {e}") from None
             self.compiled[data] = [{"request_id": u.id, "arrive_step": u.first_step, "prompt_len": u.LP, "max_tokens": u.T + 1,
                                     "digest": u.digest} for u in c.requests]
+            self.units.update({u.digest: u for u in c.requests})
             self.builds.update({d: (c.programs[d], named) for d, named in c.named.items()})
         return [dict(q) for q in self.compiled[data]]
 
@@ -306,8 +309,15 @@ class I2Compiler:
         for q in requests:
             d = by.get(str(q.get("digest")))
             if d is None:
-                raise ValueError(f"request {q['request_id']}: no Build dir under {self.programs_root} holds I2's Program "
-                                 f"{str(q.get('digest'))[:16]}")
+                from verity_vllm.program.predict.steps import trace_dir
+
+                dg = str(q.get("digest"))
+                trace = trace_dir(self.units[dg]) if dg in self.units else "?"
+                have = ", ".join(f"{Path(p).name} {k[:16]}" for k, p in sorted(by.items(), key=lambda kv: kv[1])) or "none"
+                raise ValueError(f"request {q['request_id']}: no Build dir under {self.programs_root} holds I2's Program {dg[:16]} "
+                                 f"(its trace: {trace}/; the Builds there: {have}). I2's request Programs end in "
+                                 f"their length rule (`steps.stop_of`), which a `verity-vllm row run` Build's declared Programs "
+                                 f"don't: the single-GPU arm audits a Commit made under I2's Programs, their Builds in its row dir")
             if (d, q["digest"]) not in held:
                 try:
                     held[d, q["digest"]] = build_of(d, q["digest"])

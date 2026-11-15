@@ -787,6 +787,8 @@ def test_i2s_requests_are_its_compiled_units_once_per_advice_and_its_refusal_is_
 
 
 def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(tmp_path):
+    from verity_vllm.program.predict import steps as ST
+
     for name, ok, digest in (("build_request_LP5_T2", True, "d0" * 64), ("build_request_LP3_T1", False, "d1" * 64),
                              ("build_step", True, "d2" * 64)):
         (tmp_path / name).mkdir()
@@ -796,7 +798,10 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
     for rank, world in ((1, 2), (0, 2), (1, 1)):
         with pytest.raises(ValueError, match="I2 compiles a single-GPU session"):
             i2.load(rank, world, [])
-    with pytest.raises(ValueError, match="request r1: no Build dir under .* holds I2's Program d1d1"):
+    i2.units["d1" * 64] = ST.RequestUnit(1, "d1" * 64, 3, 1, {"kind": "greedy"}, None, 0, "r1", stop={"max_tokens": 2})
+    with pytest.raises(ValueError, match=r"request r1: no Build dir under .* holds I2's Program d1d1.*\(its trace: "
+                                         r"build_request_LP3_T1_greedy_s[0-9a-f]{12}/; the Builds there: build_request_LP5_T2 d0d0.*\)"
+                                         r".*length rule"):
         i2.load(0, 1, [{"request_id": "r1", "arrive_step": 0, "digest": "d1" * 64}])
 
 
