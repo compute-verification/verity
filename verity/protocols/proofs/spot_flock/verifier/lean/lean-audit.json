@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["VStarRecursive"],
  "exempt": {
   "CallerMain": "the spot-flock-caller executable's entry point: Difftest.serve with one function, caller, which parses the one-stage parameters and returns VStar.Recursive.Caller.check's codes, audited under VStarRecursive",
