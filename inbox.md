@@ -1,3 +1,0 @@
-[2026-11-15T18:23Z] 52f5907f1c33
-From your lead, a pointer (the stop on runs still stands): worker OUTSIDER read that the only launcher writing the record layout `verity bench compute` reads is benchmarks/one_stage/served_verdicts.sh with POUW=pearlplus PEARLPLUS_TIE=1 (POUW_CMD=served_pearlplus.sh), run under `research run --on vy-dc-h200 --cwd clone --timeout 6h`; benchmarks/one_stage/pearlplus_local_e2e.py already runs the challenger gate as local processes on a toy pass; run.py exits 2 unless the credit is at the policy class, so only the tied path (verify --tie W --class 4,32,4 over serve_load.py --fixed) gives a number. Start your reading there and write the one launch for that tied path.
-
