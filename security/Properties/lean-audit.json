@@ -1063,6 +1063,7 @@
   "Properties.InferenceOnly",
   "Definitions.Core",
   "Definitions.InferenceOnly",
+  "Definitions.Slowdown",
   "Definitions.Slowdown.Assumptions.Threads",
   "Definitions.InferenceOnly.Assumptions.Theta",
   "InferenceOnlyCheck.Check",
