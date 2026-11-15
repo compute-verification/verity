@@ -18,7 +18,7 @@ import pytest
 from verity import config as K
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
@@ -399,11 +399,11 @@ class StandIn(D.Machine):
 
 
 def registry(verdicts: dict | None = None, certifier_rc: int = 0) -> R.Registry:
-    def network_certifier(cfg, state, local):
+    def network_attester(cfg, state, local):
         write(state / "blocks" / "certifier-session" / "relay.json", {"periods": len(periods(state))})
         return certifier_rc
 
-    parties = {**REG.parties, "certifier": {**REG.parties["certifier"], "network-certifier": network_certifier}}
+    parties = {**REG.parties, "certifier": {**REG.parties["certifier"], "network-certifier": network_attester}}
     return R.Registry(REG.components, REG.workloads, REG.workers, parties, REG.order,
                       functools.partial(D.live, machine=lambda c, s: StandIn(c, s, verdicts or {})))
 
@@ -525,7 +525,7 @@ def test_a_party_placed_elsewhere_is_refused(tmp_path, capsys):
 
 
 def test_parties_apart_meet_only_at_a_configured_listen_port(tmp_path, capsys):
-    auditor = config(challenger="auditor-1", network_certifier="auditor-1", verifier="auditor-1")
+    auditor = config(challenger="auditor-1", network_attester="auditor-1", verifier="auditor-1")
     rc, _ = run(tmp_path, registry(), "--on", "auditor-1", cfg=auditor)
     captured = capsys.readouterr()
     assert rc == 2 and said(captured.out) == [{"party": "network-certifier", "exit": 0}]

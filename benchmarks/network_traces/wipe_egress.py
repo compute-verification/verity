@@ -42,7 +42,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for bench
 
 from verity.protocols.resource_accounting.network.verifier import record_files as RF
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 
 FORMAT = "wipe-egress/v1"

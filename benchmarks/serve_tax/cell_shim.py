@@ -47,12 +47,12 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(ROOT))
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT  # noqa: E402 (the tree's, put on sys.path above)
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.network_certifier import (DATA, END, FAIL, KIND_NAMES, PAD, REFUSED, cells,  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.network_attester import (DATA, END, FAIL, KIND_NAMES, PAD, REFUSED, cells,  # noqa: E402
                                                         read_cell)
 
 #: the longest request body taken
 BODY_BYTES = 1 << 24
-#: the file beside the certifier's ``deployment.json`` that names its listener (`network_certifier_serve.ENDPOINTS`)
+#: the file beside the certifier's ``deployment.json`` that names its listener (`network_attester_serve.ENDPOINTS`)
 ENDPOINTS = "endpoints.json"
 #: what an id request holds for the sampling fields a greedy body doesn't name: neither changes a greedy answer
 SENT = {"top_p": 1.0, "seed": 0}

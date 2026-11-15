@@ -19,7 +19,7 @@ from pathlib import Path
 from verity.protocols.resource_accounting.network.verifier import blob_files as bf, connection_rows as CR
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction, Issuer
 from verity.protocols.resource_accounting.network.verifier.connection_rows_check import FILED, MISSED, NO_HEAD, ROWS, SALTS
-from verity.protocols.resource_accounting.network.verifier.network_certifier import LENGTHS_FORMS, Released, NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import LENGTHS_FORMS, Released, NetworkCertifierParams
 
 #: the publisher queue's name for a hand's items, where a record's rows have their link's
 HAND = "connection-rows"

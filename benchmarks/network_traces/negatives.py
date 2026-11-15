@@ -83,20 +83,20 @@ from verity.protocols.resource_accounting.network.verifier import relay_check as
 from verity.protocols.resource_accounting.network.verifier.link_frame import (DATA, HEADER,  # noqa: E402
                                                                        )
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_NAME_BYTES, id_request  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import tie_service as TS, network_certifier as W  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import tie_service as TS, network_attester as W  # noqa: E402
 
 FORMAT = "verity-network-negatives/v1"
 ADVICE_MODULE = "verity.protocols.resource_accounting.network.verifier.advice"
 IO_TIE_MODULE = "verity.protocols.resource_accounting.network.verifier.io_tie"
 IO_REQUEST_MODULE = "verity.protocols.resource_accounting.network.verifier.io_request"
-NETWORK_CERTIFIER_ROWS_MODULE = "verity.protocols.resource_accounting.network.verifier.network_certifier_rows"
+NETWORK_CERTIFIER_ROWS_MODULE = "verity.protocols.resource_accounting.network.verifier.network_attester_rows"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
 TIE = "IoTieWindow"
 REQUEST_TIE = "IoTieRequest"
 #: the verifier's registered read of a network attester cell at its position under the network attester's signed root
-#: (`network_certifier_rows.opens`, the Lean verifier's check of a proof block's registered port)
+#: (`network_attester_rows.opens`, the Lean verifier's check of a proof block's registered port)
 NETWORK_CERTIFIER_READ = "Flock.Registered.checkPort"
 #: the part of the I/O tie (`TIE`) that refuses each negative it reads; None: one it must accept while its outputs are
 #: honest's (each one's step, batch row, request, index and bucket), which content refuses once the edit moves them
@@ -127,14 +127,14 @@ def frame_byte(frames: list[bytes], k: int = 0, at: int = -1) -> list[bytes]:
 
 
 def cell_reads(WR, cells, k: int, row: bytes) -> bool:
-    """Whether `row`, opened at position `k` of the network attester's committed `cells` (`network_certifier_rows.Cells`, a row a
+    """Whether `row`, opened at position `k` of the network attester's committed `cells` (`network_attester_rows.Cells`, a row a
     bucket) under that position's salt and path, climbs to their root: the verifier's registered read
-    (`network_certifier_rows.opens`)."""
+    (`network_attester_rows.opens`)."""
     return WR.opens(cells.domain, cells.root, k, WR.bc(row, cells.salts[k]), cells.path(k))
 
 
-def network_certifier_frame(run: Path, at: int | None = None) -> dict:
-    """`frame` on a network-certifier-serve run's own cells (`network_certifier_rows`: `cells.jsonl`'s registrations and the
+def network_attester_frame(run: Path, at: int | None = None) -> dict:
+    """`frame` on a network-certifier-serve run's own cells (`network_attester_rows`: `cells.jsonl`'s registrations and the
     prover's `cells.salts`, the rows' salts and the wiring's): the first egress execution phase with a data cell, its
     registration (v2) checked under the network attester's key and the schedule, and its record's bucket rows and
     wiring committed under their salts to the registered head; then byte `at` of that cell (its first payload byte by
@@ -142,7 +142,7 @@ def network_certifier_frame(run: Path, at: int | None = None) -> dict:
     signed root and the changed one's doesn't (`NETWORK_CERTIFIER_READ`)."""
     try:
         WR = importlib.import_module(NETWORK_CERTIFIER_ROWS_MODULE)
-        WS = importlib.import_module("verity.protocols.resource_accounting.network.attester.network_certifier_serve")
+        WS = importlib.import_module("verity.protocols.resource_accounting.network.attester.network_attester_serve")
     except ModuleNotFoundError as err:
         raise NotApplicable(f"no network certifier cells: {err.name} isn't in this tree") from None
     link, direction = RC.CERTIFIED[RC.EGRESS]
@@ -1084,7 +1084,7 @@ def main(argv=None) -> int:
         print(table(args.markdown))
         return 0
     try:
-        out = network_certifier_frame(args.run)
+        out = network_attester_frame(args.run)
     except NotApplicable as err:
         raise SystemExit(str(err))
     print(json.dumps(out))

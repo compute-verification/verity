@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/c
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
 import demo_stub as S  # noqa: E402
-from verity.protocols.resource_accounting.network.attester import network_certifier_serve as ws  # noqa: E402
+from verity.protocols.resource_accounting.network.attester import network_attester_serve as ws  # noqa: E402
 from verity.protocols.resource_accounting.network.prover import scan_zk as sz  # noqa: E402
 
 from verity.protocols.resource_accounting.network.attester.tests.relay_runs import _run  # noqa: E402
@@ -84,7 +84,7 @@ def test_the_class_is_eight_byte_ids_in_and_twenty_four_out_and_its_model_says_s
 def test_a_network_certifiers_id_request_of_the_class_is_answered_id_form_its_ids_below_the_vocabulary_then_the_trailer():
     """With or without the release headers the network attester puts on the server's copy, the answer is the prompt's
     24 ids (`outputs`, fixed by the prompt alone), each an id event of P bytes, then the trailer: whole id-form, as the
-    network attester's rehearsal reads it (`network_certifier_serve.parse_id_response`), and the scan's cells' payloads cut from
+    network attester's rehearsal reads it (`network_attester_serve.parse_id_response`), and the scan's cells' payloads cut from
     it."""
     ids = S.outputs(PROMPT)
     want = b"".join(IT.id_event(t, P) for t in ids) + IT.TRAILER
@@ -125,7 +125,7 @@ def test_what_isnt_a_network_certifiers_id_request_is_refused_and_the_models_lis
     for other in (IDF.id_request(**fields, frame_bytes=256, offset=0), moved,
                   ws.http_request({"model": NAME, "prompt": PROMPT, "max_tokens": 24}, "h"),
                   ids_request().replace(b"POST /v1/completions", b"POST /v1/chat/completions", 1)):
-        assert other != ids_request() and S.network_certifier_request(other) is None
+        assert other != ids_request() and S.network_attester_request(other) is None
         assert "a network certifier's id request" in refused(respond(other))
     models = respond(b"GET /v1/models HTTP/1.1\r\nhost: s\r\n\r\n")
     assert models.startswith(b"HTTP/1.1 200 OK\r\n")
@@ -141,7 +141,7 @@ def test_its_prompts_are_the_class_and_the_gate_takes_them_as_its_scan_rehearsal
     assert all(len(p) == 3 and all(t < 5 for t in p) for p in S.prompts(2, S.Shape(3, vocab=5)))
     req = {"requests": 8, "tokens": 24, "height": 10, "minutes": 4, "prompts": True, "scan": True}
     data = json.dumps(got, separators=(",", ":")).encode()
-    assert G.network_certifier_prompts(req, data) == data and req["prompts"] == {"count": 4, "ids": 32}
+    assert G.network_attester_prompts(req, data) == data and req["prompts"] == {"count": 4, "ids": 32}
 
 
 def test_serve_prints_where_it_listens_and_answers_over_loopback(capsys):
@@ -301,10 +301,10 @@ def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified
     assert sorted(p.name for p in out.iterdir()) == ["report.json", "serve.json", "windows.jsonl"]
     published = b"".join(p.read_bytes() for p in out.iterdir())
     assert not any(n in published for n in [*SS.needles(prompts), b'"prompt_len"', b'"sampling"', b'"emitted"'])
-    assert CR.network_certifier_endpoint_step(rep)["in_the_clear"] == CR.CLEAR["warden_endpoint_served"]
+    assert CR.network_attester_endpoint_step(rep)["in_the_clear"] == CR.CLEAR["warden_endpoint_served"]
 
 
-def test_the_gates_demo_traffic_through_the_network_certifier_is_the_demo_stand_ins_class_and_the_check_accepts_its_answers(
+def test_the_gates_demo_traffic_through_the_network_attester_is_the_demo_stand_ins_class_and_the_check_accepts_its_answers(
         tmp_path):
     """`warden-rehearse --scan --prompts --tokens 24` of the demo stand-in's prompts (`demo_stub.py prompts`) sends each
     prompt as it is, with exactly 24 tokens and greedy; on the network attester at the scan's schedule, the stand-in,
@@ -316,8 +316,8 @@ def test_the_gates_demo_traffic_through_the_network_certifier_is_the_demo_stand_
     prompts = S.prompts(4)
     req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
            "prompts": True, "temperature": 0.0, "top_p": 1.0}
-    (tmp_path / G.PROMPTS).write_bytes(G.network_certifier_prompts(req, json.dumps(prompts).encode()))
-    args = ws.parser().parse_args(G.network_certifier_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    (tmp_path / G.PROMPTS).write_bytes(G.network_attester_prompts(req, json.dumps(prompts).encode()))
+    args = ws.parser().parse_args(G.network_attester_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
     params = ws._params(args)
     assert params == sz.PARAMS and (args.requests, args.max_tokens) == (4, 24)
     traffic = ws.traffic_of(args, S.Shape().name)
@@ -328,12 +328,12 @@ def test_the_gates_demo_traffic_through_the_network_certifier_is_the_demo_stand_
     out.mkdir()
     span = ws.group_windows(params, 24)
     assert span == 2
-    network_certifier = _run(out, tmp_path / "key", requests, responses, windows=span, params=params, id_payload=params.payload,
+    network_attester = _run(out, tmp_path / "key", requests, responses, windows=span, params=params, id_payload=params.payload,
                   servers=servers)
-    assert len(network_certifier.log) == 4 and all(c["failed"] is None and not c["cut"] for c in network_certifier.log)
+    assert len(network_attester.log) == 4 and all(c["failed"] is None and not c["cut"] for c in network_attester.log)
     for j, (server, response) in enumerate(zip(servers, responses)):
         sent = b"".join(data for _, data in server.writes)
-        fields = S.network_certifier_request(sent)
+        fields = S.network_attester_request(sent)
         assert release_of(sent)[0] == j and fields["user"] == f"user-{j}" and S.refusal(fields) is None
         assert S.answer(fields["prompt"]) == response
     result = RC.check(out)

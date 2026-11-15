@@ -175,7 +175,7 @@ The records are in the evidence store, in the run files of the runs that carry
   below);
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
   its head's digest, from which a class's count is read. Its one writer is the offline check of the network
-  attester's run, `verity/protocols/resource_accounting/network/attester/network_certifier_serve.py check` with `--key-sha512 HEX --session HEX` and
+  attester's run, `verity/protocols/resource_accounting/network/attester/network_attester_serve.py check` with `--key-sha512 HEX --session HEX` and
   `--registrations FILE`. The auditor hands that check the SHA-512 of the network attester's public key and its
   session, and the check holds the run's deployment record to them: a run made under another key or session, a
   rehearsal's own, gets no file, and that problem is the first the check lists. The file's first line says what

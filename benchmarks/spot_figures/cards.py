@@ -47,7 +47,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 
 HERE = Path(__file__).resolve().parent
 CARDS = HERE / "cards"

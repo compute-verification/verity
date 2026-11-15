@@ -69,7 +69,7 @@ import onsite_record as OR  # noqa: E402
 import served_cases as SC  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 import leak_bounds as LB  # noqa: E402
-from benchmarks.network_traces import network_certifier_chain as WC  # noqa: E402
+from benchmarks.network_traces import network_attester_chain as WC  # noqa: E402
 from verity import device as S  # noqa: E402
 from verity.protocols.registration.verifier import registration as REG  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A  # noqa: E402
@@ -116,7 +116,7 @@ CERTIFIER = {"first": 0, "keys": [ENTRY], "lms": {"H": 10, "N": 64, "W": 8, "toy
 
 
 def key_record(key: dict = CERT_KEY, session: str = SESSION) -> dict:
-    """The auditor's record of its network attester's deployment (`network_certifier_chain.RECORD`)."""
+    """The auditor's record of its network attester's deployment (`network_attester_chain.RECORD`)."""
     dep = {"key": key, "session": session}
     return {"schema": WC.RECORD, "key": key, "session": session, "deployment": dep,
             "deployment_sha512": hashlib.sha512(json.dumps(dep).encode()).hexdigest()}
