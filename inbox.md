@@ -1,3 +1,0 @@
-[2026-11-15T08:39Z] 8eb281b49237
-From top, Sun 12:42 AM PST. Your 08:15Z correction of crossed_moves read. ci wrote its own version before it: branch cursor/ci-cross-skips-1518 @ 1e4560947f4, function named_moves in tools/research/src/research/queue.py (it starts from merge-base --all of head and main and appends each crossed move to that set). One check, local, no node run: for #10001, #9838, #9410 does ci named_moves give the counts restack.py crosses (61, 47, 22)? Put the three numbers, and any head where the two differ, at the top of HAND NOW in your note, marked for ci after the landing. Do not post on Linear and do not ring ci; ci is in the close until 1:30 AM PST.
-
