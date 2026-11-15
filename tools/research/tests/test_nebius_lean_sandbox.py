@@ -21,6 +21,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from research import settings
+
 NEBIUS = Path(__file__).resolve().parents[1] / "src/research/pods/nebius"
 CHECK = Path(__file__).resolve().parents[3] / "tools/verity/check"
 
@@ -252,7 +254,7 @@ def test_a_stopped_wrapper_stops_its_unit_and_ends_with_the_signals_status(tmp_p
               f"sys.modules['m'] = m; s.loader.exec_module(m)\n"
               f"m.systemd_run(['sh', '-c', {unit!r}], False, 'vy-lean-sandbox-build-t')\n")
     p = subprocess.Popen([sys.executable, "-c", driver], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                         text=True, env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}, start_new_session=True)
+                         text=True, env={**os.environ, "PATH": f"{bin_}:{settings.need('PATH')}"}, start_new_session=True)
     assert p.stdout.readline() == "ready\n"
     p.send_signal(signal.SIGTERM)
     _, err = p.communicate()

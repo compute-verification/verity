@@ -30,8 +30,12 @@ check, or whose fields can't show it ("cannot tell"), prices nothing, and is nam
 check it didn't pass, the check's answer and its reason, in the rules' words, then with what it lacks to be priced
 (`row_why`). The rules' four other checks are no condition here: three read a run's other files (its lease and card,
 the card at its start and end, its window's sessions), and `one_numa_node` reads `cores.numa_nodes`, which a row may
-lack. A labelled row is priced whatever they say (`steady.verdict` gives all ten, from the row and its run's files).
-`report_why` judges a report.
+lack. They are read through a run's own verdict instead (`own_verdict`): a run of the harness's steady-state point
+(`STEADY_POINT_TOOL`) judged its row by all ten as it ended, and its attempt carries that verdict as its result's
+validation. A run of the point whose verdict is `failed` prices none of its rows, each refused with the run and the
+checks it didn't pass, and one whose attempt carries no verdict can't be told and is refused too. Any other run, one
+timed outside the harness's point or before it, has no verdict of its own and is judged by `CHECKS` alone, whatever
+the other four say. `report_why` judges a report.
 
 A type is priced at the stated prover count (`--provers`), from the rows at that count only, and at
 the stated host CPU cores a card (`--cores`): from the rows whose provers held that many, else from those that held
@@ -86,7 +90,7 @@ from pathlib import Path
 from typing import Any, TypeGuard
 
 from verity_bench import exfiltration as E
-from verity_bench import jobs, kit, overhead_records, settings, steady
+from verity_bench import jobs, kit, overhead_records, settings, steady, steady_node
 from verity_bench import lean_verify as L
 from verity_bench import overhead as O
 from verity_bench import prove as P
@@ -111,6 +115,11 @@ REPORTS, TYPES = "*/server-k*/server.json", "types.json"
 #: the checks of the proof server's steady-state rules (`steady.CHECKS`) a row is held to here, each the rules' own
 #: function of the row, in the rules' order: every check of theirs that reads the row alone, but `one_numa_node`
 CHECKS = (steady.accepted, steady.exits, steady.not_void, steady.flat, steady.no_throttling, steady.every_prover_warmed)
+#: the tool a run of the harness's steady-state point is recorded under (`verity_bench.tool.STEADY_POINT`'s name): its
+#: attempt carries the point's verdict on all ten checks as its result's validation (`own_verdict`)
+STEADY_POINT_TOOL = "steady_point"
+#: what a refusal of a run by its own verdict opens with: the measurements name each such refusal among their inputs
+OWN_VERDICT = "its own steady-state verdict"
 #: what a row holds, beside what those checks read, for the command to price it, by the script's names (`stage.word`,
 #: the census type it was staged for, names its block type, and `stage.definition`, the form staged, where it has no
 #: `stage.word`; `verify_s` is there only where the verifier was timed, and `cores`, the CPU cores its provers held for
@@ -315,14 +324,16 @@ def row_cores(row: Mapping[str, Any], unstated: int = P.UNSTATED_CORES) -> int |
     return stated if _count(stated) else None
 
 
-def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES) -> PF.Steady | str:
+def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES,
+               refused: str | None = None) -> PF.Steady | str:
     """A `RATES` row as a staged type's measurement at its prover count and its cores: a statement's GPU-seconds are
     the GPUs its provers held over its statements a second, and its cores the CPU cores they held for its card
     (`row_cores`; `unstated` on a row that states none). Its block type is the census type it was staged for
     (`stage.word`), and the Definition staged (`stage.definition`) its `form` where that is another; a row with no
     `stage.word` is its `stage.definition`'s. A row that names no staged Definition can't be put on a block
     type's row, and is its reason instead. `art`: the art that holds the row as its `ART_RATES`, where the run's files
-    don't."""
+    don't. `refused`: why the row's run prices none of its rows (`own_verdict`), which the row is refused with in
+    place of `CHECKS`' answers."""
 
     name = f"`{row.get('type')}` at {row.get('provers')} provers"
     definition = _field(row, "stage.definition")
@@ -330,7 +341,7 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
         why: str | None = (f"failed: {row['error']}" if "error" in row else f"skipped: {row['skipped']}" if "skipped" in row else
                "it lacks `stage.definition`")
         return f"its row {name}: {why}"
-    why = row_why(row)
+    why = refused or row_why(row)
     stage = row["stage"]
     staged = definition
     if isinstance(stage.get("word"), str):
@@ -347,11 +358,53 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
                     row.get("verify_s"), provers=provers, art=art, cores=cores, form=form)
 
 
+def own_verdict(store: Any, run: str, attempt: Mapping[str, Any] | None) -> str | None:
+    """Why a run prices none of its rows by its own verdict, or None where it has none against them. A run of the
+    harness's steady-state point (its attempt's tool `STEADY_POINT_TOOL`) judged its row by all ten of the rules'
+    checks as it ended, and wrote that verdict as its result's validation, which its attempt carries: `passed` leaves
+    its rows to `CHECKS`; `failed` refuses them, naming the run and the checks its verdict file
+    (`steady_node.VERDICT_FILE`, fetched only for such a run) says it didn't pass; and no validation at all can't be
+    told, and refuses them too, as a row whose fields can't show a check prices nothing. Any other run, one timed
+    outside the harness's point or before it, has no verdict of its own: None, and `CHECKS` alone judge its rows."""
+
+    if ((attempt or {}).get("tool") or {}).get("name") != STEADY_POINT_TOOL:
+        return None
+    status = ((attempt or {}).get("status") or {}).get("validation")
+    if status == "passed":
+        return None
+    if status != "failed":
+        return (f"{OWN_VERDICT} can't be told: run {run} is a steady-state point's, and its attempt carries no verdict "
+                f"(its result's validation is {status!r})")
+    return f"{OWN_VERDICT} failed: run {run} {_failed_checks(store, attempt or {})}"
+
+
+def _failed_checks(store: Any, attempt: Mapping[str, Any]) -> str:
+    """The checks a failed steady-state point's verdict file says its row didn't pass, each with its answer, or what its
+    verdict says instead where it names none."""
+
+    out = attempt.get("outputs") or {}
+    files, path = out.get("run_files") or out.get("run_record"), steady_node.VERDICT_FILE
+    if not files or not store.listing(files, [path]):
+        return f"keeps no `{path}` naming the checks it didn't pass"
+    try:
+        doc = json.loads((Path(store.fetch(files, paths=[path])) / path).read_text())
+    except json.JSONDecodeError as e:
+        return f"keeps a `{path}` that isn't JSON ({e.msg})"
+    checks = ((doc.get("verdict") or {}).get("checks") or {}) if isinstance(doc, Mapping) else {}
+    named = [f"`{name}` ({c.get('status')})" for name, c in checks.items()
+             if isinstance(c, Mapping) and c.get("status") != steady.PASS]
+    if named:
+        return "didn't pass " + ", ".join(named)
+    why = doc.get("why") if isinstance(doc, Mapping) else None
+    return f"wasn't a passed point: {why}" if why else f"keeps a `{path}` that names no check it didn't pass"
+
+
 def rates(store: Any, run: str) -> tuple[list[PF.Steady], list[str]]:
     """Every row of a run's `RATES` that names a staged Definition, or, in a run that holds none, every staged type of
     its proof server reports; and why the rest (or the run) can't be read. A `RATES` row that states no `cores` is
     read at the run's own (`HOST`'s `HOST_CORES_FIELD`), where the run's files state them; any other row that states
-    none, and every staged type of a report, at `prove.UNSTATED_CORES`."""
+    none, and every staged type of a report, at `prove.UNSTATED_CORES`. A run whose own verdict is against its rows
+    (`own_verdict`) has each refused with it, and the verdict first among its reasons."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
@@ -360,12 +413,17 @@ def rates(store: Any, run: str) -> tuple[list[PF.Steady], list[str]]:
     files = out.get("run_files") or out.get("run_record")
     if not files:
         return [], ["kept no run files"]
+    verdict = own_verdict(store, run, attempt)
     kept = {row["path"] for row in store.listing(files, [RATES, HOST])} & {RATES, HOST}
     if RATES in kept:
         tree = Path(store.fetch(files, paths=sorted(kept)))
         host = json.loads((tree / HOST).read_text()) if HOST in kept else None
         stated = host.get(HOST_CORES_FIELD) if isinstance(host, Mapping) else None
-        return _rows(json.loads((tree / RATES).read_text()), run, unstated=stated if _count(stated) else P.UNSTATED_CORES)
+        found, whys = _rows(json.loads((tree / RATES).read_text()), run,
+                            unstated=stated if _count(stated) else P.UNSTATED_CORES, refused=verdict)
+        return found, [verdict, *whys] if verdict else whys
+    if verdict:
+        return [], [verdict]
     held = {row["path"] for row in store.listing(files, [REPORTS, REPORTS.rsplit("/", 1)[0] + "/" + TYPES])}
     paths = sorted(p for p in held if p.endswith("/server.json") and p.rsplit("/", 1)[0] + "/" + TYPES in held)
     if not paths:
@@ -403,13 +461,14 @@ def report_why(report: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _rows(doc: Any, run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES) -> tuple[list[PF.Steady], list[str]]:
+def _rows(doc: Any, run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES,
+          refused: str | None = None) -> tuple[list[PF.Steady], list[str]]:
     """A rate file's rows as `run`'s: those that name a staged Definition, and why the rest (or the file) can't be read.
-    A row that states no `cores` is read at `unstated`."""
+    A row that states no `cores` is read at `unstated`; `refused`: why the run prices none of them (`own_verdict`)."""
 
     if not isinstance(doc, list) or not all(isinstance(row, Mapping) for row in doc):
         return [], [f"its `{RATES if art is None else ART_RATES}` isn't a list of rows"]
-    read = [steady_row(row, run, art, unstated) for row in doc]
+    read = [steady_row(row, run, art, unstated, refused) for row in doc]
     return [x for x in read if isinstance(x, PF.Steady)], [x for x in read if isinstance(x, str)]
 
 
@@ -417,8 +476,10 @@ def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, 
     """What a target of the steady-state record gives, by the run or art read: its rows that name a staged Definition,
     and why the rest (or the target) can't be read. A run gives its own `RATES`. An art that holds `ART_RATES` gives
     those rows in place of its run's own: they are that run's, completed or corrected after it, so its meta names the
-    one run in `runs`, which the rows are ordered by and which isn't read. Any other art stands for the runs its meta
-    names. A superseded target gives nothing, unless `superseded` asks for its rows anyway (for their staged names)."""
+    one run in `runs`, which the rows are ordered by and whose files aren't read; its attempt is, for the run's own
+    verdict (`own_verdict`), which holds of its rows completed as of its own. Any other art stands for the runs its
+    meta names. A superseded target gives nothing, unless `superseded` asks for its rows anyway (for their staged
+    names)."""
 
     if not superseded and (by := _superseded(store, target)):
         return {target: ([], [f"superseded by {', '.join(by)}"])}
@@ -433,7 +494,9 @@ def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, 
     if len(runs) != 1:
         return {target: ([], [(f"holds `{ART_RATES}` and names {len(runs)} runs ({', '.join(runs)}): an art's rows are "
                                "one run's, so each run's go in an art of their own")])}
-    return {target: _rows(_read(store, target, ART_RATES), runs[0], target)}
+    verdict = own_verdict(store, runs[0], store.get_attempt(runs[0]))
+    found, whys = _rows(_read(store, target, ART_RATES), runs[0], target, refused=verdict)
+    return {target: (found, [verdict, *whys] if verdict else whys)}
 
 
 def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
@@ -796,7 +859,8 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     """The kit writer's measurements of a table, one a metric id of `metrics`: the total its
     key names (`FIGURES`), in that total's unit, with its mark (`_mark`). A total with a value has its mark in the
     table's words as the first of its inputs, since the kit holds a `why` only for a measurement with no value, then
-    the records the table read; a total with none has those words as its `why`. The prover GPUs a serving GPU are the
+    the records the table read, then each steady-state run its own verdict refused (`own_verdict`), with why; a total
+    with none has those words as its `why`. The prover GPUs a serving GPU are the
     proving total over the stated serving rate, so their mark is the weaker of the two's (`STRENGTH`), first among
     their inputs, then proving's words and the serving rate's. The figure at the exfiltration run of record's design
     (`AT_RECORD`) is read from that run alone, which its inputs name in place of the table's records. The figures of
@@ -808,6 +872,7 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     if AT_RECORD in metrics.values() and "at_record" not in doc:
         raise ValueError(f"`{AT_RECORD}` is SPOT's: only a table at a sampling plan holds it")
     targets = list(dict.fromkeys(t for i in doc["inputs"] for t in i["targets"]))
+    targets += [f"refused {x['target']}: {x['why']}" for x in doc["refused"] if str(x["why"]).startswith(OWN_VERDICT)]
     s, out = doc["serving"], list[dict[str, Any]]()
     for name, figure in metrics.items():
         value, mark, said = _mark(doc, figure)

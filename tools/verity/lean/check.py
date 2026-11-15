@@ -74,7 +74,7 @@ BUILDING = "building.json"
 #: the lock's schema version, which every lock this file writes carries as `format`: bump it with any change to what a lock
 #: holds or how its sections read, and `merge.py`'s `FORMAT` with it, so an older driver leaves a newer lock to git's
 #: conflict rather than merge what it can't read
-FORMAT = 1
+FORMAT = 2
 #: the facts document `facts_of` keeps beside a package's reports, gzipped with no timestamp: equal facts are equal bytes
 FACTS = "facts.json.gz"
 #: the stage-A document that `--facts-from` judges from (`facts_document`), beside a package's reports; the augmented,
@@ -127,6 +127,8 @@ ORDER = ("format", "roots", "proved_in", "exempt", "runs", "axioms", "assumption
          "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@lane`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
+#: a premise entry's `id`, the claim id that names it (`claim_ids.py`): kebab-case, or `<property>/<instance>`
+CLAIM_ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*(/[a-z0-9]+(-[a-z0-9]+)*)?")
 #: an open premise's `issue` (the Linear issue that discharges it) and `due`
 OPEN_ISSUE, OPEN_DUE = re.compile(r"[A-Z][A-Z0-9]*-[0-9]+"), re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 #: the kinds a guarantee's `premises` record lists: the named assumptions it rests on, the open premises it takes and
@@ -2840,8 +2842,9 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     holds, where the definitions it reads have records of their own; for a premise no `reads` record holds, whatever
     module defines it (a Proofs or Properties module, outside `meaning`), it is ``walked``'s ({premise: (its module, the
     digest of it and every definition it reads in `meaning` and this repository's modules)}, `Facts.lean`'s
-    `assumption_reads`), so a change to its statement or to anything it reads changes its record.  An update writes the
-    digests, drops an entry no guarantee reads, and converts a list of assumption modules into the definitions the
+    `assumption_reads`), so a change to its statement or to anything it reads changes its record.  An entry may carry
+    `id`, the claim id that names the premise, written by hand and kept by an update (`claim_ids.py` writes the table
+    from each id to its Lean names from these).  An update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the definitions the
     guarantees read there, each owned by the one owner of the guarantees that read its module (``read_by``, `readers`;
     or ``owner``).
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
@@ -3015,7 +3018,12 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
             continue
         if kind is None:
             continue
-        entry = ({"owner": who} if who else {}) | ({"digest": h} if h is not None else {})
+        cid = (rec or {}).get("id") if isinstance(rec, dict) else None
+        if cid is not None and not (isinstance(cid, str) and CLAIM_ID.fullmatch(cid)):
+            fails.append(Failure(f"{kind}.id-form", a, f"{kind}: {a}'s `id` is {cid!r}: a claim id is kebab-case "
+                                 f"(`trusted-device`) or `<property>/<instance>` (`cr/sha-512`)"))
+            cid = None
+        entry = ({"id": cid} if cid else {}) | ({"owner": who} if who else {}) | ({"digest": h} if h is not None else {})
         if kind == "domain":
             entry = domain_entry(a, rec if section == "domain" else {}, entry)
         if kind == "open":
