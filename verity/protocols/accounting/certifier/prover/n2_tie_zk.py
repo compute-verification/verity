@@ -2,8 +2,8 @@
 each proved as IoTieRequest (`tie_service.IngressTie`, its proof block `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`),
 registered on the link's own stream, proved by Flock `prove --zk` behind the Lean ZK server with each proof block's
 witness row read off the network certifier's
-root (`warden_rows.bucket_port`), delivered, decided by the tie's verifier on its own lanes from the advice
-and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
+root (`network_certifier_rows.bucket_port`), delivered, decided by the tie's verifier on its own lanes from the advice
+and the network certifier's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
 the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
 through `tie_service.Ties`, the verifier's tie source).
 
@@ -17,11 +17,11 @@ through `tie_service.Ties`, the verifier's tie source).
   public, and the cells and their salts are witness. ``--class served`` (`CLASSES`) is the served link's ingress
   instead: one window of T = 60 buckets of one lane of r = 1 4,096-byte cell, the unit
   `IoTieRequest_v1{B=4096,L=1,R=1}`, with the ``honest`` and ``forged`` members alone.
-* **A network certifier's run** (``--class warden --warden-run RUN``, `warden_link`): the gate's ``warden-rehearse``'s
+* **A network certifier's run** (``--class warden --warden-run RUN``, `network_certifier_link`): the gate's ``warden-rehearse``'s
   real ingress in place of the served link, its first K execution phases (``--windows``, 1 by default), every connection
   in them starting and ending there. The verifier reads ``deployment.json`` (the schedule, its digest, the network
   certifier's key and session) and each window's registration in ``cells.jsonl``, its head's signature verified under
-  that key; the prover's rows are the ingress records under ``cells.salts``, held to that head, as `scan_zk.warden_run`
+  that key; the prover's rows are the ingress records under ``cells.salts``, held to that head, as `scan_zk.network_certifier_run`
   reads them. The release is the cells' headers (each connection's first bucket, checked against the network certifier's
   wiring, and its `DATA` and `END` cells a bucket) and the honest advice's prompt lengths the requests' own (their
   bytes' ``prompt``). The proof block is the schedule's, ``IoTieRequest_v1{B, L, R}``, and the members are ``honest``
@@ -34,13 +34,13 @@ through `tie_service.Ties`, the verifier's tie source).
   its output word 0 fails the registered read of ``o0``; ``split``, prompts of 40 and 5 tokens in cells the advice
   swaps, proved on the cells' own lanes, which the verifier refuses in every window, the release not being the
   swapped advice's schedule, so it has no lanes to register (`EXPECT`).
-* **The statement and the rounds** follow `warden_zk`'s: one circuit, `IngressTie.proof_block` lowered once (the gate
+* **The statement and the rounds** follow `network_certifier_zk`'s: one circuit, `IngressTie.proof_block` lowered once (the gate
   the Definition its pinned digest names), and each execution phase a statement of T instances, unit t bucket t, on rows
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file every port
-  of which is a registered read, ``wit`` the window's bucket rows under the warden's salts and paths, and ``pub`` and
+  of which is a registered read, ``wit`` the window's bucket rows under the network certifier's salts and paths, and ``pub`` and
   ``o0`` the prover's rows under the known values' public salts (`known`). A round registers, selects, proves live
   behind the ZK server, delivers, and decides on the proof: the verifier's own Lean run with its own registered reads
-  (`IngressTie.registered`: the warden's root, and at known content its own lanes from the advice and the release
+  (`IngressTie.registered`: the network certifier's root, and at known content its own lanes from the advice and the release
   and the output word 1), each ``pub`` row opened to its own copy and each ``o0`` row read. Per window: prove (the
   session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier's run, Lean
   included). The members run one after another, one ZK server session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is
@@ -68,7 +68,7 @@ from verity.protocols.accounting.certifier.verifier import relay_check as RC
 from verity.protocols.accounting.certifier.prover import leak_scan as LS, n2_zk as Z
 from verity.protocols.accounting.certifier.verifier import advice as ADV, head_check as HC
 from verity.protocols.accounting.certifier.verifier import io_request as Q, service as SVC
-from verity.protocols.accounting.certifier.verifier import tie_service as TS, warden as W, warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import tie_service as TS, network_certifier as W, network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER
 from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
@@ -76,7 +76,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 B = 512
 #: two lanes of r = 2 slots, 4-bucket windows: IoTieRequest_v1{B=512,L=2,R=2}, the pinned size class
-PARAMS = W.WardenParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
+PARAMS = W.NetworkCertifierParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
 T = PARAMS.window
 LINK = "requests"
 SESSION = hashlib.sha512(b"n2-tie-zk").digest()
@@ -94,12 +94,12 @@ MEMBERS = ("honest", "carried", "forged", "split")
 EXPECT = {"honest": (True, True), "carried": (True, False), "forged": (False, False), "split": (False, False)}
 #: what the verifier receives per execution phase, by file (`member`)
 def _received(T: int) -> dict[str, str]:
-    return {"registration.json": "the registration record (the warden's salted root)", "draw.json": "the stream's draw",
+    return {"registration.json": "the registration record (the network certifier's salted root)", "draw.json": "the stream's draw",
             f"pub-{T}.bin": "the statement's public file",
             "registered.json": "the verifier's own registered reads, null where it has no lanes",
             "session-*": "the session's files",
             "delivered.json": "each unit's pub and o0 rows' salts and its output word",
-            "outcome.json": "the outcome record", "advice.json": "the link's advice and the warden's release"}
+            "outcome.json": "the outcome record", "advice.json": "the link's advice and the network certifier's release"}
 
 
 RECEIVED = _received(T)
@@ -109,23 +109,23 @@ WINDOWS = 2
 #: window, honest and forged
 CLASSES = {
     "test": {"B": B, "params": PARAMS, "windows": WINDOWS, "expect": EXPECT},
-    "served": {"B": 4096, "params": W.WardenParams(cell_bytes=4096, slots=1, lanes=1, window=60, delay=1),
+    "served": {"B": 4096, "params": W.NetworkCertifierParams(cell_bytes=4096, slots=1, lanes=1, window=60, delay=1),
                "windows": 1, "expect": {"honest": (True,), "forged": (False,)}},
     "warden": None,
 }
-#: the network certifier run ``--class warden`` reads (`warden_link`), None at the other classes
+#: the network certifier run ``--class warden`` reads (`network_certifier_link`), None at the other classes
 REAL = None
 
 
 def use(name: str, run: Path | None = None, windows: int = 1) -> None:
     """Set the driver's size class to `CLASSES` [name]: its B, network certifier parameters, windows, and members with
-    their verdicts; ``warden`` reads them off the network certifier run `run`'s first `windows` execution phases
-    (`warden_link`), the forged member's window 0 refused and the rest tied."""
+    their verdicts; ``network_certifier`` reads them off the network certifier run `run`'s first `windows` execution phases
+    (`network_certifier_link`), the forged member's window 0 refused and the rest tied."""
     global B, PARAMS, T, PROFILE, MEMBERS, EXPECT, RECEIVED, WINDOWS, LINK, SESSION, REAL
     if name == "warden":
         if run is None or windows < 1:
-            raise SystemExit("--class warden reads a warden run's first execution phases: --warden-run RUN [--windows K]")
-        REAL = warden_link(Path(run), windows)
+            raise SystemExit("--class warden reads a network certifier run's first execution phases: --warden-run RUN [--windows K]")
+        REAL = network_certifier_link(Path(run), windows)
         B, PARAMS, LINK, SESSION, WINDOWS = REAL.params.cell_bytes, REAL.params, REAL.link, REAL.session, windows
         EXPECT = {"honest": (True,) * windows, "forged": (False,) + (True,) * (windows - 1)}
     else:
@@ -156,7 +156,7 @@ def advice(prompt_lens, got) -> TS.LinkAdvice:
 
 
 def served(prompt_lens, arrivals, rates) -> Q.ServedIngress:
-    """The requests through the warden's own ingress over the class's windows."""
+    """The requests through the network certifier's own ingress over the class's windows."""
     return Q.serve(PARAMS, requests(prompt_lens), arrivals, rates, buckets=WINDOWS * T)
 
 
@@ -166,7 +166,7 @@ def received(link: Q.ServedIngress) -> tuple[int, ...]:
 
 
 def _found(run: Path, name: str) -> Path:
-    """A network certifier run's file: in the run's directory (`warden_serve.py serve --out`), else its ``witness/``
+    """A network certifier run's file: in the run's directory (`network_certifier_serve.py serve --out`), else its ``witness/``
     (the gate's ``warden-rehearse``)."""
     for d in (run, run / "witness"):
         if (d / name).is_file():
@@ -174,7 +174,7 @@ def _found(run: Path, name: str) -> Path:
     raise SystemExit(f"--warden-run {run}: no {name} there or in its witness/")
 
 
-def warden_link(run: Path, windows: int) -> SimpleNamespace:
+def network_certifier_link(run: Path, windows: int) -> SimpleNamespace:
     """The network certifier run's ingress execution phases 0 … windows − 1 (the module docstring, "A network
     certifier's run"): each window's rows under the network certifier's salts, held to the head the verifier read off
     its signed registration, the windows' release and their requests' prompt lengths, refused by name where any of it
@@ -182,7 +182,7 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
     from verity.protocols.accounting.certifier.verifier import blob_files as bf, record_files as RF
 
     dep = json.loads(_found(run, "deployment.json").read_text())
-    params = W.WardenParams(**dep["params"])
+    params = W.NetworkCertifierParams(**dep["params"])
     if params.digest.hex() != dep["digest"]:
         raise SystemExit(f"--warden-run {run}: deployment.json's digest isn't its parameters'")
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
@@ -209,15 +209,15 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
         c = WR.Cells.of(RC.LINK, Direction.INGRESS, records[w], params, session, row_salts, wiring_salt)
         if c.head != head:
             raise SystemExit(f"--warden-run {run}: ingress execution phase {w}'s record under cells.salts isn't the rows "
-                             "whose root the warden signed")
+                             "whose root the network certifier signed")
         cells.append(c)
     releases, lens = _released(params, cells)
-    return SimpleNamespace(source=f"warden run {dep.get('run_id')} (warden_serve.py, its deployment's key)",
+    return SimpleNamespace(source=f"network certifier run {dep.get('run_id')} (network_certifier_serve.py, its deployment's key)",
                            run_id=dep.get("run_id"), params=params, session=session, link=RC.LINK, cells=cells,
                            records=tuple(records[w] for w in range(windows)), releases=releases, prompt_lens=lens)
 
 
-def _released(params: W.WardenParams, cells: list) -> tuple[list[Q.Release], tuple[int, ...]]:
+def _released(params: W.NetworkCertifierParams, cells: list) -> tuple[list[Q.Release], tuple[int, ...]]:
     """The windows' release read off their cells' headers, each connection's first bucket and its request cells a
     bucket to its `END`, its first bucket the network certifier's wiring's; and each request's prompt length, its bytes'
     ``prompt``. Refused where a connection's ingress runs past the windows or the ordinals aren't 1, 2, …"""
@@ -236,7 +236,7 @@ def _released(params: W.WardenParams, cells: list) -> tuple[list[Q.Release], tup
                     d["end"] = b if kind == W.END else d["end"]
         for q, first, _n in c.wiring.connections:
             if q in seen and seen[q]["first"] // T_ == c.window and seen[q]["first"] != c.window * T_ + first:
-                raise SystemExit(f"connection {q}'s first cell is in bucket {seen[q]['first']}, and the warden's "
+                raise SystemExit(f"connection {q}'s first cell is in bucket {seen[q]['first']}, and the network certifier's "
                                  f"wiring says {c.window * T_ + first}")
     if sorted(seen) != list(range(1, len(seen) + 1)):
         raise SystemExit(f"the windows' connections are {sorted(seen)}, not ordinals 1 … {len(seen)}")
@@ -313,13 +313,13 @@ def members() -> dict[str, tuple]:
 
 
 def phases(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=None) -> SimpleNamespace:
-    """Every execution phase of the member as the warden and the prover hold it before it registers: the warden's cells
-    (`warden_rows.Cells`: a network certifier run's own, else fresh salts) and its head, the verifier's lanes of `adv`
+    """Every execution phase of the member as the network certifier and the prover hold it before it registers: the network certifier's cells
+    (`network_certifier_rows.Cells`: a network certifier run's own, else fresh salts) and its head, the verifier's lanes of `adv`
     (``own``, None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a
     tuple, the lanes of those prompt lengths), the prover's rows (the network certifier's, or a `Forge`'s), each proof
     block's arguments on the prover's lanes and rows and the verifier's public arguments on its own, each output word by
     the gate's reference, whether each proof block's public row is the verifier's (``opens``) and the host's read of the
-    registered rows (``held``, `warden_rows.refusal`: None where every row opens the network certifier's root)."""
+    registered rows (``held``, `network_certifier_rows.refusal`: None where every row opens the network certifier's root)."""
     out = []
     for w, rec in enumerate(link.records):
         cells = link.cells[w] if getattr(link, "cells", None) else \
@@ -398,7 +398,7 @@ def known(tie: TS.IngressTie, x: SimpleNamespace) -> dict:
 def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNamespace], out: Path) -> dict:
     """Every execution phase's statement on the one circuit, T instances each, unit t bucket t (`UnitStager.stage`: the
     outputs the lowering's, held to the IR reference): a shared-row file every port of which is a registered read, its
-    ``wit`` table the window's bucket rows under the warden's salts and paths (`warden_rows.Cells.statement`), and its
+    ``wit`` table the window's bucket rows under the network certifier's salts and paths (`network_certifier_rows.Cells.statement`), and its
     ``pub`` and ``o0`` rows under the prover's known values' public salts and paths (`known`). Each staged ``o0`` row
     must open to its output word, and each ``pub`` row to the verifier's own copy exactly where the prover's lanes are
     the verifier's. Beside it, the verifier's own registered reads (`IngressTie.registered`, null where it has no
@@ -466,7 +466,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
         reg = tie.register(stream, tie.registration(x.head, previous))
         previous = reg.digest
         if reg.record["roots"][0]["root"] != x.head.root.hex():
-            raise SystemExit(f"{name} window {x.window}: the registered root is not the warden's")
+            raise SystemExit(f"{name} window {x.window}: the registered root is not the network certifier's")
         draw = stream.select(reg)
         if list(draw.units) != list(range(T)):
             raise SystemExit(f"{name} window {x.window}: the stream drew {list(draw.units)}, not the window's "
@@ -512,7 +512,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
                          "max_child_rss_gb": proc["max_child_rss_gb"], "cpu_s": proc["cpu_s"]},
                "verify_s": verify_s, "server_verdict": ((record or {}).get("verdict") or {}).get("accepted"),
                **({"clear": verdict["clear"]} if "clear" in verdict else {})}
-        # every row is a registered read (the warden's root, the verifier's lanes, the output word 1), so a window the
+        # every row is a registered read (the network certifier's root, the verifier's lanes, the output word 1), so a window the
         # reference refuses is Lean's to refuse, whatever the unit says of it
         held = (proof["proved"] and opened == x.words) if x.expect else not proof["lean_accepted"]
         row["registered_read"] = x.held
@@ -659,7 +659,7 @@ def main(argv=None) -> int:
     p.add_argument("--out", required=True)
     p.add_argument("--class", dest="cls", choices=sorted(CLASSES), default="test", help="the size class (`CLASSES`)")
     p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
-                   help="--class warden: a warden_serve run's directory (the gate's warden-rehearse's, its witness "
+                   help="--class warden: a network_certifier_serve run's directory (the gate's warden-rehearse's, its witness "
                         "under witness/)")
     p.add_argument("--windows", type=int, default=1, help="--class warden: its first execution phases proved")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")

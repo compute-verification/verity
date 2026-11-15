@@ -4,8 +4,8 @@ module
 # The certifier program: the active network certifier's records as rows, and their audit
 
 The executable form of `security/Definitions/Certifier/RecordRows.lean` over the lanes of
-`security/Definitions/Certifier/Warden.lean`, for the records the active network certifier writes
-(`verity/protocols/accounting/certifier/verifier/warden.py`, whose `audit` is the reference). Each direction's record
+`security/Definitions/Certifier/Cells.lean`, for the records the active network certifier writes
+(`verity/protocols/accounting/certifier/verifier/network_certifier.py`, whose `audit` is the reference). Each direction's record
 has a row a bucket holding the `r` cells of every connection live in it, connection by connection in ordinal order,
 each cell naming its connection (`readCell`); the `fails` record holds a failed connection's reason (`readReason`).
 
@@ -25,7 +25,7 @@ difftest or proof holds the list complete.
 It refuses three kinds of run the reference accepts and the network certifier never writes: a lane of no egress cell
 past its delay, unless the run's end cut it in its delay; a connection with ingress cells and no egress cells; and a
 connection of more data and `END` cells than `egress_cells`, which the network certifier fails closed (`limit`). The
-schedule's cells count a lane through its last bucket (`laneCells`), as `WardenSchedule.cells` does, so they pass
+schedule's cells count a lane through its last bucket (`laneCells`), as `NetworkCertifierSchedule.cells` does, so they pass
 `egress_cells` by the padding that fills the `END`'s bucket where `r` doesn't divide it.
 
 It accepts two kinds of run the reference refuses, because it holds two things less:
@@ -105,10 +105,10 @@ egress form (module docstring). -/
 def readCell (B : Nat) (f : ByteArray) : Except String Cell := do
   if f.size ≠ B then throw s!"a cell is {B} bytes, not {f.size}"
   let n := beAt f 5 4
-  let some kind := Kind.ofCode? (beAt f 0 1) | throw "not a warden cell"
-  if B < headerBytes + n then throw "not a warden cell"
+  let some kind := Kind.ofCode? (beAt f 0 1) | throw "not a network certifier cell"
+  if B < headerBytes + n then throw "not a network certifier cell"
   let c : Cell := ⟨kind, beAt f 1 4, f.extract headerBytes (headerBytes + n)⟩
-  if c.encode B != f then throw "not a warden cell"
+  if c.encode B != f then throw "not a network certifier cell"
   match kind with
   | .data => unless n == B - headerBytes do throw s!"a data cell of {n} bytes"
   | .fin => pure ()
@@ -126,7 +126,7 @@ def readReason (B : Nat) (f : ByteArray) : Option (Nat × String) :=
   | some why => if f.size == B && c.encode B == f then some (c.conn, why) else none
   | none => none
 
-/-- The schedule's terms the audit reads (the reference's `WardenParams`): the cell's bytes `B` (`cellBytes`), a
+/-- The schedule's terms the audit reads (the reference's `NetworkCertifierParams`): the cell's bytes `B` (`cellBytes`), a
 connection's cells a bucket each way `r` (`slots`), the buckets `D` from its admission to its first egress cell's
 (`delay`), the connections served at once (`lanes`), the buckets a record covers `T` (`window`), and the most cells a
 connection's egress lane holds (`egressCells`). It reads neither the schedule's egress form nor its `max_tokens_cap`. -/
@@ -182,7 +182,7 @@ def connsOf (r : Nat) (what : String) (b : Nat) (row : Array Cell) : Except Stri
     throw s!"{what} bucket {b}: not r cells a connection in ordinal order"
   pure conns
 
-/-- The schedule a run's egress record shows (`WardenSchedule`, its `r` and `D` the parameters'): connection `o`'s
+/-- The schedule a run's egress record shows (`NetworkCertifierSchedule`, its `r` and `D` the parameters'): connection `o`'s
 admission bucket `adm[o − 1]` and its lane's cells through its last bucket `cells[o − 1]`. -/
 structure Schedule where
   adm : Array Nat
@@ -205,7 +205,7 @@ lane's cells, through the bucket of its data's last (`laneCells`). -/
 def scheduleOf (p : Params) (adm : Array Nat) (data : Array (Array ByteArray)) : Schedule :=
   ⟨adm, data.map fun d => laneCells p.slots d.size⟩
 
-/-- **Connection `o`'s lane** past its delay, as the network certifier sends it (`Warden._egress`): a `DATA` cell for
+/-- **Connection `o`'s lane** past its delay, as the network certifier sends it (`NetworkCertifier._egress`): a `DATA` cell for
 each payload of its data but the last, an `END` with the last, then padding to the end of the `END`'s bucket; none for
 no data. -/
 def laneOf (r o : Nat) (data : Array ByteArray) : Array Cell :=

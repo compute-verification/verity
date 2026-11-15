@@ -88,7 +88,7 @@ inputs = [
     "benchmarks/network_traces/certifier_piece.py",
     "benchmarks/network_traces/served_session.py",
     "benchmarks/network_traces/settings.py",
-    "benchmarks/network_traces/warden_chain.py",
+    "benchmarks/network_traces/network_certifier_chain.py",
     "benchmarks/network_traces/site.json",
     "verity/protocols/compose/device/live_challenger/auditor.py",
     "verity/protocols/compose/device/live_challenger/host.json",

@@ -38,12 +38,12 @@ from dataclasses import dataclass
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import replay_step as RS
 from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as REG
-from verity.commitments import advice as ADV
+from verity.commitments import advice as ADV, domains
 from verity.commitments.frame_v3 import BitRowLeaf
 from verity.commitments.rowleaf import bit_row, row_leaf
 
-SCHEMA = "verity/certifier/served-rows/v1"
-DOMAIN = b"verity/certifier/served-rows/v1"
+SCHEMA = domains.CERTIFIER_SERVED_ROWS
+DOMAIN = SCHEMA.encode()
 
 Row = tuple[int, int, int, int, int]
 

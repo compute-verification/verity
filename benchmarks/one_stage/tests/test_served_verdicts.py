@@ -14,7 +14,7 @@ open. The period the served windows join opens, through infra's own gate, on the
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and count the class of record only where
 CLASSES names it; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
-front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
+front doesn't take, a front whose endpoint isn't on the network certifier's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
 written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Under H1_TIE its serve gives
@@ -707,10 +707,12 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     assert "; the bandwidth audit: error: " in line["reason"]
 
 
-def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests_on(tmp_path):
+@pytest.mark.parametrize("key", ["trusted-device", "trusted-host"])
+def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests_on(tmp_path, key):
     """The network certifier's answer as its piece writes it when it ran on the gate's machine and the piece's steps on
     the served node: its accept's clause says the piece establishes no trusted-device and gives no bound, and which
-    machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices having placed it."""
+    machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices having placed it. A record
+    made before the premise's rename holds it under its old key, and reads the same."""
     premise = ("unmet: this piece establishes no trusted-device and gives no bound on that ground; the network certifier "
                "ran on 192.0.2.84, not the developer's vy-dc-h200; the chain's checks and samples ran on vy-dc-h200, and "
                "the period check and its proofs' challenges on vy-dc-h200")
@@ -718,7 +720,7 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests
     (d / "answer.json").write_text(json.dumps({
         "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
         "public": {"K": 15764, "eps": "1/100", "windows": 1},
-        "profile": {"placement": {"kind": "not-placed", "trusted-device": premise}}}))
+        "profile": {"placement": {"kind": "not-placed", key: premise}}}))
     (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
     _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                    servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
@@ -735,7 +737,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
              "trusted-device": f"unmet: this piece establishes no trusted-device and gives no bound on that ground; the "
                              f"network certifier ran on {host}, not the developer's {node}",
              "links": [{"name": "certified", "from": host, "to": node, "counted": True,
-                        "via": "the warden's tunnel to the endpoint's port"},
+                        "via": "the network certifier's tunnel to the endpoint's port"},
                        {"name": "gate", "from": node, "to": host, "counted": False,
                         "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
              "uncounted": f"every link of {node}'s but the certified one"}
@@ -754,7 +756,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
                                        servers={k: S.piece_server(k, d.parent) for k in [*S.PIECES, "wipe"]})
         clause[name] = line["reason"].split("; the network certifier: ", 1)[1]
     assert clause["gated"].startswith(
-        f"accept (K counts the relayed link alone, {host} to {node} through the warden's tunnel to the endpoint's "
+        f"accept (K counts the relayed link alone, {host} to {node} through the network certifier's tunnel to the endpoint's "
         f"port; every link of {node}'s but the certified one is uncounted and uncertified; "
         f"trusted-device {gated['trusted-device']}; ")
     assert clause["local"].startswith(f"accept (trusted-device {local['trusted-device']}; ")
@@ -6012,7 +6014,7 @@ FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3"
 
 IDS = "--protocol ids --id-payload 503"
 #: the runner's refusal of a front in front of an endpoint that is off the id form
-OFF_IDS = ("PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under "
+OFF_IDS = ("PREFLIGHT: the certifier front sends id-form requests, which serve-openai answers only under "
            f"SERVE_ARGS='{IDS}'")
 SESSION_CLOSE = '"$PY" benchmarks/network_traces/certifier_piece.py close "$1" "$2"'
 

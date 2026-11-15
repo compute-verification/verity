@@ -7,7 +7,7 @@ assumption). It terminates each client's TCP connection, opens one to the server
 bytes unchanged in content or not at all: no tokenizer, API, request or stop string is the network certifier's. The one
 addition is on the server's side (`release`): each HTTP request's place in the release order and its release bucket on
 the server's copy, and, with `watermark`, a stream that tells the server each bucket's close. What the network certifier
-decides is the framing and the timing, both public functions of the schedule (`WardenParams`), and it certifies every
+decides is the framing and the timing, both public functions of the schedule (`NetworkCertifierParams`), and it certifies every
 cell it sends with the certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `link_frame.encode_frame(kind, ordinal, payload)`: the header (kind u8,
@@ -51,7 +51,7 @@ the server does moves s + D. So the egress cells on a connection, their sizes an
 the number of egress cells, the failure's cell) and the public parameters alone, s of the arrivals and the admission
 rule; the ingress cells are a function of s and the client's bytes.
 
-**The egress form** (`WardenParams.egress`). `id`, the default, is the egress record (`PROTOCOL.md`'s "The egress
+**The egress form** (`NetworkCertifierParams.egress`). `id`, the default, is the egress record (`PROTOCOL.md`'s "The egress
 record"): the network certifier releases a `DATA` or `END` cell it cut only if `io_tie.parse_cell` reads it, so only an
 `io_tie.data_cell` or `io_tie.end_cell` on the connection's ordinal leaves, and it fails the connection (format) at any
 other cell, refusing and never rewriting. An honest id-form server writes one `io_tie.id_event` of exactly P bytes an
@@ -60,7 +60,7 @@ bytes (an HTTP head, a response id, an event of another size, an error body) fai
 any server's bytes in cells: a rehearsal's form, for a server that answers in another (vLLM's stock framing, say). Its
 parameters' digest is no id form's, and the period check reads only the id form's schedules.
 
-**The response cap** (`WardenParams.max_tokens_cap`, none by default): a schedule may register a cap on every response,
+**The response cap** (`NetworkCertifierParams.max_tokens_cap`, none by default): a schedule may register a cap on every response,
 in the id egress form, where a response's tokens are its `DATA` cells, one id event each. The network certifier then
 reads each request's `max_tokens` from its first request cell, where `id_form.id_request` puts it
 (`id_form.id_request_max_tokens`), before cutting that cell. A request whose field isn't there as a u32, is 0 or exceeds
@@ -73,13 +73,13 @@ holds at most its request's `max_tokens` tokens, hence at most the cap (`NetTimi
 cap and its reason enter the parameters' digest, so every record head binds them; a schedule without a cap hashes
 neither and keeps its digest. The period check reads the cap with the schedule and publishes it (`max_tokens_cap`).
 
-**The lengths rows** (`WardenParams.lengths`, none by default; 1 and 2 are their forms, `LENGTHS_FORMS`): a schedule
+**The lengths rows** (`NetworkCertifierParams.lengths`, none by default; 1 and 2 are their forms, `LENGTHS_FORMS`): a schedule
 may have its network certifier keep, of each request it releases, its place in the release order, its request's
-bytes, its response's outputs and whether it failed, a row of K = `WardenParams.stride_releases` slots a slot stride.
+bytes, its response's outputs and whether it failed, a row of K = `NetworkCertifierParams.stride_releases` slots a slot stride.
 Such a schedule has the id egress form, `ingress_buckets` ≤ D, a cell that holds an id request's head and first prompt
 field (`io_request.layout`), at most 2^16 egress cells, D + ⌊(`egress_cells` − 1)/r⌋ ≤ `window`, so that a connection
 ends within a window of its admission, and a K one proof block returns a row of (`connection_rows.check_slots`);
-`WardenParams` takes no other. The form enters the parameters' digest; a schedule without lengths rows hashes nothing
+`NetworkCertifierParams` takes no other. The form enters the parameters' digest; a schedule without lengths rows hashes nothing
 of it and keeps its digest, and its network certifier does nothing of this section. With lengths rows the network
 certifier:
 - releases no connection whose client has failed: once a client's problem is set (ingress, malformed, cap) it cuts no
@@ -95,7 +95,7 @@ certifier:
   cell, the length its head says, its `END` at its last byte). A request that is none is cut up to the first cell that
   doesn't read so and then fails as its client's (malformed), unreleased: no server sees it, so no server's failure
   follows from it;
-- hands each window's releases (`Released`, to `Warden(lengths=…)`) by the slot stride of each one's `END` and in
+- hands each window's releases (`Released`, to `NetworkCertifier(lengths=…)`) by the slot stride of each one's `END` and in
   release order, at most K a stride. Window w's are handed once window w + 1's records are published, where each of
   their connections has ended, and only where both windows' three records were published complete: a window whose
   cells have no certificate, or whose responses may reach into one that has none, has no lengths rows, and neither has
@@ -108,7 +108,7 @@ call without releases, on which the network certifier signs that the execution p
 - hands execution phase w where the one before it (if there is one), w itself and the one after it (if there is one)
   were each published complete, their three records, none withheld. Every cell of a release of w is in those three:
   its request's cells begin at most `ingress_buckets` − 1 buckets before its `END`, and its connection ends at most
-  `WardenParams.span` buckets after its admission, each at most a window. So no hand holds a byte that left in an
+  `NetworkCertifierParams.span` buckets after its admission, each at most a window. So no hand holds a byte that left in an
   execution phase without a certificate, which form 1's can: a request whose first cells left in the one before;
 - ends execution phase w once execution phase w + 1's records are published, and the run's last with its own
   records, so the run's last close ends two;
@@ -131,14 +131,14 @@ call without releases, on which the network certifier signs that the execution p
   records are withheld;
 - ends each execution phase it has not ended without releases when the run ends early, whatever ended it.
 
-**The content rows** (`WardenParams.content`, none by default: the classes of a schedule with lengths rows, each
+**The content rows** (`NetworkCertifierParams.content`, none by default: the classes of a schedule with lengths rows, each
 (P, O, rows) under form 1 and (P, O) under form 2, `content_rows`' "The classes"): the network certifier also keeps,
 of each request it releases, the request's bytes as it cut them into cells and the id of each `DATA` cell it released,
 four bytes an id, and hands them with the release (`Released.request`, `Released.ids`), so that `connection_rows` lays
 three more tables a class under the same head. Under form 2 those tables hold a row a release filed in the class and
-no other, at most `WardenParams.phase_releases`, a bound on an execution phase's releases. The hand copies an
+no other, at most `NetworkCertifierParams.phase_releases`, a bound on an execution phase's releases. The hand copies an
 execution phase's ids and makes nothing else: the tables are laid, committed and signed by whoever takes the hand,
-never on the tick. A schedule with **request words** (`WardenParams.request_words`, none by default, with content
+never on the tick. A schedule with **request words** (`NetworkCertifierParams.request_words`, none by default, with content
 rows under form 2 and a response cap only) has a fourth table a class, of two words of each released request: its
 `max_tokens` and the count of its prompt's ids, read from the request's bytes in the hand
 (`content_rows.request_words`) by the form every cell of a released request was held to at ingress, and from nothing
@@ -154,12 +154,12 @@ and no longer; of a connection it never released it keeps nothing. The classes e
 schedule without content rows hashes nothing of them and keeps its digest, and its network certifier keeps and hands
 what it did.
 
-**The head's tick** (`WardenParams.head_offset` and `WardenParams.head_wait`, none by default, set together and only
+**The head's tick** (`NetworkCertifierParams.head_offset` and `NetworkCertifierParams.head_wait`, none by default, set together and only
 in a schedule with lengths rows). Whoever takes an execution phase's hand lays its tables, commits them and signs
 their head off the tick, in a time that follows the execution phase's releases. Without the two fields that head
 is published when that work ends, and its time is held to no tick. With them the head is handed back to the network
-certifier (`Warden.head_back`), and a tick of the schedule publishes it (`leave`); nothing off the tick does:
-- execution phase w's head is due at tick `WardenParams.head_tick` = c + `head_offset`, c the last bucket of the
+certifier (`NetworkCertifier.head_back`), and a tick of the schedule publishes it (`leave`); nothing off the tick does:
+- execution phase w's head is due at tick `NetworkCertifierParams.head_tick` = c + `head_offset`, c the last bucket of the
   window whose close hands it: window w + 1's, and the run's last window's for the run's last execution phase. The
   network certifier counts the offset in its own buckets and has no other clock;
 - a head back before its tick waits for it, and leaves at that tick and never sooner;
@@ -190,7 +190,7 @@ service steers: `origin` is a reading of it, a tick runs once it reads the tick'
 lateness is read on it, and the pacer releases on it. Where the host gives no raw clock the network certifier does
 not start (`pacer.ClockRefused`): it runs on no other.
 
-**The pacer** (`Warden(paced=…)`, which a warden on the host's clock must have): a bucket written on the loop leaves
+**The pacer** (`NetworkCertifier(paced=…)`, which a network certifier on the host's clock must have): a bucket written on the loop leaves
 when its tick runs, and the loop reads every server, so when a server writes within a bucket, which the prover chooses,
 moves when the bucket reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket, every live
 connection's cells as a part for that connection's socket, to a process of its own (`pacer.Pacer`), which releases it
@@ -198,12 +198,12 @@ at `origin` + t·τ + `paced` on the network certifier's clock, a time fixed bef
 socket reaches the pacer at its admission, and its last bucket's part closes the pacer's copy. A bucket that reached
 the pacer after its time, whose release started more than `slack` after it, or that the pacer released with a
 connection's socket not yet its own, faults every grid's window `monitor-unavailable`, as a late tick does. Only a
-warden on an injected clock, a test's, writes each bucket on its loop (`paced` None). A window's three records are
+network certifier on an injected clock, a test's, writes each bucket on its loop (`paced` None). A window's three records are
 published once every bucket of it that was handed is released, or by the
 next window's first tick, faulted `monitor-unavailable` if one isn't by then. A client that reads slowly holds only its
 own bytes in the pacer, and one more than `WRITE_BACKLOG` behind is closed, as on the loop.
 
-**The watermark** (`Warden(watermark=…)`, off by default): one connection to the server, opened by `watermark` when the
+**The watermark** (`NetworkCertifier(watermark=…)`, off by default): one connection to the server, opened by `watermark` when the
 run starts, on which the network certifier sends `release.watermark_head` and then a line for each tick t,
 `release.watermark_chunk(t, n, lost)`, n the `END`s released through bucket t. Tick t makes the line, and it is sent,
 in order, once each release of bucket t has been written whole to its server connection with that transport's buffer
@@ -241,7 +241,7 @@ So the records are the wire, and each window's frames root (`certificate.frames_
 for the one cell that is on no connection, a refusal's or a turn-away's `REFUSED`: a refusal's window has no
 certificate, and a turn-away's is one constant in the bucket its arrival sets. The
 third, `fails`, has `lanes` slots a bucket and one frame a failed connection, its reason, in the bucket of its `FAIL`
-(`WardenParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
+(`NetworkCertifierParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
 schedule's and the egress form's, every `FAIL` has its one reason, and no connection failed (with lengths rows, none
 that was released).
 
@@ -276,7 +276,7 @@ PARAMETERS_TAG = "verity-network-warden/parameters/v3"
 END, FAIL, REFUSED = 0x20, 0x21, 0x22
 KIND_NAMES = {PAD: "pad", DATA: "data", END: "end", FAIL: "fail", REFUSED: "refused"}
 #: why a connection failed: the server's three, the client's two, the server's out-of-form cell, then the client's
-#: request past the response cap (a schedule without one has the first six, `WardenParams.reasons`); only the `fails`
+#: request past the response cap (a schedule without one has the first six, `NetworkCertifierParams.reasons`); only the `fails`
 #: record holds them
 REASONS = ("late", "limit", "upstream", "ingress", "malformed", "format", "cap")
 #: the reasons a client's own bytes give; the rest are the server's
@@ -317,8 +317,8 @@ async def precise_sleep(delay: float, clock: Callable[[], float] | None = None) 
 
 
 @dataclass(frozen=True)
-class WardenParams:
-    """The schedule's public parameters, fixed before the run (`WardenParams.digest` binds them)."""
+class NetworkCertifierParams:
+    """The schedule's public parameters, fixed before the run (`NetworkCertifierParams.digest` binds them)."""
 
     cell_bytes: int = 256  # B
     slots: int = 4  # r: a connection's cells a bucket, each way
@@ -459,7 +459,7 @@ class WardenParams:
         it, window w + 1's or, for the run's last execution phase, its own. ValueError for a schedule without a
         head offset, or an execution phase outside the run."""
         if self.head_offset is None:
-            raise ValueError("the schedule has no head offset (WardenParams.head_offset): its heads are held to "
+            raise ValueError("the schedule has no head offset (NetworkCertifierParams.head_offset): its heads are held to "
                              "no tick")
         if type(w) is not int or type(windows) is not int or not 0 <= w < windows:
             raise ValueError(f"execution phase {w!r} is not one of a run of {windows!r}")
@@ -518,24 +518,24 @@ class WardenParams:
                                                                             "reasons": list(self.reasons)}))
 
 
-#: `WardenParams`' fields that are unset by default, each left out of the digest of a schedule that leaves it unset
+#: `NetworkCertifierParams`' fields that are unset by default, each left out of the digest of a schedule that leaves it unset
 OPTIONAL_FIELDS = ("max_tokens_cap", "lengths", "content", "request_words", "head_offset", "head_wait")
 #: the lengths rows' forms (the module docstring's "The lengths rows"): which execution phases are handed, and whether
 #: one that isn't is ended without releases
 LENGTHS_FORMS = (1, 2)
-#: `WardenParams`' integer fields, every one but `egress` and the optional ones: the fields of every schedule the
+#: `NetworkCertifierParams`' integer fields, every one but `egress` and the optional ones: the fields of every schedule the
 #: period check reads (`scheduleOf`), which reads beside them each optional field a schedule sets, and whose egress
 #: form is the id form
-INTEGER_FIELDS = tuple(f.name for f in fields(WardenParams) if f.name not in ("egress", *OPTIONAL_FIELDS))
+INTEGER_FIELDS = tuple(f.name for f in fields(NetworkCertifierParams) if f.name not in ("egress", *OPTIONAL_FIELDS))
 #: the scan's w63 schedule, and w63k4's, its egress 5 cells an execution phase: the schedules `scan_zk`'s setups of
 #: those names serve and the gate's relay sessions run
-W63 = WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
+W63 = NetworkCertifierParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
                    ingress_buckets=12, egress_cells=65, every=16)
 W63K4 = replace(W63, egress_cells=5)
 
 
 def _stride_releases(lanes: int, every: int, delay: int, ingress_buckets: int) -> int:
-    """`WardenParams.stride_releases` of a schedule with these parameters."""
+    """`NetworkCertifierParams.stride_releases` of a schedule with these parameters."""
     return lanes * min(-(-every // (delay + 2 - ingress_buckets)), 1 + -(-(every - 1) // (delay + 1)))
 
 
@@ -560,10 +560,10 @@ def _content_rows():
     return content_rows
 
 
-def _id_request_cell(params: WardenParams, c: _Connection, made: bytes) -> bool:
+def _id_request_cell(params: NetworkCertifierParams, c: _Connection, made: bytes) -> bool:
     """With lengths rows: whether `made`, the next cell cut from c's request, is that cell of a canonical id request
     as the ingress proof block reads it (`io_request.read`, against the bytes its request has left), which it then
-    counts as cut. It reads the schedule and the connection, nothing of the device: `Warden._ingress` cuts the same
+    counts as cut. It reads the schedule and the connection, nothing of the device: `NetworkCertifier._ingress` cuts the same
     cells for a caller that stands in for the device with its parameters alone."""
     form = _request_form()
     got = form.read(form.layout(params.cell_bytes), made, c.ordinal, c.left)
@@ -586,7 +586,7 @@ def read_cell(data: bytes, cell_bytes: int) -> tuple[int, int, bytes]:
     size = len(payload)
     if kind not in KIND_NAMES or HEADER.unpack_from(data)[2] != size or \
             cell(kind, ordinal, payload, cell_bytes) != data:
-        raise ValueError("not a warden cell")
+        raise ValueError("not a network certifier cell")
     if (kind == DATA and size != cell_bytes - HEADER.size) or (kind in (PAD, FAIL, REFUSED) and size):
         raise ValueError(f"a {KIND_NAMES[kind]} cell of {size} bytes")
     return kind, ordinal, payload
@@ -710,7 +710,7 @@ def _pad(c: _Connection, cell_bytes: int) -> bytes:
     return c.pad
 
 
-class Warden:
+class NetworkCertifier:
     """The active network certifier (the module docstring): `handle(reader, writer)` serves one client connection,
     `run()` ticks the schedule from `origin`, the clock's time of bucket 0, for `windows` record windows, then cuts
     whatever is still served or queued. `connect()` opens a server connection, a (reader, writer) pair. `clock` is the
@@ -730,11 +730,11 @@ class Warden:
     - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`, its
       bucket `ingress_end`), and `run_id`, `RUN_ID_BYTES` sampled from `run_nonce` at construction, names the run on
       the server's side;
-    - with lengths rows (`WardenParams.lengths`; the module docstring's "The lengths rows"), `lengths(window,
+    - with lengths rows (`NetworkCertifierParams.lengths`; the module docstring's "The lengths rows"), `lengths(window,
       strides)` receives each window's releases by slot stride, a window later (by default they are kept in
       `lengths`); under form 2 it is called once for every execution phase of the run, in their order, the last one
       at the run's last close, with `strides` None for an execution phase that is not handed;
-    - in a schedule with a head offset (`WardenParams.head_offset`; the module docstring's "The head's tick"),
+    - in a schedule with a head offset (`NetworkCertifierParams.head_offset`; the module docstring's "The head's tick"),
       `head_back(window, head)` takes what an execution phase's hand ended in, from whoever took the hand, and
       `leave(window, tick, head)` receives it at the tick it leaves at, or None in its place at the last tick it
       could have left at (by default they are kept in `left`); `heads` has each execution phase's tick, None where
@@ -746,10 +746,10 @@ class Warden:
       docstring's "The pacer"), which releases it `paced` after its boundary on the host's raw clock, `origin`'s
       clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each bucket's
       `pacer.Report` once its writes end. On a clock of the host's (`pacer.CLOCKS`: the raw one, its default, or the
-      steered one) `paced` is required: only a warden on an injected clock writes each bucket on its loop;
-    - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
+      steered one) `paced` is required: only a network certifier on an injected clock writes each bucket on its loop;
+    - `until(predicate)` waits until the network certifier's state satisfies it, for a caller that drives a `VirtualClock`."""
 
-    def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
+    def __init__(self, params: NetworkCertifierParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  windows: int, clock: Callable[[], float] = raw_clock,
                  sleep: Callable[[float], Awaitable[None]] | None = None,
                  publish: Callable[[BlockGrid, GridParams], None] | None = None,
@@ -761,7 +761,7 @@ class Warden:
                  lengths: Callable[[int, tuple[tuple[Released, ...], ...]], None] | None = None,
                  leave: Callable[[int, int, Any], None] | None = None) -> None:
         if paced is None and any(clock is host for host in CLOCKS.values()):
-            raise ValueError("a warden on the host's clock is paced: a bucket written on its loop leaves when its tick "
+            raise ValueError("a network certifier on the host's clock is paced: a bucket written on its loop leaves when its tick "
                              "runs, which a server's writes move; give it `paced`, seconds past the slack")
         if paced is not None and not (isinstance(paced, (int, float)) and slack < paced < params.bucket_ms / 1000):
             raise ValueError(f"a paced bucket leaves past the slack and before the next boundary, so that a tick in "
@@ -825,7 +825,7 @@ class Warden:
         self.ticks = 0
         self._changed = asyncio.Event()
 
-    async def until(self, predicate: Callable[[Warden], bool]) -> None:
+    async def until(self, predicate: Callable[[NetworkCertifier], bool]) -> None:
         while not predicate(self):
             self._changed.clear()
             await self._changed.wait()
@@ -932,7 +932,7 @@ class Warden:
         one whose last tick has passed, which is dropped: that execution phase has no head. ValueError for a
         schedule without a head offset, an execution phase that wasn't handed, or one handed back twice."""
         if self.params.head_offset is None:
-            raise ValueError("the schedule has no head offset (WardenParams.head_offset): no tick publishes a head")
+            raise ValueError("the schedule has no head offset (NetworkCertifierParams.head_offset): no tick publishes a head")
         if head is None:
             raise ValueError(f"execution phase {window}'s head is handed back, not None")
         settled = dict(self.heads)
@@ -1091,7 +1091,7 @@ class Warden:
             self._end_lengths(w, whole and (not w or self._whole[w - 1]))
 
     def _end_lengths(self, w: int, handed: bool) -> None:
-        """Window w's releases by slot stride to `hand_lengths` when `handed`, each of them ended (`WardenParams`:
+        """Window w's releases by slot stride to `hand_lengths` when `handed`, each of them ended (`NetworkCertifierParams`:
         with lengths rows a connection ends within a window of its admission, and under form 2 inside the run).
         Otherwise form 1 drops them, and form 2 ends the window with the same call and no releases."""
         strides = self._released.pop(w, None)
@@ -1398,16 +1398,16 @@ class Warden:
                          "failed": c.failed, "failed_at": c.failed_at, "upstream": c.upstream, "cut": cut})
 
 
-def audit(params: WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid],
+def audit(params: NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid],
           fails: Sequence[BlockGrid]) -> dict:
-    """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a warden
+    """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a network certifier
     cell; in every bucket of each direction each live connection has r cells, in ordinal order, and admissions are in
     ordinal order; each connection's ingress is data and padding, then one `END` and padding to its bucket a; and its
     egress is exactly the schedule's for (its admission s, its egress cells): padding through bucket s + D − 1 (up to
     its `FAIL`, for a client's failure before then), then `DATA` in every slot, then one `END` or `FAIL`, then padding
     to the bucket's end. Every `FAIL` has one reason in the `fails` record, in its bucket, and every reason its `FAIL`.
     In the id egress form every egress `DATA` and `END` cell is one `io_tie.parse_cell` reads. Every reason is the
-    schedule's (`WardenParams.reasons`). Under a response cap each connection's `max_tokens` is read from its first
+    schedule's (`NetworkCertifierParams.reasons`). Under a response cap each connection's `max_tokens` is read from its first
     request cell as the network certifier read it: a request cut into cells has one from 1 to the cap, its response
     at most that many `DATA` cells, and only a request with no cells is refused (cap). A window is accepted when its
     three records are complete, its cells are the schedule's and the egress form's and no connection failed in it. With

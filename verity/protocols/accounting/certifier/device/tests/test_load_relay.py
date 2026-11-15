@@ -348,7 +348,7 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
     assert len(rep["streams"]) == 4 and all(s["weights"] and s["witness"] for s in rep["streams"])
     assert set(rep) == {"shape", "model", "values", "rows", "link_bytes", "witness_bytes", "seconds", "jobs", "workers",
                         "streams"} and [set(a) for a in rep["streams"]] == [{"weights", "witness"}] * 4, (
-        "the relay's record is witness whole (auditor.WARDEN_PUBLIC names none of it): a new key stays there")
+        "the relay's record is witness whole (auditor.NETWORK_CERTIFIER_PUBLIC names none of it): a new key stays there")
     assert [sum(a[k] for a in rep["streams"]) for k in ("weights", "witness")] == [rep["link_bytes"],
                                                                                     rep["witness_bytes"]]
     assert rep == json.loads((out / "load-relay.json").read_text())
