@@ -14675,7 +14675,9 @@
    "Properties.NetworkPeriod.RowsSessionsComplete": "unstated: a key's listed sessions are complete from its first listed entry on, in any period the check accepts; no theorem proves it yet",
    "Properties.NetworkPeriod.RowsSessionsCompleteHonest": "unstated: RowsSessionsComplete's honest witness (check accepts a period at the deployed LMS parameters listing one key in two sessions); no theorem proves it yet",
    "Properties.NetworkPeriod.RowsSessionsCompleteNontrivial": "unstated: RowsSessionsComplete's nontrivial witness (RowsSessionsCompleteOf fails at acceptAllRows); no theorem proves it yet",
-   "Properties.NetworkPeriod.SignsCertificateAt": "unstated: a certificate the deployed-parameters LMS key signs passes Certificate.signs under its public key, the step from Lms.signAt to the check's verification; no theorem proves it yet"
+   "Properties.NetworkPeriod.SignsCertificateAt": "unstated: a certificate the deployed-parameters LMS key signs passes Certificate.signs under its public key, the step from Lms.signAt to the check's verification; no theorem proves it yet",
+   "Properties.Remote.CallerCheckMeans": "unstated: the caller's check (VStar.Recursive.Caller.check) finds nothing exactly where the record keeps the caller's facts (Properties.Spot.CallerHeld), proved in security_proofs by Properties.Remote.callerCheckMeans with no hypothesis; a step of StageHeld's proof, which reads only its forward half. Listing the theorem under `guarantees` adds a listed guarantee, so it is listed after the architecture landing",
+   "Properties.Remote.CallerCheckSound": "unstated: CallerCheckMeans' forward half, proved in security_proofs by Properties.Remote.callerCheckSound from callerCheckMeans; it is the hypothesis stage_held and stageHeld_of_accepts take. Listed under `guarantees` with CallerCheckMeans after the architecture landing"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
