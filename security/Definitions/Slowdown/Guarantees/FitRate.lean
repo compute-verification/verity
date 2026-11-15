@@ -9,7 +9,7 @@ public import Definitions.Slowdown.Assumptions.Fit
 
 `FitBound` on the windows a run's cuts make. The servers `X i` of an actual circuit `A` (`Accounting.Placed`), cut at
 `0 = τ 0 ≤ … ≤ τ J = t` (`Accounting.Cuts`), divide the developer's region over `[0, t)` into `n J` windows
-`A[X i, [τ j, τ (j + 1))]`; through a containment of the reference circuit `c` in the developer's declaration, those
+`A[X i, [τ j, τ (j + 1))]`; through a containment of the reference training algorithm `c` in the developer's declaration, those
 windows divide `c`. Each window reads at most its server's state at the cut that opens it plus what its links carry, so
 when that state, in the image of `c`'s novel gates, is at most `R` bits wide, the capacity of the links into each server
 at most `r` and each window at most `ω` ticks long, every window reads at most `S = R + r ω`, and `FitBound` applies
@@ -27,7 +27,7 @@ namespace Slowdown.Guarantees
 open Verity Accounting Finset
 
 /-- **The fit bound on a run**. For an actual circuit `A` meeting causality and links at the developer's pairwise
-disjoint servers `X i`, cuts `κ` of `[0, t)` into windows of at most `ω` ticks, and a reference circuit `c` contained
+disjoint servers `X i`, cuts `κ` of `[0, t)` into windows of at most `ω` ticks, and a reference training algorithm `c` contained
 (`M`) in the developer's declaration over `[0, t)` and threaded by `T`: when each server's state at each cut, in the
 image of `c`'s novel gates, is at most `R` bits wide, the capacity of the links into each server is at most `r`, and
 `S = R + r ω < N* b_w`, then under F3 (`Assumptions.Reach`) and F1 with F4 (`Assumptions.Fits`) over the windows pulled

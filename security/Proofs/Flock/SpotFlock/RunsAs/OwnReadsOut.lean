@@ -60,10 +60,16 @@ theorem lessOwnReads_out {reg : Json} {opened : Array (String × Json)} {v : Str
   rw [Bool.not_eq_true']
   by_contra hany
   rw [Bool.not_eq_false] at hany
-  obtain ⟨px, hpx, hpred⟩ := Array.any_eq_true'.1 hany
-  obtain ⟨p, x⟩ := px
-  simp only [Bool.and_eq_true, beq_iff_eq] at hpred
-  exact hne ⟨x, hpred.1 ▸ hpx, hpred.2⟩
+  cases hf : (Spot.Record.byPort reg).find? (fun q => q.1 == v) with
+  | none =>
+    rw [hf] at hany
+    simp at hany
+  | some px =>
+    rw [hf] at hany
+    obtain ⟨p, x⟩ := px
+    have hp : p = v := by simpa using Array.find?_some hf
+    subst hp
+    exact hne ⟨x, Array.mem_of_find?_eq_some hf, by simpa using hany⟩
 
 /-- Each entry of `acc` has a null root, or is the value and root of a registered read one of the statements `l`
 states. -/

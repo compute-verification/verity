@@ -3,9 +3,9 @@ module
 public import Definitions.InferenceOnly
 
 /-!
-# Partial containment: a reference circuit computed partly off the books
+# Partial containment: a reference training algorithm computed partly off the books
 
-`RegisteredCircuit.Contains` asks the declared circuit `d` to compute every gate of the reference circuit `c`. A prover can
+`RegisteredCircuit.Contains` asks the declared circuit `d` to compute every gate of the reference training algorithm `c`. A prover can
 instead compute some of `c`'s gates outside `d`, off the books, and feed their values into `d` as inputs. A partial
 containment (`PartialContainment c d`) says what `d` still computes: a set `S` of `c`'s computed gates, each with its own
 gate of `d` reading the images of the gates it reads. The rest of `c`'s computed gates are its dark gates (`dark`): `d`
@@ -25,7 +25,7 @@ namespace Slowdown
 
 open Verity
 
-/-- **A partial containment** of the reference circuit `c` in a declaration `d`: `d` computes the gates `S` of `c` on
+/-- **A partial containment** of the reference training algorithm `c` in a declaration `d`: `d` computes the gates `S` of `c` on
 the books, and the rest of `c`'s computed gates are dark. Through `emb`:
 1. `S` holds only computed gates of `c`;
 2. distinct gates of `S` and of `in(S)`, the gates outside `S` that `S` reads, go to distinct gates of `d`, of the same

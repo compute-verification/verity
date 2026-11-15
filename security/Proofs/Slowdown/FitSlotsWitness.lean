@@ -5,7 +5,7 @@ public import Proofs.Slowdown.Fit
 /-!
 # A window across optimizer steps: `FitBoundSlots` applies where `FitBound` can't
 
-A ten-gate reference circuit of two optimizer steps on two parameters. Gates 0 and 1 are the parameters' step-1
+A ten-gate reference training algorithm of two optimizer steps on two parameters. Gates 0 and 1 are the parameters' step-1
 versions (four-bit inputs), gates 2 and 3 one-bit activations, of thread 0 (a token at step 1) and thread 1 (a token at
 step 2). Gates 4 and 5 are thread 0's counted multiplications, of parameter 0 and parameter 1 by activation 2. Gates 6
 and 7 are the step-2 versions, each computed from its step-1 version and the product on it (the toy's gradient), and

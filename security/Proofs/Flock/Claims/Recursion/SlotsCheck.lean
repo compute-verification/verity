@@ -75,19 +75,19 @@ otherwise (`RecSetup.oneFull`). `ksLin2_deployed_full` and `bitsLin2_deployed_fu
 namespace RecDeploy
 
 /-- **A block's bit at the table share is the witness's hidden value** at the share's interleaved address. -/
-theorem blockBit_zOf (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (J t : ℕ) (o : Fin (2 ^ S.nbl))
+theorem chunkBit_zOf (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (J t : ℕ) (o : Fin (2 ^ S.nbl))
     {y : ℕ} (hy : y < 2 ^ S.kLog) :
-    FlockSoundness.Discharge.Hm.blockBit S (Flock.Readable.zOf J w t S.m) o y =
+    FlockSoundness.Discharge.Hm.chunkBit S (Flock.Readable.zOf J w t S.m) o y =
       w.hid.getD ((o.val * 2 ^ S.kLog + y) * J + t) false := by
-  rw [FlockSoundness.Discharge.Hm.blockBit_of_lt S _ o hy]
+  rw [FlockSoundness.Discharge.Hm.chunkBit_of_lt S _ o hy]
   exact Flock.Readable.bit_toZ _
 
 /-- At one table, the share's address is the block's own: `slotHid`'s form. -/
-theorem blockBit_zOf_one (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (o : Fin (2 ^ S.nbl))
+theorem chunkBit_zOf_one (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (o : Fin (2 ^ S.nbl))
     {y : ℕ} (hy : y < 2 ^ S.kLog) :
-    FlockSoundness.Discharge.Hm.blockBit S (Flock.Readable.zOf 1 w 0 S.m) o y =
+    FlockSoundness.Discharge.Hm.chunkBit S (Flock.Readable.zOf 1 w 0 S.m) o y =
       w.hid.getD (o.val * 2 ^ S.kLog + y) false := by
-  rw [blockBit_zOf S w 1 0 o hy, Nat.mul_one, Nat.add_zero]
+  rw [chunkBit_zOf S w 1 0 o hy, Nat.mul_one, Nat.add_zero]
 
 /-- The hm96 net's output column, as `Hm.bcCol` reads it, is `hmOutCol`'s. -/
 theorem hmOut_eq (c : Flock.Circuit) : FlockSoundness.Discharge.Hm.hmOut c = hmOutCol c := by
@@ -107,14 +107,14 @@ theorem bc_bit (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (c : 
     (hk : 2 ^ S.kLog = 2 ^ c.kLog) (hb : n / c.g < 2 ^ S.nbl) (hy : hmBase c q n + (hmOutCol c + t) < 2 ^ c.kLog)
     (ht : t < 1024) :
     FlockSoundness.Discharge.Hm.bitL (FlockSoundness.Discharge.Hm.bytesOf
-      (FlockSoundness.Discharge.Hm.blockBit S (Flock.Readable.zOf 1 w 0 S.m) ⟨n / c.g, hb⟩) 128
+      (FlockSoundness.Discharge.Hm.chunkBit S (Flock.Readable.zOf 1 w 0 S.m) ⟨n / c.g, hb⟩) 128
       (FlockSoundness.Discharge.Hm.bcCol c (n % c.g) q)) t =
       w.hid.getD (slotHid c n (hmBase c q n) (hmOutCol c + t)) false := by
   have he : FlockSoundness.Discharge.Hm.bcCol c (n % c.g) q (t / 8) (t % 8) = hmBase c q n + (hmOutCol c + t) := by
     unfold FlockSoundness.Discharge.Hm.bcCol hmBase
     rw [hmOut_eq]
     omega
-  rw [FlockSoundness.Discharge.Hm.bitL_bytesOf _ _ (by omega), he, blockBit_zOf_one S w _ (by rw [hk]; exact hy), hk]
+  rw [FlockSoundness.Discharge.Hm.bitL_bytesOf _ _ (by omega), he, chunkBit_zOf_one S w _ (by rw [hk]; exact hy), hk]
   rfl
 
 /-- **Port `q`'s salt at instance `n`, bit `j`**, as `Hm.row_bc_flat` reads it in block `n / g`, is the hidden value
@@ -123,14 +123,14 @@ theorem salt_bit (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (c 
     (hk : 2 ^ S.kLog = 2 ^ c.kLog) (hb : n / c.g < 2 ^ S.nbl) (hy : hmBase c q n + (hmIn c 2 + j) < 2 ^ c.kLog)
     (hj : j < 1536) :
     FlockSoundness.Discharge.Hm.bitL (FlockSoundness.Discharge.Hm.bytesOf
-      (FlockSoundness.Discharge.Hm.blockBit S (Flock.Readable.zOf 1 w 0 S.m) ⟨n / c.g, hb⟩) 192
+      (FlockSoundness.Discharge.Hm.chunkBit S (Flock.Readable.zOf 1 w 0 S.m) ⟨n / c.g, hb⟩) 192
       (FlockSoundness.Discharge.Hm.saltCol c (n % c.g) q)) j =
       w.hid.getD (slotHid c n (hmBase c q n) (hmIn c 2 + j)) false := by
   have he : FlockSoundness.Discharge.Hm.saltCol c (n % c.g) q (j / 8) (j % 8) = hmBase c q n + (hmIn c 2 + j) := by
     unfold FlockSoundness.Discharge.Hm.saltCol hmBase
     rw [hmIn_eq]
     omega
-  rw [FlockSoundness.Discharge.Hm.bitL_bytesOf _ _ (by omega), he, blockBit_zOf_one S w _ (by rw [hk]; exact hy), hk]
+  rw [FlockSoundness.Discharge.Hm.bitL_bytesOf _ _ (by omega), he, chunkBit_zOf_one S w _ (by rw [hk]; exact hy), hk]
   rfl
 
 /-! ## A row bit's input column copies its message bit -/
@@ -213,10 +213,10 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
     (o : Fin (2 ^ (L.model regs).nbl)) :
     st.c.unitRange.slot (g * st.c.upv) + ((st.c.unit.inGroups.getD 0 default).col * Flock.WORD +
       16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + i) < 2 ^ st.c.kLog ∧
-    FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o (st.c.unitRange.slot (g * st.c.upv) +
+    FlockSoundness.Discharge.Hm.chunkBit (L.model regs) z o (st.c.unitRange.slot (g * st.c.upv) +
       ((st.c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 +
         i)) =
-      FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o
+      FlockSoundness.Discharge.Hm.chunkBit (L.model regs) z o
         (FlockSoundness.Typed.msgCol st.c g q (i / 8) (i % 8)) := by
   have C := F.check
   set start := (st.c.ports.extract 0 q).foldl (· + ·.words) 0 with hstart
@@ -247,7 +247,7 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
   have hoff := L.port_lt hxp ht16
   have hy := L.unit_slot_lt hs₀ (lt_of_lt_of_le hoff (L.fit st.c.unitNet).2)
   refine ⟨by rw [hoffe]; exact hy, ?_⟩
-  rw [hoffe, FlockSoundness.Discharge.Hm.blockBit_of_lt (L.model regs) z o hy,
+  rw [hoffe, FlockSoundness.Discharge.Hm.chunkBit_of_lt (L.model regs) z o hy,
     FlockSoundness.Discharge.Aliased.copyAt_block L regs F hs₀ hoff ⟨_, hy⟩ rfl hz o]
   have hm : (Flock.portCols st.c.unit.inGroups)[x]!.1 + t ∈ FlockSoundness.portBits st.c.unit.inGroups := by
     unfold FlockSoundness.portBits
@@ -278,10 +278,10 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
   rw [ite_eq_left hm]
   by_cases hlt : FlockSoundness.flatSrcAt st.c (g * st.c.upv) ((Flock.portCols st.c.unit.inGroups)[x]!.1 + t) <
       2 ^ st.c.kLog
-  · rw [dite_eq_left hlt, ← FlockSoundness.Discharge.Hm.blockBit_of_lt (L.model regs) z o hlt, hsrc]
+  · rw [dite_eq_left hlt, ← FlockSoundness.Discharge.Hm.chunkBit_of_lt (L.model regs) z o hlt, hsrc]
   · rw [dite_eq_right hlt, FlockSoundness.Discharge.Aliased.zeroPos_block L regs F hs₀ hz o]
     rw [hsrc] at hlt
-    unfold FlockSoundness.Discharge.Hm.blockBit
+    unfold FlockSoundness.Discharge.Hm.chunkBit
     split
     · rename_i h
       exact absurd h hlt
@@ -304,12 +304,12 @@ theorem table_rows {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables :
     FlockSoundness.Discharge.Hm.RowRanges st.c ∧ 0 < st.c.g ∧
       st.nbl = max 3 (Flock.log2ceil (max ((st.n + st.c.g - 1) / st.c.g) 1)) ∧
       (∀ (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ}, g < st.c.g → p < st.c.ports.size →
-        FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o) 128
+        FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.chunkBit (L.model regs) z o) 128
           (FlockSoundness.Discharge.Hm.bcCol st.c g p) = FlockSoundness.Binding.commitString
           ((Flock.HmRow.rowPrefix st.c.ports[p]!.words).data.toList ++
-            FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o)
+            FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.chunkBit (L.model regs) z o)
               (2 * st.c.ports[p]!.words) (FlockSoundness.Typed.msgCol st.c g p))
-          (FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o) 192
+          (FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.chunkBit (L.model regs) z o) 192
             (FlockSoundness.Discharge.Hm.saltCol st.c g p))) ∧
       ∀ (o : Fin (2 ^ (L.model regs).nbl)) {N g q i : ℕ},
         st.c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat → g < st.c.g → ∀ hq : q < st.c.ports.size,
@@ -318,10 +318,10 @@ theorem table_rows {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables :
         i < st.c.ports[q].bits →
         st.c.unitRange.slot (g * st.c.upv) + ((st.c.unit.inGroups.getD 0 default).col * Flock.WORD +
           16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + i) < 2 ^ st.c.kLog ∧
-        FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o (st.c.unitRange.slot (g * st.c.upv) +
+        FlockSoundness.Discharge.Hm.chunkBit (L.model regs) z o (st.c.unitRange.slot (g * st.c.upv) +
           ((st.c.unit.inGroups.getD 0 default).col * Flock.WORD +
             16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + i)) =
-          FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o
+          FlockSoundness.Discharge.Hm.chunkBit (L.model regs) z o
             (FlockSoundness.Typed.msgCol st.c g q (i / 8) (i % 8)) := by
   unfold FlockSoundness.Discharge.HiddenExec.setupOne at hd
   cases hh : tags.hiddenOutputs
@@ -426,7 +426,7 @@ theorem slotCommits_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {t
     rw [Array.getElem?_eq_getElem hqs, hq!]
     rfl
   have hrow : Claims.Recursion.VStarB.readForms w (((rowHidden st.c nm n).getD []).map Flock.HmNets.Lin.var) =
-      FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs)
+      FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.chunkBit (L.model regs)
         (Flock.Readable.zOf 1 w 0 st.m) o) (2 * st.c.ports[q]!.words)
         (FlockSoundness.Typed.msgCol st.c (n % st.c.g) q) := by
     rw [rowHidden_eq n hl hq hqs hN, Option.getD_some]
@@ -436,9 +436,9 @@ theorem slotCommits_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {t
     simp only [List.getElem_map, List.getElem_range, formBit_var]
     obtain ⟨hy, he⟩ := hleaf o hl hgn hqs hbw hN hi
     rw [FlockSoundness.Discharge.Hm.bitL_bytesOf _ _ (by rw [hq!]; omega), ← he]
-    exact (blockBit_zOf_one (L.model regs) w o hy).symm
+    exact (chunkBit_zOf_one (L.model regs) w o hy).symm
   have hsalt : Claims.Recursion.VStarB.readForms w (hmSalt st.c q n) =
-      FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs)
+      FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.chunkBit (L.model regs)
         (Flock.Readable.zOf 1 w 0 st.m) o) 192 (FlockSoundness.Discharge.Hm.saltCol st.c (n % st.c.g) q) := by
     refine readForms_eq_of_bits (by simp [hmSalt, FlockSoundness.Discharge.Hm.length_bytesOf]) fun j hj => ?_
     have hj' : j < 1536 := by simpa [hmSalt] using hj
