@@ -15,3 +15,6 @@ inputs = ["tools/config/verity_config", "verity/__init__.py", "tools/config/veri
           "verity/device.py", "verity/errors.py", "verity/runtime/__init__.py",
           "verity/channel.py", "verity/runtime/handshake.py", "verity/runtime/framing.py", "verity/party.py",
           "verity/tests/tests/test_channel.py"]
+
+[tool.verity.interface]
+core = "verity bench compute"

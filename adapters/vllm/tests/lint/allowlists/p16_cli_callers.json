@@ -5,7 +5,7 @@
     "advice-windows": "benchmarks/one_stage/a5_tp.sh",
     "block-counts": "benchmarks/one_stage/served_verdicts.sh",
     "build": "benchmarks/stacked_share/job.sh",
-    "int8-checkpoint": "benchmarks/hash/dither/pin_glm53.sh",
+    "int8-checkpoint": "adapters/vllm/tests/protocols/pous_gpu.sh",
     "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
     "serve-openai": "adapters/vllm/tools/served_run/serve.sh",
     "served-match": "adapters/vllm/verity_vllm/ops/served_build.sh",

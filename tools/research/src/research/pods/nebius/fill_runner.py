@@ -355,6 +355,15 @@ def lease(i: int) -> str | None:
         return "held"
 
 
+def shared_free(fd: int) -> bool:
+    """Whether a shared flock on `fd` is granted at once: False exactly while someone holds the file exclusively."""
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        return True
+    except BlockingIOError:
+        return False
+
+
 def held(lock: Path) -> bool:
     """Whether someone holds `lock` exclusively (flock)."""
     try:
@@ -362,10 +371,7 @@ def held(lock: Path) -> bool:
     except OSError:
         return False
     try:
-        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
-        return False
-    except BlockingIOError:
-        return True
+        return not shared_free(fd)
     finally:
         os.close(fd)
 
@@ -394,11 +400,8 @@ def waiters() -> list[int]:
             print(f"fill: {f.name} skipped, gone while the waits were listed ({type(e).__name__})", file=sys.stderr, flush=True)
             continue
         try:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            if shared_free(fd):
                 continue
-            except BlockingIOError:
-                pass
             text = os.read(fd, 4096).decode(errors="replace")
             m = re.search(r"\bn=(\d+)", text)
             on = re.search(r"\bon=(\S+)", text)
@@ -659,7 +662,10 @@ def repin(f: dict, fs: list[dict]) -> None:
         try:
             pgid = int((d / "stat").read_text().rsplit(")", 1)[1].split()[2])
             cg = (d / "cgroup").read_text().strip()
-        except (OSError, IndexError, ValueError):
+        except (OSError, IndexError, ValueError) as e:
+            if d.exists():
+                print(f"fill: pid {d.name} unread, so its threads stay where they are ({type(e).__name__}: {e})",
+                      file=sys.stderr, flush=True)
             continue
         if pgid not in groups and not (scopes and cg.endswith(scopes)):
             continue
@@ -669,8 +675,10 @@ def repin(f: dict, fs: list[dict]) -> None:
                 if had & off and had - off:
                     os.sched_setaffinity(int(task.name), had - off)
                     moved += 1
-            except OSError:
-                pass
+            except OSError as e:
+                if task.exists():
+                    print(f"fill: thread {task.name} of pid {d.name} left on its CPUs ({type(e).__name__}: {e})",
+                          file=sys.stderr, flush=True)
     event("fence", "-", owner=f["owner"], gpu=f["gpu"], cpus=f["cpus"], jobs=f["jobs"], threads_moved=moved)
 
 

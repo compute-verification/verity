@@ -959,13 +959,24 @@ def test_a_preempted_job_can_still_publish_its_attempt():
         assert t.count("RESEARCH_STORE: /workspace/jobs/store") == tasks, f.name    # the pod's own home dies with the pod
 
 
-def test_backfill_takes_its_credentials_on_stdin_only():
+def test_backfill_takes_its_credentials_on_stdin_only(tmp_path, monkeypatch):
+    """Run under a sudo that refuses, as a locked node's does (and so never the machine's own): the exit trap still removes the
+    credentials file, through its plain `rm`."""
+    import os
     import subprocess
     script = SKY / "backfill_attempts.sh"
     text = script.read_text()
     assert "head -n 4 > \"$creds\"" in text and "R2_ENDPOINT=" not in text.replace("export R2_ENDPOINT", "")
+    bin_dir, tmp = tmp_path / "bin", tmp_path / "tmp"
+    bin_dir.mkdir()
+    tmp.mkdir()
+    (bin_dir / "sudo").write_text('#!/bin/sh\necho "sudo: a password is required" >&2\nexit 1\n')
+    (bin_dir / "sudo").chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
+    monkeypatch.setenv("TMPDIR", str(tmp))
     r = subprocess.run(["bash", str(script)], input="only-one-line\n", capture_output=True, text=True)
     assert r.returncode == 2 and "want the 4 credential lines on stdin" in r.stderr
+    assert list(tmp.iterdir()) == []
 
 
 def test_a_quiet_commit_is_stopped_and_a_progressing_one_is_not(tmp_path):
