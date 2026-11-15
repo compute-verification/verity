@@ -6,7 +6,8 @@ Definitions a served Program calls are the word Call families circuit-check hold
 here, not beside that module, so that the registries import no frontend module for it."""
 from __future__ import annotations
 
-from typing import Any, Callable, Iterator
+from collections.abc import Callable, Iterator
+from typing import Any
 
 
 def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:

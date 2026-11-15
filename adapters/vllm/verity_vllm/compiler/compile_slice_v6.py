@@ -103,9 +103,10 @@ verdicts, `run_copy` `PageCopy`'s.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import Any, Sequence
+from typing import Any
 
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean import memcheck as MC

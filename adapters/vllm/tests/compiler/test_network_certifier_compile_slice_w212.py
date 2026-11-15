@@ -80,7 +80,7 @@ def test_the_served_rows_are_the_replays(w212):
     x = w212
     assert [[list(r) for r in step] for step in x.served] == x.fx["rows"]
     assert [list(map(list, s)) for s in CS.case(x.S, x.sl, BOOK).steps] == x.fx["rows"]
-    assert x.fx["steps"] == 20 and x.S.P == {OWN: 20, CLASS: 54}[x.name]
+    assert x.fx["steps"] == 20 and {OWN: 20, CLASS: 54}[x.name] == x.S.P
 
 
 def test_the_slice_accepts_w212(w212):

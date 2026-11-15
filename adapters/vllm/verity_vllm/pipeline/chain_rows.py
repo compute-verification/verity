@@ -156,7 +156,7 @@ def _places(T: int, NS: int, BN: int, DV: int, DR: int) -> tuple[Place, ...]:
                     ("m", None, "o0", blocks[-1]), ("l", None, "o1", blocks[-1]), ("o", None, "o0", last[(s, c)]))))
         for c in range(DV // G):
             reads = tuple((p, s, o, ends[(s, c)]) for p, o in (("lse", "o1"), ("o", "o0")) for s in range(n))
-            if G != combine_cols(DV):
+            if combine_cols(DV) != G:
                 out.append(Place(("combine", n, G), col=c, reads=reads))
                 continue
             j = whole[(("combine", n), 0, c)]
@@ -352,7 +352,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
         y = y.reshape(NH, DV)
         pl = key_places(S) if k == "keys" else places(S)
 
-        def key_cols(p: Place, c: int) -> np.ndarray:
+        def key_cols(p: Place, c: int, kv: np.ndarray = kv) -> np.ndarray:
             return kv[p.keys[0]:p.keys[1], c * p.key[-1]:(c + 1) * p.key[-1]]
 
         def returned(p: Place, h: int) -> list[np.ndarray]:
@@ -371,7 +371,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
 
         at = [(h, pl[j]) for h in range(1 if k == "keys" else NH) for j in positions(tp, S)]
 
-        def own(nm: str) -> np.ndarray | None:
+        def own(nm: str, at: list = at) -> np.ndarray | None:
             if k in ("values", "keys"):
                 return np.stack([key_cols(p, p.col) for _h, p in at]) if nm == "kv" else None
             if k == "scores" and (c := re.fullmatch(r"kv(\d+)", nm)):

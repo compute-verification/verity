@@ -83,8 +83,8 @@ bitlen(NS) follow (`stream_statics`).
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable, Sequence
 from types import SimpleNamespace
-from typing import Callable, Sequence
 
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean import memcheck as MC

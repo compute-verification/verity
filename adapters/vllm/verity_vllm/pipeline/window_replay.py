@@ -231,7 +231,7 @@ def _plan(circuit: IF.Circuit) -> _Plan:
             L, first = port.leaves, port.free
 
             def unit(u: int, bands: Any = bands, free: Any = free, port: _Port = port, L: int = L, first: int = first,
-                     rows: int = 1) -> list[tuple[str, int, View]]:
+                     at: int = at, rows: int = 1) -> list[tuple[str, int, View]]:
                 """Units ``u`` to ``u + rows``' rows of the port; more than one unit only of a port of one band."""
                 got: list[tuple[str, int, View]] = []
                 for j0, j1, w in bands:

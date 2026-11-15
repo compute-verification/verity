@@ -39,10 +39,10 @@ place of 96.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import lru_cache, partial
+from functools import cache, partial
 from types import SimpleNamespace
-from typing import Sequence
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import ZERO, Circuit
@@ -183,7 +183,7 @@ def evaluate(st: dict, cases: Sequence[CS.Case]) -> list[int]:
     return [sum(int(b) << j for j, b in enumerate(o)) for o in out]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _counted(key: tuple) -> dict[str, int]:
     S = SimpleNamespace(**dict(key))
     C = Circuit(cse=True)

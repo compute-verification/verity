@@ -47,7 +47,7 @@ def _honest(rng, table, n):
             sent = rng.random() < .3
             if sent:
                 wh = rng.randrange((wh + 1) // 2, wh + 1)
-            nins = rng.randrange(wh, K // S.U + 1) if K // S.U >= wh else wh
+            nins = rng.randrange(wh, K // S.U + 1) if wh <= K // S.U else wh
             row = replace(look, sent=sent, wh=wh, nins=nins)
         else:
             row = CS.Row(r=r, units=units, pfx=walk[r], nins=rng.randrange(KU + 1))

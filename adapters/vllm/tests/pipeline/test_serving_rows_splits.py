@@ -604,10 +604,10 @@ def test_each_scores_and_values_unit_is_wired_to_the_units_that_wrote_what_it_re
     for left, why in ((UNITS[0], "block 0 (visit order)'s scores are the output of a scores template"),
                       (UNITS[5], "block 0 (visit order) of split 1's O on column block 0 is the output of a values template"),
                       (UNITS[6], "split 0's end column block 0 is the output of a column end template"),
-                      (UNITS[8], "block 0 (visit order)'s key rows' column block 0 of 32 columns are the output of a keys "
-                                 "template"),
-                      (UNITS[9], "block 0 (visit order) of split 1's key rows' column block 0 of 32 columns are the output of "
-                                 "a keys template")):
+                      (UNITS[8], ("block 0 (visit order)'s key rows' column block 0 of 32 columns are the output of a keys "
+                                  "template")),
+                      (UNITS[9], ("block 0 (visit order) of split 1's key rows' column block 0 of 32 columns are the output of "
+                                  "a keys template"))):
         with pytest.raises(ValueError, match=re.escape(f"{why} the partition does not name")):
             members(s, [t for t in UNITS if t != left], UNITS_CHUNK)
 

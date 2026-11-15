@@ -61,10 +61,10 @@ full session scales by offline memory checking: it sorts the session's unit oper
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from functools import lru_cache
+from functools import cache
 from types import SimpleNamespace
-from typing import Sequence
 
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import (
@@ -413,7 +413,7 @@ def evaluate(st_: dict, cases: Sequence[tuple[Sequence[Entry], Row]]) -> list[Ou
 # --- cost ------------------------------------------------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=None)
+@cache
 def part_ands(key: tuple) -> dict[str, int]:
     st_ = dict(zip(STATICS, key))
     return {d.name: ands(bind(d, **st_)) for d in PARTS}

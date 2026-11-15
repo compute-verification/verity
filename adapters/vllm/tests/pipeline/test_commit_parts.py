@@ -239,8 +239,8 @@ def test_an_empty_committer_is_a_usage_error_naming_the_committers(capsys: pytes
     with pytest.raises(SystemExit) as e:
         cli.parse("commit", ["--out", "o", "--committer", ""], {})
     assert e.value.code == 2
-    assert "--committer is empty: name the treatment arm's committer (native_collect_v2b, the default; hooks_only; or " \
-           "plugin:MODULE:FACTORY), or run the control alone with --only-arm control" in capsys.readouterr().err
+    assert ("--committer is empty: name the treatment arm's committer (native_collect_v2b, the default; hooks_only; or "
+            "plugin:MODULE:FACTORY), or run the control alone with --only-arm control") in capsys.readouterr().err
     assert cli.parse("commit", ["--out", "o"], {}).committer == "native_collect_v2b"
     assert cli.parse("commit", ["--out", "o", "--committer", "hooks_only"], {}).committer == "hooks_only"
 

@@ -310,8 +310,8 @@ def test_a_bf16_launchs_hook_tables_domains_and_program_are_unchanged():
     doc = {"program": L.partition["program"], "ports": L.ports(), "provenance": L.provenance(),
            "words": [L.words(t) for t in L.tables]}
     assert hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest() == BF16_LAYOUT
-    assert "words" not in L.provenance()["tables"] and L == BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=LEAVES,
-                                                                      row_words=H.WORDS)
+    assert "words" not in L.provenance()["tables"] and BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=LEAVES,
+                                                                      row_words=H.WORDS) == L
 
 
 def test_a_layout_of_fp8_ds_mla_rows_binds_its_words_in_its_tables_domains_and_its_record():

@@ -56,10 +56,10 @@ request ids and kinds are wired past). N is public, as the Commit's binding map 
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from types import SimpleNamespace
-from typing import Sequence
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import BIT
@@ -521,7 +521,7 @@ def _count(build, params) -> int:
     return C.counts()["ands"]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _step_ands(key: tuple) -> int:
     """The step's parts counted as Flock lowers them, each activation by its builder on its own wires: the slots, the
     routing with its M − R zero records constant, the scan."""

@@ -88,7 +88,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, fields
-from functools import lru_cache
+from functools import cache
 from types import SimpleNamespace
 from typing import Any
 
@@ -786,7 +786,7 @@ def evaluate_close(S: Shape, cases: Sequence[list[list[int]]]) -> list[int]:
 
 # --- cost -----------------------------------------------------------------------------------------------------------------
 
-@lru_cache(maxsize=None)
+@cache
 def _counted(which: str, key: tuple) -> int:
     S = SimpleNamespace(**dict(zip(STATICS, key)))
     sig, build = {"advance": (_sig_advance, _build_advance), "load": (_sig_load, _build_load),

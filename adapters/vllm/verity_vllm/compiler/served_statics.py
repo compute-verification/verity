@@ -41,9 +41,9 @@ proof block's Flock block is set by its two rows' in-circuit hashing, G·R·(3 +
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Sequence
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import BIT

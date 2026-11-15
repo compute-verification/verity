@@ -91,9 +91,10 @@ call's logic over every kind's positions, the memo's 169 ANDs at GLM-5.3's width
 """
 from __future__ import annotations
 
-from functools import lru_cache
+from collections.abc import Callable, Sequence
+from functools import cache
 from types import SimpleNamespace
-from typing import Callable, NamedTuple, Sequence
+from typing import NamedTuple
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import memcheck as MC
@@ -381,7 +382,7 @@ class Stream:
             if key:
                 NW = self.Z.NW
                 mask = (1 << NW) - 1
-                self._acc(TAGS["M"], key, lambda v: (cn if v & mask == b else v & mask)
+                self._acc(TAGS["M"], key, lambda v, b=b, cn=cn, cp=cp, mask=mask, NW=NW: (cn if v & mask == b else v & mask)
                           | (cp if (v >> NW) & mask == b else (v >> NW) & mask) << NW | v >> 2 * NW << 2 * NW)
                 if cp:
                     self._b(cp, cnext=cn)
@@ -400,8 +401,8 @@ class Stream:
             key = self._acc(TAGS["RK"], rk(S, c.r, k))
             if self.value(TAGS["K"], b):
                 self._refuse(f"cache of block {b}: it has a key")
-            self._acc(TAGS["K"], b, lambda v: key)
-            m = self._acc(TAGS["M"], key, lambda v: (v & mask or b) | b << Z.NW | v >> 2 * Z.NW << 2 * Z.NW)
+            self._acc(TAGS["K"], b, lambda v, key=key: key)
+            m = self._acc(TAGS["M"], key, lambda v, b=b: (v & mask or b) | b << Z.NW | v >> 2 * Z.NW << 2 * Z.NW)
             last = (m >> Z.NW) & mask
             if last:
                 self._b(last, cnext=b)
@@ -952,7 +953,7 @@ def evaluate(st_: dict, cases: Sequence[list[list[int]]]) -> list[Out]:
 # --- cost ------------------------------------------------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=None)
+@cache
 def part_ands(key: tuple) -> dict[str, int]:
     st_ = dict(zip(SLOT_STATICS, key))
     return {d.name: ands(bind(d, **st_)) for d in PARTS}

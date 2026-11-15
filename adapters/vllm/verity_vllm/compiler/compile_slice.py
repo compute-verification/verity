@@ -117,10 +117,10 @@ with its fields for ``pub``, ``cin``, ``cout`` and ``cert``'s tail, its circuit 
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from functools import lru_cache
+from functools import cache
 from types import SimpleNamespace
-from typing import Sequence
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import BIT
@@ -370,7 +370,7 @@ def with_block(st: dict, G: int | None) -> dict:
     st = {k: v for k, v in st.items() if k != "G"}
     G = st["P"] if G is None else G
     block(SimpleNamespace(**st, G=G))
-    return st if G == st["P"] else {**st, "G": G}
+    return st if st["P"] == G else {**st, "G": G}
 
 
 def unit(**st):
@@ -796,7 +796,7 @@ def evaluate(st: dict, cases: Sequence[Case]) -> list[int]:
     return [sum(int(b) << j for j, b in enumerate(o)) for o in out]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _counted(key: tuple) -> dict[str, int]:
     S = SimpleNamespace(**dict(key))
     C = Circuit(cse=True)

@@ -235,10 +235,10 @@ def _window(rng: random.Random, AS: int) -> CS.Slice:
     base = [rng.randrange(1, 15) for _ in range(4)]
     arrivals, tokens = [], []
     for i in range(3):
-        P, O = rng.randrange(4, 13), rng.randrange(1, 5)
+        P, n_out = rng.randrange(4, 13), rng.randrange(1, 5)
         pre = base if rng.random() < 0.6 else [rng.randrange(1, 15) for _ in range(4)]
-        tokens.append(tuple((pre + [rng.randrange(1, 15) for _ in range(P + O)])[:P + O]))
-        arrivals.append((i, P, O, rng.randrange(2)) if AS else (i, P, O))
+        tokens.append(tuple((pre + [rng.randrange(1, 15) for _ in range(P + n_out)])[:P + n_out]))
+        arrivals.append((i, P, n_out, rng.randrange(2)) if AS else (i, P, n_out))
     return CS.Slice(tuple(arrivals), tuple(rng.randrange(2) for _ in range(5)), 5, tuple(tokens))
 
 
