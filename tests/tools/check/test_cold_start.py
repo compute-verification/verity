@@ -113,13 +113,12 @@ def _tail(out: str) -> str:
 
 
 def test_suites_py_syncs_a_fresh_tree_and_runs_a_suite(shipped):
-    """`uv run tools/check/suites.py` in a fresh tree, as `research run` workloads start it: it finds `uv run`'s
-    environment missing the workspace, syncs it and runs the suite."""
+    """`uv run tools/check/suites.py` in a fresh tree, as `research run` workloads start it: it syncs the workspace and runs
+    the suite. `tools/check` has no project of its own (its suite's is `tests/tools/check`), so `uv run` syncs the root's."""
     tree, env = shipped
     out = env["TMPDIR"] + "/outcome.json"
     p = subprocess.run([UV, "run", "tools/check/suites.py", "--fresh", "--json", out, "tools/config"], cwd=tree, env=env,
                        capture_output=True, text=True)
-    assert "holds none of the workspace yet" in p.stderr, _tail(p.stdout + p.stderr)
     assert p.returncode == 0, _tail(p.stdout + p.stderr)
     [r] = json.loads(Path(out).read_text())
     assert r["status"] == "passed" and r["counts"].get("passed"), r
@@ -131,7 +130,6 @@ def test_check_py_reaches_its_first_step_from_a_fresh_tree(shipped):
     tree, env = shipped
     hit, out = _until([UV, "run", "tools/check/check.py"], tree, env, FIRST_STEP)
     assert hit, _tail(out)
-    assert "holds none of the workspace yet" in out, _tail(out)
 
 
 def test_the_verity_command_reaches_checks_first_step_from_a_fresh_tree(shipped):
