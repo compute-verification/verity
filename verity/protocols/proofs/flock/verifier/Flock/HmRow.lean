@@ -199,13 +199,13 @@ def byteAt (p : Port) (byte : Nat) : Nat × Nat :=
 
 /-- Column `t` of a message block's 1024 (word `t / 64`, its bit `t % 64`; the block's bytes big-endian per word) as the
 block's byte and the byte's bit. -/
-def blockBit (t : Nat) : Nat × Nat := (8 * (t / 64) + 7 - t % 64 / 8, t % 8)
+def chunkBit (t : Nat) : Nat × Nat := (8 * (t / 64) + 7 - t % 64 / 8, t % 8)
 
 /-- Bit `t` (a block column) of block `k` of row `p`'s message after the prefix: `none` for a row bit (`8 j + b < bits`), else
 the constant there (a fill bit of the last row byte, zero, or SHA-512's padding `tl`). -/
 def constBit (p : Port) (tl : ByteArray) (k t : Nat) : Option Bool :=
-  let j := 128 * k + (blockBit t).1
-  let b := (blockBit t).2
+  let j := 128 * k + (chunkBit t).1
+  let b := (chunkBit t).2
   if 8 * j + b < p.bits then none
   else some (decide (p.bytes ≤ j) && ((tl.get! (j - p.bytes)).toNat >>> b) % 2 == 1)
 
@@ -219,7 +219,7 @@ inductive MsgBit where
   deriving BEq, Repr
 
 def msgBit (p : Port) (k t : Nat) : MsgBit :=
-  let (o, b) := blockBit t
+  let (o, b) := chunkBit t
   match p.segs with
   | none => match constBit p (tailOf p) k t with
     | some v => .const v
