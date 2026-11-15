@@ -217,8 +217,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
 
 ## Tests
 
-Each package's tests are one suite in its own `tests/`, run in its own process and cached by input; the root `tests/`
-holds only invariants of the whole tree. How to run them, what a suite may read, and the rules for slow tests, fixtures
+Every test is under the root `tests/`: the tests of X in `tests/X`, one suite each, run in its own process and cached by
+input; the top of `tests/` holds only invariants of the whole tree. How to run them, what a suite may read, and the rules for slow tests, fixtures
 and dummy credentials: the testing skill.
 
 No test reads wall-clock time (no sleeps, clock readings or timeouts:
