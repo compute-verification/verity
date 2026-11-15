@@ -57,9 +57,9 @@ research run --on auto --mem-gb 93 --max-min 120 --project verity --source . --c
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
   93 GB is 86.6 GiB, a heavy build's need. The fast path (the lean-proofs skill): PKG's records and its requirers';
   `lean_changed.py --ask PKG` prints PKG's ask
-research run --on auto --mem-gb 258 --max-min 180 --project verity --source . --cwd clone -- \
+research run --on auto --mem-gb 307 --max-min 180 --project verity --source . --cwd clone -- \
   python3 tools/verity/lean/check.py --build --update PKG
-  258 GB is 240.3 GiB, an ArkLib replay's need. A full record, left at lean-audit/audit-TAG/lean-audit.json;
+  307 GB is 285.9 GiB, an ArkLib replay's need. A full record, left at lean-audit/audit-TAG/lean-audit.json;
   `check.py --ask --build PKG` prints PKG's ask
 ~~~
 
