@@ -150,9 +150,10 @@ def GreedyStopCheckClass(B, S, logits, *rest):
     ok = o.band(ok, o.ieq(min_tokens, o.word(0)))
     ok = o.band(ok, o.ieq(lp, o.word(S.P)))
     ok = o.band(ok, o.bnot(live[0]))
+    within = {i: o.ile(n, o.word(i)) for i in range(1, S.T)}
     for i in range(1, S.T):
-        ok = o.band(ok, o.bor(o.bnot(o.ile(n, o.word(i))), o.ieq(ids[i], o.word(0))))
-    return o.band(ok, o.bor(o.ile(n, o.word(S.T - 1)), _is_token(B, ids[S.T - 1], token)))
+        ok = o.band(ok, o.bor(o.bnot(within[i]), o.ieq(ids[i], o.word(0))))
+    return o.band(ok, o.bor(within[S.T - 1], _is_token(B, ids[S.T - 1], token)))
 
 
 __all__ = ["CLASS_STATICS", "STATICS", "GreedyStopCheck", "GreedyStopCheckClass", "class_reference", "reference", "refuse",
