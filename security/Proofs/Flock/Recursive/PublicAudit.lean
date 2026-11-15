@@ -27,7 +27,7 @@ statement read from registered rows. It is a conjunction:
   the event is empty, or the sessions type and there is a registrant fork (`regFinder`), a round fork, a session fork
   or an inner fork of the prover's own runs, or Lean's verifier accepts `st` and the verifier every session
   while `st` fails with probability at most `RecursiveSound`'s bound with the compiled table's error as its inner term;
-* (ii) zero knowledge: `RecursiveFirewallPrivate`, `RecursiveAudit`'s (ii), named; at a public unit it is read at no
+* (ii) zero knowledge: `RecursiveZkServerPrivate`, `RecursiveAudit`'s (ii), named; at a public unit it is read at no
   registration rows, the simulator reading the public circuit and the owed outputs.
 
 What it takes, against `RecursiveAudit`:
@@ -46,7 +46,7 @@ What it takes, against `RecursiveAudit`:
   and SHA-512 enters only as the fork disjuncts;
 * obligations, facts about our own code: in (i), `VStarParses` (V*'s files parse to `Vs`, until gap 4) and `TagsFound`
   (each session's inputs carry the tags their name names, `_hF`), as in `RecursiveAudit`; in (ii), whatever
-  `RecursiveFirewallPrivate` takes.
+  `RecursiveZkServerPrivate` takes.
 
 Its proof is `Flock.SecurityProofs.PublicAudit` (`Proofs.Flock.Recursive.PublicAuditProof`). Its non-vacuity is to be
 shown at one recorded recursive run with a public inner unit (`test_lean_witness.py`).
@@ -110,7 +110,7 @@ $$\Pr[\text{Lean's verifier builds } st \text{ from } obj, prog \wedge \text{eve
 is at most V*'s sessions' expected statistical errors under the full sample's model, `r` times their expected stage
 slack, and the compiled table's error.
 
-(ii) `RecursiveFirewallPrivate`, `RecursiveAudit`'s (ii), named rather than restated. At a public unit it is read at
+(ii) `RecursiveZkServerPrivate`, `RecursiveAudit`'s (ii), named rather than restated. At a public unit it is read at
 no registration rows (`nr = 0`) and the public circuit `P` as the simulator's `p₀`: the registration's term
 `2 n_r·δ_{K*}` is zero, the bound is `ε_V(δ_{K*}) + n_h·δ_{K*}`, and the simulator reads `P`, the schedule's transcript
 and the owed outputs.
@@ -191,7 +191,7 @@ def PublicAudit : Prop :=
               (fun R₂ j τ => (custodied zr _hCust h σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (Accounting.tableError (execClassAt st).sch
             ⟨(execClassAt st).cls.kLog, (execClassAt st).regs.length, (execClassAt st).cls.mPts⟩)) ∧
-  RecursiveFirewallPrivate
+  RecursiveZkServerPrivate
 
 /-- **`PublicAudit` with no A3**: `PublicAudit` without its A3 premise, at the same bound. V*'s laws are the full sample
 (`--draw subset:<units>`), which samples every unit at every value of the operating system's bytes
@@ -259,6 +259,6 @@ def PublicAuditNoA3 : Prop :=
               (fun R₂ j τ => (custodied zr _hCust h σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (Accounting.tableError (execClassAt st).sch
             ⟨(execClassAt st).cls.kLog, (execClassAt st).regs.length, (execClassAt st).cls.mPts⟩)) ∧
-  RecursiveFirewallPrivate
+  RecursiveZkServerPrivate
 
 end Flock.Guarantees

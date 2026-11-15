@@ -1,4 +1,4 @@
-"""The coin tree's opening checks in Lean (`Flock/Firewall/Coins.lean`, `flock-firewall coins`), the verdict a ZK
+"""The coin tree's opening checks in Lean (`Flock/ZkServer/Coins.lean`, `flock-zk-server coins`), the verdict a ZK
 server session loop takes for every coin it hands on, on `live/src/coin_open_vectors.json`, which coin_tree.rs's test holds
 Rust's `Checked` (an unserved `--zk` prover's) to: docs/coin-tree-v2.md §9's tree, its
 honest openings and altered ones (a bit of a coin, of `T_n`, of the salt or of a path node; a word short or long; another
@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
+BIN = LEAN / ".lake" / "build" / "bin" / "flock-zk-server"
 VECTORS = Path(__file__).resolve().parents[1] / "live" / "src" / "coin_open_vectors.json"
 CASES = {c["case"]: c["steps"] for c in json.loads(VECTORS.read_text())["cases"]}
 
@@ -24,7 +24,7 @@ CASES = {c["case"]: c["steps"] for c in json.loads(VECTORS.read_text())["cases"]
 def built():
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    subprocess.run(["lake", "build", "flock-firewall"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "flock-zk-server"], cwd=LEAN, check=True, capture_output=True)
 
 
 def _request(step: dict) -> bytes:

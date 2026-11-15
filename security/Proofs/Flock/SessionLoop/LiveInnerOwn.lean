@@ -38,8 +38,8 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec Hashes TMW)
-open _root_.Flock.Firewall.Frame (INNER_ROUNDS labelFrame wordBytes words)
-open _root_.Flock.Firewall.Finish (Tab RepIn Asks)
+open _root_.Flock.ZkServer.Frame (INNER_ROUNDS labelFrame wordBytes words)
+open _root_.Flock.ZkServer.Finish (Tab RepIn Asks)
 open _root_.Flock.Transcript (header)
 open FlockSoundness.Refine (colBytes)
 
@@ -164,7 +164,7 @@ theorem finOf_finalC_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
     omega
   have hfc := Loop.finInner_fc hfi
   rw [hlayT, Loop.askOf_draws, Loop.askOf_vals_fc _ _ hfv] at hfc
-  have hph : (_root_.Flock.Firewall.Finish.padsOf q₀.draws).h =
+  have hph : (_root_.Flock.ZkServer.Finish.padsOf q₀.draws).h =
       (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h :=
     congrArg (fun p => p.h) hpads
   rw [hlay, hcfgh, FlockSoundness.Refine.getD_of_lt hfh, ← hph, ← hfc]
