@@ -1622,7 +1622,7 @@ SERVED_OUTSIDE = (
     (r"(outcome|deliver)-again|retry-.*", "the service's stream: one delivery, a final outcome, the failure budget"),
     (r"open-.*", "served_zk's opening check (a proof's rows are the drawn unit's), a verdict beside the verifier of record's"),
     (r"lean-.*", "the verifier of record (Lean `verity-verify-proof verify --zk`) on one unit's session; the protocol reads its verdict"),
-    (r"firewall-.*", "the firewall's checks on a delivered proof, before the outcome"),
+    (r"firewall-.*", "the ZK server's checks on a delivered proof, before the outcome"),
 )
 
 
