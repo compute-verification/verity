@@ -378,11 +378,23 @@ private theorem sortLt_sorted : ∀ l : List String, (sortLt l).Pairwise (· ≤
   | [] => List.Pairwise.nil
   | a :: l => by simp only [sortLt, List.foldr]; exact insLt_sorted (sortLt_sorted l)
 
+/-- `sortStrings` leaves an already-ascending array unchanged: its `qsort` is the sorted permutation, which a
+duplicate-free ascending array already is. The walk tries this first on every `sortStrings`; its side condition
+`Pairwise (· < ·)` costs only `n - 1` string `<` comparisons (cheap), so each already-sorted key set — every subobject,
+and the top-level object's own keys read back from the tree — reduces at that price. Only the push-chain key set (built in
+insertion order) falls through to `sortStrings_eq_sortLt`. -/
+private theorem sortStrings_of_sorted {as : Array String} (h : as.toList.Pairwise (· < ·)) :
+    Spot.sortStrings as = as := by
+  show as.qsort (· < ·) = as
+  calc as.qsort (· < ·) = (as.qsort (· < ·)).toList.toArray := rfl
+    _ = as.toList.toArray := by rw [Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted h]
+    _ = as := rfl
+
 /-- `sortStrings` equals `sortLt` of its list. `sortStrings = Array.qsort (· < ·)`, which the kernel cannot run
 (well-founded recursion); `sortLt` is structural over `String`'s computable `<`, so the kernel evaluates it. Both are
-`Pairwise (· ≤ ·)` permutations of the input, hence equal (`Perm.eq_of_pairwise`, `≤` on `String` antisymmetric). The
-walk rewrites every `sortStrings` by this, so each `exactly`/`keys?` key set — sorted or in push-chain order — reduces to
-a concrete array the kernel then compares. -/
+`Pairwise (· ≤ ·)` permutations of the input, hence equal (`Perm.eq_of_pairwise`, `≤` on `String` antisymmetric). This is
+the fallback for the one push-chain key set `sortStrings_of_sorted` cannot take (it is not ascending); sorting it in the
+kernel costs `O(n²)` string `<` comparisons, so the walk is given `sortStrings_of_sorted` first to keep this to one set. -/
 private theorem sortStrings_eq_sortLt (as : Array String) :
     Spot.sortStrings as = (sortLt as.toList).toArray := by
   show as.qsort (· < ·) = (sortLt as.toList).toArray
@@ -457,7 +469,7 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     rw [hgp] at hdp
     rw [hgk] at hU
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, keys?_mkObj, sortStrings_eq_sortLt]
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, keys?_mkObj, sortStrings_of_sorted, sortStrings_eq_sortLt]
       block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
     case f1 => kernel_rfl'            -- own.partition = partitionObj
     case f2 => rw [hpf]               -- own.program = programFile
