@@ -1458,6 +1458,8 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     from dataclasses import asdict
 
     from verity.protocols.proofs.spot.prover.audit import class_size as CZ
+    from verity_vllm.definitions.registry.attention_vocab import fa2_masked_from
+    from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict.window_circuit import class_circuit
 
     compiler = compiler_of_args(a)
@@ -1467,7 +1469,8 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1, provable=False))
     lowered = time.time() - t0
     try:
-        one = CZ.project(seen, probe, cls)
+        one = CZ.project(seen, probe, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)),
+                         lambda T, BN: fa2_masked_from(T, 1, 0, BN, False))
         sizes = {"program": CZ.size(one), "window": CZ.size(one, cls.slots)}
     except ValueError as e:
         raise ValueError(f"{e} (the probe's census: {json.dumps(seen, sort_keys=True)})") from None

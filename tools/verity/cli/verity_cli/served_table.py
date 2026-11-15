@@ -14,9 +14,11 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
 - ``runtime``: a party of its protocol's `ProtocolDef` (`Session`), which `verity run` starts on the machine the
   configuration places it on through the runtime (`verity.runtime.runner.run`), one run of the protocol a piece: the
   wipe's, PoUS's rounds' and PoUB's parties. The auditor's side listens at its ``address`` binding and the prover's side
-  dials it; a party whose manifest needs a clock gets the clock its header names (`RealClock(read, name)`). What this
-  machine hands the party (`held`: the served store, the auditor's signer and session log, its party key and the run's
-  request) doesn't reach the table yet, and raises `NotImplementedError` (`NOT_YET`) before anything starts;
+  dials it; a party whose manifest needs a clock gets the clock its header names (`RealClock(read, name)`). Its
+  protocol starts it (`ProtocolDef.starts`: from the configuration, the piece's bindings and the party's state
+  directory, its request and its capabilities, the auditor's signer refused first unless the configuration pins it), and
+  this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
+  request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
 - ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
   composed verdict is the period's.
 
@@ -94,7 +96,8 @@ def _law(law: str, params: Mapping[str, Any]) -> None:
 
 
 def _pous(params: Mapping[str, Any]) -> dict[str, Any]:
-    """PoUS's served piece: ``challenges``, the memory challenger's reads in the period (320: ε = 2^-20)."""
+    """PoUS's served piece: ``challenges``, the memory challenger's reads in the period (320: ε = 1% + 2^-128,
+    ``period.certify``'s, since more reads than a certificate's keep its ε)."""
     if extra := sorted(set(params) - {"challenges"}):
         raise Refused("unknown-key", f"[params.\"{SP.IDS['pous']}\"]: {', '.join(extra)} (known: challenges)")
     k = params["challenges"]
@@ -128,7 +131,6 @@ def _served(params: Mapping[str, Any]) -> dict[str, Any]:
 
 _VERIFIER = Role(VERIFIER, "auditor", needs=("audit", "component", "product"))
 _PROVER = Role(PROVER, "developer", per="server", needs=("store",))
-_MEMORY_CHALLENGER = Role(MEMORY_CHALLENGER, "auditor", needs=("clock", "coins", "signing-key"))
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
               needs=frozenset({"windows"}), law=_law, default_law="rate:1/3481648"),
@@ -139,10 +141,8 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
     Component("pearl-plus", SP.IDS["pearl-plus"], parties=(_VERIFIER,), needs=frozenset({"windows"})),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
-    Component("pous", SP.IDS["pous"], parties=(_MEMORY_CHALLENGER, _PROVER, _VERIFIER),
-              channels=(Channel(PROVER, MEMORY_CHALLENGER, ("Setup", "Response")),
-                        Channel(MEMORY_CHALLENGER, PROVER, ("Challenge",), carries_coins=True),
-                        Channel(MEMORY_CHALLENGER, VERIFIER, ("SignedRun",), after=("Response",))),
+    Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
+              channels=(*CS.MANIFEST.channels, Channel(MEMORY_CHALLENGER, VERIFIER, ("SignedRun",), after=("End",))),
               needs=frozenset({"store"}), params=_pous, default_params={"challenges": 320}),
     Component("bandwidth", SP.IDS["bandwidth"],
               parties=(Role(BANDWIDTH_VERIFIER, "auditor", needs=("clock", "coins")), _PROVER, _VERIFIER),
@@ -261,7 +261,8 @@ class Session:
         defs = [_protocol_def(h) for h in self.halves]
         if any(d.manifest != defs[0].manifest for d in defs):
             raise ValueError(f"{', '.join(self.halves)} are halves of more than one manifest")
-        return ProtocolDef(defs[0].manifest, {r: f for d in defs for r, f in d.parties.items()})
+        return ProtocolDef(defs[0].manifest, {r: f for d in defs for r, f in d.parties.items()},
+                           {r: f for d in defs for r, f in d.starts.items()})
 
     def absent(self) -> list[str]:
         """The halves' modules that aren't in this tree."""
@@ -269,19 +270,16 @@ class Session:
 
 
 class Held(NamedTuple):
-    """What a machine hands a runtime party: its capabilities, its party key and the check of its peer's, and the run's
-    request (its parameters)."""
+    """What a machine hands a runtime party beside what its protocol's start gives it: its party key and the check of
+    its peer's."""
 
-    capabilities: Mapping[str, Any]
     key: Any
     verify: Callable[[bytes, bytes, bytes], bool]
-    params: Mapping[str, Any]
 
 
 def held(piece: Piece, role: Role) -> Held:
-    """What this machine hands ``role``, ``piece``'s party: on the prover node the served store (``store``: the card's
-    fill, P2's C*, the engine's store), on the auditor's host its signer and session log (``signing-key``), and on each
-    its party key and the request the store's registration gives. None of it reaches the table yet."""
+    """What this machine hands ``role``, ``piece``'s party: its party key, which the channels authenticate. It doesn't
+    reach the table yet."""
     raise NotImplementedError(NOT_YET)
 
 
@@ -526,21 +524,26 @@ def deployment(cfg: Mapping[str, Any], piece: Piece, protocol: ProtocolDef, addr
 
 
 def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], piece: Piece) -> Callable[[], Any]:
-    """``piece``'s party run through the runtime (`verity.runtime.runner.run`), ready to start: its `ProtocolDef`, what
-    this machine hands it (`held`), its clock, and the listener's address, which it listens at or dials. Refused
-    ``no-piece`` while a half of its protocol isn't in this tree."""
+    """``piece``'s party run through the runtime (`verity.runtime.runner.run`), ready to start: its `ProtocolDef`, its
+    protocol's start (`ProtocolDef.starts`: its request and capabilities, from the configuration, the piece's bindings and
+    its state directory ``state/runs/<component>/<party>``), what this machine hands it (`held`), its clock, and the
+    listener's address, which it listens at or dials. Refused ``no-piece`` while a half of its protocol isn't in this
+    tree; a party its protocol declares no start for raises `NOT_YET`."""
     s = piece.session
     if absent := s.absent():
         raise Refused("no-piece", f"{piece.party}'s {piece.component} piece: {', '.join(absent)} is not in this tree")
     protocol = s.protocol()
     role = protocol.manifest.role(s.roles[piece.party])
+    if role.name not in protocol.starts:
+        raise NotImplementedError(NOT_YET)
+    here, bound = state / "runs" / piece.component / piece.party, piece._bindings(bindings)
+    begun = protocol.starts[role.name](cfg, bound, here)
     h = held(piece, role)
-    address, listener = piece._bindings(bindings)["address"], s.roles[s.listener]
+    address, listener = bound["address"], s.roles[s.listener]
     sources = {role.name: {"clock": RealClock(*s.clocks[role.name])}} if "clock" in role.needs else None
-    return lambda: runner.run(deployment(cfg, piece, protocol, address, h.params), [role.name], "live",
-                              state / "runs" / piece.component / piece.party,
+    return lambda: runner.run(deployment(cfg, piece, protocol, address, begun.params), [role.name], "live", here,
                               protocols={protocol.manifest.protocol: protocol}, keys={role.name: h.key},
-                              verify=h.verify, sources=sources, capabilities={role.name: h.capabilities},
+                              verify=h.verify, sources=sources, capabilities={role.name: begun.capabilities},
                               dial_to=None if role.name == listener else {listener: address}).outcomes[role.name]
 
 
