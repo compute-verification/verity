@@ -156,3 +156,101 @@ Build r20261115-015403-4566 (jobs, seconds):
 For the "in" line: our 111 guarantees (owner @network-accounting: 56 in security/lean-audit.json, 55 in Properties') have their proofs in 23 modules. All 23 built at this tip. Four of them are outside the groups above and built in a side build, r20261115-015557-11c2 on machine 14: Proofs.Flock.Recursive.StopCountBudget and StopCountProof (2118 jobs, 38 s), and Proofs.Properties.Hash.Identity and Core.Period (781 jobs, 7 s). As of this tip the list of our proofs that don't build is empty.
 Next: the build at about 9:00 PM PST of the tip then, with PERIODPROOF2's, GATERELAY2's, DEVICEKEYS2's and POLICYROWS2's Ties (21b77db6d25f), the 23 modules first.
 
+[2026-11-15T02:36Z] 317e193ea9c1
+DEVICEKEYS2 to lead, 6:36PM PST: step 4 pushed. Row commit 2c093cada53, collect bd7762c217e5 (merged). The row's exact lines (tests/import_order.toml):
+
+loads = [
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/protocols/accounting/certifier/verifier",
+    "verity/protocols/accounting/pous/verifier",
+    "verity/protocols/proofs/spot/verifier",
+]
+reaches = [
+    "verity/channel.py",
+    "verity/circuits",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/randomness",
+    "verity/protocols/accounting/certifier/verifier",
+    "verity/protocols/accounting/pous/verifier",
+    "verity/protocols/proofs/spot/verifier",
+    "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/runtime",
+]
+loaded_by = [
+    "verity/protocols/accounting/certifier/prover/tests/test_network_certifier_serve.py",
+    "verity/protocols/accounting/certifier/prover/tests/test_scan_zk.py",
+]
+
+tests/test_boundaries.py:
+#: and the network certifier's load relay, whose `generate` lays a weight's generation rows with numpy
+#: (Mon 16 Nov 6 PM PST, network-accounting, whether `load_relay` keeps numpy)
+NUMPY_USERS += ("verity/protocols/accounting/certifier/device/load_relay.py",)
+
+The commit's message:
+
+The network certifier's device's row in the listing, and load_relay in NUMPY_USERS
+
+tools/check/import_order.py --grow, written for the place verity/protocols/accounting/certifier/device only: no other
+place's lines and no other list. Each load the row holds, the device file and line that makes it, and the same file's
+same load at its old path on main (origin/main 64485744710; load_relay's lines are the same at 8911e231e3a):
+
+loads verity/protocols/accounting/certifier/verifier
+  network_certifier_serve.py:225-247 (blob_files, record_files, load_check, connection_rows_check, io_tie,
+    network_certifier_rows, id_form, certificate, grid, pacer, release, network_certifier, relay_check);
+    main: benchmarks/network_traces/warden_serve.py:193-198 (io_tie, warden_rows, active, certificate, grid, release,
+    warden)
+  connection_rows_run.py:130-136; main: benchmarks/network_traces/connection_rows_run.py:82-88
+  load_relay.py:93-94 (transfer_rows, certificate), 97-99 (load_check), 1150 (record_files);
+    main: benchmarks/network_traces/load_relay.py:100-101 (transfer_rows, certificate)
+  coin_link.py:51-52 (grid, pacer); main: verity/protocols/accounting/certifier/verifier/coin_link.py:51 (grid), then
+    a load inside its own place
+  certifier_key.py:12-13, runner_parts.py:19-22, device_party.py:32-33: files main doesn't hold; certifier_key's
+    load_key and signer are main's benchmarks/network_traces/certifier_serve.py:297 and 337, whose file loads
+    certificate at :233
+loads verity/commitments
+  load_relay.py:88-91 (hm96, hm96.batch, merkle, rowleaf); main: load_relay.py:95-98
+  coin_link.py:55 (identity); main: verifier/coin_link.py:54
+loads verity/commitments/crypto
+  load_relay.py:92 (chacha20); main: load_relay.py:99
+  network_certifier_serve.py:237 (lms); main: benchmarks/network_traces/certifier_serve.py:228, which
+    warden_serve.py:189 imports
+  certifier_key.py:11 (lms): main doesn't hold the file; its load_key and signer are certifier_serve.py:297 and 337
+    on main, the load at :228
+loads verity/protocols/accounting/pous/verifier
+  load_relay.py:95 (schemes.p2); main: load_relay.py:102
+loads verity/protocols/proofs/spot/verifier
+  load_relay.py:96 (one_stage.registered); main: load_relay.py:103
+  coin_link.py:53-54 (spot/device/challenger.py and remote.py, files of this place); main: verifier/coin_link.py:52-53
+
+reaches: what those five places reach in turn, by their own rows: verity/channel.py, verity/circuits,
+verity/commitments, verity/commitments/crypto, verity/commitments/randomness, certifier/verifier, pous/verifier,
+spot/verifier, spot/verifier/profile.py and verity/runtime (channel.py and the runtime through certifier/verifier,
+which loads both).
+
+loaded_by
+  certifier/prover/tests/test_scan_zk.py:39 (network_certifier_serve); main:
+    benchmarks/network_traces/tests/test_scan_zk.py:50 (import warden_serve)
+  certifier/prover/tests/test_network_certifier_serve.py:33-34, 37-38 (runner_parts, network_certifier_serve,
+    tests.relay_runs, connection_rows_run, tests.test_connection_rows_run); main:
+    benchmarks/network_traces/tests/test_warden_serve.py:44-50 (warden_serve.py by file)
+
+Left out, new since main, named red by test_a_place_loads_only_the_places_the_listing_names:
+  loads verity/channel.py: device_needs.py:29-30 (verity.channel, verity.party) and device_party.py:28-29; neither
+    file is on main
+  loads verity/runtime: device_party.py:30 (verity.protocol.ProtocolDef); not on main
+
+NUMPY_USERS (tests/test_boundaries.py): verity/protocols/accounting/certifier/device/load_relay.py, for :126
+(import numpy as np, in generate); main: load_relay.py:231. Its entry carries "Mon 16 Nov 6 PM PST,
+network-accounting, whether `load_relay` keeps numpy".
+
+The listing's generated tables carry no comment (tools/check/import_order.py writes them whole and
+test_the_listing_is_what_its_generator_writes compares the text), so the row's line for PoUS's verifier carries its
+owner here: Mon 16 Nov 6 PM PST, soundness with network-accounting, narrowing load_relay's edge into PoUS's verifier to
+schemes/p2.
+
+Co-authored-by: danielreuter <danielreuter@users.noreply.github.com>
+
+test_boundaries: before step 4 (b6a295e56ea) 6 failed / 22 passed with 18 device lines (load_relay.py:126 numpy; 7 loads, 10 reaches); after (bd7762c217e5) 6 failed / 22 passed, the device's two lines are the two left out above. The step-3 red on certifier/verifier's loaded_by (prover/tests/test_network_certifier_serve.py, prover/tests/verdict_records.py) is not in this commit.
+
