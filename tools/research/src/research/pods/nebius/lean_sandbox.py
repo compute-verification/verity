@@ -793,7 +793,7 @@ def alive(uid: int, proc: Path = PROC, systemctl: Systemctl = _systemctl) -> lis
         try:
             st = dict(ln.split(":", 1) for ln in (proc / pid / "status").read_text().splitlines() if ":" in ln)
         except OSError as e:
-            if (proc / pid).exists():
+            if not isinstance(e, (FileNotFoundError, ProcessLookupError)):
                 out.append(f"pid {pid}: its status is unreadable ({e})")
             continue
         uids = st.get("Uid", "").split()
