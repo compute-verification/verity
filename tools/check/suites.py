@@ -529,7 +529,7 @@ def suite_name(path: str, project: dict, dirs: dict[str, str]) -> str:
 
 def discover() -> list[Suite]:
     suites, testpaths = [], {}
-    dirs = {d: n for n, d in members().items()}
+    dirs = {d: n for n, d in members().items()} if (ROOT / "pyproject.toml").is_file() else {}
     for f in metadata()[:-1]:
         path = str(Path(f).parent)
         data = _pyproject(path)
