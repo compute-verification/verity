@@ -117,7 +117,7 @@ SETUP = threading.Lock()
 #: the toolchains a `setup.sh` of this run has installed
 _INSTALLED: set[str] = set()
 #: the build sandbox (`sandbox.sh`): new user, mount, network and PID namespaces
-UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--ipc", "--pid", "--fork", "--kill-child"]
 #: a fetch's sandbox (`in_fetch_sandbox`): the build sandbox's namespaces but the network's
 UNSHARE_NET = [a for a in UNSHARE if a != "--net"]
 #: the toolchains `setup` installs: a release of Lean, a tag of `leanprover/lean4`. elan downloads any other from a

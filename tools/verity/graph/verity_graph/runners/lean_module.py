@@ -53,12 +53,12 @@ from . import Timeout, call
 
 LEAN = ROOT / "tools" / "verity" / "lean"
 #: the files of the Lean tool a task runs: inputs of every lean-module task
-TOOLS = tuple(f"tools/verity/lean/{f}" for f in ("Replay.lean", "sandbox.sh"))
+TOOLS = tuple(f"tools/verity/lean/{f}" for f in ("Replay.lean", "sandbox.sh", "sockets.py"))
 #: the axioms a declaration may use: the Lean check's (check.py's `STANDARD`, which no lock overrides)
 STANDARD = ("Classical.choice", "Quot.sound", "propext")
 #: sandbox.sh's invocation (its header), probed as check.py's `sandboxed()` probes it: check.py isn't among a task's inputs,
 #: so the runner doesn't load it
-UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--ipc", "--pid", "--fork", "--kill-child"]
 #: beside a worker's fetched packages once they're made: {"key": their `deps_key`, "warm": the `_stamp` of the warm copy they
 #: last took what they lacked from, null when the worker kept none}
 READY = ".ready"

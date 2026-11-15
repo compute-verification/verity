@@ -1,0 +1,181 @@
+"""What keeps `sandbox.sh`'s command from every unix socket it did not make, run as `python3 -I -S sockets.py MODE`.
+
+A read-only mount doesn't stop `connect`, and a new network namespace hides only abstract names, so a socket file the
+sandbox can see (`/run/user/UID/bus`, through which `systemd-run --user` starts anything outside it) is reachable. The
+sandbox hides `/run` and the TMPDIR under private tmpfs, and three modes do the rest:
+
+- `exec -- CMD...`: CMD under a seccomp filter that refuses (EACCES) `socket(AF_UNIX, ...)` and `io_uring_setup` (an
+  io_uring makes sockets without `socket`) for x86-64 and arm64, and every system call of any other ABI. `socketpair`
+  stays: a pair reaches nothing. No unix socket made, no socket file or abstract name is reached, whenever it was bound.
+- `inventory`: before the sandbox mounts its own /proc, every unix socket name the kernel lists in the network
+  namespace of a process it can see (`/proc/PID/net/unix`), one per line: what a walk of every mount would find (a walk
+  takes minutes on a node), and also names in a directory no walk can list.
+- `probe`: run as CMD runs (under `exec`), tries to connect to each name the inventory gave (`SANDBOX_SOCKETS`), the
+  well-known ones, and the abstract names of the sandbox's network namespace; exit 3, naming each, if any connects or
+  the inventory can't be read.
+"""
+
+from __future__ import annotations
+
+import ctypes
+import os
+import socket
+import struct
+import sys
+
+PR_SET_NO_NEW_PRIVS, PR_SET_SECCOMP, SECCOMP_MODE_FILTER = 38, 22, 2
+RET_ALLOW, RET_ERRNO = 0x7FFF0000, 0x00050000
+EACCES, AF_UNIX = 13, 1
+#: per ABI, (its audit arch, the first number of a foreign ABI it also accepts or None, socket, io_uring_setup)
+ABI = {"x86_64": (0xC000003E, 0x40000000, 41, 425), "aarch64": (0xC00000B7, None, 198, 425)}
+#: names a process of the host listens on wherever they exist ({uid}: the user the sandbox's root is)
+KNOWN = ("/run/user/{uid}/bus", "/run/user/{uid}/systemd/private", "/run/user/{uid}/systemd/notify",
+         "/run/user/{uid}/gnupg/S.gpg-agent", "/run/user/{uid}/gnupg/S.gpg-agent.ssh", "/run/user/{uid}/pipewire-0",
+         "/run/dbus/system_bus_socket", "/var/run/dbus/system_bus_socket", "/run/systemd/private",
+         "/run/systemd/notify", "/run/systemd/journal/socket", "/run/systemd/journal/stdout", "/dev/log",
+         "/run/systemd/userdb/io.systemd.Multiplexer", "/run/systemd/resolve/io.systemd.Resolve", "/run/snapd.socket",
+         "/run/snapd-snap.socket", "/run/docker.sock", "/var/run/docker.sock", "/run/containerd/containerd.sock",
+         "/run/uuidd/request", "/run/rpcbind.sock", "/tmp/.X11-unix/X0")
+
+
+def program() -> bytes:
+    """The filter: refuse a foreign ABI's calls, and this ABI's `socket(AF_UNIX, ...)` and `io_uring_setup`."""
+    try:
+        arch, foreign, sock, uring = ABI[os.uname().machine]
+    except KeyError:
+        raise SystemExit(f"sockets.py: no seccomp filter for {os.uname().machine}, so the sandbox can't keep its command"
+                         f" from the host's unix sockets") from None
+    deny = RET_ERRNO | EACCES
+    ld, jeq, jge, ret = 0x20, 0x15, 0x35, 0x06
+    ins = [(ld, 0, 0, 4), (jeq, 1, 0, arch), (ret, 0, 0, deny), (ld, 0, 0, 0)]
+    if foreign is not None:
+        ins += [(jge, 0, 1, foreign), (ret, 0, 0, deny)]
+    ins += [(jeq, 0, 1, uring), (ret, 0, 0, deny), (jeq, 0, 3, sock), (ld, 0, 0, 16), (jeq, 0, 1, AF_UNIX),
+            (ret, 0, 0, deny), (ret, 0, 0, RET_ALLOW)]
+    return b"".join(struct.pack("HBBI", *i) for i in ins)
+
+
+def confine() -> None:
+    code = program()
+    buf = ctypes.create_string_buffer(code)
+    prog = struct.pack("HxxxxxxP", len(code) // 8, ctypes.addressof(buf))
+    pbuf = ctypes.create_string_buffer(prog)
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.prctl.argtypes = [ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong]
+    if libc.prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) or libc.prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER,
+                                                                 ctypes.addressof(pbuf), 0, 0):
+        raise SystemExit(f"sockets.py: the seccomp filter wasn't installed ({os.strerror(ctypes.get_errno())}), so the"
+                         f" sandbox can't keep its command from the host's unix sockets")
+
+
+def names(text: str) -> tuple[list[str], bool]:
+    """The socket names of one `/proc/.../net/unix`, and whether every line parsed (a name holding a newline doesn't)."""
+    out, ok = [], True
+    for line in text.splitlines()[1:]:
+        w = line.split(None, 7)
+        if len(w) == 7:
+            continue
+        if len(w) != 8 or not w[0].endswith(":") or not w[6].isdigit():
+            ok = False
+            continue
+        out.append(w[7])
+    return out, ok
+
+
+def inventory() -> int:
+    seen, found, ok, read = set(), set(), True, 0
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/net/unix") as f:
+                text = f.read()
+        except OSError:
+            continue
+        read += 1
+        if text in seen:
+            continue
+        seen.add(text)
+        got, parsed = names(text)
+        ok &= parsed
+        found.update(n for n in got if not n.startswith("@"))
+    if not read or not ok:
+        print("sockets.py: the kernel's list of unix sockets (/proc/PID/net/unix) "
+              + ("could be read for no process" if not read else "holds a name no line parses"), file=sys.stderr)
+        return 3
+    sys.stdout.write("".join(f"{n}\n" for n in sorted(found)))
+    return 0
+
+
+def host_uid() -> str:
+    with open("/proc/self/uid_map") as f:
+        for line in f:
+            inside, outside, _ = line.split()
+            if inside == "0":
+                return outside
+    return str(os.getuid())
+
+
+def reached(name: str) -> str | None:
+    """How ``name`` was reached, or None: a stream, a datagram or a seqpacket socket of ours that connected to it."""
+    addr = "\0" + name[1:] if name.startswith("@") else name
+    for kind in (socket.SOCK_STREAM, socket.SOCK_DGRAM, socket.SOCK_SEQPACKET):
+        try:
+            s = socket.socket(socket.AF_UNIX, kind)
+        except OSError:
+            return None
+        try:
+            s.settimeout(2)
+            s.connect(addr)
+            return {socket.SOCK_STREAM: "stream", socket.SOCK_DGRAM: "datagram"}.get(kind, "seqpacket")
+        except OSError:
+            continue
+        finally:
+            s.close()
+    return None
+
+
+def probe() -> int:
+    listed = os.environ.get("SANDBOX_SOCKETS")
+    if listed is None:
+        print("sockets.py: probe without the inventory (SANDBOX_SOCKETS)", file=sys.stderr)
+        return 3
+    uid = host_uid()
+    want = {*filter(None, listed.split("\n")), *(k.format(uid=uid) for k in KNOWN)}
+    for var in ("DBUS_SESSION_BUS_ADDRESS", "DBUS_SYSTEM_BUS_ADDRESS"):
+        want |= {a[len("unix:path="):].split(",")[0] for a in os.environ.get(var, "").split(";")
+                 if a.startswith("unix:path=")}
+    if os.environ.get("SSH_AUTH_SOCK"):
+        want.add(os.environ["SSH_AUTH_SOCK"])
+    try:
+        with open("/proc/self/net/unix") as f:
+            own, ok = names(f.read())
+    except OSError as e:
+        print(f"sockets.py: the sandbox's own list of unix sockets can't be read ({e})", file=sys.stderr)
+        return 3
+    if not ok:
+        print("sockets.py: the sandbox's own list of unix sockets holds a name no line parses", file=sys.stderr)
+        return 3
+    want |= {n for n in own if n.startswith("@")}
+    hits = [f"{n} ({how})" for n in sorted(want) if (how := reached(n))]
+    if hits:
+        print("sandbox.sh: the command could connect to these unix sockets, which it did not make:", *hits, file=sys.stderr)
+        return 3
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    match argv:
+        case ["exec", "--", cmd, *args]:
+            confine()
+            os.execvp(cmd, [cmd, *args])
+        case ["inventory"]:
+            return inventory()
+        case ["probe"]:
+            return probe()
+    print("usage: sockets.py exec -- CMD... | inventory | probe", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
