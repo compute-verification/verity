@@ -597,12 +597,13 @@ def test_a_suite_whose_tests_path_becomes_its_directory_lists_its_test_files_fro
     """Every test moves under the root's `tests/`, each suite's pyproject beside its tests: `pkg/pyproject.toml` with
     `testpaths = ["tests"]` becomes `tests/pkg/pyproject.toml` with `["."]`, and the files its `[tool.verity.tests]` lists from
     the suite's directory (`untraced`, a `[[reads]]` entry's `tests`) lose their `tests/`; its root-relative `inputs` and a
-    `[[reads]]` entry's `paths` don't, and its `pythonpath`, written from `pkg`, names the same directories from `tests/pkg`."""
+    `[[reads]]` entry's `paths` don't, and its `pythonpath`, written from `pkg`, names the same directories from `tests/pkg`. An
+    input it adds to a list whose last line holds a comma or a comment goes first."""
     r = tmp_path / "repo"
     files = {"pkg/pyproject.toml": ('[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = [".", "../lib"]\n\n'
                                     '[tool.verity.tests]\n'
                                     'untraced = [\n    "tests/test_a.py",  # starts git\n    "tests/sub/test_b.py",\n]\n'
-                                    'inputs = ["tests/fixtures", "pkg"]\n\n[[tool.verity.tests.reads]]\n'
+                                    'inputs = ["tests/fixtures",\n          "pkg",  # its code\n]\n\n[[tool.verity.tests.reads]]\n'
                                     'tests = ["tests/test_a.py"]\npaths = ["tests/test_root.py"]\n'),
              "pkg/tests/test_a.py": "", "pkg/tests/sub/test_b.py": "", "tests/test_root.py": "", "tests/fixtures/x.json": "{}",
              "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
@@ -612,7 +613,7 @@ def test_a_suite_whose_tests_path_becomes_its_directory_lists_its_test_files_fro
     (tmp_path / "map.toml").write_text(
         '[roots]\nold = {}\nnew = {}\n\n[paths]\n"pkg/tests/" = "tests/pkg/"\n"pkg/pyproject.toml" = "tests/pkg/pyproject.toml"\n\n'
         '[pyproject."tests/pkg/pyproject.toml"]\ntestpaths_replace = { "tests" = "." }\nstrip_suite_relative = "tests/"\n'
-        'pythonpath_from = "pkg"\n\n[modules]\n"pkg.tests" = "tests.pkg"\n')
+        'pythonpath_from = "pkg"\nadd_inputs = ["lib"]\n\n[modules]\n"pkg.tests" = "tests.pkg"\n')
     git(r, "init", "-q", "-b", "main")
     git(r, "add", "-A")
     git(r, "commit", "-q", "-m", "old")
@@ -621,7 +622,7 @@ def test_a_suite_whose_tests_path_becomes_its_directory_lists_its_test_files_fro
     assert (r / "tests/pkg/pyproject.toml").read_text() == (
         '[tool.pytest.ini_options]\ntestpaths = ["."]\npythonpath = ["../../pkg", "../../lib"]\n\n[tool.verity.tests]\n'
         'untraced = [\n    "test_a.py",  # starts git\n    "sub/test_b.py",\n]\n'
-        'inputs = ["tests/fixtures", "pkg"]\n\n[[tool.verity.tests.reads]]\n'
+        'inputs = ["lib", "tests/fixtures",\n          "pkg",  # its code\n]\n\n[[tool.verity.tests.reads]]\n'
         'tests = ["test_a.py"]\npaths = ["tests/test_root.py"]\n')
 
 
