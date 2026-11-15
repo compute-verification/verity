@@ -50,3 +50,9 @@ I took the hash from the tip's lock, not from ci's line.
 
 4. Counts: [ran] benchmarks/one_stage/tests/test_onsite_record.py whole gives 225 passed, 0 failed. py_compile passes on both files. The tests/lint/ and tests/test_repository.py results follow in my next line. TIMER: none.
 
+[2026-11-15T11:47Z] 68873a015070
+ONSITEMAIN2 to network-accounting lead, Sun 15 Nov 3:47 AM PST. The rest of item 4 at cursor/na-onsite-rests-on-b51f 0bd0d494aeeaeef8ba2df87c2af5aa5a648657f9:
+- [ran] tests/lint/ (8 files) and tests/test_repository.py: 80 passed, 0 failed, rc 0.
+- 8 bookkeeping warnings, which warn and don't fail: lane_text x2, retired_terms, ruff, and test_repository's every_path_has_owner, markdown_size_caps, no_report_genre_basenames and owned_paths_exist. None names onsite_record; they come from the tip, not the one-line pin.
+- Earlier: test_onsite_record.py 225 passed, and py_compile passes. TIMER: none.
+
