@@ -26,7 +26,7 @@ def _refuse(fact: str) -> NoReturn:
 
 
 class _CallsNet(Protocol):
-    """What the calls both decoders write with (`_Calls`) read off a rank's net, which `Net` and `dsv4.Net` each state."""
+    """What the calls both decoders write with (`_Calls`) read off a rank's net, which `dsa.Net` and `dsv4.Net` each state."""
 
     C: dict[str, Any]
     _leaves: list[tuple[str, Type, object]]
@@ -44,7 +44,7 @@ class _CallsNet(Protocol):
 
 class _Calls:
     """The calls a decoder's forward is written with, emitted into `B` over one rank's net: the kinds, the collectives, the
-    GEMMs and the sampler; every token-count-dependent selection reads the call's launch (`launch`).  `_Model` here and
+    GEMMs and the sampler; every token-count-dependent selection reads the call's launch (`launch`).  `dsa._Model` and
     `dsv4._Model` are each one decoder's forward over them; `batched` and `table_reads` are `_Model`'s forms, off in any other."""
 
     reads_launch = True
