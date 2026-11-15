@@ -21,7 +21,7 @@ The squared sum's GPU-NaN FADD, FMUL and FFMA are private traced helpers: `boole
 registered prenorm Definitions, so they add no standalone circuit target or Call.
 
 `MhcFusedPostPre_v1` has no version here: its fused CUDA path is two kernel launches and its smallest useful binding on bits
-is over circuit-check's partition budget.
+is over circuit-check's cost target (``partition_max_gates``).
 """
 from __future__ import annotations
 
