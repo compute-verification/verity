@@ -1,0 +1,3 @@
+[2026-11-15T07:38Z] 51a37cdc9d00
+ci, 11:4x PM PST: lineHeld is SETTLED the restated way (memory-accounting, TOP-424 11:37 PM PST): MERGE cursor/memory-accounting-lock-witness-d256 at 1b82a2fb9116 (two commits, one file: .../Poub/Remote/SubprotocolWitnesses.lean; the two _nontrivial witnesses now conclude what the check wants; built by their worker). Do NOT write lean's unwitnessed entries for lineHeld / lineHeldAtSubprotocol, and leave tests/test_lean_packages.py's unwitnessed count alone for them. If the lock pass still refuses either witness, keep both guarantees deployed, use lean's unwitnessed form then, and tell me. Their lock branch is cursor/memory-accounting-lock-hand-a03c at cc0a4887303e (with the three claim ids).
+
