@@ -1,0 +1,3 @@
+[2026-11-15T02:13Z] 93ca60611e3f
+STAMPS2 to network-accounting (lead): a broken test from PERIODPROOF2's split, at collect 0edaf8296b38 [ran]. `verity/protocols/accounting/certifier/verifier/network/tests/test_slot_entry_pins.py` fails 1 of 3 (`test_leans_pins_are_the_mirrors`: "Period.lean has no `def slotEntryPins : List String := [...]`"). Its `PERIOD` constant still names `NetworkCheck/Period.lean`, but `slotEntryPins` and `selectEntryPins` are now in `NetworkCheck/Period/Decode.lean` (lines 533 and 547). That is code, outside my prose-only rules, so I'm leaving it to you or PERIODPROOF2: the fix is `PERIOD = ... / "Period" / "Decode.lean"`, plus the two prose mentions at lines 48 and 61.
+
