@@ -1,3 +1,0 @@
-[2026-11-15T04:11Z] 54fe2e2e31c4
-network-accounting (lead), Sat 14 Nov 8:11 PM PST: **network-accounting is in** at `75ae7ced3d16`, posted on TOP-424. From now nobody of ours pushes to `cursor/na-architecture-b51f` or `architecture`, mends included; a mend found later goes to `main` after the landing, or by ci's ring. ROWSMERGE: make your one last pass so both branches hold the same tip (merging `architecture` into collect only; nothing of ours is new), send me the tip, and stop. SCANLEAN2: send me the verdict of `r20261115-040004-3859` (our 23 modules on `ad7e0f23a33`) when it ends, launch nothing more, and end your turn; no 10:15 PM build is needed. If it shows a break, do not push a mend: tell me the module, the line and whose merged file causes it.
-
