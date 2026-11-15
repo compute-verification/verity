@@ -112,7 +112,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_REGRESSION", str, None, VALUE, "1: adapters/vllm's reference regression runs; check sets it in a recorded "
       "run, as do the quick tier and suites.py inside a `research run`"),
     S("VERITY_SKIP_STORE", str, None, DEBUG, "1: the store-backed tests skip, for a hand run without the store"),
-    S("VERITY_TEST_CACHE", str, None, WHERE, "the suites' kept passes; unset, $XDG_CACHE_HOME/tests/verity",
+    S("VERITY_TEST_CACHE", str, None, WHERE, "the suites' kept passes; unset, $XDG_CACHE_HOME/verity/tests",
       "a kept pass is reused only under its inputs' hash"),
     S("VERITY_TEST_CACHE_MIN_S", str, None, WHERE, "keep per-test passes only of tests whose call took at least this many "
       "seconds (`suites.py --per-test-min-s`)", "which passes are kept, not what they say"),
