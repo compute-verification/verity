@@ -204,7 +204,7 @@ def test_the_served_path_takes_no_os_randomness_for_its_coins():
     """No PoUW or proof-system module reads `os.urandom`, `os.getrandom`, `secrets` or `random.SystemRandom` but those
     `OS_RANDOMNESS` names: every coin comes from a challenger's named entropy, the Lean verifier's `coins` on
     the served path."""
-    verity = Path(EC.__file__).resolve().parents[6]
+    verity = Path(EC.__file__).resolve().parents[5]
     found = set()
     for d in ("protocols/resource_accounting/compute/pouw/verifier", "protocols/proofs/spot", "protocols/resource_accounting/compute/pouw/prover"):
         for path in (verity / d).rglob("*.py"):
