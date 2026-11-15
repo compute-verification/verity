@@ -1,0 +1,19 @@
+# The suite of the distribution `cluster`: a virtual member that depends on it, so the suite keys on what the
+# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.
+[project]
+name = "cluster-tests"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = ["cluster"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["test_nebius2.py", "test_policy.py", "test_policy_apply.py", "test_submit.py"]
