@@ -5,7 +5,7 @@
 // kv_append writes `batch` sequences' new token at slot t, layers l0 .. l0 + nl - 1, into the cache in kv_attn's layout:
 // encoded at k rounds (word w of token-layer (b ctx + t) layers + l at index (((b ctx + t) layers + l) TLW + w)), or
 // plain at k = 0. `in` holds the tokens' plain words, [batch][nl][TLW] of NL limbs.
-#include "../../verity/protocols/accounting/poub/prover/word_codec/kv.cu"
+#include "../../verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu"
 
 namespace kv {
 
