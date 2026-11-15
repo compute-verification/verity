@@ -513,9 +513,9 @@ def one_card(kind: str) -> tuple[dict, int]:
 
 def digest(path: Path) -> str:
     """SHA-256 over the files under `path` (a file or a directory), each by its path in the tree and its bytes'
-    SHA-256, in path order; a directory whose name starts with `.` or is `__pycache__` is left out."""
+    SHA-256, in path order; Markdown, and a directory whose name starts with `.` or is `__pycache__`, are left out."""
     files = [path] if path.is_file() else sorted(
-        p for p in path.rglob("*") if p.is_file()
+        p for p in path.rglob("*") if p.is_file() and p.suffix != ".md"
         and not any(part.startswith(".") or part == "__pycache__" for part in p.relative_to(path).parts))
     h = hashlib.sha256()
     for p in files:
