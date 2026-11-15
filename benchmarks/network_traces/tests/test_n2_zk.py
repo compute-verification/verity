@@ -117,14 +117,14 @@ def test_the_summary_holds_its_released_keys_and_the_rest_goes_to_the_witness(tm
 def test_a_refused_execution_phase_leaves_the_public_summary_the_same_wherever_it_fell(tmp_path, monkeypatch):
     """When the signer refused an execution phase, the public summary is each member's flag alone, with no window
     count, so nothing public says where the refusal fell; the witness holds the members whole."""
-    run, real = gate_run(tmp_path / "g"), n2.link_windows
+    run, real = gate_run(tmp_path / "g"), n2.phases
 
     def refused_at(w: int):
-        def link_windows(r, **kw):
+        def phases(r, **kw):
             rd = real(r, **kw)
             rd.issuer_refused = [] if kw else [w]
             return rd
-        return link_windows
+        return phases
 
     seen = []
     for w in (0, 1):
