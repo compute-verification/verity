@@ -956,7 +956,9 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
     got = captured([sys.executable, "-m", "benchmarks.network_traces.leak_guard", str(d), str(quarantine),
                     *(["--gates", str(unpacked)] if unpacked is not None else []), "--hold", str(hold),
                     "--release-to", str(d), *(x for f in PIECE_FILES for x in ("--public", f)),
-                    "--report", str(quarantine / "piece-guard.json")])
+                    "--report", str(quarantine / "piece-guard.json")],
+                   env={**os.environ,
+                        "PYTHONPATH": os.pathsep.join(filter(None, [str(TREE), os.environ.get("PYTHONPATH")]))})
     print(f"leak guard (exit {got.returncode}): {got.stdout.strip()[-400:]}", flush=True)
     return got.returncode
 
