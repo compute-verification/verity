@@ -104,7 +104,7 @@ if [ "$1" = - ]; then
 fi
 exec python3 "$@"
 '''
-LAKEFILE = '[[lean_exe]]\nname = "flock-verify"\nroot = "FlockVerify"\n\n[[lean_exe]]\nname = "flock-read-tmpl"\nroot = "FlockReadTmpl"\n'
+LAKEFILE = '[[lean_exe]]\nname = "verity-verify-proof"\nroot = "FlockVerify"\n\n[[lean_exe]]\nname = "flock-read-tmpl"\nroot = "FlockReadTmpl"\n'
 
 
 #: /proc/meminfo as the job reads it, at GB of MemAvailable
@@ -310,7 +310,7 @@ def test_prove_routes_past_the_gpu_bound_to_the_cpu_prover_and_checks_each_proof
     assert calls[2:] == [
         "window prove gpus=2 allowed=4,5 cvd=[unset] device=gpu census:Small_v1{N=1}@full",
         "window prove gpus=1 allowed=4,5 cvd=[] device=cpu census:Big_v1{N=9}@full",
-        "lake build flock-verify cvd=[unset]",
+        "lake build verity-verify-proof cvd=[unset]",
         f"lean-verify small-k0 l0001-1 pub={out}/kept/small/pub.bin program-word.json",
         f"lean-verify big-k0 l0001-1 pub={out}/cpu/out/kept/big/pub.bin program.json"]
     rows = [ln.split("\t")[:4] for ln in (out / "lean.tsv").read_text().splitlines()]
@@ -328,7 +328,7 @@ def test_a_proof_the_lean_verifier_refuses_fails_the_job_once(job, tmp_path: Pat
 def test_a_verifier_that_does_not_build_fails_every_proof_unchecked(job, tmp_path: Path):
     fw = staged(tmp_path, TWO)
     rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", PROVED="1")
-    assert rc == 7 and "LEAN REFUSED: the verifier flock-verify did not build: none of 2 proved statements checked" in steps
+    assert rc == 7 and "LEAN REFUSED: the verifier verity-verify-proof did not build: none of 2 proved statements checked" in steps
     assert not any(c.startswith("lean-verify") for c in calls) and not fw.exists()
 
 

@@ -845,7 +845,7 @@ def test_a_call_over_the_cost_target_warns_by_its_name(monkeypatch):
     """Over ``partition_max_gates`` (the cost target) the partition is not run, and a Call whose callees can't partition it
     either (one is no Call) warns by its name, with that callee (``partition/over-cost-target``): the cost target bounds no
     proof, and its proof block is held to Flock's range by ``block``."""
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     fn, opts = _over_cost_target()
     monkeypatch.setattr(TG, "is_call", lambda fam: fam == TG.family(fn))

@@ -50,7 +50,7 @@ def test_a_unit_past_c_flocks_range_fails_block_however_its_partition_reads(monk
     from verity_flock import circuit as FC
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.types import Array, Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
     from circuit_check import targets as TG
 
     fn = bind(CompositeDefinition("CircuitCheckBlockOver", 1, (), lambda S: ((("x", Array(2, Value(32))),), Value(32)),

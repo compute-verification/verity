@@ -210,7 +210,7 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
                  "tools/check/check.py", "tools/check/drive.toml", "tools/check/policy.toml",
                  *(f"tools/research/src/research/{m}.py" for m in ("queue", "landing", "vqueue", "vqueue_loop", "vqueue_slim",
                                                                     "cli", "merge", "carry", "labelauth")),
-                 "tools/verity/lean/check.py", "verity/circuits/program.py", "verity/commitments/x.py", "verity/claims/x.py",
+                 "tools/verity/lean/check.py", "verity/circuits/program.py", "verity/commitments/x.py",
                  "verity/protocols/accounting/pouw/verifier/audit.py",
                  "verity/protocols/compose/device/live_challenger/auditor.py"):
         assert not lowrisk([path, "README.md"], flags.plain_excludes), f"drive.toml's excludes let {path} land on a verdict"
@@ -221,16 +221,16 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
 @pytest.mark.parametrize("path, entry", [
     ("tests/test_tree.py", "tests/"),
     ("pyproject.toml", "pyproject.toml"),
-    ("verity/definitions/__init__.py", "__init__.py"),
+    ("adapters/vllm/verity_vllm/definitions/__init__.py", "__init__.py"),
     ("tools/agent-guard/shell_hook.py", "tools/agent-guard/"),
     ("infra/README.md", "infra/"),
     ("benchmarks/one_stage/a5.py", None),
-    ("benchmarks/network_traces/warden_serve.py", None),
+    ("verity/protocols/accounting/certifier/device/network_certifier_serve.py", None),
     ("benchmarks/remote_session/auditor_line.py", None),
     ("tools/move/restack.py", None),
     ("verity/circuits/program.py", None),
     ("tools/research/src/research/vqueue_loop.py", None),
-    ("tools/verity/check/drive.toml", None),
+    ("tools/check/drive.toml", None),
     ("verity/protocols/accounting/pouw/verifier/__init__.py", None),
     ("verity/protocols/compose/verifier/lean/pyproject.toml", None),
 ], ids=lambda x: x or "-")
