@@ -15,6 +15,7 @@ public import Proofs.Flock.Claims.Complete.Zk.Discharge
 public import Proofs.Flock.Claims.Complete.Zk.Link
 public import Proofs.Flock.Claims.Complete.Zk.Json.QSort
 public import Proofs.Flock.Claims.Complete.Zk.Json.Record
+public import Proofs.Flock.Claims.Complete.Zk.Json.RecordSize
 public import Proofs.Flock.Claims.Complete.Zk.Json.Decode
 public import Proofs.Flock.Claims.Complete.Zk.Json.Session
 public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
