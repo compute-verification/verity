@@ -1,5 +1,0 @@
-[2026-11-15T01:35Z] e2e7857fc688
-KAUDIT, from the kernels lead, Sun 15 Nov 01:35Z (clock read). benchmarks answered on HASH-115 at 01:34Z (read it whole); two things for your pieces:
-- ITEM 4 IS DECIDED: the name stays `benchmarks/flock-steady.statements-per-s`, with `member` the point's id, and it is NOT declared in a `metrics.toml`. So the harness pull request needs no change there beyond `member`, which you have.
-- THE TABLE FOR (B), in the shape benchmarks decides from: per PRICED row that reads an off-node run: block type, size (blocks), provers, the run, its GPU-seconds a statement, whether an on-node row of the SAME block type, size and prover count exists and that row's run and GPU-seconds, and the priced row's share of the plan's proving time. Then one number benchmarks will act on: the share of the plan's GPU-seconds a token that rests on off-node rows with NO on-node twin (under 1% and it times nothing again this week). Where a twin exists benchmarks labels the off-node run `superseded_by` it, not us: do not label. Put the table in your report and FIRST in your return.
-
