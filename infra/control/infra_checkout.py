@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""compute-verification/infra's main at /opt/infra on the control pod and on every node (INF-412), as on an agent VM.
+"""compute-verification/infra's main at /opt/infra on the control pod and at ~/.research/infra on every node.
 
-    infra_checkout.py loop [--state PATH]                   a pass every EVERY_S (the watchers supervisor runs it)
+    infra_checkout.py loop [--state PATH]                   a pass every EVERY_S
     infra_checkout.py once [--state PATH] [--node NAME]...  one pass, over the named nodes only when any are given
 
 The pod's /opt/infra is a git checkout of infra's main, fetched with drive's App (`gh_app_token.sh git`, the credential helper
 whose token covers infra). A node holds no GitHub credential, so each pass sends it the pod's commit whenever the node's
-`/opt/infra/.commit` names another: `git archive` over ssh (the registry's host and user, the RunPod key), unpacked as root into
-`/opt/infra-trees/<commit>` and swapped in by renaming a symlink, so /opt/infra is always one whole tree. Each node keeps its
-two newest trees.
+`~/.research/infra/.commit` names another: `git archive` over ssh (the registry's host and user, the RunPod key), unpacked as
+the login into `~/.research/infra-trees/<commit>` and swapped in by renaming a symlink, so `~/.research/infra` is always one
+whole tree. No step takes root, so a node whose lock-out took root from research still gets each commit. Each node keeps its
+two newest trees. A node's /opt/infra, which earlier passes installed as root, is read by nothing and left as it is.
 
 The nodes are the registry's ssh machines reached as `research` whose `deadline` hasn't passed; one that doesn't answer is
 tried again next pass. The auditor's devices (the challenger and the auditors, reached as `vy-admin`) get nothing from here:
@@ -35,24 +36,27 @@ URL = "https://github.com/compute-verification/infra.git"
 HELPER = "!/data/infra/gh_app_token.sh git"
 STATE = Path("/data/watchers/infra-checkout.json")
 
-# run as root on the node, the tree on stdin and the commit as $1
+# the node's tree, under the login's home (`$HOME` is the node's, expanded there)
+NODE = "$HOME/.research/infra"
+# run as the login on the node, the tree on stdin and the commit as $1
 INSTALL = r"""set -eu
 c=$1
 case $c in *[!0-9a-f]*|'') echo "not a commit: $c" >&2; exit 2;; esac
 [ ${#c} -eq 40 ] || { echo "not a commit: $c" >&2; exit 2; }
-t=/opt/infra-trees/$c
-mkdir -p /opt/infra-trees
+d=$HOME/.research
+t=$d/infra-trees/$c
+mkdir -p "$d/infra-trees"
 rm -rf "$t.part"
 mkdir "$t.part"
 tar -x -C "$t.part"
 printf '%s\n' "$c" > "$t.part/.commit"
 rm -rf "$t"
 mv "$t.part" "$t"
-if [ -e /opt/infra ] && [ ! -L /opt/infra ]; then mv /opt/infra "/opt/infra-trees/replaced-$(date +%s)"; fi
-ln -sfn "$t" /opt/infra.next
-mv -T /opt/infra.next /opt/infra
-ls -1dt /opt/infra-trees/*/ | tail -n +3 | xargs -r rm -rf
-cat /opt/infra/.commit
+if [ -e "$d/infra" ] && [ ! -L "$d/infra" ]; then mv "$d/infra" "$d/infra-trees/replaced-$(date +%s)"; fi
+ln -sfn "$t" "$d/infra.next"
+mv -T "$d/infra.next" "$d/infra"
+ls -1dt "$d"/infra-trees/*/ | tail -n +3 | xargs -r rm -rf
+cat "$d/infra/.commit"
 """
 
 
@@ -89,14 +93,14 @@ def ssh_to(name: str, machines: dict) -> list[str]:
 
 
 def install(ssh: list[str], commit: str) -> str:
-    """Send `commit`'s tree to the node and swap it in; the node's /opt/infra/.commit after."""
+    """Send `commit`'s tree to the node and swap it in; the node's `NODE/.commit` after."""
     def feed(pipe):
         arch = subprocess.Popen(["git", "-C", str(CHECKOUT), "archive", "--format=tar", commit], stdout=subprocess.PIPE)
         while chunk := arch.stdout.read(1 << 20):
             pipe.write(chunk)
         if arch.wait():
             raise RuntimeError(f"git archive {commit} exited {arch.returncode}")
-    r = remote.ssh_stream(ssh, ["sudo", "-n", "sh", "-c", INSTALL, "install", commit], feed, timeout=600)
+    r = remote.ssh_stream(ssh, ["sh", "-c", INSTALL, "install", commit], feed, timeout=600)
     if r.returncode:
         raise RuntimeError(f"install exited {r.returncode}: {r.stderr.decode(errors='replace').strip()[-300:]}")
     return r.stdout.decode().strip()
@@ -111,17 +115,17 @@ def once(state_path: Path, only: list[str]) -> dict:
         rec = state.setdefault("nodes", {}).setdefault(name, {})
         try:
             ssh = ssh_to(name, ms)
-            r = remote.ssh_run(ssh, ["sh", "-c", "cat /opt/infra/.commit 2>/dev/null; true"], timeout=60)
+            r = remote.ssh_run(ssh, ["sh", "-c", f'cat "{NODE}/.commit" 2>/dev/null; true'], timeout=60)
             if r.returncode:
                 raise RuntimeError(r.stderr.decode(errors="replace").strip()[-300:] or f"ssh exited {r.returncode}")
             had = r.stdout.decode().strip()
             if had != commit:
                 got = install(ssh, commit)
                 if got != commit:
-                    raise RuntimeError(f"/opt/infra/.commit reads {got[:12] or 'nothing'} after the install")
+                    raise RuntimeError(f"{NODE}/.commit reads {got[:12] or 'nothing'} after the install")
                 print(f"infra-checkout: {name}: {had[:12] or 'none'} -> {commit[:12]}", flush=True)
             rec.update(commit=commit, error="")
-        except Exception as e:  # one node's failure must not stop the others
+        except Exception as e:  # noqa: BLE001  (one node's failure must not stop the others)
             rec["error"] = f"{type(e).__name__}: {e}"[:400]
             print(f"infra-checkout: {name}: {rec['error']}", flush=True)
     tmp = state_path.with_suffix(".tmp")
@@ -142,7 +146,7 @@ def main() -> None:
     while True:
         try:
             once(a.state, [])
-        except Exception as e:  # the pod's own fetch failed: the nodes keep what they have
+        except Exception as e:  # noqa: BLE001  (the pod's own fetch failed: the nodes keep what they have)
             print(f"infra-checkout: pass failed: {type(e).__name__}: {e}", flush=True)
         time.sleep(EVERY_S)
 
