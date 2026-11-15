@@ -66,6 +66,19 @@ def test_the_result_holds_the_totals_and_each_leads_readings(tmp_path: Path) -> 
     assert got == {**{(S.FOUND, m): (v, 0, "partial", "sites") for m, v in found.items()},
                    **{(S.ALLOWED, m): (v, None, "partial", "sites") for m, v in allowed.items()}}
     assert doc["validation"]["status"] == "passed" and "repo_ruff" in doc["validation"]["detail"]
+    for name in (S.FOUND, S.ALLOWED):
+        mine = [m for m in doc["measurements"] if m["name"] == name]
+        assert mine[-1].get("member") is None and all(m.get("member") for m in mine[:-1]), "the total is written last"
+        assert {tuple(m["inputs"]) for m in mine} == {
+            ("partial", "not counted: repo_ruff (the tree pins ruff==0.17.2 and python has no ruff)")}
+
+
+def test_a_list_that_is_no_ratchets_is_named_and_makes_nothing_partial(tmp_path: Path) -> None:
+    doc = result(tmp_path, "repo_env_reads\ttests/x.py\t2\t1\nrepo_python_verdicts\t-\t-\t-\n",
+                 "repo_python_verdicts: not counted: its module has no allowed()\n")
+    assert {m["mark"] for m in doc["measurements"]} == {"measured"}
+    assert all(m["inputs"] == ["measured"] for m in doc["measurements"])
+    assert "No ratchet's, so never counted: repo_python_verdicts" in doc["validation"]["detail"]
 
 
 def test_a_run_that_counted_no_list_writes_nothing(tmp_path: Path) -> None:

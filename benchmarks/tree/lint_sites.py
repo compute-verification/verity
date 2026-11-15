@@ -2,13 +2,16 @@
 allows, one line a lint and a file from `lint_counts.py` beside this, summed as `top/lint-sites-found` and
 `top/lint-sites-allowed`. Each is written as the total and once for each lead, the handle whose longest `owns` entry in
 `.agents/skills/using-slack/registry.json` covers the file, as its `member`; a file no entry covers is `unowned`'s.
-Lower is better; the tree holds no site a lint finds at zero.
+The leads' readings are written first and the total last, since a reader that keys by name alone takes an id's
+last-written reading as the row's. Lower is better; the tree holds no site a lint finds at zero.
 
-    research run --on auto --cwd source -- uv run python benchmarks/tree/lint_sites.py
+    research run --on auto --cwd source -- uv run --all-packages --extra torch-cpu python benchmarks/tree/lint_sites.py
 
-A list `lint_counts.py` couldn't count is left out of both sums, which are then `partial`, and the validation's detail
-names it with its reason beside each counted list's totals; where it counted none, nothing is written. It counts the
-checkout's HEAD and writes under `--out` (`out/` outside a research run).
+The whole workspace's environment is the one mypy's list was recorded under, and its lint refuses any other. A list
+`lint_counts.py` couldn't count is left out of both sums, which are then `partial`: each reading's `inputs` name it with
+its reason, and so does the validation's detail, beside each counted list's totals. A list that is no ratchet's
+(`NOT_RATCHETS`) is never counted and makes nothing partial. Where no list was counted, nothing is written. It counts
+the checkout's HEAD and writes under `--out` (`out/` outside a research run).
 """
 from __future__ import annotations
 
@@ -27,6 +30,8 @@ COUNTS = Path(__file__).resolve().with_name("lint_counts.py")
 REGISTRY = ROOT / ".agents/skills/using-slack/registry.json"
 UNOWNED = "unowned"
 FOUND, ALLOWED = "top/lint-sites-found", "top/lint-sites-allowed"
+#: lists whose lint is no ratchet (it has no `allowed()`): out of what these numbers cover, so not what makes one partial
+NOT_RATCHETS = frozenset({"repo_python_verdicts"})
 
 
 def parse(text: str) -> tuple[list[tuple[str, str, int, int]], list[str]]:
@@ -50,13 +55,14 @@ def owner(handles: list[dict], path: str) -> str:
 
 
 def sums(rows: list[tuple[str, str, int, int]], handles: list[dict]) -> dict[str | None, tuple[int, int]]:
-    """{None: the totals, each lead that owns a path and `UNOWNED`: its files' totals}, each (found, allowed)."""
+    """{each lead that owns a path and `UNOWNED`: its files' totals, then None: the totals}, each (found, allowed). The
+    totals are last, so they are each id's last-written reading."""
     found, allowed = Counter(), Counter()
     for _, file, f, a in rows:
         who = owner(handles, file)
         found.update({None: f, who: f})
         allowed.update({None: a, who: a})
-    members = [None, *sorted({h["handle"] for h in handles if h.get("owns")} | {UNOWNED})]
+    members = [*sorted({h["handle"] for h in handles if h.get("owns")} | {UNOWNED}), None]
     return {m: (found[m], allowed[m]) for m in members}
 
 
@@ -80,20 +86,27 @@ def detail(rows: list[tuple[str, str, int, int]], uncounted: list[str], stderr: 
     lists = sorted(set(named) | set(found))
     text = f"counted {len(lists)} list(s) at HEAD with lint_counts.py: " + (
         "; ".join(f"{n} {found[n]} found, {allowed[n]} allowed" for n in lists) or "none")
-    if uncounted:
-        text += ". Not counted, so left out of both sums: " + "; ".join(
-            f"{n} ({why.get(n, 'no reason printed')[:200]})" for n in uncounted)
+    if missing := limits(uncounted, why):
+        text += ". Not counted, so left out of both sums: " + "; ".join(missing)
+    if out := sorted(NOT_RATCHETS & set(uncounted)):
+        text += ". No ratchet's, so never counted: " + ", ".join(out)
     return text
+
+
+def limits(uncounted: list[str], why: dict[str, str]) -> list[str]:
+    """Each ratchet's list that wasn't counted, with the first line of why: what a partial sum leaves out."""
+    return [f"{n} ({why.get(n, 'no reason printed')[:200]})" for n in uncounted if n not in NOT_RATCHETS]
 
 
 def write(w: kit.Writer, rows: list[tuple[str, str, int, int]], uncounted: list[str], handles: list[dict],
           stderr: str) -> None:
     if not rows and not log(stderr)[0]:
         raise SystemExit(f"lint_counts.py counted no list, so there is no number to write: {detail(rows, uncounted, stderr)}")
-    mark = "partial" if uncounted else "measured"
+    missing = [f"not counted: {m}" for m in limits(uncounted, log(stderr)[1])]
+    mark = "partial" if missing else "measured"
     for member, (f, a) in sums(rows, handles).items():
-        w.measurement(FOUND, f, "sites", target=0, mark=mark, member=member)
-        w.measurement(ALLOWED, a, "sites", mark=mark, member=member)
+        w.measurement(FOUND, f, "sites", target=0, inputs=missing, mark=mark, member=member)
+        w.measurement(ALLOWED, a, "sites", inputs=missing, mark=mark, member=member)
     w.validation("passed", "benchmarks/tree/lint_sites.py", detail(rows, uncounted, stderr))
 
 
