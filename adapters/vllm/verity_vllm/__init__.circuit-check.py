@@ -55,7 +55,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
     router = {"E": 8, "SCALE": 2.5}
     marlin = {"E": 3, "K": 256, "N": 16, "TK": 128, "TN": 8, "GRID": 5, "DOT": MM.DOT}
     int8_row = {"D": 32, "S": 33, "SCALE": 32 ** -0.5}   # Q' K'^T steps 32 channels, so D >= 32; int8_exact's sidecar's row
-    dsv4 = {"triton_block_rmsnorm": {"N": 512, "BLOCK": 2048, "WARPS": 8, "EPS": 1e-6},
+    dsv4: dict[str, dict[str, Any]] = {"triton_block_rmsnorm": {"N": 512, "BLOCK": 2048, "WARPS": 8, "EPS": 1e-6},
             "mhc_pre_broadcast": {**mhc, "H": 7168, "NS": 28}, "mhc_residual_broadcast": {"HC": 2, "H": 8},
             "mhc_fused_post_pre": {**mhc, "H": 1024, "NS": 4, "TH": 256}, "mhc_post_pre_tf32": {**mhc, "H": 1024, "NS": 4},
             "mhc_post": {"HC": 4, "N": 7168}, "hc_head": {**mhc, "H": 7168, "TH": 128},

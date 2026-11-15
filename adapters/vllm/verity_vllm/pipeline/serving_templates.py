@@ -573,7 +573,9 @@ def _bind(spec: str, family: str | None = None, **over: Any) -> Any:
         except KeyError:
             return v
 
-    reg, _errors = load()
+    loaded = load()
+    assert loaded is not None
+    reg, _errors = loaded
     d = reg.defs.get(family or spec_base(spec))
     if d is None or not hasattr(d, "bind"):
         return None

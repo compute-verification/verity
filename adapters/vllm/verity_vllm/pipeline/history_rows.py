@@ -303,6 +303,7 @@ class Reader:
                 root, dom = _digest_words(table.root), _digest_words(table.domain.domain_id)
             x = rs[p]
             e = int(self.tok(x)[j])
+            assert table is not None
             held = e < len(table.rows)
             row = table.rows[e] if held else np.zeros(table.words, dtype=np.uint16)
             salt = table.salts[e] if held else bytes(CS.SALT_BYTES)

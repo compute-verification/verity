@@ -193,7 +193,9 @@ def read_coord(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable,
             raise LookupError(f"row {r['i']} output {member}: {why}")
         y = packed([np.asarray(y)], bits[-1], f"row {r['i']} output {member}").reshape(U, -1)
         if mid:
-            got = MIDS[spec_base(r["spec"])].y(mid, W[0], WS[0], G)
+            twin = MIDS[spec_base(r["spec"])].y
+            assert twin is not None
+            got = twin(mid, W[0], WS[0], G)
             if not np.array_equal(np.asarray(got, dtype=np.uint16).reshape(-1), y.reshape(-1)):
                 raise ValueError(f"row {r['i']} ({d['op_path']}): the twin's output on its intermediates {sorted(mid)} is not "
                                  f"the row's served {member} words")
@@ -291,6 +293,7 @@ def read_cols(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, 
         nh = W // w
         mid = mids(pi, r, d, store, weights, rid, arrive, slices, packed) if any(src == "mid" for src, _g in p[1]) else {}
         ports = [*((src, g) for src, g in p[1]), *(("out", j) for j in p[2])]
+        assert tp.packed is not None
         if len(ports) != len(tp.packed):
             raise ValueError(f"row {r['i']} ({d['op_path']}): {len(ports)} operands and outputs, not template {tp.id}'s "
                              f"{len(tp.packed)} ports")

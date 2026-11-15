@@ -67,7 +67,9 @@ __all__ = ["MODELLED_ENGINE", "Options", "compilation_facts", "main", "request_i
 logger = init_logger(__name__)
 
 # the request descriptors decode through the registry the Match reads (`catalog.load`): every registry module loaded
-for _e in _load_registry()[1]:
+_loaded = _load_registry()
+assert _loaded is not None
+for _e in _loaded[1]:
     logger.warning("registry module unavailable (%s): components naming its Definitions will not decode", _e)
 
 

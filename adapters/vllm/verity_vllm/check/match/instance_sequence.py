@@ -51,7 +51,9 @@ def const_value(spec: str) -> tuple[int, int] | None:
 def _registry():
     """The registry every module loaded (`verity_vllm.definitions.registry.load`); a module that fails to import is named on stderr (its
     Programs, e.g. Hopper's under Python < 3.12, then fail to decode with that reason)."""
-    reg, errors = catalog.load()
+    loaded = catalog.load()
+    assert loaded is not None
+    reg, errors = loaded
     for e in errors:
         logger.warning("[compare] registry module unavailable (%s): Programs naming its Definitions will not decode", e)
     return reg

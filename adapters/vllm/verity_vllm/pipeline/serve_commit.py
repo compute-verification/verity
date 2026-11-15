@@ -470,6 +470,7 @@ class CommitWindows:
         the pool (a block a running request holds). No coin or verdict reads it yet, so it doesn't fail the window."""
         from verity_vllm.engine import pool_row as PR
 
+        assert self.pool is not None and self.pool_block is not None
         try:
             got = PR.export(self.pool(), self.pool_block, self.out / "pool_rows" / f"w{self.window}.json")
         except Refused as e:

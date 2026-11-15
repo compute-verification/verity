@@ -215,7 +215,7 @@ def _plan(circuit: IF.Circuit) -> _Plan:
 
     args = []
     for t, at, n in ranges:
-        node = []
+        node: list[tuple[int | None, Any, tuple[tuple[str, int, View], ...]]] = []
         for p, ty in sigs[t][0]:
             port = ports[t, p]
             while port.nxt < len(port.wires) and port.wires[port.nxt].at <= at:
@@ -236,6 +236,7 @@ def _plan(circuit: IF.Circuit) -> _Plan:
                 got: list[tuple[str, int, View]] = []
                 for j0, j1, w in bands:
                     if w is None:
+                        assert port.param is not None
                         lo = (first + (u - at) * len(free) + free.index(j0)) * L
                         got.append(("p", port.param, (lo, 1, 1, 0, (rows * (j1 - j0)) * L)))
                     else:

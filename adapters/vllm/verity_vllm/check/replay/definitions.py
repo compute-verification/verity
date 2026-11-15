@@ -210,7 +210,9 @@ def refusal(program_dir: str, digest: str, specs: Iterable[tuple[str, str]]) -> 
     got = program_digest(desc)
     if got != digest:
         return f"{p} is Program {got[:16]}, not the Program of record {str(digest)[:16]}"
-    registry, _errors = load()
+    loaded = load()
+    assert loaded is not None
+    registry, _errors = loaded
     ours: dict[str, Any] = {}
     seen: dict[str, str | None] = {}
     skew: list[str] = []

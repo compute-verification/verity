@@ -488,9 +488,9 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
                         w.setdefault((f"in{g[nm]}" + ("" if s is None else f".{s}"), o), []).append(unit[(rid, int(r["i"]), h, hit[0])])
                     for nm, c in _key_reads(pl[j], d["statics"]):
                         p = pl[j]
-                        if (hit := keys.get((rid, int(r["i"]), p.split, p.block, c, p.key[3]))) is None:
+                        if (key_hit := keys.get((rid, int(r["i"]), p.split, p.block, c, p.key[3]))) is None:
                             raise ValueError(f"{t}: row {r['i']}'s {_writer(Place(('keys', p.keys[1] - p.keys[0], p.key[3]), p.split, p.block, p.keys, c))} the partition does not name")
-                        w.setdefault((f"in{g[nm]}", "o0"), []).append(hit)
+                        w.setdefault((f"in{g[nm]}", "o0"), []).append(key_hit)
         if w:
             writers[t] = [(p, o, np.asarray(x, dtype=np.int64)) for (p, o), x in w.items()]
     out = []
