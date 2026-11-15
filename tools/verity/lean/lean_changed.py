@@ -231,12 +231,23 @@ def read_here(f: str) -> bytes | None:
     return p.read_bytes() if p.is_file() else None
 
 
+def in_tree(pkg: str, entry: str, file: str) -> str:
+    """``entry`` of ``pkg``'s ``file`` (a path dependency's `dir`, a `proved_in` package) as a repository path: a package
+    whose build the audit of ``pkg`` writes, so one outside the tree is refused (`check.OutsideTree`)."""
+    p = posixpath.normpath(posixpath.join(pkg, entry))
+    if p == ".." or p.startswith(("../", "/")):
+        raise AUDIT.OutsideTree(f"{pkg}/{file}: {entry!r} names {p}, outside the tree, whose .lake a build of {pkg} would "
+                                f"write: a package it requires by path or names under proved_in must lie in the tree")
+    return p
+
+
 def path_deps(pkg: str, read=read_here) -> list[str]:
-    """The packages ``pkg`` requires by path, as `lean_audit.path_deps` reads them from its manifest, through ``read``."""
+    """The packages ``pkg`` requires by path, as `lean_audit.path_deps` reads them from its manifest, through ``read``;
+    each must lie in the tree (`in_tree`)."""
     b = read(f"{pkg}/lake-manifest.json")
     if b is None:
         return []
-    return sorted({posixpath.normpath(posixpath.join(pkg, d["dir"])) for d in json.loads(b).get("packages", [])
+    return sorted({in_tree(pkg, d["dir"], "lake-manifest.json") for d in json.loads(b).get("packages", [])
                    if d.get("type") == "path"})
 
 
@@ -249,7 +260,7 @@ def provers(pkg: str, read=read_here) -> list[str]:
     except (OSError, ValueError, AttributeError) as e:
         print(f"lean_changed: {pkg}/lean-audit.json can't be read ({e!r}); it is taken to name no proved_in", file=sys.stderr)
         return []
-    return sorted({posixpath.normpath(posixpath.join(pkg, d)) for d in named if isinstance(d, str)})
+    return sorted({in_tree(pkg, d, "lean-audit.json") for d in named if isinstance(d, str)})
 
 
 def closure(pkg: str, read=read_here) -> list[str]:
@@ -517,11 +528,17 @@ def lake_dirs(ro: list[str]) -> None:
 
 def in_sandbox(pkg: str, tree: Path, argv: list[str], at: tuple[str, ...] | list[str] = ()) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
-    fetched dependencies, which it binds read-only (`--ro`, after `lake_dirs`). The paths are resolved, as mountinfo names
-    them: a slot tree is a link into the node's cache root. A build passes ``at``, `bound`'s words, and reads the tree at
-    the fixed path, where its fetched dependencies are read-only too."""
-    rw = [str((tree / p / ".lake").resolve()) for p in closure(pkg)]
-    ro = [str(Path(d) / "packages") for d in rw if (Path(d) / "packages").is_dir()]
+    fetched dependencies, which it binds read-only (`--ro`, after `lake_dirs`). Each package's directory is resolved (a
+    slot tree is a link into the node's cache root) and must stay in the tree (`check.OutsideTree`), and its `.lake` is
+    passed as it is, so that the sandbox refuses one the tree holds as a link. A build passes ``at``, `bound`'s words, and
+    reads the tree at the fixed path, where its fetched dependencies are read-only too."""
+    rw = []
+    for p in closure(pkg):
+        if not (d := (tree / p).resolve()).is_relative_to(tree.resolve()):
+            raise AUDIT.OutsideTree(f"{tree / p} resolves to {d}, outside the tree {tree.resolve()}, so a build of {pkg} "
+                                    f"would write its .lake there: a package of the tree must be a directory in it")
+        rw.append(str(d / ".lake"))
+    ro = [str(Path(d) / "packages") for d in rw if not Path(d).is_symlink() and (Path(d) / "packages").is_dir()]
     lake_dirs(ro)
     return [*UNSHARE, "--", "bash", str(SANDBOX), *(a for d in ro for a in ("--ro", d)), *at, *rw, "--", *argv]
 

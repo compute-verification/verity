@@ -4800,15 +4800,44 @@ def sandboxed() -> bool:
     return _SANDBOX
 
 
+class OutsideTree(ValueError):
+    """A directory the tree's own content chose for a build to write (a package, a path dependency) that lies outside the
+    tree: a build of the tree writes only in it, so it is refused."""
+
+
+def home(pkg: Path) -> Path:
+    """Where the packages a build of ``pkg`` writes must lie, resolved: `TREE` when ``pkg`` is in it, named by its path there
+    or its resolved one, and then ``pkg`` itself must resolve inside it (`OutsideTree`: a directory the tree holds as a
+    link out of it); else the directory holding ``pkg`` (a control's fixture, a test's package), which no tree chose."""
+    tree, p = TREE.resolve(), Path(os.path.abspath(pkg))
+    if p.is_relative_to(os.path.abspath(TREE)) or p.is_relative_to(tree):
+        if not pkg.resolve().is_relative_to(tree):
+            raise OutsideTree(f"{pkg} resolves to {pkg.resolve()}, outside the tree {tree}, so its build would write "
+                              f"there: a package of the tree must be a directory in it")
+        return tree
+    return pkg.resolve().parent
+
+
 def path_deps(pkg: Path) -> list[Path]:
-    """The packages ``pkg`` requires by path (its manifest lists the inherited ones too)."""
+    """The packages ``pkg`` requires by path (its manifest lists the inherited ones too), each inside ``pkg``'s `home`:
+    its build writes their `.lake`, so a manifest entry that resolves outside is refused (`OutsideTree`)."""
     manifest = pkg / "lake-manifest.json"
-    return [(pkg / d["dir"]).resolve() for d in json.loads(manifest.read_text()).get("packages", [])
-            if d.get("type") == "path"] if manifest.exists() else []
+    if not manifest.exists():
+        return []
+    root, deps = home(pkg), []
+    for d in json.loads(manifest.read_text()).get("packages", []):
+        if d.get("type") == "path":
+            if not (dep := (pkg / d["dir"]).resolve()).is_relative_to(root):
+                raise OutsideTree(f"{manifest}: the path dependency {d.get('name')!r} (\"dir\": {d['dir']!r}) resolves to "
+                                  f"{dep}, outside {root}, so a build of {pkg} would write its .lake there: a path "
+                                  f"dependency must lie in the tree")
+            deps.append(dep)
+    return deps
 
 
 def writable(pkg: Path) -> list[Path]:
-    """The `.lake` directories a build of ``pkg`` writes: its own and each path dependency's."""
+    """The `.lake` directories a build of ``pkg`` writes: its own and each path dependency's, all inside its `home`."""
+    home(pkg)
     return [d / ".lake" for d in [pkg.resolve(), *path_deps(pkg)]]
 
 
@@ -5098,9 +5127,17 @@ def forget_mismatched(mk, store: Path, keyed: dict, mods: Iterable[str], sealed:
 def bound(lakes: Iterable[Path], tree: Path | None = None) -> list[str]:
     """`sandbox.sh`'s `--at` for a build that writes the `.lake` directories ``lakes``: ``tree`` (default `TREE`) at
     `FIXED`, when each of them is in it. A package outside it (a control's fixture, one given by a path of its own) gets
-    none and compiles at its own path: its place under `FIXED` would be no function of the tree."""
-    tree = (tree or TREE).resolve()
-    return ["--at", str(FIXED), str(tree)] if all(d.resolve().is_relative_to(tree) for d in lakes) else []
+    none and compiles at its own path: its place under `FIXED` would be no function of the tree. Some in it and others
+    out is refused (`OutsideTree`), unless each one out is a fetched dependency's (under a `.lake`, whose `packages` may
+    be a link out of the tree): a build of the tree writes only in it."""
+    lakes, tree = list(lakes), (tree or TREE).resolve()
+    out = [d for d in lakes if not d.resolve().is_relative_to(tree)]
+    if not out:
+        return ["--at", str(FIXED), str(tree)]
+    if len(out) < len(lakes) and not all(".lake" in d.parts[:-1] for d in out):
+        raise OutsideTree(f"a build of the tree would write {', '.join(str(d.resolve()) for d in out)}, outside the tree "
+                          f"{tree}: a build of the tree writes only in it")
+    return []
 
 
 def fixed(path: Path, tree: Path | None = None) -> Path:

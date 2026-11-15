@@ -2538,6 +2538,54 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
                                                    str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
 
 
+@pytest.mark.parametrize("file, text", [
+    ("lake-manifest.json", json.dumps({"packages": [{"type": "path", "name": "v", "dir": "../../var/tmp/victim"}]})),
+    ("lake-manifest.json", json.dumps({"packages": [{"type": "path", "name": "v", "dir": "/var/tmp/victim"}]})),
+    ("lean-audit.json", json.dumps({"proved_in": ["../.."]})),
+], ids=["manifest-up", "manifest-absolute", "proved-in-up"])
+def test_a_package_the_audit_would_build_from_outside_the_tree_is_refused(file, text):
+    """A path dependency's `dir` or a `proved_in` entry is the tree's own content, and the audit writes the `.lake` of
+    each package of the `closure`: one that names a directory outside the tree (another slot's build, a cache) is refused,
+    naming the file and the entry, before any sandbox is built."""
+    files = {f"Sec/{file}": text.encode()}
+    with pytest.raises(LC.AUDIT.OutsideTree, match=f"Sec/{file}: .*outside the tree"):
+        LC.closure("Sec", files.get)
+
+
+def test_a_package_directory_the_tree_holds_as_a_link_out_of_it_is_refused(tmp_path, monkeypatch):
+    """`Dep -> /elsewhere`, a package directory the tree holds as a link: its `.lake` would be outside the tree, so the
+    sandbox is never built for it. A link above the packages (a slot tree) stays."""
+    real, link = tmp_path / "cache-root" / "build-2", tmp_path / "build-2"
+    (real / "Sec").mkdir(parents=True)
+    (elsewhere := tmp_path / "elsewhere").mkdir()
+    (real / "Dep").symlink_to(elsewhere)
+    link.symlink_to(real)
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "Dep"])
+    with pytest.raises(LC.AUDIT.OutsideTree, match=f"resolves to {elsewhere}, outside the tree"):
+        LC.in_sandbox("Sec", link, ["lake", "build"])
+
+
+@pytest.mark.skipif(subprocess.run([*LC.UNSHARE, "--", "true"], capture_output=True).returncode != 0,
+                    reason="no unprivileged user namespaces here")
+def test_a_lake_the_tree_holds_as_a_link_reaches_the_sandbox_as_the_link_which_refuses_it(tmp_path, monkeypatch):
+    """`Sec/.lake -> ../src` in a slot tree: the sandbox is handed the `.lake` as it is (only the package's directory
+    resolved), so it sees the link and refuses it; handed the link's target, it bound the tree's sources read-write and
+    the command rewrote one."""
+    real, link = tmp_path / "cache-root" / "build-2", tmp_path / "build-2"
+    (real / "src").mkdir(parents=True)
+    (real / "src" / "Main.lean").write_text("orig\n")
+    (real / "Sec").mkdir()
+    (real / "Sec" / ".lake").symlink_to("../src")
+    link.symlink_to(real)
+    monkeypatch.setattr(LC, "closure", lambda p: [p])
+    argv = LC.in_sandbox("Sec", link, ["bash", "-c", "echo pwned > .lake/Main.lean"])
+    assert str(real / "Sec" / ".lake") in argv and str(real / "src") not in argv
+    r = subprocess.run(argv, cwd=link / "Sec", capture_output=True, text=True)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert "is a symbolic link" in r.stderr, r.stderr
+    assert (real / "src" / "Main.lean").read_text() == "orig\n"
+
+
 def test_a_build_s_sandbox_binds_its_tree_at_the_fixed_path_with_its_fetched_dependencies_read_only_there_too(
         tmp_path, monkeypatch):
     """A build reads its tree at check.py's `FIXED` (`sandbox.sh --at`), so what it compiles doesn't depend on where the
@@ -2563,8 +2611,10 @@ def test_a_build_s_sandbox_binds_its_tree_at_the_fixed_path_with_its_fetched_dep
         "sandbox": True, "bound": [str(fixed), str(real)], "compiled": ["Sec.A"]}
     monkeypatch.setattr(LC, "closure", lambda p: [p, "../elsewhere"])
     (tmp_path / "cache-root" / "elsewhere").mkdir()
-    assert LC.bound("Sec", link) == [] and "--at" not in LC.in_sandbox("Sec", link, ["lake", "build"], LC.bound("Sec", link)), \
-        "a package required from outside the tree has no place under the fixed path"
+    with pytest.raises(LC.AUDIT.OutsideTree, match="outside the tree"):
+        LC.bound("Sec", link)
+    with pytest.raises(LC.AUDIT.OutsideTree, match="elsewhere, outside the tree"):
+        LC.in_sandbox("Sec", link, ["lake", "build"])
 
 
 def test_every_lake_build_reads_the_tree_at_the_fixed_path_and_a_lake_command_its_own(tmp_path, monkeypatch):

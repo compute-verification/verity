@@ -2268,6 +2268,38 @@ def test_two_writers_of_one_key_each_write_their_own_temporary_file_and_the_last
     assert json.loads((replay / f"{key}.json").read_text())["module"] == "M"
 
 
+@pytest.mark.parametrize("dir_", ["../../outside", "/var/tmp/victim", "../../../../../../../../../var/tmp/victim"])
+def test_a_path_dependency_outside_the_tree_is_refused_before_a_build_writes_it(tmp_path, monkeypatch, dir_):
+    """A `lake-manifest.json` path dependency is the tree's own content, and a build writes each one's `.lake`
+    (`writable`, `sandbox.sh`'s RW_DIRs): one that resolves outside the tree (another slot's build, a cache) is refused,
+    naming the manifest and the entry. `bound` refuses a build that would write in the tree and out of it, rather than
+    dropping `--at`."""
+    tree = tmp_path / "tree"
+    (pkg := tree / "P").mkdir(parents=True)
+    (tmp_path / "outside").mkdir()
+    (pkg / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "V", "type": "path", "dir": dir_}]}))
+    monkeypatch.setattr(A, "TREE", tree)
+    with pytest.raises(A.OutsideTree, match=f'{pkg / "lake-manifest.json"}: the path dependency .V. .*outside {tree}'):
+        A.writable(pkg)
+    with pytest.raises(A.OutsideTree, match="outside the tree"):
+        A.bound([pkg / ".lake", (pkg / dir_).resolve() / ".lake"])
+    assert A.bound([pkg / ".lake"]) == ["--at", str(A.FIXED), str(tree.resolve())]
+
+
+def test_a_package_of_the_tree_that_is_a_link_out_of_it_is_refused(tmp_path, monkeypatch):
+    """`tree/P -> /elsewhere`: named by its path in the tree, the package would be built (and its `.lake` written)
+    outside it, so `writable` refuses it. A package given by a path outside the tree (a control's fixture) is bounded by
+    the directory holding it."""
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (elsewhere := tmp_path / "elsewhere").mkdir()
+    (tree / "P").symlink_to(elsewhere)
+    monkeypatch.setattr(A, "TREE", tree)
+    with pytest.raises(A.OutsideTree, match=f"resolves to {elsewhere}, outside the tree"):
+        A.writable(tree / "P")
+    assert A.writable(elsewhere) == [elsewhere / ".lake"]
+
+
 def test_a_facts_or_replay_cache_that_a_build_could_write_is_refused(tmp_path, capsys):
     """A facts sidecar's SHA-256 catches corruption and staleness, not a writer that rewrites the document and its sidecar
     consistently, and a replay entry is no harder to forge. So each cache must lie outside all a sandboxed build writes:
