@@ -10,6 +10,7 @@ import types
 from pathlib import Path
 
 import pytest
+from verity_bench import kit
 from verity_bench import proof_layers as PL
 from verity_bench.cli import main
 
@@ -261,7 +262,7 @@ def test_an_empty_out_or_run_dir_is_no_place_to_write(tmp_path, monkeypatch, cap
         monkeypatch.delenv("OUT", raising=False)
     else:
         monkeypatch.setenv("OUT", out)
-    assert PL.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS)) is None
+    assert kit.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS)) is None
     assert capsys.readouterr().out == 'text\n{"rows": []}\n' and not any(tmp_path.iterdir())
 
 

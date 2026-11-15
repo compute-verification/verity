@@ -30,7 +30,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_bench import kit, settings
+from verity_bench import kit
 
 SCHEMA = "verity-bench/proof-layers/v1"
 #: each layer's flag and its row's title, in the table's order
@@ -513,31 +513,6 @@ def measured(rows: Sequence[Row], metrics: Mapping[str, str]) -> list[dict[str, 
     return out
 
 
-def report(name: str, text: str, doc: Mapping[str, Any], measurements: Iterable[Mapping[str, Any]] = (), *,
-           mark: str = "measured") -> Path | None:
-    """The command's last step: prints `text`, then `doc` as one line of JSON, and where it has a place to write (under a
-    research run its ``out/``, else ``$OUT`` where set) writes that line to ``<name>.json`` there and each of
-    `measurements` at `mark` to the run's result (`kit.writer`); with no place it writes nothing, and an empty
-    ``$RESEARCH_RUN_DIR`` or ``$OUT`` is none, never the working directory. Its signature is the kit's report step's, so a
-    caller moves to that one by its name alone."""
-
-    print(text)
-    line = json.dumps(doc)
-    print(line)
-    run_dir = str(settings.RESEARCH_RUN_DIR or "") if settings.is_set("RESEARCH_RUN_DIR") else ""
-    out = str(settings.OUT or "") if settings.is_set("OUT") else ""
-    if not (run_dir or out):
-        return None
-    place = Path(run_dir) / "out" if run_dir else Path(out)
-    place.mkdir(parents=True, exist_ok=True)
-    (place / f"{name}.json").write_text(line + "\n")
-    if measurements := list(measurements):
-        w = kit.writer(place)
-        for m in measurements:
-            w.measurement(**m, mark=mark)
-    return place
-
-
 def add_arguments(parser: argparse.ArgumentParser) -> None:
     for layer, title in LAYERS.items():
         parser.add_argument(f"--{layer}", metavar="DIR|RUN",
@@ -546,5 +521,5 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 
 def run(args: argparse.Namespace) -> int:
     rows = [read(layer, getattr(args, layer)) for layer in LAYERS]
-    report(REPORT, render(rows), document(rows), measured(rows, getattr(args, "metrics", None) or {}))
+    kit.report(REPORT, render(rows), document(rows), measured(rows, getattr(args, "metrics", None) or {}))
     return 0 if has_number(rows) else 1
