@@ -431,6 +431,15 @@ private theorem split_half : "1/2".splitOn "/" = ["1", "2"] := by
   show String.splitOnAux "1/2" "/" 0 0 0 [] = ["1", "2"]
   repeat (rw [String.splitOnAux.eq_1]; simp (config := {decide := true}) only [ite_true, ite_false])
 
+/-- `Core.Ratio.ofString "1/2" "delta" = .ok ⟨1, 2⟩`: the parameters' `delta`. Fed to the walk whole (the ratio parse's
+`natOf` reads `String.all`/`length`/`front`, which the walk's weak-head step cannot drive), so `ruleAt` rewrites the
+`Core.Ratio.ofString` call before it is unfolded. `split_half` clears the one `splitOn`; the kernel then runs `natOf` and
+`gcd` under `decide`. -/
+private theorem ratio_half : Core.Ratio.ofString "1/2" "delta" = .ok ⟨1, 2⟩ := by
+  unfold Core.Ratio.ofString
+  rw [split_half]
+  decide
+
 /-! ## v2's parameters, with every field named -/
 
 /-- The parameters `θ₀` decodes to, with each field `paramsOfJson` reads. -/
@@ -512,8 +521,9 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
       show (Flock.unhex gk).toOption = some keyPub
       rw [← hgk, Flock.Hex.unhex_hexOf]; rfl
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, split_half, poolValues_none, keys?_mkObj, keys?_obj,
-      sortStrings_of_sorted, sortStrings_eq_sortLt] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, ratio_half, split_half, poolValues_none, keys?_mkObj,
+      keys?_obj, sortStrings_of_sorted, sortStrings_eq_sortLt] block [Flock.canon, Spot.Program.parse, Flock.unhex]
+      shallow []
     case f1 => kernel_rfl'            -- own.partition = partitionObj
     case f2 => rw [hpf]               -- own.program = programFile
     case f3 => kernel_rfl'            -- own.circuit
