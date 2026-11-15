@@ -15,7 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
 
-from . import crons, subscriber
+from . import comms, crons, subscriber
 from .deps import (CANARY_DONE, CANARY_SENT, DEAD, DEAD_TOPIC, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, TOPIC, Deps,
                    error, deployed)
 
@@ -87,6 +87,10 @@ def create_app(deps: Callable[[], Deps] = deployed) -> FastAPI:
         ev, eid = data.get("event") or {}, data.get("event_id")
         if data.get("type") != "event_callback" or not eid:
             return JSONResponse({"ok": True, "ignored": data.get("type")})
+        if comms.candidate(d, ev):
+            return await enqueue(d, {"kind": "comms-relay", "event_id": "comms:" + ev["ts"],
+                                     "event": {k: ev[k] for k in ("type", "subtype", "channel", "thread_ts", "ts", "text",
+                                                                  "username", "bot_id") if k in ev}})
         if ev.get("bot_id") and ev.get("bot_id") == d.registry.get("bot_id") and not d.rs.external_post(ev, d.registry):
             return JSONResponse({"ok": True, "ignored": "our bot's post"})
         return await enqueue(d, {"kind": "event", "event_id": eid, "event": ev, "team_id": data.get("team_id"),

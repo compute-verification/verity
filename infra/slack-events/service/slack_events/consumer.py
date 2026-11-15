@@ -19,7 +19,7 @@ import argparse
 import re
 from typing import Any
 
-from . import router
+from . import comms, router
 from .deps import CANARY_DONE, DEAD, DEAD_TOPIC, LAST_DONE, LAST_SUCCESS, Deps, error
 
 MAX_DELIVERIES = 5
@@ -71,6 +71,8 @@ def consume(deps: Deps, payload: dict, delivery_count: int) -> str:
         return "dropped"
     try:
         decision = process(deps, payload)
+    except comms.Pending as e:
+        raise Retry(30, "waiting for comms") from e
     except Exception as e:  # noqa: BLE001 - every failure retries, then dead-letters
         deps.log("failed", event_id=eid, delivery=delivery_count, error=error(e))
         if delivery_count < MAX_DELIVERIES:
@@ -85,6 +87,9 @@ def consume(deps: Deps, payload: dict, delivery_count: int) -> str:
 
 
 def process(deps: Deps, payload: dict) -> str:
+    if payload.get("kind") == "comms-relay":
+        ev = payload.get("event") or {}
+        return comms.forward(deps, ev) if comms.candidate(deps, ev) else "comms relay closed"
     if payload.get("kind") == "interactivity":
         # TODO: #ask-daniel's buttons. The decision is recorded by the website's /api/agent-approvals route, which
         # only a card's asker can reach (Cursor OIDC); `ring_decision` needs that record. README "Needs".

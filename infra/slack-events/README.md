@@ -166,3 +166,19 @@ the registry changed since the deployment before (`service/ignore.py`, vercel.js
 - **Routing by model is off** (`router.py`).
 - **Unverified until a deploy:** the drain's first `done` lines (polling from a Vercel function, a per-minute cron),
   and Runtime Cache's behavior across regions.
+
+## Comms rehearsal
+
+The existing Events API can forward a verified router doorbell in the comms inbox to the
+production agents platform. Set `COMMS_RELAY_INBOX` (channel ID/thread timestamp) and
+`COMMS_RELAY_UNTIL` (UTC ISO timestamp) in both production projects. The 24-hour window is
+closed by default. While Cursor holds the route, only the public coordination thread named by
+`COMMS_RELAY_CANARY_THREAD` can be rehearsed. Reserve that thread with the Cursor holder first.
+Full delivery requires the verified platform seat to hold the open comms route. The relay handles
+public coordination doorbells only. Private-channel work and other notification types require
+their own handoff before a full cutover.
+
+The relay authenticates with its Vercel production identity, checks Slack for an existing receipt
+after an uncertain post, and replies as comms in the verified source thread. Inspect the dead-letter
+queue for a reply with a missing receipt. Pausing the platform seat, restoring the Cursor route and
+clearing the canary or closing the time window stops forwarding.
