@@ -1343,6 +1343,9 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
                   passed=lambda name: passed_gb(name, SLOTS.parent))
         got = None if n else take([s for s in slots if (priority or not s["trains"]) and holds(s, min_mem)], SLOTS.parent, now(),
                                   priority, poll)
+        if got and run_max is not None and (short := short_of(run_max, run_dir, mono)):
+            os.close(got[1])                                        # before a twin claim, which its twins would take as started
+            return gone(short)
         if got and pair:
             state, info = twin("claim", pair, {**me, "took": f"{now():%Y-%m-%dT%H:%MZ}"})
             if state != "claimed":
@@ -1367,9 +1370,6 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         if run_max is not None and (short := short_of(run_max, run_dir, mono)):
             return gone(f"{short} ({why})")
         sleep(POLL_S)
-    if run_max is not None and (short := short_of(run_max, run_dir, mono)):
-        os.close(got[1])
-        return gone(short)
     ticket.unlink()
     os.close(tfd)
     slot, fd = got

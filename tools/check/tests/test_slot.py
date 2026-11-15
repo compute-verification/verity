@@ -564,7 +564,8 @@ def test_run_max_never_moves_the_run_s_end_later_than_its_stated_timeout(tmp_pat
 
 def test_a_waiter_whose_run_ends_before_its_run_max_is_not_started(tmp_path, monkeypatch, capsys):
     """A point that took its slot 31 minutes into a 90-minute run with --run-max 90 minutes could not finish before the
-    run's end: it isn't started, on a free slot or after waiting in the line, and its run's timeout is left as it was."""
+    run's end: it isn't started, on a free slot or after waiting in the line, and its run's timeout is left as it was. A twin
+    leaves before claiming its pair, so a twin whose run can finish still runs."""
     (tmp_path / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     run = tmp_path / "run"
@@ -588,6 +589,11 @@ def test_a_waiter_whose_run_ends_before_its_run_max_is_not_started(tmp_path, mon
     assert "less than --run-max 5400 s, so CMD could not finish before the run's end (every check slot is taken (a: busy))" \
         in capsys.readouterr().err
     os.close(held)
+
+    (run / "status.json").write_text(json.dumps({"started_mono": 0.0, "timeout_s": 5400}))
+    assert SLOT.main(["--twin", "p4", "--run-max", "5400", "--", "true"], now=lambda: NOW, mono=lambda: 1860.0,
+                     sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED
+    assert not (tmp_path / SLOT.TWINS / "p4").exists()                           # its pair is left for a twin that can finish
 
 
 def test_a_wait_with_no_limit_moves_the_run_s_timeout_from_where_it_stands(tmp_path):
