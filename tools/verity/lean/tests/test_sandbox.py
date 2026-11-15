@@ -707,8 +707,9 @@ def test_a_sandboxed_build_in_a_slot_tree_replaces_a_path_dependencys_outputs_an
 @needs_var_tmp
 def test_a_real_build_whose_compile_time_code_writes_a_source_through_a_linked_lake_is_refused_before_lake_runs(tmp_path):
     """A change commits `pkg/.lake -> ../src` beside a module whose `#eval`, run while it compiles, writes `.lake/Main.lean`,
-    which is `src/Main.lean`. In the sandbox, as a build runs (`--at`), the build is refused and the source stays; the
-    same `lake build` outside it rewrites the source, so the `#eval` is a writer."""
+    which is `src/Main.lean`, and its `lake-manifest.json` (without it Lake's first write, the manifest's, fails in the
+    read-only package before anything compiles). In the sandbox, as a build runs (`--at`), the build is refused and the
+    source stays; the same `lake build` outside it rewrites the source, so the `#eval` is a writer."""
     tree = tmp_path.resolve() / "tree"
     (src := tree / "src").mkdir(parents=True)
     (src / "Main.lean").write_text("orig\n")
@@ -718,6 +719,8 @@ def test_a_real_build_whose_compile_time_code_writes_a_source_through_a_linked_l
     (pkg / "P.lean").write_text('#eval IO.FS.writeFile ".lake/Main.lean" "pwned\\n"\n')
     (pkg / ".lake").symlink_to("../src")
     env = {**os.environ, "LAKE_ARTIFACT_CACHE": "false"}
+    subprocess.run(["lake", "update"], cwd=pkg, env=env, check=True, capture_output=True)
+    assert (pkg / "lake-manifest.json").is_file() and (src / "Main.lean").read_text() == "orig\n"
     r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(tree), str(pkg / ".lake"), "--", "lake",
                         "build"], cwd=pkg, env=env, capture_output=True, text=True)
     assert r.returncode == 3, r.stdout + r.stderr
