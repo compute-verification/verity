@@ -5730,7 +5730,8 @@
     "Definitions.Hash",
     "Definitions.Pouw",
     "Definitions.Pouw.Assumptions",
-    "Definitions.Core.Assumptions"
+    "Definitions.Core.Assumptions",
+    "Definitions.Certifier.JointBridge"
    ],
    "except": [],
    "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do; the lead's premises read core's named assumptions (`Definitions.Core.Assumptions`, the certifier's `trusted-device`) and the hash area's formats (`Definitions.Hash`: frame-v3 trees and hm96-sha512 rows), never its guarantees; the lead's commitment premises read the hash area's keyed leaf and hm96 leaf (Definitions.Hash.Keyed, Definitions.Hash.Hm96)",
@@ -5743,14 +5744,27 @@
     "Definitions.Core.Assumptions",
     "Definitions.Pouw",
     "Definitions.Pouw.Assumptions",
-    "Definitions.Pouw.Guarantees"
+    "Definitions.Pouw.Guarantees",
+    "Definitions.Registration.Physical",
+    "Definitions.Registration.Assumptions.Sheet",
+    "Definitions.Assumptions.Accounting",
+    "Definitions.Assumptions.Pouw",
+    "Definitions.Compose.Assumptions.Stages"
    ],
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
    "sealed": true
   },
   "Definitions.Pouw": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Hash", "Definitions.Pouw"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Claims",
+    "Definitions.Hash",
+    "Definitions.Pouw",
+    "Definitions.Accounting.Actual",
+    "Definitions.Compose.Joint"
+   ],
    "except": ["Definitions.Pouw.PearlC.Defs"],
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share; the lead's keyed commitments read the hash area's keyed leaf and hm96 leaf (Definitions.Hash.Keyed, Definitions.Hash.Hm96)"
   },
@@ -5794,7 +5808,8 @@
     "Definitions.Pous",
     "Definitions.Pous.Assumptions",
     "Definitions.Assumptions.Pous",
-    "Definitions.Pous.Guarantees"
+    "Definitions.Pous.Guarantees",
+    "Definitions.Core.Accel.Card"
    ],
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses (the area's, and timed incompressibility in the assumptions home, Definitions.Assumptions.Pous), never over a proof",
@@ -5814,7 +5829,16 @@
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
   "Definitions.Pous": {
-   "imports": ["Mathlib", "Definitions.Core.Game", "Definitions.Core.Accel", "Definitions.Pous"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core.Game",
+    "Definitions.Core.Accel",
+    "Definitions.Pous",
+    "Definitions.Compose.Joint",
+    "Definitions.Pous.Assumptions.P2",
+    "Definitions.Pouw.Confidence",
+    "Definitions.Core.Blocks"
+   ],
    "except": [],
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; the probability is core's uniform probability (Verity.Game.prCoin, Definitions.Core.Game); an instance at one card reads that card's table (Definitions.Core.Accel), the figures' one source in Lean"
   },
@@ -5856,14 +5880,41 @@
     "Definitions.Pous",
     "Definitions.Hash",
     "Definitions.Claims",
-    "Definitions.Accounting"
+    "Definitions.Accounting",
+    "Definitions.Compose.Additive",
+    "Definitions.Poub.Bandwidth",
+    "Definitions.Poub.BandwidthAudit",
+    "Definitions.Poub.BoundReceipt",
+    "Definitions.Poub.BoundSketch",
+    "Definitions.Certifier.Bridge",
+    "Definitions.Poub.Carrier",
+    "Definitions.Compose.Compose",
+    "Definitions.Compose.ComposeMonitoringPeriod",
+    "Definitions.Registration.Device",
+    "Definitions.Compose.Joint",
+    "Definitions.Compose.JointPeriod",
+    "Definitions.Certifier.JointBridge",
+    "Definitions.Compose.JointLive",
+    "Definitions.Compose.PeriodBinding",
+    "Definitions.Registration.Physical",
+    "Definitions.Slowdown.Tasks",
+    "Definitions.Certifier.NetWitness",
+    "Definitions.Poub.RateAudit",
+    "Definitions.Poub.RateAuditDeployed",
+    "Definitions.Poub.RateAuditInteractive",
+    "Definitions.Poub.RateAuditJoint",
+    "Definitions.Poub.RateAuditPartial",
+    "Definitions.Poub.RateAuditPooled",
+    "Definitions.Poub.RateAuditRemote",
+    "Definitions.Poub.RateAuditSketch",
+    "Definitions.Poub.RateAuditSketchDeployed",
+    "Definitions.Poub.RateAuditSketchInteractive",
+    "Definitions.Poub.RateAuditSketchLayout",
+    "Definitions.Poub.Remote",
+    "Definitions.Slowdown.ServingBlocks",
+    "Definitions.Poub.Tag"
    ],
-   "except": [
-    "Definitions.Poub.Bandwidth.Game",
-    "Definitions.Certifier.JointBridge.CommOfMonitoringPeriodLeakAccepted",
-    "Definitions.Certifier.JointBridge.CommOfPooledLeakAccepted",
-    "Definitions.Certifier.JointBridge.CommOfPooledLeakAcceptedWitness"
-   ],
+   "except": [],
    "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model; the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game; they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer; the remote audit's receipts are the served row leaf in frame-v3-sha512 trees, and their binding event is a collision among the two openings' checks (Definitions.Hash); a period of the causal game reads its subprotocols' collision finders and their success (Definitions.Claims' Finder, Finder.Pr), as the claims state them"
   },
   "Definitions.Accounting.Guarantees": {
@@ -5882,7 +5933,51 @@
     "Definitions.Accounting.Assumptions",
     "Definitions.Accounting.Guarantees",
     "Definitions.Claims",
-    "Definitions.Assumptions"
+    "Definitions.Assumptions",
+    "Definitions.Slowdown.Guarantees.Actual",
+    "Definitions.Compose.Guarantees.Additive",
+    "Definitions.Poub.Guarantees.Bandwidth",
+    "Definitions.Poub.Guarantees.BandwidthAudit",
+    "Definitions.Poub.Guarantees.BoundReceipt",
+    "Definitions.Poub.Guarantees.BoundSketch",
+    "Definitions.Pouw.Guarantees.Bridges",
+    "Definitions.Pouw.Guarantees.CoinFlow",
+    "Definitions.Compose.Guarantees.Compose",
+    "Definitions.Compose.Guarantees.ComposeMonitoringPeriod",
+    "Definitions.Pouw.Guarantees.Confidence",
+    "Definitions.Pouw.Guarantees.FillerLuck",
+    "Definitions.Pouw.Guarantees.HMu",
+    "Definitions.Pouw.Guarantees.Headline",
+    "Definitions.Pouw.Guarantees.HeadlineDc",
+    "Definitions.Compose.Guarantees.Joint",
+    "Definitions.Compose.Guarantees.JointLive",
+    "Definitions.Certifier.Guarantees.JointBridge",
+    "Definitions.Pouw.Guarantees.PerRun",
+    "Definitions.Compose.Guarantees.PeriodBinding",
+    "Definitions.Pouw.Guarantees.Pouw",
+    "Definitions.Pouw.Guarantees.PouwWork",
+    "Definitions.Poub.Guarantees.RateAudit",
+    "Definitions.Poub.Guarantees.RateAuditDeployed",
+    "Definitions.Poub.Guarantees.RateAuditNamed",
+    "Definitions.Poub.Guarantees.RateAuditPartial",
+    "Definitions.Poub.Guarantees.RateAuditPooled",
+    "Definitions.Poub.Guarantees.RateAuditRemote",
+    "Definitions.Poub.Guarantees.RateAuditSketch",
+    "Definitions.Slowdown.Guarantees.ServingBlocks",
+    "Definitions.Poub.Guarantees.RemoteHeld",
+    "Definitions.Poub.Guarantees.RemoteDraw",
+    "Definitions.Poub.Guarantees.RemoteBinding",
+    "Definitions.Poub.Guarantees.RemotePass",
+    "Definitions.Poub.Guarantees.RemoteSketch",
+    "Definitions.Poub.Guarantees.RemoteSketchLine",
+    "Definitions.Poub.Guarantees.RemoteSketchP2",
+    "Definitions.Poub.Guarantees.Sketch",
+    "Definitions.Poub.Guarantees.Stacking",
+    "Definitions.Pouw.Guarantees.TS",
+    "Definitions.Registration.Guarantees.Sheet",
+    "Definitions.Poub.RateAuditRemote",
+    "Definitions.Registration.Assumptions.Sheet",
+    "Definitions.Registration.Physical"
    ],
    "except": [],
    "why": "the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition) and takes NCI's named incompressibility assumptions as hypotheses; B1 is TT at the cost model of the actual circuit's provers; B2 and lemma M compose with PoUS's audit game and take P2's named assumption P2RingAuditSecure as a hypothesis; a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and the named assumptions (PoUW's TT, resource accounting's own) as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model and its named assumption; the composed credit's binding lemma (Compose.BindingOfECR) prices a fork by the claims' expected-cost collision resistance (Definitions.Claims' ExpectedCR, Finder), as the claims state it; the bound receipt's tile games take PoUW's named assumption that a cost model hashes nothing (Definitions.Assumptions.Pouw's Pouw.CostModel.Hashless) as a hypothesis",
@@ -5976,14 +6071,33 @@
     "Definitions.Pous.Model.Audit",
     "Definitions.WeightSecurity",
     "Definitions.WeightSecurity.Assumptions",
-    "Definitions.Assumptions"
+    "Definitions.Assumptions",
+    "Definitions.Poub.Carrier",
+    "Definitions.Poub.Remote",
+    "Definitions.Slowdown.Cut",
+    "Definitions.Slowdown.Formalism"
    ],
    "sealed": true,
    "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's definitions, PoUW's cost models (Definitions.Pouw.Game.Defs and Pearl-C's Definitions.Pouw.PearlC.Game, for Definitions.Assumptions.Pouw and the resource-accounting assumptions), PoUS's timed audit (for PoUS's assumptions), the hash area's messages and digests with core's coin probability (Definitions.Hash.Basic, Definitions.Core.Game, for the hash's assumptions), the transport's channels (for the transport's assumptions) and weight security's definitions and premises, never a guarantee or a proof"
   },
   "Definitions.Certifier": {
-   "imports": ["Mathlib", "Definitions.Certifier", "Definitions.Claims", "Definitions.Hash"],
-   "except": [],
+   "imports": [
+    "Mathlib",
+    "Definitions.Certifier",
+    "Definitions.Claims",
+    "Definitions.Hash",
+    "Definitions.Registration.Device",
+    "Definitions.Registration.Physical",
+    "Definitions.Compose.JointPeriod",
+    "Definitions.Poub.BandwidthAudit",
+    "Definitions.Compose.Compose",
+    "Definitions.Pouw.PouwWitness",
+    "Definitions.Core.Boolean"
+   ],
+   "except": [
+    "Definitions.Certifier.JointBridge.CommOfMonitoringPeriodLeakAccepted",
+    "Definitions.Certifier.JointBridge.CommOfPooledLeakAccepted"
+   ],
    "why": "the protocol's definitions, and the statements under its Guarantees/, are trusted text: they import no assumption or proof, only Mathlib, one another, the claims' definitions (the sampled audit reads sampling's vocabulary) and the hash area's (a carried pool's rows and their sha512/row-seg/v1 roots)"
   },
   "Definitions.Certifier.Assumptions": {
@@ -6015,14 +6129,15 @@
     "Definitions.Core",
     "Definitions.Core.Assumptions",
     "Definitions.InferenceOnly",
-    "Definitions.InferenceOnly.Assumptions"
+    "Definitions.InferenceOnly.Assumptions",
+    "Definitions.Slowdown.Dark"
    ],
    "except": [],
    "why": "a named assumption reads the protocol, never a proof",
    "sealed": true
   },
   "Definitions.InferenceOnly.Guarantees": {
-   "except": ["Definitions.Slowdown.Guarantees.FitRate"],
+   "except": [],
    "imports": [
     "Mathlib",
     "Definitions.Core",
@@ -6031,7 +6146,8 @@
     "Definitions.InferenceOnly",
     "Definitions.InferenceOnly.Assumptions",
     "Definitions.Assumptions",
-    "Definitions.InferenceOnly.Guarantees"
+    "Definitions.InferenceOnly.Guarantees",
+    "Definitions.Slowdown.Covering"
    ],
    "sealed": true,
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
@@ -6043,7 +6159,9 @@
     "Definitions.InferenceOnly",
     "Definitions.InferenceOnly.Assumptions",
     "Definitions.Accounting",
-    "Definitions.Slowdown.Guarantees.FitRate"
+    "Definitions.Slowdown.Guarantees.FitRate",
+    "Definitions.Registration.Physical",
+    "Definitions.Slowdown.Assumptions.Fit"
    ],
    "except": [],
    "why": "the fit bound on a run is stated over NCI's window premises and the actual circuit's windows (Definitions.Accounting), never over a proof"
