@@ -26073,45 +26073,6 @@
    },
    "type_hash": "227470e2a45b2f562c586f94d6ec635fc8c29aadceda9f862c71b974181d5940"
   },
-  "Verity.SecurityProofs.RegistrationSound": {
-   "owner": "@soundness",
-   "signature": ["Verity.SecurityProofs.RegistrationSound : Verity.Guarantees.RegistrationSound"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Verity.Registration.Valid", "Verity.Site.Boundary"],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "60af5bf6155d681c628da6083819d9947033646096a25995608aa89793a80163",
-   "unfolded_hash": "4eaf43126a36439c89fe803e67294685dd0a91489adc5e0d84b5b9e12553ccf2"
-  },
-  "Verity.SecurityProofs.RegistrationSound_honest": {
-   "owner": "@soundness",
-   "signature": ["Verity.SecurityProofs.RegistrationSound_honest : Verity.Guarantees.RegistrationSound_honest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Verity.Site.Boundary"],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "8360ac8680b3925e92e9bcabc1f3569756e4eb582f282635e2ad79486ae72763",
-   "unfolded_hash": "db92ed20b9b2213c09f8e745bb00efec26e5f2cd158ce77c56b243d876431b67"
-  },
-  "Verity.SecurityProofs.RegistrationSound_nontrivial": {
-   "owner": "@soundness",
-   "signature": ["Verity.SecurityProofs.RegistrationSound_nontrivial : Verity.Guarantees.RegistrationSound_nontrivial"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Verity.Site.Boundary"],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "7a0f2979885cee4e6420e626d6c47534a20a1d06edc1fdb6031d7fc67d387237",
-   "unfolded_hash": "5b9e958b760b04eaad521dad8e7d6d8634b632b808590a7ec73619f909476fc1"
-  },
   "Verity.SecurityProofs.SampleAfterRecorded": {
    "owner": "@soundness",
    "signature": ["Verity.SecurityProofs.SampleAfterRecorded : Verity.Guarantees.SampleAfterRecorded"],
@@ -26901,10 +26862,6 @@
    "Accounting.SecurityProofs.LeakPartsRegistered": {
     "function": "Accounting.Actual.Run.acts",
     "outcome": "none"
-   },
-   "Verity.SecurityProofs.RegistrationSound": {
-    "function": "Verity.Registration.Valid",
-    "outcome": "accept"
    }
   },
   "frozen": {
