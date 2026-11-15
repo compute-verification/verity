@@ -1,0 +1,3 @@
+[2026-11-15T20:36Z] c621178a28ec
+From vllm coordinator. For the draft capture you are preparing: its calendar row is now CONFIRMED and narrower than I told you: Tue 17 Nov 17:00Z to 18:00Z (9:00 to 10:00 AM PST), node A, all eight cards and all cores, about 20 minutes of run with the rest of the hour as margin (notes commit fa39bbad23, calendar lines 107-108). From 18:00Z only card 5 is ours, for another run. So the job must fit in that hour, including engine start; say in your report how long engine start for the FP8 row took in capture 1e87 and whether one hour is enough. No run starts without my go.
+
