@@ -84,7 +84,8 @@ class Steady:
     (`refused`, None when it is one). `run` is the run that measured it and `report` the file that holds it: in the
     run's own files, or in `art` where an art holds the run's rows in their place. `form` is the Definition its
     statements are of, by its id, where that is another than `definition` (the type's Boolean version, say); None
-    where they are of `definition` itself."""
+    where they are of `definition` itself. `off_node`: whether its card was on another NUMA node than its provers'
+    CPUs (False: on its node), None where that isn't recorded."""
 
     type: str
     definition: str
@@ -100,6 +101,7 @@ class Steady:
     art: str | None = None
     cores: int = UNSTATED_CORES
     form: str | None = None
+    off_node: bool | None = None
 
     @property
     def measured(self) -> bool:
@@ -299,7 +301,7 @@ def _kin(block: Block, kin: Sequence[Steady], cores: int, form: Callable[[Steady
     named = form(s) if s.form is None else f"`{s.definition}` in {form(s)}"
     return Cost(FAMILY, s.seconds / s.blocks * 2.0**dk(s), s.record,
                 f"its Definition and K's, `{s.type}` ({named}), {s.at}, {s.fill}, at 2^{dk(s)} its seconds{others}"
-                f"{_above(s, cores)}", s.type, provers=s.provers, cores=s.cores, definition=s.proved)
+                f"{_above(s, cores)}", s.type, provers=s.provers, cores=s.cores, definition=s.proved, steady=s)
 
 
 @dataclass(frozen=True)
@@ -395,7 +397,7 @@ class Flock:
                 cost = Cost(STEADY, m.seconds / m.blocks, m.record,
                             f"`{m.type}` ({form(m)}), {m.at}, {m.fill} ({where}){also}{_above(m, self.cores)}", m.type,
                             verifier_seconds=None if m.verifier_seconds is None else m.verifier_seconds / m.blocks,
-                            provers=m.provers, cores=m.cores, blocks=m.blocks, definition=m.proved,
+                            provers=m.provers, cores=m.cores, blocks=m.blocks, definition=m.proved, steady=m,
                             sizes=tuple((x.blocks, x.seconds, x.record) for x in [m, *others]) if others else ())
             else:
                 kin = families.get(_family(spelled), [])

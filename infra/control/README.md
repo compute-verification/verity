@@ -233,17 +233,21 @@ clone with `--source .` and the clone's own `research`, without the site key in 
 carry only the options `ALLOWED` in `metrics_rerun.py` lists, each with a value of its form; any other (`--send`, `--source
 DIR`, `--runs-dir`, `--id`) is refused and said, so no row ships a file of the pod. A command that doesn't split as a shell
 line is refused and said, and the pass goes on; a `research run` without `--on` is a local run, which would run on the pod,
-and is skipped and said. A CPU command (`--on auto`) goes to the loop's `--on` in its row's pool, else the loop's `--pool`;
-a command asking for GPUs or naming its machine (`--on NODE`, `--on vy-...`) goes only to a machine
+and is skipped and said. The loop runs a row only when its command asks no more than the default job (`DEFAULT_JOB`,
+`research run`'s own `AUTO_MEM_GB` and `AUTO_MAX_MIN` from `research.cli`): no `--pool`, and `--mem-gb` and `--timeout` each
+at or under the default's, read as `research run` reads them (one it can't read is over); a row may carry no `--cpus`.
+Any other row runs when its owner runs it, and is skipped and said, before and whatever the plan below lists for it. A CPU command (`--on auto`) goes to the loop's `--on` in the loop's
+`--pool`; a command asking for GPUs or naming its machine (`--on NODE`, `--on vy-...`) goes only to a machine
 `/data/watchers/gpu-plan.toml` lists for one of its numbers now (the machine it names, when it names one) and that no
 launch of the loop's is in flight on (waiting for its slot or running), and without one it is skipped and said. The plan is
 the lead's, one `[[free]]` table a machine, with `machine`, `from` and `until` (TOML date-times, UTC) and `metrics`, the ids
 it is free for: a row naming none is free for none, and said. Never `auto`, never vy-nebius-cpu-2, -4, -5 or -6. A pass
 launches at most `--max`; never a number whose last launch of the loop's is in flight (a run whose state can't be read
 stays so) or ran and ended less than its `every` ago, whatever the door says; never a command that takes a run id only its
-owner picks (FIRE_RUN); never a loop's own number (a row whose command's script is under `infra/`); never a command that
-failed twice running under its rows as they are, until a change to them. The loop names each run (`--id`) and records it
-before launching, so a launch that prints no run line, or that its timeout kills, is judged by that run's own record: a
+owner picks (FIRE_RUN); never a loop's own number (a row whose command's script is under `infra/control/`); never a parked
+number (a row whose `goal` is `top/parked`, rerun only by hand), and said; never a command
+that failed twice running under its rows as they are, until a change to them. The loop names each run (`--id`) and records
+it before launching, so a launch that prints no run line, or that its timeout kills, is judged by that run's own record: a
 run that registered and reached its machine is in flight and never launched again while it is. A launch that never ran
 (its run never registered or never reached its machine, or ended without taking its slot, as when a pool refuses it at
 once) is a fault of the launch, not of the command: after two in a row the number waits its `every` from the last, and is

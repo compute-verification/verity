@@ -16,6 +16,7 @@ build made of the reads are what the toolchain and the audit take, and that the 
 import."""
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -25,7 +26,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import git, toy_tree
+from conftest import git, once, toy_tree
 
 from verity_graph import ROOT, graph, local, runners
 from verity_graph.families import lean_env as env_family
@@ -86,32 +87,59 @@ EVIL = "module\n\nprelude\npublic import Init.Prelude\n\npublic theorem q : True
 DEP = {"lakefile.toml": 'name = "dep"\ndefaultTargets = ["Dep"]\n\n[[require]]\nname = "evil"\n'
                         'git = "https://example.invalid/evil"\n\n[[lean_lib]]\nname = "Dep"\n',
        "Dep.lean": "prelude\nimport Evil\n", "lake-manifest.json": manifest("dep", "evil")}
-#: `evil` with a definition whose public part hides its body, which takes 100000 steps of `Nat.rec` to evaluate, and a
+#: the steps of `Nat.rec` `big` takes: on v4.34.0 the replay's kernel stops on a 2048 KB stack from about 3000 steps, and
+#: `lean` itself slows sharply checking `t` with `big`'s body past about 60000 (1.6 s at 40000, 23 s at 80000, 217 s at
+#: 100000)
+STEPS = 40000
+#: `evil` with a definition whose public part hides its body, which takes `STEPS` steps of `Nat.rec` to evaluate, and a
 #: theorem the kernel checks at once where `big` is an axiom, and only by evaluating `big` where it has its body
 DEEP = {"Deep": "module\n\nprelude\npublic import Init.Prelude\n\npublic noncomputable def big : Nat :=\n"
-                "  Nat.rec (motive := fun _ => Nat → Nat) (fun acc => acc) (fun _ r acc => r (Nat.succ acc)) 100000 0\n",
+                f"  Nat.rec (motive := fun _ => Nat → Nat) (fun acc => acc) (fun _ r acc => r (Nat.succ acc)) {STEPS} 0\n",
         "Evil": "module\n\nprelude\npublic import Deep\n\n"
-                "public theorem t (h : Eq big 100000) : Eq (id big) 100000 := h\n"}
+                f"public theorem t (h : Eq big {STEPS}) : Eq (id big) {STEPS} := h\n"}
+
+
+def _replay(cache: Path) -> None:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("CHECK_CACHE", str(cache))
+        module_runner.program("Replay", module_runner.toolchain_dir(TOOLCHAIN), cache)
 
 
 @pytest.fixture(scope="module")
-def lean_env(tmp_path_factory) -> Path:
-    """The check's cache, holding the worker's `lean` env, shared by this file's tests, so `Replay.lean` compiles once."""
-    return tmp_path_factory.mktemp("check-cache")
+def lean_env(pytestconfig, tmp_path_factory) -> Path:
+    """The check's cache, holding the worker's `lean` env, shared by this file's tests, with `Replay.lean` compiled once a
+    run (`once`) and copied in, where `module_runner.program` finds it."""
+    cache = tmp_path_factory.mktemp("check-cache")
+    programs = Path("lean-env") / "programs"
+    shutil.copytree(once(pytestconfig, tmp_path_factory, "replay", _replay) / programs, cache / programs, symlinks=True)
+    return cache
 
 
 class Envs:
-    """The lean-env tasks this file's tests ran, each once, by key, with its result and its record, which each test's
-    executor takes as a cache would: the toolchain's env replays every module of the toolchain."""
+    """The lean-env tasks this file's tests ran, each once a run (`once`, for every xdist worker: the key digests what the
+    task reads, and the worker's env is the toolchain's, which each worker of the machine shares), by key, with its result
+    and its record, which each test's executor takes as a cache would: the toolchain's env replays every module of the
+    toolchain."""
 
-    def __init__(self, store: Path) -> None:
-        self.store, self.got = store, {}
+    def __init__(self, config: pytest.Config, factory: pytest.TempPathFactory) -> None:
+        self.config, self.factory, self.got = config, factory, {}
 
     def run(self, task: dict, doc: dict) -> tuple[dict, Path]:
-        if task["key"] not in self.got:
-            work = self.store / f"{len(self.got)}"
-            self.got[task["key"]] = (runners.execute(task, doc, work), work / env_family.record(task["vars"]["package"]))
-        return self.got[task["key"]]
+        key = task["key"]
+        if key not in self.got:
+            record = env_family.record(task["vars"]["package"])
+            if not isinstance(key, str):
+                work = self.factory.mktemp("env") / "work"
+                self.got[key] = (runners.execute(task, doc, work), work / record)
+                return self.got[key]
+
+            def make(d: Path) -> None:
+                res = runners.execute(task, doc, d / "work")
+                (d / "result.json").write_text(json.dumps(res))
+                assert json.loads((d / "result.json").read_text()) == res, "a result its JSON doesn't give back"
+            d = once(self.config, self.factory, "lean-env-" + hashlib.sha256(key.encode()).hexdigest()[:32], make)
+            self.got[key] = (json.loads((d / "result.json").read_text()), d / "work" / record)
+        return self.got[key]
 
     def launch(self, doc: dict):
         def go(t: dict, w: Path) -> dict:
@@ -138,8 +166,8 @@ def stage(record: Path, work: Path, at: str) -> Path:
 
 
 @pytest.fixture(scope="module")
-def envs(tmp_path_factory) -> Envs:
-    return Envs(tmp_path_factory.mktemp("envs"))
+def envs(pytestconfig, tmp_path_factory) -> Envs:
+    return Envs(pytestconfig, tmp_path_factory)
 
 
 @pytest.fixture
@@ -499,7 +527,7 @@ def test_a_declaration_the_kernel_stops_on_passes_on_the_imports_lean_checked_it
     assert res["status"] == "pass" and res["detail"]["rounds"][0]["on_public_imports"] == ["t"], res["detail"]
     res = replay(DEEP | {"Evil": "module\n\nprelude\nimport all Deep\n\n"
                                  "set_option maxRecDepth 100000000 in\nset_option maxHeartbeats 0 in\n"
-                                 "theorem t (h : Eq big 100000) : Eq (id big) 100000 := h\n"}, tmp_path / "all")
+                                 f"theorem t (h : Eq big {STEPS}) : Eq (id big) {STEPS} := h\n"}, tmp_path / "all")
     assert res["status"] == "fail" and res["detail"]["rejected"] == ["Evil"], res["detail"]
 
 
