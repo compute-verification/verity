@@ -1,5 +1,6 @@
 """The core benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface") as the kit holds it:
-`record_dir` reads a directory with nothing of research's and a run id only through it, past its withdrawals,
+`record_dir` reads a directory with nothing of research's and a run id only through it, past its withdrawals (which
+`record` also gives),
 `ran_with` takes only the fixed words and the deployed challenger's only verified, and `report` prints the line after
 the first, says where it is not an audit and where its record is made up, and gives no number for a run the Lean
 verifier didn't accept. The section's table is held too: each listed directory's README has the three parts, its
@@ -119,7 +120,8 @@ def no_research(monkeypatch):
 
 def test_a_directory_is_its_record_and_imports_nothing_of_researchs(tmp_path, monkeypatch):
     no_research(monkeypatch)
-    assert kit.record_dir(tmp_path) == (tmp_path, []) and kit.record_dir(str(tmp_path)).path == tmp_path
+    assert kit.record_dir(tmp_path) == tmp_path and kit.record_dir(str(tmp_path)) == tmp_path
+    assert isinstance(kit.record_dir(tmp_path), Path) and kit.record(tmp_path) == (tmp_path, [])
 
 
 @pytest.mark.parametrize("arg", ["no/such/dir", "r2000-bad", f"{RUN}x"])
@@ -178,10 +180,9 @@ def stand_in_research(monkeypatch, attempts: dict, fetched: Path, withdrawals: d
 def test_a_run_id_is_fetched_through_research_to_its_records_directory(tmp_path, monkeypatch):
     asked = stand_in_research(monkeypatch, {RUN: {"outputs": {"run_record": f"art:{RUN}"}}, "r20000101-000000-bbbb": {}},
                               tmp_path)
-    assert kit.record_dir(RUN, paths=["out/a.json"]) == (tmp_path, [])
-    assert asked == [("pull", [RUN, f"art:{RUN}"]), ("fetch", f"art:{RUN}", ["out/a.json"])]
-    with pytest.raises(kit.NoRecord, match="its record holds none of out/z.json"):
-        kit.record_dir(RUN, paths=["out/z.json"])
+    assert kit.record_dir(RUN, paths=["out/a.json"]) == tmp_path and isinstance(kit.record_dir(RUN), Path)
+    assert asked[:2] == [("pull", [RUN, f"art:{RUN}"]), ("fetch", f"art:{RUN}", ["out/a.json"])]
+    assert kit.record(RUN, paths=["out/a.json"]) == (tmp_path, [])
     with pytest.raises(kit.NoRecord, match="the evidence store holds no record of it"):
         kit.record_dir("r20000101-000000-bbbb")
     with pytest.raises(kit.NoRecord, match=r"can't give its record \(the store is down\)"):
@@ -199,17 +200,18 @@ def test_a_run_id_is_fetched_through_research_to_its_records_directory(tmp_path,
 def test_a_run_withdrawn_whole_or_where_it_is_read_is_refused_before_anything_is_fetched(tmp_path, monkeypatch, target,
                                                                                        reason, paths):
     asked = stand_in_research(monkeypatch, {RUN: {"outputs": {"run_record": f"art:{RUN}"}}}, tmp_path, {target: [reason]})
-    with pytest.raises(kit.NoRecord) as e:
-        kit.record_dir(RUN, paths=paths)
-    assert str(e.value) == f"{RUN} was withdrawn ({reason!r}, by infra): nothing of it is fetched"
+    for read in (kit.record_dir, kit.record):
+        with pytest.raises(kit.NoRecord) as e:
+            read(RUN, paths=paths)
+        assert str(e.value) == f"{RUN} was withdrawn ({reason!r}, by infra): nothing of it is fetched"
     assert [a for a in asked if a[0] == "fetch"] == []
 
 
 def test_a_withdrawal_of_only_other_files_is_reported_and_printed_beside_the_number(tmp_path, monkeypatch, out, capsys):
     reason = "the private value of a coin can be recovered (only out/pieces, out/b.json)"
     stand_in_research(monkeypatch, {RUN: {"outputs": {"run_files": f"art:{RUN}"}}}, tmp_path, {f"art:{RUN}": [reason]})
-    record = kit.record_dir(RUN, paths=["out/a.json"])
-    assert record == (tmp_path, [f"{reason!r}, by infra"])
+    record = kit.record(RUN, paths=["out/a.json"])
+    assert record == (tmp_path, [f"{reason!r}, by infra"]) and kit.record_dir(RUN, paths=["out/a.json"]) == tmp_path
     assert kit.report("x", "x: 0.25", DOC, withdrawn=record.withdrawn) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[:2] == ["x: 0.25", f"  part of the run's record was withdrawn, none of it a file read here: {reason!r}, by infra"]

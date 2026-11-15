@@ -514,4 +514,4 @@ from verity_bench import kit_report  # noqa: E402
 
 COINS, NOT_STATED, PARAMETERS = kit_report.COINS, kit_report.NOT_STATED, kit_report.PARAMETERS
 NoRecord, Record, ran_with = kit_report.NoRecord, kit_report.Record, kit_report.ran_with
-record_dir, report = kit_report.record_dir, kit_report.report
+record, record_dir, report = kit_report.record, kit_report.record_dir, kit_report.report

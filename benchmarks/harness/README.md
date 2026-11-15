@@ -388,7 +388,7 @@ the audit's cost (the marks are in the spans arms' time). Then each spans arm's 
 
 ## The kit
 
-`verity_bench.kit` holds what benchmarks' runners share, whatever they measure: seven calls, each written once, on the
+`verity_bench.kit` holds what benchmarks' runners share, whatever they measure: eight calls, each written once, on the
 standard library and `verity_bench.settings` alone, so a runner imports it without vLLM or torch.
 
 - **`kit.lease(gpus, minutes)`:** the `gpu-lease` argv a job's command follows: the wait for its GPUs, held for its bound.
@@ -435,15 +435,16 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   prints and writes as before. It returns the exit code: 1 with no number, else 0. `tests/test_report.py` holds
   compute, memory and inference_only to it (compute and memory on their own suites' fixtures, inference_only on its
   stated policy), and `tests/test_interface.py` the interface's arguments.
-- **`kit.record_dir(arg, *, paths=None)`:** the run's record `arg` names as a `kit.Record`, its `path` and its
-  `withdrawn`: a directory as given, with nothing of research's imported; a run id fetched through research's store
-  client where it is installed, refused where it was withdrawn whole or in a part holding a file read, as
-  `benchmarks/compute/run.py`'s `EvidenceStore.files` refuses it, and with a withdrawal of only other files as
-  `withdrawn`. Anything else is refused in one line naming the fix (`kit.NoRecord`, a `ValueError`).
+- **`kit.record_dir(arg, *, paths=None)`:** the directory of the run's record `arg` names: a directory as given, with
+  nothing of research's imported; a run id fetched through research's store client where it is installed, refused where
+  it was withdrawn whole or in a part holding a file read, as `benchmarks/compute/run.py`'s `EvidenceStore.files`
+  refuses it. Anything else is refused in one line naming the fix (`kit.NoRecord`, a `ValueError`).
+  **`kit.record(arg, *, paths=None)`** is the same read as a `kit.Record`, its `path` and its `withdrawn`, a withdrawal
+  of only other files of the record, which the command passes to `kit.report(..., withdrawn=...)`.
 - **`kit.ran_with(coins, parameters, detail=None, *, verified=False)`:** the line `ran with: coins COINS; parameters
   PARAMETERS (DETAIL)` and its object, in the fixed words (`kit.COINS`, `kit.PARAMETERS`); other words are refused, and
   `deployed challenger` without `verified=True`, which a command passes only where it checked the challenger's
-  signature against a pinned key itself. These three are in
+  signature against a pinned key itself. These are in
   `verity_bench/kit_report.py`, which `kit` re-exports.
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a

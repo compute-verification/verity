@@ -110,8 +110,9 @@ The core benchmarks take and print the same things in the same form. Each rule i
    `research`. A run id is taken only where `research` is installed, and is fetched to such a directory first, past
    the store's withdrawals: a run withdrawn whole, or in a part that holds a file the command reads, is refused with its
    reason before anything is fetched, and a withdrawal of only other files of it is printed beside the number and is
-   the document's `withdrawn` (`kit.report(..., withdrawn=...)`). `kit.record_dir(arg, paths=...)` gives the directory
-   and the withdrawals (`kit.Record`), and refuses anything else in one line naming the fix (`kit.NoRecord`).
+   the document's `withdrawn` (`kit.report(..., withdrawn=...)`). `kit.record_dir(arg, paths=...)` gives the directory,
+   and `kit.record(arg, paths=...)` the directory and the withdrawals (`kit.Record`); each refuses anything else in one
+   line naming the fix (`kit.NoRecord`).
 2. **One line of coins and parameters,** right after the command's first line: `ran with: coins COINS; parameters
    PARAMETERS (DETAIL)`, and in the document `ran_with: {coins, parameters, detail}`. COINS is `deployed challenger`,
    `local challenger` (its own process on this machine) or `in-process` (the serve holds the challenger); PARAMETERS

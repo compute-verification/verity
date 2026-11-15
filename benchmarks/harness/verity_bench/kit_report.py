@@ -3,7 +3,7 @@ re-exported by `kit`:
 
 - `record_dir(arg)`: what a command takes, a run's record as a directory, read with nothing of ours; a run id is fetched
   through research's store client where it is installed, past its withdrawals, and refused in one line naming the fix
-  where it is not.
+  where it is not. `record(arg)` gives the same directory and what was withdrawn of the rest of the record.
 - `ran_with(coins, parameters, detail=None, verified=False)`: the one line of the coins and parameters a run ran with,
   in the fixed words (`COINS`, `PARAMETERS`), and its object for the document.
 - `report(name, text, doc, measured, ...)`: a command's last step: prints the text and the one line of JSON, writes them
@@ -50,8 +50,8 @@ class NoRecord(ValueError):
 
 
 class Record(NamedTuple):
-    """A run's record as `record_dir` gives it: its directory, and what was withdrawn of the rest of it, each as its
-    label says it, which the command passes to `report` (`withdrawn=`)."""
+    """A run's record as `record` gives it: its directory, and what was withdrawn of the rest of it, each as its label
+    says it, which the command passes to `report` (`withdrawn=`)."""
     path: Path
     withdrawn: list[str]
 
@@ -60,7 +60,12 @@ def _under(path: str, prefix: str) -> bool:
     return path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/")
 
 
-def record_dir(arg: str | os.PathLike, *, paths: list[str] | None = None) -> Record:
+def record_dir(arg: str | os.PathLike, *, paths: list[str] | None = None) -> Path:
+    """The directory of the run's record `arg` names, as `record` gives it, without what was withdrawn of the rest."""
+    return record(arg, paths=paths).path
+
+
+def record(arg: str | os.PathLike, *, paths: list[str] | None = None) -> Record:
     """The run's record `arg` names: a directory as given, imported and fetched through nothing; a run id (`RUN_ID`)
     its record fetched through research's store client (only `paths` of it where given, each a file's whole path in
     the run). Anything else, or a run id where research isn't installed or holds no record of it, is refused
@@ -104,8 +109,6 @@ def record_dir(arg: str | os.PathLike, *, paths: list[str] | None = None) -> Rec
             if not partial or any(_under(f, p) for f in read for p in prefixes):
                 raise NoRecord(f"{arg} was withdrawn ({said}): nothing of it is fetched")
             gone.append(said)
-        if paths is not None and not any(n in paths for n in names):
-            raise NoRecord(f"{arg}: its record holds none of {', '.join(paths)}: {fix}")
         return Record(Path(store.fetch(art, paths=paths)), gone)
     except StoreError as e:
         raise NoRecord(f"{arg}: the evidence store can't give its record ({e}): {fix}") from None
@@ -116,7 +119,8 @@ def ran_with(coins: str, parameters: str, detail: str | None = None, *,
     """The run's coins and parameters as its one line, ``ran with: coins COINS; parameters PARAMETERS[ (DETAIL)]``, and
     as the document's ``ran_with``; `detail` is the command's own words (draws, δ, scheme, key). Words other than
     `COINS`' and `PARAMETERS`' are refused, and the deployed challenger's without `verified`: True only where the command
-    itself checked the challenger's signature on the coins against a pinned key (`UNVERIFIED`)."""
+    itself checked the challenger's signature on the coins against a pinned key (`UNVERIFIED`), and then the object's
+    ``verified: true``."""
     if coins not in COINS:
         raise ValueError(f"coins {coins!r}: one of {', '.join(map(repr, COINS))}")
     if parameters not in PARAMETERS:
@@ -126,7 +130,7 @@ def ran_with(coins: str, parameters: str, detail: str | None = None, *,
     if coins == COINS[0] and not verified:
         raise ValueError(UNVERIFIED)
     line = f"ran with: coins {coins}; parameters {parameters}" + (f" ({detail})" if detail else "")
-    return line, {"coins": coins, "parameters": parameters, "detail": detail, "verified": verified}
+    return line, {"coins": coins, "parameters": parameters, "detail": detail} | ({"verified": True} if verified else {})
 
 
 #: `ran_with`, under a name `report`'s parameter of that name doesn't hide
@@ -175,7 +179,7 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
         if said is not None and _pair(said["coins"], said["parameters"], said.get("detail"),
                                       verified=said.get("verified", False)) != (line, said):
             raise ValueError(f"ran_with is ran_with()'s pair, not {ran_with!r}")
-        audit = (not made_up and said is not None and said["verified"] is True
+        audit = (not made_up and said is not None and said.get("verified") is True
                  and (said["coins"], said["parameters"]) == (COINS[0], PARAMETERS[0]))
         under = [line, *([] if audit else [NOT_AN_AUDIT])]
         doc |= {"ran_with": None if said is None else dict(said), "audit": audit}
