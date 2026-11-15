@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from research.executor import (AFTER_LANDING_PRIORITY, BLOCKED, GRAPH_V2, TASKS_GRAPH_KIND, Executor, FileTransport, QueueTransport,
-                               Shadowed, agrees, compare, fold_results, keyed, old_verdicts, shadow_report, task_key, task_target)
+                               fold_results, keyed, task_key, task_target)
 from research.landing import AFTER_LANDING
 from research.store import vocab
 from research.store.local import LocalStore
@@ -109,64 +109,6 @@ def test_the_queue_transport_pulls_every_key_not_passed_here(monkeypatch):
                         lambda store, targets, jobs: pulled.extend(targets) or here.update({t: remote[t] for t in targets}))
     assert Executor(QueueTransport(Store())).verdicts([K_SUITE, K_LEAN, new]) == {K_SUITE: "pass", K_LEAN: "pending", new: "pass"}
     assert pulled == [f"task:{K_LEAN}", f"task:{new}"]
-
-
-def test_the_comparison_is_per_task_where_the_run_records_one_and_per_job_where_it_records_the_job_whole():
-    ids = {"pytest:pkg": "k1", "circuit-check:1/2": "k2", "circuit-check:2/2": "k3", "lean-unit-cut": "k4"}
-    old = {"pytest": "pass", "pytest:pkg": "pass", "circuit-check": "fail", "lean-unit-cut": "pass"}
-    got = compare(ids, old, {"k1": "pass", "k2": "pass", "k3": "fail", "k4": "pass"})
-    assert got == {"units": 4, "agree": 4, "pending": [], "disagree": [], "missing": [], "executor_only": []}
-    assert agrees(got)
-
-
-def test_a_graph_missing_a_part_the_run_has_never_agrees_fully():
-    ids = {"pytest:pkg": "k1", "lean-unit-cut": "k4"}
-    old = {"pytest": "pass", "pytest:pkg": "pass", "pytest:other": "pass", "lean-unit-cut": "pass", "ratchet-gate": "pass"}
-    got = compare(ids, old, {"k1": "pass", "k4": "pass"})
-    assert got["missing"] == ["pytest:other", "ratchet-gate"] and got["executor_only"] == [] and not agrees(got)
-    assert {"unit": "ratchet-gate", "old": "pass", "executor": "missing"} in got["disagree"] and got["agree"] == 3
-    text, ok = shadow_report([Shadowed("1" * 40, "2026-11-01T01:00:00Z", got)] * 3, 10)
-    assert not ok and "missing in executor 2" in text and "    ratchet-gate: missing in executor (run pass)" in text, text
-
-
-def test_an_executor_only_task_is_listed_and_disagrees():
-    ids = {"pytest:pkg": "k1", "pytest:new": "k2", "lean-unit-cut": "k3", "circuit-check:1/1": "k4"}
-    old = {"pytest": "pass", "pytest:pkg": "pass", "circuit-check": "pass"}
-    got = compare(ids, old, {"k1": "pass", "k2": "pass", "k3": "pending", "k4": "pass"})
-    # pytest's suites are recorded one by one, so pytest:new has no counterpart; lean-unit-cut the run didn't run at all
-    assert got["executor_only"] == ["lean-unit-cut", "pytest:new"] and got["missing"] == [] and not agrees(got)
-    assert {"unit": "lean-unit-cut", "old": "none", "executor": "pending"} in got["disagree"] and got["pending"] == []
-    text, _ = shadow_report([Shadowed("1" * 40, "2026-11-01T01:00:00Z", got)], 10)
-    assert "executor only 2" in text and "    pytest:new: executor only (executor pass)" in text, text
-    assert not agrees({k: v for k, v in compare({"a": "k"}, {"a": "pass"}, {"k": "pass"}).items()
-                       if k not in ("missing", "executor_only")}), "a record without coverage counts never agrees"
-
-
-def test_the_runs_records_read_as_the_graph_cuts_them(tmp_path):
-    """A suite reused from the cache passes; one a step skipped by name, and the preflight, have no verdict; a suite the graph
-    splits by file is compared whole through its parts."""
-    d = tmp_path / "r"
-    d.mkdir()
-    (d / "steps.jsonl").write_text(json.dumps({"step": "preflight-lock", "status": "passed"}) + "\n"
-                                   + json.dumps({"step": "pytest", "status": "failed"}) + "\n")
-    (d / "suites.json").write_text(json.dumps([{"name": "kept", "status": "cached"}, {"name": "lean", "status": "skipped"},
-                                               {"name": "big", "status": "failed"}]))
-    old = old_verdicts([d])
-    assert old == {"pytest": "fail", "pytest:kept": "pass", "pytest:big": "fail"}, old
-    ids = {"pytest:kept": "k1", "pytest:big:1/2": "k2", "pytest:big:2/2": "k3"}
-    got = compare(ids, old, {"k1": "pass", "k2": "pass", "k3": "fail"})
-    assert got == {"units": 3, "agree": 3, "pending": [], "disagree": [], "missing": [], "executor_only": []}, got
-    assert agrees(got)
-    assert compare(ids, old, {"k1": "pass", "k2": "pass"})["pending"] == ["pytest", "pytest:big"]
-
-
-def test_shadow_reports_the_switch_gate_once_three_tips_in_a_row_agree():
-    full = {"units": 2, "agree": 2, "pending": [], "disagree": [], "missing": [], "executor_only": []}
-    off = {"units": 2, "agree": 1, "pending": [], "disagree": [{"unit": "x", "old": "pass", "executor": "fail"}],
-           "missing": [], "executor_only": []}
-    recs = [Shadowed(f"{i}" * 40, f"2026-11-01T0{i}:00:00Z", r) for i, r in ((4, full), (3, full), (2, full), (1, off))]
-    assert shadow_report(recs, 2)[1] and "the newest 3 agree" in shadow_report(recs, 2)[0]
-    assert not shadow_report(recs[:2] + recs[3:], 10)[1]
 
 
 #: the graph/v2 envs of the fakes here; only their digests enter a key

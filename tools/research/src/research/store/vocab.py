@@ -454,9 +454,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(READY_VERDICT, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: a JSON object, the verdict of that commit's "
        "`ready:` check once none of its merge-gate tasks is still to end ({check, state, why, counts, failed, infra, flaky: "
        "[{task, key, why, ...}]}); the queue's loop reads it in place of asking the executor (`research.vqueue_loop`)"),
-    _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by drive with `executor = \"shadow\"`: a JSON object comparing "
-       "the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: [{unit, old, executor}], "
-       "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),
+    _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the old path's drive under `executor = \"shadow\"`, which nothing writes or reads now: a "
+       "JSON object comparing the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: "
+       "[{unit, old, executor}], pending, missing, executor_only, error, incomplete})"),
     _k(NIGHTLY_CHECK, GROUP_VERIFICATION, ENUM, "on commit:<sha>, by the control pod's nightly loop: what the uncached check of "
        "that commit of main (`check.py --no-cache`, every path counted as changed) said, with its run as the ref: passed, and "
        "the check named no cached pass it contradicts; contradicted, it named one, a cached pass that answers for something "

@@ -837,9 +837,7 @@ class DriveFlags:
     #: the entries of `lowrisk_excludes` the land verdicts gate doesn't read, each written as it is there: what keeps a change
     #: off the low-risk lane only so that a reader sees it, which a land verdict already is (`plain_excludes`)
     verdict_plain: tuple[str, ...] = ()
-    #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
-    #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
-    #: of `drive.SLIM_STEPS` alone beside it
+    #: the task executor after landing (`research.executor`): "off", "shadow" or "on", which only the old path's drive read
     executor: str = "off"
     #: the task executor's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it
     #: puts `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
