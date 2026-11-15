@@ -10,8 +10,9 @@ public import Definitions.Flock.Piop
 public import Definitions.Flock.Ligerito
 public import Definitions.Flock.Sparse
 public import Definitions.Flock.Merkle
+public import Definitions.Flock.MerklePair
 public import Definitions.Flock.Circuit
-public import Definitions.Flock.Audit.Law
+public import Definitions.Flock.Audit.SamplingDesign
 public import Definitions.Flock.Defs
 public import Definitions.Flock.Extract
 public import Definitions.Flock.Audit.Harm

@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from tests.pipeline.test_row import _row, _tp_row
 from verity_vllm import target_family as tf
@@ -160,6 +161,28 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
     r3 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_L40S, "--stages", "build", "--out", str(out)],
                         capture_output=True, text=True, env={**env, "CUDA_VISIBLE_DEVICES": ""}, cwd=TREE)
     assert r3.returncode == 3 and "CUDA_VISIBLE_DEVICES hides" in r3.stderr, "the row's empty CUDA_VISIBLE_DEVICES reaches the check"
+
+
+def _main_reads(tmp_path, option: str) -> list:
+    """The record ``main`` writes when ``option`` names its file in bytes, and then by an open descriptor."""
+    f, out = tmp_path / "f.json", tmp_path / "target_family.json"
+    f.write_text(json.dumps({"engine": {"target": {"compute_capability": [9, 0]}}, "step": {"target": {"compute_capability": [9, 0]}}}))
+    recs = []
+    names: list[Any] = [os.fsencode(f), os.open(f, os.O_RDONLY)]  # the option's annotation promises a str; main opens what it is handed
+    for name in names:
+        assert tf.main(tf.Options(row=ROW_L40S, stages="build", no_device=True, out=str(out), **{option: name})) == 3
+        recs.append(json.loads(out.read_text()))
+    return recs
+
+
+def test_the_cli_opens_the_workload_by_the_name_as_it_is_handed(tmp_path):
+    """``--workload`` is opened as given, not through ``pathlib``, which refuses a name in bytes and a descriptor."""
+    assert [[m["fact"] for m in r["mismatches"]] for r in _main_reads(tmp_path, "workload")] == [["declared"], ["declared"]]
+
+
+def test_the_cli_opens_the_build_summary_by_the_name_as_it_is_handed(tmp_path):
+    """``--build-summary`` is opened as given, not through ``pathlib``, which refuses a name in bytes and a descriptor."""
+    assert [[m["fact"] for m in r["mismatches"]] for r in _main_reads(tmp_path, "build_summary")] == [["built"], ["built"]]
 
 
 def test_the_row_match_argv_carries_the_explicit_snapshot_cap_only_when_set(tmp_path):

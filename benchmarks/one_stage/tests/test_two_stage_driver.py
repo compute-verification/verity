@@ -1,8 +1,8 @@
-"""A served window's two-stage audit as `two_stage.py` drives it: one size class's boundary registration
+"""A served window's two-stage audit as `two_stage.py` drives it: one size class's boundary docket
 (`verity_vllm.pipeline.boundary_rows`) on its two-stage stream, sampled on a test's own challenger (`fake_challenger`);
 the replay side's stream again from ``stage1.json`` alone, sampling the same spans on the bytes the first stage read; the
-interior registration over the sampled spans' proof blocks and the second stage on the next challenger's coins; and what
-`resume` refuses. A toy check template of one gate's worth."""
+interior docket over the sampled spans' proof blocks and the second stage on the next challenger's coins; and what
+`resume` refuses. A toy check template of one gate's worth, and the long row's check over a 131,072-id prompt."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import importlib
 import itertools
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -29,18 +30,20 @@ from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, docket as R
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
-                                  interior_rows as IR, serving_rows as SRW)
+                                  interior_rows as IR, long_row as LR, serving_rows as SRW)
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
+REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "benchmarks" / "one_stage"))
+sys.path.insert(0, str(REPO / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
 TS = importlib.import_module("two_stage")
 FC = importlib.import_module("fake_challenger")
-AC = importlib.import_module("a5_coins")
+AC = importlib.import_module("verity.protocols.proofs.spot.device.challenger_session")
+VT = importlib.import_module("test_verdict_record")
+VR, NAMES, _design, _record = VT.VR, VT.NAMES, VT._design, VT._record
 
 XOR8 = PrimitiveDefinition("TwoStageDriverTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -78,7 +81,7 @@ def _class(check=PAIR, inline: bool = False) -> BR.Committed:
 
 
 def _interior(layout: BR.Layout, previous: str, program: Program | None = None) -> tuple[dict, dict]:
-    """The replay side's interior registration over the Q sampled spans' proof blocks (PAIR's instances, or
+    """The replay side's interior docket over the Q sampled spans' proof blocks (PAIR's instances, or
     ``program``'s, a window of templates'), at stand-in roots."""
     m = Q * P.units(Program(layout.replay), layout.query)
     program, query = program or P.population_program(PAIR, m), layout.query
@@ -105,20 +108,20 @@ def _samples_q(got: TS.First) -> bool:
 
 
 def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
-    """The first stage samples Q of the class's N spans on the challenger's coins after the boundary registration;
-    ``stage1.json`` alone gives the replay side the same registration and sample on the bytes it read; its interior
-    registration is logged after it, and the second stage samples K proof blocks in each sampled span on the next
-    challenger's coins, opened after the interior registration's digest."""
+    """The first stage samples Q of the class's N spans on the challenger's coins after the boundary docket;
+    ``stage1.json`` alone gives the replay side the same docket and sample on the bytes it read; its interior
+    docket is logged after it, and the second stage samples K proof blocks in each sampled span on the next
+    challenger's coins, opened after the interior docket's digest."""
     c = _class()
     got = TS.first(c.public(), PAIR, RULE, _placed(c.layout))
-    assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
+    assert got.layout.n_rho == N_RHO and got.docket.record["population"] == N
     assert _samples_q(got) and got.read
-    handoff = json.loads(json.dumps(got.stage1()))
+    handoff = json.loads(json.dumps(got.first_stage()))
     assert handoff["units"] == list(got.sample.units) and handoff["spec"] == got.stream.spec.digest()
     again = TS.resume(handoff, PAIR, FC.Challenger("second"))
-    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
-    ireg, second = again.second(*_interior(again.layout, again.registration.digest))
-    assert ireg.order == again.registration.order and again.coins.live
+    assert (again.docket.digest, again.sample.units) == (got.docket.digest, got.sample.units)
+    ireg, second = again.second(*_interior(again.layout, again.docket.digest))
+    assert ireg.order == again.docket.order and again.coins.live
     assert second.replay_sample == again.sample and len(second.units) == Q * K
     assert [u // N_RHO for u in second.units] == list(range(Q))
 
@@ -130,9 +133,9 @@ def test_an_inlined_checks_second_stage_samples_the_template_its_body_calls():
     c = _class(WRAP, inline=True)
     got = TS.first(c.public(), WRAP, RULE, _placed(c.layout))
     assert got.layout.inline and got.stream.spec.check.query == P.template_instance_query(PAIR)
-    again = TS.resume(json.loads(json.dumps(got.stage1())), WRAP, FC.Challenger("second"))
-    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
-    _, second = again.second(*_interior(again.layout, again.registration.digest))
+    again = TS.resume(json.loads(json.dumps(got.first_stage())), WRAP, FC.Challenger("second"))
+    assert (again.docket.digest, again.sample.units) == (got.docket.digest, got.sample.units)
+    _, second = again.second(*_interior(again.layout, again.docket.digest))
     assert len(second.units) == Q * K and [u // (2 * N_RHO) for u in second.units] == list(range(Q))
 
 
@@ -159,12 +162,12 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
 
     got = TS.first(c.public(), BOTH, rule, _placed(c.layout))
     assert got.stream.cells == (2 * N_RHO, N_RHO) and got.stream.counts == (3, 1)
-    handoff = json.loads(json.dumps(got.stage1()))
+    handoff = json.loads(json.dumps(got.first_stage()))
     assert handoff["rule"]["k"] == ks
     again = TS.resume(handoff, BOTH, FC.Challenger("second"))
     assert again.stream.spec.selection == S.TwoStage(c.layout.grain, RULE.replay, ks)
-    _, second = again.second(*_interior(again.layout, again.registration.digest, again.stream.interior_program(Q)))
-    assert second.law == S.second_law(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
+    _, second = again.second(*_interior(again.layout, again.docket.digest, again.stream.interior_program(Q)))
+    assert second.law == S.second_sampling_design(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
     pairs = [u for u in second.units if u < Q * 2 * N_RHO]
     assert sorted(u // (2 * N_RHO) for u in pairs) == [0, 0, 0, 1, 1, 1] and len(second.units) - len(pairs) == Q
 
@@ -218,33 +221,33 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
 def test_resume_refuses_another_rule_registration_or_sample():
     c = _class()
     got = TS.first(c.public(), PAIR, RULE, _placed(c.layout))
-    stage1 = json.loads(json.dumps(got.stage1()))
+    first_stage = json.loads(json.dumps(got.first_stage()))
     with pytest.raises(ValueError, match="hand-off"):
-        TS.resume({**stage1, "format": "other"}, PAIR)
+        TS.resume({**first_stage, "format": "other"}, PAIR)
     with pytest.raises(ValueError, match="Spec"):
-        TS.resume({**stage1, "rule": TS.Rule(RULE.replay, K + 1, INTERIOR, 60.0).to_json()}, PAIR)
+        TS.resume({**first_stage, "rule": TS.Rule(RULE.replay, K + 1, INTERIOR, 60.0).to_json()}, PAIR)
     with pytest.raises(ValueError, match="registers to another digest"):
-        TS.resume({**stage1, "registration": "00" * 64}, PAIR)
+        TS.resume({**first_stage, "registration": "00" * 64}, PAIR)
     others = [u for u in range(N) if u not in got.sample.units][:Q]
     with pytest.raises(ValueError, match="other spans"):
-        TS.resume({**stage1, "units": others}, PAIR)
+        TS.resume({**first_stage, "units": others}, PAIR)
 
 
 def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
     """`resume` names the family of the first stage's challenges from the class's layout (`family_of`) and the
     session's root from the record's window, the run the first stage registers under (`_first_all`). A hand-off that
-    names the same, or names neither, resumes to the same registration and sample under them. Refused: a first
+    names the same, or names neither, resumes to the same docket and sample under them. Refused: a first
     stage on a source of another family (`first` holds its source to the place's); a hand-off that names another
     family; a hand-off that names another session root than its record's; a caller's root that is not the record's; and a
     record whose window is of another run, or names another class, than the class's commitment."""
     c = _class()
     pub, mine, elsewhere = c.public(), TS.family_of(c.layout), "ab" * 64
     got = TS.first(pub, PAIR, RULE, _placed(c.layout), window_root=pub["run"])
-    hand = json.loads(json.dumps(got.stage1()))
+    hand = json.loads(json.dumps(got.first_stage()))
     assert hand["family"] == mine and "window_root" not in hand and TS.first_root(hand) == pub["run"]
     for handoff in (hand, {**hand, "window_root": pub["run"]}, {k: v for k, v in hand.items() if k != "family"}):
         again = TS.resume(handoff, PAIR, window_root=TS.first_root(handoff))
-        assert again.registration.digest == got.registration.digest and again.sample.units == got.sample.units
+        assert again.docket.digest == got.docket.digest and again.sample.units == got.sample.units
         assert again.stream.family(again.sample) == mine
 
     assert FC.LABEL != mine != AC.family(0)
@@ -325,8 +328,8 @@ def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
     assert [(r["port"], r["leaves"]) for r in got.record["roots"]][:3] == [("b.ingress", N), ("b.egress", N), (name, N * N_RHO)]
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
     assert _samples_q(got)
-    again = TS.resume(json.loads(json.dumps(got.stage1())), SAME, FC.Challenger("second"))
-    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
+    again = TS.resume(json.loads(json.dumps(got.first_stage())), SAME, FC.Challenger("second"))
+    assert (again.docket.digest, again.sample.units) == (got.docket.digest, got.sample.units)
 
 
 def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample():
@@ -454,7 +457,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     sampled = [hs[n] for n in names]
     toks = ((1, 5, 0, 2), (0, 4, 3, 2))
     it = IR.interior([IR.Span(f"s{k}", member, IR.table_reads(t, toks[k]), [[0, cells]], "p" * 64)
-                      for k, t in enumerate(sampled)], cells, got.registration.digest, got.sample.units,
+                      for k, t in enumerate(sampled)], cells, got.docket.digest, got.sample.units,
                      row="two-stage-driver-test", tables=sampled, served=got.record, positions=c, links=links)
     entries = {e["value"]: e for e in it.record["registered"]}
     assert list(entries) == [x.value for x in links]
@@ -495,6 +498,61 @@ def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_inte
     assert spec.selection == S.TwoStage(_class().layout.grain, RULE.replay, K)
 
 
+class _Decided:
+    """A stream that has decided: it takes the delivery and gives the outcome and the record it was built with."""
+
+    def __init__(self, accepted: bool, *audits: dict | None, refuses: Exception | None = None) -> None:
+        self.accepted, self.refuses = accepted, refuses
+        self.records = [{"symbol": "s", "audit": audits[0], "replay_sample": {"audit": audits[1]}}]
+
+    def deliver(self, *_a: object) -> None:
+        return None
+
+    def outcome(self, *_a: object, **_k: object) -> NS:
+        if self.refuses is not None:
+            raise self.refuses
+        return NS(accepted=self.accepted, record="r")
+
+
+def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
+    """`outcome_of` reports ``complete`` beside ``accepted``. The replay block here is a stand-in for the class's
+    request Definition (`REQUEST_DEFINITION`) and the two-stage form is off (`second_stage.FORM`), so an outcome whose
+    stream accepted on two audit records that accepted and are complete is still not complete; nor is it with either
+    one switched on alone. Completeness is Lean's (`second_stage.complete`), which no entry answers yet, so with both on
+    it is not either. With Lean's answer (its twin standing in) and both on it is, and then only for an accepted
+    outcome whose records both accepted and are complete. A refused outcome is not."""
+    handed = {"sessions": [], "verdicts": {}, "statement": {}, "proved_units": [], "instances": 0, "served": [],
+              "session_roots": {}}
+    whole = {"accepted": True, "complete": True, "checks": {}}
+
+    def said(stream: _Decided) -> bool:
+        return TS.outcome_of(stream, None, handed, [None, None], [], {})["complete"]
+
+    assert TS.REQUEST_DEFINITION is False and SS.FORM is False
+    assert TS.outcome_of(_Decided(True, whole, whole), None, handed, [None, None], [], {})["accepted"] is True
+    assert said(_Decided(True, whole, whole)) is False
+    with monkeypatch.context() as m:
+        m.setattr(SS, "FORM", True)
+        m.setattr(TS, "REQUEST_DEFINITION", True)
+        assert said(_Decided(True, whole, whole)) is False
+    monkeypatch.setattr(SS, "complete", SS.complete_twin)
+    assert said(_Decided(True, whole, whole)) is False
+    with monkeypatch.context() as m:
+        m.setattr(SS, "FORM", True)
+        assert said(_Decided(True, whole, whole)) is False
+    with monkeypatch.context() as m:
+        m.setattr(TS, "REQUEST_DEFINITION", True)
+        assert said(_Decided(True, whole, whole)) is False
+    monkeypatch.setattr(SS, "FORM", True)
+    monkeypatch.setattr(TS, "REQUEST_DEFINITION", True)
+    assert said(_Decided(True, whole, whole)) is True
+    assert said(_Decided(False, whole, whole)) is False
+    assert said(_Decided(True, whole, {**whole, "complete": False})) is False
+    assert said(_Decided(True, {**whole, "accepted": False}, whole)) is False
+    assert said(_Decided(True, whole, None)) is False
+    assert said(_Decided(True, whole, whole, refuses=S.Pending("no proof yet"))) is False
+
+
 def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_like_any_other():
     """A serve's stop rule cuts a class's boundary rows into `b.request`, `b.prompt` and `b.egress`: the class's Spec
     names those, its first stage registers their record and samples its spans, and its stop word, the stop record's
@@ -505,8 +563,8 @@ def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_
     assert list(c.public()["values"]) == [*BR.PARTS, BR.STOP]
     got = TS.first(c.public(), PAIR, RULE, _placed(c.public()), stop=stop)
     assert [v.name for v in got.stream.spec.values if v.phase == "serve"] == list(BR.PARTS)
-    assert [r["port"] for r in got.registration.record["roots"]] == list(BR.PARTS)
-    assert got.registration.record["population"] == N and len(got.sample.units) == Q
+    assert [r["port"] for r in got.docket.record["roots"]] == list(BR.PARTS)
+    assert got.docket.record["population"] == N and len(got.sample.units) == Q
 
 
 #: a serve's stop rule: one stop id, a model of 64 ids, responses of at most 4
@@ -651,7 +709,7 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
     """After a stop class's first stage its stop record registers on a one-stage stream of the verifier's stop block
     whose log starts with the class's boundary record: one stop block a span, `b.stop` its one port, its inputs that
     record's `b.request` and `b.egress` as output values. It is sampled at a rate over the class's N stop blocks on
-    coins opened after its own registration's digest, of the family of its stop blocks' place. Refused: a boundary
+    coins opened after its own docket's digest, of the family of its stop blocks' place. Refused: a boundary
     record that is another class's, another rule than the commitment's, a sampling design that is a fixed count, and
     a source of another family than that place's, the class's spans' among them."""
     pub = json.loads(json.dumps(_stop_class().public()))
@@ -659,7 +717,7 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
     blocks = TS.family_of(got.layout, blocks=True)
     coins = _placed(pub, "stop", blocks=True)
     s = TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", coins, got.record)
-    assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == N
+    assert s["record"]["previous"] == got.docket.digest and s["record"]["population"] == N
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP]
     assert sorted(e["value"] for e in s["record"]["registered"]) == sorted(BS.STOP_READS)
     assert s["record"]["window"] == {**got.record["window"], "population": "stop"}
@@ -682,15 +740,15 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
 
 
 def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():
-    """`stop_order` on a session's published evidence: it holds when the log shows the boundary registration's coins,
-    then the stop registration's, each in a family of its own, and the stop sample read exactly the latter. It names
-    why otherwise: no published log; no family; a coin released after the stop registration left unread, or bytes that
-    are not those coins'; the boundary registration's coins handed in as the stop sample's, or the stop sample's held
-    to the boundary registration's family; another window's root; another challenger key than the session's, no key,
+    """`stop_order` on a session's published evidence: it holds when the log shows the boundary docket's coins,
+    then the stop docket's, each in a family of its own, and the stop sample read exactly the latter. It names
+    why otherwise: no published log; no family; a coin released after the stop docket left unread, or bytes that
+    are not those coins'; the boundary docket's coins handed in as the stop sample's, or the stop sample's held
+    to the boundary docket's family; another window's root; another challenger key than the session's, no key,
     evidence that names a key, even the session's own, and another copy of main's history than the evidence carries;
     a log the challenger's close does not sign (a
-    prover's own ordering of the same lines); the stop registration's coins released first; no coin after the boundary
-    registration at all; and a stop sample whose family holds the boundary registration's coins before its own, the
+    prover's own ordering of the same lines); the stop docket's coins released first; no coin after the boundary
+    docket at all; and a stop sample whose family holds the boundary docket's coins before its own, the
     one family a prover that registers again after reading would use."""
     b, s = "b0" * 64, "c0" * 64
 
@@ -855,8 +913,8 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
             opened.append({"name": name, "turns": turns})
             return manager, turns, finisher
         monkeypatch.setattr(AC, "start", start)
-        a = _args(out, stage1=str(out / "handoff.json"), boundary=str(tmp_path), capture=str(tmp_path / "capture"),
-                  rids=None, proofs=None, unlinked=False, stop=json.dumps(STOP.to_json()), **more)
+        a = _args(out, first_stage=str(out / "handoff.json"), boundary=str(tmp_path), capture=str(tmp_path / "capture"),
+                  rids=None, proofs=None, unlinked=False, kept=None, stop=json.dumps(STOP.to_json()), **more)
         assert TS._second(a) == 1
         return json.loads((out / "summary.json").read_text())
 
@@ -883,3 +941,67 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
     (tmp_path / "empty").mkdir()
     got = second("empty-host", first, challenger="local", challenger_host=str(tmp_path / "empty"))
     assert AC.NO_HOST in got["refused"] and len(opened) == sessions, "no challenger of the second stage's own was started"
+
+
+@pytest.mark.slow
+def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it(tmp_path, monkeypatch):
+    """The verdict record's fixtures (`test_verdict_record.py`) are written in the form the writer expects, so they
+    can't show that the form is the drivers'. This registers a stop class's first stage on a test's challenger as `two_stage.py first --stop` does,
+    builds its stop stream again as the stop audit does, and takes `stop_audit.summary_of`'s own summary: the record
+    names the class's boundary record, the directory the class is filed under and the rate its stop record registers.
+    No session is proved and Lean is not called."""
+    SA = importlib.import_module("stop_audit")
+    pubs = [json.loads(json.dumps(_stop_class().public()))]
+    monkeypatch.setattr(AC, "start", _start(OneSession("verdict-record")))
+    (wrote,) = TS._first_all(_args(tmp_path), pubs, PAIR, RULE, None, STOP)
+    first = json.loads(json.dumps(wrote))
+    design = f"rate:{Q}/{N}"
+    r = SA.resume(first, PAIR, STOP, design, proof_deadline=RULE.proof_deadline)
+    audit = {"accepted": True, "complete": False, "verdicts": {}, "checks": {}}
+    summary = json.loads(json.dumps(SA.summary_of(r, STOP, design, {"accepted": True, "audit": audit})))
+    got = VR.record("stop_record", first, summary, **NAMES)
+    layout = r.layout
+    assert got["class"] == f"w{pubs[0]['window']}/p{layout.prompt}-o{layout.outputs}"
+    assert got["registration"] == r.boundary == first["registration"] != r.docket.digest
+    assert got["rate"] == VR.rate({"population": layout.spans, **_design("subset", len(r.sample.units))})
+    assert (got["verdict"], got["verifier"]["module"]) == ("not complete", SA.TOOL)
+    assert (got["stream_registration"], got["stream_names_boundary"]) == (r.docket.digest, True)
+    assert r.docket.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
+    interior = _record(4, 4, previous=r.boundary, interior=True)
+    second = {"first_stage": {"registration": r.first.docket.digest}, "held": True, "outcome": {"accepted": False},
+              "second_stage": {"registration": R.digest(interior)}}
+    assert VR.record("second_stage", first, second, stream=interior, **NAMES)["verdict"] == "withheld"
+
+
+def test_the_command_finds_the_long_rows_check_by_its_id_in_a_process_that_never_imported_it():
+    """The command looks a class's check up by the descriptor id its ``commit.json`` names (`template_fn`): the long
+    row's (`long_row`'s `DsaTopKReadRowsCut_v1`, which no registry module registers) is found in a process of its own,
+    since this one has imported `long_row`."""
+    t = descriptor_id(bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=E.read(16, 1)))
+    code = ("import sys\nsys.path.insert(0, sys.argv[2])\nimport two_stage\nfrom verity.circuits.codec import descriptor_id\n"
+            "assert 'verity_vllm.pipeline.long_row' not in sys.modules\nprint(descriptor_id(two_stage.template_fn(sys.argv[1])))")
+    got = subprocess.run([sys.executable, "-c", code, t, str(REPO / "benchmarks" / "one_stage")], capture_output=True,
+                         text=True, check=False)
+    assert got.returncode == 0, got.stderr[-2000:]
+    assert got.stdout.strip() == t
+
+
+@pytest.mark.slow
+def test_the_long_rows_class_over_a_131072_id_prompt_has_its_rule_from_its_replay_block():
+    """The rule the command's first stage gives a class when none is named (`rule_of`), on the record of the long row's
+    class (`long_row.layout`: a prompt of 2^17 ids, 2 outputs) at small statics: its digit picks are wired to a writer
+    of two units a block, which the interior window places by the replay block's rows (`second_stage.replay_rows`), as
+    round 2 reads them; the same design without its rows is refused as before. The draw itself is not run here: at this
+    prompt `first` takes ten minutes on a CPU. Over a minute, nearly all of it building the check's body; the cheaper
+    tests here have no wire to a writer of several units a block."""
+    t = bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=E.read(16, 1))
+    span = BR.Span("r0", tuple(i % 1000 for i in range(1 << 17)), {**GREEDY, "max_tokens": 2}, (7, 8), "length")
+    pub = json.loads(json.dumps(BR.commit([span], LR.layout(ROOT, t), 0).public()))
+    assert (pub["prompt"], pub["values"]["b.ingress"]["words"]) == (1 << 17, 262172)
+    layout = BR.layout_of(pub, t, None)
+    rule = TS.rule_of(layout, "rate:1/1", 1)
+    d = TS.design(layout, unlinked=True)
+    assert d.rows == tuple(SS.replay_rows(layout.program, d.key)) and d.rows
+    assert rule.interior == tuple(v for m in d.window("00", [0]).members for v in TS.interior_values(m)) and rule.interior
+    with pytest.raises(ValueError, match="reads a writer of 2 units a block.*give the replay block's rows"):
+        replace(d, rows=()).window("00", [0])

@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[3]
 RUN = "c20261027T160500Z-0000"
 #: a witness value the stub's status plants (STUB_NOTE), 64 hex characters: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
-#: the warden's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
+#: the network certifier's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
 #: aligned text pieces (`leak_guard.TEXT` bytes)
 _CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
 STALLS = " " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n'
@@ -40,8 +40,7 @@ elif cmd.startswith("status "):
         open(os.environ["STUB_FIFO"], "w")
         signal.pause()
     print(json.dumps({"run": "%(run)s", "note": os.environ.get("STUB_NOTE"),
-                      "end": {"run": "%(run)s", "rc": 0, "ended_utc": "2026-10-27T17:05:00Z",
-                              "verdict": {"accepted": True}}}))
+                      "end": {"run": "%(run)s", "rc": 0, "ended": "ended", "verdict": {"accepted": True}}}))
 elif cmd == "fetch %(run)s":
     files = {"end.json": b"{}", "request.json": b"{}", "out/certificates.jsonl": b"",
              "out/deployment.json": json.dumps({"windows": 3, "origin_unix": 1.5,
@@ -118,12 +117,13 @@ def test_record_keeps_no_witness(tmp_path):
     assert not [n for n in names if "witness" in n.split("/")]
     assert f"{RUN}/out/deployment.json" in names and f"{RUN}/request.json" in names
     sys.path.insert(0, str(HERE))
-    import wipe_egress
+    sys.path.append(str(ROOT))  # for benchmarks.network_traces
+    from benchmarks.network_traces import wipe_egress
     assert sorted(wipe_egress.read_run(tmp_path / "run" / "out" / "bundle.tgz")) == sorted(wipe_egress.FILES)
 
 
-def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_records(tmp_path):
-    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the warden's stall probe
+def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_network_certifier_records(tmp_path):
+    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the network certifier's stall probe
     records its cgroup in the witness (stalls.json), and no public file of the run holds it: in the hold, the leak guard
     holds the reply (and the log it was echoed to) as a piece of the witness, and the job exited 3. The reply goes to
     KEEP/RUN alone (0600), so the job exits on the gate's rc."""
@@ -138,9 +138,9 @@ def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_
     published, q = tmp_path / "published", tmp_path / "q"
     published.mkdir()
     shutil.copyfile(reply, published / "start.json")
-    held = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(published), str(q), "--gates",
+    held = subprocess.run([sys.executable, "-m", "benchmarks.network_traces.leak_guard", str(published), str(q), "--gates",
                            str(keep / RUN / "fetch.tar.gz"), "--dry", "--report", str(tmp_path / "report.json")],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, cwd=ROOT)
     assert held.returncode == 3, held.stdout + held.stderr
     (piece,) = [p for f in json.loads((q / "leak-guard.json").read_text())["found"] for p in f["pieces_found"]]
     assert (piece["witness"], piece["keypath"]) == (f"{RUN}/witness/stalls.json", ["unit"])

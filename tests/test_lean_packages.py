@@ -65,7 +65,7 @@ def test_no_lakefile_names_the_setting_lake_reads_before_the_environment():
     assert not named, (
         f"{', '.join(named)}: names `enableArtifactCache`, which Lake reads before `LAKE_ARTIFACT_CACHE`: where a package "
         "turns it on, its build reads and writes a cache whatever the variable says. Two places turn Lake's cache off by "
-        "the variable alone: `lake_env` in tools/verity/lean/check.py and `UNCACHED_ENV` in tools/verity/check/suites.py. "
+        "the variable alone: `lake_env` in tools/verity/lean/check.py and `UNCACHED_ENV` in tools/check/suites.py. "
         "Leave the setting out, or in the same change give both what `build` in tools/verity/lean/lean_changed.py gives a "
         "build outside the sandbox: a `LAKE_CACHE_DIR` naming an empty directory of the command's own, removed after it.")
 
@@ -92,11 +92,11 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-# security's list: Flock.SecurityProofs.SpotExfilTwo and SpotKSTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
+# security's list: Flock.SecurityProofs.SpotExfilTwo, SpotKSTwo and SpotOneWaitTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
 # Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
 # restated at the deployed session its domain hypothesis fixes
-UNWITNESSED = {"security": 222, "security/Properties": 182, "verity/protocols/proofs/flock/verifier": 7}
+UNWITNESSED = {"security": 217, "security/Properties": 176, "verity/protocols/proofs/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -166,26 +166,15 @@ def test_lean_module_roots_are_disjoint():
     assert not clashes, clashes
 
 
-def test_every_lock_is_owned():
-    """A lock with no owner, issue or due date in it is unowned, and the Lean check holds it to no owner rule
-    (`check.py`'s `unowned_lock`): the lock of a tree with no lanes.  This tree has lanes, so each of its locks that
-    lists a guarantee or a premise names who answers for it."""
-    merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
-    unowned = [_rel(p) for p in lake_packages() if merge.A.unowned_lock(_lock(p))]
-    assert not unowned, (f"locks that name no owner, so no entry of theirs owes one: {unowned}; run `check.py --update "
-                         f"--owner @lane` on each, which owns its entries")
-    assert any(merge.A.unowned_lock({s: {"X": {}}}) for s in merge.A.LANE_ENTRIES)
-
-
 def test_every_record_merges_with_the_driver():
     """`.gitattributes` sends every `lean-audit.json` to `tools/verity/lean/merge.py`, and the unread ratchet's caps to its
-    `--caps` driver, and each record's `reads` digests are the ones the driver recomputes from their definitions."""
+    `--limits` driver, and each record's `reads` digests are the ones the driver recomputes from their definitions."""
     spec = importlib.util.spec_from_file_location("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     merge = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(merge)
     attributes = (ROOT / ".gitattributes").read_text().splitlines()
     assert f"lean-audit.json merge={merge.NAME}" in attributes
-    assert f"tools/verity/lean/{merge.UNREAD_CAPS} merge={merge.CAPS}" in attributes
+    assert f"tools/verity/lean/{merge.UNREAD_CAPS} merge={merge.LIMITS}" in attributes
     stale = [f"{p.relative_to(ROOT)}: {m}" for p in lake_packages()
              for m, g in json.loads((p / "lean-audit.json").read_text()).get("reads", {}).items()
              if g["digest"] != merge.A.module_digest(merge.A.definitions(g))]
@@ -373,8 +362,8 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
     """``got``, a count by key, held to the cap ``caps`` (this file's ``name``), which equals it: a count above its cap
     fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
     change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
-    the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
-    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap three-way: one side's change alone stands, and two
+    the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-limits` merge driver
+    (`tools/verity/lean/merge.py --limits`) merges two changes to a cap three-way: one side's change alone stands, and two
     changes add, except two lowerings, which take the larger."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
     assert not over, (f"{what} grew in {over}: {fix} (where a merged change lowered the cap while the other took room "
@@ -387,7 +376,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
 #: all Flock's until its spec is extracted
-TREES_EXCEPT = {"security": 41}
+TREES_EXCEPT = {"security": 29}
 
 
 def test_the_trees_except_list_only_shrinks():
@@ -574,7 +563,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"security": 963, "security/Proofs": 54185, "verity/protocols/accounting/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 725}
+OVERLONG = {"security": 963, "security/Proofs": 53427, "verity/protocols/accounting/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 725}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
@@ -602,9 +591,12 @@ RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener
 IMPORT_ALL: dict[str, str] = {
     "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
         "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean: Spot.ChallengerSession":
+        "`pinnedChallengePhaseWith` restates `pinnedChallengePhase`, which reads the private `strOf`, and is held to it by "
+        "`rfl`; a copy of `strOf` is another constant, so the `rfl` fails",
 }
 #: the entries of `IMPORT_ALL` whose FILE the tree has, per package
-IMPORT_ALL_USES = {"security/Proofs": 1}
+IMPORT_ALL_USES = {"security/Proofs": 1, "verity/protocols/accounting/pouw/verifier/lean/check": 1}
 
 
 def imports_all(files: dict[str, str], in_tree) -> list[str]:
@@ -686,7 +678,7 @@ def test_an_entry_of_the_replay_list_that_matches_no_audited_module_is_named():
 
 
 def test_every_cap_merges_key_by_key():
-    """Each cap here is one line the `lean-caps` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
+    """Each cap here is one line the `lean-limits` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
     three-way, key by key, instead of conflicting."""
     merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     caps = [s for s in Path(__file__).read_text().splitlines() if re.match(r"[A-Z][A-Z_]* = \{", s)

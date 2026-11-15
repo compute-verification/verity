@@ -1,4 +1,4 @@
-"""The sample over hidden positions (`one_stage.hidden_draw`): the honest table's positions are its live (call, row, tile)
+"""The sample over hidden positions (`one_stage.hidden_sample`): the honest table's positions are its live (call, row, tile)
 triples one to one, and on any table, overlapping, out of order or with gaps, no two positions share a witness and each
 witness is in range."""
 
@@ -6,7 +6,7 @@ import random
 
 import pytest
 
-from verity.protocols.proofs.spot.verifier.one_stage import hidden_draw as HD
+from verity.protocols.proofs.spot.verifier.one_stage import hidden_sample as HD
 
 
 @pytest.mark.parametrize("width, rows", [(1, [3, 0, 2]), (4, [2, 0, 1, 5]), (24, [0, 0]), (3, [])])

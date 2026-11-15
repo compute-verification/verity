@@ -12,8 +12,9 @@ one's body at that cost model (same protocol, domain, `g₀ = 1/400` and `δPear
 (W1.w1Priced dv salt) …` (`Proofs.Pouw.PearlC.TTOutFp4W1`). What W1 charges, why `w1Priced`, and the honest program's
 `AdmitsRef` are `TTOutW1`'s.
 
-**The device.** `devFp4Sm120` is set on `W1Device.fp4Sm120 sha fetch`: sm_120 at the loop's prices (`sm120Loop`) in FP4
-units, an FP8 unit worth 2, with `sha` and `fetch` given in FP4 units. Its table gives the record's prices:
+**The device.** At sm_120 (`TTOutFp4Sm120W1`, `Proofs.Pouw.PearlC.Records`), `devFp4Sm120` is set on
+`W1Device.fp4Sm120 sha fetch`: sm_120 at the loop's prices (`sm120Loop`) in FP4 units, an FP8 unit worth 2, with `sha`
+and `fetch` given in FP4 units. Its table gives the record's prices:
 `W1Prices.toFp4Prices` at the `lut256` scale path is `Fp4Prices.sm120` (`W1Checks.toFp4Prices_fp4Sm120`), as
 `W1Checks.toPrices_*` pairs the FP8 records. `sha` and `fetch` are unmeasured parameters, and the assumption only gets
 weaker as they grow.
@@ -22,13 +23,25 @@ weaker as they grow.
 side (B̃'s forming, B̃·F_A, P_B), which D-SK keys by the salt; `qa·m·k` (in `wrefFp4` only); SHA-512 work; and every
 fetch.
 
-**The noise.** W1 makes no oracle call. D-SK (`Fp4Sem.SaltKeyedB`, in `pearlCDomainFp4`) states `B̃`'s lines as a
-function of the oracle's answer at `seed_B`, for every oracle `H`. So at a `sem` in the domain they are either read
-from `H`, which a W1 program cannot call after the salt, or the same at every salt. At a `sem` whose `B̃` lines vary
-with the salt without reading `H` (SHA-512 of the salt, as deployed), D-SK fails, the domain is empty and these
-assumptions are vacuous. So, unlike the FP8 forms at `NoiseSha512.sha512Sem`, these say nothing about the deployment
-until D-SK and the lines are stated over SHA-512 (an `Fp4Sem` whose lines a W1 program computes with `sha`
-instructions, `pearl_c4.line`).
+**The noise.** W1 makes no oracle call. D-SK (`Fp4Sem.SaltKeyedB`, in `pearlCDomainFp4`) states `B̃`'s lines as the
+ones SHA-512 gives from `seed_B` of the salt's bytes (`NoiseSha512Fp4`), which a W1 program computes with `sha`
+instructions. These assumptions speak at `sha512Fp4Sem base salt rootA rootB`, the registered scheme's noise
+(`pearl-c-nvfp4-v0`, h0; `pearl_c4.py`'s lines op for op), which meets D-SK.
+
+`rootA salt u act` stands for h0's root of unit `u`'s rows, committed after the salt under the salt and the unit's
+index: a plain SHA-256 tree over TurboSHAKE128 digests (`verity/protocols/pouw/verifier/serving.py`,
+`audit.commit_rows` with `public`). The spec has neither hash, so it is a parameter, and `sha512Fp4Sem` is the registered
+scheme's noise only at that `rootA`. At a `rootA` that doesn't read `act`, `seed_A` is fixed before the rows are and
+Pearl-C's adaptive-A attack runs (measured on FP8, not run on FP4): these assumptions are not believed there, and the
+statements that take them hold there only vacuously.
+
+**One salt.** As for the FP8 forms (`TTOutW1`), each form here takes the cost model's `salt` and the semantics
+separately. It speaks at the registered scheme when `sem := sha512Fp4Sem base salt rootA rootB` with the `salt` its cost
+model reads.
+
+**The program's text is bounded** (`W1.Prog.bounded`), so a W1 program can't hold the reference at `sha512Fp4Sem` as a
+table of one leaf per salt in its code (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`, which is about W1 programs alone,
+not a protocol's noise).
 -/
 
 @[expose] public section
@@ -47,15 +60,5 @@ def TTOutFp4W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1De
 def TTOutTileFp4W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
   TTOutTileW1 dv salt (pearlCProtocolFp4 d sem ρ) (pearlCTilesFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
-
-/-- **`tt-out/fp4-sm120` at W1**: TT_OUT(1/400) for Pearl-C4 at `devFp4Sm120` on `W1Device.fp4Sm120 sha fetch`. -/
-def TTOutFp4Sm120W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
-    (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOutFp4W1 (W1.W1Device.fp4Sm120 sha fetch) salt devFp4Sm120 sem ρ
-
-/-- **`tt-out/fp4-sm120` per audit tile at W1**: `TTOutTileFp4W1` at `devFp4Sm120` on `W1Device.fp4Sm120 sha fetch`. -/
-def TTOutTileFp4Sm120W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
-    (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTileFp4W1 (W1.W1Device.fp4Sm120 sha fetch) salt devFp4Sm120 sem ρ
 
 end Pouw.PearlC.Assumptions

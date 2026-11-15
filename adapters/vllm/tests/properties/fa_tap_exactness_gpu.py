@@ -37,10 +37,11 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry import attention_vocab, hopper
-from verity.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.registry import attention_vocab, hopper
+from verity_vllm.definitions.registry import fa3_check_inf as F3
 
+from tests.commit.hidden_stream import StreamLayout
 from tests.properties.fa_tap_exactness import (
     CONSTRUCTIONS,
     FILL,
@@ -67,7 +68,6 @@ from tests.properties.fa_tap_exactness import (
     verify_record,
     visited_rows,
 )
-from verity_vllm.commit.hidden_stream import StreamLayout
 
 
 def _sha256(path: str) -> str:

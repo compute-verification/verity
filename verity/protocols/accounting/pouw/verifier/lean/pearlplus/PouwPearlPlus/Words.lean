@@ -11,7 +11,7 @@ public import PouwPearlPlus.Records
 # A tile's words under Pearl-C v1 -h3 on the H100 (`pearl_c.PearlC.encode`, `checked`, `leaf`)
 
 The words a sampled tile's openings determine, each step in the Python's order and exact semantics (`pearl_c`, `pearl_kw`;
-FP32 steps `verity.definitions.silicon.fp32`, here `Evaluate.Fp32`'s; the FP8 atom and BF16 step the H100's,
+FP32 steps `verity.circuits.silicon.fp32`, here `Evaluate.Fp32`'s; the FP8 atom and BF16 step the H100's,
 `HOPPER_E4M3_K32` and `HOPPER_BF16_WGMMA_K16`, here `Evaluate.TC`'s):
 
 * **Noise.** -h3's `s512(ℓ, m)` is the first 32 bytes of SHA-512 over `pearl-c/h3s/ℓ\0` zero-padded to 128 bytes, then `m`.
@@ -190,7 +190,7 @@ def parseRow (row : ByteArray) (k : Nat) : Reject (Array Nat) := do
     finite (row[4 * i]!.toNat ||| (row[4 * i + 1]!.toNat <<< 8) ||| (row[4 * i + 2]!.toNat <<< 16) |||
       (row[4 * i + 3]!.toNat <<< 24))
 
-/-- What one fixed operand's noise reads, once per weight and epoch: seed_B, F_A and F_B as columns, and G. -/
+/-- What one fixed operand's noise reads, once per fixed operand and epoch: seed_B, F_A and F_B as columns, and G. -/
 structure FixedNoise where
   seedB : ByteArray
   fa : Array (Array Nat)

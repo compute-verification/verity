@@ -7,7 +7,7 @@ import pytest
 
 from verity.protocols.proofs.spot.prover.candidates import Shape, _lams, _Program, cuts, pressure, shape_of
 from verity.protocols.proofs.spot.prover.optimize import CostModel, Objective, frontier
-from verity.circuits.partition_v2 import UNIT_CLASS_MAX
+from verity.circuits.partition_v2 import SIZE_CLASS_MAX
 
 STEP = Shape("Step", 4190, 32, 32, rows=(32, 32, 4, 4), commit_bits=32, cap=4096)
 CHUNK = Shape("Dot{K=256}", 8 * 4190, 256, 32, rows=(256, 256, 4, 4), commit_bits=32, cap=4096, parts=((STEP, 8),))
@@ -48,13 +48,13 @@ def test_size_classes_admit_rows_and_tiles_and_prune_past_the_widest():
                 cap=4096, parts=((coord, 128),))
     _, alts, _ = cuts("row", row, N, costs, OBJECTIVE, grid=21)
     assert (("Row{N=128}", N),) in alts.values()
-    n = UNIT_CLASS_MAX // 32 + 1
+    n = SIZE_CLASS_MAX // 32 + 1
     wide = Shape(f"Row{{N={n}}}", n * 4190, n * 1024, 32 * n, out_gates=n, rows=(4 * n,), commit_bits=32 * n,
                  cap=4096, parts=((coord, n),))
     _, alts, _ = cuts("wide", wide, N, costs, OBJECTIVE, grid=21)
     assert alts == {"c0": (("Coord", n * N),)}
     with pytest.raises(ValueError, match="fit no size class"):
-        cuts("wide", Shape("Wide", 1, 1, UNIT_CLASS_MAX + 1, out_gates=2), N, CostModel(per_and=1.0), OBJECTIVE)
+        cuts("wide", Shape("Wide", 1, 1, SIZE_CLASS_MAX + 1, out_gates=2), N, CostModel(per_and=1.0), OBJECTIVE)
 
 
 def test_a_shape_past_c_flocks_block_is_never_a_proof_block():
@@ -66,7 +66,7 @@ def test_a_shape_past_c_flocks_block_is_never_a_proof_block():
     cands, alts, hints = cuts("tile", tile, N, costs, OBJECTIVE, grid=21)
     assert all(u != "Tile2" for key in alts.values() for u, _ in key) and {c.cap for c in cands} == {4096}
     assert not [h for h in hints if h.node == "Tile2"]
-    with pytest.raises(ValueError, match=r"^Huge has no legal cut: it is past C-Flock's block \(cap 0\)"):
+    with pytest.raises(ValueError, match=r"^Huge has no legal cut: it is past Flock's block \(cap 0\)"):
         cuts("huge", Shape("Huge", 1, 1, 16, cap=0), N, costs, OBJECTIVE)
 
 

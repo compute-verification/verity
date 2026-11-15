@@ -6,8 +6,7 @@ certifier record each window of each port: the frames in each bucket (the occupa
 once content is fixed) and a digest of their content. The challenger records each answer: to a challenge, to a read
 window, to a wipe's spot checks. A `Deviation` plays the adversary.
 
-This is the run's model, on simulated ticks. The same records come from the real certifier
-(`verity.protocols.accounting.certifier.verifier`) when the mock datacenter runs it on real links (`benchmarks/network_sim`).
+This is the run's model, on simulated ticks.
 """
 from __future__ import annotations
 

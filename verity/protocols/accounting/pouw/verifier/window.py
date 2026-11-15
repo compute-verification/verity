@@ -62,7 +62,7 @@ Compose's `Declared.round` numbers them), all committed before the execution pha
 opens after its own root, so a coin root released before them hides no choice the prover makes, and its commitment's
 root is in the salt and every round's noise key.  The salt coin opens once, after the
 execution phase's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
-rule is `core_check.salt`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
+rule is `core_check.salt_of_record`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
 round r commits, and round r's noise key is `round_key` of that coin and that root.  `rounds_reason` is the rule on an
 execution phase's round coins (Lean: `PouwWindow.Rounds`).  A Pearl-C pass's session takes its salt coin alone
 (`SALT_FAMILIES`, `salt_epoch_reason`; Lean `Properties.Pouw.LiveSalt.SaltEpoch`), opened after its execution phase's root
@@ -102,7 +102,7 @@ PUBLIC = (
                                          "commitment scheme fix the auditor's verifier")),
     ("sampling", "structure", "parameter", ("ε, δ and the grid, and the law subset:K′ they fix with the level: the guarantee "
                                             "is stated in them")),
-    ("length", "structure", "parameter", ("the rows of record's fixed length: each slot's max_tokens, served whatever it "
+    ("length", "structure", "parameter", ("the workloads of record's fixed length: each slot's max_tokens, served whatever it "
                                           "samples (ignore_eos), so the useful work is public")),
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
@@ -754,12 +754,12 @@ def _registered_root(registration: Mapping[str, Any]) -> tuple[bytes, bytes]:
 def instance_ts(registration: Mapping[str, Any], sampled: Sequence[int], sigma: int, cap: int) -> list[int]:
     """Session σ's tile indices: sampled[σ·cap + s] while that is sampled, N − 1 after.  Raises ValueError unless the sample is
     the registration's K′ distinct indices of [0, N), ascending, and σ one of its S sessions."""
-    n, law = registration.get("population"), registration.get("law")
+    n, sampling_design = registration.get("population"), registration.get("law")
     if not _positive(n) or n > 1 << T_BITS:
         raise ValueError(f"the registration's population {n!r} is not a tile count of at most 2^{T_BITS}")
-    k = law.get("k") if isinstance(law, Mapping) and law.get("law") == "subset" else None
+    k = sampling_design.get("k") if isinstance(sampling_design, Mapping) and sampling_design.get("law") == "subset" else None
     if not _positive(k):
-        raise ValueError(f"the registration's law {law!r} is not subset:K′")
+        raise ValueError(f"the registration's law {sampling_design!r} is not subset:K′")
     sampled = list(sampled)
     if len(sampled) != k or any(not isinstance(t, int) or isinstance(t, bool) for t in sampled) \
             or sampled != sorted(set(sampled)) or not 0 <= sampled[0] <= sampled[-1] < n:

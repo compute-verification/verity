@@ -3,16 +3,14 @@ The partition as a named query over the verifier's own program (`one_stage/parti
 object and its digest (Flock's `HmRow.checkPartitionObject` and `HmRow.partitionDigest`), and the queries one-stage
 applies to the program: the template queries (Flock's `TemplateQuery`), `Q_word` v1 at `X = 16` (`Flock.Extract`) and
 `Q_call` v1 at `X ≤ 16` (`Flock.Qcall`), each on a topological program only, as core's `evaluate` refuses any other.
-Every unit's committed bits fit a public size class (`UNIT_CLASSES`, powers of two from 16 to `UNIT_CLASS_MAX` bits,
-provisional), its class the least that holds them (`unitClass`), a public property of its Definition: a program with a unit
+Every unit's committed bits fit a public size class (`SIZE_CLASSES`, powers of two from 16 to `SIZE_CLASS_MAX` bits,
+provisional), its class the least that holds them (`sizeClass`), a public property of its Definition: a program with a unit
 wider than the widest class is refused (a template instance's bits are its distinct returned gates', `templateBits`; a
 `Q_call` unit's count the constants its activation holds, `committedBits`, which `Q_call`'s width rule leaves out; a
 `Q_word` unit's are its cut's), and so is a program with a template of no gate. The verifier holds its own copy of the
 program and applies the query itself; it never takes a population or a unit index on the prover's word.
-`unitGatesFast` is the walk unit by unit with a template query's units reading their gates off one `table`
-(`gatesBy_table`), each root callee's gate count computed once through a memo (`gatesMemo`) and each range's offset
-once, where `TemplateQuery.gates` recomputes both per unit. `unitGates` reads a range at a time instead
-(`TemplateQuery.unitGates`), so nothing runs as `unitGatesFast`.
+`unitGates` reads a template query's units a range at a time (`TemplateQuery.unitGates`). `gTable` computes each root
+callee's gate count once through a memo (`gatesMemo`), for the readers that would otherwise recompute it per node.
 -/
 module
 
@@ -64,16 +62,16 @@ def digest (obj : Json) : Option String :=
 /-- `Q_word` v1's `X`, and the most `Q_call` v1's `X` may be: the width rule of the queries applied here. -/
 def QUERY_X : Nat := 16
 
-/-- The widest public size class of a unit's committed bits (the claims' `Claims.Sampling.unitClassMax`,
+/-- The widest public size class of a unit's committed bits (the claims' `Claims.Sampling.sizeClassMax`,
 provisional). 16 sets the classes back to the former literal limit alone. -/
-def UNIT_CLASS_MAX : Nat := 262144
+def SIZE_CLASS_MAX : Nat := 262144
 
-/-- The public size classes, ascending: the powers of two from 16 to `UNIT_CLASS_MAX` (the claims' `sizeClasses`). -/
-def UNIT_CLASSES : List Nat := (List.range (Nat.log2 (UNIT_CLASS_MAX / 16) + 1)).map (16 * 2 ^ ·)
+/-- The public size classes, ascending: the powers of two from 16 to `SIZE_CLASS_MAX` (the claims' `sizeClasses`). -/
+def SIZE_CLASSES : List Nat := (List.range (Nat.log2 (SIZE_CLASS_MAX / 16) + 1)).map (16 * 2 ^ ·)
 
-/-- `partition.unit_class`: the size class of a unit that commits `bits` bits, the least of `UNIT_CLASSES` that holds
+/-- `partition.size_class`: the size class of a unit that commits `bits` bits, the least of `SIZE_CLASSES` that holds
 them; `none` when none does. -/
-def unitClass (bits : Nat) : Option Nat := UNIT_CLASSES.find? (bits ≤ ·)
+def sizeClass (bits : Nat) : Option Nat := SIZE_CLASSES.find? (bits ≤ ·)
 
 /-- `partition._call_ranges`: the ranges of the Calls `(root-body index, Definition id, units)`, numbered by Call from
 `0`, one per Call with units. -/
@@ -82,7 +80,7 @@ def callRanges (calls : Array (Nat × String × Nat)) : Array TRange :=
     if x.2.2 == 0 then acc else (acc.1.push ⟨x.1, x.2.1, acc.2, x.2.2⟩, acc.2 + x.2.2)) (#[], 0)).1
 
 /-- `Q_word` v1's Calls with their cuts at `X = 16` (`partition._word_calls`): refused when a Definition's unit commits
-bits no public class holds (`unitClass`, `Flock.Partition.boundaryWidths` on its Call's graph). -/
+bits no public class holds (`sizeClass`, `Flock.Partition.boundaryWidths` on its Call's graph). -/
 def wordCalls (P : Flock.Program.Prog) : V (Array (Nat × Nat × Flock.Qword.DCut)) := do
   let calls ← Flock.Extract.evaluate P QUERY_X
   let mut seen : Array Nat := #[]
@@ -92,8 +90,8 @@ def wordCalls (P : Flock.Program.Prog) : V (Array (Nat × Nat × Flock.Qword.DCu
     let gr ← Flock.Extract.graph P d (full := false)
     if c.owner.size != gr.g.n then throw s!"query-refused: {(P.defs[d]!).key}'s cut leaves a computing gate out"
     let (ob, _) := Flock.Partition.boundaryWidths gr.g c.owner
-    if let some u := (List.range ob.size).find? (fun u => (unitClass ob[u]!).isNone) then
-      throw s!"query-refused: unit {u} of {(P.defs[d]!).key} commits {ob[u]!} bits, more than the widest class, {UNIT_CLASS_MAX}"
+    if let some u := (List.range ob.size).find? (fun u => (sizeClass ob[u]!).isNone) then
+      throw s!"query-refused: unit {u} of {(P.defs[d]!).key} commits {ob[u]!} bits, more than the widest class, {SIZE_CLASS_MAX}"
   return calls
 
 /-- `partition._committed_bits`: per unit `[lo, hi)` of one activation of a Definition, laid out as `G`
@@ -125,7 +123,7 @@ def templateBits (P : Flock.Program.Prog) (d : Nat) : V Nat := do
     if i > 0 && sorted[i - 1]!.1 == sorted[i]!.1 then bits else bits + sorted[i]!.2) 0
 
 /-- `partition._check_units` on a template query's ranges: refused for a template of no gate, or one whose instance commits
-bits no public class holds (`unitClass`, `templateBits`), each template once. -/
+bits no public class holds (`sizeClass`, `templateBits`), each template once. -/
 def checkTemplates (P : Flock.Program.Prog) (rs : Array TRange) : V Unit := do
   let root := (P.defs[P.root]!).body
   let mut seen : Array String := #[]
@@ -135,10 +133,10 @@ def checkTemplates (P : Flock.Program.Prog) (rs : Array TRange) : V Unit := do
     let d := root.nodes[r.node]!.fn
     if (P.defs[d]!).gates == 0 then throw s!"query-refused: template {r.template} has no gate"
     let bits ← templateBits P d
-    if (unitClass bits).isNone then
-      throw s!"query-refused: an instance of {r.template} commits {bits} bits, more than the widest class, {UNIT_CLASS_MAX}"
+    if (sizeClass bits).isNone then
+      throw s!"query-refused: an instance of {r.template} commits {bits} bits, more than the widest class, {SIZE_CLASS_MAX}"
 
-/-- `partition._check_units` on `Q_call`'s Calls: refused when a unit commits bits no public class holds (`unitClass`,
+/-- `partition._check_units` on `Q_call`'s Calls: refused when a unit commits bits no public class holds (`sizeClass`,
 `committedBits`, constants counted, which `Q_call`'s width rule leaves out), each Definition once. -/
 def checkCalls (P : Flock.Program.Prog) (cs : Array Flock.Qcall.Call) : V Unit := do
   let mut seen : Array Nat := #[]
@@ -146,8 +144,8 @@ def checkCalls (P : Flock.Program.Prog) (cs : Array Flock.Qcall.Call) : V Unit :
     if seen.contains c.d then continue
     seen := seen.push c.d
     let bits := committedBits c.c.gates (c.c.units.map fun u => (u.lo, u.hi))
-    if let some u := (List.range bits.size).find? (fun u => (unitClass bits[u]!).isNone) then
-      throw s!"query-refused: unit {u} of {(P.defs[c.d]!).key} commits {bits[u]!} bits, more than the widest class, {UNIT_CLASS_MAX}"
+    if let some u := (List.range bits.size).find? (fun u => (sizeClass bits[u]!).isNone) then
+      throw s!"query-refused: unit {u} of {(P.defs[c.d]!).key} commits {bits[u]!} bits, more than the widest class, {SIZE_CLASS_MAX}"
 
 /-- The `Q_word` or `Q_call` query's Calls with their units, as `(root-body index, Definition id, units)`: `Q_word` v1 at
 `X = 16` (`wordCalls`) or `Q_call` v1 at `X ≤ 16` (any `W` core accepts, its units `checkCalls`'); `query-refused` for
@@ -355,75 +353,6 @@ theorem look_gTable (d : Desc) : look d (gTable d) = d.gates := by
   · rename_i v hv; exact gTable_spec d c v hv
   · rfl
 
-/-- The gates of `root`'s nodes before node `k`, each callee's count by `g` (`TemplateQuery.gates`' offset at
-`g = d.gates`). -/
-def offWith (d : Desc) (g : String → Nat) (root : DDef) (k : Nat) : Nat :=
-  (root.nodes.extract 0 k).foldl (fun acc x => acc + x.members * g (d.callees.getD x.fn "")) 0
-
-/-- What `TemplateQuery.gates` reads per unit, once per program and ranges: the root, each root callee's gates
-(`gTable`) and the offset of each range's node. -/
-structure GateTable where
-  root : Option DDef
-  G : Std.HashMap String Nat
-  offs : Std.HashMap Nat Nat
-
-def table (d : Desc) (rs : Array TRange) : GateTable :=
-  let G := gTable d
-  let root := d.def? d.root
-  { root, G, offs := match root with
-      | none => {}
-      | some r => rs.foldl (fun o x => o.insert x.node (offWith d (look d G) r x.node)) {} }
-
-/-- `TemplateQuery.gates` off a `GateTable`. -/
-def gatesBy (d : Desc) (tb : GateTable) (rs : Array TRange) (i : Nat) : Option (Nat × Nat) := do
-  let (k, m, t) ← Flock.TemplateQuery.locate rs i
-  let root ← tb.root
-  let off := match tb.offs[k]? with
-    | some o => o
-    | none => offWith d (look d tb.G) root k
-  let g := look d tb.G t
-  return (off + m * g, off + m * g + g)
-
-theorem offs_spec (d : Desc) (g : String → Nat) (r : DDef) (rs : Array TRange) (k o : Nat)
-    (h : (rs.foldl (fun (o : Std.HashMap Nat Nat) (x : TRange) => o.insert x.node (offWith d g r x.node)) {})[k]? =
-      some o) : o = offWith d g r k := by
-  rw [← Array.foldl_toList] at h
-  have key : ∀ (l : List TRange) (O : Std.HashMap Nat Nat), (∀ k o, O[k]? = some o → o = offWith d g r k) →
-      ∀ k o, (l.foldl (fun (o : Std.HashMap Nat Nat) (x : TRange) => o.insert x.node (offWith d g r x.node)) O)[k]? =
-        some o → o = offWith d g r k := by
-    intro l
-    induction l with
-    | nil => intro O h; exact h
-    | cons x l ihl =>
-      intro O hO
-      apply ihl
-      intro k' o' h'
-      simp only [Std.HashMap.getElem?_insert] at h'
-      split at h'
-      · rename_i he
-        cases eq_of_beq he
-        simp only [Option.some.injEq] at h'
-        exact h'.symm
-      · exact hO _ _ h'
-  exact key _ _ (by intro k o h; simp at h) k o h
-
-theorem gatesBy_table (d : Desc) (rs : Array TRange) (i : Nat) :
-    gatesBy d (table d rs) rs i = Flock.TemplateQuery.gates d rs i := by
-  simp only [gatesBy, table, Flock.TemplateQuery.gates, look_gTable]
-  cases Flock.TemplateQuery.locate rs i with
-  | none => rfl
-  | some kmt =>
-    obtain ⟨k, m, t⟩ := kmt
-    cases d.def? d.root with
-    | none => rfl
-    | some r =>
-      simp only [Option.bind_eq_bind, Option.bind_some]
-      split
-      · rename_i o ho
-        rw [offs_spec d d.gates r rs k o ho]
-        rfl
-      · rfl
-
 /-- `partition.unit_gates` with a template query's units laid out by `instances` (`TemplateQuery.unitGates` or
 `TemplateQuery.unitGatesRef`): each unit's gates `[lo, hi)` in root gates, by unit: an instance's
 (`TemplateQuery.gates`), a `Q_call` unit's interval of its Call, or the span of the gates a `Q_word` unit owns. -/
@@ -576,26 +505,5 @@ def runInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
   !inside.isEmpty && inside.all fun i => match nodes[i]? >>= fun x => P.defs[x.fn]? with
     | some f => f.prim && f.binding == some Flock.Program.RUN
     | none => false
-
-/-- The walk unit by unit (`unitGatesBy` at each unit's `TemplateQuery.gates`) with a template query's units read off
-one `table` of the program and ranges (`gatesBy`, `gatesBy_table`), rather than each unit recomputing its node's offset
-and its template's gates. `unitGates` reads a range at a time instead, and nothing runs this. -/
-def unitGatesFast (p : Program) (query : Json) : V (Array (Nat × Nat)) := do
-  let rs ← evaluate p query
-  let q := getD (build (Flock.hexOf p.sha512) query) "query"
-  let name := (q.getObjValAs? String "name").toOption.getD ""
-  let version := (nat? (getD q "version")).getD 0
-  let X := (nat? (getD (getD q "params") "X")).getD 0
-  if (Flock.TemplateQuery.templatesOf name version (getD q "params")).isSome then
-    let tb := table p.desc rs
-    return ← (Array.range (Flock.TemplateQuery.population rs)).mapM fun u =>
-      match gatesBy p.desc tb rs u with
-      | some g => pure g
-      | none => throw s!"unit {u} has no instance"
-  let root := (p.prog.defs[p.prog.root]!).body
-  if name == "Q_word" then
-    return ← (← wordCalls p.prog).foldlM (fun acc (k, d, c) => return acc ++ (← wordGates p.prog k d c)) #[]
-  return (← Flock.Qcall.evaluate p.prog X).foldl (fun acc c =>
-    acc ++ c.c.units.map fun u => (root.offsets[c.k]! + u.lo, root.offsets[c.k]! + u.hi)) #[]
 
 end Spot.Partition

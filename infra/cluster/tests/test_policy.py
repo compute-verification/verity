@@ -35,7 +35,7 @@ VY_POOL_PRIORITY=circuits-gpu
 VY_POOL_MAX=6
 VY_POOL_IDLE_S=30
 """
-FILES = {policy.LEAN_SLOTS: "# NAME CAP\ncheck 2\naudit 2\n",
+FILES = {policy.LEAN_SLOTS: "# NAME LIMIT\ncheck 2\naudit 2\n",
          policy.CHECK_SLOTS: "c 8-31\na 32-63 only=trains\nb 64-95\nd 128-159  # since 2 Oct\n",
          "/etc/vy/direct-gpus": "none\n", "/etc/vy/direct-cpus": "# the non-benchmark CPUs\n0-95,128-159\n",
          policy.USER_CPUSET: "# delegate cpuset\n[Service]\nDelegate=cpu cpuset memory pids\n",

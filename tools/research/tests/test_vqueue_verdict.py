@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import re
 import tomllib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -15,13 +15,15 @@ import research.vqueue_loop as L
 from research import vqueue, vqueue_slim
 from research.digest import REVERT_SUBJECT
 from research.merge import REVERTS
-from research.queue import DRIVE_FLAGS
+from research.queue import DRIVE_FLAGS, DriveFlags, lowrisk
 from test_queue import AUTHORED, NAMED, OWN, _git, _who
 from test_vqueue_loop import NEW, Env, Runs, _acts, _main_to, _move, _row
 
-#: drive.toml on `main` in these tests: the low-risk lane on, keeping Lean and the verifiers off it, and those two off the
-#: quick tier where the land verdicts gate
-DRIVE = 'lowrisk_lane = true\nlowrisk_excludes = ["*.lean", "verity/core/"]\nverdict_excludes = ["*.lean", "verity/core/"]\n'
+#: drive.toml on `main` in these tests: the low-risk lane on, keeping Lean and the verifiers off it, and those two and a
+#: device off the quick tier where the land verdicts gate
+DRIVE = 'lowrisk_lane = true\nlowrisk_excludes = ["*.lean", "verity/core/"]\nverdict_excludes = ["verity/device/"]\n'
+#: the checkout's root, whose drive.toml and tracked files the tests of what is plain on this tree read
+ROOT = Path(__file__).resolve().parents[3]
 #: a change failing suite pkg's new test
 FAILING = {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"}
 
@@ -122,12 +124,14 @@ def test_under_gate_verdict_a_plain_candidate_lands_on_its_land_verdicts_and_the
     assert not [r for r in env.lines() if r["action"] in ("revert", "fallback")] and not env.posts
 
 
-@pytest.mark.parametrize("how", ["a Lean change", "a verdict_excludes path", "no land verdict of its own"])
+@pytest.mark.parametrize("how", ["a Lean change", "a lowrisk_excludes path", "a verdict_excludes path",
+                                 "no land verdict of its own"])
 def test_under_gate_verdict_a_candidate_that_is_not_plain_still_takes_the_whole_check(env, monkeypatch, how):
-    """A PR changing Lean or a path drive.toml's `verdict_excludes` names, or one taken on its ready mark alone with no land
-    verdict at its head, makes its candidate take the whole check before `main`, as under `--gate check`: no quick tier."""
-    files = {"a Lean change": {"Lib/A.lean": "def a := 1\n"}, "a verdict_excludes path": {"verity/core/v.py": "x = 1\n"},
-             "no land verdict of its own": {"a.txt": "1\n"}}[how]
+    """A PR changing Lean or a path drive.toml's `lowrisk_excludes` or `verdict_excludes` names, or one taken on its ready
+    mark alone with no land verdict at its head, makes its candidate take the whole check before `main`, as under `--gate
+    check`: no quick tier."""
+    files = {"a Lean change": {"Lib/A.lean": "def a := 1\n"}, "a lowrisk_excludes path": {"verity/core/v.py": "x = 1\n"},
+             "a verdict_excludes path": {"verity/device/d.py": "x = 1\n"}, "no land verdict of its own": {"a.txt": "1\n"}}[how]
     head = env.put(1, files)
     if how == "no land verdict of its own":
         env.labels.verdicts[1, head] = []
@@ -138,23 +142,35 @@ def test_under_gate_verdict_a_candidate_that_is_not_plain_still_takes_the_whole_
     assert [kw["shard"] for kw in _shards_of(runs, sha)] == ["1/3", "2/3", "3/3"]
 
 
+def _tree_drive(**lists: list[str] | None) -> str:
+    """drive.toml on `main` with the low-risk lane on and this tree's own `lowrisk_excludes`, `verdict_excludes` and
+    `verdict_plain`, but each ``lists`` names: that list in its place, or, as None, left out."""
+    real = tomllib.loads((ROOT / DRIVE_FLAGS).read_text())
+    keys = {k: real[k] for k in ("lowrisk_excludes", "verdict_excludes", "verdict_plain")} | lists
+    return "lowrisk_lane = true\n" + "".join(f"{k} = {json.dumps(v)}\n" for k, v in keys.items() if v is not None)
+
+
 @pytest.mark.parametrize("what, files, gate", [
+    ("a doc", {"GLOSSARY.md": "x\n"}, vqueue_slim.QUICK),
+    ("a benchmark", {"benchmarks/census/README.md": "x\n"}, vqueue_slim.QUICK),
+    ("the circuit language", {"verity/circuits/program.py": "x = 1\n"}, "check"),
     ("the root's tests", {"tests/test_tree.py": "x = 1\n"}, vqueue_slim.QUICK),
-    ("the circuit language", {"verity/circuits/program.py": "x = 1\n"}, vqueue_slim.QUICK),
+    ("a verifier", {"verity/protocols/accounting/pouw/verifier/audit.py": "x = 1\n"}, "check"),
+    ("a device", {"verity/protocols/compose/device/live_challenger/auditor.py": "x = 1\n"}, "check"),
     ("a Lean source", {"Lib/A.lean": "def a := 1\n"}, "check"),
     ("a lock", {"pkg/lean-audit.json": "{}\n"}, "check"),
     ("a move", {"c.txt": None, "moved/c.txt": "c\n", "a.txt": "moved/c\n"}, "check"),
     ("the loop", {"tools/research/src/research/vqueue_loop.py": "x = 1\n"}, "check"),
-], ids=["the root's tests", "the circuit language", "a Lean source", "a lock", "a move", "the loop"])
-def test_under_gate_verdict_what_is_plain_is_what_the_tree_s_verdict_excludes_leaves_whatever_lowrisk_excludes_names(
+], ids=["a doc", "a benchmark", "the circuit language", "the root's tests", "a verifier", "a device", "a Lean source",
+        "a lock", "a move", "the loop"])
+def test_under_gate_verdict_what_is_plain_is_what_the_tree_s_lowrisk_excludes_and_verdict_excludes_both_leave(
         env, monkeypatch, what, files, gate):
-    """`main`'s drive.toml holds this tree's own `verdict_excludes`, and a `lowrisk_excludes` naming the root's tests and the
-    circuit language, as the low-risk lane's does.  A PR with a land verdict of its own that changes either is plain all the
-    same, and its candidate takes the quick tier: the gate reads `verdict_excludes` alone.  One changing a Lean source, a
-    lock or the loop's own code, which `verdict_excludes` names, takes the whole check, as does a move, whatever it touches."""
-    real = tomllib.loads((Path(__file__).resolve().parents[3] / DRIVE_FLAGS).read_text())["verdict_excludes"]
-    _main_to(env, {DRIVE_FLAGS: 'lowrisk_lane = true\nlowrisk_excludes = ["*.lean", "tests/", "verity/circuits/"]\n'
-                                f"verdict_excludes = {json.dumps(real)}\n"})
+    """`main`'s drive.toml holds this tree's own `lowrisk_excludes`, `verdict_plain` and `verdict_excludes`.  A PR with a land
+    verdict of its own that changes a doc, a benchmark or the root's tests (an entry of `verdict_plain`) is plain, and its
+    candidate takes the quick tier.  One changing the circuit language, a verifier, a device, a Lean source, a lock or the
+    loop's own code takes the whole check, the gate reading what the low-risk lane keeps off but `verdict_plain` and adding
+    `verdict_excludes`, as does a move, whatever it touches."""
+    _main_to(env, {DRIVE_FLAGS: _tree_drive()})
     if what == "a move":
         _move(env, 1, files)
     else:
@@ -165,6 +181,53 @@ def test_under_gate_verdict_what_is_plain_is_what_the_tree_s_verdict_excludes_le
     started = next(r for r in logged if r["action"] == "slim" and r["sha"] == built["sha"])
     assert built["members"] == [1] and started["record"]["gate"] == gate
     assert (len(quick.launches), len(_shards_of(runs, built["sha"]))) == ((1, 0) if gate == vqueue_slim.QUICK else (0, 3))
+
+
+def test_under_gate_verdict_no_file_of_the_tree_the_low_risk_lane_keeps_off_is_plain_nor_any_verifier_or_device(
+        env, monkeypatch):
+    """Over this tree's drive.toml and every file the checkout tracks, one ready PR changing each with a land verdict of its
+    own: none whose file `lowrisk_excludes` keeps off the low-risk lane is plain, except a file only entries of
+    `verdict_plain` keep off, nor any changing non-test Python under a `verifier/` or `device/` directory, so a Python
+    verifier that drifts from its Lean takes the whole check before it lands.  A verifier, a device, the code an auditor's
+    device runs, the research tool's CLI, the move tool, the Lean check and the check are not plain; a doc, a benchmark,
+    infra/ and the agent guard are."""
+    files = _git(ROOT, "ls-files").splitlines()
+    _main_to(env, {DRIVE_FLAGS: _tree_drive()})
+    loop, _, _ = _verdict(env, monkeypatch)
+    ready = [vqueue.Ready(n, f"{n:040x}", frozenset({f})) for n, f in enumerate(files, 1)]
+    loop.world.reviewed = {x.number for x in ready}
+    plain = {files[n - 1] for n in loop._plain(ready, env.main())}
+    flags = DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text())
+    gate = [x for x in flags.lowrisk_excludes if x not in flags.verdict_plain]
+    kept = {f for f in files if not lowrisk([f], gate)}
+    assert flags.verdict_plain and kept and not kept & plain, (
+        f"plain though the low-risk lane keeps them off by more than `verdict_plain`: {sorted(kept & plain)[:10]}")
+    freed = {f for f in files if not lowrisk([f], flags.lowrisk_excludes) and lowrisk([f], gate)}
+    assert freed and freed <= plain
+    audited = {f for f in files if f.endswith(".py") and {"verifier", "device"} & set(f.split("/")[:-1])
+               and "tests" not in f.split("/") and not PurePosixPath(f).name.startswith("test_")}
+    assert audited and not audited & plain, f"plain verifier or device Python: {sorted(audited & plain)[:10]}"
+    whole = {"verity/protocols/accounting/pouw/verifier/audit.py", "verity/protocols/compose/device/live_challenger/auditor.py",
+             "tools/research/src/research/cli.py", "tools/verity/lean/check.py", "tools/check/check.py",
+             "benchmarks/one_stage/a5.py", "verity/protocols/accounting/certifier/device/network_certifier_serve.py",
+             "benchmarks/remote_session/auditor_line.py", "tools/move/restack.py"}
+    quick = {"GLOSSARY.md", "benchmarks/census/README.md", "infra/README.md", "tools/agent-guard/boot.sh"}
+    assert whole | quick <= set(files) and not whole & plain and quick <= plain
+
+
+@pytest.mark.parametrize("absent", ["lowrisk_excludes", "verdict_excludes"])
+def test_under_gate_verdict_with_either_list_absent_at_main_no_candidate_is_plain(env, monkeypatch, absent):
+    """`main`'s drive.toml holds this tree's lists but for one, left out: the gate fails closed, and a PR changing a doc, with
+    a land verdict of its own, takes the whole check before it lands.  `verdict_plain` goes with `lowrisk_excludes`, whose
+    entries it lists."""
+    _main_to(env, {DRIVE_FLAGS: _tree_drive(**{absent: None}, **({"verdict_plain": None} if absent == "lowrisk_excludes" else {}))})
+    env.put(1, {"GLOSSARY.md": "x\n"})
+    loop, runs, quick = _verdict(env, monkeypatch)
+    logged = loop.tick()
+    built = next(r for r in logged if r["action"] == "build")
+    started = next(r for r in logged if r["action"] == "slim" and r["sha"] == built["sha"])
+    assert built["members"] == [1] and started["record"]["gate"] == "check" and quick.launches == []
+    assert loop.plain == {}
 
 
 def test_under_gate_verdict_a_plain_candidate_whose_quick_tier_fails_is_a_red_of_its_own_and_ejects_its_member(env, monkeypatch):

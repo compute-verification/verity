@@ -11,8 +11,8 @@ public import Proofs.Pouw.PearlPlus.Peel
 public import Proofs.Pouw.PearlPlus.Factors
 public import Proofs.Pouw.PearlPlus.Semantics
 public import Proofs.Pouw.PearlPlus.Assembly
-public import Proofs.Pouw.PearlPlus.Draw
-public import Proofs.Pouw.PearlPlus.Debit
+public import Proofs.Pouw.PearlPlus.Sample
+public import Proofs.Pouw.PearlPlus.InertWork
 public import Proofs.Pouw.PearlPlus.Cap
 
 /-!
@@ -24,12 +24,12 @@ premise `TTOutTilePearlCH100Rev1` reads. Four parts:
 
 * (a) `Atom`: the evaluator's FP8 atom is the Definitions' step.
 * (b) `Noise` and `Words`: -h3's noise is `NoiseSha512`'s, and a tile's checked words are the reference values.
-* (c) `Rules`, `Keys`, `Debit` and `Cap`: the per-row rules are `RowOK`, a word's replayed inert work is the game's
-  (`Keys`: the replay's keys, bisection and carried add; `Debit`: the replay itself, and that it reads the semantics'
+* (c) `Rules`, `Keys`, `InertWork` and `Cap`: the per-row rules are `RowOK`, a word's replayed inert work is the game's
+  (`Keys`: the replay's keys, bisection and carried add; `InertWork`: the replay itself, and that it reads the semantics'
   codes), and a passed tile is within the game's inert-work bound, its chain and its forming term (`Cap`).
 * (d) `Assembly`: a passed tile whose openings are its unit's commitment has good words, or SHA-512 collides.
 
-`Draw` reads the run's sample and acceptance as `TileDraw`'s game samples and audits: a passed tile's declaration is
+`Sample` reads the run's sample and acceptance as `TileSample`'s game samples and audits: a passed tile's declaration is
 consistent (`declOK`), the code's tickets are `drawTickets`, and an accepted run's samples are accepted by the tolerant
 audit over `goodDeclTiles ∪ blankTiles`, or SHA-512 collides.
 -/

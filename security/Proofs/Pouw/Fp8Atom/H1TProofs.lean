@@ -9,7 +9,7 @@ public import Proofs.Pouw.Fp8Atom.H1TChecks
 public import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
-# Proofs of H-1T's pinned statements
+# Proofs of H-1T's guarantees
 
 The conformance statements assemble the kernel-evaluated parts of `Pouw.Fp8Atom.H1TChecks`; the chain's running words
 follow by induction from its local checks. The structural statements unfold the definitions. `RnErr` is

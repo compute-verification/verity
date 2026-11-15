@@ -5,9 +5,9 @@
          x: Array<N_IN, Value<1>>) -> Array<N_OUT, Value<1>>
         W = N_IN + G wires, K = bit_length(W - 1) bits per wire index (at least 1)
 
-The private circuit's gates and wiring are a value, a `Netlist`, that this Definition takes as input beside the data, so the
-unit's structure is a function of the size class (G, N_IN, N_OUT) alone. It is not how a private circuit is hidden: circuit
-hiding is recursion (Flock's ``--hide``).
+The private circuit's gates and wiring are a value, a `PrivateCircuit`, that this Definition takes as input beside the data,
+so the unit's structure is a function of the size class (G, N_IN, N_OUT) alone. It is not how a private circuit is hidden:
+circuit hiding is recursion (Flock's ``--hide``).
 
 **The private circuit's description** is in SSA form: wires 0 .. N_IN - 1 are the data inputs x, and wire N_IN + g is gate g's output. Gate g is
 ``(op, a, b)``; it reads wires a and b and computes
@@ -60,8 +60,8 @@ from verity.circuits.types import Array
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.gather import gather
 
-__all__ = ["AND", "NAND", "NOOP", "Netlist", "UniversalUnit", "XNOR", "XOR", "and_count", "arguments", "build", "index_bits",
-           "interpret", "pad", "traced"]
+__all__ = ["AND", "NAND", "NOOP", "PrivateCircuit", "UniversalUnit", "XNOR", "XOR", "and_count", "arguments", "build",
+           "index_bits", "interpret", "pad", "traced"]
 
 BIT = BL.BIT
 XOR, AND, XNOR, NAND = 0, 1, 2, 3
@@ -81,7 +81,7 @@ def _check_class(G: int, N_IN: int, N_OUT: int) -> None:
 
 
 @dataclass(frozen=True)
-class Netlist:
+class PrivateCircuit:
     """``gates[g] = (op, a, b)`` makes wire ``n_in + g``; ``outputs`` are wire indices. Any index is allowed: one the reading
     gate can't see, or an output past the last wire, reads 0."""
 
@@ -94,17 +94,17 @@ class Netlist:
         object.__setattr__(self, "outputs", tuple(int(o) for o in self.outputs))
         if self.n_in < 0 or any(len(g) != 3 or not 0 <= g[0] <= 3 or min(g[1:]) < 0 for g in self.gates) or \
                 any(o < 0 for o in self.outputs):
-            raise ValueError("a netlist's gates are (op in 0..3, a >= 0, b >= 0) and its outputs indices >= 0")
+            raise ValueError("a private circuit's gates are (op in 0..3, a >= 0, b >= 0) and its outputs indices >= 0")
 
     @property
     def wires(self) -> int:
         return self.n_in + len(self.gates)
 
 
-def interpret(net: Netlist, x: Sequence[int]) -> list[int]:
+def interpret(net: PrivateCircuit, x: Sequence[int]) -> list[int]:
     """The private circuit run gate by gate on the bits ``x``: the reference `UniversalUnit` agrees with."""
     if len(x) != net.n_in:
-        raise ValueError(f"the netlist has {net.n_in} inputs, not {len(x)}")
+        raise ValueError(f"the private circuit has {net.n_in} inputs, not {len(x)}")
     w = [b & 1 for b in x]
     for op, a, b in net.gates:
         va = w[a] if a < len(w) else 0
@@ -113,35 +113,35 @@ def interpret(net: Netlist, x: Sequence[int]) -> list[int]:
     return [w[o] if o < len(w) else 0 for o in net.outputs]
 
 
-def pad(net: Netlist, G: int, N_IN: int) -> Netlist:
+def pad(net: PrivateCircuit, G: int, N_IN: int) -> PrivateCircuit:
     """``net`` in the class's G gates over N_IN inputs: unread inputs after its own (its gate wires shifted past them), then
     no-op gates. Every index of ``net`` must be in range (a source below its gate's own wire, an output below its wires)."""
     g0, n0 = len(net.gates), net.n_in
     if g0 > G or n0 > N_IN:
-        raise ValueError(f"a netlist of {g0} gates over {n0} inputs does not fit G = {G}, N_IN = {N_IN}")
+        raise ValueError(f"a private circuit of {g0} gates over {n0} inputs does not fit G = {G}, N_IN = {N_IN}")
     if any(max(a, b) >= n0 + g for g, (_, a, b) in enumerate(net.gates)) or any(o >= net.wires for o in net.outputs):
-        raise ValueError("pad takes a netlist whose every index is in range")
+        raise ValueError("pad takes a private circuit whose every index is in range")
     shift = N_IN - n0
 
     def at(i: int) -> int:
         return i if i < n0 else i + shift
 
     gates = [(op, at(a), at(b)) for op, a, b in net.gates] + [NOOP] * (G - g0)
-    return Netlist(N_IN, tuple(gates), tuple(at(o) for o in net.outputs))
+    return PrivateCircuit(N_IN, tuple(gates), tuple(at(o) for o in net.outputs))
 
 
 def _bits(v: int, k: int) -> list[int]:
     return [(v >> j) & 1 for j in range(k)]
 
 
-def arguments(net: Netlist, x: Sequence[int]) -> tuple[list[int], list[int], list[int], list[int]]:
+def arguments(net: PrivateCircuit, x: Sequence[int]) -> tuple[list[int], list[int], list[int], list[int]]:
     """``UniversalUnit_v1{G = len(gates), N_IN = n_in, N_OUT = len(outputs)}``'s four arguments, each a flat list of bits in leaf
     order (`verity.circuits.evaluation.evaluate`'s form)."""
     k = index_bits(len(net.gates), net.n_in)
     if any(i >> k for g in net.gates for i in g[1:]) or any(o >> k for o in net.outputs):
         raise ValueError(f"an index does not fit the class's {k}-bit wire indices")
     if len(x) != net.n_in:
-        raise ValueError(f"the netlist has {net.n_in} inputs, not {len(x)}")
+        raise ValueError(f"the private circuit has {net.n_in} inputs, not {len(x)}")
     op = [b for g in net.gates for b in _bits(g[0], 2)]
     src = [b for g in net.gates for i in g[1:] for b in _bits(i, k)]
     out = [b for o in net.outputs for b in _bits(o, k)]
@@ -187,8 +187,8 @@ def _body(B, S, *colls):
 
 UniversalUnit = CompositeDefinition(
     "UniversalUnit", 1, ("G", "N_IN", "N_OUT"), _signature, _body, conformance="exact-model-tested",
-    doc="The netlist (op, src, out) of G gates over N_IN inputs run on x: SSA wires (x, then each gate's output), each gate "
-        "XOR / AND / XNOR / NAND of two earlier wires (a later or out-of-range one reads 0), output i wire out[i]")
+    doc="The private circuit (op, src, out) of G gates over N_IN inputs run on x: SSA wires (x, then each gate's output), "
+        "each gate XOR / AND / XNOR / NAND of two earlier wires (a later or out-of-range one reads 0), output i wire out[i]")
 
 
 def _tree(m: int, k: int) -> int:

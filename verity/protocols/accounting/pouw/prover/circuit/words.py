@@ -41,10 +41,6 @@ def _rotr64(x: int, c: int) -> int:
     return ((x >> c) | (x << (64 - c))) & M64 if c else x
 
 
-def _halves(x: int) -> tuple[int, int]:
-    return x >> 32, x & M32
-
-
 # ---- 32-bit words ------------------------------------------------------------------------------------------------------
 
 @primitive("PouwXor32", 1, [("a", U32), ("b", U32)], U32, conformance="protocol-defined")
@@ -257,7 +253,7 @@ def PouwSqGe(x: int, th: int) -> int:
 
 # ---- Pearl-C's inert-work bound (`cap`): a promotion window's masked words ------------------------------------------------
 
-#: a promotion window of G = 4 atoms of k = 32, and its masked words (`pearl_c_debit._masked`): mask m's word from +0, atom j
+#: a promotion window of G = 4 atoms of k = 32, and its masked words (`pearl_c_inert_work._masked`): mask m's word from +0, atom j
 #: passing its word through when bit j of m is set, at bits 32m to 32m + 31 for m = 0 to 14 (mask 15 passes every atom: +0)
 WINDOW, MASKS, MASKED = 128, 15, Value(480)
 

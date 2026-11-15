@@ -1,6 +1,6 @@
-"""The scan (`ingress_scan.IngressScanBucket`, `IngressScanFirst`) and the egress buckets on the views it writes
+"""The scan (`ingress_scan.IngressScanBucket`, `IngressScanStart`) and the egress buckets on the views it writes
 (`egress.EgressBucket`), on the network certifier's own records: the network certifier, driven tick by tick
-(`test_network_certifier_warden`'s harness), carries three network-certifier-form id requests on two lanes, the third
+(`test_network_certifier`'s harness), carries three network-certifier-form id requests on two lanes, the third
 queued until a lane frees, and their responses of id events. The reference's scan of its ingress rows from the empty
 state, the Programs' rows its responses, holds each request's prompt ids at their positions, its head's fields, its
 admission bucket and its anchor until the anchor (two requests anchored at one boundary in their own slots) and its
@@ -19,10 +19,11 @@ nothing, and ignores every entry outside a due, occupied slot (an entry off its 
 entry's padding, a due slot's entry whose occupancy word is 0, which takes no outputs); the Programs' entries are
 `SlotEntry_v1`'s rows, word-aligned, one port a slot; the same traffic at a KI one below request 3's prompt is
 refused at the cell that takes it past; a window
-circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the first bucket's circuit
-is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
+circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the ingress circuit at the
+empty state is the reference from no state; the egress circuit is its reference on the views;
 `scan_traffic.serve`, the zk run's driver, ticks the same rows as the network certifier; and the w63 class's state is
-the scan's sized layout, with the outputs N2's view reads."""
+the scan's sized layout, with the outputs N2's view reads; and the carried start's unit (`IngressScanStart`) outputs
+the state row it is given, bit for bit."""
 from __future__ import annotations
 
 import asyncio
@@ -34,23 +35,24 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import scan_traffic as ST
-from test_network_certifier_warden import EOF, Server, drive
+from test_network_certifier import EOF, Server, drive
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.accounting.certifier.prover import egress as EG
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import HEADER, id_request
-from verity.protocols.accounting.certifier.verifier.warden import DATA, END, PAD, WardenParams, cells
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
+from verity.protocols.accounting.certifier.verifier.network_certifier import DATA, END, PAD, NetworkCertifierParams, cells
 
 B = 512
-PARAMS = WardenParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
+PARAMS = NetworkCertifierParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                       ingress_buckets=3, egress_cells=9, every=2)
 CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 UNIT = bind(IS.IngressScanBucket, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
-FIRST = bind(IS.IngressScanFirst, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
+START = bind(IS.IngressScanStart, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 SHAPE = CLS.egress
 EGRESS = bind(EG.EgressBucket, B=B, R=SHAPE.R, r=SHAPE.r, NR=SHAPE.NR, K=SHAPE.K, IB=SHAPE.IB, D=SHAPE.D)
 #: request 3's prompt is KI ids
@@ -74,8 +76,8 @@ def run():
     arrivals = {0: [cells(reqs[0], B)], 1: [cells(reqs[1], B), cells(reqs[2], B)]}
     CLS.serves(PARAMS)
     server = Server([[(1, _response(xs)), (2, EOF)] for xs in RESPONSES])
-    warden, _ = asyncio.run(drive(server, arrivals, params=PARAMS))
-    rec = {r.link: r for r in warden.records}
+    network_certifier, _ = asyncio.run(drive(server, arrivals, params=PARAMS))
+    rec = {r.link: r for r in network_certifier.records}
     rows = [WR.window_rows(rec[link], PARAMS) for link in ("requests", "responses")]
     ch = ST.chain(CLS, *rows, {q: xs for q, xs in enumerate(RESPONSES, 1)})
     admitted = {}
@@ -83,7 +85,7 @@ def run():
         for s in st.slots:
             if s.live:
                 admitted.setdefault(s.q, s.admitted)
-    return SimpleNamespace(warden=warden, reqs=reqs, chain=ch, rows=ch.ingress, egress=ch.egress, states=ch.scan,
+    return SimpleNamespace(network_certifier=network_certifier, reqs=reqs, chain=ch, rows=ch.ingress, egress=ch.egress, states=ch.scan,
                            bits=ch.states, admitted=admitted)
 
 
@@ -179,7 +181,7 @@ def test_a_window_circuit_reads_the_scan_s_state_rows_from_t0_minus_one(run):
         IS.window_state(CLS, [x[:-16] for x in registered], 0, 2)
 
 
-def test_each_egress_bucket_computes_the_wardens_row_from_the_view_its_ingress_bucket_wrote(run):
+def test_each_egress_bucket_computes_the_network_certifiers_row_from_the_view_its_ingress_bucket_wrote(run):
     ch = run.chain
     assert len(ch.egress) == len(ch.ingress) == PARAMS.window
     assert sum(row[s * B] == DATA for row in ch.egress for s in range(SHAPE.R)) == sum(map(len, RESPONSES))
@@ -194,7 +196,7 @@ def test_each_egress_bucket_computes_the_wardens_row_from_the_view_its_ingress_b
     assert EG.outputs(SHAPE, ch.view(t))[1] != bytes(forged)
 
 
-def test_scan_traffic_ticks_the_warden_s_rows(run):
+def test_scan_traffic_ticks_the_network_certifier_s_rows(run):
     served = ST.serve(PARAMS, run.reqs, [0, 1, 1], [1 << 20] * 3, RESPONSES, 1)
     assert served.rows() == (run.rows, run.egress) and served.admitted == (0, 1, PARAMS.delay + 2)
 
@@ -232,7 +234,7 @@ def test_the_state_is_the_layout_neg_sized():
         IS.Class(B=512, r=4, lanes=4, C=47, KI=2083)
     with pytest.raises(ValueError, match=re.escape("KI <= 147")):
         IS.Class(B=512, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8)
-    served = WardenParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
+    served = NetworkCertifierParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
                           egress_cells=65, window=32, every=16)
     w63.serves(served)
     assert (served.program_slots, served.window_programs) == (w63.SLOTS, 8)
@@ -352,10 +354,23 @@ def test_each_negative_is_refused_by_the_reference_or_computes_another_state(run
         assert IS.reference(CLS, *ignored[name][0]) == (1, *run.chain.outputs(t)), name
 
 
+def test_the_carried_start_s_unit_outputs_its_state_row_bit_for_bit(run):
+    """`IngressScanStart`, the unit of a scan's carried start: one input, ``sin``, and one output, each a state row of
+    the class, and the output is ``sin`` on the empty state's row, every state of the run and random rows, so the row
+    it commits is the state it was given and no other."""
+    NS = IS.state_bits(CLS)
+    (name, ty), ret = START.signature()[0][0], START.signature()[1]
+    assert (name, ty.n) == ("sin", NS) and [t.n for t in ret.fields] == [NS]
+    rng = random.Random(11)
+    rows = [IS.encode(CLS, IS.empty(CLS)), *run.chain.states, *([rng.randrange(2) for _ in range(NS)] for _ in range(8))]
+    assert len({tuple(r) for r in rows}) > len(run.chain.states) // 2
+    assert _circuit(START, [rows]) == [list(r) for r in rows]
+
+
 @pytest.mark.slow
 def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_random_flips(run):
-    """Slow (about 15 s: 217,065 and 137,969 ANDs traced, the ingress unit evaluated on about 100 cases, the first
-    bucket's on about 30, and the egress unit on 31)."""
+    """Slow (about 15 s: 217,065 and 137,969 ANDs traced, the ingress unit evaluated on about 130 cases and the
+    egress unit on 31)."""
     ch = run.chain
     T = len(run.rows)
     honest = [(ch.ingress[t], ch.states[t], ch.progs[t]) for t in range(T)]
@@ -388,8 +403,8 @@ def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_rando
     assert [a == b and a[0] == 1 for a, b in zip(pairs[::2], pairs[1::2])] == [True] * len(ignored)
     moved = [o1 != ch.outputs(t)[0] for t, (o0, o1, _) in zip(at, got[T + len(negs):]) if o0]
     assert sum(moved) >= 5, moved
-    # the first bucket's proof block is the ingress proof block at the empty state, its outputs bit for bit where a
-    # check fails too
+    # at the empty state, the start's row, the ingress proof block is the reference from no state, where a check fails
+    # too
     starts = [(c[0], c[2]) for c in cases if c[1] == ch.states[0]]
     for _ in range(20):
         row, prog = bytearray(ch.ingress[0]), list(ch.progs[0])
@@ -398,8 +413,7 @@ def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_rando
         else:
             prog[rng.randrange(len(prog))] ^= 1
         starts.append((bytes(row), prog))
-    first = _scan_outputs(FIRST, starts)
-    assert first == _scan_outputs(UNIT, [(row, ch.states[0], prog) for row, prog in starts])
+    first = _scan_outputs(UNIT, [(row, ch.states[0], prog) for row, prog in starts])
     assert first[0] == (1, *ch.outputs(0)) and 0 in [o0 for o0, _, _ in first]
     assert [o0 for o0, _, _ in first] == [IS.reference(CLS, row, None, prog)[0] for row, prog in starts]
     views = [ch.view(t) for t in range(T)] + [ch.view(t + 1) for t in range(T - 1)]

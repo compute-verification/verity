@@ -57,7 +57,7 @@ def role_of_module(name: str) -> str | None:
     if not short.startswith(MODULE_PREFIX):
         return None
     role = short[len(MODULE_PREFIX):]
-    return role if role and all(c.isupper() or c.isdigit() or c == "_" for c in role) else None
+    return role if role and all(c.isupper() or c.isdecimal() or c == "_" for c in role) else None
 
 
 def checkpoint_entry(role: str) -> dict[str, Any] | None:

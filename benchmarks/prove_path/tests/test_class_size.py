@@ -24,10 +24,12 @@ import pytest
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
+from verity_vllm.definitions.registry.attention_vocab import fa2_masked_from
+from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import class_size as CZ  # noqa: E402
+sys.path.insert(0, str((Path(__file__).resolve().parents[1])))
+from verity.protocols.proofs.spot.prover.audit import class_size as CZ  # noqa: E402
 
 #: adapters/vllm's `tests.program.predict.test_steps.TINY` and its grain in test_window_circuit
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
@@ -43,6 +45,11 @@ def _registered(config: dict) -> Registered:
     return Registered.of(phi, default_seed=7)
 
 
+def _project(probe: dict[str, int], at: WindowClass, cls: WindowClass) -> dict[str, int]:
+    """`class_size.project` with what the adapter hands it: the class's scan binding's label and FA2's first guarded block."""
+    return CZ.project(probe, at, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)), lambda T, BN: fa2_masked_from(T, 1, 0, BN, False))
+
+
 def _census(cls: WindowClass, config: dict = TINY, grain: Grain = GRAIN) -> dict[str, int]:
     return CZ.census(class_circuit(_registered(config), cls, 1, grain, provable=False))
 
@@ -50,8 +57,8 @@ def _census(cls: WindowClass, config: dict = TINY, grain: Grain = GRAIN) -> dict
 def test_the_lowering_projected_from_a_probe_is_the_exact_lowering_at_a_larger_class():
     probe, at, two = _census(PROBE), WindowClass(1, 5, 3), WindowClass(2, 5, 3)
     assert PROBE.positions == 3 and at.positions == 7
-    assert CZ.project(probe, PROBE, at) == _census(at)
-    assert CZ.project(probe, PROBE, two) == _census(two) and "ScanSlots_v2{NS=4550,NP=5,IDB=17,K0=12,K=45}" in _census(two)
+    assert _project(probe, PROBE, at) == _census(at)
+    assert _project(probe, PROBE, two) == _census(two) and "ScanSlots_v2{NS=4550,NP=5,IDB=17,K0=12,K=45}" in _census(two)
 
 
 def test_first_blocks_of_value_slices_project_as_the_exact_lowering():
@@ -64,25 +71,25 @@ def test_first_blocks_of_value_slices_project_as_the_exact_lowering():
     probe, exact = (CZ.census(class_circuit(reg, c, 1, provable=False)) for c in (PROBE, at))
     assert {lab for lab in exact if lab.startswith("AttnBlockFirst")} == {
         f"AttnBlockFirst_v2{{D=64,NVIS={t},BN=192,VS=32}}" for t in range(1, at.positions + 1)}
-    assert CZ.project(probe, PROBE, at) == exact
+    assert _project(probe, PROBE, at) == exact
 
 
 def test_v19s_heads_are_key_blocks():
     first = "AttnBlockFirst_v1{{D=4,NVIS={},BN=3}}"
     probe = {**{first.format(t): 4 for t in (1, 2, 3)}, "AttnHeadEnd_v1{D=4}": 12, "RMSNormTriton_v5{N=4}": 6,
              "TokenFeed_v1{NP=2,FIRST=false}": 1}
-    assert CZ.project(probe, PROBE, WindowClass(1, 5, 3)) == {
+    assert _project(probe, PROBE, WindowClass(1, 5, 3)) == {
         "RMSNormTriton_v5{N=4}": 14, "TokenFeed_v1{NP=5,FIRST=false}": 4,
         "AttnBlockFirst_v1{D=4,NVIS=1,BN=3}": 12, "AttnBlockFirst_v1{D=4,NVIS=2,BN=3}": 8, "AttnBlockFirst_v1{D=4,NVIS=3,BN=3}": 8,
         "AttnBlock_v5{D=4,NVIS=3,FIRST=false,BN=3,CHECK=false}": 20, "AttnHeadEnd_v1{D=4}": 28}
     with pytest.raises(ValueError, match="not a fixed count at each of its 3 positions"):
-        CZ.project({**probe, "RMSNormTriton_v5{N=4}": 7}, PROBE, WindowClass(1, 5, 3))
+        _project({**probe, "RMSNormTriton_v5{N=4}": 7}, PROBE, WindowClass(1, 5, 3))
     with pytest.raises(ValueError, match="not one count of first blocks at each T"):
-        CZ.project({**probe, first.format(3): 5}, PROBE, WindowClass(1, 5, 3))
+        _project({**probe, first.format(3): 5}, PROBE, WindowClass(1, 5, 3))
     with pytest.raises(ValueError, match=r"11 AttnHeadEnd_v1\{D=4\} units, not one a head"):
-        CZ.project({**probe, "AttnHeadEnd_v1{D=4}": 11}, PROBE, WindowClass(1, 5, 3))
+        _project({**probe, "AttnHeadEnd_v1{D=4}": 11}, PROBE, WindowClass(1, 5, 3))
     with pytest.raises(ValueError, match=r"2 TokenFeed_v1\{NP=2,FIRST=false\} units, not the 1 its slot places"):
-        CZ.project({**probe, "TokenFeed_v1{NP=2,FIRST=false}": 2}, PROBE, WindowClass(1, 5, 3))
+        _project({**probe, "TokenFeed_v1{NP=2,FIRST=false}": 2}, PROBE, WindowClass(1, 5, 3))
 
 
 def test_size_prices_the_measured_units_and_refuses_the_unmeasured(monkeypatch):

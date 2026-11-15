@@ -25,17 +25,17 @@ from verity_vllm.pipeline import cli
 from verity_vllm.program import model as M
 from verity_vllm.program.predict import weights_tie as WT
 from verity_vllm.program.predict import window_weights as WW
-from verity_vllm.protocols.pouw.h1 import registered as H1R
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 
 from verity.protocols.proofs.spot.verifier import service as SV
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.circuits.codec import descriptor_id
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.gates.sha512 import IV
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 
 DESIGN, CAP = D.parse_design("work:613"), 16
 EMBED = "model.embed_tokens.weight"
@@ -138,7 +138,7 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     assert set(got["registered"][1]["values"]) == {n for c in t.chains for n in c.supplied()}
     assert got["circuit"] == t.digest(DESIGN, CAP) != WT.tie(reg, d, man, grain=GRAIN, run_id="other").digest(DESIGN, CAP)
     w = t.window(DESIGN, CAP).window
-    rated = D.derive(w.program, w.query, *SV.params_law("work-rate:613/613", w.program, w.query, w.work_table))
+    rated = D.derive(w.program, w.query, *SV.params_sampling_design("work-rate:613/613", w.program, w.query, w.work_table))
     assert D.same_design(D.derive(w.program, w.query, DESIGN, w.work_table), rated)
     assert all(s["k"] == s["floor"] == sum(hi - lo for lo, hi in s["units"]) for s in rated["strata"])
 
@@ -149,7 +149,7 @@ def test_the_honest_registration_is_accepted(x, tmp_path):
     opens the supplied root. Written, its registration records each weight's registered root, the verifier's window from
     its records alone is the tie's (one circuit digest), and the verifier pins the roots on an accepting audit of it."""
     reg, (d, man) = S._registered(), x
-    registration, t, win = WT.commit(reg, KEY, d, man, law=DESIGN, cap=CAP, grain=GRAIN)
+    registration, t, win = WT.commit(reg, KEY, d, man, design=DESIGN, cap=CAP, grain=GRAIN)
     assert registration == WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
     assert win.mismatches(kernel="auto") == {}
     assert _ends(win) == {f"{c.name}/sha512": IF.digest_words(c.digest) for c in t.chains}
@@ -179,7 +179,7 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     reg, (d, man) = S._registered(), x
     honest = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
     served = WW.record_words(reg, *_checkpoint(tmp_path / "y", seed=4))
-    registration, t, win = WT.commit(reg, KEY, d, man, law=DESIGN, cap=CAP, grain=GRAIN, served=served)
+    registration, t, win = WT.commit(reg, KEY, d, man, design=DESIGN, cap=CAP, grain=GRAIN, served=served)
     assert set(registration["values"]) == set(honest["values"])
     assert not [p for p, e in registration["values"].items() if e["root"] == honest["values"][p]["root"]]
     assert win.mismatches(kernel="auto") == {}
@@ -191,18 +191,20 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     c = win.close()
     win.write(c, tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
     assert len(ends) == len(t.chains) and _unopened(win, c, tmp_path / "w", pins) == ends
-    _r, _t, forged = WT.commit(reg, KEY, d, man, law=DESIGN, cap=CAP, grain=GRAIN, served=served, forge_digest=True)
+    _r, _t, forged = WT.commit(reg, KEY, d, man, design=DESIGN, cap=CAP, grain=GRAIN, served=served, forge_digest=True)
     assert _ends(forged) == digests
     assert forged.mismatches(kernel="auto") == {t: [0] for t in _ends_of(forged)}
     fc = forged.close()
     forged.write(fc, tmp_path / "f", {"tie": WT.TIE_TAG}, registrar=R)
     assert _unopened(forged, fc, tmp_path / "f", pins) == set()
     roots = WW.WeightsRegistration.of(registration, "r").roots
-    for bad, why in [({"ok": False}, "didn't accept"), ({"forged": {"ok": True}}, "didn't accept"),
-                     ({"run_root": "00" * 64}, "another circuit or run"),
-                     ({"draw": list(range(1, t.units()))}, "not every one"),
-                     ({"population": t.units() + 1, "draw": list(range(t.units() + 1))}, "not every one"),
-                     ({"registered": {}}, "held no registered pins")]:
+    refused: list[tuple[dict[str, object], str]] = [
+        ({"ok": False}, "didn't accept"), ({"forged": {"ok": True}}, "didn't accept"),
+        ({"run_root": "00" * 64}, "another circuit or run"),
+        ({"draw": list(range(1, t.units()))}, "not every one"),
+        ({"population": t.units() + 1, "draw": list(range(t.units() + 1))}, "not every one"),
+        ({"registered": {}}, "held no registered pins")]
+    for bad, why in refused:
         with pytest.raises(ValueError, match=why):
             WT.checked_pins(registration, record, t, _summary(t, registration, record, roots, **bad), DESIGN, CAP)
     other = {**roots, next(iter(roots)): "ab" * 64}
@@ -220,7 +222,7 @@ def test_a_registration_that_roots_the_rotary_table_is_refused_at_the_pins(x, tm
     field = next(f for f in record["fields"] if f.get("pinned") == "analytic")
     rooted = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN,
                                      tables={"cos_sin": M.cos_sin_table(field["analytic"]["C"])})
-    registration, t, win = WT.commit(reg, KEY, d, man, law=DESIGN, cap=CAP, grain=GRAIN)
+    registration, t, win = WT.commit(reg, KEY, d, man, design=DESIGN, cap=CAP, grain=GRAIN)
     rope = sorted(set(rooted["values"]) - set(registration["values"]))
     assert rope == sorted(t.unrooted) and {p: rooted["values"][p] for p in registration["values"]} == registration["values"]
     win.write(win.close(), tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
@@ -289,7 +291,7 @@ def _rewrite(d: str, man: str, tensors: dict, *, gap: str | None = None, tail: b
     ("tail", "bytes [{at}, {end}) after its last tensor"),
     ("cast", "its field is '1:1' (cast 'F32->bf16 (RNE)'"),
     ("unpinned", "the checkpoint is not of record"),
-    ("narrow", "{p}: its rows are 64 bytes; C-Flock proves a unit only with a row of at least 112 bytes"),
+    ("narrow", "{p}: its rows are 64 bytes; Flock proves a unit only with a row of at least 112 bytes"),
 ])
 def test_a_shard_the_tie_cant_read_is_refused_by_name(x, change, why):
     """A tensor no registered parameter holds, bytes between two tensors or after the last, a tensor the served model
@@ -298,10 +300,10 @@ def test_a_shard_the_tie_cant_read_is_refused_by_name(x, change, why):
     reg, (d, man) = S._registered(), x
     ck = WR.CheckpointIndex(d, verify_shards=False)
     tensors = {n: (ck.dtype(n), ck.array(n)) for n in sorted(ck.tensors, key=lambda n: ck.tensors[n][3])}
-    norm, kw = "model.norm.weight", {}
+    norm, record = "model.norm.weight", None
     if change == "narrow":
-        kw["record"] = rec = WW.weights_record(reg, d, man, grain=GRAIN)
-        p, e = min((p, e) for p, e in rec["registered_entries"].items() if e["words"] == 512)
+        record = WW.weights_record(reg, d, man, grain=GRAIN)
+        p, e = min((p, e) for p, e in record["registered_entries"].items() if e["words"] == 512)
         e["words"], e["leaves"] = 32, e["leaves"] * 16
         why = why.format(p=p)
     elif change == "extra":
@@ -321,4 +323,4 @@ def test_a_shard_the_tie_cant_read_is_refused_by_name(x, change, why):
         p = Path(d) / "model.safetensors"
         p.write_bytes(p.read_bytes()[:-1] + bytes([p.read_bytes()[-1] ^ 1]))
     with pytest.raises(ValueError, match=re.escape(why)):
-        WT.tie(reg, d, man, grain=GRAIN, **kw)
+        WT.tie(reg, d, man, grain=GRAIN, record=record)

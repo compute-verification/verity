@@ -8,6 +8,7 @@ import os
 
 from research import cli
 from research import runs as R
+from research import settings
 from research.store.cli import main as data_main
 
 from test_run_custody import FIXTURE_RID, _fixture_run
@@ -75,7 +76,7 @@ def test_custody_publish_keep_local_and_a_file_changed_since_the_check_stay(tmp_
     from research.store import evict as EV
     from research.store.local import LocalStore
 
-    plan = EV.plan_runs(LocalStore(os.environ["RESEARCH_STORE"]), runs, quiet_s=0, now=4e9)
+    plan = EV.plan_runs(LocalStore(settings.need("RESEARCH_STORE")), runs, quiet_s=0, now=4e9)
     assert [(r["artifact"], [f["path"] for f in r["files"]]) for r in plan] == [(rep["run_record"], ["big.bin"])], \
         "`research data evict --runs` finds a custody run through its run record"
     os.utime(big, (rep["verified_from"] + 1, rep["verified_from"] + 1))

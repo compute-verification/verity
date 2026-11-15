@@ -1,8 +1,8 @@
 module
 
 public import Mathlib
-public import Definitions.Accounting.Carrier
-public import Proofs.Accounting.RateAudit.DeployedSketchSum
+public import Definitions.Poub.Carrier
+public import Proofs.Poub.RateAudit.DeployedSketchSum
 
 /-!
 # A pass on some of its tiles: what it obtained there

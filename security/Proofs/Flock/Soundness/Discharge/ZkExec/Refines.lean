@@ -4,12 +4,12 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
 public import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
 /-!
-# The refinement at `--zk`, one table, and the `--zk` headline at flock-verify's acceptance
+# The refinement at `--zk`, one table, and the `--zk` headline at verity-verify-proof's acceptance
 
 * `execRefinesZK_one : ExecRefinesZKOne …`: the live `--zk` audit simulated in the compiled `--zk` audit, by the live
   challenger's simulation (`live_le`, `Refine/LiveSim.lean`) at each sample, with `bad = ⊥`, given `DecodesZK`.
 * `zk_headline_exec_one : ZkHeadlineExecOne …`: from it, any bound on the compiled audit's acceptance with an event of
-  the simulated prover bounds flock-verify `--zk`'s acceptance with that event (`exec_le_of_refines`).
+  the simulated prover bounds verity-verify-proof `--zk`'s acceptance with that event (`exec_le_of_refines`).
 -/
 
 @[expose] public section
@@ -28,7 +28,7 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {P Cp Op Out : Finset (Fin n) → R
   (opn : ∀ S R, Array ByteArray → Op S R) (dg : ByteArray → ByteArray)
   (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
-  (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ) (L : Law n)
+  (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ) (L : SamplingDesign n)
 
 theorem execRefinesZK_one : ExecRefinesZKOne G out acc I wr opn dg dec one fin capOf N L := by
   intro hinh hdec τ
