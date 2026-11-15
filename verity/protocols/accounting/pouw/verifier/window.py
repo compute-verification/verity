@@ -102,7 +102,7 @@ PUBLIC = (
                                          "commitment scheme fix the auditor's verifier")),
     ("sampling", "structure", "parameter", ("ε, δ and the grid, and the law subset:K′ they fix with the level: the guarantee "
                                             "is stated in them")),
-    ("length", "structure", "parameter", ("the rows of record's fixed length: each slot's max_tokens, served whatever it "
+    ("length", "structure", "parameter", ("the workloads of record's fixed length: each slot's max_tokens, served whatever it "
                                           "samples (ignore_eos), so the useful work is public")),
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
