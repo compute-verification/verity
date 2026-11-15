@@ -118,6 +118,8 @@ def toml(way: str) -> str:
             "# the auditor devices' install directories, each a checkout of the tree (`pods/nebius/challenger/`,",
             "# `pods/nebius/verifier/`): their units name the challenger's service by its path there",
             f"root_prefixes = {q(['/opt/vy-challenger/current/', '/opt/vy-verifier/current/'])}",
+            "# paths into history, read at a recorded run's commit: replay.py's ERA_PARTS adds each new layout at its end",
+            'keep_in = {"benchmarks/one_stage/replay.py" = ["verity/protocols/accounting/pouw/prover/kernels/served_zk"]}',
             "", "[split]",
             "# `accounting/` splits: registration leaves it for `verity/protocols/registration/`, and a reference to the",
             "# whole directory follows the larger part, `resource_accounting/`. SPOT's directory has no row of its own, so",

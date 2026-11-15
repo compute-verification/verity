@@ -1562,7 +1562,8 @@ def registered_gemm(run: Run) -> Iterator[Case]:
 #: what the era's code imports from a run's commit: each part's path in every layout it has had, oldest first. These are
 #: paths into history, read at the run's commit: a move adds its new path at the end and never rewrites these.
 ERA_PARTS = {"verity": ("verity",), "catalog": ("catalog/verity_catalog",), "kernels": ("kernels/verity_kernels",),
-             "served_zk": ("benchmarks/pouw/served_zk", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk")}
+             "served_zk": ("benchmarks/pouw/served_zk", "verity/protocols/accounting/pouw/prover/kernels/served_zk",
+                           "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk")}
 
 
 def era_path(commit: str, part: str, exists: Callable[[str, str], bool] | None = None) -> str:
