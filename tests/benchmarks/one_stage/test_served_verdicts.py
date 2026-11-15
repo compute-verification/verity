@@ -7205,7 +7205,7 @@ def _workspace_reach(*modules: str) -> dict[str, str]:
     """Each workspace package an import statement reaches from `modules`, theirs or a reached module's, in a function
     too, by top-level name: its import root relative to the workspace's root (where `verity` is), as this environment
     imports it. A name this environment doesn't import from the workspace is not followed."""
-    repo = Path(importlib.util.find_spec("verity").origin).parents[1]
+    repo = Path(importlib.util.find_spec("verity").origin).resolve().parents[1]
     roots: dict[str, Path | None] = {}
 
     def root(top: str) -> Path | None:
