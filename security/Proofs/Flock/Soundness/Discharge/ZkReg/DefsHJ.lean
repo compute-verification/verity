@@ -46,7 +46,7 @@ def OwnReadsHJ (I : Inputs) (own : Array Registered.Port) (c : Circuit) (pub : P
     (readAt : (Fin n × Fin c.ports.size) ⊕ Gate → ℕ) : Prop :=
   ∀ p, isRead p → ∃ u q d D dp idx, p = .inl (u, q) ∧ port p ∈ own ∧
     (List.range c.ports.size).find? (fun j => c.ports[j]!.name == (port p).name) = some q.val ∧
-    recordDraw t.record = some d ∧ Draw.UnitDraw.ofJson (drawJ I d (partOf I d u.val)) = .ok D ∧
+    recordDraw t.record = some d ∧ Draw.UnitSample.ofJson (drawJ I d (partOf I d u.val)) = .ok D ∧
     HmOut.drawn c pub (drawJ I d (partOf I d u.val)) = .ok dp ∧
     Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
     (port p).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some (readAt p))
@@ -57,7 +57,7 @@ def regPathsHJ (I : Inputs) (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port) : (Fin n × Fin c.ports.size) ⊕ Gate → ByteArray
   | .inl (u, q) => Option.getD (do
       let d ← recordDraw t.record
-      let D ← (Draw.UnitDraw.ofJson (drawJ I d (partOf I d u.val))).toOption
+      let D ← (Draw.UnitSample.ofJson (drawJ I d (partOf I d u.val))).toOption
       let dp ← (HmOut.drawn c pub (drawJ I d (partOf I d u.val))).toOption
       let tb ← dp.tables
       let (_, paths) ← (Registered.entry dp (port (.inl (u, q)))).toOption
@@ -65,7 +65,7 @@ def regPathsHJ (I : Inputs) (c : Circuit) (pub : Public) (t : Exec.Transcript)
       ByteArray.empty
   | .inr _ => ByteArray.empty
 
-theorem drawJ_one {I : Inputs} (h1 : I.count ≤ 1) (d : Lean.Json) (j : ℕ) : drawJ I d j = d := by
+theorem sampleJ_one {I : Inputs} (h1 : I.count ≤ 1) (d : Lean.Json) (j : ℕ) : drawJ I d j = d := by
   simp [drawJ, h1]
 
 /-- At one table, `OwnReadsHJ` is `OwnReadsH`. -/
@@ -73,7 +73,7 @@ theorem ownReadsHJ_one {I : Inputs} (h1 : I.count ≤ 1) (own : Array Registered
     (t : Exec.Transcript) (isRead : (Fin n × Fin c.ports.size) ⊕ Gate → Prop)
     (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port) (readAt : (Fin n × Fin c.ports.size) ⊕ Gate → ℕ) :
     OwnReadsHJ I own c pub t isRead port readAt ↔ OwnReadsH own c pub t isRead port readAt := by
-  simp only [OwnReadsHJ, OwnReadsH, drawJ_one h1]
+  simp only [OwnReadsHJ, OwnReadsH, sampleJ_one h1]
 
 /-- At one table, `regPathsHJ` is `regPathsH`. -/
 theorem regPathsHJ_one {I : Inputs} (h1 : I.count ≤ 1) (c : Circuit) (pub : Public) (t : Exec.Transcript)
@@ -81,7 +81,7 @@ theorem regPathsHJ_one {I : Inputs} (h1 : I.count ≤ 1) (c : Circuit) (pub : Pu
     regPathsHJ I c pub t port = regPathsH c pub t port := by
   funext p
   rcases p with ⟨u, q⟩ | g
-  · simp only [regPathsHJ, regPathsH, drawJ_one h1]
+  · simp only [regPathsHJ, regPathsH, sampleJ_one h1]
   · rfl
 
 end FlockSoundness.Discharge.ZkReg

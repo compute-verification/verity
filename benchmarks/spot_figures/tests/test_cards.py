@@ -91,6 +91,14 @@ def test_a_headline_row_names_what_breaks(change, message):
     change(c["value"]["rows"][0])
     with pytest.raises(ValueError, match=message):
         cards.check(c)
+def test_a_certifier_card_is_a_network_certifier_schedule():
+    """A certifier card's schedule is `WardenParams`' fields: an unknown field, a cap past the egress cells and a cap
+    outside the id egress form are refused, as the certifier refuses them."""
+    c = good() | {"slot": "certifier", "value": {"schedule": {"max_tokens_cap": 875}}}
+    cards.check(c)
+    for bad in ({"max_tokens": 875}, {"max_tokens_cap": 4096}, {"max_tokens_cap": 875, "egress": "bytes"}):
+        with pytest.raises(ValueError, match="not a network certifier schedule"):
+            cards.check(c | {"value": {"schedule": bad}})
 
 
 def test_load_falls_back_to_every_model_and_names_a_missing_card(tmp_path, monkeypatch):

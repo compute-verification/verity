@@ -106,8 +106,7 @@ def _p07_env_owners() -> frozenset[str]:
 
 
 def _package_entries(name: str) -> list[dict]:
-    """An allowlist's entries in the package: the lints also hold the Definitions that moved to ``verity/definitions/``,
-    which the scorecard doesn't count."""
+    """An allowlist's entries in the package."""
     entries = json.loads((LIMITS / f"{name}.json").read_text(encoding="utf-8"))["entries"]
     return [e for e in entries if e["file"].startswith(f"{SC.PACKAGE}/")]
 

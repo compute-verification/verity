@@ -1,15 +1,15 @@
 module
 
-public import Proofs.Flock.Claims.Sampling.EndToEndDraw
+public import Proofs.Flock.Claims.Sampling.EndToEndSample
 public import Proofs.Flock.Claims.Sampling.Escape
 public import Proofs.Flock.Claims.Sampling.Select.Steps
 public import Proofs.Flock.Claims.Sampling.Select.Take
 public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 
 /-!
-# `EndToEndDraw`'s facts as equalities, and the deployed design's shape
+# `EndToEndSample`'s facts as equalities, and the deployed design's shape
 
-At a `SubsetDesign` over one class of `n` proof blocks (`EndToEndDraw`'s hypotheses):
+At a `SubsetDesign` over one class of `n` proof blocks (`EndToEndSample`'s hypotheses):
 
 * `Pa_subset_of_range`, `miss_subset`, `missAt_subset`: `P_a(B)`, `miss(t)` and `missAt D t x` are the hypergeometric
   `C(n − |B|, kd)/C(n, kd)` and `C(n − t, kd)/C(n, kd)`, for `B ⊆ [0, n)` and `t ≤ n`.
@@ -31,7 +31,7 @@ stratum). So `SubsetDesign` and a one-class partition fail there (`deployOf_not_
 
 @[expose] public section
 
-namespace Claims.Sampling.EndToEndDraw
+namespace Claims.Sampling.EndToEndSample
 
 open scoped ENNReal
 
@@ -79,7 +79,7 @@ variable {d : Design} {kd : ℕ} {P : Partition} {c : List (List (List ℕ))} {n
 theorem Pa_subset_of_range (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.blocks.length = n)
     {B : Finset ℕ} (hB : B ⊆ Finset.range n) :
     d.Pa P B = ((n - B.card).choose kd : ℝ) / (n.choose kd : ℝ) := by
-  rw [Pa_subset hd hP, hn, Claims.Sampling.EndToEndDraw.window_zero fun v hv => Finset.mem_range.1 (hB hv)]
+  rw [Pa_subset hd hP, hn, Claims.Sampling.EndToEndSample.window_zero fun v hv => Finset.mem_range.1 (hB hv)]
 
 /-- **The miss is the hypergeometric tail**: `miss(t) = C(n − t, kd)/C(n, kd)` for `t ≤ n`. -/
 theorem miss_subset (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.blocks.length = n) {t : ℕ}
@@ -157,7 +157,7 @@ theorem slotDesign_rules {rule : _root_.Spot.Select.Rule} {p : _root_.Spot.Progr
   | all =>
     obtain rfl := (Except.ok.inj h).symm
     exact ⟨_, rfl, fun _ => rfl, fun h => absurd rfl h⟩
-  | law _ | twoStage _ _ _ =>
+  | samplingDesign _ | twoStage _ _ _ =>
     obtain ⟨parsed, -, h⟩ := _root_.Properties.Spot.SecurityProofs.bind_eq_ok.1 h
     obtain rfl := (Except.ok.inj h).symm
     exact ⟨_, rfl, (fun h => by cases h), fun _ => ⟨_, rfl⟩⟩
@@ -286,7 +286,7 @@ theorem Pa_subsetInputs_of_window (hd : SubsetInputsDesign d kd) (hP : P.classes
     d.Pa P B = ((c.flatten.length - B.card).choose kd : ℝ) / (c.flatten.length.choose kd : ℝ) := by
   have hB' := subset_range_of_window hB hw
   rw [Pa_subsetInputs hd hP, all_Pa_of_empty hw, mul_one,
-    Claims.Sampling.EndToEndDraw.window_zero fun v hv => Finset.mem_range.1 (hB' hv)]
+    Claims.Sampling.EndToEndSample.window_zero fun v hv => Finset.mem_range.1 (hB' hv)]
 
 /-- **The deployed miss is the population's hypergeometric tail**: `miss(t) = C(N − t, kd)/C(N, kd)` for `t ≤ N`, the
 population's `N` slots. -/
@@ -336,4 +336,4 @@ theorem notMem_M_iff_subsetInputs (hd : SubsetInputsDesign d kd) (hP : P.classes
 
 end SubsetInputs
 
-end Claims.Sampling.EndToEndDraw
+end Claims.Sampling.EndToEndSample

@@ -20,7 +20,7 @@ exit is 1.
 
 The rebuild needs the pinned vLLM (`ops/pod_bootstrap.sh --cpu`) and each row's checkpoint metadata (the derive runs on the meta
 device and reads no weights), so it runs on a CPU pod, never in `check`; the suite's tier is `tests/program/test_derive_neutrality.py`.
-fast: small TP1/TP2 rows, minutes each, run after each landing of main by `tools/verity/check/post_train.py`, whose red names
+fast: small TP1/TP2 rows, minutes each, run after each landing of main by `tools/check/post_train.py`, whose red names
 the row and rings the rows' owner; heavy: GLM-5.3's 8 ranks, about 50 minutes on a 256-CPU pod.
 """
 from __future__ import annotations
@@ -36,6 +36,7 @@ from verity_vllm.config import ROOT, UsageError, option
 from verity_vllm.engine import env as engine_env
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import epoch
+from verity_vllm.pipeline.cli import write
 from verity_vllm.records.schema_ids import NEUTRALITY_REPORT_SCHEMA
 
 __all__ = ["Options", "main"]
@@ -84,7 +85,7 @@ def rebuild(row: str, out: Path, flags: list[str]) -> int:
     role, repo, rev, _world = epoch.resolve(row)
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "row", "run", row, role, repo, rev, "--stages", "build",
            "--build-construction", "trace", "--py", sys.executable, "--sweep-dir", str(out), *flags]
-    print("[neutrality] " + " ".join(cmd), flush=True)
+    write("[neutrality] " + " ".join(cmd))
     return subprocess.run(cmd, cwd=ROOT).returncode
 
 
@@ -118,8 +119,8 @@ def main(a: Options) -> int:
                                "manifest_digest": man, "manifest_digest_pinned": pin.get("manifest_digest")}
         failed |= bool(diffs)
         moved = "" if man in (None, pin.get("manifest_digest")) else f"; manifest {man[:16]} (pinned {str(pin.get('manifest_digest'))[:16]})"
-        print(f"[neutrality] {row}: {'NEUTRAL' if not diffs else 'MOVED'} -- {len(built)} rank(s){moved}"
-              + "".join(f"\n    {d}" for d in diffs), flush=True)
+        write(f"[neutrality] {row}: {'NEUTRAL' if not diffs else 'MOVED'} -- {len(built)} rank(s){moved}"
+              + "".join(f"\n    {d}" for d in diffs))
         if a.update and rc in (0, None) and finished(built):
             src = {"build": str((out / row).resolve()), **{k: v for k, v in (("run", a.run_id), ("tree", a.source_sha)) if v}}
             lost = []
@@ -130,7 +131,7 @@ def main(a: Options) -> int:
                             f"of a PASS of this Build names one")
                 pin["record"] = None
             if lost:
-                print("\n".join(f"[neutrality] {row}: {what}" for what in lost), flush=True)
+                write("\n".join(f"[neutrality] {row}: {what}" for what in lost))
             doc["rows"][row] = {**pin, "pinned_from": src, "programs": built, "manifest_digest": man}
         elif a.update:
             unpinned.append(row)
@@ -138,7 +139,7 @@ def main(a: Options) -> int:
     if a.update:
         CR.write_index(doc, Path(a.pins))
         pinned = [r for r in report["rows"] if r not in unpinned]
-        print(f"[neutrality] re-pinned {', '.join(pinned) or 'no row'} in {a.pins}"
-              + (f"; not re-pinned, their Build did not finish: {', '.join(unpinned)}" if unpinned else ""), flush=True)
+        write(f"[neutrality] re-pinned {', '.join(pinned) or 'no row'} in {a.pins}"
+              + (f"; not re-pinned, their Build did not finish: {', '.join(unpinned)}" if unpinned else ""))
         return 1 if unpinned else 0
     return 1 if failed else 0

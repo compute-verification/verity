@@ -24,10 +24,10 @@ from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import hooks as PHK
-from verity_vllm.protocols.pouw.h1 import ranks as PHR
-from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity_vllm.protocols.pouw import h1_hooks as PHK
+from verity_vllm.protocols.pouw import h1_ranks as PHR
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 
 K = 64
 SALT = hashlib.sha512(b"salt").digest()

@@ -23,9 +23,7 @@
     verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
     verity graph check --local [--family F]
                                     run the graph serially here, uncached: the reference executor
-    verity demo NAME [ARGS]         demos/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
-                                    workload on its placement
-    verity demo --status            every demo's protocol, workload, run and proof, and each one's next missing evidence
+    verity demo [NAME] [ARGS]       `verity run demos/NAME.toml ARGS`, the demo's one file; NAME defaults to onsite_compute
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
                                     holds it, with its Lean options as `lake build` gives them, exiting with lean's
                                     status, and last the axiom probe: each theorem whose
@@ -59,10 +57,14 @@ USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P]
          "verity lean deployed [--rev REV] [--today YYYY-MM-DD]")
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
+#: `research run --wait`'s line when the run moved to its late twin on another machine, which is then the run
+MOVED = re.compile(r"^research: run \S+ left its line without starting \S+; its late twin (\S+) on (\S+) is the run now", re.M)
 #: Flock's Lean verifier, which `verity verify proof` runs: its Lake package and the root module of the executable `lake
 #: build` writes there, whose name the package's lakefile gives (`verify_proof_exe`)
 VERIFIER = "verity/protocols/proofs/flock/verifier"
 VERIFY_PROOF_ROOT = "FlockVerify"
+#: the demo `verity demo` runs given no NAME
+DEFAULT_DEMO = "onsite_compute"
 
 
 def verify_proof_exe(root: Path) -> str:
@@ -98,6 +100,19 @@ def _runner(top: str, command: str, args: list[str]) -> int:
         if (d / runner).exists():
             return _run([*argv, str(d / runner), *args[1:]])
     raise SystemExit(f"{top}/{args[0]} has no run.py or run.sh: run its tool through `research run`")
+
+
+def _demo(args: list[str]) -> int:
+    """`verity demo [NAME] [ARGS]`: `verity run demos/NAME.toml ARGS`, NAME `onsite_compute` when the first of ``args`` is
+    a flag or there is none."""
+    name, rest = (args[0], args[1:]) if args and not args[0].startswith("-") else (DEFAULT_DEMO, args)
+    config = ROOT / "demos" / f"{name.replace('-', '_')}.toml"
+    if not config.is_file():
+        names = sorted(p.stem for p in (ROOT / "demos").glob("*.toml"))
+        raise SystemExit(f"verity demo [NAME] [ARGS] (a - in NAME is a _): NAME is one of {', '.join(names) or 'none'}")
+    from . import run
+
+    return run.run_main([str(config), *rest])
 
 
 def _git(*argv: str, env: dict | None = None, cwd: Path = ROOT) -> str:
@@ -253,7 +268,7 @@ def _lean(args: list[str]) -> int:
     if not (m := LAUNCHED.search("".join(said))):
         print(f"verity lean try: `research run` exited {rc} without starting a run", file=sys.stderr)
         return rc or 1
-    run_id, machine = m.groups()
+    run_id, machine = moved[-1] if (moved := MOVED.findall("".join(said))) else m.groups()
     subprocess.run([*research, "fetch", run_id, "--on", machine, "--all"], cwd=ROOT, stdout=subprocess.DEVNULL)
     d = Path(os.environ.get("RESEARCH_RUNS", Path.home() / ".research" / "runs")).expanduser() / run_id
     for name, to in (("stdout.log", sys.stdout), ("stderr.log", sys.stderr)):
@@ -299,15 +314,8 @@ def main(argv: list[str] | None = None) -> int:
         from . import run
 
         return (run.run_main if args[0] == "run" else run.config_main)(args[1:])
-    if args[0] == "demo" and args[1:] == ["--status"]:
-        from verity_cli.examples import status
-        return status(ROOT)
     if args[0] == "demo":
-        if args[1:] and (config := ROOT / "demos" / args[1].replace("-", "_") / "config.toml").is_file():
-            from . import run
-
-            return run.run_main([str(config), *args[2:]])
-        return _runner("demos", "demo", args[1:])
+        return _demo(args[1:])
     if args[0] == "verify":
         return _verify(args[1:])
     if args[0] == "lean":

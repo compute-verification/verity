@@ -2,7 +2,7 @@
 `Flock.Partition`, the partition of record of a Boolean Program: the word Program's partition lifted by σ, the map from each
 word Definition to its Boolean version. This module checks the lift's structure on the two descriptors (`Program.decode` of
 each), as `verity_vllm.program.boolean.sigma_check` checks it on Python objects, which stays the mirror (the
-`verity/core/service/sigma` difftest holds the two together).
+`verity/protocols/proofs/flock/verifier/sigma` difftest holds the two together).
 
 The Boolean descriptor carries the lift as data, a top-level field under its program SHA-512:
 
@@ -587,9 +587,9 @@ def checkBytes (word bits : ByteArray) : Except Refusal Report := do
     | none => Json.null
   check PW PB link
 
-/-- `flock-verify sigma-check WORD BITS`: one `SIGMACHECK` line, the report or the refusal; exit 0 when the lift holds. -/
+/-- `verity-verify-proof sigma-check WORD BITS`: one `SIGMACHECK` line, the report or the refusal; exit 0 when the lift holds. -/
 def cmd (args : List String) : IO UInt32 := do
-  let [wp, bp] := args | IO.eprintln "usage: flock-verify sigma-check WORD.json BITS.json"; return 2
+  let [wp, bp] := args | IO.eprintln "usage: verity-verify-proof sigma-check WORD.json BITS.json"; return 2
   let word ← try IO.FS.readBinFile wp catch _ => pure ByteArray.empty
   let bits ← try IO.FS.readBinFile bp catch _ => pure ByteArray.empty
   match checkBytes word bits with

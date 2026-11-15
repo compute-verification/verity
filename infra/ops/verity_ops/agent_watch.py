@@ -301,6 +301,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Callable, Iterator
 
+from research import settings
+
 API = "https://api.cursor.com"
 POLL_S = 60
 HELD_S = 15 * 60
@@ -3280,10 +3282,10 @@ class Publisher:
 def rate_wait(e: urllib.error.HTTPError, last: float) -> float:
     """Seconds to wait after a sweep the API refused with 429: its Retry-After when it gives one, else double the last wait
     (from `RATE_WAIT_S[0]`), at most `RATE_WAIT_S[1]`. A sweep every minute into a rate limit kept it shut for 3.5 h."""
-    first, cap = RATE_WAIT_S
+    first, limit = RATE_WAIT_S
     given = str((e.headers or {}).get("Retry-After") or "")
     asked = float(given) if re.fullmatch(r"\d+(?:\.\d+)?", given) else 0.0   # an HTTP-date form doubles instead
-    return min(cap, asked if asked > 0 else max(first, 2 * last))
+    return min(limit, asked if asked > 0 else max(first, 2 * last))
 
 
 def pump(watch: Watch, r: Run) -> None:
@@ -3340,7 +3342,7 @@ def main(argv: list[str] | None = None) -> int:
     ns = ap.parse_args(argv)
     if ns.cmd == "runs":
         return print_runs(ns.nodes, ns.notes, ns.hours)
-    key = os.environ.get("CURSOR_API_KEY")
+    key = settings.get("CURSOR_API_KEY")
     if not key:
         print("agent_watch: no CURSOR_API_KEY in the environment", file=sys.stderr)
         return 2
@@ -3355,7 +3357,7 @@ def main(argv: list[str] | None = None) -> int:
             return {"run": {"id": "dry-run"}}
         api.post = post
     publish = None
-    if url := os.environ.get("AGENT_WATCH_PG_URL"):
+    if url := settings.get("AGENT_WATCH_PG_URL"):
         publish = Publisher(url) if not ns.dry_run else (
             lambda body, t: print(f"dry-run: would publish {len(body)} bytes to {STATUS_TABLE}", file=sys.stderr, flush=True))
     launcher = ns.launcher or (ns.registry.resolve().parents[3] / "infra/cursor/launch_coordinator.py" if ns.registry else None)

@@ -4,7 +4,7 @@
     format = "verity/config/v0"
     protocols = ["sampled-proofs", "pouw", "inference-only"]    the subprotocols, by their names
     [workload]  name, params                         the computation audited, and its public shape
-    [service]   law                                  the proof system's selection law (no ε, δ or threshold)
+    [service]   law                                  the proof system's sampling design (no ε, δ or threshold)
     [program]   commit                               the commit of the auditor-trusted code the parties run
     [params."<id>"]                                  a listed subprotocol's public structural parameters
     [[party]]   name, machine, principal             machine: `local`, or a name `verity run --on` gives
@@ -16,14 +16,15 @@ workload declares (``default_params``), and `check` returns the configuration wi
 covers, so stating a default changes no hash.
 
 The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
-composite's (`COMPOSITES`): onsite's, or remote's (sampled proofs, the inference-only policy and Pearl+'s run verdict,
-``pearl-plus``). Protocol soundness covers only those two, and `check` refuses any set that is no composite's
+composite's (`COMPOSITES`): onsite's, or remote's (SPOT, the inference-only policy and Pearl+'s run verdict,
+``pearl-plus``). Protocol soundness covers only those two. `check` also reads onsite's two smaller sets, each a
+deployment with an id of its own (`UNACCEPTED`), which `verity run` doesn't run yet, and refuses any other set
 (``composite``), H1's development composite's among them.
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
-service laws it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s, its
-parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
+sampling designs it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s,
+its parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
 name (`verity.channel.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose
 needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
 declared ones, and a placement the declarations forbid.
@@ -75,6 +76,11 @@ LOCAL = "local"
 COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs",
                                     "wipe"),
               "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs")}
+#: onsite's two smaller sets, by id (`demos/onsite_network.toml`, `demos/onsite_compute.toml`): each a deployment of its
+#: own with its own claim, so that an accepted one is never read as onsite. No composite `Core.Composites.ofIds` accepts
+#: is one, so `check` reads and hashes them and `verity run` runs neither (`NotImplementedError`)
+UNACCEPTED = {"verity/onsite-network/v0": ("certifier", "sampled-proofs", "wipe"),
+              "verity/onsite-compute/v0": ("certifier", "inference-only", "pouw", "sampled-proofs", "wipe")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 _SHA512 = re.compile(r"[0-9a-f]{128}")
@@ -89,7 +95,7 @@ def _no_params(params: Mapping[str, Any]) -> dict[str, Any]:
 @dataclass(frozen=True)
 class Component:
     """What a protocol declares for a configuration. ``params`` checks its parameters (the file's, over
-    ``default_params``) and returns them normalized; ``law`` refuses a service law the subprotocol can't run under
+    ``default_params``) and returns them normalized; ``sampling_design`` refuses a sampling design the subprotocol can't run under
     (raising `Refused`), given its checked parameters; ``product``: whether the composite takes it (`COMPOSITES`)."""
 
     name: str
@@ -102,8 +108,8 @@ class Component:
     product: bool = True
     params: Callable[[Mapping[str, Any]], dict[str, Any]] = _no_params
     default_params: Mapping[str, Any] = field(default_factory=dict)
-    law: Callable[[str, Mapping[str, Any]], None] | None = None
-    default_law: str | None = None
+    sampling_design: Callable[[str, Mapping[str, Any]], None] | None = None
+    default_sampling_design: str | None = None
 
 
 @dataclass(frozen=True)
@@ -238,10 +244,10 @@ def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
     params = {c.id: c.params({**c.default_params, **_table(f"[params.\"{c.id}\"]", given.get(c.id, {}))})
               for c in listed}
     _keys("[service]", cfg["service"], ("law",), ("law",))
-    law = _str("service.law", cfg["service"]["law"])
+    sampling_design = _str("service.law", cfg["service"]["law"])
     for c in listed:
-        if c.law is not None:
-            c.law(law, params[c.id])
+        if c.sampling_design is not None:
+            c.sampling_design(sampling_design, params[c.id])
     _keys("[program]", cfg["program"], ("commit",), ("commit",))
     if not _COMMIT.fullmatch(str(cfg["program"]["commit"])):
         raise Refused("commit", f"[program] commit is a 40-hex git commit, not {cfg['program']['commit']!r}")
@@ -263,9 +269,10 @@ def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
 
 
 def composite(names: Sequence[str], components: Mapping[str, Component]) -> str:
-    """The id of the composite the listed subprotocols ``names`` make (`COMPOSITES`), or `Refused` (``composite``)."""
+    """The id of the composite the listed subprotocols ``names`` make (`COMPOSITES`), or of onsite's smaller set they are
+    (`UNACCEPTED`), or `Refused` (``composite``)."""
     taken = sorted(n for n in names if components[n].product)
-    for cid, want in COMPOSITES.items():
+    for cid, want in {**COMPOSITES, **UNACCEPTED}.items():
         if taken == sorted(want):
             return cid
     covered = " and ".join(f"{c} ({', '.join(w)})" for c, w in COMPOSITES.items())
@@ -384,8 +391,8 @@ def digest(cfg: Mapping[str, Any]) -> str:
 def new(workload: str, protocols: Sequence[str], components: Mapping[str, Component],
         workloads: Mapping[str, Workload], commit: str, machine: str = LOCAL) -> dict[str, Any]:
     """A configuration of ``protocols`` on ``workload`` that states only its choices: every declared party on
-    ``machine``, the declared channels, and the first default law of a listed subprotocol that every listed subprotocol
-    runs under; parameters are left to their defaults. Refused by name like `check`, which it passes."""
+    ``machine``, the declared channels, and the first default sampling design of a listed subprotocol that every listed
+    subprotocol runs under; parameters are left to their defaults. Refused by name like `check`, which it passes."""
     if unknown := [n for n in protocols if n not in components]:
         raise Refused("unknown-protocol", f"{', '.join(unknown)} (known: {', '.join(components)})")
     if workload not in workloads:
@@ -396,9 +403,9 @@ def new(workload: str, protocols: Sequence[str], components: Mapping[str, Compon
         parties, channels = declared(listed, w)
     except ValueError as e:
         raise Refused("declaration", str(e)) from None
-    law = next((d for d in (c.default_law for c in listed) if d and _runs_under(d, listed)), "")
+    sampling_design = next((d for d in (c.default_sampling_design for c in listed) if d and _runs_under(d, listed)), "")
     cfg = {"format": FORMAT, "protocols": list(protocols), "workload": {"name": workload},
-           "service": {"law": law}, "program": {"commit": commit},
+           "service": {"law": sampling_design}, "program": {"commit": commit},
            "party": [{"name": p, "machine": machine, "principal": r.principal} for p, r in parties.items()],
            "channel": [{"from": c.sender, "to": c.receiver, "messages": list(c.messages),
                         **({"after": list(c.after)} if c.after else {})} for c in channels.values()]}
@@ -406,11 +413,11 @@ def new(workload: str, protocols: Sequence[str], components: Mapping[str, Compon
     return cfg
 
 
-def _runs_under(law: str, listed: Sequence[Component]) -> bool:
+def _runs_under(sampling_design: str, listed: Sequence[Component]) -> bool:
     try:
         for c in listed:
-            if c.law is not None:
-                c.law(law, c.params(dict(c.default_params)))
+            if c.sampling_design is not None:
+                c.sampling_design(sampling_design, c.params(dict(c.default_params)))
     except Refused:
         return False
     return True
@@ -455,5 +462,5 @@ def render(cfg: Mapping[str, Any], header: Sequence[str] = ()) -> str:
 
 
 __all__ = ["AUDITOR", "CHANNEL", "COMPOSITES", "FORMAT", "LOCAL", "PARTY", "PIN", "REQUIRED", "SCHEMES", "TOP",
-           "TRANSPORT", "Component", "Workload", "canonical", "check", "composite", "declared", "digest", "hashed", "new",
-           "parse", "render"]
+           "TRANSPORT", "UNACCEPTED", "Component", "Workload", "canonical", "check", "composite", "declared", "digest",
+           "hashed", "new", "parse", "render"]

@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Frame
+public import Flock.ZkServer.Frame
 public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 public import Proofs.Flock.Soundness.Refine.Frames
 import Mathlib.Algebra.Order.Floor.Semifield
@@ -27,7 +27,7 @@ import VCVio.Prelude.Core
 /-!
 # The frame's round over a round's frames
 
-The Lean frame parses each round the transport hands it (`Flock.Firewall.Frame.roundFree`): a loop over the round's
+The Lean frame parses each round the transport hands it (`Flock.ZkServer.Frame.roundFree`): a loop over the round's
 bytes that reads each frame's 16-byte header, takes its payload, and labels, copies or absorbs it, until the round's
 squeeze. The analysis models a round's bytes as its frames (`FlockSoundness.Refine.Frame`, `encs`). This file runs the
 loop on those bytes:
@@ -50,7 +50,7 @@ namespace Claims.ZKServer
 
 open _root_.Flock (V F128 u64OfLE)
 open _root_.Flock.Transcript (header padded)
-open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS bytesFrame innerOwn roundFree)
+open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS bytesFrame innerOwn roundFree)
 open FlockSoundness.Refine (Frame encs colBytes toBytes_length header_data le64_data padded_data)
 open FlockSoundness.Discharge.ZkView (get!_eq u64OfLE_eq foldl_le64)
 

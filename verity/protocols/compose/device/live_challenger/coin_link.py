@@ -1,5 +1,5 @@
 """The network certifier's coin link for one window's session, on the challenger's host
-(`verity.protocols.accounting.certifier.verifier.coin_link`): the one path the session's coins take to its peer, counted and re-clocked
+(`verity.protocols.accounting.certifier.device.coin_link`): the one path the session's coins take to its peer, counted and re-clocked
 on the link's grids.
 
     python3 -I verity/protocols/compose/device/live_challenger/coin_link.py --out DIR --port PORT [--peer NAME [--peers FILE]] [--minutes M]
@@ -11,15 +11,16 @@ session's coin commitment from that record, listens on a port of this host's loo
 only then opens `ssh -N -R 127.0.0.1:PORT:127.0.0.1:LISTEN` to `--peer`'s line of `--peers` (/etc/vy/peers), so the
 prover's client on the peer connects to its own 127.0.0.1:PORT; without `--peer` (a test) no tunnel opens and the client
 connects to LISTEN. It prints `listening 127.0.0.1:LISTEN` and relays each connection to serve.py's port, one at a time,
-until SIGTERM, the tunnel's end or `--minutes`; then it runs to the end of its link-window and writes `coin-link.json` to
+until SIGTERM, the tunnel's end or `--minutes`; then it runs to the end of its execution phase and writes `coin-link.json` to
 `--out` (`CoinLink.summary`, with PORT, LISTEN, the peer and how the tunnel ended), which the window's `end` entry seals.
-The defaults are D7's parameters (`CoinLinkParams`).
+The defaults are D7's parameters (`CoinLinkParams`). The link's origin is read on the clock its ticks read, the network
+certifier's (`pacer.raw_clock`); on a host that gives no such clock the link refuses to start.
 
 The tunnel goes straight to the peer: `ProxyJump` and `ProxyCommand` are `none`, and a `--peers` line that names a jump
 or a proxy is refused, so the coins leave this host encrypted to the peer's own sshd and are read on no other host
 (WitnessPathPrivate).
 
-Exit 0 when every link-window is complete and no cell was dropped, 1 otherwise, 2 when it refuses to start.
+Exit 0 when every execution phase is complete and no cell was dropped, 1 otherwise, 2 when it refuses to start.
 """
 from __future__ import annotations
 
@@ -29,7 +30,6 @@ import json
 import re
 import signal
 import sys
-import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -37,7 +37,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 sys.path.insert(0, str(HERE))
 
 from serve import peer_ssh  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.coin_link import CoinLink, CoinLinkParams  # noqa: E402
+from verity.protocols.accounting.certifier.device.coin_link import CoinLink, CoinLinkParams  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.pacer import ClockRefused, raw_clock  # noqa: E402
 from verity.protocols.proofs.spot.device import remote  # noqa: E402
 from verity.protocols.proofs.spot.device.challenger import ChallengerRecord, CoinError, LiveCommitment  # noqa: E402
 
@@ -87,7 +88,7 @@ def commitment(out: Path) -> LiveCommitment:
 async def serve(args: argparse.Namespace, params: CoinLinkParams, coins: LiveCommitment,
                 ssh: list[str] | None) -> dict:
     loop = asyncio.get_running_loop()
-    link = CoinLink(params, coins, lambda: asyncio.open_connection("127.0.0.1", args.port), origin=time.monotonic(),
+    link = CoinLink(params, coins, lambda: asyncio.open_connection("127.0.0.1", args.port), origin=raw_clock(),
                     slack=args.slack_ms / 1000,
                     buckets=None if args.minutes is None else args.minutes * 60_000 // params.bucket_ms)
     server = await asyncio.start_server(link.handle, "127.0.0.1", 0)
@@ -123,6 +124,7 @@ async def serve(args: argparse.Namespace, params: CoinLinkParams, coins: LiveCom
 def main(argv: list[str] | None = None) -> int:
     args = parse(argv)
     try:
+        raw_clock()
         params = CoinLinkParams(args.cell_bytes, args.coin_cells, args.request_cells, args.bucket_ms, args.window)
         coins = commitment(args.out)
         ssh = None
@@ -131,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
             if (option := jump(ssh)) is not None:
                 raise ValueError(f"{args.peers}'s line for {args.peer} routes through another host ({option}): the coins "
                                  f"go straight to the peer's own sshd (WitnessPathPrivate), so name the peer itself")
-    except (CoinError, ValueError, OSError) as e:
+    except (ClockRefused, CoinError, ValueError, OSError) as e:
         print(f"the coin link refused to start: {e}", file=sys.stderr)
         return 2
     summary = asyncio.run(serve(args, params, coins, ssh))

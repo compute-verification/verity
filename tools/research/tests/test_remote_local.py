@@ -10,6 +10,7 @@ import pytest
 
 from research import remote
 from research import runs as R
+from research import settings
 from waits import Gate, wait_runner
 
 PY = sys.executable
@@ -123,7 +124,7 @@ def test_a_direct_run_on_a_gpu_lease_host_gets_gpus_only_through_gpu_lease(tmp_p
     (bin_dir / "gpu-lease").write_text('#!/bin/sh\necho "$*" > "$RESEARCH_RUN_DIR/lease-args"\nwhile [ "$1" != -- ]; do shift; done; shift\n'
                                        'CUDA_VISIBLE_DEVICES=4,5 exec "$@"\n')
     (bin_dir / "gpu-lease").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{settings.need('PATH')}")
     show = [PY, "-c", "import os; print(repr(os.environ['CUDA_VISIBLE_DEVICES']))"]
     req, runs_root = _request(tmp_path, "g0", show, env={"CUDA_VISIBLE_DEVICES": "0"})
     out = remote.launch_request(req)
@@ -159,7 +160,7 @@ def test_bad_schema_is_refused_without_side_effects(tmp_path):
 
 def test_a_machine_that_takes_runs_through_its_check_slots_refuses_any_other(tmp_path, monkeypatch):
     """/etc/vy/runs-via-slot (cpu-1's, deploy.toml): the launcher starts a run only when its command is slot.py's (`python3
-    tools/verity/check/slot.py [OPTS] -- CMD`), so no run beside cpu-1's merge check takes its slice's memory."""
+    tools/check/slot.py [OPTS] -- CMD`), so no run beside cpu-1's merge check takes its slice's memory."""
     marker = tmp_path / "runs-via-slot"
     monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(marker))
     marker.write_text("")
@@ -167,7 +168,7 @@ def test_a_machine_that_takes_runs_through_its_check_slots_refuses_any_other(tmp
     out = remote.launch_request(req)
     assert out["started"] is False and "only through its check slots" in out["refused"] and str(marker) in out["refused"]
     assert R.summarize(runs_root / "off")["state"] == "refused" and not (runs_root / "off" / "job.json").exists()
-    req, _ = _request(tmp_path, "slot", ["python3", "tools/verity/check/slot.py", "--by", "t", "--", "true"])
+    req, _ = _request(tmp_path, "slot", ["python3", "tools/check/slot.py", "--by", "t", "--", "true"])
     doc = json.loads(req.read_text()); doc["cwd"] = str(tmp_path); req.write_text(json.dumps(doc))   # no slot.py here: the run fails
     assert remote.launch_request(req)["started"]
     _wait_terminal(runs_root / "slot")
@@ -183,14 +184,14 @@ def test_the_machines_deployed_slot_rule_decides_not_the_shipped_trees(tmp_path,
     node.write_text("def through_slot(command):\n    return command[:1] == ['echo']\n\n"
                     "def refusal(marker):\n    return f'node rule ({marker})'\n")
     monkeypatch.setenv("NODE_SLOT_ONLY_FILE", str(node))
-    req, runs_root = _request(tmp_path, "node-off", ["python3", "tools/verity/check/slot.py", "--", "true"])
+    req, runs_root = _request(tmp_path, "node-off", ["python3", "tools/check/slot.py", "--", "true"])
     out = remote.launch_request(req)
     assert out["started"] is False and out["refused"] == f"node rule ({marker})"
     req, _ = _request(tmp_path, "node-on", ["echo", "ok"])
     assert remote.launch_request(req)["started"]
     _wait_terminal(runs_root / "node-on")
     node.unlink()
-    assert remote.node_slot_only().through_slot(["python3", "tools/verity/check/slot.py", "--", "true"])
+    assert remote.node_slot_only().through_slot(["python3", "tools/check/slot.py", "--", "true"])
 
 
 def test_the_machines_deployed_tool_rules_judge_the_package_that_answers(tmp_path, monkeypatch):
@@ -214,7 +215,7 @@ def test_the_machines_deployed_tool_rules_judge_the_package_that_answers(tmp_pat
 
 
 def test_an_auditor_host_starts_only_the_commands_its_marker_lists(tmp_path, monkeypatch):
-    """/etc/vy/auditor (vy-challenger-1's, deploy.toml): the auditor host runs its own service and nothing else, so the
+    """/etc/vy/auditor (vy-challenger-1's, deploy.toml): the auditor device runs its own service and nothing else, so the
     launcher refuses any other command before anything starts, a listed one with an extra argument or a wrapper among them, and a
     marker it can't read lets nothing through."""
     marker = tmp_path / "auditor"
@@ -222,11 +223,11 @@ def test_an_auditor_host_starts_only_the_commands_its_marker_lists(tmp_path, mon
     marker.write_text("# the challenger only\nbash verity/protocols/compose/device/live_challenger/run.sh\n")
     for i, command in enumerate(([PY, "-c", "print('no')"], ["bash", "verity/protocols/compose/device/live_challenger/run.sh", "--x"],
                                  ["nice", "-n", "19", "bash", "verity/protocols/compose/device/live_challenger/run.sh"],
-                                 ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py",
+                                 ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/check/slot.py",
                                   "--", "bash", "verity/protocols/compose/device/live_challenger/run.sh"])):
         req, runs_root = _request(tmp_path, f"off{i}", command)
         out = remote.launch_request(req)
-        assert out["started"] is False and "auditor host" in out["refused"] and str(marker) in out["refused"], command
+        assert out["started"] is False and "auditor device" in out["refused"] and str(marker) in out["refused"], command
         assert "`bash verity/protocols/compose/device/live_challenger/run.sh`" in out["refused"]
         assert R.summarize(runs_root / f"off{i}")["state"] == "refused" and not (runs_root / f"off{i}" / "job.json").exists()
     req, runs_root = _request(tmp_path, "challenger", ["bash", "verity/protocols/compose/device/live_challenger/run.sh"])
@@ -281,11 +282,11 @@ def test_a_machine_registered_as_an_auditor_host_takes_no_research_run(tmp_path,
                  'auditor="verity/protocols/compose/device/live_challenger/auditor.py"\n')
     monkeypatch.setenv("RESEARCH_MACHINES", str(f))
     monkeypatch.setenv("RESEARCH_MACHINES_D", "off")
-    monkeypatch.setattr(remote, "ssh_run", lambda *a, **k: pytest.fail("ssh to an auditor host"), raising=False)
+    monkeypatch.setattr(remote, "ssh_run", lambda *a, **k: pytest.fail("ssh to an auditor device"), raising=False)
     from research import cli
     rc = cli.main(["run", "--on", "c", "--project", "verity", "--no-custody-r2", "--", "true"])
     err = capsys.readouterr().err
-    assert rc == 3 and "auditor host" in err and "verity/protocols/compose/device/live_challenger/auditor.py" in err
+    assert rc == 3 and "auditor device" in err and "verity/protocols/compose/device/live_challenger/auditor.py" in err
 
 
 def test_machines_resolution(tmp_path, monkeypatch):

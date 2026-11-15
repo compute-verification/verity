@@ -3,7 +3,7 @@ bound, `Achievability`'s rates at zero statement cost, the frontier under Flock'
 between a partition and a covering, serving's commitment (per proof block, and the fixed serve-time total with its overlaps), the
 weight classes' weights, the sensitivity queries, and the two-stage design: its exfiltration bound against the
 admissible sets' count enumerated and the adversary's best attack at scale, uncapped and capped at the bits a replay
-block serves, its proving price with its statements a replay block's or a registration's padded to its public cap, and the
+block serves, its proving price with its statements a replay block's or a docket's padded to its public cap, and the
 width-stratified design against the uniform one."""
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ from verity.protocols.proofs.spot.prover.optimize import (HM96_ANDS, KAPPAS, PRO
                                                            sensitivity, sqrt_grain, template_cost, touched,
                                                            two_stage_counts, two_stage_design, two_stage_exfil,
                                                            two_stage_price, two_stage_statements, two_stage_strata, weigh,
-                                                           work_law)
-from verity.circuits.partition_v2 import UNIT_CLASS_MAX
+                                                           work_sampling_design)
+from verity.circuits.partition_v2 import SIZE_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
 
@@ -60,13 +60,13 @@ def test_density_bound_is_above_core_harm_bound():
             n = rng.randint(1, 60)
             strata.append((f"s{i}", n, rng.randint(0, n), rng.choice([0.0, 1.0, rng.uniform(0, 50)])))
         delta = rng.choice([0.5, 2.0 ** -5, 2.0 ** -20])
-        law = Stratified(tuple(Stratum(name, n, k) for name, n, k, _ in strata))
-        core = law.harm_bound({name: h for name, _, _, h in strata}, delta)
+        sampling_design = Stratified(tuple(Stratum(name, n, k) for name, n, k, _ in strata))
+        core = sampling_design.harm_bound({name: h for name, _, _, h in strata}, delta)
         assert at_most(core, density_bound(((n, k, h) for _, n, k, h in strata), delta))
 
 
 def test_density_bound_is_its_exact_value_rounded_up():
-    """`density_bound`'s float is at least `density_exact`, Lean's rational (the sampled proofs service's `harm_bound`
+    """`density_bound`'s float is at least `density_exact`, Lean's rational (the SPOT service's `harm_bound`
     difftest holds the two equal), and within 2^-18 of it unless delta is within 2^-40 of 1, where the budget's 2^-60
     is most of ln(1/delta)."""
     assert ln_upper(Fraction(1, 2)) == Fraction(3196577161300663915, 2 ** 62)
@@ -99,15 +99,15 @@ def test_max_harm_brackets_the_exact_supremum():
                 for n in (rng.randint(0, 7) for _ in range(rng.randint(1, 3)))]
         delta = rng.choice([0.5, 0.1, 0.01, rng.uniform(1e-4, 0.99)])
         lower, upper, lam, cert = max_harm(rows, delta)
-        law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+        sampling_design = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
         best = max(sum(Fraction(h) * x for (_, _, h), x in zip(rows, xs))
                    for xs in product(*(range(n + 1) for n, _, _ in rows))
-                   if law.escape({f"s{i}": x for i, x in enumerate(xs)}) >= Fraction(delta))
+                   if sampling_design.escape({f"s{i}": x for i, x in enumerate(xs)}) >= Fraction(delta))
         assert lower <= best <= upper <= best + 4 * max(Fraction(h) for _, _, h in rows) + Fraction(1, 2 ** 40), rows
         assert max_harm_check([(*r, *c) for r, c in zip(rows, cert)], delta, lam) == (lower, upper)
 
 
-def test_certificate_of_a_full_law_is_zero_and_the_leak_adds_location():
+def test_certificate_of_a_full_sampling_design_is_zero_and_the_leak_adds_location():
     cands = [Candidate("a", "A", 50, 3, 16), Candidate("b", "B", 10, 7, 4)]
     exfil = Objective(2.0 ** -10, work=0.0, bits=1.0)
     full = certify({"A": 50, "B": 10}, cands, exfil)
@@ -142,14 +142,14 @@ def test_zero_statement_cost_gives_achievability_rates(achievability):
 
 
 def _registered(plan, cands) -> dict[str, int]:
-    """What `work:1` over `work_law`'s table samples, as the verifier reads it."""
-    table = work_table(work_law(plan, cands)["table"])
+    """What `work:1` over `work_sampling_design`'s table samples, as the verifier reads it."""
+    table = work_table(work_sampling_design(plan, cands)["table"])
     chosen = [c for c in cands if c.template in table]
     total = sum(table[c.template][0] * c.units for c in chosen)
     return {c.template: work_k(1, table[c.template][0], c.units, total, table[c.template][1]) for c in chosen}
 
 
-def test_work_law_draws_the_plan_sizes(achievability, batched):
+def test_work_sampling_design_samples_the_plan_sizes(achievability, batched):
     cands, _, plan = achievability
     assert _registered(plan, cands) == dict(plan.sizes)
     cands, _, _, plans = batched
@@ -183,7 +183,7 @@ def test_frontier_is_monotone_and_certified(batched):
     assert any("M" in p.full for p in plans)
 
 
-def test_statement_size_moves_to_the_cap_as_the_draw_densifies(batched):
+def test_statement_size_moves_to_the_cap_as_the_sample_densifies(batched):
     cands, costs, objective, plans = batched
     sparse = for_target(cands, costs, objective, 4e5, plans=plans)
     dense = for_target(cands, costs, objective, 2e5, plans=plans)
@@ -258,9 +258,9 @@ def test_a_compression_costs_its_pin_which_is_the_gadgets_rows():
 
 
 def test_candidates_fit_a_size_class():
-    for bits, gates in ((16, 1), (64, 2), (2048, 128), (UNIT_CLASS_MAX, UNIT_CLASS_MAX // 16)):
+    for bits, gates in ((16, 1), (64, 2), (2048, 128), (SIZE_CLASS_MAX, SIZE_CLASS_MAX // 16)):
         Candidate("a", "A", 1, 1, bits, out_gates=gates)
-    for bits, gates in ((UNIT_CLASS_MAX + 1, 1), (UNIT_CLASS_MAX + 32, 8193)):
+    for bits, gates in ((SIZE_CLASS_MAX + 1, 1), (SIZE_CLASS_MAX + 32, 8193)):
         with pytest.raises(ValueError, match="size class"):
             Candidate("a", "A", 1, 1, bits, out_gates=gates)
     with pytest.raises(ValueError, match="n_rho"):
@@ -461,7 +461,7 @@ def _loc_exact(n: int, k: int) -> float:
     return log2(sum(comb(n, j) for j in range(k + 1)))
 
 
-def test_leak_count_is_certified_and_the_leak_law_draws_n_lambda_over_k_plus_one():
+def test_leak_count_is_certified_and_the_leak_sampling_design_samples_n_lambda_over_k_plus_one():
     """K is the most incorrect proof blocks the target allows under `loc_bits` (at least Lean's `locBits`, so b K +
     locBits n K <= ℓ holds for it), and the sampling design samples n Λ / (K + 1), at most n, none once every proof block may be
     incorrect."""
@@ -1178,7 +1178,7 @@ def test_miss_holds_its_digits_at_any_population():
                 assert Decimal(_miss(n, m, k)) == pytest.approx(exact.exp(), rel=Decimal("1e-9") + loose)
 
 
-def test_shared_statements_hold_only_the_drawn_units():
+def test_shared_statements_hold_only_the_sampled_units():
     """Under `shared` a sample of k pays ceil(k / cap) statements and stages k proof blocks however large n is; cut in order, a
     sparse sample of a huge population touches one statement a sampled proof block."""
     c = Candidate("x", "A", 10 ** 12, 1, 16, ands=1000, cap=64)
@@ -1190,7 +1190,7 @@ def test_shared_statements_hold_only_the_drawn_units():
     assert template_cost(c, replace(costs, shared=True), 0)[0] == 0.0
 
 
-def test_sparse_draws_on_huge_populations_still_touch_statements_and_replay_blocks():
+def test_sparse_samples_on_huge_populations_still_touch_statements_and_replay_blocks():
     """At 10^17 proof blocks the miss probability of a single sample rounds to 1: what it touches is kept as 1 - miss directly."""
     n = 10 ** 17
     assert touched(n, 4, 1) == pytest.approx(1.0, rel=1e-12)

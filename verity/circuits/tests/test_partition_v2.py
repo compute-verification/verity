@@ -34,7 +34,7 @@ from verity.circuits.ops.scalar import Bf16GtStrict, SelectBf16
 
 PATH = Path(__file__).parent / "partition_v2_vectors.json"
 REWRITE = ("the vector differs from the tree's; a change meant to move it rewrites it with "
-           "`uv run python tools/verity/check/pins.py --write verity/circuits/tests/partition_v2_vectors.json`")
+           "`uv run python tools/check/pins.py --write verity/circuits/tests/partition_v2_vectors.json`")
 V1 = json.loads((Path(__file__).parent / "partition_vectors.json").read_text())
 BF16 = Value(16)
 
@@ -259,8 +259,8 @@ def test_the_width_limit_refuses_every_unit_returning_a_32_bit_value():
 
 
 def test_the_size_classes():
-    assert V.UNIT_CLASSES[0] == V.WIDTH and V.UNIT_CLASSES[-1] == V.UNIT_CLASS_MAX == 262_144 and len(V.UNIT_CLASSES) == 15
-    assert [V.unit_class(b) for b in (0, 1, 16, 17, 32, 33, 1024, 262_144, 262_145)] == [16, 16, 16, 32, 32, 64, 1024, 262_144, None]
+    assert V.SIZE_CLASSES[0] == V.WIDTH and V.SIZE_CLASSES[-1] == V.SIZE_CLASS_MAX == 262_144 and len(V.SIZE_CLASSES) == 15
+    assert [V.size_class(b) for b in (0, 1, 16, 17, 32, 33, 1024, 262_144, 262_145)] == [16, 16, 16, 32, 32, 64, 1024, 262_144, None]
 
 
 def test_the_builder_refuses_units_of_two_size_classes(program):

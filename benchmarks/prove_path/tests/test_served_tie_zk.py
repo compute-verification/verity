@@ -10,6 +10,8 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import served_tie_zk as Z  # noqa: E402
 
+Z.zk_drivers.install()
+
 REPS = ("s-circuit.rep0.bin", "s-circuit.rep1.bin")
 
 

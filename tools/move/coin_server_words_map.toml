@@ -1,0 +1,35 @@
+# The retired "coin server" family (GLOSSARY.md: "coin server" is the challenger's live-coin part): what
+# `tools/move/rename.py --map tools/move/coin_server_words_map.toml` renames over the whole tree.
+# - `CoinServer`, the recursion's live-coin part (`verity_flock.rec_live.CoinServer`, which Flock's Lean and SPOT's
+#   challenger name in prose), is `LiveCoinPart`: it hands out what Lean reads as `RoundCoins`, and a run's `coins_from`
+#   names where they came from;
+# - `coin_server` in a name (test names, the Rust test module `coin_server_tests`) is `live_coin_part`;
+# - the prose "the coin server" is "the challenger's live-coin part", and any other "coin server(s)" is "live-coin
+#   part(s)", in docs, comments and refusals alike, with the tests that match the refusals.
+# It leaves every byte a digest or a record takes: the `round_digest` text of statement identities ("framing: the coin
+# server retains every round's bytes ...", in `Flock/Tags.lean`, `flock-circuit.rs` and the agreement patches), which
+# keeps its words until a format version (Glossary), and the assumption id `uniform/flock-coin-server`. GLOSSARY.md's
+# retired-terms row and the lints that name the terms are not rewritten.
+
+[words]
+"the coin servers" = "the challenger's live-coin parts"
+"the coin server" = "the challenger's live-coin part"
+"coin servers" = "live-coin parts"
+"coin server" = "live-coin part"
+"CoinServer" = "LiveCoinPart"
+"coin_servers" = "live_coin_parts"
+"coin_server" = "live_coin_part"
+
+[keep]
+# the hashed `round_digest` text, the assumption id, and the Glossary's row of retired terms
+patterns = ["framing: the coin server retains every round's bytes", "uniform/flock-coin-server"]
+strings = ["| \"coin server\"; the `round_digest` strings of statement identities in `Flock/Tags.lean`, until a format version |"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps), fixtures and patches whose bytes a digest or
+# a replay pins, lock files, the lints that name the retired terms, and the network certifier's files while its rename
+# runs. Each entry matches a tracked file (`git ls-files ':(glob)GLOB'`).
+exclude = ["tools/move/**", "**/fixtures/**", "**/*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
+           "tests/test_retired_terms.py",
+           "tests/lint/test_repo_retired_terms.py", "verity/protocols/accounting/certifier/**",
+           "security/**/Certifier/**"]

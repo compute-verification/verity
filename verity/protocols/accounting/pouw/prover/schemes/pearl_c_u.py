@@ -217,3 +217,7 @@ def y(u_word: int, alpha_a: int, alpha_b: int) -> int:
     """The served BF16 y_ij from U_ij and its row's and column's α (forming v1's `s5_stats`): the kernels' epilogue
     ``__float2bfloat16_rn(__fmul_rn(__fmul_rn(u, __frcp_rn(α_A)), __frcp_rn(α_B)))``, registry's `PearlCUnscale`."""
     return rn_bf16(_finite(fp32.mul(_finite(fp32.mul(u_word, fp32.div(ONE, alpha_a))), fp32.div(ONE, alpha_b))))
+
+
+__all__ = ["NonFinite", "ONE", "PEEL_K", "R", "STATUS", "WINDOW", "atom", "chain", "k16", "pa_row", "pb_row",
+           "rn_bf16", "u", "y"]

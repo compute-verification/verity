@@ -10,22 +10,23 @@
 # A new directory under `verity/` is in its parent's row until it is listed here.
 #
 # The order, the distributions and each place's `paths` and `trusted` mark are kept by hand.  The tables after them are
-# the tree's own, written by `uv run tools/verity/check/import_order.py`, and the test holds this file to what it writes.
+# the tree's own, written by `uv run tools/check/import_order.py`, and the test holds this file to what it writes.
 
 order = [
-    ["fixtures", "tools/config", "verity"],
+    ["tools/config", "verity"],
     ["verity/circuits"],
     ["tools/difftest"],
     ["verity/commitments"],
     ["verity/protocols/proofs/flock/verifier"],
     ["verity/protocols/interface"],
-    ["verity/circuits/call_scope.py", "verity/circuits/cross_call.py", "verity/circuits/tiny.py", "verity/circuits/word.py", "verity/definitions"],
+    ["verity/circuits/call_scope.py", "verity/circuits/cross_call.py", "verity/circuits/tiny.py", "verity/circuits/word.py"],
     ["verity/channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime"],
     ["verity/device.py", "verity/hardware"],
-    ["verity/commitments/windows"],
+    ["verity/commitments/periods"],
     ["verity/protocols/proofs/spot"],
     ["verity/protocols/proofs/flock"],
     ["verity/protocols/proofs/recursion"],
+    ["verity/protocols/proofs/spot_flock"],
     ["verity/protocols/accounting/registration"],
     ["verity/protocols/accounting/pous"],
     ["verity/protocols/accounting/poub"],
@@ -55,11 +56,31 @@ order = [
 directory = "verity/protocols/proofs/flock"
 owner = "proofs"
 reason = "Flock's distribution (`verity_flock`) and its verifier's scripts"
+# the files of `verity` that load it, each by its path, until `known_reason`'s day; the list only shrinks
+known = [
+    "verity/protocols/proofs/spot/prover/audit/compose_circuit.py",
+    "verity/protocols/proofs/spot/prover/audit/prove_bundle.py",
+    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
+    "verity/protocols/proofs/spot/prover/audit/template_audit.py",
+    "verity/protocols/proofs/spot/prover/audit/two_stage.py",
+    "verity/protocols/proofs/spot/prover/audit/window_audit.py",
+]
+known_reason = "SPOT's prover audit runs Flock's prover; owner proofs; goes the day `verity_flock` joins `verity`"
 
 [[distribution]]
 directory = "verity/protocols/accounting/pous/verifier/check"
 owner = "memory-accounting"
 reason = "the PoUS Lean check (`pous-check`), whose Python is run by path beside `benchmarks/pous`: its difftest generator, which its `lean-audit.json` runs, and `interop.py`, which holds it to the wire's Python reference through `verity_difftest`"
+
+[[distribution]]
+directory = "verity/protocols/accounting/poub/prover"
+owner = "memory-accounting"
+reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never imports: loaded by path under its own names (`prover`, `device`, `kv`, `paged`) by the vLLM adapter and by its harness in `benchmarks/`; the session's prover party (`session_prover.py`), which only tests load by name; and the honest provers, the period's prover side and the P2 session's (`audit_prover.py`, `p2_prover.py`, `period_prover.py`, `opening_prover.py`, `p2_party_prover.py`), which tests, `benchmarks/` and the vLLM adapter load by name; and the P2 session's staging (`p2_stage/`: `bandwidth.py`, run as a script, and the `stage` and `layout` it loads), which `benchmarks/` loads by path under those names"
+
+[[distribution]]
+directory = "verity/protocols/accounting/pous/prover/p2"
+owner = "memory-accounting"
+reason = "PoUS's P2 prover, which runs on a GPU through torch, which `verity` never imports: loaded by path as the package `p2_store` by PoUS's `weight_store` (whose tensors are its `tensors.py`), the vLLM adapter and its harness in `benchmarks/`"
 
 [[distribution]]
 directory = "verity/protocols/compose/device/live_challenger"
@@ -81,6 +102,22 @@ owner = "compute-accounting"
 # file of the second.  It only shrinks: the test refuses a file not listed here (cut the tie instead: move what the
 # loader needs down to its row or an earlier one, or pass it in), a listed file that no longer loads the later row, and
 # a pair no file needs any more, which it names to delete.
+[[against]]
+loader = "verity/protocols/proofs/flock"
+loaded = "adapters"
+files = [
+    "verity/protocols/proofs/flock/prover/python/verity_flock/boolean_export.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/class_statement.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/ir_lower.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/ir_sampling.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/partition_units.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/tail.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/tail_pieces.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/templates/silu_mul_v2.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py",
+]
+
 [[against]]
 loader = "verity/protocols/proofs/flock"
 loaded = "tools"
@@ -108,13 +145,6 @@ loader = "verity/protocols/accounting/poub"
 loaded = "tools"
 files = [
     "verity/protocols/accounting/poub/device/live_verifier/host.py",
-]
-
-[[against]]
-loader = "verity/protocols/compose"
-loaded = "benchmarks"
-files = [
-    "verity/protocols/compose/device/live_challenger/auditor.py",
 ]
 
 [[against]]
@@ -159,10 +189,23 @@ loaded_by = [
 [[place]]
 paths = [
     "verity/channel.py",
+    "verity/party.py",
+    "verity/runtime/__init__.py",
+    "verity/runtime/framing.py",
     "verity/runtime/handshake.py",
     "verity/tests/tests/test_channel.py",
 ]
 trusted = true
+loaded_by = [
+    "verity/protocols/accounting/certifier/prover/workload.py",
+    "verity/protocols/accounting/poub/prover/p2_party_prover.py",
+    "verity/protocols/accounting/poub/prover/session_prover.py",
+    "verity/protocols/accounting/pous/prover/challenger_prover.py",
+    "verity/protocols/accounting/pous/prover/wipe_prover.py",
+    "verity/protocols/accounting/pous/prover/workload.py",
+    "verity/protocols/accounting/pouw/prover/workload.py",
+    "verity/protocols/proofs/spot/prover/workload.py",
+]
 
 [[place]]
 paths = [
@@ -175,6 +218,17 @@ paths = [
     "verity/circuits/requirement.py",
     "verity/circuits/requirement_units.py",
     "verity/circuits/stacking.py",
+]
+
+[[place]]
+paths = [
+    "verity/circuits/call_scope.py",
+    "verity/circuits/cross_call.py",
+    "verity/circuits/tiny.py",
+    "verity/circuits/word.py",
+]
+loads = [
+    "verity/circuits",
 ]
 
 [[place]]
@@ -234,15 +288,6 @@ loads = [
 
 [[place]]
 paths = [
-    "verity/claims",
-]
-trusted = true
-loaded_by = [
-    "verity/commitments/tests/test_hm96.py",
-]
-
-[[place]]
-paths = [
     "verity/commitments",
     "verity/commitments/gates/attest.py",
     "verity/commitments/gates/block_key.py",
@@ -284,27 +329,11 @@ paths = [
 
 [[place]]
 paths = [
-    "verity/commitments/windows",
+    "verity/commitments/periods",
 ]
 loads = [
     "verity/circuits",
     "verity/circuits/ops",
-    "verity/commitments",
-]
-
-[[place]]
-paths = [
-    "verity/definitions",
-    "verity/circuits/call_scope.py",
-    "verity/circuits/cross_call.py",
-    "verity/circuits/tiny.py",
-    "verity/circuits/word.py",
-]
-loads = [
-    "verity/circuits",
-    "verity/circuits/kernels",
-    "verity/circuits/ops",
-    "verity/circuits/silicon",
     "verity/commitments",
 ]
 
@@ -322,10 +351,11 @@ reaches = [
 ]
 loaded_by = [
     "verity/hardware/lean.py",
-    "verity/hardware/tests/test_cards.py",
+    "verity/tests/tests/test_cards.py",
     "verity/hardware/tests/test_lean.py",
-    "verity/hardware/tests/test_nodes.py",
+    "verity/tests/tests/test_nodes.py",
     "verity/hardware/tests/test_policy.py",
+    "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py",
 ]
 
 [[place]]
@@ -346,10 +376,12 @@ paths = [
     "verity/protocols/accounting/certifier/prover",
 ]
 loads = [
+    "verity/channel.py",
     "verity/circuits",
     "verity/commitments",
     "verity/protocols/accounting/certifier/verifier",
     "verity/protocols/proofs/spot/verifier",
+    "verity/runtime",
 ]
 
 [[place]]
@@ -367,7 +399,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -376,20 +407,20 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
-    "verity/protocols/accounting/certifier/prover/advice_check.py",
-    "verity/protocols/accounting/certifier/prover/cache_step_v3.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v4.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v5.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v6.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v7.circuit-check.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v7.py",
+    "adapters/vllm/verity_vllm/compiler/advice_check.py",
+    "adapters/vllm/verity_vllm/compiler/cache_step_v3.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v4.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v5.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v6.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v7.circuit-check.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v7.py",
     "verity/protocols/accounting/certifier/prover/egress.py",
     "verity/protocols/accounting/certifier/prover/ingress_scan.py",
     "verity/protocols/accounting/certifier/prover/io_ids.py",
     "verity/protocols/accounting/certifier/prover/lengths_row.py",
     "verity/protocols/accounting/certifier/prover/response_tie.py",
-    "verity/protocols/accounting/certifier/prover/served_statics.py",
-    "verity/protocols/accounting/certifier/prover/served_tie.py",
+    "adapters/vllm/verity_vllm/compiler/served_statics.py",
+    "adapters/vllm/verity_vllm/compiler/served_tie.py",
     "verity/protocols/accounting/certifier/prover/window_charge.py",
 ]
 
@@ -409,7 +440,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -420,6 +450,20 @@ reaches = [
 ]
 loaded_by = [
     "verity/commitments/tests/test_block_check.py",
+    "verity/protocols/accounting/poub/prover/audit_prover.py",
+    "verity/protocols/accounting/poub/prover/codec_tensor/reader.py",
+    "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py",
+    "verity/protocols/accounting/poub/prover/p2_party_prover.py",
+    "verity/protocols/accounting/poub/prover/opening_prover.py",
+    "verity/protocols/accounting/poub/prover/p2_prover.py",
+    "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py",
+    "verity/protocols/accounting/poub/prover/period_prover.py",
+    "verity/protocols/accounting/poub/prover/remote_session/device.py",
+    "verity/protocols/accounting/poub/prover/remote_session/prover.py",
+    "verity/protocols/accounting/poub/prover/session_prover.py",
+    "verity/protocols/accounting/poub/prover/word_codec/kv.py",
+    "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py",
+    "verity/protocols/accounting/poub/tests/session_harness.py",
 ]
 
 [[place]]
@@ -435,7 +479,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -458,7 +501,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -471,8 +513,14 @@ paths = [
     "verity/protocols/accounting/pous/prover",
 ]
 loads = [
+    "verity/channel.py",
     "verity/circuits",
     "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/periods",
+    "verity/protocols/accounting/pous/verifier",
+    "verity/protocols/proofs/spot/verifier",
+    "verity/runtime",
 ]
 
 [[place]]
@@ -483,7 +531,6 @@ paths = [
 ]
 loads = [
     "verity/channel.py",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -492,11 +539,22 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/runtime",
+]
+loaded_by = [
+    "verity/protocols/accounting/pous/prover/challenger_prover.py",
+    "verity/protocols/accounting/poub/prover/p2_prover.py",
+    "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py",
+    "verity/protocols/accounting/poub/prover/p2_stage/layout.py",
+    "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
+    "verity/protocols/accounting/pous/prover/p2/p2_store/load.py",
+    "verity/protocols/accounting/pous/prover/p2/p2_store/store.py",
+    "verity/protocols/accounting/pous/prover/wipe_prover.py",
+    "verity/protocols/accounting/pous/prover/wipe_run.py",
+    "verity/protocols/accounting/pous/prover/wipe_store.py",
 ]
 
 [[place]]
@@ -504,6 +562,7 @@ paths = [
     "verity/protocols/accounting/pouw/prover",
 ]
 loads = [
+    "verity/channel.py",
     "verity/circuits",
     "verity/circuits/ops",
     "verity/circuits/silicon",
@@ -513,6 +572,7 @@ loads = [
     "verity/protocols/accounting/pouw/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/runtime",
 ]
 
 [[place]]
@@ -532,7 +592,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -543,8 +602,8 @@ reaches = [
 loaded_by = [
     "verity/protocols/accounting/pouw/prover/circuit/__init__.py",
     "verity/protocols/accounting/pouw/prover/circuit/anchors.py",
-    "verity/protocols/accounting/pouw/prover/circuit/cap.circuit-check.py",
-    "verity/protocols/accounting/pouw/prover/circuit/cap.py",
+    "verity/protocols/accounting/pouw/prover/circuit/inert_bound.circuit-check.py",
+    "verity/protocols/accounting/pouw/prover/circuit/inert_bound.py",
     "verity/protocols/accounting/pouw/prover/circuit/compile.py",
     "verity/protocols/accounting/pouw/prover/circuit/eps1_reference.py",
     "verity/protocols/accounting/pouw/prover/circuit/h1tile.py",
@@ -552,7 +611,7 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/circuit/h1zy.py",
     "verity/protocols/accounting/pouw/prover/circuit/live.py",
     "verity/protocols/accounting/pouw/prover/circuit/ncp2.py",
-    "verity/protocols/accounting/pouw/prover/circuit/pc4.py",
+    "verity/protocols/experimental/pearl_c4/prover/pc4.py",
     "verity/protocols/accounting/pouw/prover/circuit/pc8.py",
     "verity/protocols/accounting/pouw/prover/circuit/plan.py",
     "verity/protocols/accounting/pouw/prover/circuit/rowk.py",
@@ -562,9 +621,13 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/schemes/__init__.py",
     "verity/protocols/accounting/pouw/prover/schemes/ncp.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c.py",
-    "verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py",
+    "verity/protocols/experimental/pearl_c4/prover/pearl_c4.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c_work.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_kw.py",
+    "verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py",
+    "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_f1_fast.py",
+    "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_fixture.py",
+    "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_twin.py",
     "verity/protocols/proofs/flock/prover/tests/test_lean_registered_bit_rows.py",
 ]
 
@@ -594,9 +657,12 @@ paths = [
 ]
 loads = [
     "verity/circuits",
+    "verity/circuits/kernels",
     "verity/circuits/silicon",
     "verity/commitments",
+    "verity/commitments/crypto",
     "verity/protocols/accounting/pouw/prover",
+    "verity/protocols/accounting/pouw/verifier",
 ]
 
 [[place]]
@@ -613,7 +679,7 @@ reaches = [
 
 [[place]]
 paths = [
-    "verity/protocols/proofs/flock/sigma",
+    "verity/protocols/proofs/flock/verifier/sigma",
 ]
 trusted = true
 
@@ -625,10 +691,53 @@ trusted = true
 
 [[place]]
 paths = [
+    "verity/protocols/proofs/spot/prover/audit",
+    "verity/protocols/proofs/spot/prover/cost",
+]
+loads = [
+    "adapters/vllm",
+    "benchmarks/network_traces",
+    "benchmarks/one_stage",
+    "verity/circuits",
+    "verity/circuits/ops",
+    "verity/commitments",
+    "verity/commitments/periods",
+    "verity/device.py",
+    "verity/protocols/accounting/pouw/prover",
+    "verity/protocols/accounting/pouw/verifier",
+    "verity/protocols/accounting/registration/verifier/registration.py",
+    "verity/protocols/proofs/flock/prover",
+    "verity/protocols/proofs/spot/verifier",
+    "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/runtime",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/proofs/spot/prover/registered_reads.py",
+]
+loads = [
+    "verity/commitments",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/proofs/spot/prover/workload.py",
+]
+loads = [
+    "verity/channel.py",
+    "verity/runtime",
+]
+
+[[place]]
+paths = [
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/prover/candidates.py",
     "verity/protocols/proofs/spot/prover/costfit.py",
     "verity/protocols/proofs/spot/device/challenger.py",
+    "verity/protocols/proofs/spot/device/challenger_gate.py",
+    "verity/protocols/proofs/spot/device/challenger_party.py",
+    "verity/protocols/proofs/spot/device/challenger_session.py",
     "verity/protocols/proofs/spot/device/coins.py",
     "verity/protocols/proofs/spot/device/remote.py",
     "verity/protocols/proofs/spot/prover/optimize.py",
@@ -637,8 +746,8 @@ paths = [
 loads = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
+    "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
@@ -646,7 +755,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -655,6 +763,7 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/accounting/certifier/prover/window_charge.py",
+    "verity/protocols/accounting/pous/prover/served_weights.py",
     "verity/protocols/accounting/pouw/prover/circuit/h1window.py",
     "verity/protocols/proofs/flock/prover/pod/rec_inner.py",
     "verity/protocols/proofs/flock/prover/pod/rec_reprice.py",
@@ -704,6 +813,7 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/tests/test_stream_zk_server.py",
     "verity/protocols/proofs/flock/prover/tests/test_tmpl_statement.py",
     "verity/protocols/proofs/flock/prover/tests/tmpl_statement.py",
+    "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
 ]
 
 [[place]]
@@ -731,7 +841,6 @@ trusted = true
 paths = [
     "verity/runtime",
     "verity/config.py",
-    "verity/party.py",
     "verity/protocol.py",
     "verity/tests/tests/test_periods.py",
     "verity/tests/tests/test_periods_difftest.py",
@@ -742,4 +851,14 @@ loads = [
 ]
 reaches = [
     "verity/channel.py",
+]
+loaded_by = [
+    "verity/protocols/accounting/certifier/prover/workload.py",
+    "verity/protocols/accounting/poub/prover/p2_party_prover.py",
+    "verity/protocols/accounting/poub/prover/session_prover.py",
+    "verity/protocols/accounting/pous/prover/challenger_prover.py",
+    "verity/protocols/accounting/pous/prover/wipe_prover.py",
+    "verity/protocols/accounting/pous/prover/workload.py",
+    "verity/protocols/accounting/pouw/prover/workload.py",
+    "verity/protocols/proofs/spot/prover/workload.py",
 ]

@@ -38,7 +38,7 @@ them, so Vercel installs them alone; `uv lock` in `service/` after a pin moves).
 | `slack_events/consumer.py` | One message: route a person's post (`deliver`, routing lines), dead-letter after 5 deliveries, the canary, a newcomer's `team_join`. |
 | `slack_events/crons.py` | The watchdog (reminders, escalation, the daily list, `stall`, `canary`) and reconciliation. |
 | `slack_events/router.py` | `route_unaddressed`, the seam for routing by model: None (no-model mode) unless `ROUTER_MODEL_ENABLED=1`; its docstring is the plan for the AI Gateway call, which isn't built. |
-| `slack_events/deps.py` | What the service runs against (routing code, registry, queue, Slack, cache, clock): `production()` from the environment, fakes in the tests. |
+| `slack_events/deps.py` | What the service runs against (routing code, registry, queue, Slack, cache, clock): `deployed()` from the environment, fakes in the tests. |
 | `slack_events/vendor.py` | Loads the routing code and registry: `_vendor/` in a deployment, the repository's own files from a checkout. |
 | `build.py` | The build step: copies `slack.py` and `.agents/skills/using-slack/registry.json` into `_vendor/` (never committed), so a deployment runs `main`'s routing code byte for byte. |
 | `ignore.py` | Vercel's `ignoreCommand`: build only `main`, and only when the service's inputs changed. |
@@ -109,7 +109,7 @@ Vercel pushes a Python subscriber only from its Python framework build, which co
 entry in `pyproject.toml` into a queue-triggered function ([Python SDK](https://vercel.com/docs/queues/python-sdk),
 "Consuming messages in push mode"); a `vercel.json` `experimentalTriggers` entry is documented for JavaScript functions.
 This project's build (`framework: null`, `buildCommand`, `api/index.py`) compiles neither, so a push subscriber would
-never run: production would publish every event and consume none while health looks clean. So the service polls:
+never run: the deployed service would publish every event and consume none while health looks clean. So the service polls:
 
 - `subscriber.drain` calls the SDK's `poll(topic, "slack-events-drain", limit=10, lease_duration=120)`, which
   authenticates as `send` does. Entering a delivery renews its lease while the handler runs and acknowledges it on a
@@ -134,7 +134,7 @@ expected and runs `chat open` again, which reuses the channel and may post the w
 
 ## Deploy
 
-Production is `verity-slack-events` (https://verity-slack-events.vercel.app), behind the docs site's rewrite of
+The deployment is `verity-slack-events` (https://verity-slack-events.vercel.app), behind the docs site's rewrite of
 `/api/slack/*`. A landing deploys it: Git deployments build only `main`, and only when `infra/slack-events/`, `slack.py` or
 the registry changed since the deployment before (`service/ignore.py`, vercel.json's `ignoreCommand`). Console's
 `vercel deploy --prod` from main always builds, as the fallback. The project's setup:

@@ -9,13 +9,13 @@ from typing import Any
 
 import pytest
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
-from verity.definitions.registry import act
-from verity.definitions.registry import moe as M
 
 from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled
+from verity_vllm.definitions.registry import act
+from verity_vllm.definitions.registry import moe as M
 
 H, E, TOPK, VPT, INTER = 32, 8, 2, 4, 16
 OP = "torch.ops.vllm.moe_forward.default"
@@ -97,6 +97,25 @@ def test_another_form_of_the_op_is_refused(old: str, new: str, why: str) -> None
     assert old in WRAPPER
     with pytest.raises(Unmodelled, match=why):
         _piece(WRAPPER.replace(old, new))
+
+
+def _through_the_graph(src: str, layer: str = "synthetic_local_tmp_0_") -> dict[str, Any]:
+    """The op's call, its piece wired after a piece that returns its rows: the token count, those rows, the GEMM's weight and the
+    graph's argument `layer`, a layer name or a weight's placeholder."""
+    rows = {"args": 1, "values": [{"name": "add_rms_norm/buf3", "width": H}], "calls": [], "returns": [{"value": 0, "width": H}], "kernels": {}}
+    weight = "l_self_modules_gate_parameters_weight_"
+    args = [{"kind": "sym", "name": "s7"}, {"kind": "piece_ret", "piece": 0, "ret": 0}, {"kind": "weight"}, {"kind": "weight" if layer == weight else "layer_name"}]
+    graph = {"attention": [], "wiring": [{"args": [{"kind": "sym", "name": "s7"}], "raw_args": ["s7"]},
+                                         {"args": args, "raw_args": ["s7", "getitem", weight, layer]}]}
+    return SV.wire([rows, _piece(src).program()], graph, backbone="model")["calls"][1]
+
+
+def test_the_wiring_hands_the_op_its_layer() -> None:
+    op = {"op": "moe_forward", "piece": 1, "reads": [{"value": "c01.mm/buf0", "width": H}], "writes": ["c01.moe_forward/buf1"]}
+    assert _through_the_graph(WRAPPER) == {**op, "layer": {"layer_name": True}}
+    assert _through_the_graph(WRAPPER.replace("None, arg3_1, 0)", f"None, '{LAYER}', 0)")) == {**op, "layer": {"name": LAYER}}
+    with pytest.raises(Unmodelled, match="piece 1 moe_forward: its layer argument is {'weight': 'model.gate.weight'}, not a layer name"):
+        _through_the_graph(WRAPPER, "l_self_modules_gate_parameters_weight_")
 
 
 # ------------------------------------------------------------------------------------------------------------- the expansion

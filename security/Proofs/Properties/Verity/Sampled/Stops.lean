@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Readings
 public import Proofs.Properties.Verity.Sampled.RecordRounds
 
 /-!
-# Sampled proofs' coupling: a stop's written coins in the play's log
+# SPOT's coupling: a stop's written coins in the play's log
 
 Where the projection writes a round's coins into a stop's opening, the play on the tape the trace ends on releases them
 there.

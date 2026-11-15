@@ -1,4 +1,12 @@
-/-
+module
+
+public import Flock.Comp
+public import Flock.DeriveCheck
+public import Flock.Layout
+public import Flock.Net
+public import Flock.Tags
+
+/-!
 Item 1e (Project doc `verified-lowering-design.md`): the typed statement `verity/flock-circuit/types`
 (`verity_flock.typed_statement`), whose unit is a circuit type and a layout instead of rows. No statement carries the
 unit's rows: the verifier derives them and places them as the old statement's `unit` slots. It folds rows only through
@@ -19,13 +27,6 @@ A flat class (no placed parts, Δ or reads) is one `CIRCUIT unit` section. A tem
 each placed layout's net, and Δ. A placed read's layout is generated (`table/v2`); its product rows' B side is the table,
 which the verifier holds (`hold`): the statement names each table by the SHA-512 of its words and never carries them.
 -/
-module
-
-public import Flock.Comp
-public import Flock.DeriveCheck
-public import Flock.Layout
-public import Flock.Net
-public import Flock.Tags
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -147,7 +148,7 @@ def rowsA (d : DeriveAll.D) : Array (Array Nat) := (Array.range d.size).map fun 
 def rowsB (d : DeriveAll.D) : Array (Array Nat) := (Array.range d.size).map fun c => (d.rows.getD c ([], [])).2.toArray
 
 /-- A layout's net, built straight from `derive`'s rows (no text): its size, constant and port groups, and each row's A
-and B columns, as `DeriveAll.netlist` would print them and `Net.parse` read them back. -/
+and B columns, as `DeriveAll.circuitDescription` would print them and `Net.parse` read them back. -/
 def netOfD (d : DeriveAll.D) (name : String) : V Net :=
   let grp := fun (gs : Array (Nat × Nat × Array Nat)) => gs.map fun (col, words, bits) => ({ col, words, bits } : Group)
   Net.ofRows name d.size d.const (grp d.inGroups) (grp d.outGroups) (rowsA d) (rowsB d)
@@ -173,7 +174,7 @@ def isFlat (u : DeriveAll.D) : Bool :=
 /-- A flat class's file with its unit's rows `u` inserted as its `CIRCUIT unit` section, first, where the old statement had
 it; META and the other sections unchanged. -/
 def expandWith (tags : Tags) (lines : Array String) (name : String) (u : DeriveAll.D) : ByteArray :=
-  let rows := ((DeriveAll.netlist u name).splitOn "\n").toArray.pop
+  let rows := ((DeriveAll.circuitDescription u name).splitOn "\n").toArray.pop
   let out := #[lines[0]!, lines[1]!, s!"{tags.blockKeyword} unit {rows.size}"] ++ rows ++ lines.extract 2 lines.size
   ("\n".intercalate out.toList ++ "\n").toUTF8
 
@@ -467,8 +468,8 @@ def rows (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
   let placed := (List.range ls.size).filter fun j => u.parts.any (·.1 == j)
   let files := placed.toArray.map fun j =>
     let d := digests.getD j ""
-    (s!"{d}.txt", DeriveAll.netlist (done.getD j default) (d.take 16).toString)
-  return #[("root.txt", DeriveAll.netlist u name)] ++ files ++ #[("delta.txt", DeriveAll.deltaText ls digests u)]
+    (s!"{d}.txt", DeriveAll.circuitDescription (done.getD j default) (d.take 16).toString)
+  return #[("root.txt", DeriveAll.circuitDescription u name)] ++ files ++ #[("delta.txt", DeriveAll.deltaText ls digests u)]
 
 /-- A flat class's file with its unit's rows derived, as text (`typed-expand --out`, for the tests that compare it with the
 old statement byte for byte). -/

@@ -21,9 +21,13 @@ import all Init.Data.ToString.Basic
   `Site.kind?_ofLog_prefix`), so a later entry changes nothing already registered.
 * `Registration.Valid.ids_nodup` and `Registration.Valid.parents`: a valid log registers each id once, and its Site is a
   tree, each location under a registered parent of a kind its own allows.
+* `Registration.Valid.linkKinds`, `Registration.Valid.ends_known` and `Registration.Valid.ends_ne`: a valid log's
+  links join kinds a link may join (`Site.LinkKinds`), end at something registered and each join two different ends;
+  so the other end of a memory challenger's link is a host (`Site.host_of_challenger`).
 * A small onsite site and a later entry for each check, each refused by that check's name
   (`Registration.Example.onsite_refusals`), and the same entries on a remote site, which accepts the two that only an
-  onsite site refuses (`Registration.Example.remote_refusals`); a device's model read off the Site
+  onsite site refuses (`Registration.Example.remote_refusals`); both sites complete against the auditor's figures, and
+  one short of a leaf not (`Registration.Example.complete`); a device's model read off the Site
   (`Registration.Example.gpu0_device`); and the onsite site with day 0 declared, a second declaration of the day refused
   (`Registration.Example.declaration_refusals`).
 -/
@@ -93,6 +97,28 @@ theorem loc?_ofLog_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) {i : St
 theorem kind?_ofLog_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) {i : String} {k : Kind}
     (hk : (ofLog l₁).kind? i = some k) : (ofLog l₂).kind? i = some k :=
   kind?_of_prefix (ofLog_prefix h).2.1 hk
+
+/-- **Every registered link joins kinds a link may join**: what the entry check `kind` (`Entry.Kinds`) asks of each
+new link, at the whole Site. A valid log's Site has it (`Registration.Valid.linkKinds`). -/
+def LinkKinds (S : Site) : Prop := ∀ k ∈ S.links, ∃ p ∈ Kind.links, S.Joins k p.1 p.2
+
+instance instDecidableLinkKinds (S : Site) : Decidable S.LinkKinds := by unfold LinkKinds; infer_instance
+
+/-- **A memory challenger's links end at hosts**: at a Site whose links join kinds a link may join, the other end of
+a link with a memory challenger at one end is a host. -/
+theorem host_of_challenger {S : Site} (hk : S.LinkKinds) {k : Link} (hmem : k ∈ S.links) :
+    (S.kind? k.ends.1 = some .challenger → S.kind? k.ends.2 = some .host) ∧
+      (S.kind? k.ends.2 = some .challenger → S.kind? k.ends.1 = some .host) := by
+  obtain ⟨p, hp, hj⟩ := hk k hmem
+  have hp' : p = (Kind.host, Kind.host) ∨ p = (Kind.host, Kind.outside) ∨ p = (Kind.certifier, Kind.host) ∨
+      p = (Kind.certifier, Kind.outside) ∨ p = (Kind.challenger, Kind.host) := by
+    simpa [Kind.links] using hp
+  simp only [Joins, Prod.mk.injEq] at hj
+  constructor
+  · intro h
+    rcases hp' with rfl | rfl | rfl | rfl | rfl <;> simp_all
+  · intro h
+    rcases hp' with rfl | rfl | rfl | rfl | rfl <;> simp_all
 
 end Site
 
@@ -246,6 +272,66 @@ theorem Valid.parents {l : Registration} (h : Valid D A c l) :
         simpa [hpar, hk', Site.kind?_of_prefix hpre hk'] using hp
     · exact ⟨he.2.1.1 x hx, (he.2.2.1.1 x hx).1⟩
 
+/-- **A valid log's links join kinds a link may join**: the entry check `kind` holds each new link to it at the Site
+as the entry extends it, and a later entry changes no registered id's kind. -/
+theorem Valid.linkKinds {l : Registration} (h : Valid D A c l) : (Site.ofLog l).LinkKinds := by
+  unfold Site.LinkKinds
+  induction l using List.reverseRecOn with
+  | nil => simp
+  | append_singleton l e ih =>
+    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
+    cases e with
+    | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | site _ s => ?_
+    have hpre : (Site.ofLog l).locs <+: ((Site.ofLog l).add s).locs := by simp [Site.add, List.prefix_append]
+    rw [Site.ofLog_concat, Entry.added]
+    intro k hk
+    rcases List.mem_append.mp hk with hk | hk
+    · obtain ⟨p, hp, hj⟩ := ih hl k hk
+      refine ⟨p, hp, ?_⟩
+      simp only [Site.Joins, Prod.mk.injEq] at hj ⊢
+      rcases hj with ⟨h1, h2⟩ | ⟨h1, h2⟩
+      · exact Or.inl ⟨Site.kind?_of_prefix hpre h1, Site.kind?_of_prefix hpre h2⟩
+      · exact Or.inr ⟨Site.kind?_of_prefix hpre h1, Site.kind?_of_prefix hpre h2⟩
+    · exact (he.2.2.1.2.1 k hk).2.1
+
+/-- **A valid log's links end at something registered**: the entry check `unknownRef` holds each new link's ends to
+registered ids, and a registered id stays registered. -/
+theorem Valid.ends_known {l : Registration} (h : Valid D A c l) :
+    ∀ k ∈ (Site.ofLog l).links, (Site.ofLog l).Known k.ends.1 ∧ (Site.ofLog l).Known k.ends.2 := by
+  induction l using List.reverseRecOn with
+  | nil => simp
+  | append_singleton l e ih =>
+    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
+    cases e with
+    | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | site _ s => ?_
+    have hpre : (Site.ofLog l).locs <+: ((Site.ofLog l).add s).locs := by simp [Site.add, List.prefix_append]
+    rw [Site.ofLog_concat, Entry.added]
+    intro k hk
+    rcases List.mem_append.mp hk with hk | hk
+    · exact ⟨Site.known_of_prefix hpre (ih hl k hk).1, Site.known_of_prefix hpre (ih hl k hk).2⟩
+    · exact he.2.1.2 k hk
+
+/-- **A valid log's links each join two different ends**: the entry check `kind` holds each new link to it. -/
+theorem Valid.ends_ne {l : Registration} (h : Valid D A c l) :
+    ∀ k ∈ (Site.ofLog l).links, k.ends.1 ≠ k.ends.2 := by
+  induction l using List.reverseRecOn with
+  | nil => simp
+  | append_singleton l e ih =>
+    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
+    cases e with
+    | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | site _ s => ?_
+    rw [Site.ofLog_concat, Entry.added]
+    intro k hk
+    rcases List.mem_append.mp hk with hk | hk
+    · exact ih hl k hk
+    · exact (he.2.2.1.2.1 k hk).1
+
 namespace Example
 
 open Site (Sheet Loc Link Tier outside)
@@ -263,80 +349,141 @@ def digests : Digests :=
   ⟨fun k => k.sku ++ "/" ++ toString k.bw ++ "/" ++ toString k.figures.clock.num ++ "/" ++
       toString (k.figures.peakRate .uniformS8).num, (·.previous ++ "+"), fun _ => "genesis"⟩
 
-/-- The auditor's data sheets for the two SKUs, a tenth's tolerance around their figures, and its certifier's and
-challenger's keys. -/
+/-- The scheme the example's keys are of. -/
+def lms : String := "lms-sha512/n64-w1-h20/v0"
+
+/-- The auditor's figures for the host `node0`: its on-chip state, its two cards, its DRAM's shared rate and its
+uplink. -/
+def node0Figures : Site.HostFigures :=
+  { chip := 2 ^ 28
+    cards := [("sim-int8-a", 1), ("sim-int8-b", 1)]
+    shared := [(.dram, 2 ^ 38)]
+    ways := [("uplink0", some 100000)] }
+
+/-- The auditor's data sheets for the two SKUs and a tenth's tolerance around their figures; the keys of its certifier,
+its challenger and its host `vm0`, each of the scheme `lms`; its figures for the host `node0` and for its DRAM and disk
+leaves; its figures for a host `node1` and its DRAM, which a later entry registers; and `vm0`'s time base and its
+clock's drift, one part in two thousand. -/
 def auditor : Auditor :=
-  ⟨fun s => [sheetA, sheetB].find? (·.sku == s), ⟨1 / 10⟩, fun i => if i = "cert0" then some "key0" else
-    if i = "chal0" then some "" else none⟩
+  { sheet := fun s => [sheetA, sheetB].find? (·.sku == s)
+    tolerance := ⟨1 / 10⟩
+    key := fun i => if i = "cert0" then some "key0" else if i = "chal0" then some "" else
+      if i = "vm0" then some "key1" else none
+    scheme := fun i => if i ∈ ["cert0", "chal0", "vm0"] then some lms else none
+    memory := [("dram0", ⟨"node0", 2 ^ 37, 512 * 2 ^ 30⟩), ("nvme0", ⟨"node0", 2 ^ 35, 2 ^ 40⟩),
+      ("dram1", ⟨"node1", 2 ^ 37, 1⟩)]
+    hosts := [("node0", node0Figures), ("node1", { chip := 2 ^ 28 })]
+    drift := [("vm0", 1 / 2000)]
+    timebases := [("vm0", "tb0")] }
 
 /-- A device under `parent` with sheet `k`. -/
 def device (id parent : String) (k : Sheet) : Loc :=
-  { id, kind := .device, parent := some parent, sheet := digests.sheet k }
+  { id, kind := .accelerator, parent := some parent, sheet := digests.sheet k }
 
-/-- A memory leaf of tier `t` under `parent`, holding `bytes`. -/
+/-- A memory leaf of tier `t` under the device `parent`, holding `bytes`. -/
 def memory (id parent : String) (t : Tier) (bytes : ℕ) : Loc :=
   { id, kind := .memory, parent := some parent, tier := some t, bytes }
 
-/-- One node with two devices, each with its HBM, and the node's DRAM and disk. -/
+/-- A memory leaf of tier `t` directly under the host `parent`, read at `bw` bits a second and holding `bytes`. -/
+def leaf (id parent : String) (t : Tier) (bw bytes : ℕ) : Loc :=
+  { memory id parent t bytes with bw := some bw }
+
+/-- A host under `site0` with `chip` bits of on-chip state. -/
+def host (id : String) (chip : ℕ) (shared : List (Tier × ℕ) := []) : Loc :=
+  { id, kind := .host, parent := some "site0", chip := some chip, shared }
+
+/-- One of the auditor's own under `parent`, with its key, of the scheme `lms`. -/
+def own (id : String) (kind : Site.Kind) (parent key : String) : Loc :=
+  { id, kind, parent := some parent, owner := .auditor, key, scheme := lms }
+
+/-- One node at a site whose unit of time is a millisecond, with two devices, each with its HBM, and the node's DRAM
+and disk. -/
 def node : List Loc :=
-  [{ id := "site0", kind := .site }, { id := "node0", kind := .host, parent := some "site0" },
+  [{ id := "site0", kind := .site, timeUnit := some (1 / 1000) }, host "node0" (2 ^ 28) [(.dram, 2 ^ 38)],
    device "gpu0" "node0" sheetA, memory "hbm0" "gpu0" .hbm (64 * 2 ^ 30),
    device "gpu1" "node0" sheetB, memory "hbm1" "gpu1" .hbm (128 * 2 ^ 30),
-   memory "dram0" "node0" .dram (512 * 2 ^ 30), memory "nvme0" "node0" .disk (2 ^ 40)]
+   leaf "dram0" "node0" .dram (2 ^ 37) (512 * 2 ^ 30), leaf "nvme0" "node0" .disk (2 ^ 35) (2 ^ 40)]
+
+/-- A link between two ends at `β` bits a second. -/
+def link (id : String) (ends : String × String) (β latency : ℕ) : Link := { id, ends, β := some β, latency }
 
 /-- The onsite site's first entry: the node, its uplink split by a certifier, and a memory challenger linked to it. -/
 def onsite : Entry := .site "genesis"
   { sheets := [sheetA, sheetB]
-    locs := node ++
-      [{ id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key := "key0" },
-       { id := "chal0", kind := .challenger, parent := some "site0", owner := .auditor }]
-    links := [⟨"uplink0", ("node0", "cert0"), 100000, 100000⟩, ⟨"uplink0-out", ("cert0", outside), 100000, 0⟩,
-      ⟨"chal0-link", ("chal0", "node0"), 100000, 1000000⟩] }
+    locs := node ++ [own "cert0" .certifier "site0" "key0", own "chal0" .challenger "site0" ""]
+    links := [link "uplink0" ("node0", "cert0") 100000 100000, link "uplink0-out" ("cert0", outside) 100000 0,
+      link "chal0-link" ("chal0", "node0") 100000 1000000] }
 
 /-- The remote site's first entry: the node and its uplink, which no certifier splits. -/
 def remote : Entry := .site "genesis"
   { sheets := [sheetA, sheetB]
     locs := node
-    links := [⟨"uplink0", ("node0", outside), 100000, 100000⟩] }
+    links := [link "uplink0" ("node0", outside) 100000 100000] }
 
 /-- A site entry following the first, or `previous`. -/
 def next (locs : List Loc) (links : List Link := []) (sheets : List Sheet := []) (previous := "genesis+") : Entry :=
   .site previous ⟨sheets, locs, links⟩
 
+/-- The auditor's device `vm0`, at the site, with its time base and its clock's drift. -/
+def vm0 : Loc := { own "vm0" .auditorHost "site0" "key1" with timebase := some "tb0", drift := some (1 / 2000) }
+
 /-- A later entry for each check, with the refusal it samples on the onsite site. -/
 def later : List (Entry × Option Refusal) :=
-  [(next [device "gpu2" "node0" sheetB, memory "hbm2" "gpu2" .hbm (128 * 2 ^ 30),
-      memory "nvme1" "node0" .disk (2 ^ 40)], none),
+  [(next [device "gpu2" "node0" sheetB, memory "hbm2" "gpu2" .hbm (128 * 2 ^ 30)], none),
    (next [device "gpu2" "node0" sheetB] (previous := "genesis"), some .previous),
    (next [device "gpu0" "node0" sheetA], some .duplicateId),
    (next [memory "hbm9" "gpu9" .hbm 1], some .unknownRef),
    (next [device "gpu9" "site0" sheetA], some .kind),
-   (next [] [⟨"l9", ("node0", "node0"), 1, 1⟩], some .kind),
+   (next [] [link "l9" ("node0", "node0") 1 1], some .kind),
+   (next [{ vm0 with parent := some "node0" }], some .kind),
+   (next [] [{ id := "u9", ends := ("node0", outside), β := none, latency := 1 }], some .kind),
+   (next [] [{ id := "u9", ends := ("node0", outside), β := none, latency := 1, unmediated := some "no line rate" }],
+     none),
    (next [] [] [{ sheetA with figures := stated "sim-int8-z" 1000 64000 }], some .sheetDigest),
    (next [] [] [{ sheetA with figures := stated "sim-int8-a" 1050 60000 }], none),
    (next [] [] [{ sheetA with figures := stated "sim-int8-a" 1200 64000 }], some .figures),
    (next [] [] [{ sheetA with figures := stated "sim-int8-a" 1000 0 }], some .figures),
    (next [] [] [{ sheetA with bw := 3201 }], some .figures),
+   (next [leaf "dram9" "node0" .dram (2 ^ 37) 1], some .figures),
+   (next [host "node9" (2 ^ 28)], some .figures),
+   (next [{ id := "site1", kind := .site, timeUnit := some 1 }], some .figures),
    (next [{ device "gpu9" "node0" sheetA with sheet := "00" }], some .sheetDigest),
    (next [device "gpu9" "node0" sheetA, memory "hbm9" "gpu9" .hbm (64 * 2 ^ 30 + 1)], some .capacity),
-   (next [memory "dram9" "node0" .dram 0], some .capacity),
-   (next [{ id := "cert9", kind := .certifier, parent := some "site0", owner := .auditor, key := "00" }]
-      [⟨"u9", ("node0", "cert9"), 1, 1⟩, ⟨"u9-out", ("cert9", outside), 1, 0⟩], some .owner),
-   (next [{ id := "node9", kind := .host, parent := some "site0", owner := .auditor }], some .owner),
-   (next [] [⟨"u9", ("node0", outside), 1, 1⟩], some .uncertified),
-   (next [{ id := "node1", kind := .host, parent := some "site0" }, memory "dram1" "node1" .dram 1]
-      [⟨"n01", ("node0", "node1"), 1, 1⟩], some .challengerReach)]
+   (next [device "gpu9" "node0" sheetA, memory "hbm9" "gpu9" .hbm 0], some .capacity),
+   (next [own "cert9" .certifier "site0" "00"]
+      [link "u9" ("node0", "cert9") 1 1, link "u9-out" ("cert9", outside) 1 0], some .owner),
+   (next [{ device "gpu9" "node0" sheetA with owner := .auditor }], some .owner),
+   (next [vm0], none),
+   (next [{ vm0 with timebase := some "tb1" }], some .owner),
+   (next [{ vm0 with drift := none }], some .owner),
+   (next [] [link "u9" ("node0", outside) 1 1], some .uncertified),
+   (next [host "node1" (2 ^ 28), leaf "dram1" "node1" .dram (2 ^ 37) 1] [link "n01" ("node0", "node1") 1 1],
+     some .challengerReach)]
 
 theorem onsite_valid : Valid digests auditor .onsite [onsite] := by decide +kernel
 
 theorem remote_valid : Valid digests auditor .remote [remote] := by decide +kernel
 
-/-- gpu0's device model, read off the onsite Site at a tick of a millisecond: its sheet's 64000 MACs a second are 64 a
-tick, and its memory figures are its sheet's, its device memory in bits. -/
+/-- The remote site's first entry without the node's disk leaf, which the auditor has figures for. -/
+def short : Entry := .site "genesis"
+  { sheets := [sheetA, sheetB]
+    locs := node.dropLast
+    links := [link "uplink0" ("node0", outside) 100000 100000] }
+
+/-- Both sites are complete against the auditor's figures: `node0`'s two leaves, its two cards and its uplink are
+registered. Without its disk leaf the remote site is not. -/
+theorem complete :
+    Complete digests auditor (Site.ofLog [onsite]) ∧ Complete digests auditor (Site.ofLog [remote]) ∧
+      ¬Complete digests auditor (Site.ofLog [short]) := by
+  decide +kernel
+
+/-- gpu0's device model, read off the onsite Site at its unit of time, a millisecond: its sheet's 64000 MACs a second
+are 64 a tick and its 3200 bits a second from device memory 4 a tick, each rounded up, and its memory figures are its
+sheet's, its device memory in bits. -/
 theorem gpu0_device :
-    ((Site.ofLog [onsite]).device digests.sheet auditor (device "gpu0" "node0" sheetA) (1 / 1000) 0 0
+    ((Site.ofLog [onsite]).device digests.sheet auditor (device "gpu0" "node0" sheetA) 0 0
       (fun _ : Unit => 0)).map (fun d => (d.rate .tc, d.bw, d.chip, d.mem)) =
-      some (64, 3200, 2 ^ 25, 8 * (64 * 2 ^ 30)) := by
+      some (64, 4, 2 ^ 25, 8 * (64 * 2 ^ 30)) := by
   decide +kernel
 
 /-- Each check refuses its case on the onsite site, by its name. -/
@@ -352,22 +499,21 @@ theorem remote_refusals :
       later.map (fun x => if x.2 = some .uncertified ∨ x.2 = some .challengerReach then none else x.2) := by
   decide +kernel
 
-/-- Day 0's circuit: a program and its one block Definition. -/
-def day0 : Declared := ⟨0, "program0", ["block0"]⟩
+/-- Day 0's circuit: its program. -/
+def day0 : Declared := ⟨0, "program0"⟩
 
 /-- The onsite site, then its declaration of day 0. -/
 def declaredLog : Registration := [onsite, .declaration "genesis+" day0]
 
-/-- The onsite site with day 0 declared is valid, and day 0's declared circuit is `day0`, a nonempty one. -/
-theorem declaredLog_valid : Valid digests auditor .onsite declaredLog ∧ declared declaredLog 0 = some day0 ∧
-    day0.blocks ≠ [] := by
-  refine ⟨by decide +kernel, rfl, by simp [day0]⟩
+/-- The onsite site with day 0 declared is valid, and day 0's registered circuit is `day0`. -/
+theorem declaredLog_valid : Valid digests auditor .onsite declaredLog ∧ declared declaredLog 0 = some day0 :=
+  ⟨by decide +kernel, rfl⟩
 
 /-- A second declaration of day 0 is refused, by `duplicateDeclaration`, and a declaration of day 1 is not; a
 declaration that follows no head is refused by `previous` first. -/
 theorem declaration_refusals :
-    [Entry.declaration "genesis++" ⟨0, "program1", ["block0"]⟩, .declaration "genesis++" ⟨1, "program1", ["block1"]⟩,
-      .declaration "genesis+" ⟨0, "program1", ["block0"]⟩].map (refusal digests auditor .onsite declaredLog) =
+    [Entry.declaration "genesis++" ⟨0, "program1"⟩, .declaration "genesis++" ⟨1, "program1"⟩,
+      .declaration "genesis+" ⟨0, "program1"⟩].map (refusal digests auditor .onsite declaredLog) =
       [some .duplicateDeclaration, none, some .previous] := by
   decide +kernel
 

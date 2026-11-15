@@ -24,10 +24,10 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.protocols.accounting.certifier.verifier import advice as ADV, head_check as HC, io_request as Q, service as SVC, \
     tie_service as TS, warden as W, warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
 
 import standin
 
@@ -137,7 +137,7 @@ def test_an_honest_link_is_tied(tmp_path):
 
 
 def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_path):
-    """C-Flock's Lean verifier rejects every session of a statement with a port its `--registered` file doesn't name
+    """Flock's Lean verifier rejects every session of a statement with a port its `--registered` file doesn't name
     (`Registered.checkComplete`), which the stand-in mirrors: the verifier's own file names ``wit`` at the warden's
     root and ``pub`` and ``o0`` at known content, its own lanes of each bucket and the output word 1 under public
     salts, so an honest window's proof is proved and accepted, where a file naming ``wit`` alone rejects it at

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.KS.PlainWrP
 public import Proofs.Flock.Claims.KS.ZkAccJ
-public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkSampleJ
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,13 +39,13 @@ import Proofs.Flock.Claims.DeployTables
 /-!
 # The deployed `--zk` decoders at the masked statement
 
-`ZkLiveAccAtJ`'s decoders (`hdec`) at the deployed statement, from `ZkPlanJ`, `ZkPlanHJ` and `ZkDrawJ`: where the
+`ZkLiveAccAtJ`'s decoders (`hdec`) at the deployed statement, from `ZkPlanJ`, `ZkPlanHJ` and `ZkSampleJ`: where the
 statement parses in scope and `Deploy.V` sets it up at a sample, the old `--zk` openings and decoder, at public or hidden
 outputs, are right at Flock ZK's padded tables (`zkTabs`) on the outcomes `verify --zk` accepts at the setup at that
 sample at `wrS`.
 
-* `acc_draw_of_setup`: wherever some run accepts, the statement carries a sample at the inputs `Deploy.V` reads of it
-  (`acc_draw`, the checks refusing a session without one).
+* `acc_sample_of_setup`: wherever some run accepts, the statement carries a sample at the inputs `Deploy.V` reads of it
+  (`acc_sample`, the checks refusing a session without one).
 * `setupAt_of_setupOf`: `Deploy.V`'s setup of the statement is `verify --zk`'s at its sample (`setupAt`), with no
   `--public-inputs` (`InScope` refuses them, `publicInputs_none_of_inScope`).
 * `tags_of_inScope`: the scope gives `verify --zk`'s inputs untyped tags with retained rounds and `hm96-sha512/v1`
@@ -69,21 +69,21 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A statement some run accepts carries a sample**, at the inputs `Deploy.V` reads of it (`acc_draw`). -/
-theorem acc_draw_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
+/-- **A statement some run accepts carries a sample**, at the inputs `Deploy.V` reads of it (`acc_sample`). -/
+theorem acc_sample_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts)) :
     ∃ d, ins.read.draw = some d := by
-  obtain ⟨ins', spec', sts', d, hset', hd⟩ := acc_draw hacc
+  obtain ⟨ins', spec', sts', d, hset', hd⟩ := acc_sample hacc
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj (hset'.symm.trans hset))
   exact ⟨d, hd⟩
 
 end Gen
 
-/-- **A statement some run accepts carries a sample**, at the inputs `Deploy.V` reads of it (`acc_draw`). -/
-theorem acc_draw_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
+/-- **A statement some run accepts carries a sample**, at the inputs `Deploy.V` reads of it (`acc_sample`). -/
+theorem acc_sample_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts)) :
     ∃ d, ins.read.draw = some d :=
-  Gen.acc_draw_of_setup (S := S₀) (zk := zk) (x := x) (hacc := hacc) (ins := ins) (spec := spec) (sts := sts)
+  Gen.acc_sample_of_setup (S := S₀) (zk := zk) (x := x) (hacc := hacc) (ins := ins) (spec := spec) (sts := sts)
     (hset := hset)
 
 namespace Gen
@@ -161,7 +161,7 @@ theorem decodesTable_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {d : Lean.Json} (hd : ins.read.draw = some d)

@@ -8,7 +8,7 @@ public import Definitions.Core.Digest
 # The advice root, with every string it hashes
 
 The advice the developer reports, the registered compiler's input (`Verity.Compiler`), is committed under a hidden root
-(`verity.ml.commitments.advice`, which partition v2, `verity.ml.circuits.partition_v2`, uses): the advice's rows, each
+(`verity.commitments.advice`, which partition v2, `verity.circuits.partition_v2`, uses): the advice's rows, each
 under a salt of the prover's choosing in an `hm96-sha512/row/v2` leaf, in one `frame-v3-sha512` tree. The commitment
 commits the advice, never a partition chosen beside it: the partition is the compiler's output on the advice (partition
 v2's rows are its Call and cut tables, from which the compiler reads each gate's proof block). This module models that root with each hash it takes, so that

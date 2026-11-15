@@ -1,0 +1,58 @@
+# The kernels' benchmarks' move: what `tools/move/layout.py --map tools/move/kernels_bench_map.toml` moves and rewrites.
+#
+# The exact W8A8 linear (`benchmarks/torch_gpu/s8_linear/`), the exact-linear kernels' gates and benches
+# (`benchmarks/hash/exactlin/`), the four files every kernel job ships with (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`,
+# `ship_probe.sh`) and the job that builds a library off the card (`job_nvcc.sh`) go into one directory,
+# `benchmarks/kernels/`.
+#
+# - Both directories move whole and laid out as they were; the five files keep their names.
+# - What changes is each path to them and each module name under them.
+# - No Lean module, lakefile or manifest names them.
+# - No directory is split, so the map has no [split] table and reads the same on any base.
+# Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+[paths]
+"benchmarks/torch_gpu/s8_linear/" = "benchmarks/kernels/s8_linear/"
+"benchmarks/hash/exactlin/" = "benchmarks/kernels/exactlin/"
+"benchmarks/torch_gpu/ship.sh" = "benchmarks/kernels/ship.sh"
+"benchmarks/torch_gpu/ship_clock.c" = "benchmarks/kernels/ship_clock.c"
+"benchmarks/torch_gpu/ship_nvcc.sh" = "benchmarks/kernels/ship_nvcc.sh"
+"benchmarks/torch_gpu/ship_probe.sh" = "benchmarks/kernels/ship_probe.sh"
+"benchmarks/torch_gpu/job_nvcc.sh" = "benchmarks/kernels/job_nvcc.sh"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row, and each row is a
+# directory's, so a file only a branch has under it is carried
+paths = ["benchmarks/torch_gpu/s8_linear/", "benchmarks/hash/exactlin/"]
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json",
+           "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "archive/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "benchmarks/network_e2e/tests/data/**",
+           "adapters/vllm/manifests/**", "adapters/vllm/workloads/**", "adapters/vllm/data/**",
+           "adapters/vllm/verity_vllm/pins/**", "adapters/vllm/tools/migrate/superseded_quarantine.py", "adapters/vllm/tests/migrate/test_superseded_quarantine.py",
+           "**/*.lean", "tests/tree.toml", "**/*.cu",
+           "**/*.cuh", "**/*.cpp", "**/*.h",
+           "**/*.c"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md",
+           "**/lake-manifest.json", "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean", "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json", "verity/protocols/flock/prover/tests/fixtures/inner_claims.json", "verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_two_lean.json", "verity/protocols/spot/verifier/tests/fixtures/history_read_vector.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/pouw/verifier/tests/vectors/pearl_c_u.json", "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c_u.json"]
+root_prefixes = ["/opt/vy-verifier/current/"]
+
+[modules]
+"benchmarks.hash.exactlin" = "benchmarks.kernels.exactlin"
+"benchmarks.torch_gpu.s8_linear" = "benchmarks.kernels.s8_linear"

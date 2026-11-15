@@ -7,7 +7,7 @@
 OOM guard.  The kernel's OOM killer picks by size alone and can take the lease loop (which stops the VM on time), sshd sessions or
 the samplers.  When MemAvailable falls under ACT_PCT of MemTotal, the guard stops the largest process group of this user by
 resident memory, outside PROTECT: SIGTERM, then SIGKILL after 10 s.  Under WARN_PCT it only alerts.  Every OOM kill anywhere
-(/proc/vmstat oom_kill, including a gpu-lease job killed at its own cgroup cap) is an alert, with the user journal's line naming
+(/proc/vmstat oom_kill, including a gpu-lease job killed at its own cgroup limit) is an alert, with the user journal's line naming
 the unit.
 
 Page: OUT/status.md, with who holds which GPU (gpu-lease status), the GPUs' latest sample (gpu_util_sampler's JSONL, so no NVML
@@ -172,10 +172,10 @@ BUILD = {"lake", "lean", "leanc", "cargo", "rustc", "cc1", "cc1plus", "ld", "ld.
 QUIET_MATCH = re.compile(os.environ["QUIET_MATCH"]) if os.environ.get("QUIET_MATCH") else None
 # a train check (slot.py's group, check.py under it) runs straight through a timed window, so landing never waits on one: a
 # --timed lease would otherwise freeze a train's check for the whole window
-QUIET_EXEMPT = re.compile(r"-m research |research launch-request|/workspace/pouw/fill/running/|timeout |tools/verity/check/(check|slot)\.py")
+QUIET_EXEMPT = re.compile(r"-m research |research launch-request|/workspace/pouw/fill/running/|timeout |tools/check/(check|slot)\.py")
 # of those, the ones whose descendants in groups of their own (ninja's compiles, a check's subprocesses) are spared too; a research
 # runner's are not, since every run's workload descends from one
-QUIET_EXEMPT_TREE = re.compile(r"/workspace/pouw/fill/running/|timeout |tools/verity/check/(check|slot)\.py")
+QUIET_EXEMPT_TREE = re.compile(r"/workspace/pouw/fill/running/|timeout |tools/check/(check|slot)\.py")
 # `research run`'s per-run sampler polls nvidia-smi every 5 s for the whole life of a run, the timed run's own included,
 # so every one is paused for a window whatever its CPU use (the pous root, 17:19Z); its run records the gap.
 SAMPLER = re.compile(r"-m research\.telemetry sample ")

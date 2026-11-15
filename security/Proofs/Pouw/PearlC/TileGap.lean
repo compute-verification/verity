@@ -33,7 +33,7 @@ namespace Pouw.PearlC
 open Finset Assumptions Pouw.Fp8Atom
 
 theorem goodTiles_subset {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R)
-    (s : S) (τ : Transcript) : goodTiles P TR U H s τ ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U τ := by
+    (s : S) (τ : Trace) : goodTiles P TR U H s τ ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U τ := by
   classical
   intro g hg
   unfold goodTiles at hg
@@ -50,7 +50,7 @@ oracle and salt, a set `good` of committed tiles of `τ` on which `Wcred ≤ Ω�
 with probability at most `e`, then the audit that accepts `good ∪ blank` does so while `T` is below `1 − γ` of the
 claimed work less `ε_s` of the layout's, `γ = 1 − (1 − γ₀)/Ω`, with probability at most `(1 − ε_s)^t + e`. -/
 theorem sampledOfGood {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (TR : TileRules Q R S)
-    (U : Workload) (τ : (Q → R) → S → Transcript) (good : (Q → R) → S → Finset ℕ) (γ₀ Ω T e : ℝ) (hγ₀ : γ₀ < 1)
+    (U : Workload) (τ : (Q → R) → S → Trace) (good : (Q → R) → S → Finset ℕ) (γ₀ Ω T e : ℝ) (hγ₀ : γ₀ < 1)
     (hΩ : 0 < Ω) (hsub : ∀ H s, good H s ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U (τ H s))
     (hW : ∀ H s, ∀ g ∈ good H s, TR.Wcred U.layout g (actOf (τ H s) ((TR.tiling U.layout).unit g)) ≤
       Ω * TR.credit H s U g (actOf (τ H s) ((TR.tiling U.layout).unit g)))
@@ -141,20 +141,20 @@ theorem gapSampled {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
     (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (g₀ Ω : ℝ) (δ : ℕ → ℕ → ℝ) (hg₀ : g₀ < 1)
     (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
-      TR.capOK H s U g act → TR.Wcred U.layout g act ≤ Ω * TR.credit H s U g act)
+      TR.inertBoundOK H s U g act → TR.Wcred U.layout g act ≤ Ω * TR.credit H s U g act)
     (hWc : ∀ U : Workload, U.InDomain P D → ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
       TR.Wcred U.layout g act ≤ TR.Wref U.layout g)
     (hTT : TTOutTile CM P TR D g₀ δ) : GGapSampled CM P TR D (1 - (1 - g₀) / Ω) δ := by
   intro U hU T hT q hq A hA w κ hκ hw t εs hεs
   classical
-  refine sampledOfGood TR U (fun H s => A.transcript U H s) (fun H s => goodTiles P TR U H s (A.transcript U H s))
+  refine sampledOfGood TR U (fun H s => A.trace U H s) (fun H s => goodTiles P TR U H s (A.trace U H s))
     g₀ Ω T (δ q U.layout.N) hg₀ hΩ (fun H s => goodTiles_subset P TR U H s _) ?_ (hWc U hU)
     (hTT.2 U hU T hT q hq A hA) w κ hκ hw t εs hεs
   intro H s g hg
   unfold goodTiles at hg
   rw [mem_filter] at hg
   obtain ⟨hgr, c, hc, hgc⟩ := hg
-  have hact : actOf (A.transcript U H s) ((TR.tiling U.layout).unit g) = c.act := by simp [actOf, hc]
+  have hact : actOf (A.trace U H s) ((TR.tiling U.layout).unit g) = c.act := by simp [actOf, hc]
   rw [hact]
   exact hW U hU H s g (mem_range.mp hgr) c.act hgc.1
 
@@ -180,7 +180,7 @@ theorem auditTiling_unit_lt (tm tn : ℕ) (L : Layout) {g : ℕ} (hg : g < (audi
 theorem pearlCTiles_wref {Q R S : Type} (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (sh : Shape) (ω : ℚ)
     (hω : wrefOf Params.pi c sh = ω * ((1 - ρ) * creditOf Params.pi c sh)) :
     ∀ U : Workload, U.InDomain (pearlCProtocol sem c ρ) (pearlCDomainAt Params.pi sh) → ∀ (H : Q → R) (s : S),
-      ∀ g < ((pearlCTiles sem c ρ).tiling U.layout).NT, ∀ act : Codes, (pearlCTiles sem c ρ).capOK H s U g act →
+      ∀ g < ((pearlCTiles sem c ρ).tiling U.layout).NT, ∀ act : Codes, (pearlCTiles sem c ρ).inertBoundOK H s U g act →
         (pearlCTiles sem c ρ).Wcred U.layout g act ≤ (ω : ℝ) * (pearlCTiles sem c ρ).credit H s U g act := by
   intro U hU H s g hg act _
   have hu := auditTiling_unit_lt 64 64 U.layout hg
@@ -331,7 +331,7 @@ activations it is given (each at least 0), `false` commits nothing. -/
 noncomputable def witnessTileCM (P : Protocol Unit Unit Unit) (TR : TileRules Unit Unit Unit) :
     CostModel Unit Unit Unit where
   Prog := Bool
-  run := fun b H U act _ s => if b then honestTranscript P H s U act else fun _ => none
+  run := fun b H U act _ s => if b then honestTrace P H s U act else fun _ => none
   cost := fun b H U act _ s => if b then
     ∑ g ∈ range (TR.tiling U.layout).NT, max (TR.credit H s U g (act ((TR.tiling U.layout).unit g))) 0 else 0
   calls := fun _ _ _ _ _ _ => 0
@@ -365,7 +365,7 @@ theorem witnessTile_sum_le (P : Protocol Unit Unit Unit) (TR : TileRules Unit Un
       obtain ⟨_, c, hc, _⟩ := hg
       have hu : (TR.tiling U.layout).unit g < U.layout.N := by
         by_contra h
-        simp [witnessTileCM, honestTranscript, h] at hc
+        simp [witnessTileCM, honestTrace, h] at hc
       simp only [witnessTileCM, ↓reduceIte]
       rw [actOf_honest P H s U act hu]
     rw [sum_congr rfl heq]
@@ -388,9 +388,9 @@ theorem witness_gridTiles : gridTiles 64 64 witnessWorkload.layout = [(0, 0, 0)]
 open Classical in
 /-- The witness tile's debit is zero: no atom of its word is flagged, no element is salt-dead, and its word needs every
 element. -/
-theorem witness_tileDebit_zero (H : Unit → Unit) (s : Unit) :
-    witnessSem.tileDebit Costs.adopted H s witnessWorkload 0 (Ico 0 1) (Ico 0 1) (witnessAct 0) = 0 := by
-  unfold PearlCSem.tileDebit
+theorem witness_tileInertWork_zero (H : Unit → Unit) (s : Unit) :
+    witnessSem.tileInertWork Costs.adopted H s witnessWorkload 0 (Ico 0 1) (Ico 0 1) (witnessAct 0) = 0 := by
+  unfold PearlCSem.tileInertWork
   dsimp only
   have ha : ∑ e ∈ (univ : Finset (Fin (witnessWorkload.layout.shape 0).m × Fin (witnessWorkload.layout.shape 0).n)).filter
       (fun e => (e.1 : ℕ) ∈ Ico 0 1 ∧ (e.2 : ℕ) ∈ Ico 0 1),
@@ -422,7 +422,7 @@ theorem witness_tileDebit_zero (H : Unit → Unit) (s : Unit) :
     rw [witness_unitFlags H s e.1 _ _ hl] at h0
     exact Bool.false_ne_true h0
   rw [ha, he]
-  simp [debitOf]
+  simp [inertWorkOf]
 
 theorem PearlCSem.rowOK_of_operandOK {Q R S : Type} (sem : PearlCSem Q R S) {p q : ℕ} {W : Codes}
     (h : sem.OperandOK p q W) {i : ℕ} (hi : i < p) : sem.RowOK p q W i :=
@@ -447,7 +447,7 @@ theorem ttOutTilePearlCWitness :
         (pearlCTiles witnessSem Costs.adopted (1 / 400))) witnessSem Costs.adopted (1 / 400) ∧
     witnessWorkload.InDomain (pearlCProtocol witnessSem Costs.adopted (1 / 400)) (pearlCDomain Params.pi) ∧
     witnessWorkload.FixedOK (pearlCProtocol witnessSem Costs.adopted (1 / 400)) ∧
-    (pearlCTiles witnessSem Costs.adopted (1 / 400)).capOK (fun _ => ()) () witnessWorkload 0 (witnessAct 0) ∧
+    (pearlCTiles witnessSem Costs.adopted (1 / 400)).inertBoundOK (fun _ => ()) () witnessWorkload 0 (witnessAct 0) ∧
     0 < ∑ g ∈ range ((pearlCTiles witnessSem Costs.adopted (1 / 400)).tiling witnessWorkload.layout).NT,
       (pearlCTiles witnessSem Costs.adopted (1 / 400)).credit (fun _ => ()) () witnessWorkload g (witnessAct 0) := by
   set P := pearlCProtocol witnessSem Costs.adopted (1 / 400)
@@ -496,7 +496,7 @@ theorem ttOutTilePearlCWitness :
       have hT' : T ≤ T / (1 - 1 / 400) := by
         rw [le_div_iff₀ (by norm_num)]
         nlinarith
-      unfold Adversary.transcript at hx
+      unfold Adversary.trace at hx
       linarith
   · have hu : (TR.tiling witnessWorkload.layout).unit 0 = 0 := by
       show ((gridTiles 64 64 witnessWorkload.layout).getD 0 (0, 0, 0)).1 = 0
@@ -511,14 +511,14 @@ theorem ttOutTilePearlCWitness :
         (min ((((gridTiles 64 64 witnessWorkload.layout).getD 0 (0, 0, 0)).2.2 + 1) * 64)
           (witnessWorkload.layout.shape ((gridTiles 64 64 witnessWorkload.layout).getD 0 (0, 0, 0)).1).n) = Ico 0 1
       rw [witness_gridTiles]; rfl
-    show witnessSem.tileDebit Costs.adopted (fun _ => ()) () witnessWorkload ((TR.tiling witnessWorkload.layout).unit 0)
+    show witnessSem.tileInertWork Costs.adopted (fun _ => ()) () witnessWorkload ((TR.tiling witnessWorkload.layout).unit 0)
         (witnessSem.passRows (witnessWorkload.layout.shape ((TR.tiling witnessWorkload.layout).unit 0)) (witnessAct 0)
           ((TR.tiling witnessWorkload.layout).rows 0)) ((TR.tiling witnessWorkload.layout).cols 0) (witnessAct 0) ≤
       1 / 400 * creditOf Params.pi Costs.adopted (witnessWorkload.layout.shape ((TR.tiling witnessWorkload.layout).unit 0)) *
         tileShare (witnessWorkload.layout.shape ((TR.tiling witnessWorkload.layout).unit 0))
           (witnessSem.passRows (witnessWorkload.layout.shape ((TR.tiling witnessWorkload.layout).unit 0)) (witnessAct 0)
             ((TR.tiling witnessWorkload.layout).rows 0)) ((TR.tiling witnessWorkload.layout).cols 0)
-    rw [hu, hr, hc, witness_passRows, witness_tileDebit_zero]
+    rw [hu, hr, hc, witness_passRows, witness_tileInertWork_zero]
     have h2 := creditOf_nonneg Costs.adopted (witnessWorkload.layout.shape 0)
     have h3 := tileShare_nonneg (witnessWorkload.layout.shape 0) (Ico 0 1) (Ico 0 1)
     positivity

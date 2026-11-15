@@ -1,7 +1,7 @@
 """Core's `IntegrityProfile` counts what the Lean audit theorem bounds.
 
-`Audit/OneStage.lean`'s `audit_count` bounds Pr[accept and at least K incorrect proof blocks] by `L.miss K + εks + δlink`, and for
-the uniform k-subset `Law.subset_miss` makes the sampling term C(n - K, k)/C(n, k). The profile's `accept(K)` for one
+`Audit/OneStage.lean`'s `audit_count` bounds Pr[accept and at least K incorrect proof blocks] by `L.miss K + εks + εbind`, and for
+the uniform k-subset `SamplingDesign.subset_miss` makes the sampling term C(n - K, k)/C(n, k). The profile's `accept(K)` for one
 level sampled `Subset(k)` must be that ratio, and its incorrect-block bound the largest count the curve does not exclude at
 delta. This pins both statements' text, so a change on either side fails here."""
 from __future__ import annotations
@@ -17,17 +17,17 @@ from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subs
 
 AUDIT = Path(__file__).resolve().parents[6] / "security" / "Proofs" / "Flock" / "Soundness" / "Audit"
 SUBSET_MISS = "(subset n k hk).miss K = ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞)"
-AUDIT_COUNT = "L.miss K + εks + δlink"
+AUDIT_COUNT = "L.miss K + εks + εbind"
 
 #: The one-stage audits: n units, k sampled, delta, the most incorrect proof blocks admitted.
 RUNS = [(1024, 16, 0.01, 254), (1024, 256, 2.0 ** -20, 46), (344, 128, 2.0 ** -20, 28), (183_680, 256, 2.0 ** -20, 9675)]
 
 
-@pytest.mark.skipif(not (AUDIT / "Law.lean").exists(), reason="the audit layer's Lean is not on this branch")
+@pytest.mark.skipif(not (AUDIT / "SamplingDesign.lean").exists(), reason="the audit layer's Lean is not on this branch")
 def test_the_lean_statements_are_the_ones_the_profile_computes():
-    law = (AUDIT / "Law.lean").read_text()
+    sampling_design = (AUDIT / "SamplingDesign.lean").read_text()
     one_stage = (AUDIT / "OneStage.lean").read_text()
-    assert "theorem subset_miss" in law and SUBSET_MISS in law
+    assert "theorem subset_miss" in sampling_design and SUBSET_MISS in sampling_design
     assert "theorem audit_count" in one_stage and AUDIT_COUNT in one_stage
 
 
@@ -35,7 +35,7 @@ def test_the_lean_statements_are_the_ones_the_profile_computes():
 def test_the_profile_is_the_lean_count_curve(n, k, delta, at_most):
     profile = IntegrityProfile((Level("unit"),), (n,), {"unit": Subset(k)}, delta)
     top, d = comb(n, k), Fraction(delta)
-    miss = lambda K: Fraction(comb(n - K, k), top)  # noqa: E731  Law.subset_miss, as stated
+    miss = lambda K: Fraction(comb(n - K, k), top)  # noqa: E731  SamplingDesign.subset_miss, as stated
     assert all(profile.accept(K) == miss(K) for K in (0, 1, at_most, at_most + 1, n - k, n))
     assert miss(at_most) >= d > miss(at_most + 1)
     assert int(profile.worst_case(lambda m: m)) == at_most
