@@ -4,7 +4,8 @@
 A sampled proof block at K is proved on K's template, `h1window.template(K, h1window.tile_unit(K, TILE))` (its unit in
 `weights.chunks` (K) chunks past `weights.CHUNK_MAX`, `h1window._chunked`, as the Program declares it), one of the declared
 Program's ``TILES``. It is lowered by Flock's `class_statement.UnitStager`, as ``benchmarks/pouw/h1_prove/stage.py``
-lowers it (`h1unit.Shape.stager`, under ``HZ_STAGE``, ``fast`` by default), and bound to the window's Program and
+lowers it (H1's lowering, `prover.lowering.h1unit`'s `Shape.stager`: the flat statement, staged by Flock's library), and
+bound to the window's Program and
 partition: ``{"program": its program_digest, "partition": the digest of its Q_template_instances partition object}``,
 its templates by ascending K, the object core's credit verifies a statement under (`credit.partition_of`). The file's
 SHA-512 is what the period-open commits for ``k<K>``, and core's credit refuses a statement whose circuit file hashes
@@ -15,7 +16,8 @@ its rows named as credit's ``--registered`` file reads them, its public row with
 
 With ``--live T,S`` the manifest's ``files`` also holds ``live``: the SHA-512 of the circuit file of the window's live
 Program's template, `live.template_v2(T)` bound to `live.program_v2(T, S, PREFIX)` (PREFIX the declared Program's,
-`credit._prefix`) and its `live.query_v2` partition, lowered as ``h1_prove/live.py`` lowers it (`live_stager`), which is
+`credit._prefix`) and its `live.query_v2` partition, lowered as ``h1_prove/live.py`` lowers it (`prover.lowering.live`'s
+`live_stager`), which is
 what core's credit verifies each round's ``live@<s>`` on (``circuit_files["live"]``). T is the period's rows and S the
 window's rounds. Past T = `live.PIECE_ROWS` it is the piece's, `live.template_rows(T, PIECE_ROWS)` bound to
 `live.program_rows` (a V3 prefill round at T 8,192 is 128 pieces of 64 rows). It takes seconds.
@@ -41,20 +43,17 @@ rest:
 from __future__ import annotations
 
 import argparse
-import functools
 import gzip
 import hashlib
-import importlib.util
 import json
-import os
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-H1_PROVE = HERE.parents[3] / "benchmarks" / "pouw" / "h1_prove"
 #: the statement's name, `h1_prove/stage.py`'s
 NAME = "unit/pouw-h1-tile"
 MANIFEST = "circuit-files.json"
@@ -123,48 +122,33 @@ def lower(k: int, tile: tuple[int, int], bind: dict, path: Path, j10r: bool = Fa
 
 
 def _lower(k: int, r: int, c: int, bind: dict, path: Path, j10r: bool = False) -> None:
-    """`h1_prove/stage.py`'s build of the statement's circuit, at R × C (J10-R's with `j10r`), bound to `bind`, written
-    to `path`."""
-    sys.path.insert(0, str(H1_PROVE))
-    sys.path.insert(0, str(H1_PROVE.parent / "hidden_zk"))
-    if os.environ.get("HZ_STAGE", "fast") == "fast":
-        import fast_stage
-        fast_stage.install(path.parent / f".scratch-k{k}")
-    import h1unit as U
+    """`h1_prove/stage.py`'s build of the statement's circuit (`h1unit.Shape.stager`, flat, staged by Flock's library),
+    at R × C (J10-R's with `j10r`), bound to `bind`, written to `path`."""
+    from verity.protocols.accounting.pouw.prover.lowering import h1unit as U
     U.Shape(k, r, c, j10r).stager(NAME, circuit=path, bind=bind)
 
 
-def _h1_live():
-    spec = importlib.util.spec_from_file_location("h1_prove_live", H1_PROVE / "live.py")
-    assert spec is not None and spec.loader is not None, f"{H1_PROVE / 'live.py'} is no module"
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-@functools.cache
-def stagers():
-    """``h1_prove/stagers.py``: the stagers ``h1_prove/drawn.py`` hands drawn's ``stage`` (``recomposed``, ``file_stager``)."""
-    spec = importlib.util.spec_from_file_location("h1_prove_stagers", H1_PROVE / "stagers.py")
-    assert spec is not None and spec.loader is not None, f"{H1_PROVE / 'stagers.py'} is no module"
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def stagers() -> ModuleType:
+    """`prover.lowering.stagers`: the stagers ``h1_prove/drawn.py`` hands drawn's ``stage`` (``recomposed``,
+    ``file_stager``)."""
+    from verity.protocols.accounting.pouw.prover.lowering import stagers as S
+    return S
 
 
 def live_part(T: int, S: int, prefix: str) -> dict:
     """The partition object of the live Program a window of S rounds at T rows under `prefix` proves on: v2's, or past
-    `live.PIECE_ROWS` rows the pieced one (``h1_prove/live.py``'s `program_of`)."""
+    `live.PIECE_ROWS` rows the pieced one (`prover.lowering.live.program_of`)."""
+    from verity.protocols.accounting.pouw.prover.lowering import live as LV
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-    return P.partition(*_h1_live().program_of({"T": T, "S": S, "prefix": prefix}))
+    return P.partition(*LV.program_of({"T": T, "S": S, "prefix": prefix}))
 
 
 def lower_live(T: int, part: dict, path: Path) -> None:
-    """``h1_prove/live.py``'s lowering of the live template at T rows (a piece's past `live.PIECE_ROWS`), bound to `part`,
-    written to `path`."""
-    module = _h1_live()
-    r, p = module.form({"T": T})
-    module.live_stager(T, path, part, None if p == 1 else r)
+    """`prover.lowering.live`'s lowering of the live template at T rows (a piece's past `live.PIECE_ROWS`), bound to
+    `part`, written to `path`."""
+    from verity.protocols.accounting.pouw.prover.lowering import live as LV
+    r, p = LV.form({"T": T})
+    LV.live_stager(T, path, part, None if p == 1 else r)
 
 
 def rebuilt(descriptor: bytes) -> Any:
@@ -216,14 +200,10 @@ def lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
 
 def _lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
     """K's leaf statement ``kind`` (`leaf_bound`) as the flat statement on `drawn_rows.leaf_rows`, its output
-    `drawn_rows.LEAF_OUT_ROWS`, lowered under ``HZ_STAGE`` (``fast`` by default) and written to `path`."""
+    `drawn_rows.LEAF_OUT_ROWS`, staged by Flock's library and written to `path`."""
     from verity_flock import class_statement as CS
 
     from verity.protocols.accounting.pouw.prover.serving.h1 import sampled_rows as D
-    if os.environ.get("HZ_STAGE", "fast") == "fast":
-        sys.path.insert(0, str(H1_PROVE.parent / "hidden_zk"))
-        import fast_stage
-        fast_stage.install(path.parent / f".scratch-{kind}{k}")
     from verity.protocols.accounting.pouw.verifier import credit as CR
     descriptor = gzip.decompress(program.read_bytes())
     defn, _desc, _part, bind = leaf_bound(rebuilt(descriptor), k, kind)
