@@ -178,7 +178,7 @@ def main() -> None:
     os.makedirs(outbox, exist_ok=True)
 
     class Handler(http.server.BaseHTTPRequestHandler):
-        def do_POST(self) -> None:  # noqa: N802
+        def do_POST(self) -> None:
             try:
                 payload = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
             except ValueError:

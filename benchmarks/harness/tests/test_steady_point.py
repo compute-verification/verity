@@ -664,8 +664,8 @@ NOT_THE_RUNS = [
     ({"changes": {"flat": True, "unfiled": DROP}, "names": ["flat", "unfiled"]}, "`unfiled` (dropped)"),
     ({"changes": {"flat": True, "accepted": 20.0}, "names": []}, "`accepted` (changed)"),
     ({"changes": {"flat": True, "accepted": 19, "exits": {}, "unfiled": 2, "sessions": 21, "warm": 1}, "names": []},
-     "`accepted` (changed), `exits.prover-gpu3-0` (dropped), `exits.prover-gpu3-1` (dropped), `exits.verifier-ab-0` "
-     "(dropped) and 4 more"),
+     ("`accepted` (changed), `exits.prover-gpu3-0` (dropped), `exits.prover-gpu3-1` (dropped), `exits.verifier-ab-0` "
+      "(dropped) and 4 more")),
 ]
 
 
@@ -906,8 +906,8 @@ ROW_BLOCKS = [
     ({"n": 8, "stage": {"blocks": 8}}, 8),
     ({"stage": {"blocks": 8}}, 8),
     ({"n": 8, "stage": {"blocks": 2}}, "its row's `n` (8) and `stage.blocks` (2) aren't one count of its statement's blocks"),
-    ({"n": 8, "stage": {"blocks": 8.0}}, "its row's `n` (8) and `stage.blocks` (8.0) aren't one count of its statement's "
-                                         "blocks"),
+    ({"n": 8, "stage": {"blocks": 8.0}}, ("its row's `n` (8) and `stage.blocks` (8.0) aren't one count of its statement's "
+                                          "blocks")),
     ({"n": True}, "its row's `n` (True) isn't one count of its statement's blocks"),
     ({"n": 0, "stage": "8"}, "its row's `n` (0) isn't one count of its statement's blocks"),
     ({}, f"its row doesn't say its statement's blocks (`n`, `stage.blocks`, which {SP.TIMER} writes)"),
@@ -1349,10 +1349,10 @@ def test_a_booked_card_is_leased_alone_once_it_is_on_the_numa_node_of_the_runs_c
 
 
 @pytest.mark.parametrize("cards, says", [
-    (CARDS, "the point was launched on card 0, which isn't on NUMA node 1 of the run's CPUs (its cards are 2, 3): "
-            "launch it with the cores of card 0's slot"),
-    (None, "the point was launched on card 0, and the node doesn't say which cards are on the NUMA node of the run's "
-           "CPUs"),
+    (CARDS, ("the point was launched on card 0, which isn't on NUMA node 1 of the run's CPUs (its cards are 2, 3): "
+             "launch it with the cores of card 0's slot")),
+    (None, ("the point was launched on card 0, and the node doesn't say which cards are on the NUMA node of the run's "
+            "CPUs")),
 ])
 def test_a_booked_card_off_the_numa_node_of_the_runs_cpus_is_refused_before_the_statement(tmp_path, monkeypatch,
                                                                                            cards, says):
@@ -1692,8 +1692,8 @@ INSIDE_THE_LEASE = [
     ({"stamp": {"card": "none", "gpus": [], "driver": None, "cuda": None, "why": "no nvidia-smi on PATH"}},
      "the host stamp doesn't say what the lease's card is (no nvidia-smi on PATH)"),
     ({"stamp": {"gpus": [{"uuid": "GPU-3", "sm_mhz": 1980, "mem_mhz": 3201}, {"uuid": "GPU-4", "sm_mhz": 0, "mem_mhz": 0}]}},
-     "the host stamp doesn't say what the lease's card is (it names 2 GPUs and the driver '570.86.15'): inside a "
-     "gpu-lease of one card it is that card's, which gpu-lease names in GPU_LEASE_UUID"),
+     ("the host stamp doesn't say what the lease's card is (it names 2 GPUs and the driver '570.86.15'): inside a "
+      "gpu-lease of one card it is that card's, which gpu-lease names in GPU_LEASE_UUID")),
 ]
 
 
@@ -1727,8 +1727,8 @@ def test_the_timed_step_refuses_a_toolkit_that_is_not_the_specs_though_the_point
 #: the toolkit's version refused before any statement or card: what the node's nvcc answers, and what the refusal says
 TOOLKIT_BEFORE_THE_STATEMENT = [
     ({"nvcc --version": NVCC.replace(CUDA, "12.9.41")},
-     "the node's CUDA toolkit is 12.9.41 (its nvcc), and spec 'steady' says 12.8.93: a row at another toolkit is another "
-     "point. Set the spec's `cuda_toolkit` to the node's"),
+     ("the node's CUDA toolkit is 12.9.41 (its nvcc), and spec 'steady' says 12.8.93: a row at another toolkit is another "
+      "point. Set the spec's `cuda_toolkit` to the node's")),
     ({"nvcc --version": None}, "the nvcc on the path the spec's setup leaves doesn't say its version"),
     ({"nvcc --version": "nvcc: no version here\n"}, "the nvcc on the path the spec's setup leaves doesn't say its version"),
 ]
@@ -1781,8 +1781,8 @@ def test_a_timed_step_stopped_before_its_end_is_a_refusal_that_says_it_began(tmp
     (RuntimeError("the stand-in fell over"), {"error": "RuntimeError: the stand-in fell over"},
      "the timed step failed: RuntimeError: the stand-in fell over (out/lease.log)"),
     (SystemExit(N.STOPPED), {"stopped": "SystemExit: 143"},
-     "the timed step was stopped before its end and left no row, as a preempted lease stops it: gpu-lease exited 1 "
-     "(out/lease.log)"),
+     ("the timed step was stopped before its end and left no row, as a preempted lease stops it: gpu-lease exited 1 "
+      "(out/lease.log)")),
 ], ids=["raised", "stopped"])
 def test_a_timed_step_that_raises_or_is_stopped_still_writes_its_record_and_the_point_says_what_ended_it(
         tmp_path, monkeypatch, ended, record, says):
