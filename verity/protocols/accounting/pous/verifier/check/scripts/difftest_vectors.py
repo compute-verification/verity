@@ -741,11 +741,15 @@ def _storage(w: int, c0: int, bps: int, segments: int, k: int, delta: int, rtt: 
         return TimedAudit(scheme, vk, key, k=k, deadline_ns=delta, rtt_allowance_ns=rtt, root_only=True,
                                 research=research, experimental=True)
 
-    try:
-        challenger(False)
-        covered = True
-    except ValueError:
-        covered = False
+    def covers() -> bool:
+        """Whether `TimedAudit` runs the audit without `research`: it refuses one outside the certificate."""
+        try:
+            challenger(False)
+        except ValueError:
+            return False
+        return True
+
+    covered = covers()
     mc = challenger(True)
     profile = StorageProfile(scheme.name, params.manifest(), params.blocks, params.m, mc.k, mc.limit_ns, mc.certificate,
                              mc.gaps, scheme.experimental)

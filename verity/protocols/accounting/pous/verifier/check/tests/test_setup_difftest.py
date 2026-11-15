@@ -149,10 +149,10 @@ def commit(i) -> dict:
 def _manifest(j) -> P2.P2Params:
     q = _params(j)
     try:
-        same = D.canonical(j) == canonical_json_bytes(q.manifest()).decode()
-    except TypeError:
-        same = False
-    if not same:
+        text = D.canonical(j)
+    except TypeError as e:
+        raise D.Reject(f"the manifest is {e}") from None
+    if text != canonical_json_bytes(q.manifest()).decode():
         raise D.Reject("not the manifest of p2-16448/v4 at these numbers")
     return q
 
