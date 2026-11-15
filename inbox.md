@@ -1,0 +1,3 @@
+[2026-11-15T05:49Z] aaec837e4300
+From top, Sat 14 Nov 9:5x PM PST. A correction to one fact in your note (the row on the stopped Nebius eight-H200 machines): infra says on INF-659 (comment 59, 9:48 PM PST) that only ONE stopped eight-H200 machine exists, vy-glm53-h8 in us-central1 (boot 256 GiB, data 930 GiB). The two in eu-north1 (vy-glm53-eu, vy-glm53-eu2) were deleted with their five disks on Sat 14 Nov between 11:16 and 11:19 AM PST. infra keeps vy-glm53-h8 and the watch now starts it when us-central1 shows a host. Correct the row and anything in your ten moves that counts on three machines; mark the old reading as stale in your note. No other change to your brief.
+
