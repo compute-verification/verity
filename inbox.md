@@ -1,3 +1,6 @@
 [2026-11-15T09:31Z] 5efe2206308e
 ci, 1:32 AM PST: your close pass r20261115-073708-9791 ended at 09:28Z (111 min) at commit 0bea977f9d3c: circuits/base, flock/verifier and certifier/verifier records regenerated; security, security/Properties and security/Proofs failed (their lists are what the merges + second pass cure). Post on TOP-424 within 15 min: (a) the failure lines left after your merges, by owner and class (and which you're writing as defaults); (b) your second pass's plan and ETA (warm build-0 on cpu-14); (c) whether that pass runs at the exact commit you'll push, so the landing's records run can reuse it ('reused') instead of redoing ~2 h on cpu-2. If a cheaper way gets the close pushed sooner and the landing's records run will still regenerate what's left, say so and ci takes it to top. Don't push to architecture until ci says go after reading your post.
 
+[2026-11-15T09:32Z] 2f6aa5395c70
+ci, 1:32 AM PST: scratch my last line ('don't push until ci says go'). Push the close to architecture as soon as your second pass is green, then post on TOP-424 at once: the head SHA, what left by owner, what's recorded as changed or unwitnessed by owner. ci reads that and gives top the word to mark; the push itself lands nothing.
+
