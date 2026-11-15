@@ -62,14 +62,15 @@ variable {m kV : ℕ} {Tp Sec : Type}
 
 /-- **`εchk i` bounds execution phase `i`'s check miss** at the trace with the registered openings, at every secret and
 every history of the period's coins (`PrCheckMissR` at the phase's statement, prover's strategy and registered
-openings). -/
+openings), the run judged by the check registered for the phase, `valid (sw i)`: the registration (`SameRegistration`)
+fixes the phase's program, layout and steps but not its check. -/
 def PhaseChecks [Fintype Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A) {L S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
-    (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
+    (sw : Fin m → AuditStatement) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp)
     (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool))
     (εchk : Fin m → ℝ) : Prop :=
-  ∀ z ω i, PrCheckMissR H (D (x z ω i)) lay k valid (x z ω i) (Pv z ω i) (ops z ω i) ≤ εchk i
+  ∀ z ω i, PrCheckMissR H (D (x z ω i)) lay k (fun _ => valid (sw i)) (x z ω i) (Pv z ω i) (ops z ω i) ≤ εchk i
 
 end Phases
 
@@ -114,7 +115,7 @@ def PooledLeakRegisteredChecked : Prop :=
     (hrate : ∀ z ω i s Pt, (D (x z ω i)).parse (x z ω i) = some s →
       (D (x z ω i)).partition s = some Pt → RateAt s Pt q)
     (e : Fin m → ℝ) (he : PhaseErrors H D x Pv ops e)
-    (εchk : Fin m → ℝ) (hck : PhaseChecks H D lay k valid x Pv ops εchk)
+    (εchk : Fin m → ℝ) (hck : PhaseChecks H D lay k valid sw x Pv ops εchk)
     (hfit : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)))
     {Conn Cell Srv Dev Par : Type} (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs Lk K S))) (tap : Dev)
