@@ -20,8 +20,8 @@ files = ["security/Proofs/Core/Site.lean"]
 words = { "kind := .device" = "kind := .accelerator" }
 
 [keep]
-# The function that reads a device's model off the site keeps its name.
-strings = ["Site.device"]
+# The function that reads a device's model off the site keeps its name, and so does the Python module `verity.device`.
+strings = ["Site.device", "verity.device"]
 
 [rewrite]
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
