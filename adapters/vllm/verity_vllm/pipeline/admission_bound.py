@@ -143,7 +143,7 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
             "composition": {"token_bytes": tok_b, "seq_bytes": seq_b, "step_bytes": step_b, "hidden_bytes": hid_b},
             "per_token_bytes": per_token, "per_seq_bytes": per_seq, "per_step_bytes": per_step, "hidden_m1": hidden_m1,
             "attn_backend": str(model.get("attn_backend") or "fa2"), "max_num_batched_tokens": max_num_batched_tokens,
-            "assumptions": [f"every request runs to its max_tokens + {int(lag)} lag row(s); an EOS before max_tokens only removes bytes",
+            "assumptions": [f"every request runs to its cap + {int(lag)} lag row(s); an EOS before the cap only removes bytes",
                             "per-arriving-prompt M1 stream (heads x prompt x NB) + one decode-launch stream, NB from the step's longest reachable context",
                             "a prompt over the step's token budget is chunked by the engine: rows x NB per chunk <= unchunked; one per_step of padding per extra chunk"]
                            + ([rope_note] if rope_note else []),

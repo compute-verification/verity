@@ -4039,7 +4039,7 @@ PEARL_ROW = "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager
 @pytest.mark.parametrize("case", ["equal", "unequal", "died", "untied"])
 def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and_w(tmp_path, case):
     """`served_verdicts.sh served-compare K`, the run's step under PEARLPLUS_TIE once Pearl+'s piece wrote W and before the
-    record, runs served_compare.py with no GPU on the serve dir, the row of record, V3C's class, Pearl+'s scheme, PRED and
+    record, runs served_compare.py with no GPU on the serve dir, the workload of record, V3C's class, Pearl+'s scheme, PRED and
     the row's Build of record, against W in pearlplus/w<k>/, at the run's REV: its verdicts in the serve dir's
     served-compare/, copied to $OUT, its lines published (W's path naming no window) and its exit the step's. One that
     dies before a verdict says NOT EQUAL with its exit and error, and no earlier compare's verdict stands for it; without
