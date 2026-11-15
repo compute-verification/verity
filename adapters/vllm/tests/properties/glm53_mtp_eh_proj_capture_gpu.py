@@ -33,6 +33,11 @@ that fails is its chunk's `ok` False, its log kept.
 
     cd adapters/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_mtp_eh_proj_capture_gpu.py --out DIR --scratch /tmp
+
+A GO record's routes enter `bf16_gemm_check`'s route table under the run's record (`add_routes`), with no GPU:
+
+    $PY tests/properties/glm53_mtp_eh_proj_capture_gpu.py --add-routes DIR/glm53_mtp_eh_proj_capture.json --run-record ART \\
+        --out verity_vllm/definitions/registry
 """
 from __future__ import annotations
 
@@ -42,6 +47,7 @@ import argparse
 import contextlib
 import json
 import multiprocessing
+import re
 import subprocess
 import sys
 import tempfile
@@ -55,12 +61,14 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_bf16_gemm_capture_gpu as BG
-from verity_vllm.records.property_record import REGISTRY, seal as seal_record
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal as seal_record
 
 SCHEMA = REGISTRY["glm53_mtp_eh_proj_capture"].schema
 RECORD = "glm53_mtp_eh_proj_capture.json"
 MODEL, PHASE, NAME = "glm53-mtp", "linear", "mtp.eh_proj"
 K, N = 2 * 6144, 6144
+#: this shape's key in the route table (`BG.route_key`)
+KEY = f"{PHASE} {K} {N}"
 #: the route table's m_max: the largest launch served (`bf16_gemm_check.CUBLAS_ROUTES`)
 M_MAX = 8192
 SCAN_CHUNKS = ((1, 1024), (1025, 2048), (2049, 4096), (4097, 8192))
@@ -277,6 +285,31 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     return doc
 
 
+def add_routes(table: dict[str, Any], record: dict[str, Any], run_record: str) -> dict[str, Any]:
+    """The route table `table` (`cublas_routes.json`) with this shape's runs from `record`, a sealed GO capture record, under its
+    run record `run_record` (`route_records`).  Raises naming the fault: a record not sealed or not GO, a scan under other
+    conditions than the table's, or runs that don't tile 1 to the table's m_max."""
+    if not re.fullmatch(r"art:[0-9a-f]{64}", run_record):
+        raise ValueError(f"--run-record {run_record!r} is not an art: id (art:<sha256 hex>)")
+    if record.get("schema") != SCHEMA or record.get("digest") != digest_of(record):
+        raise ValueError(f"the record is not a sealed {SCHEMA} record")
+    if record.get("ok") is not True:
+        raise ValueError("the record is NO-GO: its routes enter no table")
+    if record.get("route_conditions") != table["conditions"]:
+        raise ValueError(f"the record's scan ran under {record.get('route_conditions')}, the table's under {table['conditions']}: "
+                         "rescan this shape under the table's conditions")
+    runs, want = record["routes"], 1
+    for m0, m1, _split in runs:
+        if m0 != want or m1 < m0:
+            raise ValueError(f"{KEY}: a run starts at M={m0} where M={want} is next (a gap or an overlap)")
+        want = m1 + 1
+    if want != table["m_max"] + 1:
+        raise ValueError(f"{KEY}: the runs stop at M={want - 1}, the table's at m_max {table['m_max']}")
+    routes = {**table["routes"], KEY: [list(r) for r in runs]}
+    return {**table, "route_records": {**table.get("route_records", {}), KEY: run_record},
+            "routes": {k: routes[k] for k in sorted(routes)}}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="GLM-5.3's MTP eh_proj (F.linear, K 12288, N 6144) on this Hopper GPU: its cuBLAS "
                                              "routes and words")
@@ -289,7 +322,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scan-run", action="store_true", help="internal: one scan process over --scan-m, writing <out>/scan.json")
     ap.add_argument("--scan-m", default=f"1:{M_MAX}", help="LO:HI, with --scan-run")
     ap.add_argument("--scans", default=None, help="an earlier run's <out>/scan directory: its scans' routes, no scan run here")
+    ap.add_argument("--add-routes", default=None, metavar="RECORD",
+                    help=f"no GPU: write <out>/cublas_routes.json, bf16_gemm_check's route table with this {RECORD}'s routes")
+    ap.add_argument("--run-record", default=None, help="with --add-routes: the art: id of the capture's run record")
     a = ap.parse_args(argv)
+    if a.add_routes:
+        if not a.run_record:
+            ap.error("--add-routes needs --run-record")
+        from verity_vllm.definitions.registry import bf16_gemm_check as BC
+
+        table = add_routes(BC.CUBLAS_ROUTES, json.loads(Path(a.add_routes).read_text()), a.run_record)
+        (Path(a.out) / "cublas_routes.json").write_text(BG.route_table_text(table))
+        print(f"[glm53-mtp-eh-proj] wrote {Path(a.out) / 'cublas_routes.json'}: {KEY} {len(table['routes'][KEY])} runs", flush=True)
+        return 0
     if a.scan_run:
         lo, hi = (int(v) for v in a.scan_m.split(":"))
         return scan_run(lo, hi, a.out, a.scratch)

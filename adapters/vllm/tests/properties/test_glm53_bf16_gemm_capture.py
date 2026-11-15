@@ -12,6 +12,7 @@ import contextlib
 import copy
 import json
 import os
+import re
 from typing import Any
 
 import numpy as np
@@ -221,11 +222,18 @@ def _table_scans(cut: int = 700) -> list[dict]:
     return docs
 
 
+def _of_run_record() -> dict[str, Any]:
+    """The committed route table less the shapes other runs scanned (`route_records`): what its scans write."""
+    others = BC.CUBLAS_ROUTES["route_records"]
+    return {**{k: v for k, v in BC.CUBLAS_ROUTES.items() if k != "route_records"},
+            "routes": {k: v for k, v in BC.CUBLAS_ROUTES["routes"].items() if k not in others}}
+
+
 def test_the_route_writer_rebuilds_the_committed_table_from_its_scans() -> None:
     docs = _table_scans()
     assert len(docs) == 7 and sum("/linear/" in k for d in docs for k in d["cases"]) == 8
-    assert X.route_table(docs, BC.CUBLAS_ROUTES["run_record"]) == BC.CUBLAS_ROUTES
-    assert X.route_table(docs[::-1], BC.CUBLAS_ROUTES["run_record"]) == BC.CUBLAS_ROUTES
+    assert X.route_table(docs, BC.CUBLAS_ROUTES["run_record"]) == _of_run_record()
+    assert X.route_table(docs[::-1], BC.CUBLAS_ROUTES["run_record"]) == _of_run_record()
 
 
 def _router_runs(docs):
@@ -272,7 +280,7 @@ def test_write_routes_writes_the_table_the_loader_reads(tmp_path) -> None:
     rr = BC.CUBLAS_ROUTES["run_record"]
     assert X.main(["--write-routes", *paths, "--run-record", rr, "--out", str(tmp_path)]) == 0
     text = (tmp_path / "cublas_routes.json").read_text()
-    assert json.loads(text) == BC.CUBLAS_ROUTES and len(text.splitlines()) == 8 + len(BC.CUBLAS_ROUTES["routes"])
+    assert json.loads(text) == _of_run_record() and len(text.splitlines()) == 8 + len(_of_run_record()["routes"])
     with pytest.raises(ValueError, match="not an art: id"):
         X.main(["--write-routes", *paths, "--run-record", "r20261107-000000-0000", "--out", str(tmp_path)])
     with pytest.raises(SystemExit):
@@ -298,6 +306,23 @@ def test_the_default_cublas_route_does_not_confuse_unrecorded_with_non_split() -
     assert BC.default_cublas_route("linear", 1, 6144, 161) is None
     assert BC.default_cublas_route("f32out", 256, 7168, 2048) == ("non_split", {})
     assert BC.default_cublas_route("f32out", 128, 7168, 2048) == ("splitk", {"SPLIT_K": 2})
+
+
+#: GLM-5.3's MTP eh_proj (K 12288, N 6144): the M runs at which its capture's scan saw cuBLAS split K in two; serial elsewhere
+EH_PROJ_SPLIT_2 = ((105, 111), (129, 159), (161, 223), (272, 272), (288, 288), (336, 336))
+
+
+def test_eh_proj_s_route_is_its_capture_s_at_every_m_to_m_max() -> None:
+    """Every M a draft step launches eh_proj at, 1 to m_max, has its route, split K in two exactly on the capture's split runs,
+    under the run record that scanned it; past m_max none."""
+    m_max = BC.CUBLAS_ROUTES["m_max"]
+    split = {m for lo, hi in EH_PROJ_SPLIT_2 for m in range(lo, hi + 1)}
+    got = {M: BC.default_cublas_route("linear", M, 12288, 6144) for M in range(1, m_max + 1)}
+    assert {M for M, r in got.items() if r == ("splitk", {"SPLIT_K": 2})} == split
+    assert {M for M, r in got.items() if r == ("non_split", {})} == set(range(1, m_max + 1)) - split
+    assert BC.default_cublas_route("linear", m_max + 1, 12288, 6144) is None
+    (record,) = [r for k, r in BC.CUBLAS_ROUTES["route_records"].items() if k == "linear 12288 6144"]
+    assert re.fullmatch(r"art:[0-9a-f]{64}", record) and record != BC.CUBLAS_ROUTES["run_record"]
 
 
 def test_scan_routes_merges_adjacent_regimes_of_one_model() -> None:

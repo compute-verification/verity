@@ -234,6 +234,46 @@ def test_eh_proj_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, caps
     assert "GLM53-MTP-EH-PROJ NO-GO" in (printed := capsys.readouterr().out) and "no-go=['M5']" in printed
 
 
+def _eh_proj_record(**over) -> dict:
+    """A sealed GO record of eh_proj's routes as the committed route table holds them, `over` set after sealing."""
+    doc = seal({"schema": EP.SCHEMA, "route_conditions": BC.ROUTE_CONDITIONS, "routes": BC.CUBLAS_ROUTES["routes"][EP.KEY]}, True)
+    return {**doc, **over}
+
+
+def _without_eh_proj() -> dict:
+    return {**{k: v for k, v in BC.CUBLAS_ROUTES.items() if k != "route_records"},
+            "routes": {k: v for k, v in BC.CUBLAS_ROUTES["routes"].items() if k != EP.KEY}}
+
+
+def test_add_routes_writes_the_committed_table_from_its_go_record(tmp_path, monkeypatch) -> None:
+    """The committed table is the table without eh_proj with the record's routes added under the record's run record."""
+    rr = BC.CUBLAS_ROUTES["route_records"][EP.KEY]
+    (record := tmp_path / EP.RECORD).write_text(json.dumps(_eh_proj_record()))
+    monkeypatch.setattr(BC, "CUBLAS_ROUTES", _without_eh_proj())
+    assert EP.main(["--add-routes", str(record), "--run-record", rr, "--out", str(tmp_path)]) == 0
+    monkeypatch.undo()
+    assert json.loads((tmp_path / "cublas_routes.json").read_text()) == BC.CUBLAS_ROUTES
+    with pytest.raises(SystemExit):
+        EP.main(["--add-routes", str(record), "--out", str(tmp_path)])
+
+
+def _sealed(doc: dict, ok: bool = True) -> dict:
+    return seal({k: v for k, v in doc.items() if k not in ("ok", "digest")}, ok)
+
+
+@pytest.mark.parametrize("record, run_record, why", [
+    (_eh_proj_record(routes=[[1, 8192, 2]]), None, "not a sealed"),
+    (_sealed(_eh_proj_record(), ok=False), None, "NO-GO"),
+    (_sealed(_eh_proj_record(route_conditions={**BC.ROUTE_CONDITIONS, "torch": "2.14.0+cu130"})), None, "rescan this shape"),
+    (_sealed(_eh_proj_record(routes=[[1, 104, None], [106, 8192, None]])), None, "a run starts at M=106 where M=105 is next"),
+    (_sealed(_eh_proj_record(routes=[[1, 4096, None]])), None, "the runs stop at M=4096"),
+    (_eh_proj_record(), "a run id", "not an art: id"),
+], ids=["unsealed", "no-go", "other-conditions", "gap", "short", "not-art"])
+def test_add_routes_refuses_a_record_that_is_not_the_shape_s_go_scan_by_name(record, run_record, why) -> None:
+    with pytest.raises(ValueError, match=why):
+        EP.add_routes(_without_eh_proj(), record, run_record or BC.CUBLAS_ROUTES["route_records"][EP.KEY])
+
+
 @pytest.mark.parametrize("splits", [2, 3, 4, 5])
 def test_the_splitk_probe_separates_every_hypothesis_at_eh_proj_s_shape(splits: int) -> None:
     x, w, differ = EP.BG.splitk_probe_words(EP.K, splits, "bf16")
