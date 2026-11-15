@@ -96,7 +96,7 @@ EPILOGUE_BF16 = "f32_to_bf16"
 
 
 @dataclass
-class InstanceSet:
+class ProbeInputSet:
     """A tier of one dataset as tiles-to-be: ``a``/``b`` are ``(n, steps, k)`` operand words in the instruction's format, ``c0`` the
     ``(n,)`` incoming FP32 words of step 0, ``acc`` the ``(n, steps)`` expected accumulator after every step (``None`` when the set
     records none), ``y`` the ``(n,)`` expected final word after ``epilogue`` (``None``: the bare FP32 accumulator).  ``negative``
@@ -148,7 +148,7 @@ def _slice(lo: int | None, hi: int | None, n: int) -> tuple[int, int]:
 
 
 def load_bench_instances(tier: str, root: Path | None, manifest_path: Path, lo: int | None = None, hi: int | None = None,
-                         only_ids: list[int] | None = None) -> InstanceSet:
+                         only_ids: list[int] | None = None) -> ProbeInputSet:
     """``bench-instances/v1`` tier from the built arrays under ``root`` (committed files may also be read from the manifest's own
     directory), every array digest-checked against the pinned manifest first."""
 
@@ -192,7 +192,7 @@ def load_bench_instances(tier: str, root: Path | None, manifest_path: Path, lo: 
         b = np.frombuffer(data.b.tobytes(), np.uint16).reshape(n_total, 1, k)[ids]
         c = np.frombuffer(data.c.tobytes(), np.uint32)[ids]
         out = np.frombuffer(data.out.tobytes(), np.uint32)[ids]
-        return InstanceSet(tier=tier, a=a, b=b, c0=c, acc=out[:, None].copy(), y=out.copy(), epilogue=None, **common)
+        return ProbeInputSet(tier=tier, a=a, b=b, c0=c, acc=out[:, None].copy(), y=out.copy(), epilogue=None, **common)
     k, steps = I.STEP, I.STEPS
     x = np.frombuffer(data.x.tobytes(), np.uint16).reshape(n_total, steps, k)[ids]
     w = np.frombuffer(data.w.tobytes(), np.uint16).reshape(n_total, steps, k)[ids]
@@ -200,12 +200,12 @@ def load_bench_instances(tier: str, root: Path | None, manifest_path: Path, lo: 
     c0 = np.zeros(ids.size, np.uint32)
     if tier == "vu-k1536":
         acc = np.frombuffer(data.acc.tobytes(), np.uint32).reshape(n_total, steps)[ids]
-        return InstanceSet(tier=tier, a=x, b=w, c0=c0, acc=acc.copy(), y=y.copy(), epilogue=EPILOGUE_BF16, **common)
+        return ProbeInputSet(tier=tier, a=x, b=w, c0=c0, acc=acc.copy(), y=y.copy(), epilogue=EPILOGUE_BF16, **common)
     # vu-k1536-neg: y = the claimed (wrong) word; the index carries verdict and the correct word (the reference for the compare)
     cols = data.columns
     rows = [dict(zip(cols, r)) for r in data.index]
     neg = {"columns": cols, "rows": [rows[int(i)] for i in ids]}
-    return InstanceSet(tier=tier, a=x, b=w, c0=c0, acc=None, y=y.copy(), epilogue=EPILOGUE_BF16, negative=neg, **common)
+    return ProbeInputSet(tier=tier, a=x, b=w, c0=c0, acc=None, y=y.copy(), epilogue=EPILOGUE_BF16, negative=neg, **common)
 
 
 def fp8_random_finite_operands(rng: np.random.Generator, shape: tuple[int, ...]) -> np.ndarray:
@@ -323,8 +323,8 @@ def _synthetic_worker(job: tuple[str, int]) -> tuple[int, np.ndarray, np.ndarray
 
 
 def load_synthetic(syn: Synthetic, lo: int | None = None, hi: int | None = None, only_ids: list[int] | None = None,
-                   total_n: int = SYNTHETIC_N, procs: int = 1) -> InstanceSet:
-    """Generate the chosen instances of a synthetic set (``procs`` processes) as an ``InstanceSet``."""
+                   total_n: int = SYNTHETIC_N, procs: int = 1) -> ProbeInputSet:
+    """Generate the chosen instances of a synthetic set (``procs`` processes) as an ``ProbeInputSet``."""
 
     if only_ids is not None:
         ids = np.array(sorted(set(only_ids)), dtype=np.int64)
@@ -350,7 +350,7 @@ def load_synthetic(syn: Synthetic, lo: int | None = None, hi: int | None = None,
         a[r] = ai.reshape(steps, k)
         b[r] = bi.reshape(steps, k)
         acc[r] = acci
-    return InstanceSet(
+    return ProbeInputSet(
         dataset=syn.dataset, tier=syn.tier, instruction=syn.instruction, target=syn.target, model=syn.model.name,
         manifest_sha256=syn.digest(total_n), source=f"generated: rng = default_rng([{SYNTHETIC_SEED}, i]); {syn.recipe}",
         ids=ids, a=a, b=b, c0=np.zeros(ids.size, np.uint32), acc=acc, y=epilogue_words(syn.epilogue, acc[:, -1]), epilogue=syn.epilogue,
@@ -359,7 +359,7 @@ def load_synthetic(syn: Synthetic, lo: int | None = None, hi: int | None = None,
 
 
 def load_fp8_ada(lo: int | None = None, hi: int | None = None, only_ids: list[int] | None = None, total_n: int = FP8_ADA_N,
-                 procs: int = 1) -> InstanceSet:
+                 procs: int = 1) -> ProbeInputSet:
     return load_synthetic(FP8_ADA_SYNTHETIC, lo, hi, only_ids, total_n, procs)
 
 
@@ -373,7 +373,7 @@ DATASETS = {
 }
 
 
-def load_instances(spec: str, args: argparse.Namespace) -> InstanceSet:
+def load_instances(spec: str, args: argparse.Namespace) -> ProbeInputSet:
     if spec not in DATASETS:
         raise SystemExit(f"unknown input set {spec!r}; known: {', '.join(DATASETS)}")
     dataset, _, tier = spec.rpartition("/")
@@ -405,7 +405,7 @@ def epilogue_words(name: str | None, acc: np.ndarray) -> np.ndarray:
     raise ValueError(f"unknown epilogue {name!r}")
 
 
-def replay(probe: P.Probe, ins: P.Instruction, inst: InstanceSet, log: Callable[[str], None] = print) -> dict:
+def replay(probe: P.Probe, ins: P.Instruction, inst: ProbeInputSet, log: Callable[[str], None] = print) -> dict:
     """Run every instance of ``inst`` through ``probe`` (one instruction per step per tile) and compare every word."""
 
     M, K, fmt = ins.m, ins.k, ins.fmt
@@ -509,7 +509,7 @@ def replay(probe: P.Probe, ins: P.Instruction, inst: InstanceSet, log: Callable[
     return report
 
 
-def negative_verdicts(inst: InstanceSet, y_hw: np.ndarray, out_of_domain: np.ndarray) -> dict:
+def negative_verdicts(inst: ProbeInputSet, y_hw: np.ndarray, out_of_domain: np.ndarray) -> dict:
     """The claimed-wrong tier: a ``wrong`` row is detected when the hardware word differs from the claimed word (and the hardware
     word is the row's correct word); a ``reject`` row (out of the supported domain) is detected by the domain check."""
 
