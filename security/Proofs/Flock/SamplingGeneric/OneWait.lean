@@ -46,7 +46,7 @@ variable {A : Arg Coin}
   scopeCheck := L.scopeCheck
   partition := L.partition
   commit := L.commit
-  stage2 := L.stage2
+  secondStage := L.secondStage
   checked := L.checked
   sh := L.sh
   κb := L.κb

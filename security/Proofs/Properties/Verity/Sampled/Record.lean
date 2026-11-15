@@ -27,7 +27,7 @@ public-coin form (`V`), with what the sampling claims read of it (`code`, `recor
   whose session sets up one table of `A.kd` units: `RefOk`), and refuses a sample file that sets the session up at
   others.
 * **What the claims read** (`code`): the statement's audit statement and partition are V5's at `A` (`Flock.Bridge.stmtOf`,
-  `Flock.Bridge.partOf`); the sample precedes the session (`stage2` and every unit's `rounds` are the session's rounds);
+  `Flock.Bridge.partOf`); the sample precedes the session (`secondStage` and every unit's `rounds` are the session's rounds);
   the checked units are the coins' sample (`checked`); every unit's session is the one session (`sessionOf`, with a
   refusing view where the sample file was refused); the commitment is `A`'s deployed one (`LayoutIsL`'s fields at `A`); one
   session of one table. What a session's witness reveals and the reference prover's framing are the record's
@@ -225,7 +225,7 @@ noncomputable def code (A : Live) (o : Own) (e : Ext) : SamplingDeploy.Code wher
   parse x := if x = xOf A o then some (stmtA A) else none
   scopeCheck x := decide (x = xOf A o ∧ InScope (partA A) (stmtA A))
   partition _ := some (partA A)
-  stage2 _ := after _
+  secondStage _ := after _
   checked x r := if x = xOf A o then drawn A (sampleBytes (coinsAt r)) else []
   rounds _ _ := after _
   session x _ v := if x = xOf A o then some (sessionOf A o v) else none
@@ -258,7 +258,7 @@ variable (A : Live) (o : Own) (e : Ext)
 
 theorem record_V : (record A o e).V = V A o := rfl
 
-theorem record_stage2 (x : Msg) : (record A o e).stage2 x = after _ := rfl
+theorem record_secondStage (x : Msg) : (record A o e).secondStage x = after _ := rfl
 
 theorem record_rounds (x : Msg) (u : ℕ) : (record A o e).rounds x u = after _ := rfl
 
