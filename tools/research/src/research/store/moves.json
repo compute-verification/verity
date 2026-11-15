@@ -2779,6 +2779,12 @@
         "verity/protocols/proofs/recursion/verifier/firewall/tests/test_firewall_release_protocol.py": "verity/protocols/proofs/recursion/verifier/zk_server/tests/test_zk_server_release_protocol.py",
         "verity/protocols/proofs/recursion/verifier/firewall/tests/test_firewall_session_loop.py": "verity/protocols/proofs/recursion/verifier/zk_server/tests/test_zk_server_session_loop.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/hash/dither/numabind.py": "benchmarks/kernels/numabind/numabind.py",
+        "benchmarks/hash/dither/tests/test_numabind.py": "benchmarks/kernels/numabind/tests/test_numabind.py"
+      }
     }
   ]
 }
