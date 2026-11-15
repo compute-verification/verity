@@ -117,6 +117,7 @@ import hashlib
 import itertools
 import math
 import struct
+import sys
 from bisect import bisect_left
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -1310,7 +1311,8 @@ class PearlC4:
             b, e_b = self._side(b_rows, tile.cols, ROLE_EB, ROLE_FB, noise.seed_b, noise.seed_b, k)
             ops = C.Ops(a, b, e_a, e_b, peel_factors_a(self.fmt, a, e_a, noise.seed_b, k),
                         peel_factors_b(self.fmt, b, e_b, noise.seed_b, k))
-        except P.Reject:
+        except P.Reject as e:
+            print(f"pearl-c4: a tile's operands are outside the scheme's domain, so it encodes to none ({e})", file=sys.stderr)
             ops = None
         self._encoded = (key, ops)
         return ops
