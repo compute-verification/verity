@@ -44,3 +44,60 @@ What closing it takes (inferred): two things, neither in benchmarks/one_stage/in
 
 Nothing posted to Linear or Slack. I hold the branch for your word: (a) stop here, (b) build the made difftest vector, or (c) land θ alone, which changes no verdict.
 
+[2026-11-16T23:21Z] cbf7c9d0b94f
+model: claude-opus-5-5-high; subscriptions removed: none held
+
+STEP to the training lead, Mon 16 Nov 3:20 PM PST. Training's rename hand-in for today's window is in the notes.
+
+**Where it is**
+- `lanes/training/handins/page-words.md`, with `training_page_words_map.toml` (`tools/move/rename.py`'s format) beside it.
+- Notes commit `9e691e1ebc`; the first push was `6aa0ffee84`.
+- No rename branch was pushed. The map was proved on a local scratch commit, `70e116c5c09` (`main` `6f9f794db37` plus the map), shipped to nodes by `--source`.
+
+**What it renames** [ran]: 24 files and no path, in today's globs, with whole-word rows.
+- `(H)` → `T1` and `(E)` → `T2`. Where a file states the premise with its words, it reads "T1 (operands are hard)" / "T2 (exports are wide)".
+- `min-cut bound` → `slowdown theorem`.
+- Kept out: Lean files, the delete list's files, locks and fixtures, and `models.py`'s `LayerNorm(H)`.
+- A second run of the map rewrites 0 files.
+
+**Counts on `main` → after the map, in today's scope (exact spelling)** [ran]
+- `(H)`: 107 → 3 (`models.py`'s width)
+- `(E)`: 40 → 0
+- `min-cut bound`: 15 → 0
+- `slowdown theorem`: 0 → 15
+- `T1` (whole word): 5 → 109
+- `T2` (whole word): 5 → 45
+- `slowdown lower bound`: 6 → 6
+- `registered parameters`: 6 → 6
+- The whole tree's counts are in the hand-in.
+
+**Runs, each fresh on a node**
+- `r20261116-204755-e1ea`: done, rc 0, 7 of 7 passed: `repository`, `benchmarks/inference_only`, `benchmarks/slowdown`, `benchmarks/training_slowdown`, its `grader`, `verity-circuit-properties` and `benchmarks/nci`.
+- `r20261116-204839-31f9`: cancelled at its 150 min cap.
+  - Passed: `verity-bench` and `pouw/verifier`.
+  - `research` failed 2 (`test_treelock.py`).
+  - `verity-vllm` failed 2 (`protocols/test_credit_gate.py`).
+  - `verity-flock` never got past its Lean build, so **its verdict on the map is unknown**. The only change in its inputs I find is `security/README.md`'s words [inferred].
+- `r20261116-213920-b796` (`main`) and `r20261116-214429-bd9d` (scratch): both done, `test_treelock.py` 25 passed in a private clone. So the 2 come from running the suite in a slot's source tree, not from the map.
+- `r20261116-223627-5b28` (`main`) and `r20261116-223708-238d` (scratch): both failed with the same 2 credit-gate tests, so they are already red on `main`.
+- `r20261116-224949-8bd2`: done, `verity-graph` and `verity/commitments` 2 of 2 passed (scratch, private clone).
+- `r20261116-211357-a06b`: a base run under `--cwd source`, cancelled by me after 34 min waiting on another run's Lean build in `main`'s shared tree.
+
+**Words whose senses split: a reader, not a map** [read: every hit]
+- `slowdown lower bound` (6 in scope) is never the page's theorem, so PAGE's "always" is wrong here.
+  - Four uses are the old exclusion bound's pricing (the theorem family, on the delete list).
+  - Two are the old S bound "T_min/T_ref" (`training_slowdown/README.md:4` and `:381`).
+  - It is GLOSSARY.md's current term and the target of `test_retired_terms.py`'s row, so it is top's to retire.
+- `T1`/`T2` already stand 8 times in the older page's senses (update hardness or the cut, and dependence): `capture/__init__.py`, `capture/structure.py`, `counterexample.py` and `test_dependence.py`. After the map they mean two things in `training_slowdown`.
+- `min-cut bound` outside today's globs:
+  - It is the slowdown theorem in `benchmarks/circuit_properties` (README, `work.py` and `test_work.py`) and `benchmarks/README.md:262`. A second row would take them if you count them as training's.
+  - It is β(C), the bound on the stacked share of memory, in `benchmarks/stacked_share` (`beta.py` and `test_beta.py`), and stays.
+- `registered parameters` (6 in scope): all are a Program's parameters, none θ, so nothing to rename.
+- PAGE's stored key `"rho"` → `"shapes"` is in `benchmarks/circuit_properties/run.py:63`, outside today's globs, and is not in the map.
+
+**Other points**
+- If TRN-177's 3:00 PM PST map marks any of the 24 files as going, it goes into the map's `exclude`. They are listed in the hand-in.
+- The map swaps words inside existing comments and docstrings, and adds or removes none (the 1:32 PM PST rule).
+- The Glossary terms for top are listed in the hand-in; GLOSSARY.md is not edited.
+- Tuesday's Lean part is sized in the hand-in but not built.
+
