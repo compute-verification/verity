@@ -25,10 +25,10 @@
 # CMD reaches no unix socket it did not make (a read-only mount doesn't stop `connect`, and through the user's systemd
 # bus `systemd-run --user` would start anything outside every namespace): /run (and /var/run where it is no link to it)
 # and the job's TMPDIR get private read-only tmpfs, under /tmp's rule, and CMD runs under `sockets.py exec`, whose
-# seccomp filter refuses it every unix socket but a `socketpair`. Before CMD runs, `sockets.py probe`, run as CMD runs,
-# tries every unix socket the kernel lists for a process the sandbox can see and the well-known ones: the sandbox
-# refuses (3) to run CMD if any connects. Where /etc/resolv.conf resolves into the hidden /run, its copy stays (a fetch
-# resolves names).
+# seccomp filter refuses it every unix socket but a `SOCK_STREAM` `socketpair`. Before CMD runs, `sockets.py probe`,
+# run as CMD runs, tries every unix socket the kernel lists for a process the sandbox can see and the well-known ones:
+# the sandbox refuses (3) to run CMD if any connects. Where /etc/resolv.conf resolves into the hidden /run, its copy
+# stays (a fetch resolves names).
 set -euo pipefail
 tool=$(realpath -- "${BASH_SOURCE[0]}")
 tool=${tool%/*}

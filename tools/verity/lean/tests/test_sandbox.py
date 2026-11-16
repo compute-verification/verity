@@ -845,6 +845,35 @@ def test_under_the_filter_no_unix_socket_and_no_io_uring_can_be_made_but_a_pair_
     assert r.stdout.splitlines() == ["unix refused", "uring refused", "pair x", "inet made"]
 
 
+@pytest.mark.skipif(os.uname().machine not in ("x86_64", "aarch64"), reason="no seccomp filter for this machine")
+def test_under_the_filter_no_pair_sends_to_a_datagram_socket_bound_outside(tmp_path):
+    """A unix datagram pair sends to any datagram socket by its address (`sendto`), and the kernel makes a `SOCK_RAW`
+    pair a datagram one: under the filter neither pair, nor a seqpacket one, is made, and nothing sent from inside
+    arrives at a datagram socket bound outside."""
+    path = str(tmp_path / "outside")
+    outside = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    outside.bind(path)
+    outside.setblocking(False)
+    send = ("import socket, sys\n"
+            "for name in ('SOCK_DGRAM', 'SOCK_RAW', 'SOCK_SEQPACKET'):\n"
+            "    try:\n        a, b = socket.socketpair(socket.AF_UNIX, getattr(socket, name))\n"
+            "    except PermissionError:\n        print(name, 'refused'); continue\n"
+            "    try:\n        a.sendto(name.encode(), sys.argv[1]); print(name, 'sent')\n"
+            "    except OSError as e:\n        print(name, 'made, not sent', e.errno)\n")
+    try:
+        r = subprocess.run([sys.executable, "-I", "-S", str(SOCKETS), "exec", "--", sys.executable, "-I", "-S", "-c",
+                            send, path], capture_output=True, text=True)
+        try:
+            arrived = outside.recv(64)
+        except BlockingIOError:
+            arrived = None
+    finally:
+        outside.close()
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == ["SOCK_DGRAM refused", "SOCK_RAW refused", "SOCK_SEQPACKET refused"]
+    assert arrived is None
+
+
 def test_the_inventory_lists_a_socket_in_a_directory_no_walk_can_list(tmp_path):
     """The kernel lists every bound name, so a socket in a directory one may search but not read, which `find -type s`
     can't see, is still tried."""

@@ -4,9 +4,12 @@ A read-only mount doesn't stop `connect`, and a new network namespace hides only
 sandbox can see (`/run/user/UID/bus`, through which `systemd-run --user` starts anything outside it) is reachable. The
 sandbox hides `/run` and the TMPDIR under private tmpfs, and three modes do the rest:
 
-- `exec -- CMD...`: CMD under a seccomp filter that refuses (EACCES) `socket(AF_UNIX, ...)` and `io_uring_setup` (an
-  io_uring makes sockets without `socket`) for x86-64 and arm64, and every system call of any other ABI. `socketpair`
-  stays: a pair reaches nothing. No unix socket made, no socket file or abstract name is reached, whenever it was bound.
+- `exec -- CMD...`: CMD under a seccomp filter that refuses (EACCES) `socket(AF_UNIX, ...)`, `io_uring_setup` (an
+  io_uring makes sockets without `socket`) and every unix `socketpair` but a `SOCK_STREAM` one for x86-64 and arm64, and
+  every system call of any other ABI. A datagram pair would reach any datagram socket by its address (`sendto`, or
+  a `connect` that replaces its peer), and the kernel makes a unix `SOCK_RAW` pair a datagram one; a stream pair is
+  connected for good (`EISCONN`). No unix socket made, no socket file or abstract name is reached, whenever it was
+  bound.
 - `inventory`: before the sandbox mounts its own /proc, every unix socket name the kernel lists in the network
   namespace of a process it can see (`/proc/PID/net/unix`), one per line: what a walk of every mount would find (a walk
   takes minutes on a node), and also names in a directory no walk can list.
@@ -26,8 +29,10 @@ import sys
 PR_SET_NO_NEW_PRIVS, PR_SET_SECCOMP, SECCOMP_MODE_FILTER = 38, 22, 2
 RET_ALLOW, RET_ERRNO = 0x7FFF0000, 0x00050000
 EACCES, AF_UNIX = 13, 1
-#: per ABI, (its audit arch, the first number of a foreign ABI it also accepts or None, socket, io_uring_setup)
-ABI = {"x86_64": (0xC000003E, 0x40000000, 41, 425), "aarch64": (0xC00000B7, None, 198, 425)}
+#: per ABI: its audit arch, the first number of a foreign ABI it also accepts or None, and the numbers of socket,
+#: socketpair and io_uring_setup
+ABI = {"x86_64": (0xC000003E, 0x40000000, 41, 53, 425), "aarch64": (0xC00000B7, None, 198, 199, 425)}
+SOCK_STREAM, SOCK_TYPE_MASK = 1, 0xF
 #: names a process of the host listens on wherever they exist ({uid}: the user the sandbox's root is)
 KNOWN = ("/run/user/{uid}/bus", "/run/user/{uid}/systemd/private", "/run/user/{uid}/systemd/notify",
          "/run/user/{uid}/gnupg/S.gpg-agent", "/run/user/{uid}/gnupg/S.gpg-agent.ssh", "/run/user/{uid}/pipewire-0",
@@ -44,20 +49,25 @@ UNPARSED = ("holds a name no line parses: another process on this node holds a u
 
 
 def program() -> bytes:
-    """The filter: refuse a foreign ABI's calls, and this ABI's `socket(AF_UNIX, ...)` and `io_uring_setup`."""
+    """The filter: refuse a foreign ABI's calls, and this ABI's `socket(AF_UNIX, ...)`, `io_uring_setup` and
+    `socketpair(AF_UNIX, ...)` of any type but `SOCK_STREAM`."""
     try:
-        arch, foreign, sock, uring = ABI[os.uname().machine]
+        arch, foreign, sock, pair, uring = ABI[os.uname().machine]
     except KeyError:
         raise SystemExit(f"sockets.py: no seccomp filter for {os.uname().machine}, so the sandbox can't keep its command"
                          f" from the host's unix sockets: run the build on an x86-64 or arm64 machine, or add this"
-                         f" machine's audit arch and its `socket` and `io_uring_setup` numbers to `ABI`") from None
+                         f" machine's audit arch and its `socket`, `socketpair` and `io_uring_setup` numbers to"
+                         f" `ABI`") from None
     deny = RET_ERRNO | EACCES
-    ld, jeq, jge, ret = 0x20, 0x15, 0x35, 0x06
+    ld, jeq, jge, ret, and_ = 0x20, 0x15, 0x35, 0x06, 0x54
     ins = [(ld, 0, 0, 4), (jeq, 1, 0, arch), (ret, 0, 0, deny), (ld, 0, 0, 0)]
     if foreign is not None:
         ins += [(jge, 0, 1, foreign), (ret, 0, 0, deny)]
-    ins += [(jeq, 0, 1, uring), (ret, 0, 0, deny), (jeq, 0, 3, sock), (ld, 0, 0, 16), (jeq, 0, 1, AF_UNIX),
-            (ret, 0, 0, deny), (ret, 0, 0, RET_ALLOW)]
+    ins += [(jeq, 0, 1, uring), (ret, 0, 0, deny),
+            (jeq, 0, 4, sock), (ld, 0, 0, 16), (jeq, 0, 1, AF_UNIX), (ret, 0, 0, deny), (ret, 0, 0, RET_ALLOW),
+            # socketpair: its domain (args[0]), then its type (args[1]) without SOCK_NONBLOCK and SOCK_CLOEXEC
+            (jeq, 0, 6, pair), (ld, 0, 0, 16), (jeq, 0, 4, AF_UNIX), (ld, 0, 0, 24), (and_, 0, 0, SOCK_TYPE_MASK),
+            (jeq, 1, 0, SOCK_STREAM), (ret, 0, 0, deny), (ret, 0, 0, RET_ALLOW)]
     return b"".join(struct.pack("HBBI", *i) for i in ins)
 
 
