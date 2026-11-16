@@ -44,7 +44,7 @@ its Definitions with their signatures.
   id go through it, so a new module's Definitions resolve everywhere, not only where someone imported the module.
 - Each Definition module has its binding file beside it, `<module>.circuit-check.py`, the small bindings `circuit-check`
   checks it at, and `<module>.circuit-check.json`, its lowering pins (`tools/verity/circuit_check/`).
-- `tests/test_catalog.py` checks what the catalog loads.
+- `tests/adapters/vllm/verity_vllm/definitions/test_catalog.py` checks what the catalog loads.
 
 ## Boolean versions
 
@@ -90,4 +90,5 @@ declines that input, and the reference computes it.
 
 ## Tests
 
-`tests/` is the package's suite (`uv run tools/check/suites.py adapters/vllm/verity_vllm/definitions`).
+`tests/adapters/vllm/verity_vllm/definitions/` is the package's suite
+(`uv run tools/check/suites.py tests/adapters/vllm/verity_vllm/definitions`).

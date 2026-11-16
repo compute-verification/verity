@@ -202,7 +202,7 @@ EOF2
 fi
 
 if [ "$ADMIT" = release-order ] && "$PY" -c "import pytest" 2>/dev/null; then   # the pinned vLLM's own sort_batch_req_ids
-  "$PY" -m pytest -q -p no:cacheprovider tests/pipeline/test_serve_admit.py -k "pinned or refused or keeps or verifying or one_token" \
+  "$PY" -m pytest -q -p no:cacheprovider "$TREE/tests/adapters/vllm/tests/pipeline/test_serve_admit.py" -k "pinned or refused or keeps or verifying or one_token" \
     > "$OUT/admit_rows_tests.txt" 2>&1; echo "admit-rows tests rc=$?" | tee -a "$OUT/steps.txt"
 fi
 
