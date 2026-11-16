@@ -58,7 +58,7 @@ def test_integrity_bounds_are_the_profiles_count_bound() -> None:
     at = integrity["at"]
     assert "strata" not in integrity["quantity"]
     assert (at["1/100"]["value"], at["1/1000000"]["value"]) == (68, 192)
-    q = {"symbol": "integrity bound", "value": 0, "unit": "wrong units", "of": 100, "drawn": 1}
+    q = {"symbol": "integrity bound", "value": 0, "unit": "incorrect proof blocks", "of": 100, "drawn": 1}
     assert R.at_deltas("integrity", q, Fraction(1, 2))["1/100"] == {"holds": True, "value": 99, "epsilon": "99/100",
                                                                     "by": "draw"}
 

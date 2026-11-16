@@ -140,7 +140,7 @@ def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any],
     q, a = row.get("quantity") or {}, row["answer"]
     pub = a.get("public") or {}
     if subprotocol == "integrity":
-        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", **_sample(a)},
+        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "incorrect proof blocks", **_sample(a)},
                 frac(row["delta"]), "delta")
     if subprotocol == "pouw":
         w = q["work"]

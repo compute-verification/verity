@@ -1308,7 +1308,7 @@ def audit(a: argparse.Namespace) -> int:
                      "advice": bound["advice"], "cap_bits": compiler.cap_bits,
                      "inner_compiler": {"name": compiler.inner.name, "digest": compiler.inner.digest}, "compile_s": compile_s,
                      "transfer_gates": list(compiler.transfer_gates),
-                     "gap": "the advice is opened to the verifier until the compile unit exists (README.md)",
+                     "gap": "the advice is opened to the verifier until the compile slice's proof block exists (README.md)",
                      **({"i2": i2_against_record(a, requests)} if single(a) else {}),
                      **({"serve": {"run": str(a.serve_run), "window": int(a.window), **serve_check_of(a, bound)}} if served(a) else {}),
                      "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {},

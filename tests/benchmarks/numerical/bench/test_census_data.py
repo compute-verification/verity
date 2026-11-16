@@ -61,7 +61,7 @@ def test_the_census_encodes_no_units() -> None:
     (``benchmarks/census/README.md``)."""
     text = " ".join((census.ROOT / f"{n}.json").read_text(encoding="utf-8") for n in FILES)
     ids = [e["id"] for n in FILES for e in census.raw(n)]
-    assert not [i for i in ids if re.search(r"(^|[-/])(vu|ru)([-/]|$)", i)] and "verification unit" not in text.lower()
+    assert not [i for i in ids if re.search(r"(^|[-/])(vu|ru)([-/]|$)", i)] and "proof block" not in text.lower()
 
 
 def test_the_census_is_data_only() -> None:

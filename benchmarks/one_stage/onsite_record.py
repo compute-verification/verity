@@ -434,7 +434,7 @@ NO_CHAIN_REPORT = f"the run published no chain report ({CHAIN_REPORT}), whose st
 CHARGED = ("MonitoringPeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
            "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
            "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
-           "It reads no cap and no advice length: the advice is the compile unit's input, not the window Program's "
+           "It reads no cap and no advice length: the advice is the compile slice's proof block's input, not the window Program's "
            "(`records_audit.py declared_count`), so neither the advice registration's width ℓ_a (its compiler's "
            "cap_bits) nor |a_j| is in it. It is the tight form, the figure of record only once the period's check "
            "performs both checks it rests on and none of its premises is open (`CHECKS`, `DISCHARGE`, `OPEN`)")
