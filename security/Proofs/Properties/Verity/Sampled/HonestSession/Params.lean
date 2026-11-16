@@ -155,10 +155,14 @@ well-founded-recursive, so the kernel does not reduce it (`canon_norm` only give
 
 `jnorm θJ = θJ` and `jnorm paramsJ = paramsJ` are *discharged* below (`norm_θJ`, `norm_paramsJ`): `norm` rebuilds each
 object as the tree of its members re-inserted in ascending key order (`normObj`), which reproduces a literal exactly when
-that literal is `mkObj` of an ascending, duplicate-free key list at every level, as every `Data/` object is. The one
-object this piece does not yet descend is `programJ`, whose literal is nested many levels deep: discharging its
-fixpoint the same way needs a per-level tree equality for every one of its ~15 objects (the concrete `kernel_rfl'` over
-the whole literal exhausts memory, so each level's tree equality is proved with its values abstract). Until then
+that literal is `mkObj` of an ascending, duplicate-free key list at every level (`norm_mkObj_fix`), as `θJ`, `paramsJ`
+and all but one of `programJ`'s objects are. The one object this piece does not yet descend is `programJ`, for two
+reasons: its literal is nested ~15 objects deep, so discharging its fixpoint the same way needs a per-level tree equality
+for each (the concrete `kernel_rfl'` over the whole literal exhausts memory, so each level's tree equality is proved with
+its values abstract, as the `*_tree` lemmas do); and its `definitions` member is the one non-ascending literal (source
+keys `Input16_v1, Unit_v1, Root_v1`; sorted order `Input16_v1 < Root_v1 < Unit_v1`), so `norm_mkObj_fix` does not apply
+to it directly — it needs a value-preserving reorder to the ascending key list first (`mkObj` of either list is the same
+tree, since `ofList` sorts), which the scratch `NormProbe` validated through `norm_mkObj_fix_ns`. Until then
 `norm_θJ`/`norm_paramsJ` take `jnorm programJ = programJ` as a hypothesis, and `NormFacts` is exactly that one
 structural fact. -/
 def NormFacts : Prop := jnorm programJ = programJ
