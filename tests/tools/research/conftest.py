@@ -40,7 +40,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     if SHADOWED:
         monkeypatch.setenv("PYTHONPATH", str(SRC), prepend=os.pathsep)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path_factory.mktemp("store")))
-    # ... nor research.mem's ledger (/workspace/ramlock), which a slot.py a test starts reads once the clear above took the guard's
+    # ... nor research.mem's ledger (/workspace/ramlock), whose live reservations a slot.py a test starts counts against the memory
+    # free, and into which it writes its own
     monkeypatch.setenv("RESEARCH_RAMLOCK_DIR", str(tmp_path_factory.mktemp("ramlock")))
     # ... and never the developer's ~/.research/store.toml remote (an S3 config without credentials in the test env would otherwise
     # be what every test sees).  Tests that want a remote point RESEARCH_STORE_CONFIG at their own file.

@@ -197,12 +197,10 @@ def _leave(before: str) -> None:
 
 #: the machine's own files a test would read in place of its fixtures (variable: what it would read), each pointed at a path in
 #: the test's tmp dir that doesn't exist: cpu-1's run-via-slot rule, a Nebius host's CPU and GPU split, its peers and its lease
-#: deadline, a slotted machine's slots file, and research.mem's ledger, whose live reservations a slot.py a test starts counts
-#: against the memory free and into which it writes its own
+#: deadline, and a slotted machine's slots file
 HOST_FILES = {"RUNS_VIA_SLOT_FILE": "/etc/vy/runs-via-slot", "DIRECT_CPUS_FILE": "/etc/vy/direct-cpus",
               "GPU_LEASE_ALLOWED_FILE": "/etc/vy/direct-gpus", "CHECK_PEERS": "/etc/vy/peers",
-              "LEASE_DEADLINE_FILE": "/etc/research/deadline", "CHECK_SLOTS": "/workspace/research/locks/slots",
-              "RESEARCH_RAMLOCK_DIR": "/workspace/ramlock"}
+              "LEASE_DEADLINE_FILE": "/etc/research/deadline", "CHECK_SLOTS": "/workspace/research/locks/slots"}
 #: the check's caches (variable: default), each an empty directory of the test's own, so no test reads a pass, a report or a
 #: build some earlier check on the machine kept (node 1's real caches failed test_placement and test_shards)
 HOST_CACHES = {"CHECK_CACHE": "~/.cache/verity-check", "VERITY_TEST_CACHE": "~/.cache/verity/tests"}
