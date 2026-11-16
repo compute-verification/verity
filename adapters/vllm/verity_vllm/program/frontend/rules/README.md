@@ -1,19 +1,21 @@
 # verity_vllm.program.frontend.rules
 
-The lowering rules of the Build phase for vLLM's own ops. A rule takes one node of a model's exported ATen graph and
-emits one Call of a registered Definition, or refuses the node with a named reason. `DEFAULT_RULES` is the versioned
-default rule set: the members of the PyTorch adapter's `TORCH_RULES` (`verity_torch.frontend.rules`), whose rules
+These are the translator's rules for vLLM's own ops. Like the PyTorch adapter's
+([`verity_torch.frontend.rules`](../../../../../torch/verity_torch/frontend/rules/README.md)), a rule takes one node
+of a model's exported ATen graph and emits one Call of a registered Definition, or refuses the node with a named
+reason; these are the rules for the nodes plain PyTorch doesn't have, such as vLLM's RMSNorm, rotary embedding and
+attention ops.
+
+`DEFAULT_RULES` is the versioned default rule set: the members of the PyTorch adapter's `TORCH_RULES`, whose rules
 target ATen ops only, and of `VLLM_RULES`, whose rules each target an op of vLLM's. `vllm_bindings.vllm_ruleset()` is
 the default with the bindings of vLLM's custom ops, and `vocab` fills the PyTorch adapter's table of the kinds a rule
-may emit with vLLM's profiles. Each module's docstring says what it holds.
+may emit with vLLM's profiles.
 
-## What other code imports
+~~~python
+from verity_vllm.program.frontend.rules import VLLM_RULES
 
-A module's `__all__` lists the names it gives to library code outside the package. The package itself gives the rule
-sets (`DEFAULT_RULES` and the lists it is made of, which load at first use) and `vocabulary_for`; `vllm_bindings` gives
-`vllm_ruleset`, `VLLM_BINDING_RULES`, the pins of the admitted kernels and what a Build observes on its host
-(`observe_*`, `clear_observations`, `declared_derived_accounting`); the modules of one op family each give that
-family's rules with the pins, geometry tables and helpers other packages read. A module that states no `__all__` is
-the package's own. Four private names are read from outside the package all the same, and are not declared:
-`family._field_intervals`, which a benchmark reads too, `vllm_bindings.bf16_gemm._f32out_phase`,
-`vllm_bindings.collectives._ROUTE_KINDS` and `vocab._dense_kinds`.
+VLLM_RULES[:2]    # [<rule RmsNorm[vllm]_v1>, <rule FusedAddRmsNorm[vllm]_v1>]
+~~~
+
+Each module's docstring says what it holds, and [`DESIGN.md`](DESIGN.md) says which names other code imports from
+here.
