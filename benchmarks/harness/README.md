@@ -23,7 +23,7 @@ verity-bench served-table    # every protocol's served overhead from the store: 
 verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by span: the store's newest passing runs, or these files
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, no point's run: under a
                                                         # research run its numbers go into the run's result (the kit's writer)
-verity-bench overhead points|run|table  # the front door for γ at a card's operating points (`verity bench overhead`,
+verity-bench overhead table             # γ at a card's operating points, from runs of record (`verity bench overhead`,
                                         # benchmarks/overhead/README.md): the PoUW harness's kernels, not served vLLM
 verity-bench prove --system S --workload W  # a proof system's prover on a workload, a block type a row, from the store's
                                             # labelled records (`verity bench prove`, benchmarks/prove/README.md)
@@ -414,7 +414,9 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   the `inputs`, the bare word unless the first input given already opens with it, since the console's Metrics tab reads
   the mark from there until it reads `mark`. `period` and `over` say what span of time and of compute a value is
   over, each its own field where given (`benchmarks/README.md`'s "Metrics"). Under a research run (`RESEARCH_RUN_DIR` set) the result is
-  `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, whatever `out` is; outside one it is `out/result.json`.
+  `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, whatever `out` is, and each measurement holds the
+  `command` the run was launched as, from the run's `job.json` (`kit.run_command()`); outside one it is
+  `out/result.json`.
   **`kit.writer(out).validation(status, checker, detail, evidence=())`** writes the run's validation there, once: `status`
   (`passed` or `failed`, whether the run's own gates held), the `checker`'s name, its `detail` in words, and the
   `evidence`, a list of the files it stands on, as paths relative to the result's directory.
@@ -423,7 +425,7 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   to the result's directory and named once, in `measurement_files` or `artifacts`. The first writes all three keys; a
   result that uses none holds none. **`kit.writer(out, kind)`** writes a result of that `kind` (`NAME/vN`), the artifact
   kind `research` stores it as (`bench-result/v1` where a result has none), and refuses a result of another kind.
-- **`kit.report(name, text, doc, measured=(), *, document=True, mark=None, out=None, ran_with=..., accepted=None, why=None, made_up=False, withdrawn=())`:** a command's last step,
+- **`kit.report(name, text, doc, measured=(), *, document=True, mark=None, out=None, ran_with=..., accepted=None, why=None, made_up=False, withdrawn=(), from_run=None)`:** a command's last step,
   the one way `verity bench compute`, `verity bench memory` and `verity bench inference_only` print and write their
   number. It prints `text`, then `doc` as one line of JSON, whose first keys are `value`, `unit`, `commit` and `run`.
   Where it has a place to write (`out` where the caller names one, its `--out`; else `$RESEARCH_RUN_DIR/out` under a
@@ -437,7 +439,9 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   `a made-up record, not a run's` below those, `made_up: true` in the document, and each measurement marked `modeled`
   with `made_up: true`; with `accepted` false, `NAME: no number: WHY` in place of the text's headline (a first line opening with `NAME:`),
   `value` null beside `no_number` and each
-  measurement with no value and its why; `withdrawn` printed last and the document's `withdrawn`. Given none of them it
+  measurement with no value and its why; `withdrawn` printed last and the document's `withdrawn`; with `from_run`
+  naming a run other than this one, a reprint of that run's record: the print and the document as above, no
+  measurement, and one line on stderr saying so. Given none of them it
   prints and writes as before. It returns the exit code: 1 with no number, else 0. `tests/test_report.py` holds
   compute, memory and inference_only to it (compute and memory on their own suites' fixtures, inference_only on its
   stated policy), and `tests/test_interface.py` the interface's arguments.
