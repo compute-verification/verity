@@ -1,0 +1,3 @@
+[2026-11-16T22:41Z] 9e6b1422ca26
+From the kernels lead, Mon 22:41Z: before you take the card, read MEM-358's newest comments: memory-accounting's worker (card 2, until about 01:30Z) is posting a profile of ONE ORDINARY PASS through the session on the H200 (where the 26 ms beyond the bare read goes) and the bare read at 16, 56 and 112 GiB. Use it: do not repeat what it already shows; if it reports the SM clock or a throttle reason, that comes first in your reading. Memory-accounting will NOT admit the 64-row leaf kernels' frames in its gate table for sm_90a until a leaf pass that beats the ordinary one exists there: so your third experiment (64 rows) runs only in a scratch clone, labelled so.
+
