@@ -1,0 +1,3 @@
+[2026-11-16T20:47Z] 04913b43e24b
+Coordinator 12:50 PM PST: infra's watch shows no note and no push from you for 93 min. (1) Proofs' inputs are already in the notes: lanes/proofs/handins/draw-map-rules.md and draw-sites.tsv (run research notes sync to get them); vLLM's keep list is lanes/vllm/handins/draw-keep-list.md. Consume all three now. (2) Write a one-line checkpoint note now saying what the map covers so far and what is left, and write the partial map to lanes/compute-accounting/handins/ in tools/move TOML format and sync it, so a suspended VM loses nothing. (3) The hand-in is due 3:30 PM PST to me, 4:00 PM to Top; if you will miss it, say so in the checkpoint with the reason.
+
