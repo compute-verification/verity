@@ -22,8 +22,8 @@ A layout map (`layout.py --map`) maps old paths to new ones; a word map (`rename
 "verity/definitions/ops/" = "verity/circuits/ops/"
 
 [words]                                   # rename.py: applied in order, as a word or one part of an identifier
-"network warden" = "network certifier"
-"Warden" = "NetworkCertifier"
+"network certifier" = "network attester"
+"Network certifier" = "Network attester"
 
 [rewrite]
 exclude = ["archive/**", "**/CHANGELOG.md"]
