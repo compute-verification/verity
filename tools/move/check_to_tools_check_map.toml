@@ -1,0 +1,49 @@
+# The check to `tools/check/`: what `tools/move/layout.py --map tools/move/check_to_tools_check_map.toml` moves and rewrites.
+#
+# `tools/verity/check/` (`check.py`, `suites.py`, drive's and the queue's configuration, `move_check.py`, the pins list and
+# their tests) becomes `tools/check/`, whole. No file is split, added or deleted. The move scripts that name both places, to
+# find `move_check.py` and the pins list on a base from before this move or after it (`layout.py`, `rename.py`,
+# `restack.py`, `stage.py`), are not rewritten; the rest of `tools/move/` but its maps is. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"tools/verity/check/" = "tools/check/"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row
+paths = ["tools/verity/check/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: the layout of record (`tests/tree.toml`), records of what was (the earlier moves' maps, changelogs,
+# research's recorded moves, the archive), files whose bytes a digest pins, Lean sources, and the move scripts above.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/*.toml", "tools/move/layout.py",
+           "tools/move/rename.py", "tools/move/restack.py", "tools/move/stage.py", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json"]
+
+[rewrite.keep_in]
+# The relative paths of a toy tree or a docstring's example in a moved file of the check (`"../.."`, `"../../verity/lean"`),
+# which from its old place or its package's happen to name a directory of `tools/`: they name a toy's, and stay as written.
+"tools/check/anchors.py" = ["tools"]
+"tools/check/move_check.py" = ["tools"]
+"tools/check/tests/test_anchors.py" = ["tools"]
+"tools/check/tests/test_move_check.py" = ["tools", "tools/verity", "tools/verity/lean"]
+"tools/check/tests/test_node_keys.py" = ["tools"]
+"tools/check/tests/test_records.py" = ["tools/verity"]
+"tools/check/tests/test_tasks.py" = ["tools/verity"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"tools.verity.check" = "tools.check"

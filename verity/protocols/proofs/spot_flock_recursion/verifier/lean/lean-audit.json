@@ -1,0 +1,29 @@
+{
+ "format": 2,
+ "roots": ["VStarRecursion.Protocol"],
+ "exempt": {
+  "VStarRecursiveMain": "the vstar-recursive executable's entry point: its command line sends `sampled ...` to VStar.Recursive.Sampled.protocol (audited under VStarRecursive, verity/protocols/proofs/spot_flock/verifier/lean) and the rest to VStar.Recursive.main, audited under VStarRecursion"
+ },
+ "escapes": {},
+ "layers": {
+  "VStarRecursion.Protocol": {
+   "imports": [
+    "Lean",
+    "Std.Data.HashMap",
+    "Flock",
+    "CoreProtocol",
+    "Lms",
+    "Spot",
+    "VStar",
+    "VStarRecursive",
+    "VStarRecursion"
+   ],
+   "except": [],
+   "why": "the recursive audit is code: Lean core, C-Flock's verifier library (V*'s statements, RecSetup, RecCoins), the core protocol interface, the one-stage audit it decides with and SPOT's caller's check, no Mathlib and nothing of Security"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
+ }
+}

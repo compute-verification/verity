@@ -1,0 +1,61 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (lake): keyed on the suite's whole tree
+untraced = ["test_remote_coins.py"]
+# What the tests import of `verity`: the audit's codec, receipts and record, on the commitments, the randomness and the
+# profile; its coins on the one challenger, local and as a service.
+inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
+          # `coins.trusted`'s Lean verifier (`coins.lean_answer`): one_stage's `lean`, and what `lake build
+          # spot-verifier` reads, its package and its path requires
+          "verity/protocols/proofs/spot/verifier/one_stage", "verity/protocols/proofs/spot/verifier/lean",
+          "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/interface",
+          "verity/protocols/proofs/flock/verifier/Flock", "verity/protocols/proofs/flock/verifier/lakefile.toml",
+          "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean", "verity/commitments/lms/lean",
+          "verity/circuits/difftest",
+          "verity/__init__.py", "verity/errors.py",
+          "verity/protocols/proofs/spot/verifier/profile.py",
+          "verity/protocols/proofs/spot/verifier/__init__.py",
+          "verity/protocols/proofs/spot/verifier/challenger/challenger.py", "verity/protocols/proofs/spot/verifier/challenger/remote.py",
+          # one_stage's registration, which core_check imports, and its sample and verdict
+          "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/docket.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
+          "verity/circuits", "verity/commitments",
+          "verity/commitments/crypto", "verity/commitments/randomness",
+          # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
+          "verity/protocols/resource_accounting/memory/pous",
+          "verity/protocols/resource_accounting/memory/pous/prover",
+          # the deployment layer and its wire, which the session's parties run on (`session_parties.py`), the prover's
+          # party (`session_prover.py`), which test_session_parties.py runs against the verifier's, and the monitoring
+          # periods, which `monitoring` reads
+          "verity/channel.py", "verity/runtime", "tests/verity/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/__init__.py", "verity/protocols/resource_accounting/memory/poub/prover/session_prover.py",
+          # the honest provers and the period's prover side, which the tests run against the verifier's
+          "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_prover.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/period_prover.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/opening_prover.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/p2_party_prover.py",
+          # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and
+          # test_gate_ranges.py recompute from codec.encode_word, the f32 evaluators and property/v1's rules, and
+          # Exp2Lut127's table, which test_gate_ranges.py holds to vLLM's (fixtures/exp2_lut127.json)
+          "security/Proofs/Accounting/Gates.lean", "security/Definitions/Accounting/Gates/Ranges.lean",
+          # main's first-parent history, spot' fixture, which test_remote_coins.py holds a session's pin to
+          "tests/verity/protocols/proofs/spot/verifier/fixtures/main-first-parent.txt",
+          # core's model pin, whose every role's checkpoint_sha512 test_store.py recomputes with the store's own
+          # canonical JSON, held to the circuits codec's
+          "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json",
+          # PoUW's core answer form and what it imports, which test_p2_party.py holds a session's answer to
+          "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/coins.py", "verity/protocols/resource_accounting/compute/pouw/verifier/core_check.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/verifier.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/protocol.py", "verity/protocols/resource_accounting/compute/pouw/verifier/salt.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/window.py", "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "verity/protocols/resource_accounting/memory/poub/verifier"]

@@ -1,0 +1,22 @@
+# Node 2's GPU sampler, research's user unit (`systemctl --user`, lingering) in place of tmux pouw-infra-util. Its start asks
+# NVML for the GPU count (nvidia-smi -L), so it starts only outside a timed window: install restarts nothing on node 2 while
+# one runs or waits (deploy.toml's `quiet`).
+[Unit]
+Description=node 2's per-GPU utilisation sampler (gpu_util_sampler.py)
+StartLimitIntervalSec=1h
+StartLimitBurst=10
+
+[Service]
+WorkingDirectory=/workspace/pouw/infra
+EnvironmentFile=/etc/environment
+EnvironmentFile=/etc/vy/env/research.env
+EnvironmentFile=/etc/vy/env/%N.env
+ExecStart=/usr/bin/python3 /workspace/pouw/infra/bin/gpu_util_sampler.py
+Restart=on-failure
+RestartSec=5
+Nice=0
+IOSchedulingClass=best-effort
+StandardError=append:/workspace/pouw/infra/logs/sampler.err
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,140 @@
+module
+
+public import Flock.HmRow
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Refine.Regions
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Refine.Setup
+
+/-!
+# The facts read off `Spec`
+
+What `Discharge/HiddenExec` reads of `Stmt.setupHidden`, from `setupHidden_spec`: its tags and the sampled public file (its
+leaf scheme and well-formedness, `setupHidden_hm96` and `setupHidden_wf`, are `Hidden.Commit`'s, on the committed
+circuit); and of `HmOut.parse`, that an untyped one is `HmRow.parse`'s circuit then `HmOut.checkRows`
+(`parse_untyped`).
+-/
+
+@[expose] public section
+
+open Flock FlockLevel3
+open Lean (Json)
+
+namespace FlockSoundness.Discharge.Hidden
+
+open Refine
+
+variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+  {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
+
+/-! ## The parse -/
+
+/-- **`HmOut.parse`** is `HmRow.parse`'s circuit (a typed statement's: on its template, with its block and class, or
+on its unit, with its class), then `HmOut.checkRows`. -/
+theorem parse_cases {c : Circuit} (h : HmOut.parse tags cf tables = .ok c) :
+    HmOut.checkRows c = .ok () ∧
+      ((tags.typed = false ∧ HmRow.parse tags cf tables = .ok c) ∨
+        (∃ k b tm c₀, HmRow.parse tags cf tables (tmpl := some tm) = .ok c₀ ∧
+          c = { c₀ with typed := some b, cls := some k }) ∨
+        ∃ k unit c₀, HmRow.parse tags cf tables (pre := #[("unit", unit)]) = .ok c₀ ∧ c = { c₀ with cls := some k }) := by
+  have hi := HmOut.parse_isTmpl h
+  unfold HmOut.parse at h
+  rw [if_neg (by simp [hi])] at h
+  dsimp only at h
+  cases ht : tags.typed
+  · simp only [ht, Bool.not_false, ↓reduceIte] at h
+    obtain ⟨c₀, hc₀, h⟩ := ebind_ok h
+    obtain ⟨u, hu, h⟩ := ebind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ⟨hu, .inl ⟨rfl, hc₀⟩⟩
+  · simp only [ht, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+    obtain ⟨⟨k, r⟩, -, h⟩ := ebind_ok h
+    dsimp only at h
+    cases r with
+    | inr t =>
+        obtain ⟨c', hc', h⟩ := ebind_ok h
+        simp only [pure_bind] at h
+        obtain ⟨u, hu, h⟩ := ebind_ok h
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        exact ⟨hu, .inr (.inl ⟨k, _, _, c', hc', rfl⟩)⟩
+    | inl unit =>
+        obtain ⟨c', hc', h⟩ := ebind_ok h
+        simp only [pure_bind] at h
+        obtain ⟨u, hu, h⟩ := ebind_ok h
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        exact ⟨hu, .inr (.inr ⟨k, unit, c', hc', rfl⟩)⟩
+
+/-- **`parse_untyped`**: an untyped `HmOut.parse` is `HmRow.parse`'s circuit, then `HmOut.checkRows`. -/
+theorem parse_untyped {c : Circuit} (ht : tags.typed = false) (h : HmOut.parse tags cf tables = .ok c) :
+    HmRow.parse tags cf tables = .ok c ∧ HmOut.checkRows c = .ok () := by
+  have hi := HmOut.parse_isTmpl h
+  unfold HmOut.parse at h
+  rw [if_neg (by simp [hi])] at h
+  simp only [ht, Bool.not_false, ↓reduceIte] at h
+  obtain ⟨c₀, hc₀, h⟩ := ebind_ok h
+  obtain ⟨u, hu, h⟩ := ebind_ok h
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  exact ⟨hc₀, hu⟩
+
+/-- An `HmOut.parse` circuit has the tags' leaf scheme. -/
+theorem parse_leafScheme {c : Circuit} (h : HmOut.parse tags cf tables = .ok c) : c.leafScheme = tags.merkleLeaf := by
+  obtain ⟨-, ⟨-, hc⟩ | ⟨k, b, tm, c₀, hc, he⟩ | ⟨k, unit, c₀, hc, he⟩⟩ := parse_cases h
+  · exact Exec.parse_leafScheme_pre hc
+  · have := Exec.parse_leafScheme_tmpl hc; rw [he]; exact this
+  · have := Exec.parse_leafScheme_pre hc; rw [he]; exact this
+
+/-- An `HmOut.parse` circuit's slots are `HmRow.check`'s: `slot_log` in 7..k_log. -/
+theorem parse_slots {c : Circuit} (h : HmOut.parse tags cf tables = .ok c) :
+    ∀ r ∈ c.ranges.toList, 7 ≤ r.slotLog ∧ r.slotLog ≤ c.kLog := by
+  obtain ⟨-, ⟨-, hc⟩ | ⟨k, b, tm, c₀, hc, he⟩ | ⟨k, unit, c₀, hc, he⟩⟩ := parse_cases h
+  · obtain ⟨_, hls⟩ := hm_parse_check_none hc
+    exact hm_check_slots hls
+  · obtain ⟨_, hls⟩ := hm_parse_check_some hc
+    have := hm_check_slots hls; rw [he]; exact this
+  · obtain ⟨_, hls⟩ := hm_parse_check_none hc
+    have := hm_check_slots hls; rw [he]; exact this
+
+/-! ## The regions -/
+
+/-- Every region `HmOut.regions` builds is `mkRegion`'s, so well formed. -/
+theorem regions_wf {c : Circuit} {pub : Public} {regs : Array Region} (h : HmOut.regions c pub = .ok regs) :
+    ∀ x ∈ regs.toList, RegionWF c.kLog x := by
+  unfold HmOut.regions at h
+  obtain ⟨-, hall⟩ := Exec.range_mapM_ok h
+  intro x hx
+  obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hx
+  exact mkRegion_wf (hall j (by simpa using hj))
+
+/-! ## The facts read off `Spec` -/
+
+/-- `Spec.tagsEq`. -/
+theorem setupHidden_tags (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    st.tags = tags :=
+  (setupHidden_spec' h).tagsEq
+
+/-- `Spec.pub`, at a sample. -/
+theorem setupHidden_sampled {d : Json}
+    (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) :
+    ∃ pop, HmOut.loadPublic tags st.c pf = .ok pop ∧ HmOut.drawn st.c pop d = .ok st.pub := by
+  obtain ⟨pop, hl, -, hd⟩ := (setupHidden_spec' h).pub
+  exact ⟨pop, hl, hd d rfl⟩
+
+end FlockSoundness.Discharge.Hidden

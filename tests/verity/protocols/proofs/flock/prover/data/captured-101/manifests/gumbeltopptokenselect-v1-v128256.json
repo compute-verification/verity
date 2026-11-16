@@ -1,0 +1,113 @@
+{
+ "content_digest": "1fdb58eeda3c44fc1239a5695f628311a5215132b248ad87855cadcea0ce9eb5",
+ "content_digest_rule": "sha256 of the canonical JSON of {schema, set, relation, n, ports, files without index.json}",
+ "files": {
+  "in0.u16": {
+   "bytes": 8208384,
+   "sha256": "4109b34459b880d671499dcc1af10a4862d0286567dae805299159d948a0471f"
+  },
+  "in1.u32": {
+   "bytes": 128,
+   "sha256": "126e34cdbb34d7f07a67d3b78211692025d77fb2c41f028a4d726ff70fb2424f"
+  },
+  "in2.u64": {
+   "bytes": 256,
+   "sha256": "eb90274caa3ca52a0d98abcc0136d88aaab70edaaf9ce53ad23372326099064f"
+  },
+  "in3.u64": {
+   "bytes": 256,
+   "sha256": "8cae753f0fbb9c2256ad60364f664b8d28b90c1ff952b40d634af40c95bd48bf"
+  },
+  "in4.u32": {
+   "bytes": 128,
+   "sha256": "98d08e7c41ae43db25d6fb465332cd343e812f7ff1214903c3b7d740f5e1fdf6"
+  },
+  "in5.u32": {
+   "bytes": 128,
+   "sha256": "491f6b2c225088be1165f2b2aef8c54aa887a04601d09d44f8a7c1ccf14ccc60"
+  },
+  "index.json": {
+   "bytes": 1987,
+   "sha256": "b3d3c3feff377bba641d65e841c9d1958787b6dad51a22b6ef6e95137d251158"
+  },
+  "out.sampled_token_ids.u64": {
+   "bytes": 256,
+   "sha256": "df58f8cae3620f2730d99f048f5ce14ed3ba313ce36ceb6a5f218c5e91e7cc3f"
+  }
+ },
+ "n": 32,
+ "ports": {
+  "in0": {
+   "dtype": "u16",
+   "file": "in0.u16",
+   "words": 128256
+  },
+  "in1": {
+   "dtype": "u32",
+   "file": "in1.u32",
+   "words": 1
+  },
+  "in2": {
+   "dtype": "u64",
+   "file": "in2.u64",
+   "words": 1
+  },
+  "in3": {
+   "dtype": "u64",
+   "file": "in3.u64",
+   "words": 1
+  },
+  "in4": {
+   "dtype": "u32",
+   "file": "in4.u32",
+   "words": 1
+  },
+  "in5": {
+   "dtype": "u32",
+   "file": "in5.u32",
+   "words": 1
+  },
+  "out.sampled_token_ids": {
+   "dtype": "u64",
+   "file": "out.sampled_token_ids.u64",
+   "words": 1
+  }
+ },
+ "provenance": {
+  "manifest_digest": "90f8186879d5035af027259151b4ac465bf6c3dcf08c1e6d62dab9b680bfeaac",
+  "model": "unsloth/Llama-3.2-1B",
+  "pair": 0,
+  "program_digests": {
+   "r0": "ccc213475e7c4eed04b3b0d3717e2144012be65f41d900a018dbd09d1e400c6b"
+  },
+  "research_run": "r20260925-233347-8515",
+  "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+  "row": 101,
+  "row_key": "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager",
+  "run_root": "7adcef49184525329814d62364be7cb2b2c45003cad96dbca1434b11f5b1dec5",
+  "selection": "verity.randomness.derive(b'verity-vllm benchmark selection', 'verity/vllm-vu-export/select/v1', {run_root}); per family key.shard(('family', family)) through challenge.stratum_picks; sub-indices key.subset(k, n, ('row', request, i, evaluation))",
+  "versions": {
+   "cuda": "12.9",
+   "declared_execution": "bi-eager",
+   "enforce_eager": true,
+   "flashinfer": "0.6.18",
+   "numpy": "2.3.5",
+   "python": "3.12.14",
+   "torch": "2.13.0+cu129",
+   "transformers": "5.17.0",
+   "triton": "3.7.1",
+   "vllm": "0.28.1rc1.dev472+gd9105ea80",
+   "weights_hash": "host"
+  }
+ },
+ "relation": {
+  "definition": "GumbelTopPTokenSelect_v1",
+  "rule": "the registered row kernel of GumbelTopPTokenSelect_v1 (verity_vllm.program.kernels.rows)",
+  "statics": {
+   "V": 128256
+  },
+  "subcircuit": "GumbelTopPTokenSelect_v1"
+ },
+ "schema": "vllm-vu-set/v1",
+ "set": "gumbeltopptokenselect-v1-v128256"
+}

@@ -1,0 +1,1005 @@
+{
+ "about": "The measured inputs of SPOT's cost model (verity/protocols/proofs/spot/prover/cost/inputs.py reads them): each input a value, a low and a high, its source and its status (M measured, A assumed, D derived), in GPU-seconds of an RTX PRO 6000 (sm_120); the models' shapes; and the cost model's observations by card, each card with the builds and hardware they key and its price ratio (an input's name).",
+ "inputs": {
+  "cpu": {
+   "value": 0.01818181818181818,
+   "low": 0.00909090909090909,
+   "high": 0.037037037037037035,
+   "source": "vCPU $0.033/h against sm_120 $1.80/h (X = 55)",
+   "status": "M"
+  },
+  "cpu_h200": {
+   "value": 0.006238185255198488,
+   "low": 0.003119092627599244,
+   "high": 0.012452830188679246,
+   "source": "vCPU $0.033/h against one H200 SXM's $5.29/h on RunPod, the h200 card's pod (X = 160)",
+   "status": "M"
+  },
+  "round": {
+   "value": 12.6,
+   "low": 12.6,
+   "high": 12.6,
+   "source": "a round (the budget model)",
+   "status": "A"
+  },
+  "rounds": {
+   "value": 48000,
+   "low": 48000,
+   "high": 48000,
+   "source": "a week of rounds (the budget model's S)",
+   "status": "A"
+  },
+  "tokens_per_s": {
+   "value": 20000,
+   "low": 8000,
+   "high": 40000,
+   "source": "int8 Llama-3.1-8B on one RTX PRO 6000: 7.2G MACs a token at 2K context against 5e14 MAC/s dense int8 at 30-40% (prefill) down to decode's weight-bandwidth bound",
+   "status": "A"
+  },
+  "context": {
+   "value": 2048,
+   "low": 2048,
+   "high": 2048,
+   "source": "prefill at 2K, positions uniform (the budget model's binding cell): a request is one prompt of it, re-run whole from its committed tokens and the weights to rebuild a drawn proof block's witness, at `tokens_per_s`",
+   "status": "A"
+  },
+  "commit_per_byte": {
+   "value": 4.34e-12,
+   "low": 2.2e-12,
+   "high": 1.3e-11,
+   "source": "SHA-512 rows on H200: 3.62 ps a byte plus 2.94 ns a 4 KiB leaf; sm_120 taken at 0.5-3x",
+   "status": "M"
+  },
+  "commit_floor": {
+   "value": 0.06,
+   "low": 0.045,
+   "high": 0.101,
+   "source": "the one serve-time term of the 'floor' scheme: the measured hashing of the int8 linears' s8 A operands in R = 128 x 32 leaves beside the GEMM on sm_120 (0.101 at R = 64), the leaves the Commit holds and PoUW's seeds read under compile: Llama-3.1-8B's 26,624 B a token a layer, which the serve-time total prices with every other scale's bytes",
+   "status": "M"
+  },
+  "remote_receipts": {
+   "value": 268000000.0,
+   "low": 268000000.0,
+   "high": 268000000.0,
+   "source": "PoUB's receipts a GPU a pass: 64 B a 4 KiB block over the registered store, 128 GiB on the 8-GPU Llama-3.1-8B node",
+   "status": "D"
+  },
+  "passes_per_s": {
+   "value": 65,
+   "low": 1,
+   "high": 82,
+   "source": "PoUB passes a GPU-second: about 60-70 at 12.1 ms a pass; 82 back to back; whether every served step is a pass is open",
+   "status": "A"
+  },
+  "decode_tokens": {
+   "value": 32,
+   "low": 32,
+   "high": 32,
+   "source": "tokens a decode step (B32, the scales table's decode)",
+   "status": "A"
+  },
+  "compress_latency": {
+   "value": 4.3e-06,
+   "low": 2e-06,
+   "high": 6e-06,
+   "source": "seconds a dependent SHA-512 compression on decode's critical path: Pearl-C's s512_rows chain, 28 deep in 121 us",
+   "status": "M"
+  },
+  "noise_bits": {
+   "value": 1,
+   "low": 1,
+   "high": 2,
+   "source": "noise bits an entry",
+   "status": "A"
+  },
+  "zero_work_templates": {
+   "value": 30,
+   "low": 15,
+   "high": 60,
+   "source": "the layer's templates that carry no work (quantizers, softmax, norms, the epilogues' pieces), each held at its floor",
+   "status": "A"
+  }
+ },
+ "models": {
+  "llama-3.1-8b": {
+   "layers": 32,
+   "heads": 32,
+   "kv_heads": 8,
+   "head_dim": 128,
+   "hidden": 4096,
+   "intermediate": 14336
+  },
+  "qwen3-8b": {
+   "layers": 36,
+   "heads": 32,
+   "kv_heads": 8,
+   "head_dim": 128,
+   "hidden": 4096,
+   "intermediate": 12288
+  }
+ },
+ "s8": {
+  "run": "r20261018-060433-b55e",
+  "points": [
+   [
+    4096,
+    1,
+    1,
+    22.34,
+    57.63,
+    4.7
+   ],
+   [
+    4096,
+    8,
+    1,
+    21.57,
+    54.98,
+    4.5
+   ],
+   [
+    4096,
+    8,
+    8,
+    19.33,
+    50.17,
+    4.5
+   ],
+   [
+    4096,
+    64,
+    1,
+    18.55,
+    49.91,
+    7.2
+   ],
+   [
+    4096,
+    64,
+    8,
+    25.67,
+    47.32,
+    7.2
+   ],
+   [
+    4096,
+    64,
+    64,
+    27.75,
+    42.71,
+    7.2
+   ],
+   [
+    4096,
+    512,
+    1,
+    21.68,
+    41.03,
+    10.2
+   ],
+   [
+    4096,
+    512,
+    8,
+    21.22,
+    43.25,
+    10.2
+   ],
+   [
+    4096,
+    512,
+    64,
+    30.57,
+    46.27,
+    10.2
+   ],
+   [
+    4096,
+    512,
+    512,
+    62.17,
+    45.5,
+    10.2
+   ],
+   [
+    14336,
+    1,
+    1,
+    50.5,
+    109.09,
+    9.6
+   ],
+   [
+    14336,
+    8,
+    1,
+    54.69,
+    113.45,
+    9.9
+   ],
+   [
+    14336,
+    8,
+    8,
+    54.68,
+    145.56,
+    9.9
+   ],
+   [
+    14336,
+    64,
+    1,
+    53.68,
+    137.31,
+    16.1
+   ],
+   [
+    14336,
+    64,
+    8,
+    54.06,
+    124.98,
+    16.1
+   ],
+   [
+    14336,
+    64,
+    64,
+    65.44,
+    121.23,
+    16.1
+   ],
+   [
+    14336,
+    512,
+    1,
+    54.45,
+    114.67,
+    41.6
+   ],
+   [
+    14336,
+    512,
+    8,
+    54.39,
+    109.83,
+    41.6
+   ],
+   [
+    14336,
+    512,
+    64,
+    66.22,
+    107.66,
+    41.6
+   ],
+   [
+    14336,
+    512,
+    512,
+    131.07,
+    119.78,
+    41.6
+   ]
+  ]
+ },
+ "opening": {
+  "template": "BlockOpeningCheck_v1{N=512,C=569,K=2,MASKED=0,BYTES=4096,ROWS=16,LEAF=16,P=64,DR=2,DP=12,DV=1}",
+  "ands": 29617630,
+  "sessions": {
+   "r20261018-195718-d00b": [
+    [
+     64,
+     1,
+     139.5
+    ],
+    [
+     64,
+     8,
+     138.0
+    ],
+    [
+     64,
+     32,
+     161.0
+    ],
+    [
+     64,
+     64,
+     163.5
+    ]
+   ],
+   "r20261018-211523-93ec": [
+    [
+     512,
+     64,
+     156.0
+    ],
+    [
+     512,
+     128,
+     161.0
+    ],
+    [
+     512,
+     256,
+     197.0
+    ],
+    [
+     512,
+     512,
+     234.0
+    ]
+   ]
+  }
+ },
+ "h200": {
+  "r20261106-074634-13c4": [
+   [
+    "MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}",
+    73969,
+    4096,
+    4096,
+    2.409,
+    null,
+    28.6
+   ],
+   [
+    "MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}",
+    73969,
+    8192,
+    8,
+    1.144,
+    null,
+    32.0
+   ],
+   [
+    "MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}",
+    73969,
+    8192,
+    64,
+    1.311,
+    null,
+    32.0
+   ],
+   [
+    "MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}",
+    73969,
+    8192,
+    8192,
+    3.956,
+    12.82,
+    32.0
+   ],
+   [
+    "MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}",
+    1737375,
+    512,
+    512,
+    7.542,
+    null,
+    93.2
+   ],
+   [
+    "MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}",
+    1737375,
+    1024,
+    8,
+    6.341,
+    null,
+    103.2
+   ],
+   [
+    "MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}",
+    1737375,
+    1024,
+    64,
+    6.528,
+    null,
+    103.2
+   ],
+   [
+    "MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}",
+    1737375,
+    1024,
+    1024,
+    8.794,
+    43.32,
+    103.2
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}",
+    539177,
+    2048,
+    2048,
+    3.489,
+    null,
+    58.4
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}",
+    539177,
+    4096,
+    8,
+    2.312,
+    null,
+    79.7
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}",
+    539177,
+    4096,
+    64,
+    2.195,
+    null,
+    79.7
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}",
+    539177,
+    4096,
+    4096,
+    4.542,
+    17.97,
+    79.7
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=256,G=128}",
+    66607,
+    8192,
+    8192,
+    2.407,
+    null,
+    33.8
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=256,G=128}",
+    66607,
+    16384,
+    8,
+    1.212,
+    null,
+    45.9
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=256,G=128}",
+    66607,
+    16384,
+    64,
+    1.266,
+    null,
+    45.9
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=256,G=128}",
+    66607,
+    16384,
+    16384,
+    4.086,
+    12.14,
+    45.9
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}",
+    1619337,
+    1024,
+    8,
+    4.281,
+    null,
+    108.8
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}",
+    1619337,
+    1024,
+    1024,
+    5.497,
+    null,
+    108.8
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}",
+    1619337,
+    2048,
+    8,
+    4.732,
+    null,
+    137.8
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}",
+    1619337,
+    2048,
+    64,
+    4.724,
+    null,
+    137.8
+   ],
+   [
+    "ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}",
+    1619337,
+    2048,
+    2048,
+    6.764,
+    42.37,
+    137.8
+   ]
+  ],
+  "r20261106-092817-df0b": [
+   [
+    "MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}",
+    619034,
+    128,
+    128,
+    19.884,
+    null,
+    62.4
+   ],
+   [
+    "MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}",
+    619034,
+    256,
+    8,
+    16.883,
+    null,
+    68.8
+   ],
+   [
+    "MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}",
+    619034,
+    256,
+    64,
+    17.583,
+    null,
+    68.8
+   ],
+   [
+    "MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}",
+    619034,
+    256,
+    256,
+    18.481,
+    21.54,
+    68.8
+   ]
+  ],
+  "r20261106-074918-e6ff": [
+   [
+    "DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}",
+    126769,
+    8192,
+    8192,
+    5.776,
+    null,
+    107.5
+   ],
+   [
+    "DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}",
+    126769,
+    16384,
+    8,
+    3.813,
+    null,
+    149.1
+   ],
+   [
+    "DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}",
+    126769,
+    16384,
+    64,
+    4.429,
+    null,
+    149.1
+   ],
+   [
+    "DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}",
+    126769,
+    16384,
+    16384,
+    8.054,
+    60.62,
+    149.1
+   ],
+   [
+    "DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}",
+    122673,
+    8192,
+    8192,
+    5.976,
+    null,
+    84.6
+   ],
+   [
+    "DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}",
+    122673,
+    16384,
+    8,
+    4.582,
+    null,
+    104.8
+   ],
+   [
+    "DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}",
+    122673,
+    16384,
+    64,
+    4.938,
+    null,
+    104.8
+   ],
+   [
+    "DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}",
+    122673,
+    16384,
+    16384,
+    7.996,
+    59.87,
+    104.8
+   ],
+   [
+    "DsaMqaLogit_v1{H=32,D=128}",
+    1087058,
+    1024,
+    1024,
+    4.577,
+    null,
+    71.8
+   ],
+   [
+    "DsaMqaLogit_v1{H=32,D=128}",
+    1087058,
+    2048,
+    8,
+    3.907,
+    null,
+    75.6
+   ],
+   [
+    "DsaMqaLogit_v1{H=32,D=128}",
+    1087058,
+    2048,
+    64,
+    3.702,
+    null,
+    75.6
+   ],
+   [
+    "DsaMqaLogit_v1{H=32,D=128}",
+    1087058,
+    2048,
+    2048,
+    6.252,
+    28.04,
+    75.6
+   ],
+   [
+    "DsaTopKShortRow_v1{TOPK=2048}",
+    28,
+    16384,
+    16384,
+    2.473,
+    null,
+    91.3
+   ],
+   [
+    "DsaTopKShortRow_v1{TOPK=2048}",
+    28,
+    32768,
+    8,
+    0.984,
+    null,
+    166.9
+   ],
+   [
+    "DsaTopKShortRow_v1{TOPK=2048}",
+    28,
+    32768,
+    64,
+    1.072,
+    null,
+    166.9
+   ],
+   [
+    "DsaTopKShortRow_v1{TOPK=2048}",
+    28,
+    32768,
+    32768,
+    4.197,
+    12.92,
+    166.9
+   ],
+   [
+    "MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}",
+    164320,
+    4096,
+    4096,
+    2.763,
+    null,
+    77.7
+   ],
+   [
+    "MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}",
+    164320,
+    8192,
+    8,
+    1.496,
+    null,
+    120.8
+   ],
+   [
+    "MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}",
+    164320,
+    8192,
+    64,
+    1.55,
+    null,
+    120.8
+   ],
+   [
+    "MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}",
+    164320,
+    8192,
+    8192,
+    4.138,
+    17.82,
+    120.8
+   ],
+   [
+    "MoeSumCoordinate_v1{TOPK=8}",
+    6494,
+    16384,
+    16384,
+    2.641,
+    null,
+    23.6
+   ],
+   [
+    "MoeSumCoordinate_v1{TOPK=8}",
+    6494,
+    32768,
+    8,
+    1.234,
+    null,
+    25.5
+   ],
+   [
+    "MoeSumCoordinate_v1{TOPK=8}",
+    6494,
+    32768,
+    64,
+    1.035,
+    null,
+    25.5
+   ],
+   [
+    "MoeSumCoordinate_v1{TOPK=8}",
+    6494,
+    32768,
+    32768,
+    4.033,
+    13.21,
+    25.5
+   ],
+   [
+    "RMSNormFusedCuda_v2{N=6144,EPS=1e-05}",
+    12778458,
+    512,
+    512,
+    26.543,
+    null,
+    559.3
+   ],
+   [
+    "RMSNormFusedCuda_v2{N=6144,EPS=1e-05}",
+    12778458,
+    1024,
+    8,
+    27.654,
+    null,
+    633.5
+   ],
+   [
+    "RMSNormFusedCuda_v2{N=6144,EPS=1e-05}",
+    12778458,
+    1024,
+    1024,
+    30.936,
+    652.35,
+    633.5
+   ],
+   [
+    "RMSNormTriton_v1{N=2048,EPS=1e-06}",
+    4368140,
+    1024,
+    1024,
+    21.757,
+    null,
+    301.7
+   ],
+   [
+    "RMSNormTriton_v1{N=2048,EPS=1e-06}",
+    4368140,
+    2048,
+    8,
+    16.018,
+    null,
+    347.5
+   ],
+   [
+    "RMSNormTriton_v1{N=2048,EPS=1e-06}",
+    4368140,
+    2048,
+    2048,
+    17.793,
+    461.7,
+    347.5
+   ],
+   [
+    "RopeOut_v1",
+    2998,
+    4096,
+    4096,
+    2.261,
+    null,
+    22.3
+   ],
+   [
+    "RopeOut_v1",
+    2998,
+    8192,
+    8,
+    1.087,
+    null,
+    23.8
+   ],
+   [
+    "RopeOut_v1",
+    2998,
+    8192,
+    64,
+    1.197,
+    null,
+    23.8
+   ],
+   [
+    "RopeOut_v1",
+    2998,
+    8192,
+    8192,
+    3.985,
+    10.06,
+    23.8
+   ],
+   [
+    "SiluMulBf16_v2",
+    1416,
+    8192,
+    8192,
+    2.432,
+    null,
+    23.0
+   ],
+   [
+    "SiluMulBf16_v2",
+    1416,
+    16384,
+    8,
+    1.111,
+    null,
+    23.0
+   ],
+   [
+    "SiluMulBf16_v2",
+    1416,
+    16384,
+    64,
+    1.001,
+    null,
+    23.0
+   ],
+   [
+    "SiluMulBf16_v2",
+    1416,
+    16384,
+    16384,
+    3.664,
+    10.98,
+    23.0
+   ],
+   [
+    "SiluMulFp8BlockQuantGroup_v1{G=128}",
+    48230,
+    8192,
+    8192,
+    2.247,
+    null,
+    126.4
+   ],
+   [
+    "SiluMulFp8BlockQuantGroup_v1{G=128}",
+    48230,
+    16384,
+    8,
+    1.26,
+    null,
+    237.2
+   ],
+   [
+    "SiluMulFp8BlockQuantGroup_v1{G=128}",
+    48230,
+    16384,
+    64,
+    0.996,
+    null,
+    237.2
+   ],
+   [
+    "SiluMulFp8BlockQuantGroup_v1{G=128}",
+    48230,
+    16384,
+    16384,
+    3.558,
+    10.77,
+    237.2
+   ]
+  ],
+  "r20261106-092821-266a": [
+   [
+    "MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}",
+    620575,
+    128,
+    128,
+    17.365,
+    null,
+    64.0
+   ],
+   [
+    "MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}",
+    620575,
+    256,
+    8,
+    19.276,
+    null,
+    68.3
+   ],
+   [
+    "MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}",
+    620575,
+    256,
+    64,
+    17.762,
+    null,
+    68.3
+   ],
+   [
+    "MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}",
+    620575,
+    256,
+    256,
+    20.799,
+    21.94,
+    68.3
+   ]
+  ]
+ },
+ "cards": {
+  "rtx-pro-6000": {
+   "key": {
+    "prover": "flock-circuit bin-dec484d021e461a0-g1-sm120 (binary 21944fa201b5, CUDA 13.3.1), --zk --gpu, FC_HOST_WITNESS=1, the ZK server's send check on; the opening unit's sessions bin-b4e798e6b2590a24-g1-sm120, the same flags",
+    "verifier": "verity-verify-proof lean-3a9d4dc43048fdae (binary b3b257d5ac0e), verify --zk, one CPU",
+    "hardware": "RTX PRO 6000 Blackwell Server Edition (driver 580.173.02), Xeon 6776P, vy-nebius-2; the opening unit's, the same card on vy-nebius-1",
+    "templates": "ScaledMmS8Coordinate_v1{K=4096|14336}, BlockOpeningCheck_v1{N=512,C=569,K=2,MASKED=0,BYTES=4096,ROWS=16,LEAF=16,P=64,DR=2,DP=12,DV=1}"
+   },
+   "price": "cpu"
+  },
+  "h200": {
+   "key": {
+    "prover": "flock-circuit bin-32a698fff862d3db-g1-sm90 (binary 09fbd3d8c1d3, CUDA 13.3), --zk --gpu, FC_HOST_WITNESS and FC_ZK_SERVER unset",
+    "verifier": "verity-verify-proof lean-3e804125132e928c (binary f399b8425bd6), verify --zk, one CPU",
+    "hardware": "H200 SXM 141 GB (driver 595.91.07), Xeon Platinum 8568Y+, vy-spot-h1",
+    "templates": "GLM-5.3's served proof-block types at TP8 (benchmarks/served_units/stage.py)"
+   },
+   "price": "cpu_h200"
+  }
+ }
+}
