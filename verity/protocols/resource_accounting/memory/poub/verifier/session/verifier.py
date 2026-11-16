@@ -1,4 +1,4 @@
-"""The verifier's process: PoUB v0's `AuditRun` (verity/protocols/accounting/poub/verifier/audit.py)
+"""The verifier's process: PoUB v0's `AuditRun` (verity/protocols/resource_accounting/memory/poub/verifier/audit.py)
 driven over the wire against a prover on another process or machine, with a secret of its own.
 
 One connection serves one registration and then `--sessions` sessions over it, each of `--windows` windows of
@@ -67,13 +67,13 @@ beside it, and where the two differ the session is refused as `disagreement` (it
 
 `--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.DifftestCase`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
-was set, which `replay.py transcript` (verity/protocols/accounting/poub/verifier/lean/tests) replays through both
+was set, which `replay.py transcript` (verity/protocols/resource_accounting/memory/poub/verifier/lean/tests) replays through both
 verifiers, rejections included. A message the driver couldn't read is in no event: the case ends before it. A run
 keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
 0.6 GB of JSON.
 
 A session's coins are an epoch of the proof system's one challenger (`coins.SessionCoins`): from a challenger in this process
-(`--challenger local`, the default), from `verity/protocols/compose/device/live_challenger/serve.py`, started for the session on this
+(`--challenger local`, the default), from `verity/protocols/compose/verifier/live_challenger/serve.py`, started for the session on this
 machine and reached through `spot.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
 auditor device's challenger through its gate, a session reserved in the audit's period and opened at the session's
 window root (`--challenger gate`, `challengers.ChallengerGate`). Each coin is asked for after the root it follows, the
@@ -90,7 +90,7 @@ the Lean's session, which holds only the append coins released, otherwise.
 
 Openings are checked in the clear: zero-knowledge proof blocks are not in this harness (PROTOCOL.md §8).
 
-Its process is `verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`, which hands `main` what a verifier imports none of:
+Its process is `verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py`, which hands `main` what a verifier imports none of:
 the LMS verify a served or gate session's signatures are checked with, and the challenger's process `--challenger
 serve` starts.
 
@@ -122,12 +122,12 @@ from collections.abc import Sequence
 from fractions import Fraction
 from pathlib import Path
 
-from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, timing
-from verity.protocols.accounting.poub.verifier import store as rstore
-from verity.protocols.accounting.poub.verifier.session import challengers, wire
-from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv
-from verity.protocols.accounting.poub.verifier.session.checks import Checks
-from verity.protocols.proofs.spot.device.challenger import Verify
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, timing
+from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore
+from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers, wire
+from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
+from verity.protocols.resource_accounting.memory.poub.verifier.session.checks import Checks
+from verity.protocols.proofs.spot.verifier.challenger.challenger import Verify
 
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""
@@ -170,7 +170,7 @@ def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, read
 
 def regions_of(layout, blocks: int) -> tuple[tuple[str, str, int, int], ...] | None:
     """The hello's layout of the registered store as regions `(kind, tier, first, blocks)` in index order, covering its
-    `blocks` exactly (`verity.protocols.accounting.poub.prover.node_store.registry.NodeMemory.layout`'s), or None without one.  The labels are the prover's,
+    `blocks` exactly (`verity.protocols.resource_accounting.memory.poub.prover.node_store.registry.NodeMemory.layout`'s), or None without one.  The labels are the prover's,
     public as protocol structure: that a plan's weights blocks hold the circuit's weights is the plan unit's to show
     (`audit.RequirementLink`), not this."""
     if layout is None:
@@ -704,7 +704,7 @@ def _gamma_differs(lean: object, python: object, at: str = "") -> tuple[str, obj
 def gamma_answer(lean: lv.Lean, record: audit.Record, node: ledger.Node, capacity_bytes_per_s: float,
                  python: dict) -> dict:
     """The Lean's γ terms for an accepted session's record against the node's R (`capacity_bytes_per_s`), from PoUB's
-    Lean verifier (`verity/protocols/accounting/poub/verifier/lean/`, its `gamma`: `Poub.Gamma`, exact rationals, on
+    Lean verifier (`verity/protocols/resource_accounting/memory/poub/verifier/lean/`, its `gamma`: `Poub.Gamma`, exact rationals, on
     the session it ran and accepted, whose record `lv.summary_json` writes), the ones `Verifier.ledgers` declares, at
     the node's S_chip and squaring ceiling and the record's δ, each float read as its exact value.  It is held to
     `python`, `ledger.gamma`'s `Gamma.ledger.to_json()` (`_gamma_differs`), each worst window to one of the Lean's
@@ -1599,7 +1599,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     signatures are checked with `verify` and a served one's with `served_verify` (`challengers.of`), and `--challenger
     serve` starts the challenger's process `serve`,
     which the process's entry hands in with the figures
-    (`verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`): without them, those two refuse
+    (`verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py`): without them, those two refuse
     the run."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")

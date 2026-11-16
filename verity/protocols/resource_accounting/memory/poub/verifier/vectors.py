@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from verity.protocols.accounting.poub.verifier import codec
+from verity.protocols.resource_accounting.memory.poub.verifier import codec
 
 PATH = Path(__file__).with_name("vectors.json")
 PAYLOAD_DOMAIN = b"verity/remote-bandwidth/test-payload/v0\0"

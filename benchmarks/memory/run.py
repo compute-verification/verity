@@ -91,8 +91,8 @@ from pathlib import Path
 
 from verity.device import load_card, load_node
 from verity.protocol import no_bound
-from verity.protocols.accounting.poub.verifier import ledger as poub_ledger
-from verity.protocols.accounting.poub.verifier import receipts, timing
+from verity.protocols.resource_accounting.memory.poub.verifier import ledger as poub_ledger
+from verity.protocols.resource_accounting.memory.poub.verifier import receipts, timing
 from verity_bench import kit
 from verity_config.settings import of
 

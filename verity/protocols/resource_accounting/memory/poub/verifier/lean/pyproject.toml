@@ -31,8 +31,8 @@ untraced = [
 inputs = ["verity/__init__.py", "verity/errors.py", 
           "verity/protocols/proofs/spot/verifier/profile.py",
           # the γ terms' ledger and the session verifier that holds the Lean's to it (`test_gamma.py`)
-          "verity/protocols/accounting/poub/verifier/ledger.py", "verity/protocols/accounting/poub/verifier/timing.py",
-          "verity/protocols/accounting/poub/verifier/store.py", "verity/protocols/accounting/poub/verifier/session",
+          "verity/protocols/resource_accounting/memory/poub/verifier/ledger.py", "verity/protocols/resource_accounting/memory/poub/verifier/timing.py",
+          "verity/protocols/resource_accounting/memory/poub/verifier/store.py", "verity/protocols/resource_accounting/memory/poub/verifier/session",
           "verity/protocols/resource_accounting/memory/poub/verifier/__init__.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/audit.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/codec.py",

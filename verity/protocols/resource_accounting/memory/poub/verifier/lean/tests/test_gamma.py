@@ -17,9 +17,9 @@ import ra_cases as M
 import verity_difftest as D
 from hypothesis import strategies as st
 
-from verity.protocols.accounting.poub.verifier import audit, line, receipts
-from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv
-from verity.protocols.accounting.poub.verifier.session import verifier as V
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, line, receipts
+from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
+from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier as V
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

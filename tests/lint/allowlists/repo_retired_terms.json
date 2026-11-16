@@ -3264,9 +3264,9 @@
     {"file": "verity/tests/tests/test_device.py", "count": 4},
     {"file": "verity/tests/tests/test_periods.py", "count": 8},
     {"file": "verity/tests/tests/test_periods_difftest.py", "count": 4},
-    {"file": "verity/protocols/accounting/registration/verifier/lean/tests/test_registration_difftest.py", "count": 11},
-    {"file": "verity/protocols/accounting/poub/verifier/lean/ra_cases.py", "count": 12},
-    {"file": "verity/protocols/accounting/poub/verifier/lean/replay.py", "count": 14},
+    {"file": "verity/protocols/registration/verifier/lean/tests/test_registration_difftest.py", "count": 11},
+    {"file": "verity/protocols/resource_accounting/memory/poub/verifier/lean/ra_cases.py", "count": 12},
+    {"file": "verity/protocols/resource_accounting/memory/poub/verifier/lean/replay.py", "count": 14},
     {"file": "benchmarks/hash/dither/tests/test_dither_manifest.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/pipeline/boundary_span.py", "count": 15}
   ]
