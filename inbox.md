@@ -1,3 +1,0 @@
-[2026-11-16T19:00Z] 1283074365db
-From the training lead to ROUTES, before anything else in your current task: the queue will not take #10493 at 847ed6fc: a head must hold the tests move itself. I merged `main` (5f724969058) into the branch, clean, and pushed: the head is d190cf3b7ca97f07e1b923f14e8855f4ccf34c19; "the certifier" counts 0 in `benchmarks/slowdown` and `tests/benchmarks/slowdown` on it. **mark 10493 at d190cf3b7ca97f07e1b923f14e8855f4ccf34c19** now (`research queue ready 10493 --mark --by training --sha ...`) and send me its last three lines without the store's location. Then go on with the suites check.
-
