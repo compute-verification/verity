@@ -15,7 +15,16 @@ verity bench exfiltration --variant V     read one variant of the row, in a run 
 verity bench exfiltration --response-ids N the network attester's part for a class of at most N ids a response
 verity bench exfiltration --scan-delta D  the network attester's errors at another δ of its scans (a fraction)
 verity bench exfiltration --local-only    read this machine's catalog alone, not the store's remote
+verity bench exfiltration --from DIR      read one run's record directory instead, with no store
 verity bench exfiltration --help          every parameter and its default
+```
+
+To try it with nothing of ours, no store and no key, read the made-up record in this directory from the repository's
+root. It prints the same tables from rows written by hand, and says the record is made up:
+
+```text
+uv sync --all-packages --extra torch-cpu
+uv run verity bench exfiltration --from benchmarks/exfiltration/made_up
 ```
 
 ## The two parts
@@ -42,8 +51,8 @@ verity bench exfiltration --help          every parameter and its default
   the fail cells and the jitter, for the scan as the monitoring-period check charges them today, for the scan
   under each change to its check, and for the design with no run behind it, before a served audit has sampled a
   stop block and once one has. The design's two rows are also charged the count: how many of a link's releases
-  each content class holds in an execution phase. The command reads that command's document (`certifier-term/v2`)
-  and refuses another schema.
+  each content class holds in an execution phase. The command reads that command's document at one schema
+  (`verity_bench.exfiltration_common`'s `TERM_SCHEMA`) and refuses another.
   - **Its figures of record are at two release schedules**, D_j = 2, the jitter bound of that document's term of
     record. A figure at D_j = 1, and every figure of a row whose release times are taken once (`timing`,
     `all three`), is what a network attester with a set-time card would be charged. That card is simulated: none
@@ -424,3 +433,25 @@ ran. The print is the same in a run as outside one.
 ```text
 research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py
 ```
+
+## What you may change
+
+Every input the print lists with its mark: the share of total compute, the network check's share, the planner's row
+and step, the class of ids a response, the scans' δ and a served run's record, each by its flag. And the record the
+rows come from: the store's runs of record, or one run's record directory with `--from`.
+
+## What is fixed
+
+The two calculators, the planner's bound and the network attester's term, and how the command reads them: the fit
+over the pinned budgets, λ, the errors summed over everything a figure covers, and the marks. With `--from` the print
+and its document go through the harness kit (`kit.report`), which says what the run ran with (`ran with: not
+stated`: the planner's rows record no coins), that it is a measurement and not an audit, and where the record is
+made up.
+
+## How a cheating change is refused
+
+The command refuses two parts that cover different GPU-seconds, requests or weights, and two runs of record that both
+hold a scope with neither superseded; a run whose two rows files differ on one case is left out, and is listed with why.
+A figure whose error is 1 or more prints no amount. A record that says it is made up (`made_up` in its `job.json`) is
+printed as made up, and writes no measurement, under a research run or not: its document alone, which says so. A run id
+given to `--from` is fetched past the store's withdrawals, and a withdrawn record is refused.
