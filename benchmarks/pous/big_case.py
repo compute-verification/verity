@@ -21,10 +21,10 @@ from pathlib import Path
 
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.randomness import derive
-from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.verifier import period
-from verity.protocols.accounting.pous.prover import period_prover
-from verity.protocols.accounting.pous.verifier import run as R
+from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.verifier import period
+from verity.protocols.resource_accounting.memory.pous.prover import period_prover
+from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 
 ROOT = Path(__file__).resolve().parents[2]
 W, C0 = 64, 189
@@ -35,7 +35,7 @@ CHUNK = 1 << 24
 
 def _signer_module():
     spec = importlib.util.spec_from_file_location(
-        "pous_test_signer", ROOT / "verity/protocols/accounting/pous/verifier/tests/pous_test_signer.py")
+        "pous_test_signer", ROOT / "verity/protocols/resource_accounting/memory/pous/verifier/tests/pous_test_signer.py")
     m = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     return m

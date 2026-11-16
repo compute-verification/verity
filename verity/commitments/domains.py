@@ -184,10 +184,10 @@ VLLM_PEARL_C_RUN_V1 = "verity-vllm/pouw-pearl-c-run/v1"
 VLLM_PEARL_C_RUN = "verity-vllm/pouw-pearl-c-run/v2"
 VLLM_PEARL_C_RUN_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 
-# The network certifier's mark certificate (`verity.protocols.accounting.certifier.verifier.certificate`)
+# The network certifier's mark certificate (`verity.protocols.resource_accounting.network.verifier.certificate`)
 CERTIFIER_MARK = "verity-network-certifier/mark/v1"
 
-# The network certifier's count over a span between two marks (`verity.protocols.accounting.certifier.verifier.span`)
+# The network certifier's count over a span between two marks (`verity.protocols.resource_accounting.network.verifier.span`)
 CERTIFIER_SPAN = "verity-network-certifier/span/v0"
 CERTIFIER_SPAN_PROTOCOL = "verity/certifier/span/v0"
 

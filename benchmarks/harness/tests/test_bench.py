@@ -1096,8 +1096,8 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
     which the adapter's refusals accept."""
 
-    from verity.protocols.accounting.pouw.verifier import verifier
-    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
     from verity_vllm.protocols import refusals
     from verity_vllm.protocols.interface import Context
 
@@ -1105,7 +1105,7 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     control, arm, _ = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert (control.id, control.precision) == ("stock-fp8", "fp8")
     assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-sm120-v1-h3",), "bfloat16", None)
-    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120",
+    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120",
                                              "cubin": "$PEARLC_CUBIN", "schedule": "deferred"}}
     assert arm.to_json()["protocols_config"] == arm.protocols_config
     settings = spec.arm_settings["pouw:pearl-c-sm120-v1-h3"]
@@ -1129,7 +1129,7 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
     directory and cubin both the setup's (pearl_c_sm90.sh exports them), serial, beside stock FP8 eager and compiled; the
     adapter's refusals accept it."""
 
-    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
     from verity_vllm.protocols import refusals
     from verity_vllm.protocols.interface import Context
 
@@ -1156,7 +1156,7 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no challenges flipped (the
     server flips each window's); an unset ``$`` value is refused, naming it."""
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
-    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
     from verity_vllm.pipeline import serve_pearl as SPL
 
     def flipped(n):
@@ -1229,7 +1229,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
-    from verity.protocols.accounting.pouw.verifier.salt import epoch_open_root
+    from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 
@@ -1311,7 +1311,7 @@ def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_ll
 
     from verity_vllm.llm import protocol_context, resolve_options
     from verity.errors import Refused
-    from verity.protocols.accounting.pouw.prover.serving import H1_SCHEME
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import H1_SCHEME
 
     spec = resolve_spec("llama31-8b-1gpu-pouw-h1")
     control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -1447,7 +1447,7 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     """`llama31-8b-1gpu-pearl-c-whole-served-h200` is the whole-served spec's preset on one H200, the whole-step arm beside
     compiled stock, its setup building pearl_c_sm90's cubin; with PEARLC_KERNEL that directory, the arm takes its record
     (`pearl-c-h100-v1-h3`, a scheme the device path runs) and its build.sh cubin, and builds the same engine."""
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import SCHEMES
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import SCHEMES
 
     root = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(root))
@@ -1461,7 +1461,7 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     from benchmarks.pouw.pearl_c_vllm import bench_arm
     assert set(bench_arm.KERNEL_SCHEMES.values()) <= set(SCHEMES)
     assert all((root / "benchmarks/pouw" / d).is_dir() for d in bench_arm.KERNEL_SCHEMES)
-    monkeypatch.setenv("PEARLC_KERNEL", str(root / "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90"))
+    monkeypatch.setenv("PEARLC_KERNEL", str(root / "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90"))
     monkeypatch.delenv("PEARLC_SCHEME", raising=False)
     monkeypatch.delenv("PEARLC_CUBIN", raising=False)
     whole = bench_arm.PearlCWholeArm()

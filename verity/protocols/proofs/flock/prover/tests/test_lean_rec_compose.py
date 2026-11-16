@@ -19,7 +19,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity_flock import rec_compose as RC
 
 BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof"

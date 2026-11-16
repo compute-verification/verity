@@ -421,7 +421,7 @@ def scan_step(s: dict | None, network_certifier_run: str | None, job: dict | Non
     a round's kind `scan_zk.kind_of`'s), every other round's (chain, tampered, unread, stale) refused, no witness piece
     was found at the verifier, and scan_zk's own ``ok`` holds; `RESTS` in place of accepted when an honest round's
     registration verdict let tied values through (``rests_on_period_check``, which the step carries)."""
-    from verity.protocols.accounting.certifier.prover.scan_zk import kind_of
+    from verity.protocols.resource_accounting.network.prover.scan_zk import kind_of
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
@@ -710,10 +710,10 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     of the device's own client; a relay session's request asks for no number, its clients being the peer's, and
     nothing holds its requests to one."""
     import leak_bounds as LB
-    from verity.protocols.accounting.certifier.verifier import scan_answer as SA
-    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
-    from verity.protocols.accounting.certifier.prover import ingress_scan as IS
-    from verity.protocols.accounting.certifier.verifier import network_certifier as W
+    from verity.protocols.resource_accounting.network.verifier import scan_answer as SA
+    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
+    from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+    from verity.protocols.resource_accounting.network.verifier import network_certifier as W
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}

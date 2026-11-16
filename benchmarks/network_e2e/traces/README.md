@@ -36,7 +36,7 @@ end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eo
   `honest` says whether a cut moved any request's output ids, and each edge's record (`raw/cut.PID.jsonl`) its hold,
   its cut set and its time.
 - `corpus.NETWORK_CERTIFIER`'s traces serve heavy's and small KV's loads through the network certifier as a relay
-  (`verity/protocols/accounting/certifier/device/network_certifier_serve.py serve`, a process beside the server, not on the auditor device). The client
+  (`verity/protocols/resource_accounting/network/attester/network_certifier_serve.py serve`, a process beside the server, not on the auditor device). The client
   speaks cells through the relay's shim. `summarize` checks what the relay published, and writes each relay trace
   twice more for the scheduler replay (`benchmarks/network_e2e/encodings/replay.py`'s `read_corpus_trace`): with the
   relay's admission order and with its release order as the certified ingress (`summary.network_certifier_views`). The relay,
@@ -49,7 +49,7 @@ end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eo
   logical clock, in release order, so that batch composition is a function of the certified releases and the advice v1
   sends no timing. In a network certifier trace the network certifier in front of the server sends the release headers
   and streams the watermark (`network_certifier_serve.py serve --watermark`, in
-  `verity/protocols/accounting/certifier/device/`), and the summary takes each request's release from what the server
+  `verity/protocols/resource_accounting/network/attester/`), and the summary takes each request's release from what the server
   got, where the certifier's log agrees (`summary.feed_releases`); a run behind it shows the network certifier's code in
   front of the server on the serving host, not on a host the prover doesn't control. With no network certifier in front
   of the server, the client stands in for it (`corpus.StandIn`): it numbers each request and puts it in the bucket of

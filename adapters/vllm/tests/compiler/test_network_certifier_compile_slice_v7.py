@@ -16,7 +16,7 @@ from verity_vllm.compiler import compile_slice as CS
 from tests.compiler.test_network_certifier_compile_slice import BOOK
 from tests.compiler.test_network_certifier_compile_slice_w212 import CARRY, OWN, _load
 from verity_vllm.compiler import compile_slice_v7 as V7
-from verity.protocols.accounting.certifier.prover import window_charge as WC
+from verity.protocols.resource_accounting.network.prover import window_charge as WC
 
 
 @pytest.fixture(scope="module", params=["demo", "demo_async"])

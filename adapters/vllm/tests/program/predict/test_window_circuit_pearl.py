@@ -16,8 +16,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Array, Value
 from verity.commitments.periods import interface as IF
-from verity.protocols.accounting.pouw.prover.schemes import SCHEMES
-from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import SCHEMES
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 
 from tests.program.predict import test_steps as S
@@ -55,8 +55,8 @@ from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_builder import Row
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import ROW_ALIGN
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import ROW_ALIGN
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 
 #: the scheme the remote demo's Pearl+ serves under, on the H200
 SCHEME = "pearl-c-h100-v1-h3"

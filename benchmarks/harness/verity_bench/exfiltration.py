@@ -83,7 +83,7 @@ part, and the command sums them per scope and monitoring period under each of th
 `TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice.
 
 * **How the stop class is charged** is the answer of the stop verdicts' reader
-  (`verity/protocols/accounting/certifier/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`certifier`'s
+  (`verity/protocols/resource_accounting/network/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`certifier`'s
   ``stop``). The rows the calculator reads from verdict records (its document's `stop`'s `rows`: those that hold
   the lengths by a stop block) are charged below their schedules only on the execution phases the answer holds, and
   their whole schedules on every other. The runs handed to the reader are every run that carries the record
@@ -216,7 +216,7 @@ WHOLE = {"all three": "with the timing taken once and the entries charged throug
 #: the network certifier's prover's module that reads the stop class's verdict records of the runs of `VERDICTS`:
 #: its `of_runs` answers how the calculator's rows read from verdict records are charged (`_reader`)
 READER = "stop_verdicts"
-READER_MODULE = f"verity.protocols.accounting.certifier.prover.{READER}"
+READER_MODULE = f"verity.protocols.resource_accounting.network.prover.{READER}"
 #: the network certifier's row whose schedules are what a response's output count is charged while the server chooses
 #: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"
