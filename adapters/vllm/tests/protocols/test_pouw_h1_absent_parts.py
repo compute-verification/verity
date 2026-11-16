@@ -10,12 +10,18 @@ from typing import Any
 
 import numpy as np
 import pytest
+from verity.protocols.proofs.spot.verifier.challenger.challenger import (
+    OPENING_FORM,
+    LiveCommitment,
+)
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
     CHALLENGER,
     H1Run,
     registered,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.challenger import drawn_of
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.challenger import (
+    drawn_of,
+)
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.commit import (
     ROOT_BYTES,
     SCHEME,
@@ -33,7 +39,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served 
     declared,
     descriptor,
 )
-from verity.protocols.proofs.spot.verifier.challenger.challenger import OPENING_FORM, LiveCommitment
 
 from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.protocols.pouw.h1_ranks import Holder, RankExtension, executor_of

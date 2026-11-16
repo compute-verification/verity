@@ -383,10 +383,10 @@ the same challenger. Each coin leaves once, after the root the verifier
 recorded for it, and the challenger logs both before the coin leaves its host and signs the log when the session ends.
 The verifier holds that log to its own record (`AuditRun.released_reason`): the commitment it used, the same roots in
 the same order, chal_0 after \(R\), and each window's openings coin after that window's last root, so a coin opened
-before its window's root is refused. On the auditor's device the session is the one window \(\{R\}\) of the auditor's
-signed ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the window one of the
+before its window's root is refused. On the auditor's device the session is the one `window` \(\{R\}\) of the auditor's
+signed ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the `window` one of the
 audit's period's (`coins.trusted`'s `period`): a session whose coins came from a second challenger session for the same
-(period, registration), or whose window the ledger holds in another period, is refused, so a prover can't run two and
+(period, registration), or whose `window` the ledger holds in another period, is refused, so a prover can't run two and
 keep the coins it likes. `coins.trusted` reads that session only through `challenger.pinned_session`: the
 host's pins log (`pins`, as its gate serves it) is the one the session's open sealed and records the open's pin, and
 that commit is on the verifier's own `git rev-list --first-parent origin/main` (`main`), so the challenger ran a tree
@@ -1018,12 +1018,12 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   links clause: a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the
   receipts, sends no block over the links, so neither Identity nor the links' charge sees it, and only C excludes it.
   The line's statement (`LineHeld`) assumes nothing of the prover here: it reads C from what the network attesters
-  observe. Its event is that the certifiers counted no ingress into the node over the credited passes and yet the
-  passes read fewer bits than the line credits, and its error carries δ_net, the certifiers' miscount
+  observe. Its event is that the network attesters counted no ingress into the node over the credited passes and yet the
+  passes read fewer bits than the line credits, and its error carries δ_net, the network attesters' miscount
   (`IngressCounted`, `trusted-device`), beside `SketchBoundAt` (the receipts' sketch wherever computed, which
   `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
   `ResourceAccounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins). `Covered` (`certifier-coverage`) is
-  the deployment's half: every uplink of the prover's server passes through an active certifier, so an outside device
+  the deployment's half: every uplink of the developer's server passes through an active network attester, so an outside device
   computing for the node sends its result over a counted link. Memory held follows from the bits read under the
   device model (`heldAt_of_read`). The line of record says it is conditional on C, under the label vocabulary's name `NoOutsideCompute` (`auditor_line.json`'s `conditional_on`,
   `credit.md`; the `memory-line-of-record` label names the field's names, and `research data label` holds it to the
@@ -1634,7 +1634,7 @@ values, by name, before the first coin, and so does the Lean, naming each in `p2
 (`P2Session.heldTo`). The process holds its pinned `P2Session.SESSION` unless the auditor's party names a toy's
 (`p2_hold`'s `session`), and the session's core case (`p2_case.py`), whose request no digest binds, is replayed under
 `SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there. The case is signed: the memory
-challenger's key closes it (`p2_parties.Closer`, its line count and its chain, `Poub.P2Close`) under the session id
+attester's key closes it (`p2_parties.Closer`, its line count and its chain, `Poub.P2Close`) under the session id
 the auditor gave it, which its session log records before the first coin. The chain runs over the case's head (the
 commitment's digest and the clock floor, `P2Protocol.headOf`) and then every entry of its log, and it is the one
 SHA-512 the verifier's device keeps of the case (`p2_parties.case_digest`). The check refuses a close that doesn't sign

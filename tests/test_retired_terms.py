@@ -119,7 +119,7 @@ DOC_TERMS = {
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
     "uplink tap, the auditor's tap": "the network attester, and its records network certificates",
-    "timed verifier": "the memory challenger",
+    "timed verifier": "the memory attester",
     "network transparency": "network accounting",
     "prover gateway, verifier gateway": "the ZK server; the challenger",
     "batch verifier": "the verifier",

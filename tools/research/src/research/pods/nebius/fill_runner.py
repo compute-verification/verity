@@ -54,7 +54,7 @@ Every POLL_S seconds the runner:
     a job whose cores aren't free, or any while a queued run waits in the claims' line, stays queued;
   - runs the CPU jobs of an owner listed in FILL_DIR/cpu-sets (`<owner> <cpus> <slots> [mem_gb]  # why`, read each tick) on
     those CPUs instead, up to that many at a time, at nice 19 and ionice idle, with their memory limit lowered to mem_gb if
-    given, and paused (none started) while a train check holds FILL_YIELD_LOCK if those CPUs meet FILL_YIELD_CPUS; and logs
+    given, and paused (none started) while a candidate's check holds FILL_YIELD_LOCK if those CPUs meet FILL_YIELD_CPUS; and logs
     each scoped CPU job's peak memory (mem_peak_gb) when it exits;
   - keeps fill off each fence in FILL_DIR/fences (`<owner> <gpu> <cpus> <until UTC> [<job glob> <minutes>]  # why`, read each
     tick, a line past its until ignored), which `fill_runner.py fence` writes and logs, one per owner, at most 1 GPU, FENCE_MAX_CPUS
@@ -106,7 +106,7 @@ CPU_MEM_GB = int(os.environ.get("FILL_CPU_MEM_GB", "128"))
 # timed, and pous and lent CPU jobs keep their memory off NUMA 0 (numactl --membind=<node>).
 FREEZE_ON_WAIT = os.environ.get("FILL_FREEZE_ON_WAIT", "0") == "1"
 CPU_MEMBIND = os.environ.get("FILL_CPU_MEMBIND", "")
-# slot d's train checks on 0-47 run in a login session's cgroup, beside fill's user scopes, so
+# slot d's candidates' checks on 0-47 run in a login session's cgroup, beside fill's user scopes, so
 # nice 19 can't make a CPU job yield to one: a cpu-sets job on those CPUs pauses while a check holds the slot's lock
 YIELD_LOCK = Path(os.environ.get("FILL_YIELD_LOCK", "/workspace/research/locks/check-d.lock"))
 YIELD_CPUS = os.environ.get("FILL_YIELD_CPUS", "0-47")
@@ -382,7 +382,7 @@ def agent_up() -> bool:
 
 
 def yields(cpus: str | None) -> bool:
-    """Whether a cpu-sets job on `cpus` gives way to a train check: its CPUs meet YIELD_CPUS."""
+    """Whether a cpu-sets job on `cpus` gives way to a candidate's check: its CPUs meet YIELD_CPUS."""
     return bool(cpus) and bool(gpu_set(cpus, 1 << 16) & gpu_set(YIELD_CPUS, 1 << 16))
 
 

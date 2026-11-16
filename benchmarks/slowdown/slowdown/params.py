@@ -11,7 +11,7 @@ sweeps and tornados span), `source` (a datasheet, a measurement, a Lean name, a 
 What another file states is read from it, not restated in a layer (`sourced`; a file that sets one of these keys is
 refused). From `verity`: the monitoring periods are core's (`PERIODS`), each the registry's `horizon.<name>.seconds`; the
 bits an incorrect proof block injects are the widest public size class of a block's outputs (`BLOCK_OUTPUT_BITS`); the
-per-window δ is core's (`profile.WINDOW_DELTA`); and the incorrect-outputs row reports at core's reporting δs. From the
+per-execution-phase δ is core's (`profile.WINDOW_DELTA`); and the incorrect-outputs row reports at core's reporting δs. From the
 inference-only policy's calibrations (`benchmarks/nci/calibrations.json`): the calibrated policy's `K`, its range, and
 `Γ`. The session policy's `K` is a ruling its layer states, and only its range is the calibrations' (`ranges`; a file
 that gives such a key a range is refused). From the cards (`verity.device`): the memory of the H200 servers' devices

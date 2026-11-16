@@ -153,7 +153,7 @@ def test_the_probe_judges_only_whether_a_pod_is_free():
 
 
 def test_no_job_starts_on_a_pod_until_its_setup_reports_done():
-    """A launch chain that started a check while pod_setup.sh still ran cost train TVC an hour: the dispatcher can't do that."""
+    """A launch chain that started a check while pod_setup.sh still ran cost a candidate an hour: the dispatcher can't do that."""
     w = World()
     j = w.add()
     w.runner.capabilities["t1"] = {**GOOD, "setup_done": False, "setup_at": None}

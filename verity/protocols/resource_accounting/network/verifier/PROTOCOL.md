@@ -6,25 +6,25 @@ execution phase, and once per execution phase signs a **network certificate** ov
 it bounds is how much a covert sender can move across the boundary through **when** frames leave, once the content and
 order of every frame are fixed by the declared Program.
 
-- **Trust.** The certifier is auditor-trusted: it runs on a host the developer doesn't control, and the auditor trusts it
+- **Trust.** The network attester is auditor-trusted: it runs on a host the developer doesn't control, and the auditor trusts it
   to run the grid and to sign what it ran. That trust, with the custody of its keys and of its LMS leaf state, is the
   named assumption `trusted-device`. The challenger's live coins reach it on two more premises, named in
   `verity/protocols/proofs/spot/verifier/README.md`, with the coins' path in `verity/protocols/compose/verifier/live_challenger/auditor.py`:
   `CoinsConfidential`, stated as `Pouw.Assumptions.CoinsConfidential`
-  (`security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the certifier's
-  boundary before it has them), and `OneClock` (the challenger's release times and the certifier's ingress ticks are
-  read on one clock; on two devices, within 1.03 s of each other), prose only. The certifier program's Lean reads
+  (`security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the network attester's
+  boundary before it has them), and `OneClock` (the challenger's release times and the network attester's ingress ticks are
+  read on one clock; on two devices, within 1.03 s of each other), prose only. The network attester's program's Lean reads
   neither.
 - **What it signs.** An LMS signature (SHA-512, n = 64) over a message binding its key, its session, the execution phase
-  and the record's digest hidden under a salt the certifier samples ("Network certificates").
-- **Public parameters.** Each direction's grid (T, τ_b, r, B and Q, "The certifier (`grid`)"), the set of clock-sync
-  values Σ_sync, the certifier's key id and session, and the execution phases audited.
+  and the record's digest hidden under a salt the network attester samples ("Network certificates").
+- **Public parameters.** Each direction's grid (T, τ_b, r, B and Q, "The network attester (`grid`)"), the set of clock-sync
+  values Σ_sync, the network attester's key id and session, and the execution phases audited.
 
 Where each part is stated in Lean:
 - the timing analysis `NetTiming`, its guarantees and its modelling choices: `security/Definitions/Certifier` and
   `security/Proofs/Certifier` (whose `README.md` has the modelling choices), with each bound's guarantee in
   "Capacity";
-- the certifier program (`lean/`, the Lake package `certifier_program`, Lean core only): the grid, the schedule and the
+- the network attester's program (`lean/`, the Lake package `certifier_program`, Lean core only): the grid, the schedule and the
   charges as code, proved equal to the analysis's definitions and held to this package by its difftests;
 - the record and certificate encodings: `NetworkCheck.Certificate` (`verity/protocols/resource_accounting/network/verifier/lean`);
 - the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
@@ -32,7 +32,7 @@ Where each part is stated in Lean:
 - one execution phase's verdict of record: `NetworkCheck.TransferBlocks`;
 - a period, onsite's network certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`);
 - an active network attester's run audited as rows over its certified records: `NetworkCheck.RowsAudit`
-  (`verity/network-rows/v1`), over the certifier program's `NetworkAttester.Rows`. It does not hold an egress cell to
+  (`verity/network-rows/v1`), over the network attester's program's `NetworkAttester.Rows`. It does not hold an egress cell to
   the id egress form, which the reference's `audit` does: that is the io tie's (`IoTieCell`, on every cell), and a
   caller that runs no io tie holds it itself.
 
@@ -54,21 +54,21 @@ decided in the clear.
 A proof is held to the proof block's circuits: each gate names its Definition's pinned circuit digest, so the proof
 block's Program binds them, and the verifier refuses a proof of any other Program ("The check" below).
 
-The certificate's signature reads no hash of witness. The certifier signs
+The certificate's signature reads no hash of witness. The network attester signs
 `D = SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R)`, R the head's record digest:
-- `salt_c` is sampled by the certifier (`certificate.Issuer`'s `coins`), 64 bytes, fresh per record, and handed to the
+- `salt_c` is sampled by the network attester (`certificate.Issuer`'s `coins`), 64 bytes, fresh per record, and handed to the
   prover with the head as witness only (`CertifiedRecord.salt`, in the record leaf after the head; the head leaf is
   the head alone);
 - each end's head check holds `R` to the digest of the head it opens and `D` to `R` under `salt_c` (part 4 below);
-- the LMS check (`Certificate.verify`) reads only the public fields (key id, session, link, direction, window) and
+- the LMS check (`Certificate.verify`) reads only the public fields (key id, session, link, direction, execution phase) and
   `D`, a hiding commitment to `R`. The in-the-clear check (`TransferBlocks.clear`, a debug comparison) also checks `D`
   against the head and `salt_c` over the opening (`CertifiedRecord.verify`).
 
-## The certifier (`grid`)
+## The network attester (`grid`)
 
-Each boundary link has a certifier with fixed parameters (W1). The protocol programs them from a security
-parameter, and the certifier only executes them:
-- T buckets per window;
+Each boundary link has a network attester with fixed parameters (W1). The protocol programs them from a security
+parameter, and the network attester only executes them:
+- T buckets per execution phase (`window` in the records);
 - the bucket width τ_b, 100 ms by default;
 - the allocation r, in frames per bucket;
 - the frame size B, in bytes;
@@ -76,30 +76,30 @@ parameter, and the certifier only executes them:
 
 On each link:
 
-- **Constant rate, with a cap, left-packed (W4).**
+- **Constant rate, with a limit, left-packed (W4).**
   - Every bucket emits exactly r frames: `n_t = min(queue, r)` real frames in slots 0 … n_t − 1, in queue order, then
     padding. The I/O tie reads the active network attester's grid instead, each live connection's r slots of a bucket
     by ordinal ("The I/O tie", (c)).
   - The **occupancy** is (n_0, …, n_{T−1}), the number of real frames per bucket.
   - A colluding receiver can tell padding from a real frame, so occupancy is the timing channel.
-- **FIFO, with the queue carried across windows.** The release count is Lean's `released`, and the grid Lean's `fill`.
+- **FIFO, with the queue carried across execution phases.** The release count is Lean's `released`, and the grid Lean's `fill`.
 - **Fail-closed (W6).**
   - A fault is an overflow beyond Q, a frame of the wrong size, or a reported one (monitor unavailable, drop, delivery
     refused, coverage never established).
-  - After a fault, the rest of the window is padding, the queue is dropped, and the first reason is recorded.
+  - After a fault, the rest of the execution phase is padding, the queue is dropped, and the first reason is recorded.
 - **The record is exactly (grid, status) (W5).** The status is one untimed symbol per execution phase: complete, or not
   established with a reason. It carries no bucket index, time or count.
 
 ## The published record (`commitment`)
 
-A raw grid is 2.3 GiB per execution phase at r = 1,024, B = 4 KiB and T = 600. The certifier publishes one digest and
+A raw grid is 2.3 GiB per execution phase at r = 1,024, B = 4 KiB and T = 600. The network attester publishes one digest and
 the status instead, which is 64 bytes per execution phase, or about 92 KB per link per day.
 
 - **Padding is elided.** Left-packing (W4) fixes a row by its count n and its n real frames, so a row's digest covers
   only those: `tagged_sha512("verity-network-certifier/row-sha512/v1", u32be(n) ‖ f_0 ‖ … ‖ f_{n−1})`. A row that
   isn't left-packed has no encoding.
 - **The record digest** is `tagged_sha512("verity-network-certifier/record-sha512/v1", …)`. It covers:
-  - the canonical JSON of the link, the window, (T, r, B, τ_b) and the status;
+  - the canonical JSON of the link, the execution phase, (T, r, B, τ_b) and the status;
   - then the T 64-byte row digests.
 
   `tagged_sha512` is `verity.commitments.identity`'s, and the Lean check's is `Identity.taggedSha512`.
@@ -116,50 +116,50 @@ v1 stays as it is, and readable: `CommittedRecord` and `record_digest` are uncha
 **The trust change.** The **network attester**, the device on a node's uplink that shapes each link into the grid
 (`grid.Certifier`), is auditor-trusted: the auditor trusts it to run the grid and to sign what it ran. A raw or
 committed record reaches the auditor as published. Instead, once per execution phase whose status is complete, the
-certifier signs a **network certificate**: a signature over a hiding digest of the window's record, salted by the
-certifier (`certificate.Issuer`). Any other execution phase gets none (`Issuer.refused`) and fails closed (W6).
+network attester signs a **network certificate**: a signature over a hiding digest of the execution phase's record, salted by the
+network attester (`certificate.Issuer`). Any other execution phase gets none (`Issuer.refused`) and fails closed (W6).
 The record head and the salt are witness. They enter proofs, which open frames of the record in-circuit, and never
 reach the auditor in the clear, so the record's own hashes are unsalted. The audit checks the certificate against the
-certifier's public key. With an honest certifier every certificate verifies, and the audit's verdicts are those of the
+network attester's public key. With an honest network attester every certificate verifies, and the audit's verdicts are those of the
 raw records.
 
 **The record (v2)** is still exactly the grid and one status (W5), with padding elided: a fixed binary head
 (`RecordHead.encode`: the execution phase, T, r, B and τ_b, the status, the deadline bit, the parameters digest, the
-occupancy n_0 … n_{T−1}) ending in the root of a fixed-depth SHA-512 tree over the window's real frames. Its layout,
+occupancy n_0 … n_{T−1}) ending in the root of a fixed-depth SHA-512 tree over the execution phase's real frames. Its layout,
 the frame tree and the record digest are `certificate.py`'s module docstring, stated in Lean by
 `NetworkCheck.Certificate` (`RecordHead.encode`, `RecordHead.digest`, `parametersDigest`, `framesRoot`) and held to the
 Python by `NetworkCheck.Difftest`.
 
-**The signed digest** hides the record digest R under `salt_c`, 64 bytes the certifier samples from its own
+**The signed digest** hides the record digest R under `salt_c`, 64 bytes the network attester samples from its own
 randomness, fresh for each record (`Issuer`'s `coins`), never the prover's:
 
     D = SHA-512( "verity/net-cert/v1" ‖ salt_c ‖ R )     (`certificate_digest`, Lean `NetworkCheck.certificateDigest`)
 
-The certifier hands `salt_c` to the prover with the head, as witness only (`CertifiedRecord.salt`). R is 64 bytes, so
+The network attester hands `salt_c` to the prover with the head, as witness only (`CertifiedRecord.salt`). R is 64 bytes, so
 D fixes R up to a SHA-512 collision (`cr/sha-512`). D hides R as SHA-512 under a secret, uniform 64-byte prefix does,
 which rests on `random-oracle`; no Lean guarantee states the hiding.
 
-**The certificate** is D and a signature over a 64-byte message that binds D to the key, the certifier session and the
-execution phase, so a certificate can't be replayed onto another window, link, direction, key or session:
+**The certificate** is D and a signature over a 64-byte message that binds D to the key, the network attester's session and the
+execution phase, so a certificate can't be replayed onto another execution phase, link, direction, key or session:
 
     message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [D] ),
               tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
 
 This is LMS's network-certificate role digest (`verity.commitments.crypto.lms.certificate_message`, its tag `lms.ROLES`'
 `network-certificate`), the message its in-proof verifier takes, and Lean's `NetworkCheck.messageInput` hashed. I is the
-certifier's 16-byte LMS identifier. `session` is the certifier session's id: 32 bytes (`lms.SESSION_BYTES`) the
-challenger samples for the session and issues to the certifier, and the audit takes from its parameters, as it takes the
+network attester's 16-byte LMS identifier. `session` is the network attester's session id: 32 bytes (`lms.SESSION_BYTES`) the
+challenger samples for the session and issues to the network attester, and the audit takes from its parameters, as it takes the
 key; the record head and `service.encode` don't carry it. The tag is the message's own domain separation, distinct from
 the ids of the checks that read it: the network certificate check `verity/network-certificate/v4` and the audit over
 every record `verity/network-records/v3`. The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1,
 h = 20, the whole SHA-512 output, not truncated), and its unforgeability is `euf-cma/lms-sha512-n64`.
-The certifier's `Issuer` holds it as a `Signer` (`key_id`, `sign(message)`; `certificate.LmsSigner`) and the audit as a
+The network attester's `Issuer` holds it as a `Signer` (`key_id`, `sign(message)`; `certificate.LmsSigner`) and the audit as a
 `PublicKey` (`key_id`, `verify(message, signature)`; `certificate.LmsKey`), so the scheme is a parameter of both. `LmsSigner`
 keeps its next unused leaf and the session ids it has started in an `lms.LeafState`, which it holds from its first use on.
 The `Issuer` starts its session on the signer (`Signer.start`) before its first signature, and the state refuses a session
 id it has already started, so the device runs once per session. A signer whose state is missing, behind the leaves its
 journal has used or its `floor`, or held by another signer, refuses (`SignerRefused`), and so does a refused start. The
-certifier then publishes nothing for the execution phase (`Issuer.refused` lists it), which fails closed as a
+network attester then publishes nothing for the execution phase (`Issuer.refused` lists it), which fails closed as a
 `no-verdict`; it never signs with a reused leaf, nor in a session it has run before. Both rest on `trusted-device`, where
 the state the device keeps on its host is its next LMS leaf and the session ids it has started.
 
@@ -168,53 +168,53 @@ signature verifies (`CertifiedRecord.verify`; the signature alone is `Certificat
 and D). On egress the audit recomputes the record digest from the Program's grid, with a complete status, the deadline
 bit set and the parameters digest of `params` and Σ_sync, and compares it with the head's. Under `cr/sha-512`, equal
 digests mean equal records, so the audit stays exact. A certified record rests on `cr/sha-512`,
-on the signature's unforgeability, and on an honest certifier.
+on the signature's unforgeability, and on an honest network attester.
 
 ## Through the proof system (`service`)
 
 One execution phase's certificates are registered through the proof system
 (`verity.protocols.proofs.spot.verifier.service`) as a `Spec` of its own (`service.TransferBlocks`, one per link):
 - **Committed:** one value, `certificates`, of four leaves: the execution phase's egress and ingress certified records,
-  leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, the certifier's salt, then the
+  leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, the network attester's salt, then the
   certificate), and their heads,
   leaves 2 and 3, each over the head alone (`RecordHead.encode`). Every leaf has its own fresh salt, in one
-  `frame-v3-sha512` tree under one-stage's served domain for the run, the link and the window. A proof that reads only a
+  `frame-v3-sha512` tree under one-stage's served domain for the run, the link and the execution phase. A proof that reads only a
   head opens its head leaf in two or three SHA-512 compressions, where the record leaf would cost the certificate's 272
   more. The ZK server keeps the records and salts (`Hidden`). The challenger receives one salted root and never a
-  certificate, a certifier's salt or a head.
+  certificate, a network attester's salt or a head.
 - **Selection:** `All`. A registration is one execution phase, one proof block, so an accepted outcome is the exhaustive
   fact. The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
   registration's order (`TransferBlocks.register`): the receipt keeps the order, and the order is the execution phase.
 - **The network verdict of record** is `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε
-  or share credit. Over the stream's registrations and outcome records, it accepts only when, for every window w of
-  the link (`TransferBlocks.windows`), the w-th registration is window w and its outcome of
-  record accepted. A rejected or late window,
-  a registered window with no outcome yet, a gap in the registrations (a window registered out of order or never, or a
+  or share credit. Over the stream's registrations and outcome records, it accepts only when, for every execution phase w of
+  the link (`TransferBlocks.windows`), the w-th registration is execution phase w and its outcome of
+  record accepted. A rejected or late execution phase,
+  a registered one with no outcome yet, a gap in the registrations (one registered out of order or never, or a
   run that stops short of the profile) and a registration past the profile each reject the link, and `refused` lists
-  their windows. A run's network verdict is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a
+  their execution phases. A run's network verdict is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a
   Python model, not the verifier) builds no `TransferBlocks` outcomes, so its account doesn't read this
-  aggregate. Its `Account.sound` is the same AND over its own port records: false on any refused port-window, each
+  aggregate. Its `Account.sound` is the same AND over its own port records: false on any refused port's execution phase, each
   charged at its link's line rate (`refused_bits`).
-- **Public** (`service.PUBLIC`): the population, the window, the value's leaf count, domain and salted root, the
-  parameters digests and the network attester's profile (its windows and parameters digest), all bound by the spec's context with the link, the run,
-  the certifier's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A
+- **Public** (`service.PUBLIC`): the population, the execution phase, the value's leaf count, domain and salted root, the
+  parameters digests and the network attester's profile (its execution phases and parameters digest), all bound by the spec's context with the link, the run,
+  the network attester's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A
   rejected execution phase shows only the service's `reject`; the violation's kind stays in the verifier. A registration
   with any other field, a second root, a root entry with another key, or anything more in `window` is refused.
 - **The check** is `TransferBlocks.unit`, `NetworkTransferBlocks` v5{EGRESS, INGRESS}, over the two certificates' signed
   digests (``egress``, ``ingress``) and each end's head check's other parameters but its direction, which the proof
   block fixes (egress 0, ingress 1). Its output is two bits: ``verdict``, the AND of the two head checks, and
   ``deadline``, the AND of the two heads' deadline bits. The certificates are not in the proof block: the verifier
-  checks them on their public fields (`TransferBlocks.certified`: each verifies under the certifier's key in its session,
+  checks them on their public fields (`TransferBlocks.certified`: each verifies under the network attester's key in its session,
   `TransferBlocks.certifier_session`, over its public fields and its signed digest, and names the execution phase). A proof
   states the proof block on rows ``pub`` (its public parameters), ``wit`` (each end's head, leaf salt, siblings and
-  certifier's salt) and the output row ``o0``, one u16 word (`TransferBlocks.layout`, `service.OUT_BITS`), its circuit
+  network attester's salt) and the output row ``o0``, one u16 word (`TransferBlocks.layout`, `service.OUT_BITS`), its circuit
   `TransferBlocks.proof_block`. The head check is a Boolean Definition,
   `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are each end's statics), with one output, the ok
   bit, whose `signed` input is its end's signed digest. It opens the head at leaf 2 + direction under the registered
-  root, a hiding read (`NetworkHidingRead`), and accepts when the head's link, direction and window are the
+  root, a hiding read (`NetworkHidingRead`), and accepts when the head's link, direction and `window` are the
   execution phase's, its status is complete, its T, r, B, τ_b and parameters digest are the end's declared grid's
-  (`NetworkHeadFields`), on an end with an occupancy profile its T counts are the profile's row for the window
-  (`NetworkHeadCounts`; a window past the profile has no row and is a reject), and the head's record digest R
+  (`NetworkHeadFields`), on an end with an occupancy profile its T counts are the profile's row for the execution phase
+  (`NetworkHeadCounts`; an execution phase past the profile has no row and is a reject), and the head's record digest R
   (`NetworkRecordDigest`) under the witness `salt_c` is the signed digest (`NetworkSignedDigest`), so the certificate
   signs the head the check opened. In the proof block's Program each head check is one gate that names the Definition
   and its circuit digest, `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2` (`head_check.gate`): the commitment
@@ -243,8 +243,8 @@ One execution phase's certificates are registered through the proof system
   `TransferBlocks.proved`) and the sampled proof block; the proof's ``pub`` row opens, under the salt delivered, to the
   verifier's own copy (`TransferBlocks.public_arguments`: the registered root, the execution phase's public fields and both
   signed digests) and its ``o0`` row to the output word delivered, whose verdict and deadline bits are both 1; the
-  certificates verify (`TransferBlocks.certified`); and the window's declared sync is one of Σ_sync. It receives the
-  registration, the sample, the certificates' public fields and signatures (from the certifier, beside the proof
+  certificates verify (`TransferBlocks.certified`); and the execution phase's declared sync is one of Σ_sync. It receives the
+  registration, the sample, the certificates' public fields and signatures (from the network attester, beside the proof
   system: the service has no public kind for them), the declared syncs, and from the prover the statement's public
   file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
   ``wit``'s salt. The outcome passes the registered root as the session's. A proof after `proof_deadline` is the
@@ -255,7 +255,7 @@ One execution phase's certificates are registered through the proof system
   the grid, and nothing in this protocol holds them (the scan does).
 - **The in-the-clear check** is `TransferBlocks.clear`, over the opening: the opening reproduces the registered root,
   each end's head check accepts (`head_check.reference`, which the tests hold to the circuit), the opening's two
-  certificates hold under the certifier's key in its session (`TransferBlocks.certified`), and both heads met their
+  certificates hold under the network attester's key in its session (`TransferBlocks.certified`), and both heads met their
   deadline. It is a debug comparison (`verify(…, opening=…)`, off by default, which
   decides nothing) and the tests' reference. `TransferBlocks.unproved_outcome` decides a run that proves nothing (a
   rehearsal, the simulator) on it, its verdict ``"decided_by": "clear"``, never zero-knowledge.
@@ -283,7 +283,7 @@ active network attester's records, both ends at the network attester's grid and 
 Stated in Lean: `NetworkCheck.Period` (`verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has its one form, the rows form, its formats and the bound `K` it
 publishes. Its parameters list the keys of the link's network attester (`"keys"`), an entry
-for each certifier session: `{"key": hex, "session": hex, "start": a}`, its LMS public key, its session of 32 bytes,
+for each network attester's session: `{"key": hex, "session": hex, "start": a}`, its LMS public key, its session of 32 bytes,
 and the start of its stretch of execution phases, in the numbers the period's `first` is in. An entry's stretch runs
 from its start up to the next entry's, and the last entry's from its start on. Execution phase W of the period picks
 the one entry whose stretch holds it, and each certificate and rows registration for W is held to that entry: its key,
@@ -347,12 +347,12 @@ the wire. The leak bound charges that log2(`egress_cells` + 1) bits per failed c
 attester"), and it charges a `format` failure the same.
 
 **Enforcement, in two layers.**
-1. **At the network attester, on every cell, deterministically.** The certifier releases a `DATA` or `END` cell only if
+1. **At the network attester, on every cell, deterministically.** The network attester releases a `DATA` or `END` cell only if
    `io_tie.parse_cell` reads it. Any other cell fails the connection: `FAIL`, with reason `format` in the `fails`
    record.
-   - Stripping means refusing; the certifier never rewrites. A rewrite would hide the server's departure from the
-     record, and would make the certifier parse the server's JSON.
-   - With one fixed byte grammar (`IoTieCell`'s reference), the certifier stays a relay of one cell form. The gate is one
+   - Stripping means refusing; the network attester never rewrites. A rewrite would hide the server's departure from the
+     record, and would make the network attester parse the server's JSON.
+   - With one fixed byte grammar (`IoTieCell`'s reference), the network attester stays a relay of one cell form. The gate is one
      `parse_cell` check in `network_attester.NetworkAttester._egress`, where it cuts a `DATA` or `END` cell.
 2. **In the audit.** The I/O tie holds every released cell to the map: its kind, its stream, and an `END` or `PAD` at its
    slot. It holds each `DATA` cell's id to the Commit's sampled id at the map's port entry ("The I/O tie"). That is the
@@ -361,7 +361,7 @@ attester"), and it charges a `format` failure the same.
      from an unsampled block is a wrong block, and is charged.
 
 **Either side of the network attester.**
-- **The server's side.** What makes the id form from the engine's output is the prover's, and isn't trusted. It
+- **The server's side.** What makes the id form from the engine's output is the developer's, and isn't trusted. It
   needn't be, because the gate refuses every other form and the tie checks the ids. An example is serve-openai's
   `--protocol ids`, `IdsProtocol` in `adapters/vllm/verity_vllm/pipeline/serve_protocol.py`.
 - **The client's side.** A client's shim may rebuild OpenAI fields from the record by a public rule:
@@ -415,9 +415,9 @@ of leaking it.
 
 ## The I/O tie (`io_tie`, a design)
 
-N2 holds a window's counts but says nothing of its frames, nor that they carry the tokens the served computation
+N2 holds an execution phase's counts but says nothing of its frames, nor that they carry the tokens the served computation
 produced. The I/O tie closes that on the egress. It is one proof block per egress execution phase at
-selection `All`. It opens every cell of the window and holds each to the output the advice's map names there, and that
+selection `All`. It opens every cell of the execution phase and holds each to the output the advice's map names there, and that
 output's id to the id the Commit sampled. It is a design with a prototype on the network attester's own egress
 (`io_tie`, its cells cut by `network_attester.NetworkAttester._egress`), in no Spec and unproved. The execution phase's tie is T proof
 blocks, one a bucket row of the network attester's registration (`network_attester.py`'s v2, a row a bucket), and each outputs 1
@@ -434,9 +434,9 @@ the proof block.
 
 So a duplicated, dropped, reordered, moved or altered cell, a byte anywhere outside the id, a cell on another request's
 stream or in another connection's slots, an output in the wrong bucket, a fabricated output, an early, late or missing
-`END`, a `FAIL`, a wrong id and a port row that isn't the Commit's each refuse the window. Nothing is sampled within the
-window, so there is no ε: the verdict covers every cell. In the sampled-audit statement (`SampledAuditAccepted`),
-a class sampled `All` has error 0. That statement doesn't yet model the transfer gates' tie to the certifier's
+`END`, a `FAIL`, a wrong id and a port row that isn't the Commit's each refuse the execution phase. Nothing is sampled within
+it, so there is no ε: the verdict covers every cell. In the sampled-audit statement (`SampledAuditAccepted`),
+a class sampled `All` has error 0. That statement doesn't yet model the transfer gates' tie to the network attester's
 signed rows, so this proof block's place in it is still to state.
 
 **No value of the prover's says what a cell must be.** v3 held the cells to a table the prover committed, so the table
@@ -500,22 +500,22 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   it is closed.
 - **The target** reads a committed map inside the proof, bound to the advice's hiding root. The map is registered with
   the advice before the sample, as rows of `verity.commitments.advice` (fixed-width bit rows under
-  `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Committed`), here 4 KiB rows: a window's 8N
-  bytes of records and 4S a bucket of steps, at a window-aligned place in a link-day's map. The compile slice's proof block holds the
-  map's rows to the advice's outputs and release buckets, as `window_map` does in the clear. The window reads its rows
+  `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Committed`), here 4 KiB rows: an execution phase's 8N
+  bytes of records and 4S a bucket of steps, at a place aligned to execution phases in a link-day's map. The compile slice's proof block holds the
+  map's rows to the advice's outputs and release buckets, as `window_map` does in the clear. The execution phase reads its rows
   by a range read (each row's digest, hm96 leaf and `FrameV3Leaf`, the subtree's nodes once and the path above it): 12
   rows at depth 15, 3.07 × 10^7, at the rehearsal, and 1,980 rows at depth 22, 4.77 × 10^9, served. That is about half
   of v3's table (9.86 × 10^9), at 8 bytes a cell over N cells against 16 bytes a slot over M. The steps then come from
   the map's rows, so the port's reads are at hidden positions. `FrameV3Read` already takes its position as a value, so
-  they cost what they cost now. The served window is 1.466 × 10^11, 3.4% more than v4.
-- **The verifier's cost.** v4's map is a public input of 8 bytes a cell, 8.09 MB a served window, which the verifier
-  computes in time linear in the window's capacity. At the target it goes away: the verifier reads the roots, the
-  domain ids and the statics, which are O(1) a window.
+  they cost what they cost now. The served execution phase is 1.466 × 10^11, 3.4% more than v4.
+- **The verifier's cost.** v4's map is a public input of 8 bytes a cell, 8.09 MB a served execution phase, which the verifier
+  computes in time linear in the execution phase's capacity. At the target it goes away: the verifier reads the roots, the
+  domain ids and the statics, which are O(1) an execution phase.
 - **Complete:** every cell is opened and held to its place in the map, so the data cells are exactly the outputs the
-  advice releases in the window, with no duplicate and no drop, and responses are of any length. The tie needs none of
-  FIXLEN, the window-local arithmetic map or the K samples (FIXLEN stays a premise of N2's served profile, "A served
-  link"). Nor does it need a window to start at a request boundary or end idle: a request's outputs fall in the
-  windows their release buckets name.
+  advice releases in the execution phase, with no duplicate and no drop, and responses are of any length. The tie needs none of
+  FIXLEN, the arithmetic map local to an execution phase or the K samples (FIXLEN stays a premise of N2's served profile, "A served
+  link"). Nor does it need an execution phase to start at a request boundary or end idle: a request's outputs fall in the
+  execution phases their release buckets name.
 - **The routing** brings each data cell its entry: in each bucket, a Beneš network over M = 2^D ≥ max(R, E)
   positions carries each of the bucket's E = S·P port entries, its id and its index e (W = 32 + D bits), and its
   (2D − 1)·2^(D − 1) switches are witness. Every setting is a permutation, and `IoTieMatch` holds each data cell's
@@ -536,8 +536,8 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   as the network attester's FIFO makes them in arrival order. So the map puts advice request i on stream order[i] + 1, through
   the permutation advice v1 decodes against the certified record (the replay's requests in arrival order,
   the derived fields' walk, its misses sent as `order` and charged as advice: 2,194 bits on the corpus's heavy
-  trace, 30 on smallkv), and `window_map(…, order)` ranks each bucket's connections by order[i]. Every window of the
-  heavy trace's honest egress, served through the network attester's own egress at r = 1, is accepted through it (37 windows
+  trace, 30 on smallkv), and `window_map(…, order)` ranks each bucket's connections by order[i]. Every execution phase of the
+  heavy trace's honest egress, served through the network attester's own egress at r = 1, is accepted through it (37 execution phases
   of 16 buckets, `test_the_heavy_traces_honest_egress_is_accepted_through_its_order`, on
   `verity/protocols/resource_accounting/network/verifier/tests/fixtures/warden-heavy-order.json`), and a permutation other than the network
   attester's is refused (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`).
@@ -574,13 +574,13 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   carry no finish.
 
 **The two ingress ties** between the advice's requests and the network attester's certified ingress record:
-- **Each request's arrival ordinal is order[i]: checked in this unit.** The advice numbers requests in order of first
+- **Each request's arrival ordinal is order[i]: checked in this proof block.** The advice numbers requests in order of first
   row (`advice` validates it), and the map's q for request i is order[i] + 1 ((b), (c)). The network attester writes the stream
   of every cell in a connection's slots (its pads, its data cells and its `END`) as its request's ingress ordinal on
   the link, from 1, and the proof block holds it to q. Every request's `END` is released in one of the session's
-  windows. So on a link whose every egress window is accepted, advice request i is the link's arrival order[i] (from 0;
+  execution phases. So on a link whose every egress execution phase is accepted, advice request i is the link's arrival order[i] (from 0;
   ordinal order[i] + 1 on the wire). An order other than the network attester's, or a server that admits a later arrival first
-  under v0's identity, puts cells on a stream the map doesn't name there (or leaves no map at all), and the window
+  under v0's identity, puts cells on a stream the map doesn't name there (or leaves no map at all), and the execution phase
   refuses
   (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`). The premise is the network attester's numbering: the
   proxy forwards whole requests, one connection each, in the order the network attester numbers them.
@@ -592,11 +592,11 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
 
 **The ingress tie** (`io_request`, `IoTieRequest{B, L, R}`: the reference, the network attester's own ingress as its fake
 upstream (`serve`, which drives `network_attester.NetworkAttester._ingress`) and the Boolean Definitions, with its sidecar). It is one
-unit a bucket row of the network attester's ingress at selection `All`, with one output bit. It holds the prompt
+proof block a bucket row of the network attester's ingress at selection `All`, with one output bit. It holds the prompt
 lengths the advice states to the certified bytes: the phase-6 attack swapped two prompt lengths keeping their total,
 which no count of the link's frames refuses, and so released an output before its request was in. B is the cell size
 (4,096 served), L the network attester's lanes and R its r, so a row is the bucket's L·R slots.
-The row is the registered port (`network_attester_rows.bucket_port`: unit t reads row t), as the egress unit's is, so the
+The row is the registered port (`network_attester_rows.bucket_port`: proof block t reads row t), as the egress proof block's is, so the
 proof system's registered read holds it to the network attester's ingress root and no gate hashes it. A row's lanes are its
 live connections by ordinal, R slots each (`network_attester.NetworkAttester._ingress`), and an unheld lane is B zero bytes a slot. The
 proof block outputs 1 exactly when, in each lane of ordinal q:
@@ -639,30 +639,30 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   over, padded, ok); the count's carry past 2^32 is kept, so a sum that wraps is refused. Public: the lanes, each
   (q, left, fields, left_out, fields_out). Witness: the row.
 - **The verdict** (`tie_service.IoTieVerdict`) is `IoTieVerdict(link, registrations, advice, accepted)`: the link,
-  its ingress windows' registrations (each one's `registration.digest`, in order), the advice's digest
+  its ingress execution phases' registrations (each one's `registration.digest`, in order), the advice's digest
   (`tie_service.digest`) and one bit a registration, set when every bucket row of that execution phase is accepted. It
   is built only from IoTieRequest proofs the verifier verified on its own lanes (`lanes` from that advice's prompt
   lengths and order and the network attester's release) and given only by the verifier's own tie source
   (`tie_service.Ties`), which gives none on another link or another stream than its own. An accepted verdict on every
-  window says that connection order[i] + 1 is an id request of `prompt_lens[i]` prompt ids. The advice carries no
+  execution phase says that connection order[i] + 1 is an id request of `prompt_lens[i]` prompt ids. The advice carries no
   tie, and none the prover states or delivers is taken: the phase-7 attack stated the swapped split, and the phase-10
-  attack delivered a verdict built for the forged advice's digest, every window accepted.
+  attack delivered a verdict built for the forged advice's digest, every execution phase accepted.
 - **Through the proof system** (`tie_service.IngressTie`). A registration is one ingress execution phase, the
-  network attester's salted root of its T bucket rows, held to the window's order, and T proof blocks, unit t bucket
-  row t. The unit is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
+  network attester's salted root of its T bucket rows, held to the execution phase's order, and T proof blocks, proof block t bucket
+  row t. The proof block is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
   (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the network attester's root by
   the verifier's own registered read (`network_attester_rows.bucket_port`). The statement is a shared-row file every port of
   which is one of the verifier's registered reads (Flock's `Registered.checkComplete`): `wit` at the network
   attester's root, and `pub` and `o0` at known content the verifier registers itself (`IngressTie.known`), each
-  unit's lanes (`io_request.lanes`, from the advice it holds and the network attester's release, taken in the clear)
+  proof block's lanes (`io_request.lanes`, from the advice it holds and the network attester's release, taken in the clear)
   and the output word 1, under public salts, which hide nothing since both rows are public. The verifier
-  decides each window on the proof alone, each unit's `pub` row opened to its own lanes, and reports the advice's
+  decides each execution phase on the proof alone, each proof block's `pub` row opened to its own lanes, and reports the advice's
   digest. `IngressTie.tie` reads the verdict from the stream's outcomes of record
-  alone, on the link and the stream's registrations. Window w is accepted when its outcome is, decided on the proof
-  for the advice's digest. Every window is refused unless the stream registers exactly the advice's windows in order,
-  the release is the network attester's schedule for the advice and puts `received`'s request cells in each window,
+  alone, on the link and the stream's registrations. Execution phase w is accepted when its outcome is, decided on the proof
+  for the advice's digest. Every one is refused unless the stream registers exactly the advice's execution phases in order,
+  the release is the network attester's schedule for the advice and puts `received`'s request cells in each,
   and the profile's framing is the network attester's cut (`tie_service.framing`) with no own frame. A connection's
-  lanes chain from (0, 0) into its first bucket to (0, n) out of its `END`'s, so the units together hold each
+  lanes chain from (0, 0) into its first bucket to (0, n) out of its `END`'s, so the proof blocks together hold each
   request's count across the buckets it spans. A size class with no pinned digest has no accepted proof.
   `tests/test_network_attester_tie_service.py` holds the phase-9 attack's carried field count, its forged advice and
   phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`), and
@@ -729,7 +729,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
     (`test_the_unit_is_its_reference`, slow).
 
 **The proof block,** `IoTieBucket{B, R, P, S}`, one a bucket row (R = lanes·r slots):
-- **The cells** are the network attester's per-window value, as `network_attester.py`'s registration v2 commits them: each bucket's R cells are
+- **The cells** are the network attester's value for each execution phase, as `network_attester.py`'s registration v2 commits them: each bucket's R cells are
   one `hm96-sha512/row/v2` row of R·B bytes under a fresh salt, in a `frame-v3-sha512` tree of T rows (a dense
   domain, its pads to a power of two). The proof block's `row` input is the registered port (`network_attester_rows.bucket_port`:
   proof block t reads row t, every slot held or not, with no wiring), so the proof system's registered read checks it
@@ -755,7 +755,7 @@ j·B to (j + 1)·B: `network_attester.py`'s row (t − w·T)·S + j becomes word
 row is 4 KiB. Built that way: `IoTieBucket` reads its one bucket row and its S Commit step rows as registered ports,
 S + 1 reads a proof block, and recomputes no root and hashes no row.
 
-**What the map and the port must be.** For the advice's output k = (step, row, request, index), released in the window
+**What the map and the port must be.** For the advice's output k = (step, row, request, index), released in the execution phase
 (`release[k] // T = w`):
 - q is order[`request`] + 1, its request's ingress ordinal on the wire under advice v1's order permutation, which
   the proof block holds to the network attester's stream ("The two ingress ties");
@@ -764,7 +764,7 @@ S + 1 reads a proof block, and recomputes no root and hashes no row.
 - e = σ·P + `row`, with σ the place of `step` among the bucket's steps;
 - the id is port row `step`'s `row`-th id: `runner.sampler/sampled_token_ids` of step `step` at batch row `row`.
 
-So each `release[k]` is output k's frame bucket in the network attester's certified egress record. The unit checks
+So each `release[k]` is output k's frame bucket in the network attester's certified egress record. The proof block checks
 this by position: a cell's bucket is its row in the network attester's registered tree,
 and the map puts output k's cell in row `release[k]` − w·T and nowhere else.
 
@@ -793,14 +793,14 @@ phase, and each bucket's proof block reads its row there by a registered read. T
   each row: 192 bytes of the network attester's own randomness.
 - **The tree** is the dense `frame-v3-sha512` domain of T rows, `io_tie.domain(binding, T)`, which is
   `CommitmentDomain(binding, -1, RangeIndexedDomain(0, T), hash="sha512")`. The binding is a 64-byte digest naming the
-  link, the window and the cells, which the network attester's registration fixes; the tie reads the domain id as public. Under
+  link, the execution phase and the cells, which the network attester's registration fixes; the tie reads the domain id as public. Under
   that domain:
   - leaf t is `leaf_ref(domain_id, "hm96-sha512/row/v2", value_t, t)`;
   - the pads are `_hash(b"pad", domain_id, uint(t))` for t in T … 2^⌈log2 T⌉ − 1;
   - each node is `node_ref(domain_id, level, index, left, right)`.
 
   This equals `tree_levels` over the domain's `row_leaf`s.
-- **Registered:** the root and the domain id, with the window w; bucket t is session bucket w·T + t. The T salts go
+- **Registered:** the root and the domain id, with the execution phase w (`window` in the registration); bucket t is session bucket w·T + t. The T salts go
   to the prover, privately: they are its witness, and it rebuilds the cells from the map and the port.
 - **The port's rows** (the fake upstream's; the real ones are vLLM's) are the same leaves and tree over the session's
   2^DS steps: row s is `port_row` of step s's sampled ids, each under a fresh salt (`rows_levels`, `open_port`:
@@ -808,14 +808,14 @@ phase, and each bucket's proof block reads its row there by a registered read. T
   (`port_reads`).
 - **Not needed by the All tie:** a per-stream sequence number in the header.
 
-**What the prover keeps,** from the window's registration until the tie's outcome of record, by `proof_deadline`: the network
-attester's T salts, and the port rows' salts and paths at the window's steps, which the Commit's prover keeps for its own
+**What the prover keeps,** from the execution phase's registration until the tie's outcome of record, by `proof_deadline`: the network
+attester's T salts, and the port rows' salts and paths at the execution phase's steps, which the Commit's prover keeps for its own
 openings. At the target, it also keeps the map's rows, salts and paths, which the advice's prover registers. The cells
 are a function of the map and the port, so the prover rebuilds them, and it computes the switches when it proves.
 
 **Composition.**
 - **N2** (`All`) holds the head's fields and counts and the certificate that signs them.
-- **The cells' root** is the network attester's own per-window value, registered by the auditor's device
+- **The cells' root** is the network attester's own value for each execution phase, registered by the auditor's device
   (`trusted-device`). It isn't the head's frames root, which is an unsalted tree that can't be opened outside a
   proof. The head's counts and the cells come from one grid of the network attester's: bucket t holds n_t data cells. The tie
   doesn't read the head; tying the cells' root into it (a record v3 field) is open.
@@ -845,7 +845,7 @@ tie (`io_ids`) reads.
   switches are witness, which only finds entries, since the match checks each routed entry's index. At the target the
   port's reads are at hidden positions, the steps the private map gives, and the map's rows stay at public ones.
 
-What this establishes, once built: on an egress link whose every window is accepted, every cell the user received is
+What this establishes, once built: on an egress link whose every execution phase is accepted, every cell the user received is
 a pad, `event(id)` or its response's `END`. That id is the Commit's sampled id at the step and batch row advice v0
 names for that cell's output. The cell is on its request's stream, at the release bucket and the slot in it that the
 advice names, and each request's number in the advice is its arrival ordinal. This holds for every cell with no ε
@@ -859,12 +859,12 @@ and for responses of any length. What it doesn't establish:
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
 The Program fixes each real frame's content, its **anchor** (the recorded bucket of the request it answers) and its
-**logical index** λ (its position in its session, never negative). A window declares one clock-sync value
+**logical index** λ (its position in its session, never negative). An execution phase declares one clock-sync value
 `ClockSync(δ, ρ)` from the public set Σ_sync (`SyncSet`; 16 offsets × 8 rates is 7 bits). A frame is **eligible** at
-`anchor + δ + ⌊λ/ρ⌋` under the sync of its anchor's window, the shaper **hands** it to the certifier in canonical order at
-`h(k) = max(eligible(k), h(k−1))`, and the certifier's grid **releases** it. Stated in Lean:
+`anchor + δ + ⌊λ/ρ⌋` under the sync of its anchor's execution phase, the shaper **hands** it to the network attester in canonical order at
+`h(k) = max(eligible(k), h(k−1))`, and the network attester's grid **releases** it. Stated in Lean:
 `security/Definitions/Certifier/Schedule.lean` (`NetTiming`'s `eligible`, `handingBuckets`, `expectedRow` and
-`constantRate`, the Program whose advice is the content advice and one in-set sync per window), with the certifier
+`constantRate`, the Program whose advice is the content advice and one in-set sync per execution phase), with the network attester
 program's `NetworkAttester.Schedule` as its code; `schedule.py` (`expected_grids`, `run_shaper`) is the Python.
 
 ## The audit (`audit`)
@@ -875,38 +875,38 @@ Lean as a core protocol: `NetworkCheck.Check` (`verity/network-certificate/v4`, 
 the acceptance conditions and the violations, the first that applies naming it (`no-verdict`, `duplicate`, `signature`,
 `status:<reason>`, `advice`, `mismatch`), and `verity/protocols/resource_accounting/network/verifier/network/tests/test_network_check_protocol.py` and
 `test_network_records_protocol.py` hold them to `audit.py`. A violation is recorded and the run rejected; there is no
-halt, and later windows are still checked.
+halt, and later execution phases are still checked.
 
-**One clock per spatial unit.** Every egress link of the unit reads the same sync in a window. The audit keeps each
-window's sync (`Audit.syncs`), set by the first egress link checked for that window. A link that declares a different
-sync for the window is an `advice` violation in that window, even if its sync is in Σ_sync. The reason is the bound:
-the accepted-runs bound charges one sync per window for all links. Its advice is `Ac × (Fin W → Σ_sync)`, so its 7 bits
-per window at 16 × 8 are `#Σ_sync^W` values over W windows. A sync per link
+**One clock per spatial unit.** Every egress link of the unit reads the same sync in an execution phase. The audit keeps
+each one's sync (`Audit.syncs`), set by the first egress link checked for it. A link that declares a different
+sync for the execution phase is an `advice` violation in it, even if its sync is in Σ_sync. The reason is the bound:
+the accepted-runs bound charges one sync per execution phase for all links. Its advice is `Ac × (Fin W → Σ_sync)`, so
+its 7 bits per execution phase at 16 × 8 are `#Σ_sync^W` values over W execution phases. A sync per link
 would be advice of `#Σ_sync^(L·W)` over L egress links, L times the bits, and an audit that took each link's syncs on
 their own would accept it.
 
-A declared sync outside Σ_sync, or other than the unit's, is an `advice` violation in its own window only. The
+A declared sync outside Σ_sync, or other than the unit's, is an `advice` violation in its own execution phase only. The
 Program's grids are computed from each link's syncs as declared, out-of-set values included (any δ ≥ 0 and ρ > 0 gives
-a schedule), and every other window is checked against them. A window's grid reads only the syncs of its own and
-earlier windows: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
-carries forward, for any clock-sync values, in the set or not (`expected_grids`). So a window before the violating one gets the same verdict whatever sync that window
+a schedule), and every other execution phase is checked against them. An execution phase's grid reads only the syncs
+of its own and earlier ones: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
+carries forward, for any clock-sync values, in the set or not (`expected_grids`). So an execution phase before the violating one gets the same verdict whatever sync that one
 gave, and a later one is checked against the grid its advice gives it. No Lean states it of the check's grid.
 
-**Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
+**Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`, `windows` its execution phases). Lean's acceptance
 needs every boundary link's status to be complete, ingress links included, since an ingress status is itself an egress
 channel (`security/Proofs/Certifier/README.md`, modelling choice 6). An ingress link's rows are the Program's input, which it reads rather
 than predicts, so no grid is compared. An ingress execution phase is accepted if it has exactly one record, present by
 the deadline, and its status is complete; otherwise it is a `no-verdict`, `duplicate` or `status:<reason>` violation, as
 on egress. A committed record's status is read in the clear, and the digest binds it. The verifier has no Program grid
 to recompute an ingress digest from, though, so unlike on egress it can't catch a published status that disagrees with
-the digest: that rests on the certifier publishing its own status (W5). A certified ingress record's status is the signed
-head's, so it rests on the certifier instead, and the audit (`check_ingress_link(..., key=key, params=params)`) also
+the digest: that rests on the network attester publishing its own status (W5). A certified ingress record's status is the signed
+head's, so it rests on the network attester instead, and the audit (`check_ingress_link(..., key=key, params=params)`) also
 requires the head's T, r, B, τ_b and parameters digest to be `params`'s, or it is a `mismatch`. A run is accepted only
 if every execution phase of every link the audit checks is, so an accepted verdict on every link of ∂X, with
 `check_link` on egress and `check_ingress_link` on ingress, means every boundary link's status was complete in every
-window audited.
+execution phase audited.
 
-Every capacity bound holds on accepted runs only. A rejected window may already have carried up to its unbound capacity,
+Every capacity bound holds on accepted runs only. A rejected execution phase may already have carried up to its unbound capacity,
 about 8·T·r·B bits. On committed records, the bounds also assume `cr/sha-512`; on certified
 records, `cr/sha-512`, the signature's unforgeability and an honest network attester.
 
@@ -915,36 +915,36 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network atte
 | Quantity | Value | Lean |
 |---|---|---|
 | Free slot choice | `2^(T·r)` occupancies | `NetTiming.card_free` |
-| Left-packed | `(r + 1)^T` occupancies, attained by the FIFO certifier | `NetTiming.card_leftPacked`, `NetTiming.encard_fifoGrids` |
+| Left-packed | `(r + 1)^T` occupancies, attained by the FIFO network attester | `NetTiming.card_leftPacked`, `NetTiming.encard_fifoGrids` |
 | Exactly M released | at most `binom(T + M − 1, M)` | `NetTiming.card_counts_eq_le` |
 | At most M available | at most `binom(T + M, M)` grids | `NetTiming.encard_fifoGrids_le_of_available` |
 | Envelope, with no clock | `T·log2(r + 1)` bits per execution phase | Proposition 2 |
-| Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per window at 16 × 8 sync values under J | no Lean statement |
-| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | no Lean statement |
+| Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per execution phase at 16 × 8 sync values under J | no Lean statement |
+| Accepted runs of the check, over its first m execution phases | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per execution phase opened at 16 × 8 sync values under J, counted from the run's first | no Lean statement |
 | The reference schedule, k advice bits per execution block | `E·k + n·log2 D` bits over E execution blocks of g·T buckets, for n ≤ E·g·T steps | `NetTiming.encard_accSeqs_le_constantRate` |
 | The reference schedule, over the first m execution blocks | `min(E, m)·k + n·log2 D` bits, for n ≤ m·g·T steps | `NetTiming.encard_accSeqs_le_constantRate_executionPhases` |
-| The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(incorrect sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and an incorrect set is one `RAcc δ` allows (in `M_δ`, no unit sampled `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
-| The network attester (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each window's sampled charge (the row above) at the network attester's rows | for a decoder of the client's view, under `trusted-device`, `Claims.SamplingGeneric.Compiled.KS` and `Commitment.Binds`, `SecurityProofs.MonitoringPeriodLeakAccepted` |
+| The circuit's Program under a sampled audit of its step proof blocks, at δ | `c + log2 #(incorrect sets) + Σ_{v incorrect} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and an incorrect set is one `RAcc δ` allows (in `M_δ`, no proof block sampled `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no proof block may be incorrect, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
+| The network attester (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each execution phase's sampled charge (the row above) at the network attester's rows | for a decoder of the client's view, under `trusted-device`, `Claims.SamplingGeneric.Compiled.KS` and `Commitment.Binds`, `SecurityProofs.MonitoringPeriodLeakAccepted` |
 | No advice, under J (D = 1) | 0 bits: one accepted sequence for the ingress | `NetTiming.encard_accSeqs_le_constantRate` at k = 0 and D = 1 |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
-| Ingress, per execution phase (the K charge's unit) | `T·log2(r_in + 1)` bits per execution phase over the first m whole windows, plus `T·log2 D` of jitter per window, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
+| Ingress, per execution phase (the K charge's unit) | `T·log2(r_in + 1)` bits per execution phase over the first m whole ones, plus `T·log2 D` of jitter per execution phase, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
 
 **The advice's charge.** The advice string is the circuit's Program's content advice, so its charge is the sampled row's
 `c`. The sampled leak bound takes `c` as declared and public, with the premise that at most `2^c` advice values are
 charged `c` bits or fewer (`hAs` in `security/Definitions/Certifier/Guarantees/SampledCharge.lean`), as for any
-prefix-free code (Kraft). Advice v1's charge is `code_v1`'s length for the whole window: its segment, every count and
+prefix-free code (Kraft). Advice v1's charge is `code_v1`'s length for the whole execution phase: its segment, every count and
 value inside the arithmetic coder, then its length terms' fixed-width tail while the registration sends them. Its
-strings are prefix-free, so at most `2^c` advice values (each window's decisions, hits, order entries and length terms)
+strings are prefix-free, so at most `2^c` advice values (each execution phase's decisions, hits, order entries and length terms)
 are charged `c` bits or fewer (`protocol/charge-chain.md`, "The bound"). Lean mirrors the
 charge's references one for one: `ChargeCount_v1{N}`'s (`arith_encode.py`'s `reference_charge`,
 `security/Definitions/Certifier/AdviceV1.lean`) and `ChargeCount_v2{N, H, O, L}`'s (`window_charge.py`'s
 `reference_window`, `security/Definitions/Certifier/WindowCharge.lean`). Which slots ask (`en`) is not charged
-because it is not advice: the compile slice, its charge included, is proved on every advised window and never sampled,
-so `en` is pinned by that slice's scan, and the carry across windows is chained from the book's priors
-(`charge_chain.check_chain`). That the circuits compute Lean's windows (`ChargeCount_v1`'s `AdviceV1.window`,
+because it is not advice: the compile slice, its charge included, is proved on every advised execution phase and never sampled,
+so `en` is pinned by that slice's scan, and the carry across execution phases is chained from the book's priors
+(`charge_chain.check_chain`). That the circuits compute the Lean definitions (`ChargeCount_v1`'s `AdviceV1.window`,
 `ChargeCount_v2`'s `WindowCharge.window`) is held by tests: circuit-check holds each circuit to its Python reference,
-and the Lean is held to those references by the charge difftests: the certifier program's `NetworkAttester.AdviceV1`
+and the Lean is held to those references by the charge difftests: the network attester's program's `NetworkAttester.AdviceV1`
 and `NetworkAttester.WindowCharge`, proved equal to the definitions (`CodeChargesV1`, `CodeChargesWhole`), give what
 `reference_charge` and `reference_window` give on 4,000 random instances each (`runs` in `../attester/program/lean/lean-audit.json`, their
 data checked by `verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_charge_lean_difftest.py` and
@@ -952,11 +952,11 @@ data checked by `verity/protocols/resource_accounting/network/verifier/tests/tes
 
 The bound charges the declared `c`, not the realized lengths, since a run counts if any advice within it explains it.
 Each run's egress must equal the Program's, which needs every egress frame tied, and which the tie gives only when no
-step unit can be faulty: every step unit sampled `All`, or a sampled audit at δ ≥ miss(1). At a smaller δ an accepted
+step proof block can be incorrect: every step proof block sampled `All`, or a sampled audit at δ ≥ miss(1). At a smaller δ an accepted
 sampled audit gives `Accepted` only with the incorrect proof blocks' committed gates held as advice
 (`SampledAuditAccepted`), and the charge adds the incorrect proof blocks' committed bits and log2 of the number of possible
 incorrect sets, except with probability δ + ε_ks + ε_bind over the selection (`SecurityProofs.SampledLeakAccepted`).
-Charging a window only for the windows up to it would need a causality assumption about the Program, which the statement
+Charging an execution phase only for those up to it would need a causality assumption about the Program, which the statement
 doesn't take.
 
 **The network attester's row.** The network attester terminates both connections and sends every cell in its bucket: a connection admitted
@@ -967,11 +967,11 @@ scheduled end. So the client's view of the server side is the schedule, each con
 data in the cells: the server's accept time, send timing, ACKs and flow control reach it only through the fail cells.
 One run of the network attester's code gives both the cells the client receives and its record of them
 (`security/Definitions/Certifier/Tap.lean`, under `trusted-device`). The inference-only policy's transfer gates are these cells' bits,
-whose number per window the schedule fixes. The schedules are charged `log2 #schedules`, so a schedule that came to
+whose number per execution phase the schedule fixes. The schedules are charged `log2 #schedules`, so a schedule that came to
 depend on the server is still counted. The content term comes from the audits, not from a premise:
-`SecurityProofs.MonitoringPeriodLeakAccepted` composes each window's sampled leak bound at the network attester's rows with the
-client's view read back from its record, over a monitoring period of sampled audits. Each window adds its fresh
-inputs' bits, log2 of its possible incorrect sets, their committed bits and the timing, and each window's audit fails with
+`SecurityProofs.MonitoringPeriodLeakAccepted` composes each execution phase's sampled leak bound at the network attester's rows with the
+client's view read back from its record, over a monitoring period of sampled audits. Each execution phase adds its fresh
+inputs' bits, log2 of its possible incorrect sets, their committed bits and the timing, and each one's audit fails with
 probability at most δ + ε_ks + ε_bind + Pr[B_tap].
 
 The inference-only policy charges an inference block the ingress covert capacity from the last wipe before it starts,
@@ -982,7 +982,7 @@ as no-function: each is stated over the model, not the network check's code (`se
 "The records"); one named `NetTiming.…` is a lemma, proved and audited, with no record. The ingress bounds
 are over a monitoring period (the K charge, `SecurityProofs.EncardIngressObsDecodableLe`) and per execution phase
 (`SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, whose interaction is any link's). The egress charge per
-window, `log2 #Σ_sync` for each window opened, counted from the run's first window, is the check's, which no Lean
+execution phase, `log2 #Σ_sync` for each one opened, counted from the run's first, is the check's, which no Lean
 states, as no Lean states the table's two rows of the check's accepted runs. The steps of their proofs are lemmas
 (`security/Proofs/Certifier/Lemmas.lean`): proved and audited, with no record.
 
@@ -992,24 +992,24 @@ the FIFO restarting empty at each block's start. They hold with no dataflow hypo
 operator, over a monitoring period within the E execution blocks with advice (n ≤ E·g·T), since those are the blocks
 the audit checks. The bound is k bits per execution block, summed from the run's start
 (`NetTiming.encard_accSeqs_le_constantRate`). A monitoring period within the first m execution blocks is charged only
-those m (`NetTiming.encard_accSeqs_le_constantRate_executionPhases`). The check, which reads one clock sync per window, is that Program as
-one execution block of its W windows, with the send ticks the program computes from the syncs: its accepted runs
-number at most `#Ac · #Σ_sync^W · D^(W·T)`, 7 bits per window at 16 × 8 sync values. At one execution block the
+those m (`NetTiming.encard_accSeqs_le_constantRate_executionPhases`). The check, which reads one clock sync per execution phase, is that Program as
+one execution block of its W execution phases, with the send ticks the program computes from the syncs: its accepted runs
+number at most `#Ac · #Σ_sync^W · D^(W·T)`, 7 bits per execution phase at 16 × 8 sync values. At one execution block the
 reference's forms over the first m blocks and per block give nothing finer, so the check's bound over its first m
-windows comes from the program instead: a window's sync moves no hand tick before the window's start, so the first m
-windows' rows read only the content advice and those windows' syncs, and their sequences number at most
-`#Ac · #Σ_sync^min(W, m) · D^(m·T)`. No Lean states either count of the check. The per-block form, a window's bits given everything the run showed before it, need not hold
-of the check: the queue and the hand ticks carry from one window into the next, so the run shown before a window need
-not fix the rows the window's sync gives.
+execution phases comes from the program instead: an execution phase's sync moves no hand tick before its start, so the
+first m execution phases' rows read only the content advice and their syncs, and their sequences number at most
+`#Ac · #Σ_sync^min(W, m) · D^(m·T)`. No Lean states either count of the check. The per-block form, an execution phase's bits given everything the run showed before it, need not hold
+of the check: the queue and the hand ticks carry from one execution phase into the next, so the run shown before one
+need not fix the rows its sync gives.
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
 execution phase (times `D^T` for jitter, 1 under J), given the frames' content, on runs whose statuses are all complete
 (`StatusComplete`). The reference audits ingress statuses (see above), so an accepted verdict on every link of ∂X
-establishes `StatusComplete` for the windows audited. That is the acceptance hypothesis of every ingress guarantee:
+establishes `StatusComplete` for the execution phases audited. That is the acceptance hypothesis of every ingress guarantee:
 `SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe`, their `Contents` versions and
-the two per-window forms. Over the first m whole windows of a run (n = m·T; for the K charge, the run from the last
-wipe) the count factors per execution phase: `(r_ℓ + 1)^T` on each link in each window, `T·log2(r_in + 1)` bits, which
+the two per-execution-phase forms. Over the first m whole execution phases of a run (n = m·T; for the K charge, the run from the last
+wipe) the count factors per execution phase: `(r_ℓ + 1)^T` on each link in each execution phase, `T·log2(r_in + 1)` bits, which
 is the K charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, and
 `SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase` for the `Contents` version).
 
@@ -1029,28 +1029,28 @@ link that carries the coins: [protocol/coin-link.md](protocol/coin-link.md).
 
 ## Advice for arbitrary serving: what it can carry
 
-The goal is network accounting for arbitrary vLLM usage: no FIXLEN, no fixed request size, and
+The goal is network certification for arbitrary vLLM usage: no FIXLEN, no fixed request size, and
 real EOS. The registered thing is a precommitted ahead-of-time compiler. After serving, the prover hands it an
 **advice** string that encodes everything serving made unpredictable: in advice v0, each request's lengths and finish,
 each step's batch rows, and each step's release bucket. The compiler turns the advice into each step's circuit, and the
-certifier certifies the I/O. SPOT checks two things: that the committed values pass the compiled circuits (the
-step units), and that they agree with the certified I/O (the tie units). N2 is to hold each window's egress counts to
-the ingress counts and the advice; no N2 unit does yet. The advice's length is the leak, charged as `A_c` in the
+network attester certifies the I/O. SPOT checks two things: that the committed values pass the compiled circuits (the
+step proof blocks), and that they agree with the certified I/O (the tie proof blocks). N2 is to hold each execution phase's egress counts to
+the ingress counts and the advice; no N2 proof block does yet. The advice's length is the leak, charged as `A_c` in the
 accepted-runs bound.
 
 This section attacks that claim through its parts: the advice codec (`advice.py`, with `encode`,
-`decode` and `bits`), the I/O tie unit (`io_tie`) and the compiler
+`decode` and `bits`), the I/O tie proof block (`io_tie`) and the compiler
 (`verity_vllm.program.predict.compile_steps`). It gives the argument, every assumption the argument rests on, what
 each attack costs under the design, and the adversarial cases each part's tests must carry.
 
 ### The argument
 
-The notation is for one audit of W windows:
+The notation is for one audit of W execution phases:
 - I is the certified ingress: the requests' bytes and counts. It is charged on ingress, as reads and timing (the K
   charge), and nothing below charges it again.
 - w is the weights, under a root registered before any coin.
-- `compile` is `compile_steps(registered, ·)`. It is registered with the codec, a cap c on the advice's charged bits,
-  Σ_sync and (T, r, B, τ_b, Q), all before the audit's first window.
+- `compile` is `compile_steps(registered, ·)`. It is registered with the codec, a limit c on the advice's charged bits,
+  Σ_sync and (T, r, B, τ_b, Q), all before the audit's first execution phase.
 - a is the advice the prover registers, and 𝒜_c is the set of advice strings whose charge `bits(a)` is at most c.
 - The proof blocks are the step proof blocks of the compiled circuits, the tie proof blocks, and N2's proof blocks (one
   per execution phase).
@@ -1072,7 +1072,7 @@ of the incorrect proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ
 2. **With no incorrect proof block, the egress is a function of I and a.** Every committed value is the forward evaluation of the
    compiled circuits from I, w and a, because every value a circuit reads has exactly one writer (A2). Each tie proof
    block then holds its frame to the canonical frame of the committed token at the (request, position) the advice maps
-   it to. N2 holds each window's counts to the counts that the ingress counts and the advice derive. So the egress rows
+   it to. N2 holds each execution phase's counts to the counts that the ingress counts and the advice derive. So the egress rows
    are the Program `constantRate T W ss frames` with content advice a: `frames ins a ℓ` gives each frame's payload,
    anchor and logical index.
 3. **An incorrect proof block adds its influence.** Take the content advice of step 2 to be (a, φ), where φ is the incorrect
@@ -1125,18 +1125,18 @@ Each assumption, and what breaks without it:
   `compile` refuses a read with no writer. Without A2, a value nobody checks feeds the circuits, and every sample passes
   (attacks 4 and 6).
 - **A3, the tie and the step proof blocks are sampled at ε at δ, not all.** N2's proof blocks are `All`, and so is the
-  compile slice on every advised window, never sampled: its carry chain binds only proved proof blocks and its scan pins
+  compile slice on every advised execution phase, never sampled: its carry chain binds only proved proof blocks and its scan pins
   `en` ([protocol/compile-slice.md](protocol/compile-slice.md)). The step proof blocks add I_ε at
   probability δ_audit. A wrong tie proof block adds 8·B bits unless the tie is `All` too (attack 8). The bound holds on
-  accepted audits only, as every capacity bound here does: a rejected window may already have carried up to its unbound
+  accepted audits only, as every capacity bound here does: a rejected execution phase may already have carried up to its unbound
   capacity.
 - **A4, the advice is bound to the run before the coins.** The registration that the challenger receipts before its
   sample holds the advice's canonical digest (or every compiled Program's digest), with the run, the link and the
-  windows in its context. Every consumer (the compiler, N2 and the tie) reads that one advice. If the advice can follow
+  execution phases in its context. Every consumer (the compiler, N2 and the tie) reads that one advice. If the advice can follow
   the sample, the prover picks, after the sample, an a under which the sampled proof blocks pass. The error then grows
   to as much as
-  #𝒜_c · δ, which is vacuous. Each window's advice must precede its own proof blocks' sample. It may follow an earlier
-  window's sample, since an earlier window's incorrect proof blocks are counted in Φ by their exits, whatever later
+  #𝒜_c · δ, which is vacuous. Each execution phase's advice must precede its own proof blocks' sample. It may follow an earlier
+  one's sample, since an earlier one's incorrect proof blocks are counted in Φ by their exits, whatever later
   circuits read them.
 - **A5, the charge is the encoding every consumer decodes.**
   - `bits` counts the canonical, self-delimiting encoding of every field any consumer reads, and no consumer reads
@@ -1148,20 +1148,20 @@ Each assumption, and what breaks without it:
     not produce: padding bits, a trailing byte, a non-minimal integer, an unused enumeration value. Or the auditor's
     side re-encodes the decoded advice rather than forwarding the prover's bytes, as the Flock ZK server relay
     re-encodes a round.
-  - Each window's part is self-delimiting, and the windows' charges sum to the whole encoding.
-  - Each field is charged to a window no later than the first window whose rows it can change. Then the first m
-    windows' charges bound the first m windows, which the per-window form needs, as `expected_grids` gives it for the
+  - Each execution phase's part is self-delimiting, and their charges sum to the whole encoding.
+  - Each field is charged to an execution phase no later than the first one whose rows it can change. Then the first m
+    execution phases' charges bound the first m, which the per-execution-phase form needs, as `expected_grids` gives it for the
     syncs. A prefill step that releases nothing is still charged.
-- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-device`, W1 to W6 and J (D = 1
-  is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
+- **A6, the network attester's clock.** The buckets are the network attester's, under `trusted-device`, W1 to W6 and J (D = 1
+  is no jitter), and the advice's release buckets are network attester buckets. Nothing else in the accounting reads a time.
   The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
   their deadlines, so they stay out of anything published, or they are charged.
-- **A7, the advice set is fixed before the run.** The codec and the cap c are registered before the audit's first
-  window, and the audit refuses advice over the cap, as it refuses a sync outside Σ_sync. `A_c = log2 #Ac` in the
-  spec needs the set fixed before the run. Without a registered cap, the realized charge is sound only in the
+- **A7, the advice set is fixed before the run.** The codec and the limit c are registered before the audit's first
+  execution phase, and the audit refuses advice over the limit, as it refuses a sync outside Σ_sync. `A_c = log2 #Ac` in the
+  spec needs the set fixed before the run. Without a registered limit, the realized charge is sound only in the
   indexed form: for every c, the runs whose charge is at most c number at most 2^(c+1) times the rest.
 
-The claim does not say three things: that the advice is what serving did (attack 7), anything about rejected windows,
+The claim does not say three things: that the advice is what serving did (attack 7), anything about rejected execution phases,
 and the ingress terms, which stay the K charge's.
 
 ### Attacks
@@ -1178,57 +1178,58 @@ Moved to [protocol/advice-v0.md](protocol/advice-v0.md).
 Under advice v1 (the next section's end) the compile slice's proof block replays the scheduler one step proof block per
 engine step. Each proof block is `ReplayStep_v1` (`verity_vllm.compiler.replay_step`): the committed queue state, the
 next A certified arrivals and the next A decisions go in, and the step's rows and next state come out. The chain hands
-the state from proof block to proof block as the state rows of one produced value a window (`one_stage.produced`, value
-`replay-state`, `hm96-sha512/row/v2` bit rows), beside a window row (value `replay-window`). Each proof block reads its
+the state from proof block to proof block as the state rows of one produced value an execution phase (`one_stage.produced`, value
+`replay-state`, `hm96-sha512/row/v2` bit rows), beside an execution-phase row (value `replay-window`). Each proof block reads its
 rows at public positions, and no gate hashes a row: the Lean verifier checks each read's path.
 
 **The step's cursors are private.** The step reads its arrivals and decisions at the scan's cursors, which move by its
-`taken` and `used`, and where a step stands in the certified arrivals or the window's decisions is the schedule
+`taken` and `used`, and where a step stands in the certified arrivals or the execution phase's decisions is the schedule
 itself. A registered read sits at a position the verifier derives, so no proof block can read the arrival record at the
 cursor. So:
-- once a window, `ReplayLoad` writes the window row: the certified arrivals not yet taken, then the window's own (K of the network
-  attester's slots), as `queue` (at most Q), and the window's decoded decisions as `dec` (at most D), all read at public
+- once an execution phase, `ReplayLoad` writes the execution-phase row: the certified arrivals not yet taken, then the
+  execution phase's own (K of the network attester's slots), as `queue` (at most Q), and its decoded decisions as `dec` (at most D), all read at public
   positions;
 - every step proof block reads that one row, and its state row carries the cursors as private heads `qh` and `dh`.
-  `ReplayAdvance` checks the step's A arrivals and A decision bits are the window row's at the heads. It finds them with a
+  `ReplayAdvance` checks the step's A arrivals and A decision bits are the execution-phase row's at the heads. It finds them with a
   log shifter that computes only the A entries it returns: about Q + A·bitlen(Q) muxes an element bit, where moving
   the whole queue would take Q·bitlen(A).
 
 **The rows'** layouts are `verity_vllm.compiler.replay_chain`'s (`row_fields`, `window_fields`). The state row's state
 group is ReplayStep_v1's state input and next-state output, bit for bit, at the shape's AS and EW (`Shape`'s two
 statics): with EW, `run_pfx R×EW` after `run_comp`; with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`. It
-adds the heads `qh` and `dh` and `steps`, the window's executed steps still to come. The window row is the queue (at
-most Q) and the decisions ``dec`` (at most D) with ``left``. With AS an arrival carries its cap (O = max_tokens): `q_cap
+adds the heads `qh` and `dh` and `steps`, the execution phase's executed steps still to come. The execution-phase row
+is the queue (at most Q) and the decisions ``dec`` (at most D) with ``left``. With AS an arrival carries its limit
+(O = max_tokens): `q_cap
 Q×1` after `q_O`, as the step's `arr_cap` and the network attester slots' `a_cap`. In every row the valid elements of
 each group are a prefix and the rest are zero bits, and `decode` and `decode_window` refuse any other row.
 
-**A window** is the state rows S_0 … S_{P+1}, with P the public cap on its steps, and two window rows: the last
-window's and its own. Proof block 0, `ReplayLoad`, reads state rows 0 and 1 and both window rows. Proof block u ≥ 1 is
-step u: ReplayStep_v1 on state row u, with `ReplayAdvance` checking the step's arrivals and bits against window row 1
-and checking state row u + 1. Steps past the window's executed count are idle: the next row is the row, and
+**An execution phase** is the state rows S_0 … S_{P+1}, with P the public limit on its steps, and two execution-phase
+rows: the last one's and its own. Proof block 0, `ReplayLoad`, reads state rows 0 and 1 and both execution-phase rows. Proof block u ≥ 1 is
+step u: ReplayStep_v1 on state row u, with `ReplayAdvance` checking the step's arrivals and bits against execution-phase row 1
+and checking state row u + 1. Steps past the execution phase's executed count are idle: the next row is the row, and
 `ReplayAdvance`'s `active` = 0 drops the proof block's rows.
-- The load refuses a state row 0 that leaves steps to run or has read past its window row's decisions, a queue past
-  Q, more than D decisions (the carried ones and the window's) or P steps. A step refuses arrivals taken past what is
+- The load refuses a state row 0 that leaves steps to run or has read past its execution-phase row's decisions, a queue past
+  Q, more than D decisions (the carried ones and the execution phase's) or P steps. A step refuses arrivals taken past what is
   left or past A, and decisions read past what is left or past A.
-- **The carry.** Window w's state row 0 is window w − 1's last state row, and its window row 0 is window w − 1's window
-  row 1, each under the same salt (`commit_window(carry=…)`), so the verifier checks that their openings b‖c are equal
-  (`check_chain`, `C-carry`). Decisions a window leaves unread carry: the load writes the window's after the last
-  window row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a decision to the
-  earlier of its step's window and its arrival's ingress window, up to two windows before its step's: at T = 20, 5 of
-  async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries from window 0 to their
-  steps in windows 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
-- **The end.** `ReplayClose` reads the session's last state row and window row and refuses a session that ends with a
-  step to run or a decision unread (`close`). The compile slice's proof block charges each decision in the window that
+- **The carry.** Execution phase w's state row 0 is execution phase w − 1's last state row, and its execution-phase
+  row 0 is execution phase w − 1's execution-phase row 1, each under the same salt (`commit_window(carry=…)`), so the verifier checks that their openings b‖c are equal
+  (`check_chain`, `C-carry`). Decisions an execution phase leaves unread carry: the load writes its own after the last
+  execution-phase row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a
+  decision to the earlier of its step's execution phase and its arrival's ingress execution phase, up to two before
+  its step's: at T = 20, 5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries
+  from execution phase 0 to their steps in execution phases 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
+- **The end.** `ReplayClose` reads the session's last state row and execution-phase row and refuses a session that ends with a
+  step to run or a decision unread (`close`). The compile slice's proof block charges each decision in the execution phase that
   commits it, A5's, in commit order, which is the order the scan reads them in. So a carried decision is charged where
   it is committed and read where its step is, and none is left uncharged or unread
   ([protocol/compile-slice.md](protocol/compile-slice.md)).
 - **The start.** The session's first rows are the empty engine (`empty`, with NB − 1 free blocks) and the empty
-  window, under the public salts `empty_salts`, whose openings the verifier computes (`C-first`).
+  execution-phase row, under the public salts `empty_salts`, whose openings the verifier computes (`C-first`).
 
 **Cost** (`size`). A step costs `ReplayAdvance`'s ANDs: the two fronts, about (Q + A·QW)·(1 + IW + 2·LW) and
-D + A·DW, and about 2·width for the idle select and the equality. It also costs three reads and one state row. A
-window costs P steps and one `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3
-path of depth ⌈log2(P + 2)⌉, or 1 for a window row. A session adds one `ReplayClose` (13 ANDs at the sync
+D + A·DW, and about 2·width for the idle select and the equality. It also costs three reads and one state row. An
+execution phase costs P steps and one `ReplayLoad`, P + 2 state rows and two execution-phase rows, and 3P + 4 reads,
+each a frame-v3 path of depth ⌈log2(P + 2)⌉, or 1 for an execution-phase row. A session adds one `ReplayClose` (13 ANDs at the sync
 KV-pressure trace's shape) and its two reads.
 
 ## Advice v0's validity (`verity_vllm.compiler.advice_check`)
@@ -1238,7 +1239,7 @@ decodes to a well-formed v0 advice, is the Boolean Definition
 
     AdviceCheck_v1{L} (bits: Array<L, Value<1>>, length: Array<LW, Value<1>>) -> Value<1>
 
-with L the public cap in bits, a multiple of 40, and LW = bitlen(L / 8). `bits` is the string in stream order and
+with L the public limit in bits, a multiple of 40, and LW = bitlen(L / 8). `bits` is the string in stream order and
 `length` its byte count, least significant bit first; bits past 8·length aren't read. The output is 1 exactly when
 `verity_vllm.compiler.advice_check.reference` holds: length ≤ L / 8, and `decode` takes the bytes up to three refusals
 the circuit doesn't make yet (`DEFERRED`). It makes every other refusal of `decode`: the grammar (version, minimal
@@ -1257,10 +1258,10 @@ derived `kind`, no resume of a finished request, no request twice in a step, and
   which only the replay knows: matching them takes a second sort, by position, and up to five releases can end in one
   block.
 
-**Under advice v1 this isn't what the compile slice's proof block proves.** At 8.7 × 10^10 ANDs for a 60 s window's 10.6
+**Under advice v1 this isn't what the compile slice's proof block proves.** At 8.7 × 10^10 ANDs for a 60 s execution phase's 10.6
 Mbit, v0's validity is too costly to be the compile slice's proof block's proof. The replay runs vLLM's scheduler
 exactly on every corpus trace, and advice v1 is what the certified record, the replay and the derived fields leave, a
-residual of a few hundred bits a window coded prefix-free, and `v1.decode(bytes, certified record)` gives I1 v0. So the
+residual of a few hundred bits an execution phase coded prefix-free, and `v1.decode(bytes, certified record)` gives I1 v0. So the
 compile slice's proof block takes v1 and produces v0 by replay, and most of v0's validity holds by construction. The
 three deferred rules are then:
 - unique ids are certified, by the network attester's admission order and the request records;
@@ -1279,8 +1280,8 @@ three deferred rules are then:
    record, then its rows in stream order.
 
 **Cost** (`size`): ANDs = (L / 5)·(parse + replay) + C(L / 5)·swap + the ends, with C(n) ≈ n·log2(n)² / 4
-comparators: 470,116 at L = 240 and 1.49 × 10^8 at 40,000. The 60 s llama8b-shape window's v0 advice, 10.6 Mbit,
-would cost 8.67 × 10^10, 70% of it the sort. A public cap on the rows, the sort's permutation as a private input or a
+comparators: 470,116 at L = 240 and 1.49 × 10^8 at 40,000. The 60 s llama8b-shape execution phase's v0 advice, 10.6 Mbit,
+would cost 8.67 × 10^10, 70% of it the sort. A public limit on the rows, the sort's permutation as a private input or a
 narrower w_len would each cut that, each a change to what the Definition states.
 
 ## Advice v1 (`verity_vllm.pipeline.advice_code.codec`)
@@ -1288,7 +1289,7 @@ narrower w_len would each cut that, each a change to what the Definition states.
 v1 is the advice the compile slice's proof block takes: I1 v0 sent as only what the certified record, the scheduler
 replay and the derived rules leave. `v1.encode(advice, record, registered) -> bytes` and `v1.decode(bytes, record,
 registered) -> I1 v0` with `decode(encode(a)) == a`. `decode` is total: it refuses by name every string that isn't the
-canonical encoding of an advice under the record, and a string past the cap ℓ unread. It stays in the encodings until
+canonical encoding of an advice under the record, and a string past the limit ℓ unread. It stays in the encodings until
 its circuit lands.
 
 **Certified, 0 bits**: the network attester's signed records under design v3 and the id I/O they carry,
@@ -1331,7 +1332,7 @@ the order is the topological one that:
 - takes the earliest in release order where the rows leave a choice, so an order the schedule never shows costs
   nothing.
 
-**Sent**, as v1's windows (`window_charge.Advice`), and nothing else:
+**Sent**, as v1's execution phases (`window_charge.Advice`), and nothing else:
 - *The decisions*, one per open step: whether the next request had arrived.
 - *The order.* The engine admits in the API server's body-read order, which comes after the release and overtakes it
   under load: requests overtake each other by length, and the HTTP layer reorders on top. v1 sends the permutation
@@ -1341,16 +1342,16 @@ the order is the topological one that:
   of the ranks is the inversion count. The decoder (`v1._arrival`) refuses rank 0, a position or rank past the
   requests left, and a repeated position.
 - *The lengths*, while the registration sends them (`Registered.send_lengths`, on until a proof holds both halves of
-  the length rule: the stop ids and the `max_tokens` cap). A prover who controls where a response ends chooses its
+  the length rule: the stop ids and the `max_tokens` limit). A prover who controls where a response ends chooses its
   output_len, so each request's output_len goes in ⌈log2(max_tokens + 1)⌉ bits and its finish in 1, as the plain tail
-  of the window its body lands in (`advice_code.lengths`). Decode refuses a sent output_len that isn't the certified
-  ids' count and a finish that isn't the stop rule's, and a replay that admits a request in a window before its body's.
+  of the execution phase its body lands in (`advice_code.lengths`). Decode refuses a sent output_len that isn't the certified
+  ids' count and a finish that isn't the stop rule's, and a replay that admits a request in an execution phase before its body's.
 
 *Not sent: the hits.* Past the bound, eviction may shorten a hit, and the replay's pool (`pool.BlockPool`, vLLM's
-LRU) fixes it, so no hit is the prover's choice. v1's caps hold the hits, the resumes and the lag bits at 0
-(`v1.CAPS`), so their counts code in 0 bits, and the decoder refuses a window that sends one. Every value the schedule
+LRU) fixes it, so no hit is the prover's choice. v1's limits hold the hits, the resumes and the lag bits at 0
+(`v1.CAPS`), so their counts code in 0 bits, and the decoder refuses an execution phase that sends one. Every value the schedule
 reads is then replayed, derived or sent, so the encoding is injective on the whole schedule. Under the certified tick
-the registered caps hold no count, so every window's segment codes nothing: a window is charged its length terms
+the registered limits hold no count, so every execution phase's segment codes nothing: one is charged its length terms
 alone, and 0 bits where the registration sends no lengths.
 
 *Not sent: the KV pool.* `num_gpu_blocks` is public and registered before the run, in `Registered.engine`, never in
@@ -1363,29 +1364,29 @@ I1 request q's connection: the order permutation (`walk.order`) through the arri
 The I/O tie's egress tie checks each cell's stream against its request q through it. That replaces v4's stream == q, which
 refuses honest traffic wherever the engine's order isn't the network attester's.
 
-*The windows* (A5). Step s's window is the earliest window that releases an output at step s or later (the last window
-when none follows): the first window whose rows a value read at step s can change. Arrival i's ingress window is the
+*The windows* (A5). Step s's execution phase is the earliest that releases an output at step s or later (the last
+when none follows): the first whose rows a value read at step s can change. Arrival i's ingress execution phase is the
 earliest of ⌊a_j / T⌋ over it and every later arrival j. That never decreases, even where the arrivals deviate from
 release order.
-- A decision about arrival i at step k goes to the earlier of step k's window and i's ingress window.
-- An order entry for arrival p goes to the earlier of p's ingress window and the window of the first step that reads
+- A decision about arrival i at step k goes to the earlier of step k's execution phase and i's ingress execution phase.
+- An order entry for arrival p goes to the earlier of p's ingress execution phase and that of the first step that reads
   p: a decision about it, a lookup of it, or its admission.
 - Each min is never later than either rule, so it is at least as conservative for the leak bound as A5's, and every
-  value about a request is charged in or before the window the request came in.
-- Each field is nondecreasing in the replay's order. So each field's values, window after window, are in the order
+  value about a request is charged in or before the execution phase the request came in.
+- Each field is nondecreasing in the replay's order. So each field's values, execution phase after execution phase, are in the order
   the replay reads them, and the decoder replays them straight through, with no routing.
 
 *The string*, MSB first: `code_v1.encode(windows, book)`, then zero bits to a byte. W is the record's last bucket // T
 + 1.
-- `code_v1` codes each window as one terminated arithmetic segment, its counts before its values. So its decoder finds
-  each window's end, and v1 sends no length prefix (Elias-gamma(ℓ_w + 1) cost 5 to 22 bits a string).
-- A window's charge is its segment's bits (`code_v1.Encoded.lens`, `bits_by_window`), a function of the string alone,
+- `code_v1` codes each execution phase as one terminated arithmetic segment, its counts before its values. So its
+  decoder finds each one's end, and v1 sends no length prefix (Elias-gamma(ℓ_w + 1) cost 5 to 22 bits a string).
+- An execution phase's charge is its segment's bits (`code_v1.Encoded.lens`, `bits_by_window`), a function of the string alone,
   and its length tail's, whose widths the record's `max_tokens` fix.
 - The codebook is `Registered.book`, a `code_v1.Book` fit on other runs, never this one. Its digest (SHA-512 of its
-  canonical JSON) is registered before the first window.
+  canonical JSON) is registered before the first execution phase.
 - `decode` runs `code_v1.decode`, which takes only the canonical segments, then the order entries' inverse, then the
-  replay, which consumes the decisions in order. It refuses the string unless its windows are the replay's residual
-  (no hit, resume or lag bit, and every value in its window) and its order is the one `arrival_order` recovers from
+  replay, which consumes the decisions in order. It refuses the string unless each execution phase's part is the replay's
+  residual (no hit, resume or lag bit, and every value in its execution phase) and its order is the one `arrival_order` recovers from
   the advice it decodes to.
 
 The compile slice's proof block commits the values themselves, not this string, and the string's segments are only their
@@ -1393,18 +1394,18 @@ charge (the composition below): what the bound counts is the charge, not the com
 
 - *The bound.* `code_v1`'s segments are prefix-free, so the strings are prefix-free for every W, and at most
   2^c strings are charged c bits or fewer (Kraft): the sampled leak bound's premise `hAs`.
-  `code_v1.encode` is injective on the windows (`code_v1.decode` inverts it), and the order entries' inverse, the
-  replay and the walk give the advice from the windows, so at most 2^c residuals, and so at most that many advices,
+  `code_v1.encode` is injective on its `windows` (`code_v1.decode` inverts it), and the order entries' inverse, the
+  replay and the walk give the advice from them, so at most 2^c residuals, and so at most that many advices,
   are accepted at a charge of c or less.
-- *v0's per-window parts.* Each window's part is self-delimited.
+- *v0's per-execution-phase parts.* Each execution phase's part is self-delimited.
 **Composition**, all in one ZK proof under the advice's hiding root:
-1. *The values are the committed advice.* The advice's hiding rows hold each window's residual raw, as
-   `verity_vllm.compiler.replay_chain`'s window row: its decisions as bits in the scan's order, at most D a window
+1. *The values are the committed advice.* The advice's hiding rows hold each execution phase's residual raw, as
+   `verity_vllm.compiler.replay_chain`'s execution-phase row: its decisions as bits in the scan's order, at most D one
    (4,391 on the corpus' largest), in `dec` with their count `left`; its `hits` group ("The rows" below), which v1
    leaves empty; and its order entries (position, rank). No decoder runs in the circuit: the scan reads each field at a
    private head of the chain's (`dh`, `hh`).
-2. The scan of `ReplayStep_v1` over the session's steps, from the empty engine. The window row holds a queue of the
-   next Q released requests not yet arrived, in (a, ordinal) order, Q a public cap like H, and arrival p takes the one
+2. The scan of `ReplayStep_v1` over the session's steps, from the empty engine. The execution-phase row holds a queue of the
+   next Q released requests not yet arrived, in (a, ordinal) order, Q a public limit like H, and arrival p takes the one
    at its order entry's rank (0 where none names p; a rank of Q or more is refused). Q = 128 holds the network attester's traces'
    largest, 75 (heavy; p50 7) and 2 (small KV). The chain fills the step's A arrival slots from the queue, each
    `arr_id` its arrival ordinal, so `ReplayStep_v1` needs no change for the ranks. The decisions are the scan's bits.
@@ -1413,13 +1414,13 @@ charge (the composition below): what the bound counts is the charge, not the com
    one. The chain reads every committed value and none past them, so the values are exactly the asks and the
    deviations. Under async scheduling
    (AS) the certified O forces each lag row, at no decision (`ReplayStep_v1`'s "Async scheduling").
-3. *The charge.* The registered code runs forward over the same values: per window, `code_v1`'s window over
+3. *The charge.* The registered code runs forward over the same values: per execution phase, `code_v1`'s segment over
    the values charged to it, in `code_v1._window`'s order, on the encoder ("The encoder in the circuit"
-   below). A decision's context is min(run, 2), run the 0s since the last 1 in the decision stream, across windows:
-   a function of the committed decisions, which the encoder keeps in its own state. The window's coded length ℓ_w
+   below). A decision's context is min(run, 2), run the 0s since the last 1 in the decision stream, across execution phases:
+   a function of the committed decisions, which the encoder keeps in its own state. The execution phase's coded length ℓ_w
    (`code_v1.Encoded.lens`) must be at most its declared charge c_w, a protocol output. No codeword is committed, so
    nothing reads a segment at a data-dependent cursor, no ask forks the replay, and the bound above holds as it is.
-   `CompileSlice_v1` is 1–3 for one window, proved in ZK, with its stand-ins (Open).
+   `CompileSlice_v1` is 1–3 for one execution phase, proved in ZK, with its stand-ins (Open).
 4. The walk over the rows, which gives I1 v0.
 5. `AdviceCheck_v1{L}` specifies what 1–4 give. The tests hold every advice v1 decodes, random and
    bit-flipped strings' too, to I1's `advice.decode`, whose refusals that circuit makes. So it holds wherever 2 and 4
@@ -1430,11 +1431,11 @@ charge (the composition below): what the bound counts is the charge, not the com
 **The encoder in the circuit** (`arith_encode`: `ArithCountStep_v1{K, BIN, CW}`, `ArithCountFinish_v1{CW}` and
 `BookKT_v1{C}`, with their references as specs; its docstring has the mechanics).
 - *The charge is the coded length.* The scan reads the committed values (item 2). The encoder runs `code_v1`'s code
-  forward over them, once a window from `Tally()`, and counts the bits the window's segment would hold: each symbol's
+  forward over them, once an execution phase from `Tally()`, and counts the bits its segment would hold: each symbol's
   scalings, taken at once, and the termination's 2 when used. The total must be at most c_w. No codeword is committed
   and no segment is compared. `encode` is injective on the values and its strings are prefix-free, so at most 2^c value
   lists are accepted at a charge of c or less ("The bound" above).
-- *A window's run*, in `code_v1._window`'s order: n_arrived = `left`; each decision slot j < D at context min(run, 2),
+- *An execution phase's run*, in `code_v1._window`'s order: n_arrived = `left`; each decision slot j < D at context min(run, 2),
   its (f0, f1) from `BookKT_v1{3}`, coded by `ArithCountStep_v1{18, 1, 20}`; n_hits = `hleft` (0 under v1);
   n_resumes (0 under v1); n_order and each order entry's position gap and rank step; n_lag (0 under v1); then
   `ArithCountFinish_v1{20}`. Slots past a count run with en = 0. A refusal (a symbol
@@ -1442,25 +1443,25 @@ charge (the composition below): what the bound counts is the charge, not the com
   refuses a symbol.
 - *The context and the frequencies are the circuit's, never witness.* The context is a 2-bit run counter carried from
   the replay's position: an arrival resets it, and a 0 raises it, saturating. (f0, f1) come from counts that start at
-  the registered book's public priors and that each coded decision raises in the circuit, across windows. An integer's
+  the registered book's public priors and that each coded decision raises in the circuit, across execution phases. An integer's
   (cum, freq, total) come from the book's public bin tables. A context or a frequency of the prover's choosing would
   pick the code per value and charge any decisions next to nothing. The compile slice computes both in the
   circuit too, at its own model (Open), and charges the position after `ArithEncodeFinish_v1`, which counts the same
   bits.
 - *Integers.* `code_v1` codes an integer as `code.Binned` does: a bin symbol from the book's table (or the escape and a
   uniform one), then a uniform offset, each a general (cum, freq, total) that `ArithCountStep_v1{18, 0, 20}` counts.
-  `ChargeCount_v1{N}` lowers a decisions-only window's counts, the slice's one call (docstring), and
-  `ChargeCount_v2{N, H, O, L}` (`window_charge`) the whole window's, its hits and order entries with their counts too,
+  `ChargeCount_v1{N}` lowers a decisions-only execution phase's counts, the slice's one call (docstring), and
+  `ChargeCount_v2{N, H, O, L}` (`window_charge`) the whole execution phase's, its hits and order entries with their counts too,
   and its length terms' tail.
-- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`): `code_v1` over v1's windows
+- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`): `code_v1` over v1's execution phases
   (`v1.residual`, a book fit at `v1.TABLE_CAPS`) and the walk's still-sent fields. After every symbol the count's
-  interval and `used` are code.py's and its count is the bits consumed. Each window's finish gives v1's charge and
+  interval and `used` are code.py's and its count is the bits consumed. Each execution phase's finish gives v1's charge and
   refuses one bit less, each bit's estimate is the book's model's at context min(run, 2), and the bit-checking variant
   refuses every flipped or cut segment. On the 14 corpus traces at T = 600, read with the network attester's ingress and with the
-  client's send as the release (order entries sent), and 6 traces' fields: no circuit case mismatches. The certifier's vectors (the replay's step
+  client's send as the release (order entries sent), and 6 traces' fields: no circuit case mismatches. This package's vectors (the replay's step
   traces, the trace corpus's fixture) hold no order entry.
 - *Cost* (ANDs, pinned): a decision 2,580 (the step's 2,243 and `BookKT_v1{3}`'s 337), 2.8% of a
-  `ReplayStep_v1{16,64,16}` step's 92,146; an integer's symbol 3,963; a window's finish 41. A window pays for all its
+  `ReplayStep_v1{16,64,16}` step's 92,146; an integer's symbol 3,963; an execution phase's finish 41. An execution phase pays for all its
   fixed-width slots. The corpus's largest: light's, 4,396 decisions, 11.4M; smallkv's, 1,466
   decisions and 5,686 integer symbols, 26.3M before the integers' lowering; async heavy's with the client's send, 1,000
   decisions and 1,761 integer symbols, 9.6M.
@@ -1468,9 +1469,9 @@ charge (the composition below): what the bound counts is the charge, not the com
   alternative, where the committed advice is the segments and the encoder's output must equal each, bit for bit. Its
   decision step costs 3,244, and it needs a reader at a data-dependent cursor, which isn't built.
 
-**The charge's carry across windows** (`charge_chain`, `ChargeLink_v1{N}`): [protocol/charge-chain.md](protocol/charge-chain.md).
+**The charge's carry across execution phases** (`charge_chain`, `ChargeLink_v1{N}`): [protocol/charge-chain.md](protocol/charge-chain.md).
 
-**The whole window's charge** (`window_charge`, `ChargeCount_v2{N, H, O, L}` and `ChargeLink_v2{N, H, O, L}`, the
+**The whole execution phase's charge** (`window_charge`, `ChargeCount_v2{N, H, O, L}` and `ChargeLink_v2{N, H, O, L}`, the
 coding of the hits, the order entries and their counts, and the length terms' tail):
 [protocol/charge-chain.md](protocol/charge-chain.md), "The whole window".
 
@@ -1484,7 +1485,7 @@ carry the table from call to call in `ReplayStep_v1`'s scheduling order:
   - Each candidate (the W waiting slots, then the A arrivals) then gets a lookup from the root (`admit`, nins = 0),
     always in derive mode (the call's own `sent` = 0). It checks that its wh is the longest cached prefix h*.
   - The candidate's hit h, the input `ReplayStep_v1` reads with U = B, is h* less its shortfall. The shortfall is 0
-    while the bound holds, and past it the next sent one, at the window row's head `hh`.
+    while the bound holds, and past it the next sent one, at the execution-phase row's head `hh`.
   - An admitted candidate gets a second call, which owns or appends the units its row completes. It starts from its
     hit's entry: the lookup's `trail` entry at unit h − 1, or ROOT when h = 0.
   - So a later candidate's lookup reads an earlier one's units, as vLLM caches a block when it allocates it.
@@ -1501,7 +1502,7 @@ carry the table from call to call in `ReplayStep_v1`'s scheduling order:
   witness, and the step's end checks it against the count: sent = 0 iff the count through this step is at most NB − 1.
   The count only grows, so the bit never returns to 0. Async scheduling sends from the first step.
 - *The rows.* These are the exact fields the two owners add, each little-endian, with EW = bitlen(N),
-  HW = bitlen(⌈L / B⌉) (`CacheStep_v1`'s), H the sent shortfalls a window (a public cap, like D) and
+  HW = bitlen(⌈L / B⌉) (`CacheStep_v1`'s), H the sent shortfalls an execution phase (a public limit, like D) and
   HCW = bitlen(H).
   - The replay step (`ReplayStep_v1`'s "Walk entries"): the state gains `run_pfx R×EW` after `run_comp`, the step's one
     walk input is `row_pfx R×EW`, each row's entry after its last `CacheStep_v1` call, and it outputs
@@ -1512,20 +1513,21 @@ carry the table from call to call in `ReplayStep_v1`'s scheduling order:
 
         cache    c_valid N×1 | c_parent N×EW | c_tok N×(U·TW) | c_owner N×RW | filled 1×BW | sent 1×1
 
-  - The window row gains one group after `dec`:
+  - The execution-phase row gains one group after `dec`:
 
         hits     hits H×HW | hleft 1×HCW
 
-  - `hh` is how many of the window row's shortfalls the window's steps so far read. `ReplayAdvance` checks that the
-    step's W + A shortfalls are the window row's at `hh`, with the log shifter `dh` uses, and `hh` moves by sent·Σ
-    `looked`. `ReplayLoad` writes the window's decoded shortfalls after the last window row's unread ones, as it does
+  - `hh` is how many of the execution-phase row's shortfalls its steps so far read. `ReplayAdvance` checks that the
+    step's W + A shortfalls are the execution-phase row's at `hh`, with the log shifter `dh` uses, and `hh` moves by
+    sent·Σ `looked`. `ReplayLoad` writes the execution phase's decoded shortfalls after the last execution-phase row's
+    unread ones, as it does
     `dec`, and refuses a state row 0 that left any unread.
   - The empty state's groups are all zero bits. While the bound holds, nothing leaves the cache, so N = NB − 1 entries
     hold every unit computed: 149,212 bits of table a state row at smallkv's (511, 16, 17, 10).
 - *Past the bound.* The table never evicts, so it holds every unit the session computed, not NB − 1: 961 units on
   corpus-smallkv's fixture, whose pool is 100 blocks. An evicting cache never hits past what a cache that never evicts
   holds, so a shortfall is at least 0. v1 sends none: past the bound each hit is the pool's, which `CacheStep_v3`
-  derives, so the window row's `hits` group and `CacheStep_v1`'s own `sent` = 1 mode, a hit checked only as a cached
+  derives, so the execution-phase row's `hits` group and `CacheStep_v1`'s own `sent` = 1 mode, a hit checked only as a cached
   prefix, are unused.
 - *Cost* (`verity_vllm.compiler.cache_step.size`): a call walks ⌈L / U⌉ units at about N·(2·(U·TW + EW) + 2·RW) ANDs
   each. That is 5,856 ANDs at (N, U, TW, RW, L) = (8, 4, 8, 4, 32), and 38.4M at smallkv's (511, 16, 17, 10, 2048):
@@ -1554,9 +1556,9 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
   a row completes is a write record (an append, or an owner dropping to a lower request).
   - A record is the key (parent entry and U tokens, EW + U·TW = 282 bits), the value (entry and owner) and the time,
     about 320 bits.
-  - The time is a counter in the scan's state row. The step places its records in the window row's record buffer, a
-    public cap a window like H, with the log shifter `dh` uses. So the records are values under the advice's hiding
-    root, committed with the window rows the scan already commits.
+  - The time is a counter in the scan's state row. The step places its records in the execution-phase row's record buffer, a
+    public limit an execution phase, like H, with the log shifter `dh` uses. So the records are values under the advice's hiding
+    root, committed with the execution-phase rows the scan already commits.
 - *Where the sort runs.* It runs in proof blocks of its own after the scan, under the same root: `MemSort_v1{E, w}`,
   Batcher's network at E records of w bits. It is log E·(log E + 1)/2 layers of at most E/2 comparators. A proof block
   runs a block of layers on committed records and commits its output; the last proof block runs the pass and outputs one
@@ -1586,13 +1588,13 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
 **Open.**
 - *The charge's pieces* (composition item 3, "The encoder in the circuit").
   - The counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`).
-    Lowering an integer (the window's counts and each order entry) to its `Binned` symbols in the book's public
+    Lowering an integer (the execution phase's counts and each order entry) to its `Binned` symbols in the book's public
     tables isn't built, so the circuit charges the decisions only.
   - The length terms' max_tokens in the slice. `CompileSlice_v7` reads every length slot from ``cert``, so none is free
-    witness, but what holds ``cert`` to the certified record is a stand-in, the honest cert row under the certifier's
+    witness, but what holds ``cert`` to the certified record is a stand-in, the honest cert row under the network attester's
     salt, until max_tokens is read from the certified body. The circuit bounds max_tokens only from above, so a lower
     one the output still fits passes at a lower charge. `compile_slice_zk` proves `CompileSlice_v7` against that
-    stand-in (its ``max-tokens`` unit is refused by the b‖c check alone); a proof of the length rule is open
+    stand-in (its ``max-tokens`` proof block is refused by the b‖c check alone); a proof of the length rule is open
     (`send_lengths` stays on until one holds it).
 - In `CompileSlice_v1`, `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns)
   as witness it bounds, and `CacheStep_v1` derives the hits only while the no-eviction bound holds. `CompileSlice_v4`
@@ -1607,24 +1609,24 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
 
 ## The compile slice (`verity_vllm.compiler.compile_slice`)
 
-`CompileSlice_v1` is the compile slice's proof block's pieces ("Advice v1" above) composed whole for one window, each
+`CompileSlice_v1` is the compile slice's proof block's pieces ("Advice v1" above) composed whole for one execution phase, each
 hit ReplayStep_v1 reads derived by `CacheStep_v1`'s calls on the certified tokens from the empty cache. Its circuit,
 verdict flags, reference (`check`), stand-ins and the phase-9 attack's cases (`phase9`) are
 `verity_vllm.compiler.compile_slice`'s docstring. Its step rows are held to the committed ``srv`` row, which the
 verifier holds by b‖c to the served rows the Commit side registers before the sample
 (`verity_vllm.compiler.served_rows`), so the phase-10 attack's six passes are refused; at G < P, the served rows'
 blocks, its P / G rows (`CompileSliceRowGroups_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its
-charge is `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's
-carry chain. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`), the served windows' slice except under the
+charge is `ChargeLink_v1{D}` over the decisions the execution phase commits, from its carry-in to its carry-out in the session's
+carry chain. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`), the served execution phases' slice except under the
 certified tick, is v1 charging the length terms too: `ChargeLink_v2{D, 0, 0, K}`, a length slot for each certified
 arrival, its certified max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and
-what binds its inputs, why every advised window is proved, a served window at its engine's class (w212 under its
+what binds its inputs, why every advised execution phase is proved, a served execution phase at its engine's class (w212 under its
 AsyncScheduler, 1,021,302 ANDs, and 857,866 at the sync class), and its `--zk` runs through
 `benchmarks/network_traces/compile_slice_zk.py`.
 
 ## The replay at the served shape
 
-In [protocol/served-shape.md](protocol/served-shape.md): a served window as the slice's input (vLLM 8eb1's w212), and
+In [protocol/served-shape.md](protocol/served-shape.md): a served execution phase as the slice's input (vLLM 8eb1's w212), and
 the replay's cost at served shapes and its split into proof blocks.
 
 ## Tests
@@ -1634,8 +1636,8 @@ check the Lean statements on examples and prove nothing. A test that mirrors a s
 name, and each test module's docstring says what it holds.
 
 **The difftest** checks the definitions the analysis's statements are about, not the statements. On 10,000 random instances,
-the certifier program (`lean/`, `NetworkAttester`), evaluated, gives what this package gives. The Lean side is
-`expectedRow`, with `Accepted` of `constantRate` and `StatusComplete` decided per prefix of whole windows. The Python
+the network attester's program (`lean/`, `NetworkAttester`), evaluated, gives what this package gives. The Lean side is
+`expectedRow`, with `Accepted` of `constantRate` and `StatusComplete` decided per prefix of whole execution phases. The Python
 side is `expected_grids`, `check_link`'s verdicts with the first differing bucket, `check_ingress_link`, and each
 prefix's acceptance. `../attester/program/lean/scripts/difftest_vectors.py` writes the instances and this package's results, and the Lean
 audit runs `../attester/program/lean/NetworkAttester/DifftestMain.lean` on them (`runs` in `../attester/program/lean/lean-audit.json`).
@@ -1643,7 +1645,7 @@ audit runs `../attester/program/lean/NetworkAttester/DifftestMain.lean` on them 
 definitions are List forms of `NetTiming`'s `Finset` ones, and three theorems prove them equal on everything the
 difftest compares (`NetTiming.SecurityProofs.Code`): `CodeExpectedRow` (the reference's row of the program's frames,
 sent at the program's hand ticks), `CodeAcceptedConstantRate` (the program's `Accepted` is the reference's, one
-execution block of the W windows, whose advice names each sync's δ and ρ) and `CodeStatusComplete`.
+execution block of the W execution phases, whose advice names each sync's δ and ρ) and `CodeStatusComplete`.
 
 ## The active network attester (`network_attester`)
 
@@ -1654,7 +1656,7 @@ bytes, and one form of them, the egress record's ("The egress record"), the only
 can carry.
 
 **The schedule's public parameters** are `NetworkAttesterParams`, fixed before the run:
-- B (`cell_bytes`), r (`slots`), τ (`bucket_ms`), D (`delay`), the lanes, the queue and the window T;
+- B (`cell_bytes`), r (`slots`), τ (`bucket_ms`), D (`delay`), the lanes, the queue and T, the execution phase's buckets;
 - the bounds `ingress_cells`, `ingress_buckets` and `egress_cells`;
 - the egress form (`egress`): `id`, the egress record's, or `bytes`, which relays any server's bytes, for the
   rehearsals of a server that answers in another form.
@@ -1685,15 +1687,15 @@ any other it fails the connection (`format`) in that cell's slot, and none of th
 never rewrites. An honest id-form server writes one `io_tie.id_event` of exactly P bytes an output, then `TRAILER`, so
 the cut gives one event a `DATA` cell and the `END` holds the trailer; any other byte stream fails at its first cell.
 
-**The response cap** (`NetworkAttesterParams.max_tokens_cap`, id form only, none by default) bounds every response in tokens. The
+**The response limit** (`NetworkAttesterParams.max_tokens_cap`, id form only, none by default) bounds every response in tokens. The
 network attester reads each request's `max_tokens` from its first request cell (`id_form.id_request_max_tokens`) before
-cutting it. A request whose field isn't a u32 at its place, is 0 or exceeds the cap is refused (`cap`): none of its
+cutting it. A request whose field isn't a u32 at its place, is 0 or exceeds the limit is refused (`cap`): none of its
 bytes is cut into a cell or reaches the server, and it fails at once. It is never clamped, and a request that asks for
 no token is refused because the stop rule ends no response of it. Every other response is held to its
 request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each
-certified response holds at most its request's `max_tokens` tokens, hence at most the cap
-(`NetTiming.Guarantees.ResponseCapped`). The cap and its reason enter the parameters' digest, so every record head binds
-them; an uncapped schedule hashes neither and keeps its digest. The period check (`NetworkCheck.Period`) reads the cap
+certified response holds at most its request's `max_tokens` tokens, hence at most the limit
+(`NetTiming.Guarantees.ResponseCapped`). The limit and its reason enter the parameters' digest, so every record head binds
+them; a schedule with no limit hashes neither and keeps its digest. The period check (`NetworkCheck.Period`) reads the limit
 with the schedule, binds it in the schedule's digest and publishes it (`max_tokens_cap`).
 
 **The lengths rows** (`NetworkAttesterParams.lengths`, id form only, none by default; 1 and 2 are their forms) are what the
@@ -1704,7 +1706,7 @@ attester:
   every released connection ends at an egress slot, in its `END` or a server's `FAIL`;
 - fails such a connection at its first egress slot, bucket s + D, with padding both ways until then, so every
   connection holds its lane through s + D, as long as the ingress proof block's scan holds its slot, and a client's
-  failure leaves the next admission a slot. The read of the records in the clear (`network_attester.audit`) fails no window for
+  failure leaves the next admission a slot. The read of the records in the clear (`network_attester.audit`) fails no execution phase for
   a connection that was never released;
 - cuts a request cell only where the ingress proof block's reference reads it as the next cell of a canonical id
   request (`io_request.read`). A request that is none fails as its client's (`malformed`), unreleased: no server sees
@@ -1855,7 +1857,7 @@ prompt ids and a size of ids released, each a power of two.
   - **The port** (`connection_rows.port`) of a class's table has a population of its count, proof block j reading
     held row j, so a proof block is one a held row. A table of no row has no port.
 - **The request words** (`NetworkAttesterParams.request_words`, none by default, with content rows under form 2 and a
-  response cap only). A schedule with them has a fourth table a class, `words.i`, which the head lists after
+  response limit only). A schedule with them has a fourth table a class, `words.i`, which the head lists after
   `end.i`. Its row r is two u32 words of the release whose request is row r of `request.i`: its `max_tokens` and
   the count of its prompt's ids, 8 bytes. Its count is the class's, held with the other three's, a class of no
   release has it with no row, and its port is `connection_rows.port`'s by its name.
@@ -1864,7 +1866,7 @@ prompt ids and a size of ids released, each a power of two.
     reads each cell before it releases it (`io_request.read`). Nothing a server or a prover says enters them.
   - **It applies no default.** With lengths rows the device holds every request cell to the canonical id request's
     form and fails the connection as `malformed` at the first that doesn't read. So a released request has
-    `max_tokens` at its place, the number its response is held to under the cap, and no key but the canonical
+    `max_tokens` at its place, the number its response is held to under the limit, and no key but the canonical
     ones. A request without `max_tokens` at its place, or with an `ignore_eos` key, is never released and has no
     row. The row holds no `ignore_eos`: no released request has the key, so a proof block that reads the table
     takes it as the constant 0, a registered value of its Definition.
@@ -1904,7 +1906,7 @@ prompt ids and a size of ids released, each a power of two.
 - **The head's tick** (`NetworkAttesterParams.head_offset` and `NetworkAttesterParams.head_wait`, none by default, set together and
   only with lengths rows, each in the parameters' digest only where set). Without them a head is published when
   whoever takes the hand has signed it. With them the tick it is published at is the schedule's:
-  - **The due tick.** Execution phase w's head is due `head_offset` buckets after the last bucket of the window
+  - **The due tick.** Execution phase w's head is due `head_offset` buckets after the last bucket of the execution phase
     whose close hands it (`NetworkAttesterParams.head_tick`), counted in the device's buckets, its one clock. The run's
     last two execution phases, handed at its last close, share a due tick.
   - **Who publishes.** Whoever takes the hand signs the head and hands it back to the network attester
@@ -1922,7 +1924,7 @@ prompt ids and a size of ids released, each a power of two.
     check's summary names those execution phases for it (`heads`).
   - **At W = 0** a head leaves at its due tick or never.
   - **Under form 2** the word that an execution phase has no head is held to the same ticks.
-  - **The run** ticks `head_offset` + W buckets past its last window while a head may still leave. Those ticks
+  - **The run** ticks `head_offset` + W buckets past its last execution phase while a head may still leave. Those ticks
     carry no cell.
   - **What stays public.** Which of its W + 1 ticks a head left at, and whether it left. What that costs a bound
     is the reader's to charge, and no reader here does yet: log₂(W + 1) bits an execution phase for its head's
@@ -1977,11 +1979,11 @@ and the response row it returns ("The content rows"); no statement registers its
   - Given n, every cell's bucket is fixed. When the server writes and how it chunks its bytes reach the wire only by
     failing the connection.
   - Within a bucket the jitter is the ticker's, bounded by the slack. A tick past
-    the slack faults every record's window.
+    the slack faults every record's execution phase.
   - With `paced` (`NetworkAttester(paced=…)`), the tick hands each connection's cells to the egress pacer (`pacer.Pacer`),
     which writes them to the connection's socket `paced` after the bucket's boundary, a
     time fixed before the bucket is made. A bucket that reaches the pacer after that time, or whose release starts
-    past the slack, faults every record's window: the open one, or the records held until each of its buckets'
+    past the slack, faults every record's execution phase: the open one, or the records held until each of its buckets'
     releases is reported. `verity/protocols/resource_accounting/network/attester/network_attester_serve.py` paces at 50 ms by default (`--paced-ms`).
 - **The advice is not on the wire.** The network attester sends no advice. Whatever the proofs need beyond the committed values
   travels on the proof side and is charged there (`A_c`).
@@ -1996,7 +1998,7 @@ and the response row it returns ("The content rows"); no statement registers its
     and never on the wire. A server that departs from the form at cell i gives the client what a server late at cell
     i does, so `format` adds no outcome.
   - A failure the client causes (`ingress`, `malformed`, `cap`) fails at once, and only returns the client's own bits
-    to it. A server held to its request's `max_tokens` fails at a cell it chose, so the cap adds no outcome.
+    to it. A server held to its request's `max_tokens` fails at a cell it chose, so the limit adds no outcome.
   - A failed connection frees its lane at its `FAIL`'s bucket, so f also moves later connections' s. That carries no
     bits beyond f's, which this term charges, though they reach another client.
 
@@ -2004,13 +2006,13 @@ n is content, not transport: it is the length of the protocol's output, which th
 content, at ε times the output bits of unproved proof blocks at δ. So on a run in which no connection failed, the transport
 leaks log2 of the schedule's parameters, and each failed connection adds log2(cells + 1). Lean states the bound over
 the network attester's schedule as `security/Definitions/Certifier/Cells.lean` models it, for a decoder of the
-client's view read back from the certifier's record (`SecurityProofs.MonitoringPeriodLeakAccepted`; "Capacity"), not over
+client's view read back from the network attester's record (`SecurityProofs.MonitoringPeriodLeakAccepted`; "Capacity"), not over
 `network_attester.py`'s code.
 
 **Deployment requirement (`trusted-device`).** The bound holds only on a host that gives the network attester's process:
-- CPU isolation from every co-tenant (its own cores), so that no co-resident process, the prover's above all, can
-  make a tick late and so choose which windows fault (about 1 bit a window otherwise);
-- a raw monotonic clock that nothing the prover runs can step or slew by more than the slack: buckets are read from
+- CPU isolation from every co-tenant (its own cores), so that no co-resident process, the developer's above all, can
+  make a tick late and so choose which execution phases fault (about 1 bit an execution phase otherwise);
+- a raw monotonic clock that nothing the developer runs can step or slew by more than the slack: buckets are read from
   it.
 
 Both are part of the named assumption `trusted-device` (the auditor's device and its provider are trusted). Neither is
@@ -2033,7 +2035,7 @@ of the sessions started under it.
   through to disk before the base is signed, so a crash loses that time and no later session reuses it or its
   ordinal. A session id already started is refused.
 - The network attester then signs the start's certificate (`certificate.CertifiedStart`): a certificate of the
-  link's start name (`<link>-origin`), egress, window 0, over a tagged digest of the base, the ordinal and the
+  link's start name (`<link>-origin`), egress, execution phase 0, over a tagged digest of the base, the ordinal and the
   schedule's parameters digest. It is signed before the origin is set and is public (`deployment.json`'s `start`).
 - The start's tag says which clock the session's ticks are read on: `verity-network-certifier/start/v2` means the
   host's raw clock, and a device whose ticks read any other clock signs its starts under another tag. The digest
@@ -2044,9 +2046,9 @@ of the sessions started under it.
 
 **What it attests.** Each direction's records hold exactly the cells sent that way, padding included, so |T| is the
 wire's bits. The third record, `fails`, holds one reason a failed connection.
-- Each window's three records are certified as the certifier's are (record v2 and `certificate.Issuer`), with the network
+- Each execution phase's three records are certified as the grid's records are (record v2 and `certificate.Issuer`), with the network
   attester's parameters digest in the head. A head is witness, so no reason reaches the client.
-- `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's (and, in the id form,
+- `audit` reads the records in the clear and refuses an execution phase whose cells aren't the schedule's (and, in the id form,
   the egress form's), whose `FAIL` cells and reasons don't match one for one, or in which a connection failed.
 - `verity/protocols/resource_accounting/network/attester/network_attester_serve.py` runs the network attester live and checks that the session's start
   is certified and that each client got exactly its egress record's cells, each in its bucket. The auditor gate's
@@ -2105,7 +2107,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   statement's header to, so a statement made for another proof blocks' wiring is refused even at the same rows (the
   phase-11 attack's pad for a data cell, closed; no gate). But the wiring is opened to the verifier, and it and the rows
   the proof blocks read give away each connection's first row and cell count, both the prover's. A permutation argument
-  closes it, with no new verifier form. Before the window's coins, the prover registers V′, a value of its own: the
+  closes it, with no new verifier form. Before the execution phase's coins, the prover registers V′, a value of its own: the
   execution phase's N = T·S cells as pairs (k, cell k of V, the network attester's value), reordered into proof block
   order, a fixed number of positions per consuming proof block (its cells in wire order, then empty cells), so the
   population's shape is public and its occupancy isn't. Under two live coins α and γ, a population reads every row of V
@@ -2121,7 +2123,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   each a PR: (1) V′'s commitment and registration in `network_attester_rows`; (2) the permutation proof block's Definition, its
   circuit-check sidecar and its cost at the served schedule; (3) the demonstration on `network_attester_zk.py`, with a wrong
   wiring refused; (4) the consuming proof blocks read V′, the wiring is no longer opened, and this gap closes. The I/O
-  tie, which reads every row of the window in order, needs no wiring.
+  tie, which reads every row of the execution phase in order, needs no wiring.
 - A record's certificate signs certificate v2's SHA-512 frame leaves, one per cell. The same cells are also committed
   as v3's hiding commitments, a row a bucket (8·B transfer gates a cell), under a root the network attester signs ("The network
   attester's cells as rows").
@@ -2133,7 +2135,7 @@ receiver's opens the same row as an input, under a root the network attester sig
 reads (`Flock.Registered.checkPort`, `--registered`), with no new verifier form. `network_attester_rows.py`'s docstring has the
 encodings; this section says what is committed, signed and read.
 
-**The rows.** Each execution phase of the wire's two records (link, direction, window w) is T rows, a row a bucket of
+**The rows.** Each execution phase of the wire's two records (link, direction, execution phase w, `window` in the head) is T rows, a row a bucket of
 its grid whatever the load (the I/O tie's layout, "The I/O tie"):
 - row t − w·T is bucket t's S = lanes·r slots in slot order, slot j at bytes j·B to (j + 1)·B, so at words j·B/2
   onward; at the served schedule a row is 4 KiB;
@@ -2151,15 +2153,15 @@ salt of its own.
 
 **The commitment** is a registered value's: row k's `b‖c` is hm96's commit string of its `sha512/row/v2` digest under
 salt k, 192 bytes the network attester samples from the operating system for that row alone, and the leaves form a
-frame-v3-sha512 tree. Its domain is the network attester's own, binding the parameters digest, the certifier session, the link,
-direction and window, B, S, T and the row format, so a root opens under one execution phase of one session's schedule.
+frame-v3-sha512 tree. Its domain is the network attester's own, binding the parameters digest, the network attester's session, the link,
+direction and execution phase, B, S, T and the row format, so a root opens under one execution phase of one session's schedule.
 The rows, their salts and the wiring's are witness, handed to the prover alone. What the network attester keeps for the prover
 is the records and, for each execution phase, the rows' salts and the wiring's (`cells.salts`, `Cells.witness`): the
 rows and the wiring are read off the records again. The auditor's gate keeps all of it under the run's `witness/`.
 
-**The signed head** names the root and the wiring: link, direction, window, the parameters digest, B, S, T, the
-wiring's digest, the domain and the root, under its own tag (`CellsHead`). The network attester signs it with the certifier's
-signer (`Issuer.sign`: the certifier message for the key, the session and the execution phase, one LMS leaf). The
+**The signed head** names the root and the wiring: link, direction, execution phase, the parameters digest, B, S, T, the
+wiring's digest, the domain and the root, under its own tag (`CellsHead`). The network attester signs it with its
+signer (`Issuer.sign`: the network attester's message for the key, the session and the execution phase, one LMS leaf). The
 record's own certificate of that execution phase signs its salted record digest, so neither verifies as the other.
 
 **The registration** (`registration`, `verity-network-warden/registration/v2`) is the head, the rows' format and order
@@ -2189,7 +2191,7 @@ names the port's value, so it is made for the Program's proof blocks' wiring and
 to the verifier: the network attester's named gap "The cells' wiring is open to the verifier", which has the plan that
 closes it.
 
-**How the other readers of the certifier's rows differ:**
+**How the other readers of the network attester's rows differ:**
 - N2's head checks: the prover commits each record head as one row (`TransferBlocks.commit`: one-stage's served domain,
   fresh salts). The proof block opens it in-circuit (`FrameV3Read`) and recomputes the certificate's salted digest
   in-circuit.

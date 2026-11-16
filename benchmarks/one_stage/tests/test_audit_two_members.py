@@ -207,7 +207,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert row["coins"]["verified"] == whose
     record = json.loads((out / "window" / "audit.json").read_text())
     assert record["coins"]["verified"] == whose
-    assert record["case_v2"]["written"] is False and "this audit drew 2 members" in record["case_v2"]["why"]
+    assert record["case_v2"]["written"] is False and "this audit sampled 2 members" in record["case_v2"]["why"]
     answer = _answer(out)
     assert (answer["verdict"], answer["public"]["coins"]) == ("accept", whose), answer
     assert answer["public"]["case_v2"] == record["case_v2"]
@@ -223,7 +223,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert not missing, missing
     # v2's case is one table's session, so an audit of two members writes why it has none, which SPOT's row reads
     assert not (out / "window" / "case-v2.json").exists()
-    assert "this audit drew 2 members" in (out / "window" / "case-v2-error.txt").read_text()
+    assert "this audit sampled 2 members" in (out / "window" / "case-v2-error.txt").read_text()
 
 
 def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, binaries):

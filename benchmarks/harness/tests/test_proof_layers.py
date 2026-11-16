@@ -1,6 +1,7 @@
-"""`verity bench prove layers`: each layer's row read from the files its command writes, built here small in each format
-(recursion_e2e's ``recursion_e2e.json``, prove_path's arm ``audit.log`` and ``summary.json``, a5_llama1b_h200's
-``summary.txt`` with a5.sh's out), and the table, its JSON line and the kit's measurements written from them."""
+"""`verity bench prove layers`: the benchmark result for each layer, read from the files its command writes, built here
+small in each format (recursion_e2e's ``recursion_e2e.json``, prove_path's arm ``audit.log`` and ``summary.json``,
+a5_llama1b_h200's ``summary.txt`` with a5.sh's out), and the table, its JSON line and the kit's measurements written
+from them."""
 
 from __future__ import annotations
 
@@ -71,14 +72,14 @@ def a5_out(root: Path, *, stopped: bool = False, **summary: object) -> Path:
 
 
 def test_an_accepted_recursive_run_gives_its_path_without_leans_step_and_its_releases_bytes(tmp_path):
-    row = PL.read("recursion", str(recursion(tmp_path)))
-    assert row.accepted and row.why is None
-    assert row.prover_s == 1202.0 and row.prover_unit == "s a run" and row.lean_s == 90.0
-    assert row.proof_bytes == 18000000 and "10 releases" in row.bytes_what
-    assert row.workload == ("K = 4096, N = 2: N x GemmCoordinate_v2{K,DOT=HopperBF16WgmmaDot16_v1} under "
+    result = PL.read("recursion", str(recursion(tmp_path)))
+    assert result.accepted and result.why is None
+    assert result.prover_s == 1202.0 and result.prover_unit == "s a run" and result.lean_s == 90.0
+    assert result.proof_bytes == 18000000 and "10 releases" in result.bytes_what
+    assert result.workload == ("K = 4096, N = 2: N x GemmCoordinate_v2{K,DOT=HopperBF16WgmmaDot16_v1} under "
                             "Q_template_instance (rec_reprice.py)")
-    assert row.ran_with == "ran with: not stated"
-    assert row.detail == "inputs.inner: on the challenger's coin tree (FC_COINS=tree); params.tree_from test-os"
+    assert result.ran_with == "ran with: not stated"
+    assert result.detail == "inputs.inner: on the challenger's coin tree (FC_COINS=tree); params.tree_from test-os"
 
 
 @pytest.mark.parametrize("composed", [False, None])
@@ -86,25 +87,25 @@ def test_a_recursive_run_lean_did_not_compose_prints_no_number(tmp_path, compose
     """A headline with its parts passed but no composition (or one from before ``composed``) is no accepted recursive
     run, as recursion_e2e's own verdict says."""
 
-    row = PL.read("recursion", str(recursion(tmp_path, composed)))
-    assert not row.accepted and row.prover_s is None and row.lean_s is None and row.proof_bytes is None
-    assert "not an accept" in row.why and "composed" in row.lean
+    result = PL.read("recursion", str(recursion(tmp_path, composed)))
+    assert not result.accepted and result.prover_s is None and result.lean_s is None and result.proof_bytes is None
+    assert "not an accept" in result.why and "composed" in result.lean
 
 
 def test_a_prove_path_run_takes_its_honest_arm_and_its_blocks_means(tmp_path):
     out = tmp_path / "out"
     prove_path_arm(out, "llama")
     prove_path_arm(out, "llama-forged", forged=True, lean=False)
-    row = PL.read("zk", str(tmp_path))
-    assert row.accepted and row.format == PL.PROVE_PATH and row.proof == "zk"
-    assert (row.prover_s, row.lean_s, row.proof_bytes) == (3.0, 1.0, 850000.0) and row.prover_unit == "s a block"
-    assert row.workload == "arm llama: SiluMul_v2{I=8192} x 2 drawn of 8 units"
-    assert row.ran_with == ("ran with: coins local challenger; parameters not stated "
+    result = PL.read("zk", str(tmp_path))
+    assert result.accepted and result.format == PL.PROVE_PATH and result.proof == "zk"
+    assert (result.prover_s, result.lean_s, result.proof_bytes) == (3.0, 1.0, 850000.0) and result.prover_unit == "s a proof block"
+    assert result.workload == "arm llama: SiluMul_v2{I=8192} x 2 sampled of 8 proof blocks"
+    assert result.ran_with == ("ran with: coins local challenger; parameters not stated "
                             "(PROVE-PATH coins challenger; summary.json coins.challenger local)")
-    assert row.detail == "PROVE-PATH coins challenger; summary.json coins.challenger local"
+    assert result.detail == "PROVE-PATH coins challenger; summary.json coins.challenger local"
 
 
-def test_the_flock_row_is_the_plain_proofs(tmp_path):
+def test_the_flock_result_is_the_plain_proofs(tmp_path):
     zk = PL.read("flock", str(prove_path_arm(tmp_path / "a", "llama")))
     assert zk.prover_s is None and "plain" in zk.why
     plain = PL.read("flock", str(prove_path_arm(tmp_path / "b", "llama", proof="plain")))
@@ -112,32 +113,32 @@ def test_the_flock_row_is_the_plain_proofs(tmp_path):
 
 
 def test_a_prove_path_run_whose_lean_verify_refused_prints_no_number(tmp_path):
-    row = PL.read("zk", str(prove_path_arm(tmp_path, "llama", lean=False)))
-    assert not row.accepted and row.prover_s is None and "lean-verify/m0 False" in row.lean
+    result = PL.read("zk", str(prove_path_arm(tmp_path, "llama", lean=False)))
+    assert not result.accepted and result.prover_s is None and "lean-verify/m0 False" in result.lean
 
 
 def test_every_rank_needs_its_own_lean_verify_verdict(tmp_path):
     """Two ranks with one audited A5 line between them are not every rank verified by Lean, though that one line is."""
 
     assert PL.read("zk", str(prove_path_arm(tmp_path / "a", "llama", ranks=2))).accepted
-    row = PL.read("zk", str(prove_path_arm(tmp_path / "b", "llama", ranks=2, a5_lines=1)))
-    assert not row.accepted and row.prover_s is None and "not every rank has a Lean verify verdict" in row.lean
-    assert "1 A5 result line(s) for 2 rank(s), 0 without a Lean verify verdict: not one verdict a rank" in row.notes
+    result = PL.read("zk", str(prove_path_arm(tmp_path / "b", "llama", ranks=2, a5_lines=1)))
+    assert not result.accepted and result.prover_s is None and "not every rank has a Lean verify verdict" in result.lean
+    assert "1 A5 result line(s) for 2 rank(s), 0 without a Lean verify verdict: not one verdict a rank" in result.notes
 
 
-def test_the_printed_row_states_its_proof(tmp_path):
-    """Each printed row says its proof; a plain a5 out given as ``--sampling`` (Flock with zero knowledge at the sampling
+def test_the_printed_result_states_its_proof(tmp_path):
+    """Each printed benchmark result says its proof; a plain a5 out given as ``--sampling`` (Flock with zero knowledge at the sampling
     plan) says plain, prints no number and says why."""
 
-    rows = [PL.read("sampling", str(a5_out(tmp_path / "p", plain=True))), PL.read("zk", str(prove_path_arm(tmp_path, "z"))),
+    results = [PL.read("sampling", str(a5_out(tmp_path / "p", plain=True))), PL.read("zk", str(prove_path_arm(tmp_path, "z"))),
             PL.read("flock", None)]
-    text = PL.render(rows)
+    text = PL.render(results)
     line = table_lines(text)
-    assert line["with sampling"].startswith("| with sampling | values not stated: row llama32-1b__int8__h200__tp1__b4: ")
+    assert line["with sampling"].startswith("| with sampling | values not stated: workload llama32-1b__int8__h200__tp1__b4: ")
     assert "| plain | not stated | not stated | — |" in line["with sampling"]
-    assert "| zk | not stated | ε not stated at δ 0.5 | 3 s a drawn block (Flock's prove_total_s" in line["Flock with zero knowledge"]
+    assert "| zk | not stated | ε not stated at δ 0.5 | 3 s a sampled proof block (Flock's prove_total_s" in line["Flock with zero knowledge"]
     assert line["Flock"].startswith("| Flock | not run | — | — | — | — |")
-    assert ("- with sampling: no number: --sampling is the zk proof's row, and this output says its proof is plain"
+    assert ("- with sampling: no number: --sampling is the zk proof's benchmark result, and this output says its proof is plain"
             in text.splitlines())
 
 
@@ -145,27 +146,27 @@ def table_lines(text: str) -> dict[str, str]:
     return {x.split(" | ")[0][2:]: x for x in text.splitlines() if x.startswith("| ") and not x.startswith("| layer ")}
 
 
-def test_a_plain_sampling_row_writes_null_with_why_under_every_id(tmp_path):
-    rows = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path, plain=True)))]
-    own = [m for m in PL.measured(rows, IDS) if m["member"] is None]
+def test_a_plain_sampling_result_writes_null_with_why_under_every_id(tmp_path):
+    results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path, plain=True)))]
+    own = [m for m in PL.measured(results, IDS) if m["member"] is None]
     assert [m["name"] for m in own] == list(IDS)
     assert all(m["value"] is None and "says its proof is plain" in m["why"] and m["extra"]["proof"] == "plain" for m in own)
 
 
 def test_an_a5_run_reads_its_audit_its_timing_and_states_no_more_of_its_coins_than_it_says(tmp_path):
-    row = PL.read("sampling", str(a5_out(tmp_path)))
-    assert row.accepted and row.format == PL.A5
-    assert (row.prover_s, row.lean_s, row.proof_bytes) == (5.0, 2.0, 125.0)
-    assert row.workload == ("values not stated: row llama32-1b__int8__h200__tp1__b4: RoPEHead_v1{D=64} x 4 drawn of 112 units "
+    result = PL.read("sampling", str(a5_out(tmp_path)))
+    assert result.accepted and result.format == PL.A5
+    assert (result.prover_s, result.lean_s, result.proof_bytes) == (5.0, 2.0, 125.0)
+    assert result.workload == ("values not stated: workload llama32-1b__int8__h200__tp1__b4: RoPEHead_v1{D=64} x 4 sampled of 112 proof blocks "
                             "(kind=served commitment=rows-sha512)")
-    assert row.ran_with == "ran with: not stated"
-    assert row.detail == "A5 line's verdicts challenger/m0, a challenger per drawn member"
-    assert "replay rc=0 a5 rc=0" in row.notes and "serving stage build PASS 2026-11-15T10:00:00Z" in row.notes
-    assert "arm dev" in row.notes
+    assert result.ran_with == "ran with: not stated"
+    assert result.detail == "A5 line's verdicts challenger/m0, a challenger per sampled member"
+    assert "replay rc=0 a5 rc=0" in result.notes and "serving stage build PASS 2026-11-15T10:00:00Z" in result.notes
+    assert "arm dev" in result.notes
 
 
-def test_an_a5_row_is_checked_against_the_proof_of_the_layer_it_is_given_as(tmp_path):
-    """A plain a5 out given as ``--zk`` prints no seconds in the zero-knowledge row; its zk out does, with the coins its
+def test_an_a5_result_is_checked_against_the_proof_of_the_layer_it_is_given_as(tmp_path):
+    """A plain a5 out given as ``--zk`` prints no seconds in the zero-knowledge benchmark result; its zk out does, with the coins its
     summary names."""
 
     plain = PL.read("zk", str(a5_out(tmp_path / "plain", plain=True)))
@@ -177,11 +178,11 @@ def test_an_a5_row_is_checked_against_the_proof_of_the_layer_it_is_given_as(tmp_
 
 
 def test_a_stopped_a5_run_says_where_it_stopped(tmp_path):
-    row = PL.read("sampling", str(a5_out(tmp_path, stopped=True)))
-    assert not row.accepted and row.prover_s is None and row.why == "STOPPED at commit (no window)"
+    result = PL.read("sampling", str(a5_out(tmp_path, stopped=True)))
+    assert not result.accepted and result.prover_s is None and result.why == "STOPPED at commit (no window)"
 
 
-def test_a_row_given_another_commands_output_or_nothing_readable_says_so(tmp_path):
+def test_a_result_given_another_commands_output_or_nothing_readable_says_so(tmp_path):
     assert "takes prove_path" in PL.read("flock", str(recursion(tmp_path / "r"))).why
     assert PL.read("zk", str(tmp_path / "missing")).status == "unreadable"
     (tmp_path / "empty").mkdir()
@@ -190,8 +191,8 @@ def test_a_row_given_another_commands_output_or_nothing_readable_says_so(tmp_pat
 
 def test_a_run_id_is_read_from_the_record_its_fetcher_lands(tmp_path):
     root = recursion(tmp_path)
-    row = PL.read("recursion", "r20261115-183449-c6f6", fetcher=lambda run: root)
-    assert row.accepted and row.given == "r20261115-183449-c6f6"
+    result = PL.read("recursion", "r20261115-183449-c6f6", fetcher=lambda run: root)
+    assert result.accepted and result.given == "r20261115-183449-c6f6"
 
 
 #: `benchmarks/prove/run.py`'s ``LAYER_METRICS``
@@ -212,7 +213,7 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
         assert f"| {title} |" in text
     assert "| Flock | not run |" in text and "- Flock: no number: not run" in text
     doc = json.loads(line)
-    assert doc["schema"] == PL.SCHEMA and [r["layer"] for r in doc["rows"]] == list(PL.LAYERS)
+    assert doc["schema"] == PL.SCHEMA and [r["layer"] for r in doc["results"]] == list(PL.LAYERS)
     assert json.loads((tmp_path / "report" / "proof-layers.json").read_text()) == doc
     written = json.loads((tmp_path / "report" / "result.json").read_text())["measurements"]
     assert [(m["name"], m.get("member")) for m in written] == [
@@ -223,7 +224,7 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert all(values[name, "flock"]["value"] is None and values[name, "flock"]["why"].startswith("not run") for name in IDS)
     assert {m["unit"] for m in written} == {"s a proof block", "bytes a proof block"} and all(m["mark"] == "measured"
                                                                                            for m in written)
-    assert doc["rows"][3]["ran_with"] == "ran with: not stated" and doc["rows"][3]["prover_s"] == 1202.0
+    assert doc["results"][3]["ran_with"] == "ran with: not stated" and doc["results"][3]["prover_s"] == 1202.0
     head = text.splitlines()
     assert head[1:6] == [PL.NOT_AN_AUDIT, "- Flock: ran with: not stated",
                          ("- Flock with zero knowledge: ran with: coins local challenger; parameters not stated "
@@ -234,23 +235,24 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert "| 1202 s a run, wall (one recursive run's path" in line["with recursion"]
     assert "| 90 s a run, wall (the lean step whole" in line["with recursion"]
     assert "| 18,000,000 bytes a run (V*'s 10 releases" in line["with recursion"]
-    assert "| 850,000 bytes a drawn block (every rep's proof files" in line["Flock with zero knowledge"]
+    assert "| 850,000 bytes a sampled proof block (every rep's proof files" in line["Flock with zero knowledge"]
 
 
 def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_any_id(tmp_path):
-    """A refused Lean verify and an a5 member whose timing is keyed by its chunk's name (no ``draw_counts`` entry) each
-    write null with why, never a figure; recursion's row is no member of any id."""
+    """A refused Lean verify and an a5 member whose timing is keyed by its chunk's name (no count of its sampled proof
+    blocks) each write null with why, never a figure; recursion's benchmark result is no member of any id."""
 
     refused = PL.read("zk", str(prove_path_arm(tmp_path / "z", "llama", lean=False)))
     chunk = PL.read("sampling", str(a5_out(tmp_path / "s", draw_counts={"OtherTemplate_v1": 4})))
     assert chunk.accepted and chunk.prover_s is None
-    assert "no per-block figure: member RoPEHead_v1{D=64}'s timing has no drawn-block count (draw_counts)" in chunk.notes
-    rows = [PL.read("flock", None), refused, chunk, PL.read("recursion", str(recursion(tmp_path / "r")))]
-    written = PL.measured(rows, IDS)
+    assert any(n.startswith("no figure a proof block: member RoPEHead_v1{D=64}'s timing has no count of sampled proof blocks")
+               for n in chunk.notes)
+    results = [PL.read("flock", None), refused, chunk, PL.read("recursion", str(recursion(tmp_path / "r")))]
+    written = PL.measured(results, IDS)
     assert len(written) == 9 and all(m["value"] is None and m["why"] for m in written)
     assert {m["member"] for m in written} == {"flock", "zero knowledge", None}
     with pytest.raises(ValueError, match="not one of"):
-        PL.measured(rows, {"benchmarks/x": "seconds"})
+        PL.measured(results, {"benchmarks/x": "seconds"})
 
 
 @pytest.mark.parametrize("out", ["", None])
@@ -261,18 +263,18 @@ def test_an_empty_out_or_run_dir_is_no_place_to_write(tmp_path, monkeypatch, cap
         monkeypatch.delenv("OUT", raising=False)
     else:
         monkeypatch.setenv("OUT", out)
-    kit.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS))
-    assert capsys.readouterr().out == 'text\n{"rows": []}\n' and not any(tmp_path.iterdir())
+    kit.report(PL.REPORT, "text", {"results": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS))
+    assert capsys.readouterr().out == 'text\n{"results": []}\n' and not any(tmp_path.iterdir())
 
 
-def test_with_no_number_in_any_row_the_command_says_so_first_and_exits_1(tmp_path, monkeypatch, capsys):
+def test_with_no_number_in_any_result_the_command_says_so_first_and_exits_1(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.delenv("OUT", raising=False)
     assert main(["prove-layers", "--zk", str(tmp_path / "missing")]) == 1
     first = capsys.readouterr().out.splitlines()[0]
     assert first.startswith("prove layers: no number: flock: not run: no output given (--flock DIR|RUN); zk: unreadable: ")
     assert main(["prove-layers", "--recursion", str(recursion(tmp_path / "r"))]) == 0
-    assert capsys.readouterr().out.startswith("The proof system by layer")
+    assert capsys.readouterr().out.startswith("The proof benchmark by layer")
 
 
 def test_the_help_names_the_command_as_the_readme_does(capsys):
@@ -283,8 +285,8 @@ def test_the_help_names_the_command_as_the_readme_does(capsys):
 
 def test_a_run_id_the_store_cant_give_says_to_give_its_out_directory(monkeypatch):
     monkeypatch.setitem(sys.modules, "research.store", None)
-    row = PL.read("recursion", "r20261115-183449-c6f6")
-    assert row.status == "unreadable" and "isn't installed here" in row.why and PL.FIX in row.why
+    result = PL.read("recursion", "r20261115-183449-c6f6")
+    assert result.status == "unreadable" and "isn't installed here" in result.why and PL.FIX in result.why
 
 
 def test_the_device_is_the_outputs_own_words(tmp_path):
@@ -358,32 +360,32 @@ def layers_run(root: Path) -> Path:
 
 def test_a_layers_sh_run_gives_its_three_layers_each_a_statements_figures_as_stand_in_values(tmp_path):
     """layers.sh's output is recognised by its own files (layers.txt beside a6/summary.json), each layer from its own
-    directory of the run, and the row says what the output says: stand-in values, figures a statement, its ε at δ."""
+    directory of the run, and the benchmark result says what the output says: stand-in values, figures a statement, its ε at δ."""
 
     run = layers_run(tmp_path / "run")
-    rows = {x: PL.read(x, str(run)) for x in ("flock", "zk", "sampling")}
-    assert {r.format for r in rows.values()} == {PL.LAYERS_SH} and all(r.accepted for r in rows.values())
-    assert all(r.workload.startswith("stand-in values, never served: 2 statements of 2,560 units") for r in rows.values())
-    assert (rows["zk"].commit, rows["zk"].commit_from) == (SHA, "job.log's source") and "32 of them drawn" in rows["sampling"].workload
-    assert [r.proof for r in rows.values()] == ["plain", "zk", "zk"]
-    assert rows["sampling"].ran_with.startswith("ran with: coins local challenger; parameters development (a development")
-    assert rows["sampling"].eps_delta == "at most 895 of 2,560 units wrong except with probability 2^-20"
-    assert rows["flock"].eps_delta == PL.NOT_STATED and rows["zk"].device.startswith("GPU 4 (gpu-lease's")
-    line = table_lines(PL.render(list(rows.values()) + [PL.read("recursion", None)]))
-    assert "| 2 s a statement of 2,048 units; 3 s a statement of 512 units (Flock's prove_total_s) |" in line["Flock"]
-    assert "| 6 s a statement of 26 units; 7 s a statement of 6 units (Lean's verify) |" in line["with sampling"]
-    assert "900 bytes a statement of 2,048 units; 901 bytes a statement of 512 units (one rep's proof)" in line["Flock"]
+    results = {x: PL.read(x, str(run)) for x in ("flock", "zk", "sampling")}
+    assert {r.format for r in results.values()} == {PL.LAYERS_SH} and all(r.accepted for r in results.values())
+    assert all(r.workload.startswith("stand-in values, never served: 2 statements of 2,560 proof blocks") for r in results.values())
+    assert (results["zk"].commit, results["zk"].commit_from) == (SHA, "job.log's source") and "32 of them sampled" in results["sampling"].workload
+    assert [r.proof for r in results.values()] == ["plain", "zk", "zk"]
+    assert results["sampling"].ran_with.startswith("ran with: coins local challenger; parameters development (a development")
+    assert results["sampling"].eps_delta == "at most 895 of 2,560 incorrect proof blocks except with probability 2^-20"
+    assert results["flock"].eps_delta == PL.NOT_STATED and results["zk"].device.startswith("GPU 4 (gpu-lease's")
+    line = table_lines(PL.render(list(results.values()) + [PL.read("recursion", None)]))
+    assert "| 2 s a statement of 2,048 proof blocks; 3 s a statement of 512 proof blocks (Flock's prove_total_s) |" in line["Flock"]
+    assert "| 6 s a statement of 26 proof blocks; 7 s a statement of 6 proof blocks (Lean's verify) |" in line["with sampling"]
+    assert "900 bytes a statement of 2,048 proof blocks; 901 bytes a statement of 512 proof blocks (one rep's proof)" in line["Flock"]
 
 
-def test_a_stand_in_row_writes_no_figure_a_proof_block_under_the_metric_ids(tmp_path):
+def test_a_stand_in_result_writes_no_figure_a_proof_block_under_the_metric_ids(tmp_path):
     run = str(layers_run(tmp_path / "run"))
-    rows = [PL.read(x, run if x != "recursion" else None) for x in PL.LAYERS]
-    written = PL.measured(rows, IDS)
+    results = [PL.read(x, run if x != "recursion" else None) for x in PL.LAYERS]
+    written = PL.measured(results, IDS)
     assert len(written) == 9 and all(m["value"] is None for m in written)
     assert all(m["why"] == "stand-in values, never served: its figures are a statement's, not a proof block's" for m in written)
 
 
-def test_a_layers_sh_row_with_a_negative_case_accepted_or_no_zk_flag_prints_no_number(tmp_path):
+def test_a_layers_sh_result_with_a_negative_case_accepted_or_no_zk_flag_prints_no_number(tmp_path):
     neg = PL.read("zk", str(layers_sh(tmp_path / "a", "zk", negative=False)))
     assert not neg.accepted and neg.statements == [] and "negative draw-outside-the-partition not refused" in neg.lean
     plain = PL.read("zk", str(layers_sh(tmp_path / "b", "zk", zk_flag=False)))
@@ -391,44 +393,44 @@ def test_a_layers_sh_row_with_a_negative_case_accepted_or_no_zk_flag_prints_no_n
     assert PL.read("recursion", str(layers_run(tmp_path / "c"))).status == "unreadable"
 
 
-def test_a_prove_path_row_names_the_commit_its_machine_txt_states(tmp_path):
+def test_a_prove_path_result_names_the_commit_its_machine_txt_states(tmp_path):
     out = tmp_path / "out"
     prove_path_arm(out, "z")
     (out / "machine.txt").write_text(f"11\nMem: 755\n{'c352729e2ee' + '0' * 29}\n{'5e' * 20}\n")
-    row = PL.read("zk", str(out))
-    assert row.commit == "c352729e2ee" + "0" * 29 and row.workload.startswith("arm z: ")
-    commits = next(x for x in PL.render([row]).splitlines() if x.startswith("- commits: "))
-    assert commits.startswith("- commits: Flock with zero knowledge c352729e2ee (machine.txt's git HEAD); a row reruns from main")
+    result = PL.read("zk", str(out))
+    assert result.commit == "c352729e2ee" + "0" * 29 and result.workload.startswith("arm z: ")
+    commits = next(x for x in PL.render([result]).splitlines() if x.startswith("- commits: "))
+    assert commits.startswith("- commits: Flock with zero knowledge c352729e2ee (machine.txt's git HEAD); a benchmark result reruns from main")
     (out / "machine.txt").write_text("11\n")
     assert PL.read("zk", str(out)).commit is None
     assert "- commits: Flock with zero knowledge not stated; " in PL.render([PL.read("zk", str(out))])
 
 
-def test_a_served_a5_row_states_its_values_its_bound_its_coins_and_its_commit_from_its_files(tmp_path):
+def test_a_served_a5_result_states_its_values_its_bound_its_coins_and_its_commit_from_its_files(tmp_path):
     """A served a5 run's shapes: summary.json's source served beside REGISTERED kind=served, the audit's
-    wrong_units, summary.txt's COINS line and machine.txt's git HEAD (a5_llama1b_h200.sh's third line)."""
+    bound on incorrect proof blocks, summary.txt's COINS line and machine.txt's git HEAD (a5_llama1b_h200.sh's third line)."""
 
     out = a5_out(tmp_path, source="served", audit={"wrong_units": {"bound": 2, "of": 880, "delta": 0.5}}) / "out"
     (out / "machine.txt").write_text(f"uid=0(root)\n13722cef5f43\n{'45400e83995d' + '0' * 28}\nrow dir /w/r/llama32-1b__int8\n")
     with (out / "summary.txt").open("a") as f:
         f.write("COINS draw: one local challenger session (a development stand-in for the auditor's), law subset k=4 of 112 "
                 "units, delta 0.5; sessions: Flock --zk behind the Lean ZK server\n")
-    row = PL.read("sampling", str(tmp_path))
-    assert row.workload.startswith("served values: row llama32-1b__int8: RoPEHead_v1{D=64} x 4 drawn of 112 units (kind=served")
-    assert row.eps_delta == "at most 2 of 880 units wrong except with probability 0.5"
-    assert row.ran_with == ("ran with: coins local challenger; parameters not stated (summary.txt COINS draw: one local "
+    result = PL.read("sampling", str(tmp_path))
+    assert result.workload.startswith("served values: workload llama32-1b__int8: RoPEHead_v1{D=64} x 4 sampled of 112 proof blocks (kind=served")
+    assert result.eps_delta == "at most 2 of 880 incorrect proof blocks except with probability 0.5"
+    assert result.ran_with == ("ran with: coins local challenger; parameters not stated (summary.txt COINS draw: one local "
                             "challenger session (a development stand-in for the auditor's), law subset k=4 of 112 units, delta 0.5; "
                             "sessions: Flock --zk behind the Lean ZK server)")
-    assert row.commit == "45400e83995d" + "0" * 28 and row.proof_bytes == 125.0
+    assert result.commit == "45400e83995d" + "0" * 28 and result.proof_bytes == 125.0
 
 
-def test_an_a5_plain_run_is_the_flock_row_and_its_epsilon_table_gives_its_first_and_last_pairs(tmp_path):
+def test_an_a5_plain_run_is_the_flock_result_and_its_epsilon_table_gives_its_first_and_last_pairs(tmp_path):
     """The one-stage script's plain run as ``--flock``, and a sampled run's ``epsilon`` table."""
 
     table = [{"delta": d, "wrong_units": w} for d, w in ((0.5, 2), (0.1, 6), (1e-9, 57))]
     flock = PL.read("flock", str(a5_out(tmp_path / "p", plain={"coins": "tree"}, epsilon={"population": 880, "table": table})))
     assert flock.accepted and flock.format == PL.A5 and flock.proof == "plain" and flock.prover_s == 5.0
-    assert flock.eps_delta == ("at most 2 of 880 units wrong except with probability 0.5; at most 57 except with "
+    assert flock.eps_delta == ("at most 2 of 880 incorrect proof blocks except with probability 0.5; at most 57 except with "
                                "probability 1e-9 (summary.json epsilon, the first and last of its 3 pairs)")
 
 
@@ -465,38 +467,38 @@ def served_arm(root: Path, layer: str, *, records: bool = False) -> Path:
 
 @pytest.mark.parametrize("layer", ["flock", "zk"])
 def test_a_served_arm_run_reads_its_ran_with_its_one_rep_and_says_it_has_no_forged_run(tmp_path, layer):
-    row = PL.read(layer, str(served_arm(tmp_path, layer, records=layer == "zk")))
-    assert row.accepted and row.proof == ("plain" if layer == "flock" else "zk")
-    assert (row.prover_s, row.lean_s, row.proof_bytes) == (2.0, 1.0, 208107.0)
-    assert row.bytes_what.startswith("one rep's proof over its drawn blocks, of 2 reps in summary.json's timing")
-    assert row.ran_with == ("ran with: coins local challenger; parameters development (ran-with.txt: a local development "
+    result = PL.read(layer, str(served_arm(tmp_path, layer, records=layer == "zk")))
+    assert result.accepted and result.proof == ("plain" if layer == "flock" else "zk")
+    assert (result.prover_s, result.lean_s, result.proof_bytes) == (2.0, 1.0, 208107.0)
+    assert result.bytes_what.startswith("one rep's proof over its sampled proof blocks, of 2 reps in summary.json's timing")
+    assert result.ran_with == ("ran with: coins local challenger; parameters development (ran-with.txt: a local development "
                             "challenger, under a small test key)")
-    assert row.workload == ("the output disagrees on its values: ran-with.txt says served (window 0 of vllm's run r1, "
+    assert result.workload == ("the output disagrees on its values: ran-with.txt says served (window 0 of vllm's run r1, "
                             "layer 0's SiluMul_v2 units), the audit's source field says stand-in: arm served: "
-                            "SiluMul_v2{I=8192} x 3 drawn of 3 units; no forged run")
-    assert "no forged run: served-forged/commit.log: LookupError: no rows of SiluMul_v2{I=8192} at steps [24, 25]" in row.notes
-    assert row.eps_delta == "at most 0 of 3 units wrong except with probability 0.5"
-    assert (row.commit, row.device) == (SHA, "CPU (timing gpus 0)")
+                            "SiluMul_v2{I=8192} x 3 sampled of 3 proof blocks; no forged run")
+    assert "no forged run: served-forged/commit.log: LookupError: no rows of SiluMul_v2{I=8192} at steps [24, 25]" in result.notes
+    assert result.eps_delta == "at most 0 of 3 incorrect proof blocks except with probability 0.5"
+    assert (result.commit, result.device) == (SHA, "CPU (timing gpus 0)")
 
 
 def test_a_records_arm_whose_negatives_were_not_refused_prints_no_number(tmp_path):
     arm = served_arm(tmp_path, "zk", records=True) / "zk" / "out" / "served"
     log = (arm / "audit.log").read_text().replace('"negatives_refused": true', '"negatives_refused": false')
     (arm / "audit.log").write_text(log)
-    row = PL.read("zk", str(tmp_path))
-    assert not row.accepted and row.prover_s is None and "RECORDS negatives_refused False" in row.lean
+    result = PL.read("zk", str(tmp_path))
+    assert not result.accepted and result.prover_s is None and "RECORDS negatives_refused False" in result.lean
 
 
-def test_a_layers_sh_row_and_an_a5_row_whose_output_states_neither_stand_in_nor_served_say_values_not_stated(tmp_path):
+def test_a_layers_sh_result_and_an_a5_result_whose_output_states_neither_stand_in_nor_served_say_values_not_stated(tmp_path):
     d = layers_sh(tmp_path / "l", "zk") / "zk" / "out"
     (d / "layers.txt").write_text((d / "layers.txt").read_text().splitlines()[0] + "\n")
-    assert PL.read("zk", str(tmp_path / "l")).workload.startswith("values not stated: 2 statements of 2,560 units")
+    assert PL.read("zk", str(tmp_path / "l")).workload.startswith("values not stated: 2 statements of 2,560 proof blocks")
     a5 = PL.read("sampling", str(a5_out(tmp_path / "a")))
-    assert a5.workload.startswith("values not stated: row llama32-1b__int8__h200__tp1__b4: ")
+    assert a5.workload.startswith("values not stated: workload llama32-1b__int8__h200__tp1__b4: ")
     assert PL.read("sampling", str(a5_out(tmp_path / "s", source="served"))).workload.startswith("served values: ")
 
 
-def test_a_layers_sh_rows_commit_is_the_sha_after_source_never_one_printed_before_it(tmp_path):
+def test_a_layers_sh_results_commit_is_the_sha_after_source_never_one_printed_before_it(tmp_path):
     d = layers_sh(tmp_path, "zk") / "zk" / "out"
     (d / "job.log").write_text(f"21:30:00Z fetch: main at {'1' * 40}\n" + (d / "job.log").read_text())
     assert PL.read("zk", str(tmp_path)).commit == SHA

@@ -1,8 +1,8 @@
 # A template's rows compute its gates: the evidence, and the general proof
 
 This is not a hypothesis of the end-to-end theorem: the theorem is about the circuit of
-the statement's rows. What a correct unit computes beyond them needs that a unit's rows are `GateRows.rows G L` for its
-gate circuit `G`, and that `G` computes the unit's definition (`../ASSUMPTIONS.md`, The circuit and the certificate);
+the statement's rows. What a correct proof block computes beyond them needs that a proof block's rows are `GateRows.rows G L` for its
+gate circuit `G`, and that `G` computes the proof block's definition (`../ASSUMPTIONS.md`, The circuit and the certificate);
 rows that are `GateRows.rows G L` carry `G`'s outputs (`GateRows.rows_sound`). This file is the evidence for those
 premises.
 

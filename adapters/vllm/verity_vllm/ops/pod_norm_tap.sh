@@ -28,9 +28,10 @@ command -v verity-vllm >/dev/null || fail "no verity-vllm on PATH ($VENV/bin)"
 command -v ninja >/dev/null || "$VENV/bin/pip" install -q ninja || fail "ninja"
 mkdir -p "$VSRC" "$NT/build" "$NT/logs"
 
-# (1) the pinned sources
+# (1) the pinned sources, fetched only when absent. GitHub answers 429 when many pods fetch from one address: curl retries
+# each file up to 5 times, backing off 1 s doubling or as long as Retry-After says.
 for f in layernorm_kernels.cu cub_helpers.h type_convert.cuh; do
-  [ -s "$VSRC/$f" ] || curl -fsSL "https://raw.githubusercontent.com/vllm-project/vllm/$PIN/csrc/libtorch_stable/$f" -o "$VSRC/$f" || fail "fetch $f"
+  [ -s "$VSRC/$f" ] || curl -fsSL --retry 5 --retry-all-errors "https://raw.githubusercontent.com/vllm-project/vllm/$PIN/csrc/libtorch_stable/$f" -o "$VSRC/$f" || fail "fetch $f"
 done
 
 # (2) build when the inputs changed

@@ -3,7 +3,7 @@
 `Flock.SecurityProofs.RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo` (`Recursive/AuditC3.lean`,
 `Recursive/AuditC3Proof.lean`), unlisted, is PublicAudit's proof at candidate 3's table (`holoInnerAt`, R from the registration's
 `stacked` entry, V*'s statements over the verifier's own list). It has no `sorry`. It takes VBridge (`_hbr`) and V*'s
-parse (`_hob`) as PublicAudit does, and the modules under `C3/` discharge them. V*'s statements are indexed by the
+parse (`_hob`) as PublicAudit does; `C3/VStarList/Statements.lean` discharges `_hob`, and VBridge stays open (below). V*'s statements are indexed by the
 verifier's own list (`vstarCount ish`), which at candidate 3's inner shape is eleven statements in the writer's order:
 0–3 `rec-open`, 4–5 `rec-residuals`, 6 `rec-sparse`, 7–9 R's levels `rec-open-stacked`, 10 `rec-opening` at META's
 `stacked` shape.
@@ -20,9 +20,8 @@ tables also at route 2C's split bound `κ + t'·ε`, `κ ≤ 2^{-167.7}` and `ε
 (`RecDeploy.kappa_eps_oneTable_cap`). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
 statements follows from `KSLin2` there (`bitsLin2On_of_ksLin2On`).
 
-What stays open is the hypotheses the discharge takes: `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself;
-at the honest source, `hbr_honest_src`'s in `C3/Compose/HonestSrc.lean`, whose module doc lists what is left) and
-`srcOK_holo_rs`'s (`C3/Compose/AtHolo.lean`, `SrcOK` at the checked family).
+What stays open is VBridge: the proof reads VBridgeCOff as a premise (`Recursive/AuditC3Proof.lean`), and
+`C3/Compose/Honest.lean` defines the honest family its discharge is stated at (`C3Family.honest`).
 
 No test replays honest R levels through `verify` with candidate-3 coins, so `checkTopReads`' acceptance of an honest
 prover is untested (lean-agreement does not reach it). Its honesty argument is the prover's code: R's level-`l` tops are
