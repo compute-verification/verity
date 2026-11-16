@@ -2249,3 +2249,107 @@ def test_a_moved_site_pays_for_no_new_one_and_only_a_file_whose_count_falls_give
     assert c["verdict"] == "failed" and c["why"].startswith(
         f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
         f"(docs/c.md 0 -> 1)"), c["why"]
+
+
+def test_the_definitions_tests_are_the_integrations_and_keyed_as_beside_the_definitions():
+    path = "tests/adapters/vllm/verity_vllm/definitions/registry/test_a.py"
+    assert G.in_integration(path) and G.key_of(path) == "verity_vllm/definitions/tests/registry/test_a.py"
+    assert G.path_of(G.key_of(path)) == path
+    for path in ("tests/adapters/vllm/tests/pipeline/test_a.py", "adapters/vllm/verity_vllm/definitions/registry/a.py"):
+        assert G.path_of(G.key_of(path)) == path
+    assert not G.in_integration("tests/adapters/torch/test_a.py")
+
+
+ROOT = "tests/adapters/vllm/toyroot/"
+MYPY_JSON = "tests/adapters/vllm/tests/lint/allowlists/mypy.json"
+
+
+def _printed(file: str) -> dict:
+    return {**T201, "file": f"{ROOT}{file}"}
+
+
+@pytest.fixture
+def rooted(ruffed, monkeypatch) -> Repo:
+    """``ruffed`` with the vLLM rules' lint and a tests root (``ROOTS``) its lints don't read yet, whose test_a.py holds one
+    `print`, which no list records."""
+    monkeypatch.setattr(G, "ROOTS", {ROOT: ROOT})
+    ruffed.git("checkout", "-q", "main")
+    ruffed.commit("ruff with vLLM's rules, and a root it doesn't read", {
+        RUFF_VLLM_LINT: (REAL_LINT / "test_ruff_vllm.py").read_text(), G.RUFF_VLLM_CONFIG: RUFF_VLLM_TOML,
+        RUFF_VLLM_JSON: _allowlist(T201), "adapters/vllm/verity_vllm/b.py": "print(1)\n", f"{ROOT}test_a.py": "print(1)\n"})
+    ruffed.git("checkout", "-q", "-B", "pr")
+    return ruffed
+
+
+def _reads_the_root() -> dict[str, str]:
+    return {G.RATCHET_MODULE: (REAL_LINT / "_ratchet.py").read_text() + f"#: and {ROOT.rstrip('/')}\n"}
+
+
+def test_a_root_the_lints_come_to_read_brings_the_base_s_findings_but_no_new_one(rooted):
+    assert G.ROOTS == {ROOT: ROOT}
+    rooted.commit("reads the root, and records what it finds there", {
+        **_reads_the_root(), RUFF_VLLM_JSON: _allowlist(T201, _printed("test_a.py"))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "passed", c["why"]
+    assert c["pooled"] == [(f"{RUFF_VLLM_JSON} records 1 finding(s) in 1 file(s) under {ROOT}, which the change's lints come "
+                           "to read and the base's tree already holds")]
+    rooted.commit("a new use under the root", {f"{ROOT}test_b.py": "print(2)\n",
+                                               RUFF_VLLM_JSON: _allowlist(T201, _printed("test_a.py"), _printed("test_b.py"))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {RUFF_VLLM_JSON} 1 -> 2 entries"), c["why"]
+    assert c["fix"] == [f"{RUFF_VLLM_JSON}: new {G.key(_printed('test_b.py'))}"]
+
+
+def test_a_root_the_base_s_lints_read_already_brings_nothing(rooted):
+    rooted.commit("names the root", _reads_the_root())
+    rooted.git("checkout", "-q", "-B", "main")
+    rooted.git("checkout", "-q", "-B", "pr")
+    rooted.commit("records what its lint finds there", {RUFF_VLLM_JSON: _allowlist(T201, _printed("test_a.py"))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {RUFF_VLLM_JSON} 1 -> 2 entries"), c["why"]
+
+
+def test_a_root_s_mypy_entries_are_unchecked_outside_the_environment_its_list_records(rooted):
+    rooted.git("checkout", "-q", "main")
+    rooted.commit("mypy's list", {MYPY_JSON: '{"rule": "mypy", "environment": {"python": "0.0"}, "entries": []}\n'})
+    rooted.git("checkout", "-q", "-B", "pr")
+    entry = {"file": f"{ROOT}test_a.py", "kind": "name-defined", "symbol": "<module>", "detail": ""}
+    rooted.commit("reads the root, and records a mypy error there", {
+        **_reads_the_root(), MYPY_JSON: json.dumps({"rule": "mypy", "environment": {"python": "0.0"}, "entries": [entry]})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed", c["why"]
+    assert (f"{MYPY_JSON}'s 1 finding(s) under {ROOT}, which the change's lints come to read, unchecked against its base: "
+            "this environment (") in c["why"], c["why"]
+
+
+def test_a_root_s_mypy_entries_are_held_to_what_mypy_finds_in_the_base_s_tree(rooted):
+    """mypy runs on the base's root in this process's environment, which must be the one the list records."""
+    env = G.mypy_environment()
+    assert env["mypy"], "no mypy here: `uv sync --all-packages --extra torch-cpu` installs the one the root `mypy` group pins"
+    rooted.git("checkout", "-q", "main")
+    rooted.commit("mypy's list, and an error under the root", {
+        MYPY_JSON: json.dumps({"rule": "mypy", "environment": env, "entries": []}),
+        "adapters/vllm/pyproject.toml": "[tool.mypy]\n", f"{ROOT}test_c.py": 'X: int = "a"\n'})
+    rooted.git("checkout", "-q", "-B", "pr")
+    wrong = {"file": f"{ROOT}test_c.py", "kind": "assignment", "symbol": "<module>", "detail": ""}
+    rooted.commit("reads the root, and records mypy's error there", {
+        **_reads_the_root(), MYPY_JSON: json.dumps({"rule": "mypy", "environment": env, "entries": [wrong]})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "passed", c["why"]
+    assert c["pooled"] == [(f"{MYPY_JSON} records 1 finding(s) in 1 file(s) under {ROOT}, which the change's lints come to "
+                           "read and the base's tree already holds")]
+    rooted.commit("a second error there", {
+        f"{ROOT}test_c.py": 'X: int = "a"\nY: int = "b"\n',
+        MYPY_JSON: json.dumps({"rule": "mypy", "environment": env, "entries": [{**wrong, "count": 2}]})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {MYPY_JSON} assignment 0 -> 2 in total"), c["why"]
+
+
+def test_a_verdict_is_kept_for_the_environment_mypy_runs_in(monkeypatch):
+    """A new root's mypy entries are checked only in the environment their list records, so a verdict reached in another
+    one is not recalled in it."""
+    c = G.Change("a" * 40, "b" * 40, ["b" * 40])
+    monkeypatch.setattr(G, "mypy_environment", lambda: {"python": "3.12", "torch": None})
+    without = G.cache_path(c, None)
+    monkeypatch.setattr(G, "mypy_environment", lambda: {"python": "3.12", "torch": "2.14.0+cpu"})
+    assert G.cache_path(c, None) != without

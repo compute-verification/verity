@@ -31,7 +31,10 @@ when:
   at least as much, so a move from one file to another passes.  A repository list
   (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
   change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
-  so a list behind its tree catches up, while growth past the base's own findings is held as before.  A file the change
+  so a list behind its tree catches up, while growth past the base's own findings is held as before.  An integration
+  list (ruff's, ruff_vllm's, mypy's) may record entries for the files of a tests root its lints come to read in the change
+  (``ROOTS``, `new_roots`) and its base's list holds none under, as far as its lint, as it runs a tests root, finds as many
+  of each kind in each file in the base's tree (`from_new_roots`): those findings were there unlinted.  A file the change
   renames (``git diff -M``) is the base's file where the change puts it: its entry in the base's list is compared at
   its new path, where its key may rise to what the base's lint finds in the file where the base holds it, and the path
   it left holds nothing.  So a move and the commit that records its files' entries pass as one change, a site the change
@@ -146,7 +149,8 @@ on the first Python whose ``-m ruff`` is the base's pin: this one, else one ``uv
 else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A run judges every change above its BASE,
 and runs overlap (a rerun of one tip, a later tip's run whose BASE lies below changes an earlier run judged), so each
 change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default ``~/.cache/verity/ratchet-gate``; empty: none; the check's
-step keeps it in the check's cache), keyed by this file's bytes and the change's commits, which are all it reads, and BASE
+step keeps it in the check's cache), keyed by this file's bytes, the change's commits and the environment mypy runs in
+here (`mypy_environment`, which decides whether a new root's mypy entries can be checked), which are all it reads, and BASE
 too for a verdict that reads it (a failed change's exemptions run BASE's move_check), under a key of its own with
 ``--every-rule``, where a failure names more: N runs over a change judge it once,
 not N times, and once BASE moves an untouched or passed change is still not judged again.  The source checks' findings
@@ -169,6 +173,7 @@ import contextlib
 import fcntl
 import functools
 import hashlib
+import importlib.metadata
 import importlib.util
 import io
 import json
@@ -196,6 +201,17 @@ SELF = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 INTEGRATION = "adapters/vllm"
 TESTS = f"tests/{INTEGRATION}/tests/"
 LINT = f"{TESTS}lint"
+#: the served Definitions' tests, which the integration's lints name as they named them beside the Definitions
+DEFINITION_TESTS = f"tests/{INTEGRATION}/verity_vllm/definitions/"
+DEFINITION_TESTS_KEY = "verity_vllm/definitions/tests/"
+#: the integration's tests roots past ``TESTS``, by the key its lints name each by: a root is in its lints' scope at a
+#: revision whose ``_ratchet.py`` names that key
+ROOTS = {DEFINITION_TESTS_KEY: DEFINITION_TESTS}
+RATCHET_MODULE = f"{LINT}/_ratchet.py"
+#: the integration's mypy lint (``test_mypy.py``, by its slug), which the gate runs only on a root its lints come to read:
+#: its findings need the environment its list records (``environment``: python and these distributions' versions)
+MYPY_LINT = "mypy"
+MYPY_PACKAGES = ("mypy", "pydantic", "torch", "vllm")
 #: the ruff lint (``test_ruff.py``, by its slug), its config, and the pyproject whose ``dev`` group pins its ruff
 RUFF_LINT = "ruff"
 RUFF_CONFIG = f"{INTEGRATION}/ruff.toml"
@@ -242,17 +258,22 @@ RUFF_FROM = {RUFF_VLLM_LINT: INTEGRATION}
 
 
 def in_integration(path: str) -> bool:
-    """Whether ``path`` is the integration's: under ``INTEGRATION`` or its tests (``TESTS``)."""
-    return path.startswith((f"{INTEGRATION}/", TESTS))
+    """Whether ``path`` is the integration's: under ``INTEGRATION`` or its tests (``TESTS``, ``DEFINITION_TESTS``)."""
+    return path.startswith((f"{INTEGRATION}/", TESTS, DEFINITION_TESTS))
 
 
 def key_of(path: str) -> str:
-    """How the integration's lints name a file of the tree: from ``INTEGRATION``, and its tests as ``tests/...``."""
+    """How the integration's lints name a file of the tree: from ``INTEGRATION``, its tests as ``tests/...`` and the
+    Definitions' tests as ``DEFINITION_TESTS_KEY``."""
+    if path.startswith(DEFINITION_TESTS):
+        return f"{DEFINITION_TESTS_KEY}{path.removeprefix(DEFINITION_TESTS)}"
     return f"tests/{path.removeprefix(TESTS)}" if path.startswith(TESTS) else path.removeprefix(f"{INTEGRATION}/")
 
 
 def path_of(key: str) -> str:
     """The file of the tree an integration lint's key names (`key_of`'s inverse)."""
+    if key.startswith(DEFINITION_TESTS_KEY):
+        return f"{DEFINITION_TESTS}{key.removeprefix(DEFINITION_TESTS_KEY)}"
     return f"{TESTS}{key.removeprefix('tests/')}" if key.startswith("tests/") else f"{INTEGRATION}/{key}"
 MOVE_CHECK = "tools/check/move_check.py"
 #: what move_check imports from its own checkout, as `research.queue`'s `move_scripts` lists it: the move scripts (the
@@ -1036,6 +1057,123 @@ def held(c: Change, before: dict[str, list], after: dict[str, list], moved: dict
     return out, widened
 
 
+def new_roots(c: Change) -> dict[str, str]:
+    """{key: directory} of each tests root (``ROOTS``) the integration's lints come to read in ``c``: its top's
+    ``_ratchet.py`` names the root's key and its base's doesn't."""
+    def named(rev: str) -> set[str]:
+        try:
+            text = git("show", f"{rev}:{RATCHET_MODULE}")
+        except GitError:
+            return set()
+        return {k for k in ROOTS if k.rstrip("/") in text}
+    return {k: ROOTS[k] for k in sorted(named(c.hi) - named(c.lo))}
+
+
+@functools.cache
+def mypy_environment() -> dict[str, str | None]:
+    """This process's environment, as ``test_mypy`` records the one its list was taken in."""
+    def version(name: str) -> str | None:
+        try:
+            return importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            return None
+    return {"python": f"{sys.version_info.major}.{sys.version_info.minor}", **{p: version(p) for p in MYPY_PACKAGES}}
+
+
+def root_findings(rev: str, root: str, lints: dict[str, object]) -> dict[str, Counter | str]:
+    """{lint: what it finds under ``root`` (a tests root, ``ROOTS``) in ``rev``'s tree, per (file key, kind), or why it can't
+    run here}, each of the integration's ``lints`` run on a checkout of ``rev`` as it runs a tests root: ruff on the root
+    with ``rev``'s config and pin, from where that lint runs it; mypy on the root on its own, at ``--follow-imports skip``
+    under ``rev``'s ``[tool.mypy]``, when this process's environment is the one ``lints`` says its list records."""
+    out: dict[str, Counter | str] = {}
+    runs = {}
+    with tempfile.TemporaryDirectory(prefix="ratchet-gate-root-", ignore_cleanup_errors=True) as d:
+        tree = Path(d) / "tree"
+        with worktree_turn():
+            git("worktree", "add", "-q", "--detach", "--no-checkout", str(tree), rev)
+        try:
+            git("-C", str(tree), "reset", "-q", "--hard", "--no-recurse-submodules")
+            for s, recorded in lints.items():
+                if not (tree / root).is_dir():
+                    out[s] = Counter()
+                    continue
+                if s == MYPY_LINT:
+                    if (now := mypy_environment()) != recorded:
+                        out[s] = f"this environment ({now}) isn't the one its list records ({recorded})"
+                        continue
+                    at = tree / INTEGRATION
+                    cmd = [sys.executable, "-m", "mypy", "--config-file", "pyproject.toml", "--cache-dir", "/dev/null",
+                           "-O", "json", "--follow-imports", "skip", os.path.relpath(tree / root, at)]
+                else:
+                    config = RUFF_LINTS[s][1][0]
+                    if not (tree / config).is_file():
+                        out[s] = f"{rev[:12]} has no {config}"
+                        continue
+                    at = tree / RUFF_FROM.get(s, str(PurePosixPath(config).parent))
+                    cmd = [*python_for(ruff_pin(rev), [s]), "-m", "ruff", "check", "--config", os.path.relpath(tree / config, at),
+                           "--no-cache", "--exit-zero", "--output-format", "json", os.path.relpath(tree / root, at)]
+                runs[s] = (at, subprocess.run(cmd, cwd=at, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                                              env={**os.environ, "RUFF_CACHE_DIR": str(Path(d) / "ruff-cache")}))
+        finally:
+            drop_worktree(tree)
+    for s, (at, r) in runs.items():
+        if r.returncode not in ((0, 1) if s == MYPY_LINT else (0,)):
+            out[s] = f"{s} exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}"
+            continue
+        try:
+            records = [json.loads(line) for line in r.stdout.splitlines()] if s == MYPY_LINT else json.loads(r.stdout)
+        except ValueError:
+            out[s] = f"{s} wrote {r.stdout.strip()[:200]!r}, not JSON"
+            continue
+        found: Counter = Counter()
+        for e in records:
+            if s == MYPY_LINT and e.get("severity") == "error":
+                found[(key_of(os.path.relpath(os.path.normpath(at / e["file"]), tree)), e.get("code") or "misc")] += 1
+            elif s != MYPY_LINT:
+                found[(key_of(Path(e["filename"]).resolve().relative_to(tree.resolve()).as_posix()),
+                       e["code"] or "syntax-error")] += 1
+        out[s] = found
+    return out
+
+
+def from_new_roots(c: Change, before: dict[str, list], after: dict[str, list]
+                   ) -> tuple[dict[str, list], list[str], list[str]]:
+    """(``after`` without the entries the roots its lints come to read bring; a line for each list they come from; and each
+    list whose such entries can't be checked here, with why).  An integration list's (``INTEGRATION_RUFF``, mypy) entries
+    for a file of a root the change's lints come to read (`new_roots`), whose base list holds none under that root, record
+    what the base's tree already holds there, which adds no finding, as far as the base's tree holds as many findings of
+    that kind in that file (`root_findings`) as they count.  A file and kind the base's tree holds fewer of stays the
+    change's, and so does any list's growth elsewhere."""
+    out, admitted, unchecked = dict(after), [], []
+    for prefix, root in new_roots(c).items():
+        def under(e: object, prefix: str = prefix) -> bool:
+            return isinstance(e, dict) and isinstance(e.get("file"), str) and e["file"].startswith(prefix)
+        lints = {}
+        for s in (*INTEGRATION_RUFF, MYPY_LINT):
+            if not any(under(e) for e in before.get(s, [])) and any(under(e) for e in out.get(s, [])):
+                try:
+                    lints[s] = json.loads(git("show", f"{c.hi}:{LINT}/allowlists/{s}.json")).get("environment")
+                except (GitError, ValueError, AttributeError):
+                    lints[s] = None
+        for s, at_base in (root_findings(c.lo, root, lints) if lints else {}).items():
+            listed: Counter = Counter()
+            for e in out[s]:
+                if under(e):
+                    listed[(e["file"], kind(e))] += count(e)
+            name = f"{LINT}/allowlists/{s}.json"
+            if isinstance(at_base, str):
+                unchecked.append(f"{name}'s {sum(listed.values())} finding(s) under {root}, which the change's lints come "
+                                 f"to read, unchecked against its base: {at_base}")
+                continue
+            held_there = {fk for fk, n in listed.items() if at_base[fk] >= n}
+            out[s] = [e for e in out[s] if not (under(e) and (e["file"], kind(e)) in held_there)]
+            if held_there:
+                admitted.append(f"{name} records {sum(listed[fk] for fk in held_there)} finding(s) in "
+                                f"{len({f for f, _ in held_there})} file(s) under {root}, which the change's lints come to "
+                                f"read and the base's tree already holds")
+    return out, admitted, unchecked
+
+
 def public_commands(rev: str) -> dict[str, str]:
     """The commands P16's list at ``rev`` declares public, each with the file that runs it (none without the list or its
     table)."""
@@ -1444,7 +1582,9 @@ def judge(c: Change, base: str, every: bool = False) -> None:
         c.after = sum(len(after.get(s, [])) for s in before)
         moved = {new: old for old, new in renamed(c).items()}
         placed_before = carried(before, moved)
-        grown, added, c.pooled = growth(placed_before, after, {**was_at, **now_at}, *held(c, placed_before, after, moved))
+        judged, scoped, unchecked = from_new_roots(c, placed_before, after)
+        grown, added, c.pooled = growth(placed_before, judged, {**was_at, **now_at}, *held(c, placed_before, judged, moved))
+        grown, c.pooled = grown + unchecked, c.pooled + scoped
         uncalled, public = public_callers(c)
     noqa_grows = c.noqa_added > c.noqa_removed
     early = bool(grown or bad or uncalled or noqa_grows)
@@ -1639,7 +1779,8 @@ def cache_path(c: Change, base: str | None, part: str = "verdict") -> Path | Non
     if root == "":
         return None
     root = Path(root) if root else Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "ratchet-gate"
-    return root / (hashlib.sha256(json.dumps([SELF, part, base, c.lo, c.hi, c.commits]).encode()).hexdigest() + ".json")
+    key = [SELF, part, base, c.lo, c.hi, c.commits, mypy_environment()]
+    return root / (hashlib.sha256(json.dumps(key).encode()).hexdigest() + ".json")
 
 
 def recall(c: Change, p: Path | None, fields: tuple[str, ...] = JUDGED, verdicts: tuple[str, ...] = VERDICTS) -> bool:
