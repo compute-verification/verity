@@ -45,7 +45,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifie
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import a0, a5  # noqa: E402
 import a5_memo as AM  # noqa: E402
 import test_a5_memo as TM  # noqa: E402

@@ -16,7 +16,7 @@ HERE = Path(__file__).resolve().parent
 def _load(name: str):
     if f"enc_{name}" in sys.modules:
         return sys.modules[f"enc_{name}"]
-    spec = importlib.util.spec_from_file_location(f"enc_{name}", HERE.parent / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(f"enc_{name}", HERE.parents[3] / "benchmarks" / "network_e2e" / "encodings" / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)

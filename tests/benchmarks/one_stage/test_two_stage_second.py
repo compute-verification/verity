@@ -32,7 +32,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P, dock
 from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR, serving_rows as SRW
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 sys.path.insert(0, str(HERE.parents[2] / "tests" / "verity" / "protocols" / "proofs" / "spot" / "verifier"))
 TS = importlib.import_module("two_stage")
 SM = importlib.import_module("two_stage_small")
