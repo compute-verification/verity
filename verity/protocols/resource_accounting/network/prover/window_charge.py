@@ -135,7 +135,7 @@ class WindowCarry:
 
 @dataclass(frozen=True)
 class Advice:
-    """What one sampling block of the network certifier is charged: advice v1's residual for the block, each field's
+    """What one sampling block of the network attester is charged: advice v1's residual for the block, each field's
     values in the order its reader asks for them, as `code_v1` codes them. `arrived`, the replay's decisions; `hits`,
     each sent hit in hit units; `resumes`, the resumed rows' positions; `order`, each entry a step's position and its
     new requests' certified ingress indices; `lag`, async mode's bits. `reference_window` charges the residual v1

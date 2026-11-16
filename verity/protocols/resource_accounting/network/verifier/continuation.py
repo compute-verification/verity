@@ -1,7 +1,7 @@
-"""A response open at a record close continues after it: the released-count stamps the network certifier writes at
+"""A response open at a record close continues after it: the released-count stamps the network attester writes at
 the close, and the continuation the reference builds from each.
 
-**The edge** is a record close at a public bucket b inside one network certifier session: the session's schedule,
+**The edge** is a record close at a public bucket b inside one network attester session: the session's schedule,
 ordinals and release counter run on through it. Only what the records before b certify crosses it. A response still
 open at b is cut there, and its request continues after b as an ordinary arrival: the same request with the ids
 already released appended to its prompt, and that many fewer tokens left.
@@ -14,7 +14,7 @@ before b, its response
   bucket the egress record holds it in: never by when its bytes reached the certifier, by when or whether the client
   read them, nor by what the server had computed by then (an id the server has sent whose slot is at or after b
   doesn't count);
-- is *open* at b when no end cell of its (the network certifier's `END` or `FAIL`) is in an egress bucket before b.
+- is *open* at b when no end cell of its (the network attester's `END` or `FAIL`) is in an egress bucket before b.
 
 At b the certifier stamps each open response (q, N, e), q its ordinal, in N order: `stamps`. A stamp is structural:
 the certifier reads its cells' kinds, ordinals and buckets, and no request field and no id. Every part is read from
@@ -41,7 +41,7 @@ the right stamps out of N order (`order`). Records the rule can't read are refus
 stamped response past its `max_tokens` (`over`).
 
 **The records.** `Response` is one released request and its response as certified records give them, whatever their
-form. `read` reads the network certifier's own records (`network_certifier.py`'s schedule in the id egress form: `Record`s of
+form. `read` reads the network attester's own records (`network_certifier.py`'s schedule in the id egress form: `Record`s of
 `NetworkCertifierParams.window` buckets) up to b, through `network_certifier.read_cell`, `io_tie.parse_cell` and `id_form.id_request`: a
 request is its connection's `DATA` cells and its `END`, released at the `END`'s bucket, and its response's id cells
 are its `DATA` cells, one id event each. It reads no bucket at or after b, and refuses a close that isn't a whole
@@ -77,7 +77,7 @@ class Refused(ValueError):
 
 class Request(NamedTuple):
     """A certified id request's fields, `id_form.id_request`'s keywords: `id_request(**r._asdict(), frame_bytes=B,
-    offset=0)` is the request in the network certifier's cells."""
+    offset=0)` is the request in the network attester's cells."""
 
     model: str
     user: str
@@ -102,7 +102,7 @@ class Response(NamedTuple):
 
 
 class Stamp(NamedTuple):
-    """What the network certifier stamps for a response open at a close: its ordinal, its release number and its id
+    """What the network attester stamps for a response open at a close: its ordinal, its release number and its id
     cells before the close."""
 
     q: int
@@ -223,10 +223,10 @@ def check(written: Sequence[Stamp], responses: Sequence[Response], b: int) -> No
         raise Refused("order", "the stamps aren't in release order")
 
 
-# --- the network certifier's records ---------------------------------------------------------------------------------
+# --- the network attester's records ---------------------------------------------------------------------------------
 
 def _request(q: int, data: bytes, cell_bytes: int) -> Request:
-    """The fields of connection q's request, a canonical id request in the network certifier's cells (`id_request` at
+    """The fields of connection q's request, a canonical id request in the network attester's cells (`id_request` at
     offset 0). Raises `Refused` (`records`) for other bytes."""
     try:
         body = json.loads(data.partition(b"\r\n\r\n")[2])
@@ -261,7 +261,7 @@ def _buckets(params: W.NetworkCertifierParams, records: Sequence[BlockGrid], b: 
 
 def read(params: W.NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int) -> list[Response]:
     """The requests released before b and their responses' cells before b, in release order, from the network
-    certifier's ingress and egress records (the module docstring's "The records"). Raises `Refused` (`records`)."""
+    attester's ingress and egress records (the module docstring's "The records"). Raises `Refused` (`records`)."""
     if type(b) is not int or b < 0 or b % params.window:
         raise Refused("records", f"a record closes at a whole number of execution phases of {params.window} buckets, "
                                  f"not at bucket {b!r}")
@@ -300,7 +300,7 @@ def read(params: W.NetworkCertifierParams, ingress: Sequence[BlockGrid], egress:
 
 def edge(params: W.NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int,
          eos: Collection[int]) -> Edge:
-    """The close at b on the network certifier's records: the stamps it writes and the continuations they give,
+    """The close at b on the network attester's records: the stamps it writes and the continuations they give,
     `eos` the deployment's end-of-sequence ids."""
     responses = read(params, ingress, egress, b)
     return Edge(stamps(responses, b), continuations(responses, b, eos))

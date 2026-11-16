@@ -12,20 +12,20 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "exfiltration/v3"
-#: the network certifier's document the command reads: its `value` the term of record, its rows' `term` by jitter
+#: the network attester's document the command reads: its `value` the term of record, its rows' `term` by jitter
 #: bound and their ε (`eps`), its inputs, and the label of what rests on a set-time card, at its top and on each row
 #: that carries it
 TERM_SCHEMA = "certifier-term/v2"
-#: the network certifier's scopes the command prints
+#: the network attester's scopes the command prints
 SCOPES = ("datacenter", "world")
-#: the error a monitoring period's figure is to carry at most. Given no δ for the network certifier's scans, the
+#: the error a monitoring period's figure is to carry at most. Given no δ for the network attester's scans, the
 #: command takes the one at which the row it prints that sums the most execution phases carries this
 PERIOD_ERROR = Fraction(1, 2 ** 20)
 #: what a figure is printed as where its error, summed over everything it covers, is 1 or more: it carries no amount
 NO_BOUND = "no bound at this period"
-#: a network certifier's row's amounts, which a row with no bound doesn't carry
+#: a network attester's row's amounts, which a row with no bound doesn't carry
 AMOUNTS = ("schedules", "cells", "jitter", "term", "entries")
-#: a sum's two figures, the network certifier's term and the two parts together, each with the key of its error in
+#: a sum's two figures, the network attester's term and the two parts together, each with the key of its error in
 #: its scope's monitoring period
 ERRORS = {"certifier_GB": "eps", "GB": "error"}
 MODEL = "GLM-5.3"
@@ -70,12 +70,12 @@ WORLD, ROW, STEP = "ours", "(ii) honest", "+ the verifier as measured"
 #: the row the planner prices mostly at its own prices, and the label of its figures where its rows record no table's row
 ASSUMED_ROW = "(i) honest"
 ASSUMED_LABEL = "at the planner's assumed prices"
-#: the most ids a response holds in the network certifier's class the figure is read at: its class that holds the
+#: the most ids a response holds in the network attester's class the figure is read at: its class that holds the
 #: longest output the plan of record serves (assumed, as every class is: no run has certified one)
 RESPONSE_IDS = 1024
 #: a row's parts of total compute; `wait` is a part of `serve`
 PARTS = ("serve", "wait", "prove", "replay", "pool", "edge", "compile")
-#: the network certifier's rows the two parts are summed under, and what each is called beside the compute audit's
+#: the network attester's rows the two parts are summed under, and what each is called beside the compute audit's
 TOGETHER = {"scan": "as the scan's check charges it today",
             "all three": "with the lengths held by a stop block, the timing taken once and the entries charged through "
                          "the compute audit",
@@ -87,11 +87,11 @@ TOGETHER = {"scan": "as the scan's check charges it today",
 WHOLE = {"all three": "with the timing taken once and the entries charged through the compute audit, its stop class "
                       "charged its whole schedule",
          "design": "by the design no run has behind it, its stop class charged its whole schedule"}
-#: the network certifier's prover's module that reads the stop class's verdict records of the runs of `VERDICTS`:
+#: the network attester's prover's module that reads the stop class's verdict records of the runs of `VERDICTS`:
 #: its `of_runs` answers how the calculator's rows read from verdict records are charged (`_reader`)
 READER = "stop_verdicts"
 READER_MODULE = f"verity.protocols.resource_accounting.network.prover.{READER}"
-#: the network certifier's row whose schedules are what a response's output count is charged while the server chooses
+#: the network attester's row whose schedules are what a response's output count is charged while the server chooses
 #: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"
 GB = 8e9
@@ -188,7 +188,7 @@ LEAN_BOUND = "CompiledTwo.eventTwoX_le_cls_at_budget"
 #: printed where no Lean theorem gives a number at a design's sizes
 NOT_PROVED = "not proved at these sizes"
 #: the figures a runner records under a research run (`record`), each over every monitoring period at the share: the
-#: one the command calls the headline, the compute audit's part and the network certifier's
+#: one the command calls the headline, the compute audit's part and the network attester's
 FIGURES = ("headline", "compute_audit", "network_certifier")
 #: the document a run's result keeps beside its measurements, relative to the run's directory
 DOCUMENT = "out/exfiltration.json"

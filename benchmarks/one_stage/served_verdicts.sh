@@ -23,11 +23,11 @@
 #     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
 #     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
 #     with ignore_eos and max_tokens WINDOW_STEPS, all prefilled at the window's first step and run through its last. With
-#     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the network certifier, is the run's one load and its execution
+#     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the network attester, is the run's one load and its execution
 #     block the one the run audits (a period that admits a single block, say). A front that failed before a window
 #     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
 #     say) leaves its exit to the certifier's verdict, and the run goes on with the window it sealed.
-#     With LOAD=session the load is the caller's own, through a relay session of the network certifier's, and the run
+#     With LOAD=session the load is the caller's own, through a relay session of the network attester's, and the run
 #     sends nothing itself: CERTIFIER_FRONT, passing `--session` to `certifier_piece.py front`, opens the session and
 #     returns once its relay listens; LOAD_CMD, the caller's command, run as `bash -c LOAD_CMD _ RELAY D` in TREE within
 #     LOAD_TIMEOUT (default 170m, the gate's longest session), sends the load to the client address RELAY names (the
@@ -38,13 +38,13 @@
 #     load, and the close says why. LOAD=session without all three, and LOAD_CMD, CERTIFIER_CLOSE or a front passing
 #     `--session` under any other LOAD, are refused before the lease.
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
-#     that this tree's front doesn't take, or a front whose endpoint isn't on the network certifier's id form (SERVE_ARGS without
+#     that this tree's front doesn't take, or a front whose endpoint isn't on the network attester's id form (SERVE_ARGS without
 #     `--protocol ids`), is refused before the lease. The
 #     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
 #     seals.jsonl, requests.jsonl and serve.json, each window's PoUW calls record, the load's records, timings file and
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
 #     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
-#     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose network certifier-paced load no stock
+#     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose network attester-paced load no stock
 #     control compares to, and LOAD=session, whose relay-paced one none does either) less the load's counts and span, and verdict lines that name no window and count none of a
 #     window's own: no window's number, no count of the windows closed, sealed or refused, no engine step, request count or
 #     user of one. Each line goes out through `served_verdicts.py public-lines`, in full to the serve dir's
@@ -151,7 +151,7 @@
 #     V3C_NEGATIVE_WORKERS that many at once, each in a worker process with its own Lean verifier process, started only
 #     while its memory estimate, read then, fits that memory (`a5.NegativeWorkers`), and with V3C_ARCHIVE_LINK=1 each member's circuit file linked into the audit's
 #     archive rather than copied (records_audit.py's --archive-link); then
-#     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
+#     `records_audit.py period` writes the audit as the network attester's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the docket, the Program, its answer and its free inputs), and V3c fails where it
 #     writes none. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its
 #     docket held to the record H1 bound and its circuit to the verifier's record reading H1's W's tables (step 3
@@ -164,7 +164,7 @@
 #     no row dir, taps or gpu-lease (VENV the tree's .venv on a node without vLLM's). Untied, window-commit registers the
 #     window at V3C_LAW's sampling design, the one its audit samples by (R1 holds the sample to it). V3C_CLASS set empty leaves
 #     V3c out of the run, for a `served_verdicts.sh v3c` started once the window's advice is written.
-#     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (CERTIFIER_CMD then
+#     With the network attester's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (CERTIFIER_CMD then
 #     unset, and V3C_CLASS the certifier's scan class, which CLASSES holds), V3c runs before step 4, since the certifier's
 #     answer reads its period.json: the chain after the window commit, beside V3c's audit and period.json, within
 #     CERTIFIER_TIMEOUT (default 4h), and the period check once both are done and V3c wrote period.json, within

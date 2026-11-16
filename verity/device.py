@@ -5,14 +5,14 @@ links and log, `Site.ofLog`, and `Registration.Entry.refusal`, check for check a
 
 The Site is a tree of locations, each with its owner: the site at the root, stating the site's unit of time
 (`Site.time_unit`), its hosts, a host's devices, memory leaves by tier and bytes under a device or a host, and at the
-site the auditor's own: its devices, the network certifiers and memory challengers, and its hosts, each a machine a
+site the auditor's own: its devices, the network attesters and memory challengers, and its hosts, each a machine a
 device of its may run in and one that holds none of the prover's hardware (`PARENTS`), each with its key, the key's
 scheme (`SCHEMES`). An auditor's device states its time base and how far its clock may drift, which is the drift of
 every device of the auditor's in it (`Site.drift`). A host states its on-chip state and the rate its leaves of a tier
 share, and a leaf under a host the rate it is read at. Links join two ends, each a location or `OUTSIDE`, with a
 capacity `beta` in bits a second each way and a latency in the site's units of time (`LINKS`). A boundary link no
 certifier splits may say why none does (`unmediated`), and a link states no capacity only where it does; a site is
-mediated when no link says so (`Site.mediated`). A network certifier is the leaf that splits an uplink: one link from
+mediated when no link says so (`Site.mediated`). A network attester is the leaf that splits an uplink: one link from
 a host to it, one from it to the outside. Hosts carry no compute: a device names its sheet by digest. A sheet
 (`Sheet`), a card, is the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the SKU, the
 tensor clock and the peak rate of each operand class) and its memory figures (bits read from or written to device
@@ -106,7 +106,7 @@ adds the leaves' rates of a tier takes the smaller of the sum and the tier's. Ne
 disk nor a measured rate is a ceiling, so neither is a leaf's rate.
 
 **The ways out** are what a byte leaves the node by, and `ways_out` is their one reader. An interface is one, and a
-network certifier may split it. **The storage path** is the other: a disk that is not the server's own (a network
+network attester may split it. **The storage path** is the other: a disk that is not the server's own (a network
 disk, which can be attached to another machine or copied through whoever provides it) takes what is written to it
 off the node past every interface, so no certifier can split it. A file states it once, as `storage`: `leaves`,
 the names of the disk leaves that ride it, and `source`, why they leave. It states no rate of its own: its rate is
@@ -904,7 +904,7 @@ class Registration:
         **An entry always registers a link out.** A file that states no interface is refused: its entry would not say
         how the node reaches the outside.
 
-        `certifier` is the id, the key and the key's scheme of a network certifier of the auditor's that stands in
+        `certifier` is the id, the key and the key's scheme of a network attester of the auditor's that stands in
         front of the node without splitting its interface (a process on another machine, say). It adds the certifier
         and the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
         stay. The storage path's rate is not in that sum and no certifier is linked to the path: a certifier's links
@@ -1796,7 +1796,7 @@ def _line_rate(entry: Any, what: str) -> int:
 def ways_out(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = None, *,
              cards_directory: Path | None = None) -> tuple[Way, ...]:
     """**A node's ways out.** For a node file's table (``load_node(kind)``) registered as host ``host``: each
-    ``interface.NAME`` as a ``Way`` a network certifier may split (its id ``host/NAME``, and ``bw``, its ``rate`` in
+    ``interface.NAME`` as a ``Way`` a network attester may split (its id ``host/NAME``, and ``bw``, its ``rate`` in
     whole bits a second, rounded up, or ``None`` where the table states its ``driver`` and the ``source`` of a read
     that found no rate), in the file's order; then, where the file states a ``storage`` table, the storage path as a
     ``Way`` no certifier may split, ``host/storage``, at the rate that bounds the node's disks together
