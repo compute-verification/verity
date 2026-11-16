@@ -34,7 +34,7 @@ def test_the_pouw_command_proves_then_writes_the_piece_and_the_period_case(tmp_p
     tree, d, p, calls = tmp_path / "tree", tmp_path / "serve", tmp_path / "out" / "pieces" / "pouw", tmp_path / "calls"
     one = tree / "benchmarks" / "one_stage"
     one.mkdir(parents=True)
-    shutil.copy(HERE.parent / "served_pouw.sh", one)
+    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "served_pouw.sh", one)
     (tree / ".venv" / "bin").mkdir(parents=True)
     (tree / ".venv" / "bin" / "python").symlink_to(sys.executable)
     (tree / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "check").mkdir(parents=True)
