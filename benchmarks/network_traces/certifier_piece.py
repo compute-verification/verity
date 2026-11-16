@@ -107,9 +107,9 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   a reject is DIR/answer.json as the piece's, an accept DIR/`CHAINED`. **period** runs once V3c's audit wrote
   V3C/period.json: steps 1, 2 and 4 again on the chain's kept report (no chain runs), then step 5 on the rows case whose
   one compute audit is V3C/period.json (`scan_period.rows_case`), held to the class circuit of the verifier's own
-  window-circuit record beside V3C (`class_circuit`); its answer is DIR/answer.json. The check reads an audit's state
-  entry among its ``roots`` and its ``registered`` alone, and V3c's registration holds its `SCAN_STATE` in its window's
-  ``activations.values`` alone, so a served window's answer is a reject at the state tie. It answers nothing
+  window-circuit record beside V3C (`class_circuit`); its answer is DIR/answer.json. The verifier reads an audit's
+  state entry among its ``roots`` and its ``registered`` alone, and V3c's registration holds its `SCAN_STATE` among its
+  ``registered``, where the chain's scan reads it (`scan_zk.v3c_state`). It answers nothing
   where the chain step refused (DIR/`REFUSED`) or rejected (its answer stands), and refuses where it left no
   DIR/`CHAINED`, the chain's scan read no V3c window or another, or V3C has no window-circuit record beside it. Each
   releases through its own hold and refuses as

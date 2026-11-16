@@ -917,11 +917,11 @@ def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answe
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
     with the block's audit as V3c's ``period.json`` (`rows_case`'s ``v3c``) sampled at one or two proof blocks
-    (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), a stand-in for a
-    record whose state entry is among the audit's ``roots``, which the record check reads and which no served run
-    writes today, refuses that audit at
-    the state tie (`period_case.UNSTATED`) where its registration holds its `SCAN_STATE` as a served window's does, in
-    its window's ``activations.values`` alone and in no ``roots`` or ``registered`` entry; the runner
+    (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), with its state entry
+    among the audit's ``roots``, and accepts it with that entry among its ``registered``, as a workload's execution
+    phase's registration holds it, which `stateTied` passes; refuses that audit at
+    the state tie (`period_case.UNSTATED`) where its registration holds its `SCAN_STATE` in its window's
+    ``activations.values`` alone and in no ``roots`` or ``registered`` entry; the runner
     (`scan_period.main`) under ``--v3c`` expects of an honest round that refusal, by its name, where the audit's
     registration has no state entry among its ``roots`` and ``registered``, an accept there unexpected, and the accept
     where it has one; accepts it with the answer naming what one-stage's registration check let
@@ -995,14 +995,15 @@ def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answe
                        for j in range(cls.NR)]
 
     def block_audit(o0: list[dict], ports: list[str] = entries, scan_state: dict | None = state,
-                    sampled: int | None = None, served: bool = False) -> dict:
-        stated = [{"port": "scan/state", **scan_state}] if scan_state and not served else []
+                    sampled: int | None = None, served: bool = False, registered: bool = False) -> dict:
+        stated = [{"port": "scan/state", **scan_state}] if scan_state and not (served or registered) else []
         law = sz.DR.parse_design(f"subset:{sampled}") if sampled else blaw
         held = {"value": sz.SCAN_STATE, "words": st.n_bits // 16, **(scan_state or {})}
         window = {"kind": "served", "activations": {"program": "c3" * 64, "values": {sz.SCAN_STATE: held}}}
         breg = R.record(block, bquery, law, sz.S.SCHEME,
                         [*({"port": q, **o} for q, o in zip(ports, o0, strict=True)), *stated],
-                        window if served else {"kind": "stand-in"}, leaf_layer="cc" * 64)
+                        window if served else {"kind": "stand-in"}, leaf_layer="cc" * 64,
+                        registered=[held] if registered else ())
         units = list(range(sampled or E))
         bdraw = {**sz.DR.derive(block, bquery, law), "population": E, "units": units}
         brec = {"accepted": True, "registration": breg, "draw": bdraw, "proved_units": units}
@@ -1078,11 +1079,23 @@ def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answe
             "value": sz.SCAN_STATE, "words": st.n_bits // 16, **state}
         got = PC.reference(SP.rows_case(run, scan, v3c=served, circuit=SP.circuit_of_record(window_record)))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
+        (held_period := tmp_path / f"period-registered-{k}.json").write_text(
+            json.dumps(block_audit(progs, sampled=k, registered=True)))
+        (held_entry,) = json.loads(held_period.read_text())["registration"]["registered"]
+        assert held_entry == {"value": sz.SCAN_STATE, "words": st.n_bits // 16, **state}
+        held_case = SP.rows_case(run, scan, v3c=held_period, circuit=SP.circuit_of_record(window_record))
+        held_c = PC.commitment(bytes.fromhex(held_case["commitment"]))
+        assert len(held_c.windows) == 1 and PC._state_tied(PC.params(held_case["params"]), held_c.audits,
+                                                           held_c.windows[0])
+        got = PC.reference(held_case)
+        assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
+            "accept", k, E), got
     monkeypatch.setattr(SP, "mirror", lambda path: PC)
     accepted = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record)))
     for name, period, lean, want, rc in (
             ("served", served, PC.reference, "reject at the state tie", 0),
             ("stated", v3c, PC.reference, "accept", 0),
+            ("registered", held_period, PC.reference, "accept", 0),
             ("served-accepted", served, lambda case: accepted, "reject at the state tie", 1),
             ("stated-refused", v3c, lambda case: got, "accept", 1)):
         monkeypatch.setattr(SP, "lean_check", lambda exe, case, d, lean=lean: lean(case))

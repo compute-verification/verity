@@ -67,15 +67,13 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   tie is its registration's alone. An execution phase's first round; accepted, with no output opened.
 * **V3c's trees** (``--v3c WINDOW``, `v3c_trees`; a group of 1): in place of the scan's own, the trees V3c's window
   (`prove_path.py window-commit`'s directory, at w63k4's class) committed before its coins: ``state`` its
-  `SCAN_STATE` (its registration's window activations entry, the rows and salts its prover's `SCAN_STATE_FILE`) and lane
+  `SCAN_STATE` (its registration's ``registered`` entry, the rows and salts its prover's `SCAN_STATE_FILE`) and lane
   j's ``prog<j>`` chunk j's o0 of its `SELECT_ENTRY` template (``<descriptor id>/c<j>/o0`` in its ``roots``, the rows
   and salts its member's prover body), each a `Held` tree at that registration's root and domain, refused by name where
   its rows aren't the scan's own. The honest round's ``scan/state`` and ``scan/prog<j>`` are then V3c's roots and
   domains, which the consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's
   audit at any sample of it, and there is no block round: V3c's audit proves the anchored Programs' slot entries, and
-  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`). `stateTied`
-  reads an audit's state entry among its ``roots`` and its ``registered`` alone, so the check refuses V3c's audit,
-  whose `SCAN_STATE` is in its window's activations alone, at the state tie.
+  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`).
 * **The honest round**: one Program of three templates (`TEMPLATES`) in the generator form (`scan_root`, the form
   `NetworkCheck.Period`'s `scanOf` reads), 2T + 1 units: the start unit (`IngressScanStart`), T ingress units
   (`IngressScanBucket`, buckets 0 … T − 1) and T egress units, each template one batch with its row, state and egress
@@ -828,20 +826,30 @@ def _v3c_refused(window: Path, why: str) -> SystemExit:
 
 
 def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
-    """V3c's `SCAN_STATE` (the certifier's `blocks.SCAN_STATE`): its entry in its registration's window activations
-    (the ``window`` provenance window-commit writes: ``activations.values``), its rows and salts the prover's
-    `SCAN_STATE_FILE`, under the domain that provenance gives (the window circuit's program and the window's run root,
-    `registered.domain`), held to the entry's root and domain and to the scan's ``states``."""
-    prov = rec.get("window") or {}
-    acts = prov.get("activations") or {}
-    e = (acts.get("values") or {}).get(SCAN_STATE)
-    if not e or e.get("value") != SCAN_STATE:
-        raise _v3c_refused(window, f"its registration's window activations register no {SCAN_STATE}")
+    """V3c's `SCAN_STATE` (the certifier's `blocks.SCAN_STATE`): its registration's one ``registered`` entry of it, its
+    rows and salts the prover's `SCAN_STATE_FILE`, under the domain one-stage's R7 holds a value of the execution phase
+    to (`registered.domain` of the registration's ``program``, the entry's words and leaves, and the open root its
+    ``window`` names as ``run``), held to the entry's root and domain and to the scan's ``states``."""
+    named = [e for e in rec.get("registered") or () if e.get("value") == SCAN_STATE]
+    if len(named) != 1:
+        raise _v3c_refused(window, f"its registration's registered values name {SCAN_STATE} {len(named)} times, not "
+                                   "once: register the scan's state as a value of the audit's Program")
+    (e,) = named
+    if int(e.get(REG.WIDTH_KEY, REG.WORD_BITS)) != REG.WORD_BITS:
+        raise _v3c_refused(window, f"its {SCAN_STATE}'s words are {e[REG.WIDTH_KEY]} bits, not the scan's "
+                                   f"{REG.WORD_BITS}")
     n, W = int(e["leaves"]), int(e["words"])
     if n != len(states) or 16 * W != len(states[0]):
         raise _v3c_refused(window, f"its {SCAN_STATE} is {n} rows of {16 * W} bits, not the scan's {len(states)} "
                                    f"of {len(states[0])}")
-    dom = REG.domain(acts.get("program", ""), SCAN_STATE, W, n, window=prov.get("run"))
+    run = (rec.get("window") or {}).get("run")
+    if run is None:
+        raise _v3c_refused(window, f"its registration's window names no open root (``run``), which its {SCAN_STATE}'s "
+                                   "domain binds")
+    try:
+        dom = REG.domain(rec.get("program", ""), SCAN_STATE, W, n, window=run)
+    except ValueError as x:
+        raise _v3c_refused(window, f"its registration's window's open root: {x}") from None
     data = (window / SCAN_STATE_FILE).read_bytes()
     if len(data) != n * (2 * W + ADV.INST.salt_bytes):
         raise _v3c_refused(window, f"{SCAN_STATE_FILE} is {len(data)} bytes, not {n} rows of {W} words and their salts")
@@ -849,8 +857,8 @@ def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
     held = Held(dom, 16 * W, tuple(bit_row((r, 16))[0] for r in words),
                 tuple(data[at + step * t:at + step * (t + 1)] for t in range(n)))
     if (held.root.hex(), dom.domain_id.hex()) != (e["root"], e["domain"]):
-        raise _v3c_refused(window, f"{SCAN_STATE_FILE} under its provenance's domain isn't its registered "
-                                   f"{SCAN_STATE}'s root and domain")
+        raise _v3c_refused(window, f"{SCAN_STATE_FILE} under its registration's program and open root isn't its "
+                                   f"registered {SCAN_STATE}'s root and domain")
     if bad := [t for t in range(n) if words[t] != _words(states[t])]:
         raise _v3c_refused(window, f"its {SCAN_STATE} rows {bad[:4]} aren't the scan's (row t S_(t-1) from the "
                                    "empty state of execution phase 0): it scanned another network certifier run or execution phase")

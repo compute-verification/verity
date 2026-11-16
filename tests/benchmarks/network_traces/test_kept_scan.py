@@ -34,7 +34,6 @@ import pytest
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
-from verity.protocols.resource_accounting.network.verifier.blocks import SCAN_STATE
 from verity.protocols.resource_accounting.network.verifier.certificate import Issuer, LmsSigner
 from verity.commitments.crypto import lms
 from verity_vllm.program.predict.window_circuit import WindowClass
@@ -163,17 +162,17 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     opened whole, prover only (`prove_path.scan_state_opening`), is the tree ``scan_zk.py --v3c`` reads as its state:
     `scan_zk.v3c_state` finds it at the registered entry's root and domain and holds its rows to the scan's; another
     execution phase's rows are refused by name."""
-    from verity_vllm.program.predict import window_circuit as WC, window_rows as WRS
+    from verity_vllm.program.predict import window_rows as WRS
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as H1R
 
     monkeypatch.setattr(H1R, "MODE", "numpy")
     from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
     rows, _ = kept_scan(serve_dir, CLASS, USERS[:3])
-    run = "ab" * 64
-    value = WRS.state_value(WC.NAME, CLASS, rows, hashlib.sha512(b"committer").digest()[:32], 0, window=run)
+    run, program = "ab" * 64, "cd" * 64
+    value = WRS.state_value(program, CLASS, rows, hashlib.sha512(b"committer").digest()[:32], 0, window=run)
     path = PP.scan_state_opening(value, tmp_path / SZ.SCAN_STATE_FILE)
     assert path == tmp_path / SZ.SCAN_STATE_FILE and path.stat().st_mode & 0o777 == 0o600
-    rec = {"window": {"run": run, "activations": {"program": WC.NAME, "values": {SCAN_STATE: value.entry()}}}}
+    rec = {"program": program, "registered": [value.entry()], "window": {"run": run}}
     held = SZ.v3c_state(tmp_path, rec, [list(r) for r in rows])
     assert (held.root.hex(), held.domain.domain_id.hex()) == (value.entry()["root"], value.entry()["domain"])
     late, _ = kept_scan(serve_dir, CLASS, USERS[3:])
