@@ -140,7 +140,7 @@ theorem hr_planZHJP {n mPts : ℕ} {I : Exec.Inputs} {own : Option ByteArray}
   refine (div_le_div_of_nonneg_right (pow_le_pow_right₀ (by norm_num) ?_) (by positivity)).trans (cap_div_le hkρ)
   unfold tableZHJP
   split_ifs with h
-  · exact zkLogLenCap_23 _ _ _ (Classical.choice h).hz
-  · exact zkLogLenCap_23 _ _ _ y₀.hz
+  · exact zkLogLenCap_23 _ _ _ _ (Classical.choice h).hz
+  · exact zkLogLenCap_23 _ _ _ _ y₀.hz
 
 end Verity.Sampled.Instance.HonestSession.LiveFacts
