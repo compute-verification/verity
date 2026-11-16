@@ -6,7 +6,7 @@ subprotocols into one verdict over one commitment: SPOT (the committed values sa
 except on few proof blocks), PoUW (the hardware's time went to the registered circuit) and the inference-only policy (the
 registered circuit is inference, not training).
 
-**Remote is `verity/remote/v1`.** Its work component is Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`), and
+**Remote is `verity/remote/v1`.** Its PoUW subprotocol is Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`), and
 `Core.Composites.ofIds`, which names the composite a configuration's verifier runs, refuses v0's subprotocols.
 
 **The open gap.** Remote's composed guarantee, `Verity.remote_soundness_of_subprotocols`, is proved at its compiled
@@ -15,8 +15,8 @@ whose clause is proved on the Program its check judges, the two statements that 
 (`Vocab.WiresSound`, `GateARow`).
 
 This file is an outline with signposts; the Lean is the definition. The vocabulary is `ARCHITECTURE.md`'s
-Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `*Horizon` means a
-monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window*` a period.
+Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `Session*` means a
+run of a subprotocol, and `window` an execution phase (`Credit.window`, a record's `windows`).
 
 **Which "remote".** Four things in the tree are called "remote", and this page means the first:
 
@@ -53,7 +53,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 |---|---|---|---|
 | SPOT ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/spot_flock/verifier/lean`), one-stage, recursive or two-stage by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../../../resource_accounting/compute/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
-| PoUW, v0 | the period's credited work, windows all or nothing | `PouwCheck.Period.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
+| PoUW, v0 | the period's credited work, execution phases all or nothing | `PouwCheck.Period.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../../../workload_classification/training_detection/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `InferenceOnlyCheck.Protocol.protocol` (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied ties components`
@@ -62,11 +62,11 @@ The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied 
 soundness theorem covers and no configuration names. Pearl+'s run names its record's digest, tied to the policy's by `V1.run`; its check doesn't
 read that record yet. The policy and SPOT commit to the run's record, which names the registered circuit; once
 the cases fit, two different records reject remote whatever the subprotocols answer (`Core.Composition.same`). v0's
-period commitment is the auditor's ledger, not the record, so it joins by a tie (`Core.Remote.executionPhases`): every window of
-the period must name the policy's record as its Commit record (`executionPhaseRecords`), and a window on another record rejects
+period commitment is the auditor's ledger, not the record, so it joins by a tie (`Core.Remote.executionPhases`): every execution phase of
+the period must name the policy's record as its Commit record (`executionPhaseRecords`), and an execution phase on another record rejects
 remote unless it rejects already. v0's executable is `remote` (`RemoteMain.lean`); each runs as
-`id | check PARAMS COMMITMENT EVIDENCE [BLOB ...] | serve`. The Lake package `core_remote` is code: no Mathlib, no `security/` (`lean-audit.json`). The
-product's rule and its difftest are the composition's ([README](../lean/README.md),
+`id | check PARAMS COMMITMENT EVIDENCE [BLOB ...] | serve`. The Lake package `core_remote` is code: no Mathlib, no `security/` (`lean-audit.json`). Remote's
+rule and its difftest are the composition's ([README](../lean/README.md),
 `verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`).
 
 ## Lifecycle
@@ -143,10 +143,10 @@ else is a theorem or a named gap.
 | Cryptography | SHA-512 is collision resistant, and the commitments hide their values. | `cr/sha-512`, `ecr/sha-512` (`SHA512CRStrict`, `SHA512CRExpected`, at the finders `TableCRZAt`, `LinkCRZCAt`); the hiding commitments' gap | Standard; no attack known. |
 | The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | `Verity.Assumptions.TrustedDevice`, `RecordCustodyZKJPLaw`, `UniformRandomBytes`; `CoinsAfterCommitment` (prose only) | Inspect the deployment: where the challenger runs, and its coin path. |
 | The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `SlowdownRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
-| Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
+| Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the assumption is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
 | Enforcement | SPOT catches each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Slowdown.Assumptions.SampledDetection`, `Slowdown.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
-| The baseline | The data the registration names was public, not computed off the books before. | `InferenceOnly.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
+| The registered information | The data the registration names was public, not computed off the books before. | `InferenceOnly.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
 | Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Slowdown.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
 | Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `Slowdown.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
 
@@ -187,7 +187,7 @@ commitments' hiding gap.
 ### 2. Sampling
 
 **Establishes.** The challenger flips coins after the commitments are recorded, and they select the sample, the proof
-blocks that are proved. If every sampled block is proved, only the blocks the sample missed can hold faults:
+blocks that are proved. If every sampled proof block is proved, only the proof blocks the sample missed can be incorrect:
 Pr[accept ∧ more incorrect proof blocks than the sample allows at δ] ≤ δ + ε_ks + ε_bind, ε_bind the binding error of the
 links between proof blocks.
 
@@ -209,7 +209,7 @@ the whole, and nothing is retried.
 
 **Assumes.** PoUW's premises, as its period's guarantee takes them:
 
-- the proof system is sound against the window's check (`Properties.Pouw.MonitoringPeriodJ10R.TileServiceSound`), a named
+- the proof system is sound against the execution phase's check (`Properties.Pouw.MonitoringPeriodJ10R.TileServiceSound`), a named
   assumption no theorem discharges yet;
 - the published sample is the tile stratum's sample at the coin (`TileSampleIsCoin`), and registration precedes the
   sample (`RegisteredBeforeDraw`);
@@ -221,13 +221,13 @@ The time credit adds the data sheet's rates.
 
 **Lean.**
 
-- Remote's rule, the composition's product rule `check`: `Properties.Composition.AcceptMeans`, **proved**. What it
+- Remote's rule, the composition's rule `check`: `Properties.Composition.AcceptMeans`, **proved**. What it
   accepts fits its subprotocols, each accepts its own case, and the commitment binds their digests.
 - SPOT: `Properties.Spot.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
   form (v2) ends, on its own run's verdicts.
 - PoUW's period credit: `Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`, `CheckedCreditMonitoringPeriod`'s conclusion
   at `PouwCheck.Credit.window`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
-  (`GUARANTEE`) and refuses every other window form for, **proved** under the premises above.
+  (`GUARANTEE`) and refuses every other form of an execution phase for, **proved** under the premises above.
 - The time credit: `Accounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
 - The proofs behind PoUW's credit, `Accounting.Guarantees.TS.SessionSoundAt`: **proved**, under `AcceptedLive` (no
   served path meets it yet), `ExecutionPhaseDesign`, `ServedChecksHold` and `ServedRootsLinked`. It concludes
@@ -287,7 +287,7 @@ part 6's premises say why that shape trains little.
 6. *The displayed bound reading the result instead of assuming `CompliesRate`:* **open** (part 6).
 7. *The count's verdict `InferenceOnly.CompliesAtMost c k n` ⇒ the day's bound:* `Slowdown.Cut.Guarantees.CountHE`, **proved** under
    (H) and (E), the verdict its only premise on the circuit; `InferenceOnlyCheck.Properties.DescCountsCK`, from a published
-   `complies` to the verdict, and the tie of the deployment's days to the declarations the count checked are **open**.
+   `complies` to the verdict, and the tie of the deployment's days to the registered circuits the count checked are **open**.
 
 ### 5. The monitoring period
 
@@ -337,7 +337,7 @@ neither does the total. With e the per-phase sum, a week, a month and a year at 
 - f is the free share: the part of the whole fleet's capacity, unregistered hardware included, not doing correct
   credited work of the registered circuit; ζ̄ is the rate at which work can be done there.
 - q/c is the most of that count one verified inference block of c gates can do, per gate. The canonical form keeps
-  the sum of the blocks' caps; replacing it by (q/c)(1 − f) needs the accounting to tie each qualifying block to
+  the sum of the blocks' yields; replacing it by (q/c)(1 − f) needs the accounting to tie each qualifying block to
   credited actual computation.
 - With Ω_ref the reference's count in the same convention, ζ_ref = Ω_ref/C_ref and the floor Ω_* ≥ Ω_ref/α, the bound
   is 1/(α[(ζ̄/ζ_ref)·f + y]), y = (q/(c·ζ_ref))(1 − f) the share of the reference's rate inference blocks yield. α
@@ -358,12 +358,12 @@ block can import information, spending its fresh bits, or reconstruct it, spendi
 - Fresh weights are hard to hold, so a block holds few of them.
 - For certified uses, a block must import each use's context or perform its upstream computation, so a block serves
   few uses.
-- So verified work does little learning, and learning at scale has to run on the uncredited capacity, which PoUW keeps
+- So verified work does little learning, and learning at scale has to run on free compute, which PoUW keeps
   small.
 
 The inference-block yield is about k + c/g served uses, g the gates a use's certified upstream computation takes. When
 reconstructing that computation would expose updated weights priced above h, the price of fresh weights the description
-premise lets a block hold (not a storage bound), the cap falls to k.
+assumption lets a block hold (not a storage bound), the yield falls to k.
 
 **Assumes.** The learning rows of the table above, the hardware rows, and parts 1 to 5. Further premises can strengthen
 the local bound (an activation price, a joint price, a recoverable source), each a new hypothesis to earn;
@@ -371,7 +371,7 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 **Lean.**
 
-- The local bounds' caps `Slowdown.Guarantees.HeldBudget` (or, statistically, `Slowdown.Guarantees.StatHeldBudget`),
+- The local bounds `Slowdown.Guarantees.HeldBudget` (or, statistically, `Slowdown.Guarantees.StatHeldBudget`),
   `Slowdown.Guarantees.ImportOrRecompute`, `Slowdown.Guarantees.RecomputeByGates` and `Slowdown.Guarantees.RecomputeByState`, and the
   floor `Slowdown.Guarantees.CapabilityFloor`: **proved**
   (`security/Proofs/Slowdown/Capability/`, `security/Proofs/Slowdown/Coverage.lean`), each from its premises. Every premise,
@@ -392,7 +392,7 @@ SPOT's accept rule and theorems, the Lean slowdown bounds, and the composed soun
 | A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + ε_bind | `Flock.Guarantees.SampledKSLiveV3` (stated in `security/Proofs/Flock/Bridge/ScopeGate.lean`, proved in `security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | SPOT `--zk`: proved |
 | SPOT over a monitoring period | `Flock.Guarantees.IntegrityMonitoringPeriod`, `IntegrityPooled` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The slowdown over remote, per period | `Slowdown.Guarantees.SlowdownRemote` (`security/Definitions/Slowdown/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The slowdown over a monitoring period | `Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod` (`security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean`; proof `Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod` in `security/Proofs/Slowdown/RemoteMonitoringPeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
+| The slowdown over a monitoring period | `Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod` (`security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean`; proof `Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod` in `security/Proofs/Slowdown/RemoteMonitoringPeriod.lean`) | **proved**, under `TerminalDetection`, with each verification phase's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the phase), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-phase bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` (`security/Properties/Verity/Soundness.lean`) | **proved**, from two open targets and the two statements on the committed files (the open gap, above) | — |
 
 `SlowdownRemote` is the slowdown bound max(1, 1/(s + x/MFU₀)) (`Slowdown.Slowdown.remoteSlowdown`; MFU₀ divides only
@@ -434,7 +434,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - No update price has been measured at a decoder budget.
   - The wiring property hasn't been checked on a named training circuit.
   - Coverage, the floor every efficient method is assumed to meet, is the open part: it is untested.
-  - The caps and the floor are proved, and their witnesses are toys: at a four-gate circuit, `DescriptionHard`,
+  - The local bounds and the floor are proved, and their witnesses are toys: at a four-gate circuit, `DescriptionHard`,
     `SourceHard` and `Recovers` hold against a decoder that compresses one string, each parameter spent (at 0 it
     fails); at a toy task, coverage holds at η = 1/2 but not at 0, a one-gate guess escaping it. No instance meets the
     premises on a training circuit.
@@ -469,24 +469,24 @@ SPOT (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
   on an auditor device too. In Lean, only onsite's guarantees (network certification's) read `TrustedDevice`.
 - `CoinsAfterCommitment`: the challenger's coins reach the developer's machine only over paths the auditor's devices
   control, and only after the commitment. Prose only: no guarantee takes it. Onsite's `CoinsConfidential`
-  (`Pouw.Assumptions.CoinsConfidential`, which `Pouw.Guarantees.Dither.FleetSound` takes) is another premise: a
-  replica's coins reach no machine outside its certifier's boundary before it has them.
+  (`Pouw.Assumptions.CoinsConfidential`, which `Pouw.Guarantees.Dither.FleetSound` takes) is another assumption: a
+  replica's coins reach no machine outside its network attester's boundary before it has them.
 
 PoUW, as `H1J10RCheckedCreditMonitoringPeriod` takes them (`security/Properties/Pouw/MonitoringPeriodJ10R.lean`):
 
 - `Properties.Pouw.MonitoringPeriodJ10R.TileServiceSound`: the proof system is sound against `Credit.window` at each sampled
   proof block, Flock's soundness under live coins. It is a named assumption: no theorem discharges it yet.
-- `Properties.Pouw.MonitoringPeriodJ10R.TileSampleIsCoin`: on every accepted window, the proof blocks the check demands proofs of
-  are the tile stratum's sample at the window's coin. A protocol-code fact still to prove.
-- `Properties.Pouw.MonitoringPeriodJ10R.RegisteredBeforeDraw`: each window's registration is fixed before its sampling coin. It
+- `Properties.Pouw.MonitoringPeriodJ10R.TileSampleIsCoin`: on every accepted execution phase, the proof blocks the check demands proofs of
+  are the tile stratum's sample at the phase's coin. A protocol-code fact still to prove.
+- `Properties.Pouw.MonitoringPeriodJ10R.RegisteredBeforeDraw`: each execution phase's registration is fixed before its sampling coin. It
   states the order only, and the binding it is used for also needs the rows committed by the registration, which the
   deployed path doesn't do yet.
-- `Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet
+- `Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin`: each execution phase's salt is its round's live coin. The deployed path doesn't meet
   it: the loop is given its salt before it serves, and nothing in the challenger's record binds the salt to a live coin
   (`security/Properties/Pouw/MonitoringPeriod.lean`, `SaltIsLiveCoin`'s docstring).
 - `Properties.Pouw.MonitoringPeriodJ10R.SharedNoiseLucks`: the Duo receipts' lucks (H-μ⁺, `OperandHMu`, with `ReceiptLuckAt`
   and `GuessLuckAt`) at J10-R's shared noise, one computational claim over a call's joint coins.
-- `Accounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the units it didn't
+- `Accounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the proof blocks it didn't
   skip. It stays an assumption until those words are defined from the committed values.
 - `Accounting.Assumptions.TS.AcceptedLive`, a premise of the proofs behind PoUW's credit (`SessionSoundAt`'s), not of the period credit: an
   accepted proof's check words are `1` as `verity-verify-proof --zk --registered` reads them. No served path meets it yet.
@@ -543,7 +543,7 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
   at once.
 - **The failure probability.** The δ is pooled over the monitoring period (`IntegrityPooled`, `CircuitCreditMonitoringPeriod`),
   not per verification phase. The calculator prints its own beside them: `CertificateSlack`'s p/ε′ at ε′ = 10⁻⁴,
-  PoUW's per-window p assumed at 3·2⁻⁴⁰ (δ_bind, δ_ks unnumbered, part 5), with no term growing with the period.
+  PoUW's per-phase p assumed at 3·2⁻⁴⁰ (δ_bind, δ_ks unnumbered, part 5), with no term growing with the period.
 
 ## The demo
 
