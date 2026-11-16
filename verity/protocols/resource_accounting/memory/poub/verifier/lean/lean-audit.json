@@ -1,0 +1,32 @@
+{
+ "format": 2,
+ "roots": ["Poub", "Poub.Difftest", "Poub.Verifier", "Poub.Protocol", "Poub.P2Protocol"],
+ "exempt": {
+  "Poub.DifftestMain": "the poub-difftest executable's entry point, one line; it serves Poub.Difftest.table, audited under Poub.Difftest, through the difftest server's line protocol: a test and not a proof",
+  "Poub.VerifierMain": "the poub-verifier executable's entry point, one line; it runs Poub.Verifier.serve, audited under Poub.Verifier",
+  "Poub.ProtocolMain": "the poub-protocol executable's entry point, one line; its command is Core.Protocol.main of Poub.Protocol.protocol, audited under Poub.Protocol and CoreProtocol",
+  "Poub.P2ProtocolMain": "the poub-p2-protocol executable's entry point, one line; its command is Core.Protocol.main of Poub.P2Protocol.protocol, audited under Poub.P2Protocol and CoreProtocol"
+ },
+ "layers": {
+  "Poub": {
+   "imports": [
+    "Std",
+    "Flock",
+    "Randomness",
+    "CoreProtocol",
+    "PousCheck.Merkle",
+    "MemoryChallenger.Verdict",
+    "MemoryChallenger.StreamedWipe",
+    "Lms.Sign",
+    "Spot",
+    "Poub"
+   ],
+   "except": ["Poub.Difftest"],
+   "why": "the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, core's randomness, the core protocol interface its session is a component through (Poub.Protocol), and PoUS's leaf and path check (PousCheck.Merkle, on which a P2 store's openings are checked, Poub.P2), the memory challenger's LMS check (MemoryChallenger.Verdict, on which P2's close is checked, Poub.P2Protocol), the wipe's record (MemoryChallenger.StreamedWipe, which P2's close record is never, Poub.P2Close) and LMS signing (Lms.Sign, which only P2Protocol's guards run); the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, core's randomness, the core protocol interface its session is a component through (Poub.Protocol), and PoUS's leaf and path check (PousCheck.Merkle, on which a P2 store's openings are checked, Poub.P2), and the sampled proof system's one-stage audit (Spot, whose accepted runs of the opening unit decide a window in Poub.Span); no Mathlib and nothing of Security. The difftest's table (Poub.Difftest) also imports the difftest server"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "acccb6f641a52c9be17964be42390d079cbad65923ee098c4c0dc7d6803f861b"
+ }
+}

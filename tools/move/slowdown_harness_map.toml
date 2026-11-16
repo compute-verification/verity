@@ -1,0 +1,88 @@
+# The training harness's prose, where it says ρ for a record's slowdown: what
+# `tools/move/rename.py --map tools/move/slowdown_harness_map.toml` renames in `benchmarks/training_slowdown/`. It moves
+# no path and renames no module, key or Lean declaration, so its change is an ordinary one, reviewed as such; the
+# harness's own suite is its evidence.
+# - The harness has two numbers, and each is a slowdown. S is the config's slowdown: p times the other, and its names
+#   stay. The other is what the slowdown calculator gives at a job's record: the record's slowdown, `slowdown` in
+#   code. In prose a "slowdown" of the harness says whose it is, the record's or the config's, unless its own sentence
+#   or the one before it did. "The bound of record" and `bound` stay what they are: the count solved for the fewest
+#   blocks, and the calculator's whole result.
+# - The names in code (`rho`, `rho_of`, `rho_fit`, `BOUND_IS_RHO`, the tests' names) and the words the grade prints
+#   are `slowdown_python_map.toml`'s, in blocks that name the harness's files. This map holds only the symbol, and
+#   no row of it holds a name of that map's, so the two run in either order.
+# What stays:
+# - Every key that says rho, quoted or in backticks. `OUT/slowdown.json` (`grade.SCHEMA`) stores the grade's `rho`
+#   block, which is `formalism.published`'s result with its number under `"rho"`, and `rests_on.rho`; the library's
+#   rows carry the entry point's `figure`, whose products term is under `"rho"`; and `at`'s `"rho"` and `"rho_fit"`
+#   are what `published` reads its number from. A stored key is renamed with its schema, in a change that leaves no
+#   reader of both names, and a key in memory stays with the stored one it feeds, so one number has one key.
+# - ρ inside a formula (`S = p·ρ`, `C·ρ`, `ρ ≥ …`) and the one printed line that puts a kind between ρ and its term
+#   (`ρ's {kind} term`): they are written out by hand.
+# - The calculator's directory and module, which its own move renames.
+# The rows that open a sentence or name whose slowdown it is stand before the bare symbol, which is last.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/README.md", "benchmarks/training_slowdown/grader/grader.py",
+         "benchmarks/training_slowdown/training_slowdown/*.py", "benchmarks/training_slowdown/training_slowdown/routes/__init__.py",
+         "benchmarks/training_slowdown/tests/test_grade.py", "benchmarks/training_slowdown/tests/test_formalism.py"]
+[words_in.words]
+# its terms
+". ρ's products term" = ". The products term of the record's slowdown"
+"\"\"\"ρ's products term" = "\"\"\"The products term of the record's slowdown"
+"ρ's products term" = "the products term of the record's slowdown"
+"ρ's inputs" = "the inputs of the record's slowdown"
+"ρ's floor" = "the floor of the record's slowdown"
+# what it reads
+"What ρ reads of a record's" = "What a record's slowdown reads of its"
+"what ρ reads of a record's" = "what a record's slowdown reads of its"
+"only what ρ reads" = "only what its slowdown reads"
+"ρ reads a traced step" = "its slowdown reads a traced step"
+'and ρ "' = 'and its slowdown "'
+"which ρ reads" = "which its slowdown reads"
+"a key ρ reads" = "a key its slowdown reads"
+"a record ρ can't read" = "a record whose slowdown can't be read"
+"the record ρ read" = "the record whose slowdown it read"
+"that ρ was read at" = "that its slowdown was read at"
+# whose it is, already said
+"A record's slowdown ρ" = "A record's slowdown"
+"the record's ρ" = "the record's slowdown"
+"the theorem of record's ρ on M" = "the slowdown the theorem of record gives on M"
+"ρ is the entry point's slowdown" = "the record's slowdown is the entry point's"
+"ρ is the bound's slowdown" = "the record's slowdown is the bound's"
+"ρ from the search record's trace" = "the search record's slowdown from its trace"
+"at the ρ and S of the same record" = "at the slowdown and S of the same record"
+"reads its ρ" = "reads its record's slowdown"
+"its ρ" = "its slowdown"
+"whose ρ" = "whose slowdown"
+"has no ρ" = "has no slowdown"
+"the same ρ" = "the same slowdown"
+"v2's ρ" = "v2's slowdown"
+# published
+"The published ρ" = "The record's published slowdown"
+"the published ρ" = "a record's published slowdown"
+"a published ρ" = "a record's published slowdown"
+"each published ρ" = "each record's published slowdown"
+"the console's ρ" = "the record's slowdown as the console shows it"
+# the rest
+"the bound ρ" = "a record's slowdown"
+"the grade's ρ" = "the record's slowdown in a grade"
+"gives ρ at" = "gives a record's slowdown at"
+"computes no ρ" = "computes no record's slowdown"
+"so no ρ" = "so its record has no slowdown"
+"No ρ" = "No record's slowdown"
+"score ρ = 1" = "score the record's slowdown as 1"
+"(ρ None)" = "(it is None)"
+"ρ, the bound of record and the periods ---------------------" = "the record's slowdown, the bound of record and the periods -"
+"\"\"\"ρ" = "\"\"\"The record's slowdown"
+". ρ" = ". The record's slowdown"
+"ρ" = "the record's slowdown"
+
+[rewrite]
+# Never rewritten: the earlier moves and their maps.
+exclude = ["tools/move/**"]
+
+[keep]
+# a formula, and the printed line `ρ's {kind} term`: by hand
+patterns = ['p·ρ', 'C·ρ', 'ρ ≥', '''ρ's \{''']

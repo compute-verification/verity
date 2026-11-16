@@ -1,0 +1,128 @@
+# The security analysis's properties of the Lean code: what each component's executable Lean does, stated against its
+# functions, one `Properties.<Protocol>` module per component, whose docstring says what it states. It may require
+# `security` (the spec, Definitions) and the code it states properties of, never `security_proofs`. Its modules sit
+# beside the spec's (`srcDir = ".."`) under a root of their own, `Properties`: `Properties.<Protocol>` states,
+# `Proofs.Properties.<Protocol>` proves. A property whose proof needs `security_proofs` is stated here and proved there.
+# This comment lists no component, so two branches that each add one change only `[[require]]` and `roots`, which
+# `tools/verity/lean/merge.py --lakefile` merges.
+name = "security_properties"
+srcDir = ".."
+defaultTargets = ["Properties"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "security"
+path = ".."
+
+[[require]]
+name = "pouw_window"
+path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/window"
+
+[[require]]
+name = "pouw_check"
+path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
+
+[[require]]
+name = "pouw_commit"
+path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit"
+
+[[require]]
+name = "pouw_pearlplus"
+path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus"
+
+[[require]]
+name = "inference_only_check"
+path = "../../verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
+
+[[require]]
+name = "pous_check"
+path = "../../verity/protocols/resource_accounting/memory/pous/verifier/check"
+
+[[require]]
+name = "core_memory_challenger"
+path = "../../verity/protocols/resource_accounting/memory/pous/attester/lean"
+
+[[require]]
+name = "core_zk_server"
+path = "../../verity/protocols/proofs/recursion/verifier/zk_server"
+
+[[require]]
+name = "network_check"
+path = "../../verity/protocols/resource_accounting/network/verifier/lean"
+
+[[require]]
+name = "core_spot"
+path = "../../verity/protocols/proofs/spot/verifier/lean"
+
+[[require]]
+name = "verity_evaluate"
+path = "../../verity/circuits/evaluate"
+
+[[require]]
+name = "poub"
+path = "../../verity/protocols/resource_accounting/memory/poub/verifier/lean"
+
+[[require]]
+name = "core_requirement"
+path = "../../verity/circuits/requirement"
+
+[[require]]
+name = "core_composition"
+path = "../../verity/protocols/compose/verifier/lean"
+
+[[require]]
+name = "core_onsite"
+path = "../../verity/protocols/compose/verifier/onsite"
+
+[[require]]
+name = "core_registration"
+path = "../../verity/protocols/registration/verifier/lean"
+
+[[require]]
+name = "flock_verifier"
+path = "../../verity/protocols/proofs/flock/verifier"
+
+[[lean_lib]]
+name = "Properties"
+roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
+  "Properties.Pouw.MonitoringPeriod", "Properties.Pouw.MonitoringPeriod.Witnesses", "Properties.Pouw.MonitoringPeriodJ10R",
+  "Properties.Pouw.MonitoringPeriodJ10RStrata",
+  "Properties.Pouw.ServedFreed", "Properties.Pouw.ServedWork", "Properties.Pouw.ServedValues", "Properties.Pouw.Strata",
+  "Properties.Pouw.Credit", "Properties.Pouw.PearlPlus", "Properties.Pouw.PearlPlusSample",
+  "Properties.Pouw.PearlPlus.Witnesses", "Properties.Pouw.PearlPlusTie", "Properties.InferenceOnly", "Properties.InferenceOnly.Threads",
+  "Properties.Pous",
+  "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.Wipe", "Properties.Pous.EndToEnd",
+  "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt", "Properties.Pous.PeriodDeployed",
+  "Properties.Pous.Pooled", "Properties.Pous.PeriodGame", "Properties.Pous.Period.Witnesses",
+  "Properties.Certifier.JointBridge.SpaceOfPeriodHeld", "Properties.Pous.Component",
+  "Properties.Pous.MemoryChallenger.Session", "Properties.Pous.SetupProof", "Properties.Pous.InProofs",
+  "Properties.Certifier.Check", "Properties.Certifier.Check.TransferBlocks", "Properties.Hash.Identity",
+  "Properties.Attest", "Properties.Annot", "Properties.InferenceOnly.Desc", "Properties.InferenceOnly.Desc.Verdict",
+  "Properties.InferenceOnly.Desc.Cover", "Properties.InferenceOnly.Theta", "Properties.InferenceOnly.Count",
+  "Properties.Spot", "Properties.Spot.Draw", "Properties.Spot.Bits", "Properties.Spot.Interval",
+  "Properties.Spot.FactorUpper", "Properties.Spot.TwoStageCheck", "Properties.Spot.Halt", "Properties.Spot.Second",
+  "Properties.Spot.Wires", "Properties.Spot.Members", "Properties.Spot.Tables", "Properties.Spot.HistoryTable",
+  "Properties.Spot.Rate", "Properties.Spot.MonitoringPeriod", "Properties.Spot.MonitoringPeriodLedger",
+  "Properties.Core.Evaluate", "Properties.Certifier.Records", "Properties.Spot.PlanCheck", "Properties.NetworkPeriod",
+  "Properties.Certifier.Registered",
+  "Properties.Core.Period", "Properties.NetworkScan", "Properties.ResourceAccounting.Requirement",
+  "Properties.Compose.Compose", "Properties.Poub.Remote",
+  "Properties.Poub.Remote.Coins", "Properties.Poub.Remote.Pooled", "Properties.ResourceAccounting.Served",
+  "Properties.ResourceAccounting.RegisteredCircuit", "Properties.Poub.Remote.Line",
+  "Properties.Poub.Remote.Schedule", "Properties.Poub.Remote.Shared", "Properties.Poub.Remote.Live",
+  "Properties.Poub.Remote.Subprotocol", "Properties.Poub.Remote.SubprotocolDeployed",
+  "Properties.Poub.Remote.InProofs",
+  "Properties.Composition", "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
+  "Properties.Certifier.JointBridge.WorkOfCreditedWords", "Properties.Certifier.JointBridge.ServiceSoundOfSessions",
+  "Properties.Flock.Circuit", "Properties.InferenceOnly.Protocol", "Properties.Verity.Soundness", "Properties.Verity.Game",
+  "Properties.Verity.Sha512", "Properties.Verity.Idle", "Properties.Verity.Subprotocols", "Properties.Verity.Coupling",
+  "Properties.Verity.Committed", "Properties.Verity.GateARow", "Properties.Ties", "Properties.Flock.Nets", "Properties.Remote",
+  "Properties.InferenceOnly.Record", "Properties.Pous.WipeSigned", "Properties.Pous.WipeCount", "Properties.Challenger",
+  "Properties.ZkServer", "Properties.Core.Site",
+  "Properties.Registration.Premises",
+  "Properties.Assumptions", "Properties.Verity.ExecutionPhaseFiles", "Properties.InferenceOnly.Opening",
+  "Properties.InferenceOnly.PinnedRead", "Properties.InferenceOnly.RecordForm", "Properties.Verity.LedgerPinned"]

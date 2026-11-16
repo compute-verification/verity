@@ -1,0 +1,49 @@
+# The recursive audit's check into `spot_flock_recursion/`'s package: what
+# `tools/move/layout.py --map tools/move/spot_flock_recursion_protocol_map.toml` moves and rewrites.
+#
+# `VStarRecursive/Protocol.lean` (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`) leaves `spot_flock/`'s package,
+# whose SPOT check no longer reads it, for the package that builds its command (`vstar-recursive`).
+#
+# - One file moves. A Lean module is named from its package's root, and two packages' modules may not share a first
+#   component (`tests/test_lean_packages.py`), so the module becomes `VStarRecursion.Protocol`. Its declarations keep
+#   their names (`VStar.Recursive.*`); a private one's name carries its module, and those the locks record follow as
+#   moved records (`spot_flock_recursion_protocol_moves.json`, for the Lean check's `--update --moved`).
+# - Lean files are rewritten ([rewrite] excludes none): each import of the module names the new one, and each lock's
+#   module names follow it.
+# - Written by hand after the move: the new package's library, lock layer and requirers (`security/Proofs`), and the
+#   import line the package root of `spot_flock/` drops. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Protocol.lean" = "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean"
+
+[retired]
+paths = ["verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Protocol.lean"]
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json",
+           "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "archive/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "benchmarks/network_e2e/tests/data/**",
+           "adapters/vllm/manifests/**", "adapters/vllm/workloads/**", "adapters/vllm/data/**",
+           "adapters/vllm/verity_vllm/pins/**", "adapters/vllm/tools/migrate/superseded_quarantine.py", "adapters/vllm/tests/migrate/test_superseded_quarantine.py",
+           "tests/tree.toml", "**/*.cu",
+           "**/*.cuh", "**/*.cpp", "**/*.h",
+           "**/*.c"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md",
+           "**/lake-manifest.json", "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean", "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json", "verity/protocols/flock/prover/tests/fixtures/inner_claims.json", "verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_two_lean.json", "verity/protocols/spot/verifier/tests/fixtures/history_read_vector.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/pouw/verifier/tests/vectors/pearl_c_u.json", "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c_u.json"]
+root_prefixes = ["/opt/vy-verifier/current/"]

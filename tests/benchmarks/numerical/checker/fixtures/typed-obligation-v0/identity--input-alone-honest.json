@@ -1,0 +1,315 @@
+{
+ "authenticatable": true,
+ "authenticity_reasons": [],
+ "binding": {
+  "object_digest": "ddb2bc86caa19a69f569c06baac161629e161dbfb56fc4e71f570869214cf875",
+  "public_values": "ddb2bc86caa19a69f569c06baac161629e161dbfb56fc4e71f570869214cf875b655d4ac2591defec00862a435f829fd7804d34e56aa70036a151771dcac455101",
+  "statement_digest": "b655d4ac2591defec00862a435f829fd7804d34e56aa70036a151771dcac4551"
+ },
+ "canonical": "{\"family\":{\"digest\":\"88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6\",\"id\":\"veritor.int8-q7@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"boundary/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"boundary\"},{\"id\":\"boundary/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"boundary\"},{\"id\":\"boundary/2\",\"layout\":{\"value\":8},\"leaf\":2,\"position\":2,\"root\":\"boundary\"},{\"id\":\"kappa_W/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"kappa_W\"},{\"id\":\"kappa_W/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"kappa_W\"},{\"id\":\"ru0/0\",\"layout\":{\"value\":32},\"leaf\":0,\"position\":0,\"root\":\"ru0\"},{\"id\":\"ru0/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"ru0\"},{\"id\":\"ru0/2\",\"layout\":{\"value\":32},\"leaf\":2,\"position\":2,\"root\":\"ru0\"},{\"id\":\"ru0/3\",\"layout\":{\"value\":32},\"leaf\":3,\"position\":3,\"root\":\"ru0\"},{\"id\":\"ru0/4\",\"layout\":{\"value\":32},\"leaf\":4,\"position\":4,\"root\":\"ru0\"},{\"id\":\"ru1/0\",\"layout\":{\"value\":32},\"leaf\":0,\"position\":0,\"root\":\"ru1\"},{\"id\":\"ru1/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"ru1\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[],\"out\":[\"x0\"]},\"roots\":[\"boundary\"],\"subcircuit\":\"39f76d8cb00a055ea54988597f016709265df9fca144ff793422f3c5599a1505\",\"target\":{\"encoding\":\"region\",\"id\":\"C[0:1]\"}}],\"references\":[{\"leaf\":\"boundary/0\",\"offset\":[],\"ref\":\"x0\"}],\"roots\":[{\"count\":3,\"domain\":\"26df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"boundary\",\"owner\":-1,\"root\":\"689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4\"},{\"count\":2,\"domain\":\"6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"kappa_W\",\"owner\":-2,\"root\":\"e15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b\"},{\"count\":5,\"domain\":\"536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f7757\"},{\"count\":2,\"domain\":\"6a4ad6bc481f6858396dafc1a1f543eaf0668e28b08d7e4d34e8bb18da7cdf54\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru1\",\"owner\":1,\"root\":\"05c051efaa138aa09308a8008a8f98b1506273066eb8dabc4fd13832d98639c3\"}],\"subcircuits\":[{\"definition\":{\"name\":\"identity/vu/x0\"},\"digest\":\"39f76d8cb00a055ea54988597f016709265df9fca144ff793422f3c5599a1505\",\"gates\":[{\"op\":\"Input\",\"value\":\"05\",\"width\":8}],\"in\":[],\"out\":[0]}]}",
+ "description": "Input[0] alone on the honest transcript accepts (5 = 5).",
+ "digest": "ddb2bc86caa19a69f569c06baac161629e161dbfb56fc4e71f570869214cf875",
+ "identity": {
+  "layout": "scalar",
+  "plan": "plan/input-only",
+  "transcript": "honest"
+ },
+ "lowered_v3": {
+  "note": "derived by veritor.interface.lowering.lower_v3(): the format-2 lowering with maximal runs of consecutive packed words of one leaf merged into ranges (merge_ranges); expands to `lowering`",
+  "obligations": [
+   {
+    "entries": [
+     {
+      "ref": "x0",
+      "schema": "u8"
+     }
+    ],
+    "expected": {
+     "x0": "05"
+    },
+    "inputs": [],
+    "kind": "0529fe5b61aa1d8a59fed92b1fea52b85a787cdde7af0873461aef2982900c86",
+    "outputs": [
+     0
+    ],
+    "ranges": 0,
+    "slots": 1
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [],
+      "op": "in"
+     }
+    ],
+    "kind": "0529fe5b61aa1d8a59fed92b1fea52b85a787cdde7af0873461aef2982900c86",
+    "outputs": [
+     0
+    ],
+    "ports": [],
+    "subcircuit": "39f76d8cb00a055ea54988597f016709265df9fca144ff793422f3c5599a1505"
+   }
+  ]
+ },
+ "lowering": {
+  "note": "derived by veritor.interface.lowering.lower(); legacy backend data, not part of the Verity ontology",
+  "obligations": [
+   {
+    "expected": {
+     "x0": "05"
+    },
+    "inputs": [],
+    "kind": "0529fe5b61aa1d8a59fed92b1fea52b85a787cdde7af0873461aef2982900c86",
+    "outputs": [
+     0
+    ],
+    "positions": [
+     "x0"
+    ]
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [],
+      "op": "in"
+     }
+    ],
+    "kind": "0529fe5b61aa1d8a59fed92b1fea52b85a787cdde7af0873461aef2982900c86",
+    "outputs": [
+     0
+    ],
+    "ports": [],
+    "subcircuit": "39f76d8cb00a055ea54988597f016709265df9fca144ff793422f3c5599a1505"
+   }
+  ]
+ },
+ "name": "identity/input-alone-honest",
+ "object": {
+  "family": {
+   "digest": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+   "id": "veritor.int8-q7@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "boundary/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "boundary"
+   },
+   {
+    "id": "boundary/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "boundary"
+   },
+   {
+    "id": "boundary/2",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "boundary"
+   },
+   {
+    "id": "kappa_W/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "kappa_W"
+   },
+   {
+    "id": "kappa_W/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "kappa_W"
+   },
+   {
+    "id": "ru0/0",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/2",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/3",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 3,
+    "position": 3,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/4",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 4,
+    "position": 4,
+    "root": "ru0"
+   },
+   {
+    "id": "ru1/0",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru1"
+   },
+   {
+    "id": "ru1/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "ru1"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [],
+     "out": [
+      "x0"
+     ]
+    },
+    "roots": [
+     "boundary"
+    ],
+    "subcircuit": "39f76d8cb00a055ea54988597f016709265df9fca144ff793422f3c5599a1505",
+    "target": {
+     "encoding": "region",
+     "id": "C[0:1]"
+    }
+   }
+  ],
+  "references": [
+   {
+    "leaf": "boundary/0",
+    "offset": [],
+    "ref": "x0"
+   }
+  ],
+  "roots": [
+   {
+    "count": 3,
+    "domain": "26df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "boundary",
+    "owner": -1,
+    "root": "689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4"
+   },
+   {
+    "count": 2,
+    "domain": "6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "kappa_W",
+    "owner": -2,
+    "root": "e15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b"
+   },
+   {
+    "count": 5,
+    "domain": "536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f7757"
+   },
+   {
+    "count": 2,
+    "domain": "6a4ad6bc481f6858396dafc1a1f543eaf0668e28b08d7e4d34e8bb18da7cdf54",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru1",
+    "owner": 1,
+    "root": "05c051efaa138aa09308a8008a8f98b1506273066eb8dabc4fd13832d98639c3"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "identity/vu/x0"
+    },
+    "digest": "39f76d8cb00a055ea54988597f016709265df9fca144ff793422f3c5599a1505",
+    "gates": [
+     {
+      "op": "Input",
+      "value": "05",
+      "width": 8
+     }
+    ],
+    "in": [],
+    "out": [
+     0
+    ]
+   }
+  ]
+ },
+ "relations": "accept",
+ "statement": "76657269746f722f70726f6f66732f73746174656d656e742f7632000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c600000020000000010529fe5b61aa1d8a59fed92b1fea52b85a787cdde7af0873461aef2982900c8600000001000000000000000100000002696e0000000000000001000000000000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000000000000000000000529fe5b61aa1d8a59fed92b1fea52b85a787cdde7af0873461aef2982900c8600000001000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b40000000000000003000000010000000000000000000000000000000000000000000000027538010000000105000000000000000100000000",
+ "statement_digest": "b655d4ac2591defec00862a435f829fd7804d34e56aa70036a151771dcac4551",
+ "statement_v3": "76657269746f722f70726f6f66732f73746174656d656e742f7633000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c600000020000000010529fe5b61aa1d8a59fed92b1fea52b85a787cdde7af0873461aef2982900c8600000001000000000000000100000002696e0000000000000001000000000000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000000000000000000000529fe5b61aa1d8a59fed92b1fea52b85a787cdde7af0873461aef2982900c8600000001000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4000000000000000300000001000000000000000000000000000000000000000000000000027538010000000105000000000000000100000000",
+ "statement_v3_digest": "279bb7e5a42fd5ec24308ba53dfdfa2461d10bac7c47130c76b9adf76c2d0efa",
+ "subcircuits_well_formed": [
+  true
+ ],
+ "tags": [
+  "identity",
+  "instance",
+  "witness",
+  "input-equation"
+ ],
+ "values": [
+  [
+   5
+  ]
+ ],
+ "verdict": "accept",
+ "witness": "76657269746f722f70726f6f66732f7769746e6573732f763200000000010000000100000001050000000244de3aaedb05677f24efe632f3031f8e483d8ef61325428709ae51645011d379871a169c3d990656ce7ed8bba513a6108e07b2b00202dadc0c12b336538f8268",
+ "witness_verdict": "accept"
+}

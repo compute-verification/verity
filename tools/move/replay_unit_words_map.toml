@@ -1,0 +1,30 @@
+# The retired words "replay unit" and "audit block": what `tools/move/rename.py --map tools/move/replay_unit_words_map.toml`
+# renames, by the Glossary's row ("replay block (n_ρ, its count of proof blocks)"), in that sense: prose in the Lean of
+# the partition model and the audit's influence lemma, the profile and served-integrity tests, the frame vectors'
+# generator's comment and the verifier-cost README, and the frame refusal "owner must be -2 (weights), -1 (boundary) or a replay unit", in Python
+# (`verity/commitments/merkle.py`) and in PoUW's Lean verifier (`PouwCommit/Frame.lean`) together. No code name of the
+# family is in this sense, and no Lean declaration is renamed.
+# It leaves: `REPLAY_UNIT`, the live verifier's systemd unit (`vy-verifier-replay@{}.service`); `replay_bundle.check`'s
+# flag `replay_units` (whether to replay the bundle's units, a verb); "audit blocks" in `test_audit.py` (a fake audit
+# that blocks on an event), the one site of that phrase; the fixtures' `"replay_unit"` keys; the certifier's paths, until
+# network-accounting's rename is in; the lock records; and the lints and the Glossary row that name the old words.
+
+[words]
+"Replay units" = "Replay blocks"
+"replay units" = "replay blocks"
+"Replay unit" = "Replay block"
+"replay unit" = "replay block"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps), fixtures and vectors, files whose bytes a digest
+# pins, lock files (the Lean locks' records and frozen reasons included), the vLLM registry, the certifier's paths (its
+# lane renames them) and the two lints that name the retired words.
+exclude = ["tools/move/**", "**/fixtures/**", "**/*vectors*.json", "**/*.patch",
+           "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/lean-audit.json", "benchmarks/numerical/tests/bench/data/**",
+           "tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py",
+           "adapters/vllm/verity_vllm/definitions/registry/**",
+           "verity/protocols/accounting/certifier/**", "security/**/Certifier/**"]
+
+[keep]
+# The Glossary's row of the older names.
+patterns = ['(?m)^\| "replay unit".*$']

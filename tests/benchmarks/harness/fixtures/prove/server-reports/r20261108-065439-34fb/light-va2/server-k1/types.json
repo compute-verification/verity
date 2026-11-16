@@ -1,0 +1,20 @@
+{
+ "dsa-logits-v3": {
+  "definition": "DsaMqaLogits_v3{N=1,H=32,D=128}"
+ },
+ "fr-w13": {
+  "definition": "MoeExpertFp8ReadGemm_v1{READ=EmbeddingRead_v1{V=256,H=3072},K=6144,N=1,G=128,KB=128,SWAP=False,DOT=HopperE4m3MmaV2Dot32_v2}"
+ },
+ "fr-w2": {
+  "definition": "MoeExpertFp8ReadGemmW_v1{READ=EmbeddingRead_v1{V=256,H=4096},K=256,N=32,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v2}"
+ },
+ "residual-add": {
+  "definition": "ResidualAdd_v1{N=6144}"
+ },
+ "sm-fp8-k2048": {
+  "definition": "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}"
+ },
+ "sm-fp8-k6144": {
+  "definition": "ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}"
+ }
+}

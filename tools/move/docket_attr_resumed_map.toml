@@ -1,0 +1,30 @@
+# `stop_audit.Resumed`'s docket, the stop record's: its attribute `registration` becomes `docket`, with every read of
+# it (`r.registration` where `r` is a `Resumed`). The boundary stream's `First.registration` (`r.first.registration`),
+# the keys `"registration"` and `stream_registration` keep their word.
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/prover/audit/stop_audit.py"]
+[words_in.words]
+"registration: S.WindowCommitmentRecord" = "docket: S.WindowCommitmentRecord"
+"self.registration" = "self.docket"
+"r.registration" = "r.docket"
+
+[[words_in]]
+files = ["adapters/vllm/tests/pipeline/test_two_stage_driver.py", "benchmarks/one_stage/tests/test_stop_audit.py"]
+[words_in.words]
+"r.registration" = "r.docket"
+
+[[words_in]]
+files = ["benchmarks/one_stage/tests/test_stop_audit.py"]
+[words_in.words]
+"registration=NS(digest=" = "docket=NS(digest="
+
+[keep]
+patterns = []
+strings = []
+
+[rewrite]
+exclude = ["**/*.json", "**/*.jsonl", "**/*.toml", "**/*.lean", "**/fixtures/**", "tools/move/**",
+           "tools/research/src/research/store/moves.json"]

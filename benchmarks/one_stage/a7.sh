@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# One-stage audit, run A7, on a CPU machine: the requirement's plan and memory-map units under the stratified sampling design, wired to
+# PoUB's ledger (a7.py), whose check 3 on each sampled receipt is proved by the check-3 units
+# (`poub.opening`), on hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean
+# verity-verify-proof, cached under $A7_CACHE). From a clone, since the verifier builds the SPOT Lean in the
+# tree:
+#   A7_MEM_GB=96 bash benchmarks/one_stage/a7.sh
+#   (a job run from a clone of the tree)
+# (no memory request: the slot holds the memory, and a request beside it waits outside the slot line for free memory)
+# env: A7_MEM_GB (what job.sh's stages may take, within the slot's)  A7_K (a7.py's --k, every unit by default)  A7_STEPS (its --steps)
+#      A7_SAMPLES (its --samples, the remote session's samples a window)  A7_CACHE (the build cache)
+# Kept in $OUT/a7: a7's records and logs, the public files, the canonical commitments' b || c, the memory map and the sessions
+# (their proofs and records); never a prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive.
+# The units (`verity.circuits.requirement_units`) are one of each per step of a stand-in decoder's requirement,
+# their witness rows bound to canonical commitments, and the ledger takes them as its requirement link
+# (`audit.RequirementLink`): its ε the most share of the linked credit the units its sample leaves unproved can carry, its
+# δ the sample's. Checks 1-3 and 5 on each sampled receipt are proved, not opened, in a second statement, by the opening
+# unit (`verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates.block_check`).
+set -uo pipefail
+export HZ_CONFIGS=a7 HZ_MEM_GB=${A7_MEM_GB:?}
+[ -n "${A7_CACHE:-}" ] && export HZ_CACHE=$A7_CACHE
+source benchmarks/pouw/hidden_zk/job.sh
+export PATH=$HOME/.elan/bin:$PATH
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+setup
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+  || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
+log "a7: k ${A7_K:-default}, steps ${A7_STEPS:-default}, samples ${A7_SAMPLES:-default}"
+"$PY" benchmarks/one_stage/a7.py --bin "$BIN" --lean "$LEAN" --out "$W/a7" ${A7_K:+--k "$A7_K"} ${A7_STEPS:+--steps "$A7_STEPS"} \
+  ${A7_SAMPLES:+--samples "$A7_SAMPLES"} 2>&1 | tee -a "$OUT/a7.log" | cut -c1-4000
+rc=${PIPESTATUS[0]}
+mkdir -p "$OUT/a7"
+(cd "$W/a7" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -I{} cp --parents {} "$OUT/a7/")
+log "a7: done, rc $rc"
+exit "$rc"
