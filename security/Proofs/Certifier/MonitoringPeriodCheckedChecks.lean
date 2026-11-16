@@ -760,6 +760,8 @@ witness, the network attester's openings `certOps` and the observations the netw
 (`executionPhaseGoodChecked_placed`). The code checks no proof block and the extracted witness opens nothing, so the
 good event's leak relation holds by the circuit computing the network attester's openings, with no incorrect proof
 block; that the network attester's openings pass under the deployed commitment (`CertifierRegisters`) is not shown.
+The acceptance clause holds for every prover because the toy verifier (`stmtV`) accepts everything at `[]`, so it is
+no evidence that an honest prover in particular passes.
 
 It is a toy instance: `placedCode` parses every statement as one copy statement, its verifier checks only that the
 statement is `[]`, and it samples and opens nothing, so it is not the deployed check; no input is registered
