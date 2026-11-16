@@ -83,8 +83,8 @@ site_out = []
 
 
 def add(term, spelling, context, f, ln, kind, own, cls, new, evidence):
-    k = (term, spelling, context, kind if term != "certifier" else "", cls, new, evidence if cls in ("HELD", "OTHER SENSE", "ASK", "LEAN") else "")
-    d = ctx_rows.setdefault(k, {"sites": 0, "files": set(), "lean": 0, "own": collections.Counter(), "ex": [], "kinds": collections.Counter()})
+    k = (term, spelling, context, cls, new)
+    d = ctx_rows.setdefault(k, {"sites": 0, "files": set(), "lean": 0, "own": collections.Counter(), "ex": [], "kinds": collections.Counter(), "ev": evidence})
     d["sites"] += 1; d["files"].add(f); d["lean"] += f.endswith(".lean"); d["own"][own] += 1; d["kinds"][kind] += 1
     if len(d["ex"]) < 3:
         d["ex"].append(f"{f}:{ln}")
@@ -124,11 +124,14 @@ for r in rows:
             or re.fullmatch(r"verity-network-certifier(?:/.*)?", low) or '"network_certifier"' in line:
         add(term, sp, "held by the Glossary row", f, ln, kind, own, "HELD", "", f"GLOSSARY.md:{GLOSSARY_ROW}: its domain tags, the party `network-certifier`, the record keys `\"network_certifier\"` and `network_certifier_run`")
         continue
-    if low in held_tok or (HELD_FILE.search(f) and low != "certifier"):
-        where = held_tok.get(low, f"{f}:{ln}")
-        add(term, sp, "held by a recorded or deployed file", f, ln, kind, own, "HELD", "", f"{where} holds the spelling")
+    bare = low in ("certifier", "certifiers")
+    if HELD_FILE.search(f) or any(d in m.FIXTURE_DIRS for d in f.split("/")[:-1]):
+        add(term, sp, "in a recorded or deployed file", f, ln, kind, own, "HELD", "", f"{f}:{ln} is a recorded, locked or deployed file that holds the spelling")
         continue
-    if low in shell_tok and low not in ("certifier", "certifiers") and kind in ("env", "shell", "python", "printed", "key", "prose"):
+    if not bare and low in held_tok:
+        add(term, sp, "held by a recorded or deployed file", f, ln, kind, own, "HELD", "", f"{held_tok[low]} holds the spelling")
+        continue
+    if not bare and low in shell_tok:
         add(term, sp, "read by a shell, deploy or configuration file", f, ln, kind, own, "HELD", "", f"{shell_tok[low]} reads the spelling")
         continue
     if low in ("certifier", "certifiers"):
@@ -161,7 +164,8 @@ for f in files:
 with open(out / "names.v2.tsv", "w", newline="") as fh:
     w = csv.writer(fh, delimiter="\t", lineterminator="\n")
     w.writerow(["spelling", "term", "context", "sites", "files", "lean_sites", "owners", "examples", "new", "kind", "class", "evidence"])
-    for (term, sp, ctx, _k, cls, new, ev), d in sorted(ctx_rows.items(), key=lambda kv: -kv[1]["sites"]):
+    for (term, sp, ctx, cls, new), d in sorted(ctx_rows.items(), key=lambda kv: -kv[1]["sites"]):
+        ev = d["ev"]
         w.writerow([sp, term, ctx, d["sites"], len(d["files"]), d["lean"], ", ".join(f"{o}:{n}" for o, n in d["own"].most_common(6)),
                     " ".join(d["ex"]), new, d["kinds"].most_common(1)[0][0], cls, ev])
 with open(out / "sites_attesters.tsv", "w") as fh:
