@@ -92,7 +92,8 @@ theorem sum_first_le {B : ℕ} : ∀ (l : List Json) (F : ℕ),
       (l.map fun j => jsz j + 1).sum ≤ l.length * (B + 1) + F
   | [], F, _ => by simp
   | a :: l, F, h => by
-    have ha : jsz a ≤ B + F := by simpa using h 0 (by simp)
+    have h0 := h 0 (by simp)
+    have ha : jsz a ≤ B + F := by first | exact h0 | simpa using h0
     have ht := sum_first_le l 0 (fun k hk => by
       have := h (k + 1) (by simp; omega)
       simpa using this)
