@@ -215,11 +215,11 @@ patterns = [
 ]
 
 [rewrite]
-# `test_merge.py` names what its recorded locks (`fixtures/merge/`) hold, and `auditor_line.py` writes texts its records
-# keep byte for byte (`benchmarks/remote_session/tests/test_recorded_texts.py`), so both keep the old names.
+# `test_merge.py` names what its recorded locks (`fixtures/merge/`) hold, and `auditor_line.py` and `block_record.py`
+# write texts their records keep byte for byte (each suite's `test_recorded_texts.py`), so they keep the old names.
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "**/fixtures/**", "fixtures/**", "*.patch",
            "**/TRUSTED.sha256", "uv.lock", "tools/research/src/research/store/**", "tools/verity/lean/tests/test_merge.py",
-           "benchmarks/remote_session/auditor_line.py"]
+           "benchmarks/remote_session/auditor_line.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py"]
 """
 
 
