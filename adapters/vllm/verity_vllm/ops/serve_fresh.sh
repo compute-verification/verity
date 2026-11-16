@@ -89,7 +89,7 @@ CHILD=""; STEP=start
 in_group() {   # a process of group $1 that is not a zombie
   local f s a
   for f in /proc/[0-9]*/stat; do
-    read -r s < "$f" 2> /dev/null || continue
+    { read -r s < "$f"; } 2> /dev/null || continue   # a process can exit between the glob and the read
     read -r -a a <<< "${s##*) }"
     [ "${a[2]:-}" = "$1" ] && [ "${a[0]:-}" != Z ] && return 0
   done
