@@ -2249,3 +2249,12 @@ def test_a_moved_site_pays_for_no_new_one_and_only_a_file_whose_count_falls_give
     assert c["verdict"] == "failed" and c["why"].startswith(
         f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
         f"(docs/c.md 0 -> 1)"), c["why"]
+
+
+def test_the_definitions_tests_are_the_integrations_and_keyed_as_beside_the_definitions():
+    path = "tests/adapters/vllm/verity_vllm/definitions/registry/test_a.py"
+    assert G.in_integration(path) and G.key_of(path) == "verity_vllm/definitions/tests/registry/test_a.py"
+    assert G.path_of(G.key_of(path)) == path
+    for path in ("tests/adapters/vllm/tests/pipeline/test_a.py", "adapters/vllm/verity_vllm/definitions/registry/a.py"):
+        assert G.path_of(G.key_of(path)) == path
+    assert not G.in_integration("tests/adapters/torch/test_a.py")

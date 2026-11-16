@@ -40,6 +40,13 @@ ALLOWLISTS = HERE / "allowlists"
 #: run from ``ROOT``
 TESTS = HERE.parent
 TESTS_ARG = os.path.relpath(TESTS, ROOT)
+#: the served Definitions' tests, which the lints name ``verity_vllm/definitions/tests/...`` (`rel`, `path_of`), as they named
+#: them beside the Definitions, and the argument naming them for a tool run from ``ROOT``
+DEFINITION_TESTS = HERE.parents[1] / "verity_vllm" / "definitions"
+DEFINITION_TESTS_KEY = "verity_vllm/definitions/tests"
+DEFINITION_TESTS_ARG = os.path.relpath(DEFINITION_TESTS, ROOT)
+#: every tests root, as a tool run from ``ROOT`` names it
+TESTS_ARGS = (TESTS_ARG, DEFINITION_TESTS_ARG)
 SKIP_DIRS = frozenset({"__pycache__", "tests"})
 
 
@@ -83,11 +90,15 @@ def library_files(suffix: str = ".py", root: Path | None = None) -> tuple[Path, 
 def rel(p: Path) -> str:
     if p.is_relative_to(TESTS):
         return f"tests/{p.relative_to(TESTS).as_posix()}"
+    if p.is_relative_to(DEFINITION_TESTS):
+        return f"{DEFINITION_TESTS_KEY}/{p.relative_to(DEFINITION_TESTS).as_posix()}"
     return (p.relative_to(ROOT) if p.is_relative_to(ROOT) else p.relative_to(REPO)).as_posix()
 
 
 def path_of(key: str) -> Path:
     """The file or directory a lint's key names (`rel`'s inverse for the integration's)."""
+    if key.startswith(f"{DEFINITION_TESTS_KEY}/"):
+        return DEFINITION_TESTS / key.removeprefix(f"{DEFINITION_TESTS_KEY}/")
     return TESTS.joinpath(*key.split("/")[1:]) if key.split("/")[0] == "tests" else ROOT / key
 
 

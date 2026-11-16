@@ -1,7 +1,7 @@
 """mypy's errors on the integration, held to ``allowlists/mypy.json``: mypy under vLLM's settings (``[tool.mypy]`` in
 ``adapters/vllm/pyproject.toml``), run from ``adapters/vllm`` with the mypy the root ``mypy`` dependency group pins,
-in two groups as vLLM's ``tools/pre_commit/mypy.py`` runs them: the library at its configured ``follow_imports = "silent"``,
-and ``tests/`` on its own at ``skip``.
+in groups as vLLM's ``tools/pre_commit/mypy.py`` runs them: the library at its configured ``follow_imports = "silent"``,
+and each tests root (``tests/``, the Definitions' tests) on its own at ``skip``.
 
 An error is keyed ``(file, kind, symbol, "")``: the file relative to ``adapters/vllm``, mypy's error code and the
 enclosing ``Class.function`` (``<module>`` at top level), with a count, so lines that move and types that change elsewhere
@@ -13,7 +13,7 @@ mypy finds other things.  So the list records the environment it was taken in (`
 that one, the suite's own, refusing any other rather than miscounting.  ``python -m tests.lint.test_mypy --record`` (from
 ``adapters/vllm``) writes the list from what this environment finds, as after a pin moves; the ratchet gate holds it to
 no growth.  The gate counts the list but can't rerun this lint, whose findings need the suite's environment, so it has no
-``NAME``: the suite runs it, both groups at once, which no cheaper test can stand in for.
+``NAME``: the suite runs it, every group at once, which no cheaper test can stand in for.
 
 In the suite, an error the list doesn't hold and an entry that matches nothing warn (``Bookkeeping``) and a later PR fixes
 them: a type error makes no claim false, and failing the suite would fail, and revert, each in-flight PR that adds one.  An
@@ -38,7 +38,8 @@ from . import test_ruff
 LIST = "mypy"
 RULE = "mypy with vLLM's settings (adapters/vllm/pyproject.toml's [tool.mypy])"
 #: (the paths of a group, from adapters/vllm; its ``follow_imports``, None: the configured one)
-GROUPS = ((("verity_vllm",), None), ((R.TESTS_ARG,), "skip"))
+#: each tests root its own group, so two roots' modules of one name (``conftest``) aren't one module twice
+GROUPS = ((("verity_vllm",), None), *(((t,), "skip") for t in R.TESTS_ARGS))
 CLEAN = (
     "tests/ops",
     "tests/protocols/linear",
@@ -77,7 +78,7 @@ def assert_recorded_environment() -> None:
 
 
 def errors() -> list[dict]:
-    """mypy's errors in both groups, run at once, each a record of mypy's JSON output."""
+    """mypy's errors in every group, run at once, each a record of mypy's JSON output."""
     procs = []
     for paths, follow in GROUPS:
         cmd = [sys.executable, "-m", "mypy", "--config-file", "pyproject.toml", "--cache-dir", "/dev/null", "-O", "json",
@@ -144,7 +145,7 @@ def test_clean_directories_have_no_error() -> None:
 
 
 def test_the_groups_cover_the_package_and_its_tests() -> None:
-    assert sorted(p for paths, _ in GROUPS for p in paths) == sorted([R.TESTS_ARG, "verity_vllm"])
+    assert sorted(p for paths, _ in GROUPS for p in paths) == sorted([*R.TESTS_ARGS, "verity_vllm"])
     assert all(d.startswith(("tests/", "verity_vllm/")) for d in CLEAN) and list(CLEAN) == sorted(set(CLEAN))
 
 

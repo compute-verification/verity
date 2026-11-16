@@ -196,6 +196,9 @@ SELF = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 INTEGRATION = "adapters/vllm"
 TESTS = f"tests/{INTEGRATION}/tests/"
 LINT = f"{TESTS}lint"
+#: the served Definitions' tests, which the integration's lints name as they named them beside the Definitions
+DEFINITION_TESTS = f"tests/{INTEGRATION}/verity_vllm/definitions/"
+DEFINITION_TESTS_KEY = "verity_vllm/definitions/tests/"
 #: the ruff lint (``test_ruff.py``, by its slug), its config, and the pyproject whose ``dev`` group pins its ruff
 RUFF_LINT = "ruff"
 RUFF_CONFIG = f"{INTEGRATION}/ruff.toml"
@@ -242,17 +245,22 @@ RUFF_FROM = {RUFF_VLLM_LINT: INTEGRATION}
 
 
 def in_integration(path: str) -> bool:
-    """Whether ``path`` is the integration's: under ``INTEGRATION`` or its tests (``TESTS``)."""
-    return path.startswith((f"{INTEGRATION}/", TESTS))
+    """Whether ``path`` is the integration's: under ``INTEGRATION`` or its tests (``TESTS``, ``DEFINITION_TESTS``)."""
+    return path.startswith((f"{INTEGRATION}/", TESTS, DEFINITION_TESTS))
 
 
 def key_of(path: str) -> str:
-    """How the integration's lints name a file of the tree: from ``INTEGRATION``, and its tests as ``tests/...``."""
+    """How the integration's lints name a file of the tree: from ``INTEGRATION``, its tests as ``tests/...`` and the
+    Definitions' tests as ``DEFINITION_TESTS_KEY``."""
+    if path.startswith(DEFINITION_TESTS):
+        return f"{DEFINITION_TESTS_KEY}{path.removeprefix(DEFINITION_TESTS)}"
     return f"tests/{path.removeprefix(TESTS)}" if path.startswith(TESTS) else path.removeprefix(f"{INTEGRATION}/")
 
 
 def path_of(key: str) -> str:
     """The file of the tree an integration lint's key names (`key_of`'s inverse)."""
+    if key.startswith(DEFINITION_TESTS_KEY):
+        return f"{DEFINITION_TESTS}{key.removeprefix(DEFINITION_TESTS_KEY)}"
     return f"{TESTS}{key.removeprefix('tests/')}" if key.startswith("tests/") else f"{INTEGRATION}/{key}"
 MOVE_CHECK = "tools/check/move_check.py"
 #: what move_check imports from its own checkout, as `research.queue`'s `move_scripts` lists it: the move scripts (the
