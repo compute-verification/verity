@@ -44,14 +44,12 @@ rows o' + 8 (c >> 1) + (c & 1) of B's leaf, o' = 32 (wn % 2) + 2 q (8 offsets).
 Each has a Boolean twin (``_v2``, traced from a `forms` builder, word view its ``_v1``). The segment dots' twins
 (`PouwSegDot_v2`, and `PouwSegDot0_v2` from 0 below) are bound to the wrapping s8 IMMA coordinate they compute
 (`census.silicon_step`), so census/v1 counts their gates as `tc:int8`, and serve none of their products (`census.serves_none`:
-Lean's `ResourceAccounting.Gates.roleOf` puts an H1 tile's lanes at `Place.other`). `PouwWinOk_v1` is the window test of
-`PouwSegCheck`'s retired version 2 (below); no check here calls it, and Lean's gate registry classes it.
+Lean's `ResourceAccounting.Gates.roleOf` puts an H1 tile's lanes at `Place.other`). No check here calls `PouwWinOk_v1`;
+Lean's gate registry classes it.
 
 The spot checks take no prefix word as witness: every word a fold absorbs is recomputed in the proof from committed operands
 and the coin, from T_(-1) = 0, so a thread's (or warp's) whole call is one unit and the committed value is binding by
-SHA-512 alone. Version 2 of `PouwSegCheck` and `PouwSegCheckDither`, a check of one segment j that took its window's
-S + 1 prefix-word sets as witness and tied only T_j to T_(j-1), is retired: a meet-in-the-middle over two of the free
-words opened any committed R_w.
+SHA-512 alone.
 
     PouwSegCheck_v3{KS, S, FOLD}  (a: Array<KS, Array<64, Array<32, i8>>>, asel: Array<16, bit>, u: Array<4, Array<32, i8>>,
                                    b: Array<KS, Array<64, Array<32, i8>>>, bsel: Array<16, bit>,
@@ -97,7 +95,7 @@ XOR), FOLD li (P = 1) or duo or fx1 (P = 2, st each lane's y then z); 1 exactly 
 the checkpoint after set s for every s < KS + m. rc is the warp's receipt, L = ceil(P (KS + m) / 512) leaves in order (at
 K = 8192, KS = 256 and m = 3: li's 259 words in one, duo's and fx1's 518 in two), and the words after the last
 checkpoint are unread. The checkpoint is a set's, never spaced wider: the binding proved without a whole-state assumption
-is a set's 4 words a chain. Its version 1, li's alone, is retired: v2 at FOLD li is its circuit.
+is a set's 4 words a chain.
 
 A statement holds the operand leaves and ``rc`` to the trees committed before and after the coin, and recomputes the
 noise, keys and selections from the coin and the sample.

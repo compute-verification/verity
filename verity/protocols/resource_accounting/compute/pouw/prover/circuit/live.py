@@ -76,8 +76,7 @@ A's count, and one whose m isn't the round's served rows opens no row of ``live-
 check the headers' caps and rounds would be the prover's hidden choice: with each round's count m_s held to the public
 schedule, a prover could still give request q another's cap, or a later round, and so move a decode row from one request
 to another. With it each request takes a decode row in round s ≥ 1 only when s < its public max_tokens. Credit reads this
-unit (`credit.LIVE_FN`) up to T = `PIECE_ROWS`. Its version 1, the first four checks without ``cap``, is retired: credit
-refuses its Program (`credit.NOT_LIVE`).
+unit (`credit.LIVE_FN`) up to T = `PIECE_ROWS`.
 
 **`PouwLiveRows_v1{T, R}`** is a round's live check cut by rows, for a T past `PIECE_ROWS`. v2 reads 3T + 3 rows, and
 Flock's composer lowers it as one unit inside its 2^27-bit block only up to T = 64 (T 128 takes a 2^28-bit block and T 512

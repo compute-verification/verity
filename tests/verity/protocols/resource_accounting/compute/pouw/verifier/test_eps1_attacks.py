@@ -8,8 +8,8 @@ committed operand leaves and the public noise, from `T_{-1} = 0`; the noise is `
 `seed_j = SHA-512(TAG ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))`.  Each attack below leaves one
 honest call and alters one thing; the scheme's check refuses it.
 
-A meet-in-the-middle, which opened the retired `PouwSegCheck_v2` through the prefix sets it took as witness, has no
-witness to meet here: no port of the scheme's checks carries a prefix word (`test_circuit_segment`).
+A meet-in-the-middle has no witness to meet: no port of the scheme's checks carries a prefix word
+(`test_circuit_segment`).
 
 `ATTACKS` is the machine-readable table (the PR cites it): each row is (name, what the cheater alters, why it is refused).
 """
