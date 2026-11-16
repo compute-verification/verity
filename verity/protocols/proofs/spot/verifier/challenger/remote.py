@@ -113,8 +113,8 @@ MAX_BATCH = 64
 any reply is read, so they must fit the stream's send buffer while the challenger writes its replies back."""
 RELEASE_HEAD = MAX_HEAD // 2
 """The most bytes the head of a withheld session's release frame holds (`release_frames`): half of `MAX_HEAD`, so a
-relay that pads each frame to whole cells of up to that size (the certifier's coin link, `coin_link.recut`) passes it
-on."""
+relay that pads each frame to whole cells of up to that size (the network attester's coin link, `coin_link.recut`)
+passes it on."""
 SEQUENCE = ("a client's frames are hello, then open {label, index, after} per coin, tree {nonce, spec} per coin tree and "
             "tree-open {after, n, round, stream, tree} per round of one, then close")
 SESSION_ID = f"a session id is at most {Ch.MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'"

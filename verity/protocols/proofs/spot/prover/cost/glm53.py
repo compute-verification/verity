@@ -20,9 +20,10 @@ model's stop ids (`STOP_IDS`), taken as a block of its own: the serving adapter'
 ``ignore_eos`` choice, and its rows are the rule's five parameters and its word, six rows, where the served block opens
 three: its ids, one request row for two of the parameters, and its word, the stop ids and the model's length being its
 statics. Its response tie (`ResponseTieStop_v1{O}`, O = T) holds the response row the network attester released to
-those ids and that stop word: the certifier's Definition, which the caller passes (``tie``). SPOT imports neither the
-adapter nor the certifier. Each is a candidate as the card's are, with its ANDs, its rows and its output bits read
-from its Definition, and a statement holding as many of it as its block allows, as Flock's composer sizes that block.
+those ids and that stop word: network attestation's Definition, which the caller passes (``tie``). SPOT imports neither
+the adapter nor network attestation's code. Each is a candidate as the card's are, with its ANDs, its rows and its
+output bits read from its Definition, and a statement holding as many of it as its block allows, as Flock's composer
+sizes that block.
 
 Both populations are registered at ``rate:1/1``, every block proved. `charged` says what a sample of a population
 leaves: the most of its blocks an accepted sample leaves incorrect at δ (the integrity profile's count bound, in exact
@@ -32,8 +33,8 @@ These rows are the plan's: they read no verdict, and say what a sampling design 
 
     uv run python verity/protocols/proofs/spot/prover/cost/glm53.py [--card PATH] [--requests N]
 
-``--stop T [--delta D]`` needs the stop block and the response tie from a caller that holds the adapter and the
-certifier (`main`'s ``blocks_of``).
+``--stop T [--delta D]`` needs the stop block and the response tie from a caller that holds the adapter and
+network attestation's code (`main`'s ``blocks_of``).
 """
 from __future__ import annotations
 
@@ -122,7 +123,7 @@ def totals(card: dict) -> dict[str, dict[str, float]]:
 
 def main(blocks_of: Callable[[int], tuple[Any, Any]] | None = None) -> int:
     """The card's totals and gaps; with ``--stop T``, a stop class's populations, whose stop block and response tie are
-    ``blocks_of(T)``: the adapter's and the certifier's Definitions, which a caller that holds both passes."""
+    ``blocks_of(T)``: the adapter's and network attestation's Definitions, which a caller that holds both passes."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--card", type=Path, default=CARD)
     ap.add_argument("--requests", type=int, default=1)

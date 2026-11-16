@@ -65,13 +65,13 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `--rows`). `--select-only` holds the select chunks alone, composed at any V, each wired to the chunk before it, with the
   rows they read from the step blocks committed as plain input rows that no proof block of the window writes.
 - `a5_network_attester.py` (`a5_tp.sh` with `STANDIN=network_attester`, `network_attester:altered`, `network_attester:pad`, `network_attester:pad-named` or `network_attester:swapped`):
-  A5 on a window with transfer gates, which no served window has yet: two chunks of the certifier's toy Definition whose ports are the
-  bucket rows of one connection's ingress and egress cells (a row a bucket, docket v2), committed under the certifier's
-  salts, proved whole (the work sampling design's selection All) beside a sampled rest, on a local challenger's coins or the verifier's
+  A5 on a window with transfer gates, which no served window has yet: two chunks of network attestation's toy Definition whose ports are the
+  bucket rows of one connection's ingress and egress cells (a row a bucket, docket v2), committed under the network
+  attester's salts, proved whole (the work sampling design's selection All) beside a sampled rest, on a local challenger's coins or the verifier's
   own. The proof blocks' wiring is the Program's (`network_attester_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
-  cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the certifier signed,
-  named by the proof blocks' value and each proof block's read (connection, cell) placed by the wiring the certifier signed
-  (`network_attester_rows.port`, after `check_registration` under the certifier's key), which refuses a foreign, a duplicate and a
+  cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the network attester signed,
+  named by the proof blocks' value and each proof block's read (connection, cell) placed by the wiring the network attester signed
+  (`network_attester_rows.port`, after `check_registration` under the network attester's key), which refuses a foreign, a duplicate and a
   padding-slot read by name; the altered run, and a statement made for another wiring of the proof blocks (a pad in a data cell's place,
   its rows under the Program's value, two proof blocks swapped: `--made-for`), are refused by Lean's registered reads. Its certifier run
   is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `network_attester_replay.py`'s: a served window's requests through the
@@ -114,7 +114,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol, in one job on an H200 node
   from a clone of the tree (`bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
-  few greedy requests from the certifier's traffic generator, and seals each window. Before the first request, the committer
+  few greedy requests from the network attester's traffic generator, and seals each window. Before the first request, the committer
   registers its weights under its own key (`prove_path.py weights-registration`). Without a docket, `NO WEIGHTS
   REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
   SPOT: the window's advice under that docket (`--weights-of-record`) and its request Programs, V3b's window
@@ -137,10 +137,10 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   directory that names: a kept compose cache, from which a later window under the same tree takes the circuits it
   shares and composes only the rest. No step removes a kept cache, and it holds every template's circuit composed into
   it, one of which can be past 100 GB.
-  With the certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and
+  With network attestation's piece split in two (`CERTIFIER_CHAIN_CMD` and
   `CERTIFIER_PERIOD_CMD`), V3c runs before the pieces instead: the chain after its window commit, beside its audit
   (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its `period.json` once both are done, whose answer
-  the certifier's piece reads. Each
+  network attestation's piece reads. Each
   step's verdict line is in `out/verdicts.txt`. The network attester's piece, the longest, starts as soon as the window is
   picked. No line counts a window's requests: the serve dir's request lists, serve-openai's log and the load's records,
   timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate, less the load's counts,

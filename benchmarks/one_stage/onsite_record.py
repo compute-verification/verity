@@ -118,13 +118,13 @@ notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields
 the public's ``scans[j]``), ℓ_{a,j} (``free``), k_{skip,j} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
 the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K, by which `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` bounds what the serving node
 sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
-of τ (the certifier's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
-``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding and
-collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here (`UNVALUED`);
-``delta`` splits eps into the scans' δ and the charged audits', with eps a phase and each charged audit's reading at
-δ_i where the public lists it (``charged_audits``; `DELTA`: what sets each, and what a smaller one costs); ``skip`` is
-k_{skip,j} each phase with its slot entries, every one of a tied audit drawn in part with a bound of at least one
-incorrect proof block (`SKIP`, and what drawing it whole costs).
+of τ (network attestation's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the
+answer's ``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding
+and collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here
+(`UNVALUED`); ``delta`` splits eps into the scans' δ and the charged audits', with eps a phase and each charged audit's
+reading at δ_i where the public lists it (``charged_audits``; `DELTA`: what sets each, and what a smaller one costs);
+``skip`` is k_{skip,j} each phase with its slot entries, every one of a tied audit drawn in part with a bound of at
+least one incorrect proof block (`SKIP`, and what drawing it whole costs).
 K is that statement's count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many
 connections k_sched and k_fail count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's
 caps aren't those; and ``verdict_line`` is the run's published line of the network attester's verdict (`LINE` in
@@ -229,7 +229,8 @@ ONSITE = "verity/remote-network/v0"
 VERDICTS = ("sampled proofs", "PoUW", "inference-only", "remote", "the network certifier", "onsite")
 #: the window report's rows, by verdict
 ROWS = {"sampled proofs": "integrity", "PoUW": "work", "the network certifier": "communication"}
-#: where the certifier piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
+#: where the network attestation piece leaves its period's case (`certifier_piece.CASE`), whose params carry the
+#: schedule and caps
 CASE = Path("pieces") / "certifier" / "case.json"
 #: the run's advice registration as it publishes it (`served_verdicts.py public-registration`), its compiler's cap ℓ_a
 REGISTRATION = "registration.json"

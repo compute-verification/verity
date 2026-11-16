@@ -51,8 +51,8 @@ Its guarantee is soundness, and it rests on:
 - an honest verifier: the challenger flips its coins after the docket is recorded and logs them, the verifier
   reads that log and the record the challenger wrote (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`,
   `RecordCustodyZKJ`), and it runs the Lean verifier;
-- where it reads the certifier's stamp, the certifier's own assumptions, which that layer states (`trusted-device` among
-  them, `verity/protocols/resource_accounting/network/verifier/PROTOCOL.md`).
+- where it reads the network attester's stamp, network attestation's own assumptions, which that layer states
+  (`trusted-device` among them, `verity/protocols/resource_accounting/network/verifier/PROTOCOL.md`).
 
 ## Guarantee and assumptions
 
@@ -252,11 +252,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     in the lock), whose docstring is its statement, and ACCEL's pooled guarantee
     `Pouw.Guarantees.Dither.FleetSound` takes it. A path across a host the developer controls would need an encrypted,
     authenticated channel, which the challenger doesn't have. Deployed, one auditor device runs the challenger and the
-    certifier, and a run's coins leave it only on the peer's certifier coin link, which the gate refuses to open
+    network attester, and a run's coins leave it only on the peer's certifier coin link, which the gate refuses to open
     without (`auditor.coin_ports`).
-  - `OneClock`, an assumption under the trusted auditor device, with no Lean statement yet: the challenger's release times and the certifier's
+  - `OneClock`, an assumption under the trusted auditor device, with no Lean statement yet: the challenger's release times and the network attester's
     ingress and receipt times are read on one clock. Deployed, that is the auditor device's. A challenger on a device of its own would have to keep its clock within
-    1.03 s of the certifier's, the offset ACCEL's timing allows.
+    1.03 s of the network attester's, the offset ACCEL's timing allows.
 - **The Python.** `verity.protocols.proofs.spot.verifier.one_stage` is the one-stage audit's reference and `service` the
   proof system over it; `optimize`, `candidates` and `costfit` plan a sampling design (`benchmarks/sampling_plan`).
   Core API lists each module.

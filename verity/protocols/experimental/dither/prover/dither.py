@@ -20,7 +20,8 @@ may take its A from the per-call pad instead (`fill_seeds`, `pad_rows`); it comm
 **The coins** are each stream's 512-bit seed, expanded as
 ``prg(seed, x, idx) = SHA-512(seed ‖ x ‖ be64(idx))``, x NUL-padded to 8 bytes. A served call's seeds come from the
 challenger's raw coin opened after its operand roots (`seeds`): seed_x = SHA-512(`SEEDS_TAG` ‖ coin ‖ operand-root
-receipt ‖ be64(call) ‖ x), the receipt being the digest of the certifier's signed receipt of the block's operand roots.
+receipt ‖ be64(call) ‖ x), the receipt being the digest of the network attester's signed receipt of the block's operand
+roots.
 
 * ``dA``, ``dB``: d[i, k] is bit k mod 512 (least significant first) of block i ceil(K / 512) + k div 512.
 * ``V``, ``U``: row r's entry c is ((w 161) >> 32) - 80 for w the little-endian u32 word r L′ + c of the stream.
@@ -255,8 +256,8 @@ def _x(x: str) -> bytes:
 
 def seeds(coin: bytes, receipt: bytes, call: int) -> dict[str, bytes]:
     """A served call's seeds: SHA-512(`SEEDS_TAG` ‖ coin ‖ receipt ‖ be64(call) ‖ x) for each stream x, from the
-    challenger's raw coin `coin` opened after the operand roots, the digest `receipt` of the certifier's signed receipt
-    of them, and the call's index `call` in its execution phase."""
+    challenger's raw coin `coin` opened after the operand roots, the digest `receipt` of the network attester's signed
+    receipt of them, and the call's index `call` in its execution phase."""
     if not 0 <= call < 1 << 64:
         raise ValueError(f"a call's index is a u64, not {call}")
     head = SEEDS_TAG + _digest("the coin", coin) + _digest("the operand-root receipt", receipt) + call.to_bytes(8, "big")

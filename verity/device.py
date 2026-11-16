@@ -179,7 +179,7 @@ PARENTS: dict[str, tuple[str | None, ...]] = {
 LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
 """The pairs of kinds a link may join, in either order. No link ends at an auditor's device."""
 AUDITOR_KINDS = ("certifier", "challenger", "auditor-host")
-"""The auditor's own: its devices, the network certifiers and the memory challengers, and its hosts."""
+"""The auditor's own: its devices, the network attesters and the memory challengers, and its hosts."""
 SCHEMES = ("lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0")
 """The signature schemes a registered key may be of: one LMS key that signs, and a root LMS key that certifies the
 keys that sign."""
@@ -905,17 +905,17 @@ class Registration:
         how the node reaches the outside.
 
         `certifier` is the id, the key and the key's scheme of a network attester of the auditor's that stands in
-        front of the node without splitting its interface (a process on another machine, say). It adds the certifier
-        and the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
+        front of the node without splitting its interface (a process on another machine, say). It adds the network
+        attester and the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
         stay. The storage path's rate is not in that sum and no certifier is linked to the path: a certifier's links
         say nothing of it. A certifier on a node any of whose interfaces has no rate is refused, by its id, since its
         links' rate would be below what it splits (a missing rate is never read as 0, nor left out of a sum). A certifier splits one host's way out, so each node names its own, and the key and scheme are the
         ones the auditor holds for the id or `owner` refuses the entry. None of the auditor's other devices is added.
 
-        `certifier_host` is the auditor's device the certifier runs in (`auditor_host`'s location, which states its
-        time base and its clock's drift): the entry adds it where the log has none, at `site`, and the certifier in
-        it, whose clock is then that host's (`Site.clock`, `Site.drift`). With none the certifier is under the site,
-        where it reads no clock and times nothing.
+        `certifier_host` is the auditor's device the network attester runs in (`auditor_host`'s location, which states
+        its time base and its clock's drift): the entry adds it where the log has none, at `site`, and the network
+        attester in it, whose clock is then that host's (`Site.clock`, `Site.drift`). With none the network attester is
+        under the site, where it reads no clock and times nothing.
 
         A file that states no `dram` leaf or no `disk` leaf is refused: its entry would pass `check` for `remote` with
         a host that holds less memory than the node has, and whatever reads the site would take the node for smaller
@@ -1152,7 +1152,8 @@ class Site:
         return (self.kind(k.ends[0]), self.kind(k.ends[1])) in ((a, b), (b, a))
 
     def is_boundary(self, k: Link) -> bool:
-        """A boundary link of the prover's: a host's link to the outside, or to the certifier that splits its uplink."""
+        """A boundary link of the prover's: a host's link to the outside, or to the network attester that splits its
+        uplink."""
         return self.joins(k, "host", "outside") or self.joins(k, "certifier", "host")
 
     def certified(self, k: Link) -> bool:
@@ -1688,7 +1689,7 @@ class Way(NamedTuple):
     bw: int | None
     """What it carries each way, in whole bits a second, rounded up; ``None`` where the file states no rate."""
     split: bool
-    """Whether a network certifier may split it: an interface, yes; the storage path, no."""
+    """Whether a network attester may split it: an interface, yes; the storage path, no."""
 
 
 def node_kinds(*, directory: Path | None = None) -> list[str]:
