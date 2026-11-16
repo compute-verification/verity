@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceFacts
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceDelta
+public import Proofs.Flock.SpotFlock.InstanceStmt.TraceDaA
+public import Proofs.Flock.SpotFlock.InstanceStmt.TraceDaB
 import Flock.HmRow
 import Flock.HmNets
 import Flock.Canon
@@ -58,12 +60,7 @@ import all Init.WF
 
 
 /-!
-# Δ of `x r`'s table, read by the kernel
-
-`HmRow.deltaL` at the statement's circuit is the list `EX` reversed (`deltaL_cO`), so `HmRow.delta`'s array is `EX`
-(`dA_cO`, as `Concrete.Trace.dA_cW`); the output rows' pairs are `OX` (`outPairs_cO`) and no output is pinned
-(`TraceFacts.pinPairs_cO`). So the statement's Δ is `EX ++ OX` (`da_stX`). Each is a file of its own so a kernel
-failure blocks only what reads it.
+# The statement's Δ is `EX ++ OX`
 -/
 
 @[expose] public section
@@ -80,23 +77,12 @@ namespace SpotFlock.InstanceStmt.TraceDa
 variable (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s5 s6 : String)
   (hello : ByteArray → Nat → String)
 
-theorem deltaL_cO :
-    (HmRow.deltaL (cO ls lh H C A B A' B' s1) 246784).1 = EX.reverse := by kernel_rfl'
-
-theorem dA_cO : (dA (cO ls lh H C A B A' B' s1) 246784).toList = EX := by
-  have h := congrArg Prod.fst (FlockDeploy.Concrete.deltaL_eq (cO ls lh H C A B A' B' s1) 246784)
-  rw [deltaL_cO] at h
-  simp only [FlockDeploy.Concrete.Φ, FlockDeploy.Concrete.φ, List.reverse_inj] at h
-  exact h
-
-theorem outPairs_cO : (SpotFlock.InstanceStmt.outPairs (cO ls lh H C A B A' B' s1)).toList = OX := by kernel_rfl'
-
 /-- **The statement's Δ is `EX ++ OX`.** -/
 theorem da_stX : (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).da.toList = EX ++ OX := by
   have hda : (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).da =
       oA (cO ls lh H C A B A' B' s1) (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).pin := rfl
-  rw [hda, TraceFacts.pin_stX, oA_eq, Array.toList_append, Array.toList_append, dA_cO,
-    outPairs_cO, TraceFacts.pinPairs_cO]
+  rw [hda, TraceFacts.pin_stX, oA_eq, Array.toList_append, Array.toList_append, TraceDaA.dA_cO,
+    TraceDaB.outPairs_cO, TraceFacts.pinPairs_cO]
   simp
 
 end SpotFlock.InstanceStmt.TraceDa
