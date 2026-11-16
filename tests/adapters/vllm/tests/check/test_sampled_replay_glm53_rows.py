@@ -5,8 +5,6 @@ the Program's spec text (`{"f64":...}` floats, `true` / `False`, `{"fn":...}` or
 values the kernel self-check binds, so each family is checked here on those spellings against its Definition's word reference."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 from verity.circuits.defs import bind, conformance_label

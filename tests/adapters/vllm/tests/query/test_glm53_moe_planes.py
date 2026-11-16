@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from verity_vllm.program.compact import expanded_file_args
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import copy
 import re
 

@@ -8,8 +8,6 @@ Call.  FlashMLA's sparse attention is `dsv4_flashmla`'s; the caches both read ar
 
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import re
 from dataclasses import dataclass
 

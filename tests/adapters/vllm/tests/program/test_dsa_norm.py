@@ -8,8 +8,6 @@ contracted eps is the same word at a power-of-two N).  `DsaLatentRow_v1` is prog
 agreement with these word views is circuit-check's (`boolean_dsa_norm.circuit-check.py`)."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 from verity.circuits.boolean import trace as TR

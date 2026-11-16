@@ -5,8 +5,6 @@ with the C4 / C128 compress the attention emits before it (`mla_compress`), as t
 
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import re
 from dataclasses import dataclass
 
