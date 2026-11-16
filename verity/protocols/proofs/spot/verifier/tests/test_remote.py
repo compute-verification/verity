@@ -22,9 +22,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.proofs.spot.device import challenger as C
-from verity.protocols.proofs.spot.device import remote as R
-from verity.protocols.proofs.spot.device.coins import ChallengerCoins, coins_within
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C
+from verity.protocols.proofs.spot.verifier.challenger import remote as R
+from verity.protocols.proofs.spot.verifier.challenger.coins import ChallengerCoins, coins_within
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program

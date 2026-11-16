@@ -1,6 +1,6 @@
 """The agent watch: free a cloud agent whose run is held, and record what it sees, from the control pod.
 
-    python3 agent_watch.py loop --log /data/agent-watch/events.jsonl     $CURSOR_API_KEY set; standard library only
+    python3 agent_watch.py loop --log /data/agent-watch/events.jsonl     $CURSOR_API_KEY set; the standard library and `research` on the path
 
 An agent hears Slack, Linear and timer events only between runs, and a run can hang after a tool call returns, for hours and for several coordinators at once, and without the watch only a
 person pressing Stop frees one. Every `POLL_S` the watch lists the agents (`GET /v1/agents`, which shows every agent on the account:

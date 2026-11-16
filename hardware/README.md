@@ -145,12 +145,12 @@ and what is not a number is not an entry. No latency is stated: nothing reads on
 
 `storage`, once a file, is the storage path: the node's way out that is no interface. A disk that is not the
 server's own, a network disk, can be attached to another machine or copied through whoever provides it, so what is
-written to it has left the node past every interface, where no network certifier can split it. The table names the
+written to it has left the node past every interface, where no network attester can split it. The table names the
 disk leaves that ride the path (`leaves`) and says why they leave (`source`). It states no rate: the path's rate is
 the one that bounds the node's disks together, the host card's `disk.read_max`, written once, there. Both nodes'
 disks all ride it. A server whose drives are all its own has no `storage` table and no such way out.
 
-A node file holds no clock or peak of a card, which are the cards', and no network certifier or memory challenger:
+A node file holds no clock or peak of a card, which are the cards', and no network attester or memory challenger:
 those are the auditor's devices, whose ids and keys are a run's, not a kind of node's.
 
 `load_node(kind) -> dict` returns the parsed file and refuses a number that is no entry, and a `sku` that names no
@@ -165,7 +165,7 @@ ceiling in `B/s` above 0, a rate above its tier's, and a DRAM rate that is not i
 
 `ways_out(node, host, card=None) -> tuple[Way, ...]` is the one reader of the ways out. Each is a `Way`: its
 `id`, `host/NAME` for an interface and `host/storage` for the storage path; `bw`, its rate in whole bits a second,
-rounded up, or `None` for an interface that states none; and `split`, whether a network certifier may split it, which
+rounded up, or `None` for an interface that states none; and `split`, whether a network attester may split it, which
 is so of an interface and not of the storage path. The interfaces come first, in the file's order. The storage path's
 `bw` is `leaves`' rate for the disks together, so the file writes no number twice. It refuses an interface that
 states neither a rate nor its read, a storage path that does not name disk leaves of the file's, each once, and a
@@ -190,7 +190,7 @@ node none of whose ways out the auditor's hardware sits on. Two kinds of way say
 (`Link.unmediated`, from the way's kind): an interface that reads no line rate, whose link states no capacity ("no
 line rate stated"), and the storage path ("storage path"). `onsite` takes their reasons, and a site with either is
 not mediated (`Site.mediated`). An interface with a rate says none, so `onsite` refuses the node by `uncertified`
-until a certifier splits it. Where a network certifier stands in front of such a node without splitting its interface (a process on
+until a certifier splits it. Where a network attester stands in front of such a node without splitting its interface (a process on
 another machine that reaches the server through a forward), `node_entry(..., certifier=(id, key, scheme))` registers it too:
 the certifier under the site and a certified way out, host to certifier and certifier to outside, each at the
 interfaces' rates summed. The ways' own links stay beside them, so `onsite` still refuses the node, and no

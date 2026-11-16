@@ -2,7 +2,7 @@
 
 PoUW as a protocol option on vLLM: the option at each linear layer and its hooks on the engine. What runs a matrix
 multiply under PoUW, commits it and manages its window is PoUW's serving package
-(`verity.protocols.accounting.pouw.prover.serving`, one directory a scheme). This package hands each call to it through
+(`verity.protocols.resource_accounting.compute.pouw.prover.serving`, one directory a scheme). This package hands each call to it through
 `run_matmul` (``ncp-v1``, ``ncp-v2``, Pearl-C and the lead) or `observe_matmul` (H1), and imports nothing of PoUW
 except the names that package exports. The device code is the PyTorch adapter's (`verity_torch.pouw`): Pearl-C's run
 (`PearlCDeviceRun`, `pearl_c_weight_roots`, `hook_steps`) and H1's receipts and device tables (`Receipts`,
@@ -27,7 +27,7 @@ package's docstring states the option, and each module's docstring says what the
 - **Loaded by:** the adapter's selector (`verity_vllm.protocols`), its `pipeline`, `acquire`, `check.replay` and
   `program.predict` packages; and the benchmarks under `benchmarks/pouw/`, `benchmarks/harness/`,
   `benchmarks/one_stage/` and `benchmarks/prove_path/`.
-- **Loads:** `verity.protocols.accounting.pouw.prover.serving` (its exports only), `verity_torch.pouw` (its exports only)
+- **Loads:** `verity.protocols.resource_accounting.compute.pouw.prover.serving` (its exports only), `verity_torch.pouw` (its exports only)
   and `verity.protocols.proofs.spot`;
   the adapter's `protocols` (the selector and `interface`), `engine` and `program.frontend`; and numpy, torch and vLLM
   inside the functions that use them.

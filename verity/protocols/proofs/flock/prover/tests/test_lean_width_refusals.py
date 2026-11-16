@@ -12,7 +12,7 @@ import pytest
 from test_lean_verifier import LEAN, VERIFIER
 
 
-INFERENCE_ONLY_SCRIPTS = Path(__file__).resolve().parents[4] / "policy" / "inference_only" / "verifier" / "lean" / "scripts"
+INFERENCE_ONLY_SCRIPTS = Path(__file__).resolve().parents[4] / "workload_classification" / "training_detection" / "inference_only" / "verifier" / "lean" / "scripts"
 
 
 def _tile_window(bits: bool) -> str:

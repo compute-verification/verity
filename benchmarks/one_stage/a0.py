@@ -36,7 +36,7 @@ from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
 from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
 from verity_flock.input_sets import InputSet
-from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier.one_stage import (
     audit,
     draw as D,

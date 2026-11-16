@@ -70,7 +70,7 @@ def _timed_alone(priced: Mapping, share: float) -> tuple[str, str]:
 
 def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, count: Mapping, share: float,
             network_check: float, row: str, served: Mapping, stop: Mapping | None = None) -> list[dict]:
-    """Every input with its mark and source: the compute audit's from its rows of record, the network certifier's
+    """Every input with its mark and source: the compute audit's from its rows of record, the network attester's
     as its calculator marks them, and those both read, among them the request the calculator counts and what it is.
     ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0, on the
     execution phases the reader's answer holds (``term``'s `stop`); where it names none, no sum leaves the output
@@ -203,23 +203,23 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
           served: Mapping[str, Any] | None = None, store: Any = None, root: Path | None = None,
           local_only: bool = False) -> dict:
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
-    part at ``share`` of total compute for each scope of record, the network certifier's rows at the world's year
+    part at ``share`` of total compute for each scope of record, the network attester's rows at the world's year
     for a class of at most ``response_ids`` ids a response with each execution phase's scan at ``scan_delta`` (None:
     the δ `certifier` takes from `PERIOD_ERROR`), and the two side by side for each scope and monitoring period,
     summed under each of `TOGETHER`. It refuses rows of record priced over other requests than the network
-    certifier's part counts.
+    attester's part counts.
 
     Every figure carries the error summed over everything it covers, and one whose error is 1 or more carries no
-    amount (`NO_BOUND`). A scope's monitoring period holds the network certifier's ε (`eps`), the one its rows over
+    amount (`NO_BOUND`). A scope's monitoring period holds the network attester's ε (`eps`), the one its rows over
     that scope and period carry, their scans' δ summed over every link's execution phases; the compute audit's δ
     over the period (its `compute_audit`'s `delta`); and the sum of the two (`error`), what the two together fail
-    with at most, None for a scope no run of record holds. Where `eps` is 1 or more the network certifier's figures
+    with at most, None for a scope no run of record holds. Where `eps` is 1 or more the network attester's figures
     of that scope and period, the output count among them, are None, and where `error` is, the sums are. A row of the
-    network certifier's own over the world's year whose ε is 1 or more is held without its `AMOUNTS`.
+    network attester's own over the world's year whose ε is 1 or more is held without its `AMOUNTS`.
 
-    A sum is at the network certifier's jitter bound of record. Its `label` is its row's own (None on most): where
+    A sum is at the network attester's jitter bound of record. Its `label` is its row's own (None on most): where
     set, every figure of the row is printed under it. Its `with_set_time_card` is the same sum at the other jitter
-    bound, with the label the network certifier's document gives a figure there. A scope's `output_count` is what a
+    bound, with the label the network attester's document gives a figure there. A scope's `output_count` is what a
     response's output count is charged while the server chooses it, the schedules of the row `OUTPUT_COUNT`, with
     the rows whose sums take it at 0 (`at_zero_in`). Those are named from the stop verdicts' reader's answer and
     never from a schedule that reads 0: the rows of `TOGETHER` among the term document's `stop`'s `rows`, where the

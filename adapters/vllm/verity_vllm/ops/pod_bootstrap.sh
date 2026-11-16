@@ -96,7 +96,8 @@ uv pip show --python "$PY" torchcodec 2>/dev/null | grep -qx "Version: ${TORCHCO
   || uv pip install --python "$PY" --extra-index-url https://download.pytorch.org/whl/cu129 --index-strategy unsafe-best-match "$TORCHCODEC" \
   >>"$OUT/pip.log" 2>&1 || fail PIP "$TORCHCODEC: $(tail -1 "$OUT/pip.log")"
 # the `verity-vllm` launcher ([project.scripts] entry point); verity_vllm resolves from PYTHONPATH like every process on the pod
-printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nsys.exit(main())\n' "$PY" > "$VENV/bin/verity-vllm" \
+# guarded as pip's are: a spawned child (serve-openai's seal process) imports it again as __mp_main__
+printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nif __name__ == "__main__":\n    sys.exit(main())\n' "$PY" > "$VENV/bin/verity-vllm" \
   && chmod +x "$VENV/bin/verity-vllm" || fail VENV "cannot write $VENV/bin/verity-vllm"
 [ "${#OWN_CACHES[@]}" -eq 0 ] || rm -rf "${OWN_CACHES[@]}"
 

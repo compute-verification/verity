@@ -69,8 +69,8 @@ grep '^POUW-DEV ' "$Q/pouw.log"
 say "piece: served_verdicts.py pouw exit $rc after $(took "$t")$(taken "$P/check/check.log" "its Lean answers: ")"
 
 t=$(date +%s)
-EXE=$TREE/verity/protocols/accounting/pouw/verifier/lean/check/.lake/build/bin/pouw-period
-(cd verity/protocols/accounting/pouw/verifier/lean/check && lake build pouw-period) > "$Q/pouw-period-build.log" 2>&1 \
+EXE=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/.lake/build/bin/pouw-period
+(cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/check && lake build pouw-period) > "$Q/pouw-period-build.log" 2>&1 \
   || say "period: pouw-period doesn't build (its log in the serve dir's private/pouw), so the period's piece is missing"
 [ -x "$EXE" ] || EXE=
 rm -rf "$Q/period"
