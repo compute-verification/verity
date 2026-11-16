@@ -1,25 +1,25 @@
 # Registration: design
 
-Where registration's code is, what the log's sections say in full, and how the check refuses. `README.md` says what
+Where registration's code is, what the log's sections say in full, and how the check refuses. `../README.md` says what
 registration is and what each kind of entry registers.
 
 ## Where the code is
 
 The accounting protocol that runs once, before any challenge: a deployment's registration log and its check.
-Its Lean check is `verifier/lean/` (the Lake package `core_registration`: `RegistrationLog.lean`, and the
+Its Lean check is `lean/` (the Lake package `core_registration`: `RegistrationLog.lean`, and the
 `core-registration` executable, `RegistrationLog/Main.lean`), on the interface every core protocol implements
-(`../interface/`), and its Python verifier, until the Lean replaces it, is `verifier/registration.py`. The package
+(`../../interface/`), and its Python verifier, until the Lean replaces it, is `registration.py`. The package
 also holds registration's check on the Site (`RegistrationLog/SiteCheck.lean`: each site entry's checks and refusal,
-the inventory a log is held to, the log's head and its check, over the interface's Site, `../interface/CoreProtocol/Site.lean`),
+the inventory a log is held to, the log's head and its check, over the interface's Site, `../../interface/CoreProtocol/Site.lean`),
 with their guards (`RegistrationLog/SiteV2Guards.lean`), and serves the Site's port (`site-difftest`, `RegistrationLog/SiteDifftest.lean`), which its suite
-(`verifier/lean/tests/test_site_difftest.py`) holds to `verity.device`.
+(`../../../../tests/verity/protocols/registration/verifier/lean/test_site_difftest.py`) holds to `verity.device`.
 
-## The registration log (`verifier/lean/RegistrationLog.lean`)
+## The registration log (`lean/RegistrationLog.lean`)
 
 `Core.Registration` is a deployment's one registration log, which every subprotocol and both composites read. It is
 append-only: each entry names the head of the log before it (`previous`), the digest of its last entry or of its
 composite's genesis, so the head names the whole log. An entry is one of three kinds, each with its own versioned
-format (the table in `README.md`).
+format (the table in `../README.md`).
 
 Registration registers the site, θ, `B` and each day's registered circuit, not the circuit `B` builds. A subprotocol's
 Program and parameters, and the proof system, are that protocol's public verifier parameters, not entries of the log;
@@ -38,4 +38,4 @@ registered compiler and the days' registered circuits, `View.declared?`, at the 
 `Core.Site.Registration.Auditor`), the log as commitment (`{"composite", "entries"}`, its head the digest) and `{}` as
 evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside
 ASCII without DEL as `Core.canonicalJson` does. `verity.protocols.registration.verifier.registration` is
-its Python, held to it by its difftest (`../../../tests/verity/protocols/registration/verifier/lean/test_registration_difftest.py`).
+its Python, held to it by its difftest (`../../../../tests/verity/protocols/registration/verifier/lean/test_registration_difftest.py`).
