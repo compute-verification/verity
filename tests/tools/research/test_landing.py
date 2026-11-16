@@ -1398,7 +1398,7 @@ MIRRORED = {
     "hardware/cards.toml": "", "tests/hardware/test_cards.py": "", "tools/config/x.py": "",
     "tests/verity/pyproject.toml": '[tool.pytest.ini_options]\ntestpaths = ["."]\n', "tests/verity/test_a.py": "",
     "tests/test_root.py": "",
-    "tests/benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw-bench"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+    "benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw-bench"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
 }
 
 

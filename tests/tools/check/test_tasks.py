@@ -129,7 +129,7 @@ def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
 
 
 @pytest.mark.parametrize("fixtures, line", [
-    ("tests/tools/verity/lean/fixtures", None),
+    ("tools/verity/lean/tests/fixtures", None),
     ("tests/tools/verity/lean/fixtures", 'FIXTURES = HERE.parents[2] / "tests" / "tools" / "verity" / "lean" / "fixtures"')])
 def test_a_change_to_the_controls_fixtures_touches_every_lean_audit_wherever_they_are(tree, fixtures, line):
     """Every Lean check run builds the controls' packages (`check.FIXTURES`), so a change to one reruns each audit, also once
