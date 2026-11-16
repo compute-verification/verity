@@ -7,7 +7,6 @@
     "build": "benchmarks/stacked_share/job.sh",
     "int8-checkpoint": "tests/adapters/vllm/tests/protocols/pous_gpu.sh",
     "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
-    "serve-openai": "adapters/vllm/tools/served_run/serve.sh",
     "served-match": "adapters/vllm/verity_vllm/ops/served_build.sh",
     "served-pin": "benchmarks/served_commit/served_arm.sh",
     "serving-rows": "benchmarks/one_stage/a5.sh",
