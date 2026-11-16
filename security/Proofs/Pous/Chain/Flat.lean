@@ -29584,6 +29584,9 @@ def ChainBandPubMeets14Global (d : ℕ) : Prop :=
       .sequential 5 (2 ^ 20) 111 ((2⁻¹ : ℝ≥0∞) ^ 128)
 
 
+theorem band_pub_iff_64 (d : ℕ) : Pous.BandChain.ChainBandPubMeets64 d ↔ Pous.BandChain.ChainBandMeets64 d :=
+  forall_congr' fun _ => pubMeets_exact_iff _ (Pous.BandChain.chainBand_encDec _ _ _ _ _)
+
 theorem band_pub_iff_14 (d : ℕ) : ChainBandPubMeets14 d ↔ Pous.BandMulti.ChainBandMeets14 d :=
   forall_congr' fun _ => pubMeets_exact_iff _ (chainBandSeg_encDec _ _ _ _ _ _)
 
