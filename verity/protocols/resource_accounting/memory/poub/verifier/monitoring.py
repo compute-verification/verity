@@ -6,10 +6,10 @@ answer as `Poub.Protocol.certify` publishes it and that session's error in its v
 The whole error is the ledger's for the session's openings read pooled (its `horizon`): the openings' pooled bound's δ₀
 (2^-101) with AuditRO's slack a pass, the sample's terms (`sample`: the rejection ⌈W/g⌉·s/2^256, the session's openings
 coins at its `samples` s each, and the receipts' binding term) and the sketch's term at the prover's budget (`sketch`:
-`timing.sketch_failure`; 0 for a receipt that is no sketch). The answer's own `eps` is δ₀ + ⌈W/g⌉·s/2^256, the
-sample term (`LineHeldAtSubprotocol`'s), the error of "U − W receipts are correct"; a correct receipt is
-a read only on the sketch bound's event, so a table that prints `q_bytes` as reads carries the whole error. An error
-below the answer's `eps` is not that session's, and `table` refuses it.
+`timing.sketch_failure`; 0 for a receipt that is no sketch). The answer's own `eps` is the constant 2^-100 inside
+`period.refusal`'s caps, which bounds those terms (not the openings' PRF advantage), and 0 outside them, where `q_bytes` is 0; a correct receipt is a read
+only on the sketch bound's event, so a table that prints `q_bytes` as reads carries the whole error, and the larger of
+the ledger's and the answer's `eps`.
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
 T = machines·⌊period/window_s⌋ sessions in a period (the core's `block_count`), each on its own live coins, against one
@@ -63,7 +63,7 @@ def _share(x: int, of: int) -> str:
 def whole_error(error: Mapping[str, Any] | None, eps: Fraction) -> tuple[Fraction, dict[str, float]]:
     """A session's whole error from its ledger's `error` (`ledger.Gamma.to_json`'s): the pooled reading's total
     (`horizon`) at the float's exact value, and the ledger's terms of it beyond its own δ₀ and slack: the sketch's and
-    the sample's two. Refused when it is no such object, or is below `eps`, the answer's (module docstring)."""
+    the sample's two, raised to `eps`, the answer's, where it is below it. Refused when it is no such object."""
     try:
         p = Fraction(error["horizon"])
         terms = {"sketch": float(error["sketch"]), "binding": float(error["draw"]["binding"]),
@@ -72,10 +72,7 @@ def whole_error(error: Mapping[str, Any] | None, eps: Fraction) -> tuple[Fractio
         raise ValueError("a period's table reads the session's whole error from its verifier's ledger, the error of "
                          "ledger.declared(record, node)'s γ (its horizon, sketch and draw terms; --ledger), not "
                          f"{error!r}") from e
-    if p < eps:
-        raise ValueError(f"the ledger's error, {float(p):.4g}, is below the answer's eps, {float(eps):.4g}, which it "
-                         "holds with the sketch's term: it is not this session's")
-    return p, terms
+    return max(p, eps), terms
 
 
 def _observed(answer: Mapping[str, Any], error: Mapping[str, Any] | None) -> dict[str, Any]:

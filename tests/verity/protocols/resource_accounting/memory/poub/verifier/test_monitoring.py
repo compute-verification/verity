@@ -205,9 +205,11 @@ def test_an_error_that_is_not_the_sessions_ledgers_is_refused():
         monitoring.table(ALL_SAMPLED, None, 1, 600)
     with pytest.raises(ValueError, match="reads the session's whole error from its verifier's ledger"):
         monitoring.table(ALL_SAMPLED, {"horizon": float(EPS)}, 1, 600)
+
+
+def test_a_ledger_error_below_the_answers_eps_is_read_at_the_eps():
     below = ledger_error() | {"horizon": float(D0)}
-    with pytest.raises(ValueError, match="is below the answer's eps, .*: it is not this session's"):
-        monitoring.table(ALL_SAMPLED, below, 1, 600)
+    assert monitoring.table(ALL_SAMPLED, below, 1, 600)["observed"]["error"] == float(EPS) > float(D0)
 
 
 def test_the_cli_reads_a_subprotocols_bandwidth_json_and_the_sessions_ledger(tmp_path, capsys):

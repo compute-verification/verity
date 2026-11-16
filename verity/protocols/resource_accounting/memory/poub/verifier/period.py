@@ -21,8 +21,9 @@ Every call to the session is an event of the verifier's log with the clock readi
 the registration are the core case (`case`) that `Poub.Protocol` replays. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s `q_bytes` is the
 receipts not shown wrong, the receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a
-`BLOCK_BYTES` block each, at the constant `eps` 2^-100 inside the caps `refusal` names, as the Lean's `certify`
-computes them (`Properties.Poub.Subprotocol.PublishedEps`), and 0 at `eps` 0 outside them.
+`BLOCK_BYTES` block each, at the constant `eps` 2^-100 (not counting the openings' PRF advantage) inside the caps
+`refusal` names, as the Lean's `certify` computes them (`Properties.Poub.Subprotocol.PublishedEps`), and 0 at `eps` 0
+outside them.
 """
 
 from __future__ import annotations

@@ -56,12 +56,13 @@ verifier times every pass and checks each one's answers against the store's comm
 The first line is the share of the card's memory read rate, at its data sheet's read bandwidth, that one accepted
 session leaves uncertified: the session's γ in its verifier's ledger at the specification's rate. 0 would mean the
 whole read rate over the session was certified as spent reading the store, the arena the card serves from. **The
-target is 0.14 at an error of at most 2^-100.**
+target is 0.14 at an error of at most 2^-100, not counting the openings' PRF advantage.**
 
 - **Its error** is printed beside it with its power of two, as `δ = 2.8e-05 (2^-15.1)`. It reads
   `δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)`: δ is the chance, over the verifier's coins, that
   the share is wrong, and each window's adv_t is a prover's edge at telling SHA-512's output from random, which the
-  number names but neither prices nor assumes away. Neither it nor the verifier's published ε (`period.eps`) holds the
+  number names but neither prices nor assumes away. Neither it nor the verifier's published ε (`period.certified`'s `eps`, the constant 2^-100, not counting the
+  openings' PRF advantage, for a paced 64-row session inside its caps and 0 otherwise) holds the
   network attesters' term δnet, the chance their count of what enters the node is wrong: `LineHeld`'s bound carries
   it as a term of its own (`IngressCounted`), and nothing here prints it. The error is priced against one prover, one that makes at most
   2^80 SHA-512 compressions over the session on any hardware (`audit.QUERIES_LOG2`). At the 16 sketch rows a `--local`
