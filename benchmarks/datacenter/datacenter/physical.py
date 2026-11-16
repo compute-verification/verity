@@ -131,8 +131,8 @@ class Datacenter:
     fabric: list[DeviceEntry] = field(default_factory=list)
     links: list[LinkEntry] = field(default_factory=list)
     cadence: Cadence = field(default_factory=Cadence)
-    #: every link between two blocks' certifiers is a sealed pair link (the certifier's `Proxy(pair=…)`, PROTOCOL.md
-    #: "Sealed pair links"), so what crosses from one block to another is ciphertext off the two certifiers, and the
+    #: every link between two blocks' certifiers is a sealed pair link (the network attester's
+    #: `Proxy(pair=…)`), so what crosses from one block to another is ciphertext off the two certifiers, and the
     #: export is charged at the facility boundary only (`Placed._exported`). Off by default.
     sealed: bool = False
 

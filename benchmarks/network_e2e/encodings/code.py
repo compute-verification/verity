@@ -2,7 +2,7 @@
 
 The advice (I1 v0, `verity/protocols/resource_accounting/network/verifier/advice.py`) is everything serving made unpredictable, and its
 length is the leak, charged as `A_c` in the certifier's accepted-runs bound
-(at most `#Ac · #Σ_sync^W · D^(W·T)` observation sequences, the certifier's `PROTOCOL.md`, "Capacity"). This module codes
+(at most `#Ac · #Σ_sync^W · D^(W·T)` observation sequences, `security/Definitions/Certifier`). This module codes
 three subjects, each with four codes, all prefix-free and all fixed before the run by a registered `Codebook`:
 
 - **v0**: I1 v0's fields as the advice module defines them (`requests`; `steps` with their rows, a cache hit with its

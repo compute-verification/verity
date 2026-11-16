@@ -14,7 +14,7 @@ segment.
     coder = (low[32], high[32], open, x, used, ok)
     KTContext_v1{C, NW}            (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
 
-Under advice v1 (the certifier PROTOCOL's "Advice v1") each certifier window is one terminated segment of the
+Under advice v1 each window is one terminated segment of the
 32-bit Witten–Neal–Cleary arithmetic coder (`verity_vllm.pipeline.advice_code.arith`, `ArithEncoder`), as its window
 coder (`window_code`) codes it: the window's counts, then its values (the replay's decisions, each a bit at the
 registered book's KT estimate for its context, and the arrival order's deviations, integers). The compile
@@ -89,7 +89,7 @@ the composition keeps as a 2-bit counter (C = 3). Async's lag bits take one cont
 **A window's charge** (`ChargeCount_v1{N}`) is the one call the compile slice's proof block makes a window, for a window
 that sends only decisions (no hits, resumes, order entries or lag bits: the compile slice's class). Its N slots are the
 window's decisions in order, `en` (the slot holds one) and `bit` (the decision), and a slot with `en` 0 changes nothing.
-In the replay's proof blocks they are the ones the window's load loads (`protocol/charge-chain.md`). It counts
+In the replay's proof blocks they are the ones the window's load loads (`charge_chain`). It counts
 `window_code.code_executionPhase`'s segment for them:
 - n_arrived, the enabled slots' count, as the book's Exp-Golomb bin, one general step at the bin's (cum, freq, total)
   read from the public table by a one-hot of the count's bit length, then, once n ≥ 2, its offset in the bin, one more

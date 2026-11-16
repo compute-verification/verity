@@ -1,6 +1,6 @@
 """A whole window charged: its decisions, its hits (advice v1 sends none), the arrival order's deviations and the
 requests' length terms, every count and every value as `code_v1` codes them, with the carry chained from window to
-window (`verity/protocols/resource_accounting/network/verifier/protocol/charge-chain.md`, "The whole window").
+window (`verity.protocols.resource_accounting.network.verifier.charge_chain`).
 
     ChargeCount_v2{N, H, O, L}  (book, carry, en[N], bit[N], hen[H], short[H], oen[O], p[O], r[O], qen[L], mt[L],
                                  olen[L]) -> (ok, bits[CW], carry')

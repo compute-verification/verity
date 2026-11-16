@@ -718,7 +718,7 @@ def _tz(x: int) -> int:
 
 
 def test_the_parts_ands():
-    """Each composite is its parts: what the cost table in PROTOCOL.md extrapolates from."""
+    """Each composite is its parts."""
     sh, a = SMALL, HC.ands
     route, cell = a(bind(IT.IoTieRoute, W=sh.W, D=sh.D)), a(bind(IT.IoTieCell, B=sh.B))
     assert route == sh.W * sh.switches
