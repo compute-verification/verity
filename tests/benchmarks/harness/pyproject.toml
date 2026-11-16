@@ -1,0 +1,189 @@
+# The suite of the distribution `verity-bench`: a virtual member that depends on it, so the suite keys on what the
+# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.
+[project]
+name = "verity-bench-tests"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["verity-bench"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+addopts = "-q -p no:cacheprovider"
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["test_bench.py", "test_bench_engines.py", "test_bench_results.py",
+            "test_bench_resume.py", "test_bench_served.py", "test_env.py",
+            "test_spot_status.py", "test_steady_launch.py", "test_steady_node.py",
+            "test_steady_node_kept.py", "test_steady_node_refusals.py", "test_steady_point.py",
+            "test_steady_runs.py", "test_steady_specs.py"]
+# The harness is a user of the vLLM integration. Its fake-engine tests import
+# the public hook set and exercise the integration-facing arm contract, and
+# `build_bound` reads the protocol options' `requires_build` to refuse CUDA
+# graphs for arms whose served kernels are bound to a row Build. Dispatch names
+# a queue kind from benchmarks' kinds file, which a test checks every spec has. The README is the
+# harness's contract, and a test pins it to the code. The bandwidth spec's setup must export every library variable
+# the bandwidth audit's arms read and build from sources that exist, and the breakdown's arms are its `BandwidthArm`s, which
+# a test builds (it imports the spans module). served_commit's arm gates on the run phases
+# the runner names, which a test checks with a fake committer; it and its stock profiling arm read only the public
+# names of the engine the harness builds, which a test checks on its local-checkpoint engine; its profiling arms
+# write each run's records after its timed run, which a test checks with the same fakes; and its TP decode
+# driver's phases, batches and gate are tested on recorded shapes. A Pearl-C protocol arm's own gate is the
+# experimental Pearl-C arm's call check, which a test runs on a fake device run; `served_passes.py arm` writes a spec's
+# Pearl-C arm as serve-openai's --protocols-config, which a test runs on the H200 spec. The served table reads each result's
+# labels through from the store's remote (research's labels_sync, which research doesn't export), which a test checks on a
+# directory remote. A steady-state point refuses a node that can't run `gpu-lease` and names the lease tool's script to
+# put on its path, which a test checks is that script of the tree.
+inputs = [
+    "tools/research/src/research/store/labels_sync.py",
+    "tools/research/src/research/pods/sh/gpu_lease.sh",
+    "benchmarks/pouw/pearl_c_vllm/bench_arm.py",
+    "benchmarks/pouw/pearl_c_vllm/served_passes.py",
+    "benchmarks/pouw/settings.py",
+    "benchmarks/harness/README.md",
+    "benchmarks/served_commit/arm.py",
+    "benchmarks/served_commit/prof_arm.py",
+    "benchmarks/served_commit/tp_decode.py",
+    "benchmarks/harness/specs",
+    "infra/cluster/kinds/benchmarks.toml",
+    "adapters/vllm/verity_vllm/engine/hooks.py",
+    "adapters/vllm/verity_vllm/protocols/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/credit_gate.py",
+    "adapters/vllm/verity_vllm/protocols/interface.py",
+    "adapters/vllm/verity_vllm/protocols/pous.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/circuit.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/device.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/commit.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/handoff.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/records.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py",
+    "adapters/torch/verity_torch/pouw/h1/registered_device.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/requests.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/static.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/window.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/native.py",
+    "adapters/torch/verity_torch/pouw/pearl_c/passes.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py",
+    "adapters/torch/verity_torch/pouw/pearl_c/graphs.py",
+    "adapters/torch/verity_torch/pouw/pearl_c/grouped.py",
+    "adapters/torch/verity_torch/pouw/pearl_c/host.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/kernel.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/lanes.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/manifest.py",
+    "adapters/torch/verity_torch/pouw/pearl_c/screen.py",
+    "adapters/torch/verity_torch/pouw/pearl_c/screen_kernels.py",
+    "adapters/torch/verity_torch/pouw/pearl_c/whole.py",
+    "adapters/vllm/verity_vllm/protocols/spot.py",
+    "adapters/torch/verity_torch/pouw/pearl_c/whole_calls.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/kept.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/live.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served_files.py",
+    "adapters/torch/verity_torch/pouw/h1/tables_device.py",
+    "benchmarks/vllm_encoded/bench_arm.py",
+    "benchmarks/vllm_encoded/step_spans.py",
+    "verity/protocols/resource_accounting/memory/poub/prover/word_codec/paged.cu",
+    "benchmarks/codec_tensor/wt.cu",
+    "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.cu",
+    "benchmarks/kv_filler/topup.cu",
+    # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
+    # test checks
+    "tools/research/src/research/pods/nebius/slot_only.py",
+    # the overhead table scales γ by the census's datacenter, world and datasheet rates and the slowdown calculator's FLOP-to-gates conversion,
+    # and `verity bench overhead` is the door's runner, which a test runs
+    "benchmarks/census/deployments.json",
+    "benchmarks/census/adversary.json",
+    "benchmarks/census/hardware.json",
+    "benchmarks/slowdown/data/hardware.toml",
+    "benchmarks/overhead/run.py",
+    # a card the door measures on reads its SMs and L2 from its card file through verity.device
+    "hardware/cards",
+          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
+    # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
+    # door's runner, which a test runs
+    "benchmarks/slowdown/data/reference.toml",
+    "benchmarks/prove/run.py",
+    # `verity bench exfiltration` reads the network attester's calculator of K for its term, which its tests run beside
+    # fixture rows; the calculator counts the sampling plan's requests, which it reads from the break-even planner (its
+    # modules, with the figure's model, the cost model, the second stage's bound the cost model imports and the cards
+    # they read, and the slowdown calculator's world fleet); a test runs its runner. How the calculator charges the stop class is the stop
+    # verdicts' reader's answer on the command's runs of record, which its tests ask through the reader's own format
+    "benchmarks/spot_figures/breakeven", "benchmarks/spot_figures/figure1.py", "benchmarks/spot_figures/total_cost.py",
+    "benchmarks/spot_figures/second_stage.py",
+    "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/cards", "benchmarks/network_traces/leak_bounds.py",
+    "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
+    "benchmarks/exfiltration/run.py",
+    # a steady-state point's node side runs the stager and the timing script by their paths in the tree, which a test
+    # checks are there and in the point's tool's closure, with the timing script's fewest timed sessions a prover
+    "benchmarks/served_units/stage.py", "benchmarks/one_stage/server_rate.py",
+    # the harness and the benchmarks whose doors it runs import the vLLM adapter through its public interface only, which a
+    # test checks against the interface's list of public modules
+    "benchmarks/overhead", "benchmarks/prove", "benchmarks/exfiltration", "benchmarks/recursion_e2e",
+    "benchmarks/recursion_figures", "tests/test_vllm_public_api.py",
+    # `verity bench compute` and `verity bench memory` print and write through the kit's report, which a test holds
+    # each to on its own suite's fixtures and stand-in store, and they read what their own suites declare
+    "benchmarks/compute", "benchmarks/memory", "benchmarks/remote_session/summary.py", "verity/protocol.py",
+    "verity/channel.py", "verity/device.py", "verity/errors.py", "verity/party.py", "verity/runtime/__init__.py",
+    "verity/runtime/handshake.py", "verity/runtime/framing.py", "tools/config/verity_config",
+    # and `verity bench inference_only --stated-only`, run as its own process, prices the stated policy with the
+    # slowdown calculator, which reads the census, the NCI catalog and each name's standing from the locks
+    "benchmarks/inference_only", "benchmarks/slowdown", "security/lean-audit.json", "security/Properties/lean-audit.json",
+    "benchmarks/nci/tiers.py", "benchmarks/nci/bracket.py", "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
+    "benchmarks/nci/calibrations.json",
+    # the core benchmarks' interface: a test reads each directory that declares itself a core command in its own
+    # pyproject.toml ([tool.verity.interface] core), its README and its runner, so a declared directory and its README
+    # are listed here, which the test checks
+    "benchmarks/compute/README.md", "benchmarks/memory/README.md", "benchmarks/inference_only/README.md",
+]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["test_bench.py", "test_bench_engines.py", "test_bench_results.py",
+         "test_bench_resume.py", "test_bench_served.py"]
+paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_breakdown.py", "test_overhead_command.py", "test_overhead_node.py",
+         "test_overhead_points.py", "test_overhead_store.py", "test_prove_command.py",
+         "test_prove_lean_warm.py", "test_prove_rows.py", "test_prove_store.py",
+         "test_prove_store_rows.py", "test_served_table.py", "test_steady_launch.py",
+         "test_steady_node.py", "test_steady_node_kept.py", "test_steady_node_refusals.py",
+         "test_steady_point.py", "test_steady_runs.py"]
+paths = ["artifacts.json"]
+
+# env.sh puts every workspace member's packages on PYTHONPATH, which a test checks reaches everything the adapter imports
+[[tool.verity.tests.reads]]
+tests = ["test_env.py"]
+paths = ["pyproject.toml", "*/pyproject.toml", "adapters/vllm/verity_vllm"]
+
+# the H200 spec's setup, which a test runs as run_point.sh does, hashes Pearl-C's sm_90a sources and sm_120's headers, and
+# env.sh reads every workspace member's pyproject.toml
+[[tool.verity.tests.reads]]
+tests = ["test_bench_served.py"]
+paths = ["pyproject.toml", "*/pyproject.toml",
+         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90",
+         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_settings.py"]
+paths = ["tests/benchmarks/harness", "benchmarks/harness/verity_bench"]
+
+# the core benchmarks' interface test reads every benchmarks/*/pyproject.toml for its [tool.verity.interface] key
+[[tool.verity.tests.reads]]
+tests = ["test_interface.py"]
+paths = ["benchmarks/*/pyproject.toml"]
