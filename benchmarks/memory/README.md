@@ -27,9 +27,9 @@ verifier times every pass and checks each one's answers against the store's comm
   `unsloth/Llama-3.2-1B` at the revision core's pin names
   (`verity/protocols/accounting/pouw/verifier/lean/check/models.json`), about 2.5 GB from Hugging Face, not gated, so
   no token.
-  Its vLLM and torch must be built for your card's CUDA. The recipe above is the intended one, but no run from it
-  has been reported yet; the benchmark was run with Python 3.12, vLLM `0.28.1rc1.dev472+gd9105ea80.cu129` (a
-  development build) and torch `2.13.0+cu129`.
+  Its vLLM and torch must be built for your card's CUDA. The recipe as written (no pin, index or extra) was run from
+  nothing on an H200: `uv venv` fetched Python 3.12 itself, and the install gave vLLM 0.33.0 and torch
+  `2.14.0+cu130`, which served the session; earlier runs used a vLLM development build and torch `2.13.0+cu129`.
 - **The CUDA toolkit with `nvcc`** (under `/usr/local/cuda*` or `CUDA_HOME`). The driver alone is not enough: the
   session compiles its kernels for your card.
 - **Lean:** `bash tools/verity/lean/setup.sh verity/protocols/accounting/poub/verifier/lean` installs `elan` and the
@@ -42,8 +42,10 @@ verifier times every pass and checks each one's answers against the store's comm
   `elan` in `~/.elan`.
   `uv sync` fills `~/.cache/uv` before that: to keep both out of your home, set `UV_CACHE_DIR` (or `XDG_CACHE_HOME`)
   and `LOCAL_WORK` to directories elsewhere.
-- **Time and host memory:** a `--local` run on an H200 took about 22 minutes, the Lean verifier's first build
-  included, and about 76 GB of host memory at its peak.
+- **Time, disk and host memory:** from nothing on an H200, a run took about 33 minutes from the clone to the number
+  (the clone about 5, the vLLM install about 4, `--local` about 24, the Lean verifier's first build included) and
+  about 26 GB of disk (the vLLM environment 9, uv's cache 10, the clone with its `.venv` 4, the checkpoint 2.4), so
+  start with about 30 GB free. Have about 76 GB of host memory, the larger of the peaks the runs reached.
 - `GPU` picks the card (an index `nvidia-smi` gives; unset, the first). The session runs on this process's cores: a
   quarter to the engine, a quarter to the verifier and the rest to the prover (`taskset` narrows them;
   `ENGINE_CPUS`, `PROVER_CPUS` and `VERIFIER_CPUS` name others).
