@@ -731,10 +731,12 @@ def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
-    for layer, title in LAYERS.items():
+    named = {"flock": "the Flock layer", "zk": "the zero-knowledge layer", "sampling": "the sampling layer",
+             "recursion": "the recursion layer"}
+    for layer in LAYERS:
         parser.add_argument(f"--{layer}", metavar="DIR|RUN",
-                            help=f"the output the benchmark result for {title} is read from: a run's out/ directory, or a run id fetched "
-                                 "through the store")
+                            help=f"the output the benchmark result for {named[layer]} is read from: a run's out/ directory, "
+                                 "or a run id fetched through the store")
 
 
 def run(args: argparse.Namespace) -> int:
