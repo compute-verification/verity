@@ -652,7 +652,7 @@
   "WeightSecurity.Served.UndetectedLe": {
    "owner": "@proofs",
    "digest": "2c7e1138e7bbc4840bff376fd43d2c0fc3d466c38d3ff020a6a41feaddcaf198",
-   "why": "The bound δ on what the audit leaves undetected at the budget M, which the bound is stated at; the deployed audit gives it (TheftServedDeployed)."
+   "why": "The bound δ on what the audit leaves undetected at the budget M, which the bound is stated at."
   }
  },
  "open": {
