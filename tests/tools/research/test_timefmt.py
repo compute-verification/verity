@@ -159,6 +159,47 @@ def test_a_stamp_at_or_behind_the_clock_no_stamp_and_a_doubt_all_pass(now, text)
     assert stamp_ahead(text, now) is None
 
 
+SUN_1257 = dt.datetime(2026, 11, 15, 20, 57, 30, tzinfo=UTC)                           # Sun 15 Nov, 12:57 PM PST
+HEADINGS = [f"{b}{h}{b}{s}" for h in ("FOR THE COORDINATOR", "FOR THE LEAN LANE'S COORDINATOR")
+            for b in ("", "**") for s in (" \u2014", " \u2013", " -", ":")] + ["**FOR THE COORDINATOR:**"]
+
+
+@pytest.mark.parametrize("heading", HEADINGS)
+@pytest.mark.parametrize("name, rest", [("AREAS", ", the probe is up"), ("NAME", "."),
+                                        ("lean's worker AREAS (lead) again", ", the probe is up")])
+def test_a_heading_before_the_name_still_leaves_the_stamp_in_the_header(heading, name, rest):
+    """Workers' briefs head a report `**FOR THE COORDINATOR** — NAME, <stamp>`: the dash or colon ended the header before
+    the stamp, so 12:59 PM went out at 12:57. Up to 5 tokens on each side of the separator; any later time still passes."""
+    text = f"{heading} {name}, Sun 15 Nov 12:59 PM PST{rest}"
+    assert stamp_ahead(text, SUN_1257) == "the first line says Sun 15 Nov 12:59 PM PST and it is Sun 15 Nov 12:57 PM PST: " + PT_FIX
+    assert stamp_ahead(text.replace("12:59", "12:57"), SUN_1257) is None
+
+
+@pytest.mark.parametrize("text, stamp", [("FOR THE COORDINATOR \u2014 Sun 15 Nov 12:59 PM PST, the probe is up", "Sun 15 Nov 12:59 PM PST"),
+                                         ("**FOR THE COORDINATOR:** 12:59 PM PST, the probe is up", "12:59 PM PST")])
+def test_a_heading_then_the_stamp_with_no_name_between_is_a_header(text, stamp):
+    assert stamp_ahead(text, SUN_1257).startswith(f"the first line says {stamp} and it is ")
+
+
+@pytest.mark.parametrize("text", [
+    "FOR THE LEAN LANE'S OWN COORDINATOR \u2014 AREAS, Sun 15 Nov 12:59 PM PST.",          # 6 heading tokens: no header
+    "FOR THE COORDINATOR \u2014 lean's worker AREAS (lead) once again, Sun 15 Nov 12:59 PM PST.",   # 6 name tokens
+    "the window \u2014 closes by Sun 15 Nov 12:59 PM PST, then the lock", "ETA: 12:59 PM PST, then the lock",
+    "*Agent watch:* run r20261115-144403-6f08 (r20261115-144403-6f08) of worker ROWS: rows \u2014 booked Sun 00:30Z, "
+    "then rebook (<https://cursor.com/agents/bc-1|bc-1>) ended rc=0 after 5 min on vy-nebius-cpu-1",
+    "<!subteam^S2|@infra> *Agent watch:* G2-1 \u2014 went idle: \u201chold the node before the 1:10 PM PST go\u201d",
+    "lean: an ask from ci \u2014 waited over 4 h with no answer: \u201cnode A booked 1:30 PM PST, take B\u201d",
+])
+def test_a_dash_or_colon_past_the_header_or_with_no_name_after_it_makes_no_stamp(text):
+    assert stamp_ahead(text, SUN_1257) is None
+
+
+def test_a_heading_then_words_with_no_comma_before_a_time_is_no_header():
+    """A correction quotes the earlier comment's stamp after its heading; that time is not this post's."""
+    text = "RTCODE: my comment above is stamped 10:22 AM PST (18:22Z); `date -u` read 10:21 AM PST (18:21Z) when it was written."
+    assert stamp_ahead(text, dt.datetime(2026, 11, 14, 18, 21, 30, tzinfo=UTC)) is None
+
+
 def test_research_imports_without_a_tz_database_and_prints_utc_alone():
     """`research run` wraps every Nebius job, whose image has neither /usr/share/zoneinfo nor the tzdata package."""
     code = ("import sys, zoneinfo; sys.modules['tzdata'] = None; zoneinfo.reset_tzpath(()); "

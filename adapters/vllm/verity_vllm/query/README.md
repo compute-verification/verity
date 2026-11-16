@@ -22,4 +22,4 @@ From `compose`: `compose_global` and `merge_ranks`. From `manifest.bind`: `Binde
 and the functions that load a request's Programs and read a spec's family and statics. From each opt-in policy
 (`norm_scales`, `router_softmax`, `scale_products`, `vocab_range`): its `FAMILY`, `MEMBER` and `POLICY`, and the
 functions that place and size its values. Two private names are imported as well and are in no `__all__`:
-`program_view._read_instance_header`, by `pipeline` and `check`, and `vocab_range._s32`, by `acquire` and the vocab-range tap check in `tests/properties/`.
+`program_view._read_instance_header`, by `pipeline` and `check`, and `vocab_range._s32`, by `acquire` and the vocab-range tap check in `tests/adapters/vllm/tests/properties/`.
