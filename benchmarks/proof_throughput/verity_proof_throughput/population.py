@@ -1,4 +1,4 @@
-"""A class-statement workload's population: core's ``population_program`` of its VU Definition at ``n_max``, every instance
+"""A class-statement workload's population: core's ``population_program`` of its proof block's Definition at ``n_max``, every instance
 one unit of ``Q_template_instance`` v0 (``partition_units``' ``q-template-instance``). The program is the population
 program's v0 (``TemplateInstances_v0{N}``): ``proof-throughput/v2``'s manifests derive every lane from its digest, and the
 circuits staged for them bind it, so moving to v1 is a new dataset. The class sweep loads this file by path

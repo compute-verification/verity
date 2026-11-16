@@ -73,9 +73,9 @@ incorrect set of the trace the extractor recovers.
      `NetworkAttesterSound`, `WipeSound`), each open until proved (PoUW's:
      `verity/protocols/resource_accounting/compute/pouw/verifier/`). Remote: the first two, `WiresSound`, `GateARow`.
 
-**The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
-declares it (The lock): `Claims.ExpectedCR` (SHA-512 collision resistance, which the other SHA-512 shapes
-fold into), `Claims.Hm96Hiding` (hm96 leaves hide at the pinned key) and `UniformRandomBytesTest` (the operating
+**The real assumptions.** Items 1 to 3 rest on three: `Claims.ExpectedCR` (SHA-512 collision resistance, which the
+other SHA-512 shapes fold into) and `Claims.Hm96Hiding` (hm96 leaves hide at the pinned key), each under the lock's
+`open` until `Definitions/Assumptions.lean` declares it, and the declared `UniformRandomBytesTest` (the operating
 system's bytes are uniform up to η on each test). Beside them the statements read `trusted-device`, Core's challenger
 premises (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`) and `Hash.Assumptions.LmsUnforgeable`.
 
@@ -491,23 +491,13 @@ to) and build or run Lean in a package's Lake environment. No outside package re
 
 ## The lock
 
-Each package's `lean-audit.json` is its lock. For each guarantee it records the signature, its premises (the named
-assumptions, the domain hypotheses, the open premises, and the `Prop`s of an assumptions module its statement only reads) and a SHA-256 hash of
-its type, and, per module, every definition the statements read with a digest. A named assumption, under `assumptions`, is
-declared in `Definitions/Assumptions.lean` (`assumptions_module`) or under it (`Properties`' lock also lists
-`Properties/Assumptions.lean`, for one stated over the code, which the spec can't import); every other assumption is open, under `open` with
-the Linear issue that discharges it and its due date, and `--update` adds none on its own, so that list only shrinks. A
-hypothesis that is part of what its guarantee says (a domain, a scope, the layer below's guarantee) is under `domain`
-with a one-line `why` instead, and a guarantee with an honest witness must have that witness conclude it. The
-Lean check (`tools/verity/lean/check.py`) builds every file, replays every declaration through Lean's kernel, and fails
-when:
+Each package's `lean-audit.json` is its lock. What it records and what the Lean check (`tools/verity/lean/check.py`)
+refuses are AGENTS.md's (its Lean section). Beside each guarantee's statement and premises, the lock keeps a SHA-256 hash
+of its type and, per module, a digest of every definition the statements read, and each listed `Prop` with an owner and
+its definition's digest. A named assumption is declared in `Definitions/Assumptions.lean` (`assumptions_module`) or
+under it; `Properties`' lock also lists `Properties/Assumptions.lean`, for one stated over the code, which the spec
+can't import. The check also fails when:
 
-- a declaration uses an axiom other than `propext`, `Classical.choice` and `Quot.sound` (so no `sorry`, `axiom` or
-  `native_decide`), or an option that skips the kernel;
-- a guarantee has a `Prop` hypothesis that is not an assumption: a `Prop` listed by name in the lock, with an owner
-  and its definition's digest;
-- a premise is listed under the wrong kind (a named assumption declared outside `Definitions/Assumptions`), or an
-  open premise is not listed;
 - a statement reads a definition outside the spec, or breaks `layers` or `trees`;
 - a claim definition lacks its witnesses: a theorem that it fails at a toy instance, and one per deployed record that its
   checkable antecedents hold there;
@@ -519,8 +509,7 @@ with each changed definition's source; nothing waits on it, and a guarantee that
 ## The guarantees to read first
 
 **Protocol soundness** is one theorem (Start here, item 4), the union bound over a composite's subprotocols at its
-compiled verifier: `Verity.soundness_of_subprotocols` at onsite's seven and `Verity.remote_soundness_of_subprotocols` at
-remote's three. Start at `Properties/Verity/README.md`: the statement, the subprotocols each composes, how to read it
+compiled verifier. Start at `Properties/Verity/README.md`: the statement, the subprotocols each composes, how to read it
 and what it rests on.
 
 The table lists the subprotocols' own guarantees, each in its own form; each is proved under `Proofs/`. A status names
@@ -528,7 +517,7 @@ the statement's named assumptions, not the conditions on its inputs and setup (t
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
-| SPOT | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
+| SPOT | `Flock.Guarantees.SampledKSLiveV3` (Start here, item 1) | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
 | PoUW | `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditMonitoringPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/MonitoringPeriod.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `verity-verify-proof --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved under named assumptions: the device model `DeviceModel`, the instantiation `Instantiates` (`pous-ring-instantiation`), and `P2RingAuditSecure`, an open conjecture; the coin-game form adds `Hash.Assumptions.Sha512Prf` at the memory attester's two tests, its `ε_prf` in the bound, and names the certificate's fit (`Fits`) and the run's not reading the primitive (`ReadsNoPrimitive`) |
 | Bandwidth audit, PoUB's per-pass lemma | `ResourceAccounting.Guarantees.Remote.AuditRO`, `Definitions/Poub/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
@@ -560,8 +549,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   clause first.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
   `SHA512CRExpected`, `TileServiceSound`, `TileSampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
-  `SharedNoiseLucks`. Trust model: nothing the developer runs or hosts is trusted, and every coin is live,
-  with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor devices. The challenger, which
+  `SharedNoiseLucks`. The challenger and the verifier both run on auditor devices. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-device`); the verifier is the auditor's own check. Two premises about where the challenger runs are
   onsite's (`verity/protocols/proofs/spot/verifier/README.md`): `CoinsConfidential`, the named Prop
@@ -572,8 +560,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   (`ChallengerLogsCoins`), flips each only after what it samples is recorded (`FlipsAfterRecorded`), and the verifier
   reads coins only from that log (`VerifierReadsLog`). Under them a sample sampled with a logged coin misses a set fixed
   before it at most as often as the sampling design allows (`Verity.Guarantees.SampleAfterRecorded`, proved); none of
-  remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network attesters and memory
-  attesters are onsite's.
+  remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`.
 - **Not the remote composite.** `ResourceAccounting.Remote` and `Properties.Poub.Remote` are PoUB
   (`verity/protocols/resource_accounting/memory/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol
   of onsite only.
