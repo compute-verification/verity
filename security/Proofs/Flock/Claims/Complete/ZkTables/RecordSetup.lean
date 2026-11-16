@@ -13,7 +13,7 @@ import Proofs.Flock.Soundness.Refine.Walk
 # The one-table masked session's setup, from `setupOf true x` alone
 
 At a statement `x` whose masked setup returns one table (`setupOf true x = some (s, spec, sts)`, `sts.size = 1`), the
-table's statement `st` has the facts the length bound reads (`setup_facts`): `25 ≤ m ≤ 35` (`Zk.shapeOk`, `Spec.m35`),
+table's statement `st` has the facts the length bound reads (`setup_facts_hidden`): `25 ≤ m ≤ 35` (`Zk.shapeOk`, `Spec.m35`),
 the `hm96` leaf (the tags' leaf scheme, which `Tags.byName?` pins at `hm96Rows`), `k_log ≤ m`, at most `2^10` regions
 and `m_pts ≤ 64` (`checkInRange`), a keyed coin tree (`zkCoins` is a tree, and `setupHidden` keeps it:
 `setupHidden_coinTree`) and a `Hello` that reads back (`hello_ok`). It holds for a statement with hidden outputs, at any
@@ -81,6 +81,22 @@ theorem tags_hm96_or : ∀ t ∈ Tags.all ++ Tags.templated, t.hm96Rows = true �
 theorem plainLeaves_circuitPlainLeaves : Tags.circuitPlainLeaves.plainLeaves = true := by
   simp [Tags.plainLeaves, Tags.circuitPlainLeaves, Tags.withPlainLeaves]
 
+/-- A tag set `Tags.byName?` names is one of the named ones. -/
+theorem mem_of_byName {n : String} {t : Tags} (h : Tags.byName? n = some t) :
+    t ∈ Tags.all ++ Tags.templated := by
+  unfold Tags.byName? at h
+  cases hf : Tags.find? n with
+  | some t' =>
+    rw [hf] at h
+    change some t' = some t at h
+    cases h
+    unfold Tags.find? at hf
+    exact List.mem_append_left _ (List.mem_of_find?_eq_some hf)
+  | none =>
+    rw [hf] at h
+    change Tags.templated.find? (·.name == n) = some t at h
+    exact List.mem_append_right _ (List.mem_of_find?_eq_some h)
+
 /-- A statement of `Tags.byName?` with the hm96 rows and no plain leaves commits with `hm96-sha512/v1`. -/
 theorem byName_hm96 {n : String} {t : Tags} (h : Tags.byName? n = some t) (hp : t.plainLeaves = false)
     (h9 : t.hm96Rows = true) : t.merkleLeaf = "hm96-sha512/v1" := by
@@ -123,7 +139,7 @@ theorem setupHidden_coinTree {tags : Tags} {cf pf : ByteArray} {coins : Coins} {
 
 /-- **The facts the length bound reads, from the setup alone**: at one table under tags with hidden outputs, at any public
 inputs. -/
-theorem setup_facts {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem setup_facts_hidden {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1) (hh : s.read.tags.hiddenOutputs = true) :
     ∃ (st : Flock.Stmt) (t : String) (ct : CoinTree.Spec) (own : Json) (hz : String), sts = #[st] ∧
       spec.tables = #[t] ∧ spec.coinTree = some ct ∧ Flock.JsonParse.parse spec.hello = .ok own ∧
@@ -173,7 +189,7 @@ variable {H : Claims.Msg → Claims.Msg}
 
 /-- **The honest masked record weighs at most `2^8` its spec's text and `2^40`**, at one table of a session whose setup
 is `x`'s (hidden outputs, any public inputs): whatever the witness, tape and coins. -/
-theorem recordZk_size_le (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem recordZk_size_le_hidden (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1)
     (hh : s.read.tags.hiddenOutputs = true) {w : Claims.Flock.Wit} {ω : TapeZk} {k : ℕ} {r : Fin k → Coin}
     {record : String} {proofs : Array ByteArray}
@@ -181,7 +197,7 @@ theorem recordZk_size_le (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec
       (fun j => (Claims.coinSeq r j).bytes) 0).2 = .ok (record, proofs)) :
     record.toUTF8.size ≤ 2 ^ 8 * specText spec + 2 ^ 40 := by
   obtain ⟨st, t, ct, own, hz, rfl, ht, hct, hown, hc, h25, h35, hms, hkm, hreg, hpm, hmp, hpt⟩ :=
-    setup_facts hs h1 hh
+    setup_facts_hidden hs h1 hh
   obtain ⟨bs, h2, -⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq r j).bytes) spec (tabsOf #[st])
     (MaskRank.masksOf #[st]) (tracesOf #[st] w) ω #[]
   have h3 := congrArg Prod.snd h2
@@ -198,11 +214,11 @@ theorem recordZk_size_le (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec
 
 /-- **The honest masked record fits its length word** at one table of a session whose setup is `x`'s (hidden outputs,
 any public inputs), where its spec's text is under `2^55`. -/
-theorem recordFitsZkAt_of_text (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem recordFitsZkAt_of_text_hidden (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1)
     (hh : s.read.tags.hiddenOutputs = true) (ht : specText spec < 2 ^ 55) : RecordFitsZkAt H x spec sts := by
   obtain ⟨st, t, ct, own, hz, rfl, htb, hct, hown, hc, h25, h35, hms, hkm, hreg, hpm, hmp, hpt⟩ :=
-    setup_facts hs h1 hh
+    setup_facts_hidden hs h1 hh
   exact recordFitsZk_of_text h64 htb hct hown hc st h25 h35 hms hkm hreg hpm hmp hpt ht
 
 end FlockComplete.ZkTables
