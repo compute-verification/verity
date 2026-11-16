@@ -353,13 +353,7 @@ def test_the_samples_terms_are_charged_by_name(store) -> None:
 
 
 def test_a_64_row_session_is_held_at_its_profile_delta_not_the_samples_rejection() -> None:
-    """At 64 sketch rows the sample's rejection no longer holds the memory line's δ up.  A 64-row session of
-    `verity bench memory --local` on an H200 sampled 104 openings coins of 214 receipts each, 22,256 samples, and a
-    ledger charging their rejection at 2^-64 a sample gave it 1.2065e-15 (2^-49.6), the most of its δ.  At
-    `REJECTION_LOG2` = 256 the same samples charge 22,256/2^256.  A record of those counts and rows, its other figures
-    this test's own (104 one-pass windows at one window a coin over 2^27 blocks, no append coins), has δ below 2^-100,
-    the windows' profile δ the most of it."""
-    blocks, windows, samples = 2 ** 27, 104, 214
+    blocks, windows, samples = 2 ** 27, 104, 214  # a 64-row H200 `--local` session's coins and samples a coin
     profile = audit.window_profile((blocks,), samples, audit.DELTA)
     r = audit.Record(bytes(64), bytes(64), blocks, timing.BLOCK_BYTES, tuple(
         audit.WindowRecord(t, (blocks,), t * 10 ** 8, (t + 1) * 10 ** 8, (t + 1) * 10 ** 8, profile)
