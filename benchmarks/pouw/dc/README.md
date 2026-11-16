@@ -96,16 +96,16 @@ uv run python benchmarks/pouw/dc/emp.py TIME_RUN_OUT BUILD_RUN_OUT/sass [--json 
 | `probes/sm90_emp.cu`, `emp.sh`, `emp.py` | The ACCEL model's combined routes on sm_90a, each beside a saturated wgmma: the uniform chain with the honest step and an FFMA filler (`emp_pack`, `emp_pack3` at 3 warps a SMSP), 2:4 sparse wgmma against its dense twin with A in shared memory or registers (`wgsp_`, `wgsprs_`), LDS.128 beside SS wgmma (`emp_smem`), setmaxnreg producer/consumer splits (`emp_reg*`); `emp.sh` builds and gates on a CPU node and times on the H200, `emp.py` prices every timed loop's whole SASS on DS-90's facets (issue, tensor, alu, imad, shfl; a facet above 1 is a rate above the sheet) and reads each probe's event clock beside NVML's |
 | `probes/h32.cuh`, `probes/h32_mma.cuh`, `probes/sm90_h32.cu`, `probes/sm90_h32_tc.cu`, `probes/sm90_h32_sp.cu`, `probes/sm90_h32_mem.cu`, `probes/sm90_h32_pu.cu`, `h32.py` | H32 on the H200: every register writer of MH100's classes, alone and co-issued across pipes. The scalar forms of ffma, int32, fp64 and other, each at 512 an iteration and 64 (`x_`), and mixes in one warp (`m_`); wgmma of every `Shape100` shape at N 8 to 256, FP16 accumulate included (`wa_`), legacy mma.sync, DMMA and mma.sp at 128 a trip (`ms_`, `sp_`), each followed by a scalar round (`mm_`), and wgmma with lane warps beside it (`wu_`, `wu256_`); lookups whose address is the last one's result, and atomics (`d_`, `a_`); the carry writers, add.cc and addc chains of a 64-bit and a 128-bit add, priced under int32 by the general registers a lane writes (`c_`). Each probe's note is its class and the registers one warp instruction writes a lane. `emp.sh` builds, gates and times them (`emp_cuda.sh RELEASE` builds at a named CUDA release's nvcc, from NVIDIA's redistributable archives, for a node without that toolkit or with an older libc; `glibc_compat.h`); `h32.py` prices rows.jsonl in MH100's unit (4,096 over the registers a SM writes a clock): the `Prices100` table by Round 7's rule, H32 and FloorTc, the co-issue minimum and the table as a Lean literal |
 
-The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
+The tests are `../../../tests/benchmarks/pouw/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
 dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
 pipe.py's SASS profile and q*, uniform.py's tables, fit and writer, emp.py's facet pricing and event clock, h32.py's
 prices and table),
-`../tests/test_dc_jbreak.py` (sm90_jbreak.inc current),
-`../tests/test_dc_pipe.py` (the build gate's register limit, ε_tensor at L = 32 under the balance and under the round
-trip), `../tests/test_dc_uniform.py` (the table writer),
-`../tests/test_dc_s8_mma.py` (the SASS reader, and the word check on the sm_120 step's own words),
-`../tests/test_dc_device_gate.py` (each job's check of the card it runs on, with stand-ins for nvidia-smi and nvcc) and
-`../tests/test_ffill.py` (ffill's reference against the integer FP32 pipe, its `coins`, chains and pinned receipts, its
+`../../../tests/benchmarks/pouw/test_dc_jbreak.py` (sm90_jbreak.inc current),
+`../../../tests/benchmarks/pouw/test_dc_pipe.py` (the build gate's register limit, ε_tensor at L = 32 under the balance and under the round
+trip), `../../../tests/benchmarks/pouw/test_dc_uniform.py` (the table writer),
+`../../../tests/benchmarks/pouw/test_dc_s8_mma.py` (the SASS reader, and the word check on the sm_120 step's own words),
+`../../../tests/benchmarks/pouw/test_dc_device_gate.py` (each job's check of the card it runs on, with stand-ins for nvidia-smi and nvcc) and
+`../../../tests/benchmarks/pouw/test_ffill.py` (ffill's reference against the integer FP32 pipe, its `coins`, chains and pinned receipts, its
 dump checks, the header's host build, the design that prices it). A probe's rate is opcode_probe's: warp instructions a
 SM a clock, timed only after its SASS gate, its poisoned sink and its no-write control pass
 (`../opcode_probe/README.md`).
