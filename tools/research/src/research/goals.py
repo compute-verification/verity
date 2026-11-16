@@ -39,13 +39,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import urllib.error
 from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from . import settings
 from .slack import RouteError, SlackError, _Identity, http_json, route_error
 
 GOALS = "https://website-docs-sage.vercel.app/api/goals"   # the route, and its OIDC token's audience
@@ -215,7 +215,7 @@ def main(argv: list[str], route: Route | None = None) -> int:
     bl.add_argument("--now", metavar="TIME", help="the time to read at, with its offset (default: now)")
     bl.add_argument("--json", action="store_true", help="the rows in full, with the tier-1 goals above each")
     ns = p.parse_args(argv)
-    key = os.environ.get("GOALS_KEY") or None
+    key = settings.get("GOALS_KEY") or None
     try:
         route = route or Route(ns.url, key, writes=bool(key))
         if ns.cmd == "show":
