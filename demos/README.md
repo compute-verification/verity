@@ -1,16 +1,37 @@
 # Demos
 
-A demo is one file: a configuration (`verity/config/v0`, `verity.config`) that `verity run` reads. A demo
-holds no code and is never tuned; the table it runs from is `tools/verity/cli/verity_cli/served_table.py`, which holds each
-file byte for byte (`tests/tools/verity/cli/test_onsite_served.py`), and `tools/verity/cli/verity_cli/configurations.toml`
-holds each file's hash. `verity demo NAME` is `verity run demos/NAME.toml`; with no NAME it runs `onsite_compute`. Each file's machines are
-names the deploy bindings bind (`tools/verity/cli/README.md`): `prover-node` holds the developer's parties (workers, the
-ZK server, the prover), `gate-host` the challenger and the network attester, `auditor-host` the memory attester, the
-bandwidth verifier and the verifier, and remote's `auditor-remote` the auditor's parties off the site.
+A demo is Verity run end to end on real machines. A developer serves a model, the auditor's side challenges it, and
+the verifier returns one verdict.
 
-| file | what it shows | command | how far it runs and is proved |
-| --- | --- | --- | --- |
-| `remote.toml` | remote (`verity/remote/v1`): SPOT, PoUW's Pearl+ run verdict and the inference-only policy on the served execution phase, with no auditor's device at the site | `verity run demos/remote.toml --on MACHINE --bindings FILE` | not accepted by `verity run` yet: it refuses the file by name (`no-party`), since Pearl+ has no piece. The served run it stands for (`adapters/vllm/tools/served_run/`, H1's development executable): run `moved`, proof `none`; no run of record of the remote verdict has passed, since PoUW's verdict there is a development run that credits nothing, and the remote protocol has no guarantee in Lean (`verity/protocols/compose/verifier/remote/README.md`, "The open gap") |
-| `onsite_network.toml` | the network attester, SPOT and the memory wipe (`verity/onsite-network/v0`, a configuration of its own, never onsite) | `verity run demos/onsite_network.toml --on MACHINE --bindings FILE` | not accepted by `verity run` yet: it stops with `NotImplementedError` naming the goal demos/onsite-demo; proof `none` |
-| `onsite_compute.toml` | the default: those three, PoUW and the inference-only policy (`verity/onsite-compute/v0`, a configuration of its own, never onsite) | `verity run demos/onsite_compute.toml --on MACHINE --bindings FILE` | not accepted by `verity run` yet: it stops with `NotImplementedError` naming the goal demos/onsite-demo; proof `none` |
-| `onsite_full.toml` | onsite (`verity/onsite/v0`): those five, PoUS at 320 challenges and PoUB, on the served int8 execution phase; the memory attester's keys for PoUS and the wipe pinned | `verity run demos/onsite_full.toml --on MACHINE --bindings FILE` | run `moved`, proof `none`: `verity run --dry-run` resolves it without a GPU, and it has no run of record yet |
+Each demo is a single configuration file. It names the protocols to run and which party runs on which machine, and
+that is all: a demo holds no code and is never tuned.
+
+There are two settings. In the **remote** demo the auditor has no hardware at the developer's site. In the **onsite**
+demo it does: a network attester on each node's uplink, and a memory attester beside it. Onsite comes in three sizes,
+each adding protocols to the one before.
+
+| Demo | Protocols | How far it runs |
+| --- | --- | --- |
+| `remote` | SPOT, PoUW (Pearl+), inference-only | Not yet: Pearl+ has no party to run. |
+| `onsite_network` | SPOT, network attester, memory wipe | Not yet. |
+| `onsite_compute` | SPOT, network attester, memory wipe, PoUW, inference-only | Not yet. It is the default. |
+| `onsite_full` | SPOT, network attester, memory wipe, PoUW, inference-only, PoUS, PoUB | As a dry run. No run of record yet. |
+
+Only `onsite_full` is the onsite protocol itself. The two smaller sizes run part of it.
+
+## Try one
+
+~~~sh
+verity demo onsite_full --dry-run
+~~~
+
+This resolves the demo's parties and the channels between them, prints them, and starts nothing. It needs no GPU.
+
+`verity demo NAME` runs a demo for real. That takes machines bound to the roles its file names, which the
+[`verity` command's README](../tools/verity/cli/README.md) describes.
+
+## Read next
+
+- [`verity/README.md`](../verity/README.md): what each protocol in the table tells the auditor.
+- [The remote protocol](../verity/protocols/compose/verifier/remote/README.md): what a remote verdict rests on, and
+  what is still open.

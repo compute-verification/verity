@@ -232,7 +232,7 @@ adapters/
   torch/
   vllm/            on torch/, with the circuits of the kernels it serves
 demos/             one file per demo, the configuration `verity run` reads. A demo holds no code
-  README.md        one table: the file, what it shows, its command, how far it runs and is proved
+  README.md        one table: each demo, its protocols and how far it runs
   remote.toml      SPOT, PoUW and the inference-only policy
   onsite_network.toml    the network attester, SPOT and the memory wipe
   onsite_compute.toml    the default: those three, PoUW and the inference-only policy

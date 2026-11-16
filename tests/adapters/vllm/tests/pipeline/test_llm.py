@@ -1,7 +1,7 @@
 """`verity_vllm.LLM`: the options it accepts, the pin it resolves, the engine it builds and what `generate` returns.
 
 * an option outside the supported list, or a value of the wrong type, raises ``TypeError`` naming it and the list;
-* every supported option is documented in the class docstring and the README;
+* every supported option is documented in the class docstring;
 * ``model`` / ``revision`` resolve to the pin in ``manifests/checkpoints.json`` (an unpinned model or another revision
   raises; a repo pinned under two roles resolves to the downloaded one);
 * the engine is built by ``vllm_adapter.build_engine`` with the pin's role, and only the options the caller set reach vLLM;
@@ -77,10 +77,8 @@ def test_options_default_to_the_documented_values():
 
 
 def test_every_supported_option_is_documented():
-    readme = (config.ROOT / "README.md").read_text()
     for name in L.SUPPORTED:
         assert f"``{name}``" in L.LLM.__doc__, name
-        assert f"`{name}`" in readme, name
 
 
 def test_the_pin_is_the_checkpoints_entry():

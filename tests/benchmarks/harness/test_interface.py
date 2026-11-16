@@ -1,4 +1,4 @@
-"""The core benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface") as the kit holds it:
+"""The core benchmarks' interface (`benchmarks/DESIGN.md`'s "The core benchmarks' interface") as the kit holds it:
 `record_dir` reads a directory with nothing of research's and a run id only through it, past its withdrawals (which
 `record` also gives),
 `ran_with` takes only the fixed words and states the deployed challenger's unverified coins as the record's word, and `report` prints the line after

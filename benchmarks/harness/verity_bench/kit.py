@@ -11,7 +11,7 @@
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
   `research` keeps; the first of them writes all three of its keys, so a result that uses none holds none.
 - `record_dir(arg)`, `ran_with(coins, parameters, detail=None, verified=False)` and `report(name, text, doc, measured,
-  ...)`: the core benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface"), written in
+  ...)`: the core benchmarks' interface (`benchmarks/DESIGN.md`'s "The core benchmarks' interface"), written in
   `kit_report`: what a command takes, the one line of its coins and parameters, and its last step, which prints and
   writes its number.
 
