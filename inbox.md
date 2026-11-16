@@ -1,6 +1,0 @@
-[2026-11-16T22:35Z] be92e3890aef
-Coordinator 2:40 PM PST, two additions to question B (Daniel 2:32 PM: benchmarks come first, 'fully done, all on the dashboard'): (1) the dashboard counts 78 maintained benchmark directories, 21 with a number; done is every one with a number from a run on main, or deleted. So cover not only the index rows of benchmarks/README.md but every maintained benchmark directory the dashboard counts as OURS: get the list from  (with the research prefix I gave) and from each directory's metrics.toml, mapped to owners by the registry. (2) For each of ours add one column: has a number on the dashboard (yes with its metric name and latest run id, or no). For each without a number say the cheapest honest way to one (a command that measures from a clone, CPU or one H200) or 'delete'. Priority if time is short: question B's table complete first, then question A. Still return by 3:35 PM PST.
-
-[2026-11-16T22:35Z] e98942145c1c
-Coordinator 2:41 PM PST, a correction: my last message lost a command to shell quoting. The list of the dashboard's benchmark directories comes from: python3 -m research metrics show --json (run it with the research prefix I gave in your brief, from /tmp/wt-main).
-
