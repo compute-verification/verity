@@ -91,8 +91,8 @@ from pathlib import Path
 
 from verity.device import load_card, load_node
 from verity.protocol import no_bound
-from verity.protocols.accounting.poub.verifier import ledger as poub_ledger
-from verity.protocols.accounting.poub.verifier import receipts, timing
+from verity.protocols.resource_accounting.memory.poub.verifier import ledger as poub_ledger
+from verity.protocols.resource_accounting.memory.poub.verifier import receipts, timing
 from verity_bench import kit
 from verity_config.settings import of
 
@@ -129,7 +129,7 @@ LOCAL = "local: the verifier and its coins ran on the machine being measured"
 #: that one card: the share is of the one card's read rate (LOCAL_NODE names another sheet)
 LOCAL_SHEETS = {"H200": "h200-sxm-141gb-x1", "RTX PRO 6000": "rtx-pro-6000-server-x8"}
 #: what a --local result's digests are of: the session's verifier, and the data sheets its node is read from
-VERIFIER = ROOT / "verity" / "protocols" / "accounting" / "poub" / "verifier"
+VERIFIER = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier"
 SHEETS = ROOT / "hardware"
 #: the one session form `--local` runs, the node run's paced session (PACED's default) as `run.sh` passes it to its
 #: verifier: a coin a pass group, seven credited stretches of a second at 2773 openings each, the groups counted at
@@ -151,7 +151,7 @@ UTIL, VLLM_ROOM_GIB = 0.88, 12
 #: not the card's, and its share is not this benchmark's
 STORE_MIN = 0.5
 #: the pin of the checkpoint ROLE serves: its repo, revision and files, fetched into LOCAL_WORK/hf
-PIN = ROOT / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "check" / "models.json"
+PIN = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "check" / "models.json"
 FETCH = ("import sys; from huggingface_hub import snapshot_download as d; "
          "print(d(sys.argv[1], revision=sys.argv[2], allow_patterns=sys.argv[3:], max_workers=8))")
 #: who drew a session's coins, by its verifier's `--challenger`, in the kit's words (`kit.COINS`): its own challenger
@@ -166,6 +166,14 @@ PYTHON_LEDGER_WORDS = ("python ledger: the share and its error are the Python le
                        "the Lean verifier has not decided them, so no audit reads them")
 #: and the premise a Metrics row of such a share names in its verdict
 PYTHON_LEDGER_PREMISE = "the share is the Python ledger's: the Lean verifier has not decided it"
+#: `numbers_decided_by`: which of the printed numbers the Lean verifier decided and which are the Python ledger's, each
+#: by its key in the session's ledger.  Where the Lean decided the share, its error is the sum of the three: the
+#: windows' δ and AuditRO's slack (the reading's own error, held to the Lean's), and the sketch's term and the sample's
+#: rejection and binding terms (`draw`), which no Lean computes yet
+NUMBERS_LEAN = {"lean": ["spec.gamma", "spec.error.windows"],
+                "python_ledger": ["declared.gamma.spec.error.sketch", "declared.gamma.spec.error.draw"]}
+NUMBERS_PYTHON = {"lean": [], "python_ledger": ["spec.python_ledger.gamma",
+                                                "declared.python_ledger.gamma.spec.error.windows"]}
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
 #: what an unbound session's number rests on, in its Metrics row's verdict
 HELD_NONE = "the verifier held no checkpoint"
@@ -280,7 +288,8 @@ def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict
     `remote_session/summary.py`'s `gamma_spec` of the session. Where the Lean's answer for γ's terms isn't written,
     the reading is undecided and there is no number, unless `python_ledger`, which only `--loopback` and `--local`
     pass: then γ and its error are the Python ledger's reading the record carries beside it (`python_ledger`), and
-    `gamma_decided_by` says so (`PYTHON_LEDGER`); else it is `lean`."""
+    `gamma_decided_by` says so (`PYTHON_LEDGER`); else it is `lean`.  `numbers_decided_by` names which of the
+    printed numbers each decided (`NUMBERS_LEAN`, `NUMBERS_PYTHON`)."""
     try:
         v = json.loads(record.read_text())
         sessions = {s["k"]: s for s in v["sessions"]}
@@ -308,11 +317,15 @@ def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict
         if not python_ledger or not isinstance(spec.get("python_ledger"), dict):
             raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is {undecided}")
         spec, decided_by, under = spec["python_ledger"], PYTHON_LEDGER, ("python_ledger",)
+    if (why := spec.get("refused")) is not None:
+        raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is refused: {why}")
     gamma = spec.get("gamma")
     if isinstance(gamma, bool) or not isinstance(gamma, (int, float)):
         raise NoNumber(f"session {vs['k']} was accepted and its ledger holds no γ at the specification's rate")
     binding = v.get("binding") or {}
-    return {"value": gamma, "gamma_decided_by": decided_by, "session": vs["k"], "verdict": vs.get("verdict"),
+    return {"value": gamma, "gamma_decided_by": decided_by,
+            "numbers_decided_by": NUMBERS_PYTHON if decided_by == PYTHON_LEDGER else NUMBERS_LEAN,
+            "session": vs["k"], "verdict": vs.get("verdict"),
             "error": error_of(ledger, *under),
             "rate_bytes_per_s": (ledger.get("inputs") or {}).get("spec_bytes_per_s"),
             "store_bytes": blocks * BLOCK_BYTES,
@@ -358,8 +371,9 @@ def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, ho
     why = None if s.get("error") is None else no_bound(s["error"])
     return {"value": None if why else s["value"], "unit": UNIT, "commit": commit, "run": run, "loopback": loopback,
             "local": LOCAL if local else None, "machine": machine, "gamma_decided_by": s["gamma_decided_by"],
-            "host_run": host_run,
-            "no_bound": why, **{k: v for k, v in s.items() if k not in ("value", "gamma_decided_by")}}
+            "numbers_decided_by": s["numbers_decided_by"], "host_run": host_run,
+            "no_bound": why, **{k: v for k, v in s.items() if k not in ("value", "gamma_decided_by",
+                                                                       "numbers_decided_by")}}
 
 
 def left(tree: Path) -> dict:
@@ -476,6 +490,8 @@ def loopback(run: Callable = subprocess.run) -> dict:
         env.pop("SERVE", None)
         done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
         if done.returncode:
+            if (why := refusal(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json")) is not None:
+                raise NoNumber(f"{why} (run.sh exited {done.returncode})")
             raise CouldNotRun(f"the loopback's processes failed (run.sh exited {done.returncode}); their logs are above")
         s = session(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json", None, python_ledger=True)
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=True)
@@ -614,7 +630,7 @@ def local(run: Callable = subprocess.run) -> dict:
            "ENGINE_ARGS": " ".join(filter(None, [ENGINE_ARGS, f"--arena-gib {arena} --util {util:g}",
                                                  given.get("ENGINE_ARGS")])),
            "NODE_ARGS": " ".join(filter(None, [NODE_ARGS, f"--model-dir {shlex.quote(str(snap))}",
-                                               given.get("NODE_ARGS")])),
+                                               f"--node local/{kind}/serving", given.get("NODE_ARGS")])),
            "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--node",
                                                    shlex.quote(f"{held}/{NODE_FILE}"), "--hbm-bytes", str(hbm_bytes)]))}
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
@@ -623,6 +639,8 @@ def local(run: Callable = subprocess.run) -> dict:
           f"verifier's node one card of {kind}; its records go to {held}/out", file=sys.stderr)
     done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
     if done.returncode:
+        if (why := refusal(Path(held) / "out" / "verifier.json")) is not None:
+            raise NoNumber(f"{why} (run.sh exited {done.returncode}); its logs are above and in {held}/out")
         raise CouldNotRun(f"the node's session failed (run.sh exited {done.returncode}); its logs are above and in "
                           f"{held}/out")
     s = session(Path(held) / "out" / "verifier.json", None, python_ledger=True)
@@ -633,6 +651,27 @@ def local(run: Callable = subprocess.run) -> dict:
     machine = {"card": name, "sheet": kind, **engine_args(Path(held)), "sheet_sha256": digest(SHEETS),
                "verifier_sha256": digest(VERIFIER)}
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True, machine=machine)
+
+
+def refusal(record: Path) -> str | None:
+    """The verdict of a session the verifier refused, from its record at `record`: which session, where (its pass
+    group, or its window where the session is not paced), and the check that failed at which sample (pass,
+    position). None where the verifier recorded no refusal, which is no verdict: `run.sh` failed some other way."""
+    if not record.is_file():
+        return None
+    try:
+        sessions = json.loads(record.read_text())["sessions"]
+        vs = next((s for s in sessions if s.get("accepted") is False), None)
+    except (OSError, KeyError, TypeError, ValueError, AttributeError) as e:
+        raise CouldNotRun(f"the verifier's record doesn't read as one ({type(e).__name__}: {e})") from e
+    if vs is None:
+        return None
+    failure = vs.get("failure") if isinstance(vs.get("failure"), dict) else {}
+    where = "" if failure.get("t") is None else f" at {'pass group' if vs.get('pace') else 'window'} {failure['t']}"
+    at = failure.get("at")
+    sample = f" at pass {at[0]}, position {at[1]}" if isinstance(at, list) and len(at) == 2 else ""
+    return (f"the verifier refused session {vs.get('k')}{where}: its check `{failure.get('failure') or 'unrecorded'}` "
+            f"failed{sample}")
 
 
 def engine_args(held: Path) -> dict:

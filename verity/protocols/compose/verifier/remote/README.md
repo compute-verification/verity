@@ -21,9 +21,9 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 **Which "remote".** Four things in the tree are called "remote", and this page means the first:
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v1`; v0 is development);
-- PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/accounting/poub/verifier/`, `Poub`,
+- PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/resource_accounting/memory/poub/verifier/`, `Poub`,
   `Accounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
-- `RemoteChallenger` (`verity/protocols/proofs/spot/device/remote.py`), a remote challenger's client;
+- `RemoteChallenger` (`verity/protocols/proofs/spot/verifier/challenger/remote.py`), a remote challenger's client;
 - the slowdown bound's remote regime (`Slowdown.Guarantees.SlowdownRemote`, the slowdown calculator's `regime.remote`): a bound over this
   protocol, not in it (part 6 below);
 
@@ -41,9 +41,9 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`RemoteChallenger`).
   Deployed, on an auditor device, that port is the far end of a coin link the auditor device opens to the
   developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network certification's
-  code running on the auditor device (`verity/protocols/compose/device/live_challenger/coin_link.py`). No coin path of remote's own, with no
-  network certifier anywhere, is specified yet.
-- **No auditor devices at the site.** There are no network certifiers or memory challengers. So network certification,
+  code running on the auditor device (`verity/protocols/compose/verifier/live_challenger/coin_link.py`). No coin path of remote's own, with no
+  network attester anywhere, is specified yet.
+- **No auditor devices at the site.** There are no network attesters or memory challengers. So network certification,
   PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,
   see `security/Definitions/Certifier` and its `Guarantees`.
 
@@ -52,9 +52,9 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
 | SPOT ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/spot_flock/verifier/lean`), one-stage, recursive or two-stage by its `form` | `verity/sampled-proofs/v1` |
-| PoUW ([README](../../../accounting/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
+| PoUW ([README](../../../resource_accounting/compute/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
 | PoUW, v0 | the period's credited work, windows all or nothing | `PouwCheck.Period.protocol` (`pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
-| The inference-only policy ([README](../../../policy/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `InferenceOnlyCheck.Protocol.protocol` (`inference_only/verifier/inference_only/lean`) | `verity/inference-only/v0` |
+| The inference-only policy ([README](../../../workload_classification/training_detection/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `InferenceOnlyCheck.Protocol.protocol` (`inference_only/verifier/inference_only/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied [run, window] components`
 (`remote-v1`), which
@@ -245,7 +245,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `SlowdownThreaded` 
 **How it is checked.**
 
 - *By whom.* Not by remote yet: the policy isn't one of its subprotocols (Subprotocols, above). Its check runs on its
-  own, as `inference-only-check` (`InferenceOnlyCheck.Theta.check`, `verity/protocols/policy/inference_only/verifier/lean`); once composed, the
+  own, as `inference-only-check` (`InferenceOnlyCheck.Theta.check`, `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean`); once composed, the
   verifier runs it on an auditor device in each verification phase.
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
@@ -295,7 +295,7 @@ part 6's premises say why that shape trains little.
 phase to the coins before it: the chance that some subprotocol of some phase accepts while its claim fails is at most the
 sum of their errors. For SPOT,
 Pr[every phase accepted ∧ incorrect proof blocks ≥ ln(1/δ)/q_s] ≤ δ + Σ_t (ε_ks,t + ε_bind,t), q_s the sample's coverage.
-PoUW reports ε at δ_s = 2⁻⁴⁰ (`verity/protocols/accounting/pouw/verifier/credit.py`'s `DELTA`), the sample's error alone. Its pooled
+PoUW reports ε at δ_s = 2⁻⁴⁰ (`verity/protocols/resource_accounting/compute/pouw/verifier/credit.py`'s `DELTA`), the sample's error alone. Its pooled
 failure over n verification phases is δ_s + n·(δ_bind + δ_ks), PoUW's own binding and proof-system errors (not SPOT's ε_bind and ε_ks above). δ_ks rests on the undischarged `ServiceSound`, and δ_bind has no deployed bound, so
 neither has a number yet. Over a week, a month and a year, at one verification phase an hour (n = 168, 720 and 8,760,
 `verity.protocol.MONITORING_PERIODS`), the total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): a year's total below 1% needs δ_bind + δ_ks below about
@@ -559,7 +559,7 @@ run runs both halves on one served run, PoUW's as a development run:
   and no remote guarantee exists for its verdicts to reach (the open gap, above).
 
 What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the
-suite `verity-pouw-check-difftest`; `verity/protocols/accounting/pouw/verifier/lean/check/README.md`), and the composite's difftest
+suite `verity-pouw-check-difftest`; `verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/README.md`), and the composite's difftest
 (`verity/protocols/compose/verifier/lean/tests`).
 
 ## Read next

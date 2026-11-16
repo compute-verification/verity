@@ -16,15 +16,15 @@ from pathlib import Path
 import pytest
 
 from verity.device import load_card, number
-from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.accounting.pouw.prover.schemes import get
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_inert_work as D
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as W
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
-sys.path.insert(0, str(Path(__file__).parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
+sys.path.insert(0, str(Path(__file__).parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
 import clear_work as CW
 
 import price_twins as P
