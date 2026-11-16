@@ -20,7 +20,9 @@ stopped and nothing is launched or posted twice:
               night: what is left is removed by the next night's prepare.
     watch     each pass fetches the run's records and reads them as the dispatcher reads a check's (`dispatch.classify`): its
               exit code and check's result.json, with each failed step, each failed suite (suites.json, suites-lean.json)
-              and `cache_contradictions`. A run that hasn't ended LOST_S after its own timeout is lost.
+              and `cache_contradictions`, and judges its failures under the commit's `tools/check/policy.toml` (read from the
+              loop's clone) as the verified queue does (`landing.allowed_steps`, from steps.jsonl, the suite reports and
+              circuit-check's log). A run that hasn't ended LOST_S after its own timeout is lost.
     compare   a run that ended with a verdict, once: each of its parts against the recorded checks of the same commit, which
               are the store's attempts of the clean commit whose result is a check's, but this run and any other uncached
               one. A part is a suite (its row in a suite report), a Lean package (its report in lean-audit/audit.json and
@@ -33,12 +35,14 @@ stopped and nothing is launched or posted twice:
               `nightly_check` on `commit:<sha>` with the run as its ref. One that fails is tried again each pass until the
               next night is due.
 
-The outcomes: `passed`, the check passed and its result names no cached pass it contradicts; `contradicted`, its result names
-one, a cached pass that answers for something the uncached run failed, whatever the check's verdict (check records a
-contradiction only for a suite that failed fresh); `failed`, the check failed and names none; `error`, no verdict: the run
-never started (slot.py's exit 75), timed out, was refused or lost, or nothing was launched. A pass says what check's own
-`--no-cache` and `cache_contradictions` say, and no more than they cover. The state's `last` is the newest outcome and when
-it was read, which the monitors' `nightly-check` reads to ring infra when there has been none for 36 h.
+The outcomes: `passed`, the check passed, or failed only where an allowance of the policy live at the read covers the
+failure, which is no red (AGENTS.md, "Checking and merging") and is named in the post, and its result names no cached pass it
+contradicts; `contradicted`, its result names one, a cached pass that answers for something the uncached run failed,
+whatever the check's verdict (check records a contradiction only for a suite that failed fresh); `failed`, the check failed
+beyond its allowances, or under a policy that can't be read, which the post says, and names no contradiction; `error`, no
+verdict: the run never started (slot.py's exit 75), timed out, was refused or lost, or nothing was launched. A pass says
+what check's own `--no-cache` and `cache_contradictions` say, and no more than they cover. The state's `last` is the newest
+outcome and when it was read, which the monitors' `nightly-check` reads to ring infra when there has been none for 36 h.
 
 The comparison changes no outcome and no label. It adds to the post how many parts agree, how many disagree and how many
 have no stored verdict, and names each part that disagrees with both verdicts, the key and the run that recorded the other
@@ -84,11 +88,11 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
-from research import monitors, slack
+from research import monitors, policy, slack
 from research.jobs import dispatch
 
 SCHEMA = "verity/nightly-check/v1"
@@ -98,16 +102,20 @@ HELPER = "!/data/infra/gh_app_token.sh git"     # hands git the App's token when
 CHECK = "tools/check/check.py"
 KIND = "audit-main"                             # the dispatcher's name for this check, whose records `dispatch.classify` reads
 SUITE_FILES = ("suites.json", "suites-lean.json")     # check's suite reports, beside its result.json in the run dir
+#: what a read fetches beside the run's own records: the suite reports, and the steps and circuit-check's log, which say
+#: whether every failure is one an allowance covers (`only_allowed`)
+FETCHED = (*SUITE_FILES, "steps.jsonl", "circuit-check.log")
 LEAN_AUDIT = "lean-audit/audit.json"            # the Lean check's report there: each package's
 #: the steps whose parts are compared one by one, as suites and Lean packages; every other step of a result is one part, so
 #: a step check gains is compared from the night it first runs
 BY_PART = ("pytest", "lean-suites", "lean-audit")
 #: the fields of a Lean package's report that say how its check ran; the others say what it found. A reused pass's report is
 #: the one its storing run wrote, so these are that run's: its times, sample, seal and replay, its node's (`sandbox`,
-#: `build_threads`, `peak_gib`, and whether it used its replay and facts caches, `replay_cache`, `facts_cache`), the content
-#: address of its build (`facts_key`: it folds the `.olean` files, whose bytes differ between machines, and only a records
-#: run's `--facts-cache` writes it) and the records run whose facts it was judged from (`judged_from`)
-RUN_FIELDS = frozenset({"seconds", "sampled", "staged", "replay", "pipeline", "sandbox", "build_threads", "peak_gib",
+#: `build_threads`, `peak_gib`, and whether it used its replay and facts caches, `replay_cache`, `facts_cache`), where its
+#: sandboxed build read the tree (`bound`: check.py's fixed path and the run's own tree, another directory in every run), the
+#: content address of its build (`facts_key`: it folds the `.olean` files, whose bytes differ between machines, and only a
+#: records run's `--facts-cache` writes it) and the records run whose facts it was judged from (`judged_from`)
+RUN_FIELDS = frozenset({"seconds", "sampled", "staged", "replay", "pipeline", "sandbox", "bound", "build_threads", "peak_gib",
                         "replay_cache", "facts_cache", "facts_key", "judged_from"})
 VERDICTS = ("passed", "failed")
 LOST = ("launcher-exited", "runner-gone")       # a run that ended leaving no status (research.runs.ENDED)
@@ -179,8 +187,9 @@ def some(names: list[str]) -> str:
     return listed([f"`{n}`" for n in names])
 
 
-def judge(s: dict, result: dict, suites: list[dict], cfg: Settings) -> Read:
-    """A run's records (`research.runs.summarize`, check's result.json and its suite reports' rows) as the night's outcome."""
+def judge(s: dict, result: dict, suites: list[dict], cfg: Settings, allowed: bool = False) -> Read:
+    """A run's records (`research.runs.summarize`, check's result.json and its suite reports' rows) as the night's outcome;
+    ``allowed``: every failure is one an unexpired allowance of the commit's policy covers (`only_allowed`)."""
     state, rc = s.get("state"), s.get("rc")
     ob = dispatch.classify(KIND, s)
     if ob.state == "running" and state not in LOST:
@@ -204,6 +213,9 @@ def judge(s: dict, result: dict, suites: list[dict], cfg: Settings) -> Read:
             return Read("contradicted", f"the uncached check {ob.state}, and a cached pass answers for what it failed, so a cache "
                         f"key misses an input or a test isn't a function of its inputs: {tests}{more}." + (f" Its {failed}" if failed else ""),
                         minutes)
+        if failed and allowed:
+            return Read("passed", f"It failed only where an unexpired allowance of this commit's `{policy.PATH}` covers the "
+                        f"failure, which is no red: {failed} Its result names no cached pass it contradicts.", minutes)
         return Read(ob.state, f"{failed} Its result names no cached pass it contradicts." if failed else "", minutes)
     if rc == monitors.NOT_STARTED:
         why = f"it never started: no slot of `{cfg.on}`'s `{cfg.pool}` pool took it (exit {rc}), so nothing was checked"
@@ -372,12 +384,12 @@ def text(night: dict, tags: dict[str, str]) -> str:
     run = f"run `{night['run']}`" if night.get("run") else "no run"
     took = f", {night['minutes']} min" if night.get("minutes") is not None else ""
     c, to = night.get("compared") or {}, rung(night)
+    detail = f" {night['detail']}" if night["detail"] else ""
     if not to:
-        return f"Nightly check of `main` passed: {commit}, {run}{took}.{said(c)}"
+        return f"Nightly check of `main` passed: {commit}, {run}{took}.{detail}{said(c)}"
     title = {"passed": "passed", "contradicted": "contradicts the cache", "failed": "failed", "error": "gave no verdict"}[night["outcome"]]
     title += (", and disagrees with the recorded check" if c.get("disagree") else
               ", and was not compared with the recorded check" if "unread" in c else "")
-    detail = f" {night['detail']}" if night["detail"] else ""
     return f"{' '.join(tags[n] for n in to)} *Nightly check of `main` {title}* at {commit} ({run}{took}):{detail}{said(c)}"
 
 
@@ -448,7 +460,7 @@ def resume(state: dict, night: dict, cfg: Settings, fx, now: float, save: Callab
 
 def watch(state: dict, night: dict, cfg: Settings, fx, now: float, save: Callable[[dict], None]) -> None:
     try:
-        got = fx.read(night["run"])
+        got = fx.read(night["run"], night["commit"], now)
     except Exception as e:  # noqa: BLE001  (a pass that can't read the run reads it again; the deadline below bounds the wait)
         got = Read(None, f"its records could not be read ({type(e).__name__}: {e})")
     if got.outcome is not None:
@@ -553,18 +565,34 @@ def suite_rows(d: Path) -> list[dict]:
     return [r for f in SUITE_FILES for r in rows(d / f, list)]
 
 
-def read(run: str, cfg: Settings, fetch: Callable | None = None, root: Path | None = None) -> Read:
-    """Fetch the run's records, with check's suite reports, and judge them; a machine that can't be reached is read again."""
+def only_allowed(d: Path, pol: policy.Policy, now: float) -> bool:
+    """Whether the check whose records are in `d` failed only where an allowance of `pol` live at `now` covers the failure,
+    as the verified queue judges a candidate (`landing.allowed_steps`): some step failed, and each is a suite step whose
+    failed suites are covered or circuit-check with each failure its log names covered."""
+    from research import landing
+
+    failed = landing.failed_names([d])
+    return bool(failed) and failed <= landing.allowed_steps(pol, now, [d])
+
+
+def read(run: str, cfg: Settings, fetch: Callable | None = None, root: Path | None = None,
+         pol: policy.Policy | str | None = None, now: float | None = None) -> Read:
+    """Fetch the run's records, with check's suite reports, its steps and circuit-check's log, and judge them under `pol`, the
+    commit's policy (or why it can't be read), at `now`; a machine that can't be reached is read again."""
     from research import remote, runs
 
     d = runs.resolve(runs.runs_root(root), run)
-    rec = (fetch or remote.fetch)(d, also=SUITE_FILES)
+    rec = (fetch or remote.fetch)(d, also=FETCHED)
     if rec.get("last_fetch_error"):
         return Read(None, f"`{cfg.on}` unreachable (rc {rec['last_fetch_error'].get('rc')})")
     s = runs.summarize(d)
     if s["state"] == "refused":
         s["why"] = rows(d / "refused.json", dict).get("reason") or s.get("why")
-    return judge(s, rows(d / "result.json", dict), suite_rows(d), cfg)
+    allowed = isinstance(pol, policy.Policy) and only_allowed(d, pol, time.time() if now is None else now)
+    got = judge(s, rows(d / "result.json", dict), suite_rows(d), cfg, allowed)
+    if got.outcome == "failed" and isinstance(pol, str):
+        return replace(got, detail=f"{got.detail} No allowance was read: {pol}.")
+    return got
 
 
 def stored(commit: str, but: str, since: str, store=None) -> dict[str, dict]:
@@ -687,8 +715,9 @@ class Pod:
     def forget_launch(self) -> None:
         self.cfg.launch_log.unlink(missing_ok=True)
 
-    def read(self, run: str) -> Read:
-        return read(run, self.cfg)
+    def read(self, run: str, commit: str, now: float) -> Read:
+        """The run's records judged under `commit`'s policy, read from the loop's clone (`policy.at`)."""
+        return read(run, self.cfg, pol=policy.at(self.repo, commit), now=now)
 
     def compare(self, run: str, commit: str) -> dict:
         """The run's verdicts against the recorded checks' of `commit`, which were launched after it was made."""

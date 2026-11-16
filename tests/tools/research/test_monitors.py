@@ -1573,7 +1573,19 @@ hold = "waits for its owner"
 path = "/opt/t"
 nodes = ["vy-nebius-2"]
 run = ["systemd:vy-n2-only"]
+[step.lock.held]
+vy-nebius-2 = "its loop goes in first"
+[[file]]
+path = "/usr/local/sbin/vy-seal"
+nodes = ["vy-nebius-cpu-1", "vy-nebius-2"]
+run = ["systemd:vy-seal.timer"]
+step = "lock"
+[[file]]
+path = "/usr/local/lib/vy-lock/allow"
+nodes = ["vy-nebius-cpu-1", "vy-nebius-2"]
+step = "lock"
 """
+NOTHING = frozenset[str]().__contains__
 
 
 def show(*units: tuple[str, str, str]) -> str:
@@ -1581,14 +1593,47 @@ def show(*units: tuple[str, str, str]) -> str:
 
 
 def test_the_units_deploy_toml_runs_on_a_machine_are_its_run_entries_less_held_ones_tmux_and_expected_off(monkeypatch):
-    assert M.expected_units("vy-nebius-1", MANIFEST) == ["systemd:vy-a.service", "systemd:vy-b.timer", "user-systemd:u.service"]
-    assert M.expected_units("vy-nebius-2", MANIFEST) == ["systemd:vy-n2-only.service"]
+    assert M.expected_units("vy-nebius-1", MANIFEST, NOTHING) == [
+        "systemd:vy-a.service", "systemd:vy-b.timer", "user-systemd:u.service"]
+    assert M.expected_units("vy-nebius-2", MANIFEST, NOTHING) == ["systemd:vy-n2-only.service"]
     monkeypatch.setitem(M.EXPECTED_OFF, ("vy-nebius-1", "systemd:vy-b.timer"), "stopped by design")
-    assert M.expected_units("vy-nebius-1", MANIFEST) == ["systemd:vy-a.service", "user-systemd:u.service"]
-    assert M.expected_units("vy-nebius-cpu-1", MANIFEST) == ["systemd:vy-a.service", "systemd:vy-b.timer"]
-    real = set(M.expected_units("vy-nebius-2", M.MANIFEST.read_text()))
+    assert M.expected_units("vy-nebius-1", MANIFEST, NOTHING) == ["systemd:vy-a.service", "user-systemd:u.service"]
+    assert M.expected_units("vy-nebius-cpu-1", MANIFEST, NOTHING) == ["systemd:vy-a.service", "systemd:vy-b.timer"]
+    real = set(M.expected_units("vy-nebius-2", M.MANIFEST.read_text(), NOTHING))
     assert real >= {"systemd:vy-watchdog.timer", "systemd:vy-lease.service", "systemd:vy-monitors.timer"}
     assert "systemd:vy-n2-offload.service" not in real and all(M.EXPECTED_OFF.values())
+
+
+def test_a_step_that_isnt_applied_on_a_machine_holds_its_units_as_drift_holds_its_files():
+    """deploy drift calls a step's file held while no file of the step is on the machine (and always where the step's
+    `held` names it); the monitor reads that same rule, so it expects the step's units only once the step is applied."""
+    seal = "systemd:vy-seal.timer"
+    assert seal not in M.expected_units("vy-nebius-cpu-1", MANIFEST, NOTHING)
+    for applied in ("/usr/local/lib/vy-lock/allow", "/usr/local/sbin/vy-seal"):
+        assert seal in M.expected_units("vy-nebius-cpu-1", MANIFEST, {applied}.__contains__)
+    assert seal not in M.expected_units("vy-nebius-2", MANIFEST, lambda _p: True)
+    assert M.held(None, "lock", False, set()) == "step lock, not installed"
+    assert M.held(None, "lock", False, {"lock"}) is None and M.held(None, "lock", True, set()) is None
+    assert M.held("waits for its owner", None, True, set()) == "waits for its owner"
+    lockout = {"systemd:vy-seal-runs.timer", "systemd:vy-sudo-fallback-expire.timer"}
+    real = M.MANIFEST.read_text()
+    assert not lockout & set(M.expected_units("vy-nebius-cpu-1", real, NOTHING))
+    assert lockout <= set(M.expected_units("vy-nebius-cpu-1", real, {"/usr/local/lib/vy-lockout/50-vy-research"}.__contains__))
+
+
+def test_units_expected_reads_whether_a_step_is_applied_from_the_machines_own_files(tmp_path, monkeypatch):
+    manifest = tmp_path / "deploy.toml"
+    manifest.write_text(MANIFEST)
+    monkeypatch.setattr(M, "MANIFEST", manifest)
+    up = show(("loaded", "enabled", "active"), ("loaded", "enabled", "active"))
+    run = Run((has("show"), (0, up, "")))
+    ctx = M.Ctx(now=T0, run=run, root=tmp_path, machine="vy-nebius-cpu-1")
+    assert M.units_expected(ctx) == [] and run.calls[-1][0][-2:] == ["vy-a.service", "vy-b.timer"]
+    (tmp_path / "usr/local/lib/vy-lock").mkdir(parents=True)
+    (tmp_path / "usr/local/lib/vy-lock/allow").write_text("")
+    [f] = M.units_expected(M.Ctx(now=T0, run=Run((has("show"), (0, up + "\n" + show(("not-found", "", "inactive")), ""))),
+                                 root=tmp_path, machine="vy-nebius-cpu-1"))
+    assert f.key == "systemd:vy-seal.timer" and "was never installed" in f.text
 
 
 def test_units_expected_flags_a_unit_disabled_stopped_or_never_installed(tmp_path, monkeypatch):
