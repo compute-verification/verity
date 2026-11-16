@@ -1065,7 +1065,9 @@
         "security/Proofs/Properties/Verity/ExecutionPhaseFiles.lean",
         "security/Proofs/Properties/Verity/InferenceOnly.lean",
         "security/Proofs/Properties/Verity/OnsiteCaller.lean",
-        "security/Proofs/Properties/Verity/Soundness/Composite.lean"
+        "security/Proofs/Properties/Verity/Soundness/Composite.lean",
+        "benchmarks/served_errors/",
+        "tests/benchmarks/served_errors/"
       ],
       "branch_suffixes": [
         "9c4d"

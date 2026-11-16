@@ -1,0 +1,14 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# Modeled from the tree's formulas at the served sizes, written for a week, a month and a year of hourly blocks; the
+# year, the one the id names, is written last. It is one deployment's error, over no fleet: the bench scales none.
+[[metric]]
+id = "soundness/remote-joint-crypto-error-log2-year"
+title = "Remote joint cryptographic error"
+owner = "soundness"
+unit = "log₂ of error"
+axis = "Log₂ of the remote product's joint cryptographic error over a year of hourly blocks at the GLM-5.3 card's floor, PoUW's δ_a and δ_bind at κ = 0 plus integrity's ks_t, every term at 2^64 SHA-512 calls."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/served_errors/run.py"
+every = "7d"

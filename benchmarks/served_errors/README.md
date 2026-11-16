@@ -5,7 +5,9 @@ have no value from a Lean instance or a run. Each row is a term, the guarantee i
 is evaluated at, its value (log2 of a probability unless the row gives a percentage), the premises the formula
 rests on and a tag: `modeled`, or `assumed` where the value rests on a constant taken rather than bounded. Evaluating a
 formula discharges none of its premises, and a row whose guarantee is open says so. A sum takes every term at one
-budget, which the row states. `run.py`'s docstring lists the sizes and where each parameter is read.
+budget, which the row states. `run.py`'s docstring lists the sizes and where each parameter is read. Its one dashboard
+number (`metrics.toml`) is the joint cryptographic error at 2^64 calls over a year, with the week and the month beside
+it, which the text form reports through the harness kit after the rows.
 
 The terms:
 

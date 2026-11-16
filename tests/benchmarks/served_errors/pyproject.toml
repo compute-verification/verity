@@ -4,8 +4,12 @@
 testpaths = ["."]
 
 [tool.verity.tests]
-# The runner reads the GLM-5.3 workload card; the test reads the Lean files whose numerals it is held to.
+# The runner reads the GLM-5.3 workload card and reports its number through the harness kit (`kit` and its `settings`,
+# which read `verity_config`); the test reads the Lean files whose numerals it is held to.
 inputs = ["benchmarks/served_errors", "benchmarks/spot_figures/cards/workload.glm-5.3.json",
+    "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+    "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+    "tools/config/verity_config",
     "security/Proofs/Pouw/PearlC/ServedH100Rev1Gap.lean",
     "security/Proofs/Flock/Claims/NumbersDeploy.lean",
     "security/Proofs/Properties/Verity/Recursive.lean",

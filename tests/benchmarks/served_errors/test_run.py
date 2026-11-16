@@ -10,7 +10,9 @@
 - PoUW's δ_ks holds no binding term (no SHA-512 collision), δ_bind is always at κ = 0, and both it and ε_a are tagged
   assumed;
 - the joint error's cryptographic sum takes every term at one budget, and says which;
-- every row names its guarantee and formula, and the script runs with `--json`."""
+- every row names its guarantee and formula, and the script runs with `--json`;
+- the dashboard's number is the printed joint cryptographic rows at its budget over a week, a month and a year, the year
+  last, and the text form reports it as the kit's one line of JSON."""
 from __future__ import annotations
 
 import json
@@ -65,7 +67,9 @@ def test_recursive_audit_rows():
     assert all(r["log2"].endswith("binding: no value") and "over a period: none" in r["rests_on"] for r in rows)
 
 
-def test_rows_run(capsys):
+def test_rows_run(capsys, monkeypatch):
+    for name in ("RESEARCH_RUN_DIR", "OUT"):
+        monkeypatch.delenv(name, raising=False)
     assert R.main(["--json"]) == 0
     rows = json.loads(capsys.readouterr().out)
     assert rows and all(r["guarantee"] and r["formula"] and r["log2"] != "" for r in rows)
@@ -75,3 +79,17 @@ def test_rows_run(capsys):
     assert {r["tag"] for r in rows if r["term"] == "pearl+ ε_a"} == {"assumed"}
     sums = [r for r in rows if r["term"] == "joint, cryptographic" and "one budget" in r["at"]]
     assert len(sums) == 2 and all(r["at"].count("2^") >= 4 for r in sums)
+
+
+def test_metric_is_the_printed_joint_rows(capsys, monkeypatch):
+    for name in ("RESEARCH_RUN_DIR", "OUT"):
+        monkeypatch.delenv(name, raising=False)
+    ms = R.measured(R.rows())
+    printed = {r["at"]: r["log2"] for r in R.rows() if r["term"] == "joint, cryptographic"}
+    assert [m["period"] for m in ms] == ["week", "month", "year"]
+    assert all(m["name"] == R.METRIC and m["value"] == printed[f"q = 2^{R.BUDGET}, a {m['period']} ({R.PHASES[m['period']]} "
+                                                                 "blocks)"] for m in ms)
+    assert all(m["extra"]["tag"] == "assumed" and "κ = 0" in m["extra"]["rests_on"] for m in ms)
+    assert R.main([]) == 0
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert list(doc)[:4] == ["value", "unit", "commit", "run"] and doc["value"] == ms[-1]["value"]

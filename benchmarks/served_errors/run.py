@@ -1,5 +1,10 @@
 """`verity bench served_errors [--json]`: error terms of the quoted guarantees that had no value at the sizes we serve,
-evaluated there. Standard library only; it reads the workload card and nothing else.
+evaluated there. It reads the workload card and nothing else; the rows are standard library only.
+
+Its one dashboard number (`metrics.toml`) is `METRIC`: the remote product's joint cryptographic error at `BUDGET` over each
+monitoring period, the year's written last, as the kit reports it (`kit.report`) after the rows in the text form:
+
+    research run --on auto --cwd source -- uv run python benchmarks/served_errors/run.py
 
 Each row is one term: the guarantee it sits in, the formula, the parameters, and its value as the log2 of a probability,
 for one window, proof or block, against a prover of `2^80` SHA-512 calls unless the row says otherwise. Each row has a
@@ -71,6 +76,9 @@ DITHER = {"delta_coin": 1e-6, "G": 1.15e7, "q": 13816}
 # SPOT's binding error ε_bind as its one-stage audit states it, at k = ⌈2^24/e⌉ and M, R_w at 2^192.
 LINK_K = math.ceil(2**24 / math.e)
 TOKENS_REQUEST = 3320.5
+
+#: the dashboard's number: the joint cryptographic rows over a period at the one budget every term's statement covers
+METRIC, BUDGET, UNIT = "soundness/remote-joint-crypto-error-log2-year", 64, "log₂ of error"
 
 
 def l2sum(*xs: float) -> float:
@@ -249,6 +257,20 @@ def rows() -> list[dict[str, Any]]:
     return out
 
 
+def measured(rs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """`METRIC`'s measurements: the joint cryptographic rows at `BUDGET` over a week, a month and a year, as printed."""
+    joint = [r for r in rs if r["term"] == "joint, cryptographic"]
+    block = next(r for r in joint if r["at"].startswith(f"one budget q = 2^{BUDGET} "))
+    at = {r["at"]: r for r in joint}
+    out = []
+    for period, n in PHASES.items():
+        r = at[f"q = 2^{BUDGET}, a {period} ({n} blocks)"]
+        out.append({"name": METRIC, "value": r["log2"], "unit": UNIT, "period": period,
+                    "inputs": [f"modeled: {block['formula']} {r['formula']}, at {r['at']}"],
+                    "extra": {"tag": r["tag"], "rests_on": block["rests_on"]}})
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--json", action="store_true", help="print the rows as JSON")
@@ -257,10 +279,17 @@ def main(argv: list[str] | None = None) -> int:
     if a.json:
         print(json.dumps(rs, indent=1, ensure_ascii=False))
         return 0
+    text = []
     for r in rs:
-        print(f"{r['term']:22s} {str(r['log2']):>34s}  {r['tag']:8s} at {r['at']}")
-        print(f"{'':22s} {r['guarantee']}: {r['formula']}" + (f"  [{r['rests_on']}]" if r["rests_on"] else ""))
-    return 0
+        text.append(f"{r['term']:22s} {str(r['log2']):>34s}  {r['tag']:8s} at {r['at']}")
+        text.append(f"{'':22s} {r['guarantee']}: {r['formula']}" + (f"  [{r['rests_on']}]" if r["rests_on"] else ""))
+    from verity_bench import kit, settings
+
+    ms = measured(rs)
+    doc = {"value": ms[-1]["value"], "unit": UNIT, "commit": settings.RESEARCH_SOURCE_SHA, "run": settings.RESEARCH_RUN_ID,
+           "metric": METRIC, "period": ms[-1]["period"], "budget": f"q = 2^{BUDGET}",
+           "periods": {m["period"]: m["value"] for m in ms}}
+    return kit.report("served_errors", "\n".join(text), doc, ms, mark="modeled")
 
 
 if __name__ == "__main__":
