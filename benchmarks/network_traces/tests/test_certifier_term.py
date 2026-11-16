@@ -293,7 +293,7 @@ def test_a_stop_class_is_charged_its_whole_schedule_but_where_verdict_records_sa
     assert not any(line.startswith("With the lengths held by a stop block") for line in text)
     whole = next(line for line in text if line.startswith("With its stop class charged its whole schedule, "))
     assert ("for want of the verdicts that hold the lengths by a stop block, and the release times taken once by a "
-            "network certifier whose network card releases at a set time (simulated), the design's term over the "
+            "network attester whose network card releases at a set time (simulated), the design's term over the "
             "world's year is the failed connections' charge, the count and each connection's schedule. The count is "
             ) in whole
     # the hand-worked world's schedules and count are under the target, and the rate is what they leave room for
@@ -875,11 +875,11 @@ def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_
         assert design["term"]["2"]["GB"] == pytest.approx(jitter + design["count"]["GB"], rel=1e-9)
     text = LB.render(doc).splitlines()
     assert ("The term of record is the one at D_j = 2, two release schedules. The term at D_j = 1 is what a network "
-            "certifier whose network card releases at a set time would be charged. That card is simulated, the input "
+            "attester whose network card releases at a set time would be charged. That card is simulated, the input "
             "set_time_card, whose source is what the term rests on: none is deployed, so it is printed as "
             f"\"{label}\".") in text
     held = next(line for line in text if line.startswith("With the lengths held by a stop block and the release "))
-    assert "taken once by a network certifier whose network card releases at a set time (simulated)" in held
+    assert "taken once by a network attester whose network card releases at a set time (simulated)" in held
     assert held.endswith(f" Without that card the jitter alone, at D_j = 2, is {LB._n(jitter)} GB over the world's "
                          f"year, {LB._n(jitter / 300)} times the target.")
     heads = [[c.strip() for c in line.strip("|").split("|")] for line in text if line.startswith("| scope")]

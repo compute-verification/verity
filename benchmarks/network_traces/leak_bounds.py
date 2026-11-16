@@ -141,6 +141,8 @@ from verity.protocols.resource_accounting.network.verifier.scan_answer import JI
 #: the monitoring periods' seconds, by name
 PERIODS: dict[str, int] = dict(protocol.MONITORING_PERIODS)
 DELTAS: tuple[Fraction, ...] = protocol.DELTAS
+#: the device's name, as every text of the term names it
+ATTESTER = "network attester"
 #: a bucket's seconds when a link names none: the network attester's default τ
 TAU = Fraction(W.NetworkAttesterParams().bucket_ms, 1000)
 #: a sampling block's scan's δ when a link names none: `scan_zk --delta`'s default
@@ -510,7 +512,7 @@ JITTERS = (1, 2)
 #: It and `JITTER_BOUND`, which K by links is charged at, are one bound, defined there
 OF_RECORD = JITTER_BOUND
 #: the label every figure that rests on a set-time card is printed under: a figure at D_j = 1, what a network
-#: certifier whose network card releases at a set time would be charged, and at either D_j a figure of a row whose
+#: attester whose network card releases at a set time would be charged, and at either D_j a figure of a row whose
 #: release times are taken once (`CHANGES`' timing). The card is simulated (`SET_TIME_CLAUSE`)
 SET_TIME = "with a simulated set-time card"
 #: the mark of the set-time card and of the figure printed under its label, one of `MARKS`
@@ -1144,7 +1146,7 @@ def render(doc: dict) -> str:
         "schedules, the fail cells, the jitter and, on a row whose check reads the head that states it, the count. "
         "The entries are the compute side's.",
         f"The term of record is the one at D_j = {OF_RECORD}, two release schedules. The term at D_j = 1 is what a "
-        f"network certifier whose network card releases at a set time would be charged. That card is {card['mark']}, "
+        f"{ATTESTER} whose network card releases at a set time would be charged. That card is {card['mark']}, "
         "the input set_time_card, whose source is what the term rests on: none is deployed, so it is printed as "
         f"\"{card['label']}\".",
         "A row whose release times are taken once has a jitter of 0 at either D_j, which rests on the same card, so "
@@ -1201,7 +1203,7 @@ def render(doc: dict) -> str:
          "With its stop class charged its whole schedule"
          + (f" on all but {_n(st['held_phases'])} execution phase(s) of a link" if st["held_phases"] else "")
          + ", for want of the verdicts that hold the lengths by a stop block,")
-        + " and the release times taken once by a network certifier whose network "
+        + f" and the release times taken once by a {ATTESTER} whose network "
         f"card releases at a set time ({card['mark']}), the design's term over the world's year is the failed "
         "connections' charge"
         + (" and the count. " if st["below"] else ", the count and each connection's schedule. ")
@@ -1266,7 +1268,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ``--json`` its document (`document`)."""
     ap = argparse.ArgumentParser(
         prog="verity bench certifier_term",
-        description=f"The network certifier's term for {MODEL} at the load of a node, the census's reference "
+        description=f"The {ATTESTER}'s term for {MODEL} at the load of a node, the census's reference "
                     "datacenter and the world, over a week, a month and a year, in bits and GB: as the check on "
                     "main charges it by its own rule, under each of three changes to the scan's check, and for the "
                     "design that has no run behind it, without its stop block and with it: seven rows a scope and "
@@ -1281,7 +1283,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--phase-buckets", type=int, default=BUCKETS, metavar="T",
                     help=f"an execution phase's buckets (default {BUCKETS})")
     ap.add_argument("--bucket-s", type=Fraction, default=TAU, metavar="S",
-                    help=f"a bucket's seconds (default {TAU}, the network certifier's)")
+                    help=f"a bucket's seconds (default {TAU}, the {ATTESTER}'s)")
     ap.add_argument("--lanes", type=int, metavar="N",
                     help="the connections a link holds at once: the entries are then every slot's, by capacity, and "
                          "the count is at these lanes, which are refused where their schedule releases fewer "
