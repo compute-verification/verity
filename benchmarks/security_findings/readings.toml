@@ -1,0 +1,276 @@
+# Readings of things the checks of `open_findings.py` can't read where the metric runs, each taken where the thing is: the
+# command it ran (the check's own, or the check refuses it), who ran it (`reader`), when (`at`), and what it printed. A reading
+# older than `MAX_AGE_DAYS` decides nothing, and its finding counts as unread until someone runs the command again and
+# replaces the entry. Never an address, a key, a token or an auditor's machine here.
+
+# finding agent-holds-personal-and-cloud-keys: on a freshly booted agent VM, the names of AGENT_KEYS its environment holds
+[agent-env]
+command = "compgen -e | grep -xE 'LINEAR_API_KEY|RESEARCH_NOTES_TOKEN|GCP_SA_KEY_B64|RUNPOD_API_KEY|NEBIUS_SA_PRIVATE_KEY_B64'"
+reader = "infra"
+at = 2026-11-15T18:52:51Z
+names = ["LINEAR_API_KEY", "NEBIUS_SA_PRIVATE_KEY_B64", "RUNPOD_API_KEY"]
+
+# finding store-key-writes: on an agent VM, what the store answers its store key for a copy into a scratch key from a missing one
+[store-write]
+command = "uv run python benchmarks/security_findings/open_findings.py --probe-store"
+reader = "infra"
+at = 2026-11-15T18:52:59Z
+status = 404
+code = "NoSuchKey"
+
+# findings agents-have-root and security-updates-and-kernel: MACHINE_COMMAND as the agents' login on each machine, over
+# `research pods ssh NAME -- COMMAND`; a machine that didn't answer has no entry
+[machines]
+command = 'id -un; id -u; sudo -n id -u 2>/dev/null || echo refused; grep -m1 NoNewPrivs /proc/self/status | cut -f2; uname -r; (. /etc/os-release && echo "$VERSION_ID") || echo unknown; apt-config dump | grep -E "^(APT::Periodic::Unattended-Upgrade|Unattended-Upgrade::(Allowed-Origins|Origins-Pattern|Package-Whitelist))"'
+reader = "infra"
+at = 2026-11-16T00:12:46Z
+
+[machines.output]
+vy-nebius-cpu-1 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+  'Unattended-Upgrade::Package-Whitelist "";',
+  'Unattended-Upgrade::Package-Whitelist:: "ca-certificates";',
+  'Unattended-Upgrade::Package-Whitelist:: "libnss3";',
+  'Unattended-Upgrade::Package-Whitelist-Strict "true";',
+]
+vy-nebius-cpu-2 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+  'Unattended-Upgrade::Package-Whitelist "";',
+  'Unattended-Upgrade::Package-Whitelist:: "ca-certificates";',
+  'Unattended-Upgrade::Package-Whitelist:: "libnss3";',
+  'Unattended-Upgrade::Package-Whitelist-Strict "true";',
+]
+vy-nebius-cpu-3 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+  'Unattended-Upgrade::Package-Whitelist "";',
+  'Unattended-Upgrade::Package-Whitelist:: "ca-certificates";',
+  'Unattended-Upgrade::Package-Whitelist:: "libnss3";',
+  'Unattended-Upgrade::Package-Whitelist-Strict "true";',
+]
+vy-nebius-cpu-4 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+  'Unattended-Upgrade::Package-Whitelist "";',
+  'Unattended-Upgrade::Package-Whitelist:: "ca-certificates";',
+  'Unattended-Upgrade::Package-Whitelist:: "libnss3";',
+  'Unattended-Upgrade::Package-Whitelist-Strict "true";',
+]
+vy-nebius-cpu-5 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+  'Unattended-Upgrade::Package-Whitelist "";',
+  'Unattended-Upgrade::Package-Whitelist:: "ca-certificates";',
+  'Unattended-Upgrade::Package-Whitelist:: "libnss3";',
+  'Unattended-Upgrade::Package-Whitelist-Strict "true";',
+]
+vy-nebius-cpu-6 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+  'Unattended-Upgrade::Package-Whitelist "";',
+  'Unattended-Upgrade::Package-Whitelist:: "ca-certificates";',
+  'Unattended-Upgrade::Package-Whitelist:: "libnss3";',
+  'Unattended-Upgrade::Package-Whitelist-Strict "true";',
+]
+vy-nebius-cpu-7 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+  'Unattended-Upgrade::Package-Whitelist "";',
+  'Unattended-Upgrade::Package-Whitelist:: "ca-certificates";',
+  'Unattended-Upgrade::Package-Whitelist:: "libnss3";',
+  'Unattended-Upgrade::Package-Whitelist-Strict "true";',
+]
+vy-nebius-cpu-8 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+]
+vy-nebius-cpu-9 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+  'Unattended-Upgrade::Package-Whitelist "";',
+  'Unattended-Upgrade::Package-Whitelist:: "ca-certificates";',
+  'Unattended-Upgrade::Package-Whitelist:: "libnss3";',
+  'Unattended-Upgrade::Package-Whitelist-Strict "true";',
+]
+vy-nebius-cpu-11 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+  'Unattended-Upgrade::Package-Whitelist "";',
+  'Unattended-Upgrade::Package-Whitelist:: "ca-certificates";',
+  'Unattended-Upgrade::Package-Whitelist:: "libnss3";',
+  'Unattended-Upgrade::Package-Whitelist-Strict "true";',
+]
+vy-nebius-cpu-12 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+  'Unattended-Upgrade::Package-Whitelist "";',
+  'Unattended-Upgrade::Package-Whitelist:: "ca-certificates";',
+  'Unattended-Upgrade::Package-Whitelist:: "libnss3";',
+  'Unattended-Upgrade::Package-Whitelist-Strict "true";',
+]
+vy-nebius-cpu-13 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+  'Unattended-Upgrade::Package-Whitelist "";',
+  'Unattended-Upgrade::Package-Whitelist:: "ca-certificates";',
+  'Unattended-Upgrade::Package-Whitelist:: "libnss3";',
+  'Unattended-Upgrade::Package-Whitelist-Strict "true";',
+]
+vy-nebius-cpu-14 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+]
+vy-nebius-cpu-16 = [
+  'research',
+  '1001',
+  '0',
+  '0',
+  '6.11.0-1016-nvidia',
+  '24.04',
+  'APT::Periodic::Unattended-Upgrade "1";',
+  'Unattended-Upgrade::Allowed-Origins "";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESMApps:${distro_codename}-apps-security";',
+  'Unattended-Upgrade::Allowed-Origins:: "${distro_id}ESM:${distro_codename}-infra-security";',
+]
+vy-control-verity = [
+  'root',
+  '0',
+  'refused',
+  '0',
+  '6.8.0-147-generic',
+  '22.04',
+]

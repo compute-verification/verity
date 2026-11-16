@@ -10,14 +10,15 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import tomllib
 from pathlib import Path
 
+import pytest
+from research.metrics import REGISTRY_ROOTS
 from test_repository import ROOT
 
 NAME = "metrics.toml"
-#: where a benchmark's metrics.toml may sit: the trees a command's script is under (`_SCRIPT`)
-TREES = ("benchmarks", "infra", "tools")
 #: the one file every row once sat in, which no row may return to
 RETIRED = "benchmarks/metrics.toml"
 SKIP = {".git", ".lake", ".venv", "node_modules", "__pycache__", "target", "build", "dist"}
@@ -28,13 +29,13 @@ OPTIONAL = frozenset({"floor", "goal", "tags"})
 TITLE_WORDS, UNIT_WORDS = (3, 6), 3
 _ID = re.compile(r"^[a-z][a-z0-9-]*/[a-z0-9][a-z0-9.-]*$")
 _EVERY = re.compile(r"^[1-9][0-9]*[mhd]$")
-_SCRIPT = re.compile(rf"(?:^|\s)((?:{'|'.join(TREES)})/\S+\.(?:sh|py))(?:\s|$)")
-_UNDER = ", ".join(f"{t}/" for t in TREES[:-1]) + f" or {TREES[-1]}/"
+_SCRIPT = re.compile(rf"(?:^|\s)((?:{'|'.join(REGISTRY_ROOTS)})/\S+\.(?:sh|py))(?:\s|$)")
+_UNDER = ", ".join(f"{t}/" for t in REGISTRY_ROOTS[:-1]) + f" or {REGISTRY_ROOTS[-1]}/"
 
 
 def _files() -> list[str]:
     out = []
-    for tree in TREES:
+    for tree in REGISTRY_ROOTS:
         for d, dirs, files in os.walk(ROOT / tree):
             dirs[:] = sorted(x for x in dirs if x not in SKIP)
             if NAME in files:
@@ -126,7 +127,7 @@ def test_every_metric_is_declared_once_by_a_known_owner_beside_its_producing_scr
     reg = json.loads((ROOT / HANDLES).read_text(encoding="utf-8"))
     handles = {h["handle"] for h in reg["handles"]}
     files = _files()
-    assert files, f"no {NAME} under {', '.join(TREES)}: the Metrics tab would show nothing"
+    assert files, f"no {NAME} under {', '.join(REGISTRY_ROOTS)}: the Metrics tab would show nothing"
     rows, broken = _metrics(files)
     where = {f: f.rsplit("/", 1)[0] for f in files}
     declared: dict[str, list[str]] = {}
@@ -161,7 +162,7 @@ def test_a_row_that_breaks_a_rule_is_refused() -> None:
         "'infra/serving-cost-glm53'"]
     assert _problems({**good, "owner": "nobody", "command": "echo"}, {"vllm"}, here) == [
         f"owner 'nobody' is no handle in {HANDLES}",
-        "its command names no script under benchmarks/, infra/ or tools/"]
+        "its command names no script under benchmarks/, demos/, infra/ or tools/"]
     assert _problems({**good, "id": "vllm/serving-cost-glm53"}, {"vllm"}, "benchmarks/landing") == [
         "its command's script benchmarks/serve_tax/run.sh is not under benchmarks/landing/: move the row to "
         "benchmarks/serve_tax/metrics.toml, beside its script"]
@@ -232,6 +233,23 @@ def test_a_row_a_loop_sends_sits_beside_the_loop_and_may_be_due_in_minutes() -> 
         "infra/control/metrics.toml, beside its script")
     assert _problems({**row, "every": "30s"}, {"infra"}, "infra/control")[0] == (
         "every is '30s', not a count of minutes, hours or days such as 5m, 12h or 7d")
+
+
+def test_a_row_under_demos_is_found_and_held_to_the_same_rules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "demos" / "remote").mkdir(parents=True)
+    (tmp_path / "demos" / "remote" / NAME).write_text("", encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
+    assert _files() == ["demos/remote/metrics.toml"]
+    row = {"id": "vllm/remote-demo-minutes", "title": "Remote demo run time", "owner": "vllm", "unit": "minutes",
+           "axis": "Minutes from the first command to the verdict.", "better": "lower",
+           "command": "bash demos/remote/no-such-run.sh", "every": "7d"}
+    assert _problems(row, {"vllm"}, "demos/remote") == ["its command's script demos/remote/no-such-run.sh doesn't exist"]
+    assert _problems({**row, "title": "Remote demo", "every": "weekly"}, {"vllm"}, "benchmarks/serve_tax") == [
+        "title 'Remote demo' is 2 words, not 3 to 6: make it a plain headline and say the rest in axis",
+        "every is 'weekly', not a count of minutes, hours or days such as 5m, 12h or 7d",
+        ("its command's script demos/remote/no-such-run.sh is not under benchmarks/serve_tax/: move the row to "
+         "demos/remote/metrics.toml, beside its script"),
+        "its command's script demos/remote/no-such-run.sh doesn't exist"]
 
 
 def test_a_row_in_a_file_another_handle_owns_is_refused() -> None:

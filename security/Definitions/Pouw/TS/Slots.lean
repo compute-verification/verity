@@ -51,7 +51,7 @@ SAMPLING's LIN-STEER:
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Finset
 
@@ -76,4 +76,4 @@ structure Consumer (m : ℕ) where
   act : Finset (Fin m)
   cost : Finset (Fin m) → ℝ
 
-end Accounting.TS
+end ResourceAccounting.TS

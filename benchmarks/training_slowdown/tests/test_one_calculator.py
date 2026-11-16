@@ -6,7 +6,7 @@
 - The entry point is the calculator's: at three policies a config may name, its slowdown is `min_cut.bound`'s, asked
   directly, on the work a step's products state.
 - One slowdown (`second`): outside the one module, no source of the benchmark reads a private name of it (an
-  attribute `calculator._x` or `from ... calculator import _x`) or writes a `slowdown`, `rho` or `S` key in a function
+  attribute `calculator._x` or `from ... calculator import _x`) or writes a `slowdown`, `record_slowdown` or `S` key in a function
   `STATES` doesn't list; inside it, nothing calls the calculator's `bound`, `blocks_at_least` or `slowdown_at_least`,
   only `_figure` calls its `slowdown_of`, only `slowdown` calls `_bound` and `_figure`, and its public functions are
   `PUBLIC`. With the entry point replaced, what `STATES`' functions state follows it. The one ratio that is not the
@@ -115,7 +115,7 @@ def test_the_products_term_is_the_calculators(monkeypatch):
     he = {"k": 65_536.0, "groups": [group], "r_step": None, "candidates_macs": 1e9, "self_macs": 0.0,
           "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
     fig = figure(he, 1e11, 1e13)
-    assert (fig["rho"], fig["subset"], fig["beta_w"], fig["beta_x"], fig["beta_k"], fig["F"], fig["alpha"]) == (
+    assert (fig["term"], fig["subset"], fig["beta_w"], fig["beta_x"], fig["beta_k"], fig["F"], fig["alpha"]) == (
         42.0 * 1e11 / 1e13, "M", 16.0, 3.0, 3.0, 1.25, 0.5)
     assert (fig["beta"], fig["K_thr"], fig["subsets"], fig["macs_share"]) == (
         48.0 ** 0.5, 8.0, {"M": 42.0 * 1e11 / 1e13}, 1.0)
@@ -212,15 +212,15 @@ def sources() -> dict[str, str]:
 #: function beside it
 PUBLIC = {"policies", "policy", "window", "periods", "fleets", "beta_rows", "theorem", "he_past", "slowdown"}
 #: the keys a slowdown is written under
-KEYS = {"slowdown", "rho", "S"}
+KEYS = {"slowdown", "record_slowdown", "S"}
 #: the functions outside the one module that write one of `KEYS`, each with whose slowdown it writes. It only shrinks.
 STATES = {
     ("training_slowdown/formalism.py", "at"):
-        "`rho`: Fit's c/(c − d) where the training fits one block, the one ratio that is no bound of the "
+        "`slowdown`: Fit's c/(c − d) where the training fits one block, the one ratio that is no bound of the "
         "calculator's, else the entry point's slowdown",
-    ("training_slowdown/formalism.py", "published"): "`at`'s `rho`",
-    ("training_slowdown/grade.py", "slowdown_of"): "`published`'s `rho`, or none with the reason",
-    ("training_slowdown/grade.py", "grade"): "`slowdown_of`'s `rho`, and `S`, p times it",
+    ("training_slowdown/formalism.py", "published"): "`at`'s `slowdown`",
+    ("training_slowdown/grade.py", "slowdown_of"): "`published`'s `slowdown`, or none with the reason",
+    ("training_slowdown/grade.py", "grade"): "`slowdown_of`'s result as `record_slowdown`, and `S`, p times its `slowdown`",
     ("training_slowdown/library.py", "bound"): "the entry point's slowdown, or none with its reason",
     ("training_slowdown/library.py", "row"): "`bound`'s slowdown",
 }
@@ -290,7 +290,7 @@ def test_a_second_slowdown_is_found():
     assert second("training_slowdown/other.py", "def mine(blocks, c, C):\n"
                   "    return {'slowdown': max(1.0, blocks * c / C), 'blocks': blocks}\n") == [
         "2: mine writes the key 'slowdown'"]
-    assert second("training_slowdown/formalism.py", "def at(m):\n    return {'rho': m}\n\n"
+    assert second("training_slowdown/formalism.py", "def at(m):\n    return {'slowdown': m}\n\n"
                   "def other(m):\n    return {'S': m}\n") == ["5: other writes the key 'S'"]
     assert second(DOOR, "def _figure(c):\n    return _min_cut().slowdown_of(c)\n\n"
                   "def slowdown(policy, step):\n    return _bound(policy)\n\n"
@@ -303,7 +303,7 @@ def test_a_second_slowdown_is_found():
 
 def test_every_slowdown_the_benchmark_states_is_the_entry_points(monkeypatch):
     """With the entry point replaced by one that gives 7.25 on every record (beside a term of 3.5, which a caller
-    flooring the term itself would give), `at`'s `rho`, the published slowdown and the library's row give 7.25,
+    flooring the term itself would give), `at`'s `slowdown`, the published slowdown and the library's row give 7.25,
     binding the products, and the one bound's products term is the entry point's term; where it gives none, they
     give none with its reason, whatever the sensitivities beside it are; and where it gives the floor, 1, binding
     none. The one ratio that isn't the entry point's is Fit's c/(c − d), where a training fits one block."""
@@ -320,7 +320,7 @@ def test_every_slowdown_the_benchmark_states_is_the_entry_points(monkeypatch):
     part = F.Part(gates=GATES, tokens=TOKENS, token_gates=GATES, affected_gates=GATES / 2)
     m = F.Measured((part,), tau_bits=16, a_bits=16, u=F.even(2000.0), u_in=F.even(2000.0), delta_bits=None,
                    decoder_gates=0.0, products=work.products_of_trace(work.priced(traced(k))))
-    honest = F.published(m, c, k)["rho"]
+    honest = F.published(m, c, k)["slowdown"]
     assert honest == real(pol, traced(k))["slowdown"] > 1
     for give, slowdown, binding in (({"slowdown": 7.25, "term": 3.5, "binds": "products"}, 7.25, "products"),
                                ({"slowdown": 1.0, "term": 0.5, "binds": "none"}, 1.0, "none"),
@@ -330,7 +330,7 @@ def test_every_slowdown_the_benchmark_states_is_the_entry_points(monkeypatch):
         given.update(give)
         b, one = F.bound(m, c, k), F.published(m, c, k)
         assert b["entry"]["slowdown"] == slowdown and b["terms"]["products"] == give["term"]
-        assert F.at(m, c, k)["rho"] == slowdown and (one["rho"], one["binding_kind"]) == (slowdown, binding)
+        assert F.at(m, c, k)["slowdown"] == slowdown and (one["slowdown"], one["binding_kind"]) == (slowdown, binding)
         row = library.bound(traced(k), c, k)
         assert row["slowdown"] == slowdown
         if slowdown is None:
@@ -338,5 +338,5 @@ def test_every_slowdown_the_benchmark_states_is_the_entry_points(monkeypatch):
     fits = F.Measured((F.Part(gates=1e12, tokens=1e3, token_gates=0.8e12, affected_gates=0.4e12, delta_grad_bits=1e5),),
                       tau_bits=32, a_bits=8192, u=F.even(1e5), u_in=F.even(1e5), delta_bits=1e5, decoder_gates=1e12)
     one = F.published(fits, 1e13, 1e6)
-    assert (one["rho"], one["binding_kind"]) == (pytest.approx(1e13 / (1e13 - 1e12)), "fit")
-    assert math.isfinite(one["rho"]) and one["rho"] != 7.25
+    assert (one["slowdown"], one["binding_kind"]) == (pytest.approx(1e13 / (1e13 - 1e12)), "fit")
+    assert math.isfinite(one["slowdown"]) and one["slowdown"] != 7.25

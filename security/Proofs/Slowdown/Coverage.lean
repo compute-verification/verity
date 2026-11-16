@@ -8,7 +8,7 @@ import Proofs.Core.Game.Prob
 /-! `Slowdown.SecurityProofs.CapabilityFloor : Slowdown.Guarantees.CapabilityFloor`: below `min Lc Tmax`, a computation in `𝒜`
 has no covered structure (each costs at least `Lc`), so its success there is among coverage's uncovered successes below
 `Tmax`. Its witnesses (`CapabilityFloorHonest`, `CapabilityFloorNontrivial`) are proved at the toy task
-`Accounting.Slowdown.Toy`: a position holds one gate, so a run reaches at most one of the coin's two targets, and the
+`ResourceAccounting.Slowdown.Toy`: a position holds one gate, so a run reaches at most one of the coin's two targets, and the
 guess reaches one. -/
 
 @[expose] public section
@@ -21,7 +21,7 @@ theorem Slowdown.SecurityProofs.CapabilityFloor : Slowdown.Guarantees.Capability
   exact ⟨hA, hS, lt_of_lt_of_le hc (min_le_right _ _),
     fun hCore => absurd (hfloor C p.1 hA hCore) (not_le.2 (lt_of_lt_of_le hc (min_le_left _ _)))⟩
 
-namespace Accounting.Slowdown.Toy
+namespace ResourceAccounting.Slowdown.Toy
 
 open scoped ENNReal
 
@@ -62,16 +62,16 @@ theorem prob_pos (E : Unit → Set (Fin 1 → List Bool) → Prop) (h : E () {y 
   rw [prob_eq]
   simp [h]
 
-end Accounting.Slowdown.Toy
+end ResourceAccounting.Slowdown.Toy
 
 /-- **`CapabilityFloor`'s premises hold together** (`Slowdown.Guarantees.CapabilityFloorHonest`). -/
 theorem Slowdown.SecurityProofs.CapabilityFloorHonest : Slowdown.Guarantees.CapabilityFloorHonest := by
-  refine ⟨fun C pos => Accounting.Slowdown.Toy.prob_le_half _ fun h =>
-      Accounting.Slowdown.Toy.not_both (C ()) pos ⟨h.1.2.1, h.2.2.1⟩,
-    fun _ _ _ h => h, fun h => Accounting.Slowdown.Toy.prob_pos _ ?_ (h Accounting.Slowdown.Toy.comp
-      Accounting.Slowdown.Toy.pos)⟩
-  exact ⟨Set.mem_univ _, Accounting.Slowdown.Toy.guess_succeeds, (by decide : 1 < 10), (by decide : ¬ 2 ≤ 1)⟩
+  refine ⟨fun C pos => ResourceAccounting.Slowdown.Toy.prob_le_half _ fun h =>
+      ResourceAccounting.Slowdown.Toy.not_both (C ()) pos ⟨h.1.2.1, h.2.2.1⟩,
+    fun _ _ _ h => h, fun h => ResourceAccounting.Slowdown.Toy.prob_pos _ ?_ (h ResourceAccounting.Slowdown.Toy.comp
+      ResourceAccounting.Slowdown.Toy.pos)⟩
+  exact ⟨Set.mem_univ _, ResourceAccounting.Slowdown.Toy.guess_succeeds, (by decide : 1 < 10), (by decide : ¬ 2 ≤ 1)⟩
 
 /-- **`CapabilityFloor`'s conclusion can fail** (`Slowdown.Guarantees.CapabilityFloorNontrivial`). -/
 theorem Slowdown.SecurityProofs.CapabilityFloorNontrivial : Slowdown.Guarantees.CapabilityFloorNontrivial :=
-  Accounting.Slowdown.Toy.prob_pos _ ⟨Set.mem_univ _, Accounting.Slowdown.Toy.guess_succeeds, by decide⟩
+  ResourceAccounting.Slowdown.Toy.prob_pos _ ⟨Set.mem_univ _, ResourceAccounting.Slowdown.Toy.guess_succeeds, by decide⟩

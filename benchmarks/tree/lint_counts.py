@@ -12,19 +12,23 @@ It checks ``REF`` out in a clone of its own, which borrows the repository's obje
 writes nothing into the repository.  It calls each lint's own code there; nothing here scans a file.  It prints one line
 for each file that a lint finds a site in or that a list has an entry for, sorted, tab-separated, to stdout:
 
-    lint    file    found    allowed
+    lint    file    found    allowed    past
 
 ``lint`` is the list's name, ``file`` the file's path from the repository's root, ``found`` the sites the lint finds in
-the file and ``allowed`` the sites the list's entries allow it.  A list that could not be counted has one line,
-``NAME  -  -  -``; its reason goes to stderr, where each counted list has a line of totals, and the exit is 1.  Exit 0:
-every list asked for was counted.  Exit 2: no such commit, list or lint.
+the file, ``allowed`` the sites the list's entries allow it and ``past`` the sites found past their entries, counted by
+key and never netted (``by_file``).  The first four columns are what they were before ``past`` was added.  A list that
+could not be counted has one line, ``NAME  -  -  -  -`` (``NOT_COUNTED``), its reason goes to stderr, and the exit is 1.
+A list named in ``NO_RATCHETS`` is not a ratchet's and has one line, ``NAME  -  n/a  n/a  n/a`` (``NO_RATCHET``), and
+a line on stderr saying so; it changes no exit.  Any other list whose module has no ``allowed()`` is not counted: a
+ratchet that lost the function must not leave the sums unseen.  Each counted list has a line of totals on stderr.
+Exit 0: every ratchet's list asked for was counted.  Exit 2: no such commit, list or lint.
 
 How a list is read:
 
 * A repository lint (``tests/lint/test_NAME.py``): its ``found()`` and ``allowed()``.  The environment-reads lint's
   ``allowed()`` returns the list's registry marks too, which its ``found`` takes.  The ruff lint has no ``found()``:
-  its findings are its ``scan()``'s, as its own ``--prune`` reads them.  A list whose module has no ``allowed()`` is
-  not a ratchet's and is not counted: the Python verdicts' list is a reading's, and its lint finds nothing outside it.
+  its findings are its ``scan()``'s, as its own ``--prune`` reads them.  The Python verdicts' list is no ratchet's
+  (``NO_RATCHETS``): it is a reading's, its lint finds nothing outside it and its module has no ``allowed()``.
 * ``lean_retired_terms``, which ``tests/test_retired_terms.py`` holds: the Lean files' sites of its ``offenders`` and
   its ``lean_allowed()``, as its own ``--prune`` reads them.
 * ``superseded_versions``, which circuit-check's suite holds (``tools/verity/circuit_check/tests/``): the files of
@@ -34,11 +38,13 @@ How a list is read:
   (mypy's ``violations()``) and ``_ratchet.load_allowlist(NAME)``, which are what its tests compare.  Its keys name a
   file from ``adapters/vllm`` where the file is under it; a line here names every file from the repository's root.
 * A lint with two readings is counted by the one its test of new findings reads (the typed-records lint).
-* P10's ``count`` is a size in lines, not a number of sites.  Its line counts one for each module or function past the
-  limit and one for each entry.
+* P10's ``count`` is a size in lines, not a number of sites.  It is counted as its lint fails: one site for each module
+  or function past the limit, and one allowed for each entry, except an entry whose module or function has grown past
+  its recorded size and the lint's ``slack()``, which allows none, so that site is past its entry.
 
 A line sums a file's keys.  Where a list is keyed finer than the file (by rule, or by kind, symbol and detail), a key
-past its entry can stand beside one under its own in the same file; the totals on stderr count by key.
+past its entry can stand beside one under its own in the same file, so ``found - allowed`` reads low and ``past`` sums
+each key's excess alone; the totals on stderr count by key too.
 
 What a count needs of the Python that runs this:
 
@@ -66,6 +72,7 @@ import sys
 import tempfile
 import tomllib
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT_LINT = "tests/lint"
@@ -78,10 +85,15 @@ ELSEWHERE = {"lean_retired_terms": ("lean_terms", "tests/test_retired_terms.py")
 RUFF = ("repo_ruff", "ruff", "ruff_vllm")
 #: what would have a lint import, or mypy follow, another checkout's code
 DROPPED = ("PYTHONPATH", "MYPYPATH")
+#: a line's columns after ``lint`` for a list that could not be counted, and for one that is no ratchet's
+NOT_COUNTED = ("-", "-", "-", "-")
+NO_RATCHET = ("-", "n/a", "n/a", "n/a")
+#: the lists that are no ratchet's, by name: a module without ``allowed()`` that isn't one of these is not counted
+NO_RATCHETS = frozenset({"repo_python_verdicts"})
 
 #: Run as ``python -I -c CHILD TREE OUT JOBS`` (JOBS a JSON list of [list, how it is read, its lint module]): writes to OUT
-#: a JSON list with, for each job, ``{"list", "found", "allowed", "keys"}`` (each file's count, as the lint names the
-#: file, and the counts by key) or ``{"list", "refused"}``.
+#: a JSON list with, for each job, ``{"list", "found", "allowed"}`` (each a list of [key, count], the key as the lint
+#: makes it, a tuple as a list), ``{"list", "refused"}`` or ``{"list", "no_ratchet"}``.
 CHILD = r'''
 import importlib, importlib.util, json, os, sys, traceback, types
 from collections import Counter
@@ -89,6 +101,10 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 tree, out, jobs = Path(sys.argv[1]), Path(sys.argv[2]), json.loads(sys.argv[3])
+
+
+class NoRatchet(Exception):
+    pass
 
 try:
     import pytest
@@ -111,7 +127,8 @@ def root(name, module):
     mod = importlib.util.module_from_spec(spec)
     sys.modules[path.stem] = mod
     spec.loader.exec_module(mod)
-    assert hasattr(mod, "allowed"), f"{module} has no allowed(): its list is not a ratchet's, which this counts"
+    if not hasattr(mod, "allowed"):
+        raise NoRatchet(f"{module} has no allowed(), so its list is no ratchet's")
     have, *marks = have if isinstance(have := mod.allowed(), tuple) else (have,)
     return (mod.found(*marks) if hasattr(mod, "found") else Counter(k for k, *_ in mod.scan())), have
 
@@ -143,33 +160,27 @@ def adapter(name, module):
         sys.modules["lints"].__path__ = [str(path.parent)]
     have = importlib.import_module("lints._ratchet").load_allowlist(name)
     mod = importlib.import_module(f"lints.{path.stem}")
-    if hasattr(mod, "sizes"):                            # P10: a count is a size in lines
-        return Counter(dict.fromkeys(mod.sizes(), 1)), Counter(dict.fromkeys(have, 1))
+    if hasattr(mod, "sizes"):                            # P10: a count is a size in lines, which may grow by its slack
+        now = mod.sizes()
+        return Counter(dict.fromkeys(now, 1)), +Counter({k: int(now.get(k, 0) <= size + mod.slack(size)) for k, size in have.items()})
     got = mod.violations() if hasattr(mod, "violations") else mod.scan()
     if len(got) == 2 and isinstance(got[1], dict):       # P13: the violations, and each one's other copies
         got = got[0]
     return Counter(v.key for v in got), have
 
 
-def by_file(counts):
-    files = Counter()
-    for k, n in counts.items():
-        files[k if isinstance(k, str) else k[0]] += n
-    return dict(files)
-
-
 results = []
 for name, how, module in jobs:
     try:
         got, have = {"root": root, "lean_terms": lean_terms, "superseded": superseded, "adapter": adapter}[how](name, module)
-        over, under = got - have, have - got
-        results.append({"list": name, "found": by_file(got), "allowed": by_file(have),
-                        "keys": [len(over), sum(over.values()), len(under), sum(under.values())]})
+        results.append({"list": name, "found": [*got.items()], "allowed": [*have.items()]})
+    except NoRatchet as e:
+        results.append({"list": name, "no_ratchet": str(e)})
     except AssertionError as e:
         results.append({"list": name, "refused": str(e)})
     except (Exception, SystemExit):
         results.append({"list": name, "refused": traceback.format_exc(limit=3)})
-out.write_text(json.dumps(results), encoding="utf-8")
+out.write_text(json.dumps(results, default=str), encoding="utf-8")
 '''
 
 
@@ -243,6 +254,37 @@ def from_root(tree: Path, file: str) -> str:
     return file
 
 
+def key(k: object) -> object:
+    """A key as its lint made it, from the child's JSON: each list a tuple again."""
+    return tuple(map(key, k)) if isinstance(k, list) else k
+
+
+def by_file(found: Counter, allowed: Counter, path: Callable[[str], str] = lambda f: f) -> dict[str, tuple[int, int, int]]:
+    """{the file ``path`` names for each key's file: (found, allowed, past)}.  A key is its file, or a tuple whose first
+    item is its file.  ``past`` sums each key's ``max(0, found - allowed)``, so an entry that allows more than is found
+    never cancels another key's site past its own."""
+    files: dict[str, list[int]] = {}
+    for column, counts in enumerate((found, allowed, found - allowed)):
+        for k, n in counts.items():
+            files.setdefault(path(k if isinstance(k, str) else k[0]), [0, 0, 0])[column] += n
+    return {f: (n[0], n[1], n[2]) for f, n in files.items()}
+
+
+def unread(name: str, refused: str | None, no_ratchet: str | None) -> tuple[tuple[str, ...] | None, str]:
+    """(``NO_RATCHET`` or ``NOT_COUNTED``, why) for a list that gives no counts, and (None, "") for one that does.  A
+    module without ``allowed()`` is no ratchet's only for a list ``NO_RATCHETS`` names; for any other it is a refusal."""
+    if no_ratchet and name in NO_RATCHETS:
+        return NO_RATCHET, no_ratchet
+    if why := refused or (no_ratchet and f"{no_ratchet}, and NO_RATCHETS does not name it: a ratchet has allowed()"):
+        return NOT_COUNTED, why
+    return None, ""
+
+
+def lines(rows: list[tuple[str, ...]]) -> str:
+    """stdout: each row a sorted, tab-separated line."""
+    return "".join("\t".join(row) + "\n" for row in sorted(rows))
+
+
 def count(tree: Path, jobs: list[tuple[str, str, str]], env: dict[str, str]) -> list[dict]:
     """The child's result for each of ``jobs``, in a tree where it wrote nothing."""
     with tempfile.TemporaryDirectory(prefix="lint-counts-out-") as d:
@@ -280,29 +322,37 @@ def main(argv: list[str]) -> int:
             refused.update({n: why for n in asked if n in RUFF})
         jobs = [(n, *read[n]) for n in asked if n not in refused]
         results = {r["list"]: r for r in count(tree, jobs, env)} if jobs else {}
-        rows: list[tuple[str, str, str, str]] = []
+        rows: list[tuple[str, ...]] = []
         total: Counter[str] = Counter()
         for name in asked:
             r = results.get(name, {})
-            if why := refused.get(name) or r.get("refused"):
-                rows.append((name, "-", "-", "-"))
+            columns, why = unread(name, refused.get(name) or r.get("refused"), r.get("no_ratchet"))
+            if columns == NO_RATCHET:
+                rows.append((name, *NO_RATCHET))
+                total.update(none=1)
+                print(f"{name}: not a ratchet's: {why.strip()}", file=sys.stderr)
+                continue
+            if columns == NOT_COUNTED:
+                rows.append((name, *NOT_COUNTED))
                 print(f"{name}: not counted: {why.strip()}", file=sys.stderr)
                 continue
-            found, allowed = (Counter({from_root(tree, f) if read[name][0] == "adapter" else f: n for f, n in r[side].items()})
-                              for side in ("found", "allowed"))
-            rows += [(name, f, str(found[f]), str(allowed[f])) for f in sorted(found.keys() | allowed.keys())]
-            over_keys, over, under_keys, under = r["keys"]
-            total.update(found=sum(found.values()), allowed=sum(allowed.values()), over=over, under=under, counted=1)
-            print(f"{name}: {sum(found.values())} found in {len(found)} file(s), {sum(allowed.values())} allowed in "
-                  f"{len(allowed)}; {over_keys} key(s) hold {over} more than their entries, {under_keys} entr(y/ies) allow "
-                  f"{under} more than is found", file=sys.stderr)
+            found, allowed = (Counter({key(k): n for k, n in r[side]}) for side in ("found", "allowed"))
+            files = by_file(found, allowed, (lambda f: from_root(tree, f)) if read[name][0] == "adapter" else (lambda f: f))
+            rows += [(name, f, *map(str, n)) for f, n in files.items()]
+            over, under = found - allowed, allowed - found
+            total.update(found=sum(found.values()), allowed=sum(allowed.values()), over=sum(over.values()),
+                         under=sum(under.values()), counted=1)
+            print(f"{name}: {sum(found.values())} found in {sum(1 for n in files.values() if n[0])} file(s), "
+                  f"{sum(allowed.values())} allowed in {sum(1 for n in files.values() if n[1])}; {len(over)} key(s) hold "
+                  f"{sum(over.values())} more than their entries, {len(under)} entr(y/ies) allow {sum(under.values())} more "
+                  "than is found", file=sys.stderr)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
-    sys.stdout.write("".join("\t".join(row) + "\n" for row in sorted(rows)))
-    missed = len(asked) - total["counted"]
-    print(f"lint_counts: {commit[:12]}: {total['counted']} list(s) counted, {missed} not counted; {total['found']} found, "
-          f"{total['allowed']} allowed; {total['over']} past their entries by key, {total['under']} allowed past what is found",
-          file=sys.stderr)
+    sys.stdout.write(lines(rows))
+    missed = len(asked) - total["counted"] - total["none"]
+    print(f"lint_counts: {commit[:12]}: {total['counted']} list(s) counted, {missed} not counted, {total['none']} no "
+          f"ratchet's; {total['found']} found, {total['allowed']} allowed; {total['over']} past their entries by key, "
+          f"{total['under']} allowed past what is found", file=sys.stderr)
     return 1 if missed else 0
 
 

@@ -1,7 +1,7 @@
 # hidden_zk
 
-Pearl-C4's hidden-check units proved under Flock `--zk` on CPUs: each unit staged for Flock, proved by Rust `prove --zk`
-and checked by the Lean verifier, beside controls that must be refused or rejected; what staging and proving a unit
+Pearl-C4's hidden-check proof blocks proved under Flock `--zk` on CPUs: each proof block staged for Flock, proved by Rust `prove --zk`
+and checked by the Lean verifier, beside controls that must be refused or rejected; what staging and proving a proof block
 costs; and the ZK server's send check, its cost per proved witness bit.
 
 **Hardware:** a node's CPUs, no GPU. `scope` exists for a node whose sessions carry a CPU mask narrower than the CPUs a

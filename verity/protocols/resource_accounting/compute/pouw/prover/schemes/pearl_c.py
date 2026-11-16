@@ -87,6 +87,7 @@ from __future__ import annotations
 import hashlib
 import math
 import struct
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
@@ -620,7 +621,8 @@ class PearlC:
             d = self.device
             return Ops(a, b, e_a, e_b, peel_factors_a(a.codes, scaled_noise(a, e_a), noise.seed_b, k, self.line_norm, d),
                        peel_factors_b(b.codes, scaled_noise(b, e_b), noise.seed_b, k, self.line_norm, d))
-        except P.Reject:
+        except P.Reject as e:
+            print(f"pearl-c: a tile's operands are outside the scheme's domain, so it encodes to none ({e})", file=sys.stderr)
             return None
 
     def admissible(self, ctx: Context, ops: Ops) -> bool:

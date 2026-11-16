@@ -132,7 +132,7 @@ def test_every_port_of_every_statement_is_the_verifiers_own():
 
 
 def _bits_n(words: list[int], lo: int, n: int) -> int:
-    """Bits ``[lo, lo + n)`` of a row as a number, least significant first (`Accounting.TS.Lanes.bitsN`)."""
+    """Bits ``[lo, lo + n)`` of a row as a number, least significant first (`ResourceAccounting.TS.Lanes.bitsN`)."""
     return sum(((words[(lo + i) // 16] >> ((lo + i) % 16)) & 1) << i for i in range(n))
 
 

@@ -30,7 +30,8 @@ salt coin is a live session's on the auditor device instead (`bench_arm.live_coi
 ``close``), and ``DIR/coins.json`` is that session's commitment, written once the install has opened it; the document's
 ``coins`` says which (`pearl_c.window.coins_of`: the source, the session without its secret, and how it closed).  A warm-up
 ``generate`` of one short request takes the first calls' one-time
-costs (the screen's Triton build); then one timed ``generate`` call serves R requests of P seeded random prompt tokens and
+costs (the screen's Triton build), unless ``--no-warm-up``: a run held to a class's fixed load (``verify --tie W --class``)
+takes it, as its retained and dropped rounds are to be the class's alone, and the warm-up's are rounds before them; then one timed ``generate`` call serves R requests of P seeded random prompt tokens and
 O output tokens each (greedy, EOS ignored): vLLM's scheduler steps the engine, and nothing but the option ends a pass.  It
 writes each pass's counts, commitment, manifest, linear MACs (its calls' real rows × n × k) and whether the timed call made
 it (``timed``), the timed call's wall (``generate_s``), each of its engine steps' (``step_s``) and the engine's close
@@ -184,7 +185,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.wi
 
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
-SPEC = HERE.parents[1] / "specs" / "llama31-8b-1gpu-pouw-protocol-served-b32.toml"
+SPEC = HERE.parents[1] / "harness" / "specs" / "llama31-8b-1gpu-pouw-protocol-served-b32.toml"
 #: the arm `serve` serves without ``--arm``: the spec's one PoUW Pearl-C arm (``pouw:pearl-c-sm120-v1-h3`` on an RTX PRO
 #: 6000, ``pouw:pearl-c-h100-v1-h3`` on an H100 or H200)
 ARM_PREFIX = "pouw:pearl-c-"
@@ -335,8 +336,9 @@ def serve(args: argparse.Namespace) -> int:
             walls.append(time.perf_counter() - t)
     core.step = counted
     vocab = int(core.model_config.get_vocab_size())
-    llm.generate([{"prompt_token_ids": p} for p in prompts(vocab, 1, 16)],
-                 SamplingParams(max_tokens=2, ignore_eos=True, temperature=0.0), use_tqdm=False)
+    if args.warm_up:
+        llm.generate([{"prompt_token_ids": p} for p in prompts(vocab, 1, 16)],
+                     SamplingParams(max_tokens=2, ignore_eos=True, temperature=0.0), use_tqdm=False)
     warm, warm_steps = len(run.details["passes"]), len(walls)
     sp = SamplingParams(max_tokens=args.output_tokens, ignore_eos=True, temperature=0.0)
     batch = [{"prompt_token_ids": p} for p in prompts(vocab, args.requests, args.prompt_tokens)]
@@ -366,7 +368,8 @@ def serve(args: argparse.Namespace) -> int:
     coins = doc["coins"]
     session = (coins["session"] or {}).get("session")
     whose = f" (session {session}, closed {coins['closed']})" if session else ""
-    print(f"served {doc['served_tokens']} tokens in {wall:.3f} s and {len(walls)} engine steps (a warm-up's among them), "
+    warmed = " (a warm-up's among them)" if args.warm_up else ""
+    print(f"served {doc['served_tokens']} tokens in {wall:.3f} s and {len(walls)} engine steps{warmed}, "
           f"{'every pass retained' if args.retain else 'no pass retained'}: the timed steps {shown} s; {len(held)} passes "
           f"with calls, {len(over)} over their caps; coins {coins['source']}{whose} -> {'OK' if doc['ok'] else 'FAIL'}")
     return 0 if doc["ok"] else 1
@@ -926,6 +929,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--output-tokens", type=int, default=16)
     s.add_argument("--max-num-batched-tokens", type=int)
     s.add_argument("--no-retain", dest="retain", action="store_false")
+    s.add_argument("--no-warm-up", dest="warm_up", action="store_false",
+                   help="no warm-up generate before the timed one: a run held to a class's fixed load (verify --class)")
     s.add_argument("--seeded", action="store_true", help="with --no-retain: coins and the hm96 salt key from fixed streams "
                    "(`seeded`), for `same`")
     m = sub.add_parser("same")

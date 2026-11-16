@@ -8,6 +8,7 @@ checks and no GPU check, so a GPU-less pod gets its readiness.json instead of dy
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -175,3 +176,132 @@ def test_step3_stages_a_checkpoint_it_downloads_and_checks_and_no_other(tmp_path
     assert step3("hello") == 0 and not marker.exists(), "weights already on the host are not a staging"
     (local / "model.safetensors").unlink()
     assert step3("tampered") == 1 and not marker.exists(), "a shard whose sha256 fails is not staged"
+
+
+def test_gpu_readiness_reads_the_taps_under_fa2_and_the_disk_of_work(tmp_path: Path) -> None:
+    """Step 5 checks the tap builds where steps 4 put them ($FA2) and measures $WORK's disk: a bootstrap with its WORK and FA2 outside
+    /workspace never reads a host's /workspace/cp builds instead of its own."""
+    so = tmp_path / "fa2" / "build" / "fa3_matReq" / "verity_fa3_matReq.so"
+    so.parent.mkdir(parents=True)
+    so.write_bytes(b"fa3 tap")
+    src = tmp_path / "readiness.py"
+    src.write_text(_readiness_source())
+    out = tmp_path / "readiness.json"
+    b = _bin(tmp_path, nvidia_smi=True)
+    root, core, research = VLLM, TREE, TREE / "tools" / "research" / "src"
+    env = dict(os.environ, PATH=f"{b}{os.pathsep}{os.environ.get('PATH', '')}", FA2=str(tmp_path / "fa2"), WORK=str(tmp_path),
+               PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research)),
+               https_proxy="http://127.0.0.1:9", HTTPS_PROXY="http://127.0.0.1:9")
+    r = subprocess.run([sys.executable, str(src), str(root), str(core), str(out), "9.0", str(research), "gpu"],
+                       capture_output=True, text=True, env=env)
+    assert out.exists(), f"readiness.json not written\nstdout: {r.stdout}\nstderr: {r.stderr}"
+    rec = json.loads(out.read_text())
+    assert rec["checks"]["fa3_tap_so"] == {"ok": True, "value": {"path": str(so), "sha256": hashlib.sha256(b"fa3 tap").hexdigest()}}
+    assert rec["measurements"]["disk"]["path"] == str(tmp_path)
+
+
+FAKE_PY = "#!/bin/sh\n[ \"$1\" = - ] && exit 1\nexit 0\n"            # steps 1-2's checks pass; step 3's heredoc stops the run
+# every call fills the caches it is given, as an install does, and records which they were
+FAKE_UV = ("#!/bin/sh\necho \"$UV_CACHE_DIR $PIP_CACHE_DIR\" >> \"${0%/*}/caches.log\"\nmkdir -p \"$UV_CACHE_DIR\" \"$PIP_CACHE_DIR\" && touch \"$UV_CACHE_DIR/filled\" \"$PIP_CACHE_DIR/filled\"\n"
+           "[ \"$1 $2\" = \"pip show\" ] && echo \"Version: 0.16.0+cu129\"\nexit 0\n")
+
+
+def _through_step2(tmp_path: Path, before: tuple[str, ...] = (), **env: str) -> dict[str, Path]:
+    """Run the script through step 2 (venv, install, cache cleanup) with a fake venv python and `uv`, a HOME and a WORK of
+    its own; the caches under HOME, any the caller names in env and those in `before` hold an entry beforehand. Step 3
+    then fails, which ends the run."""
+    home, work, fake = tmp_path / "home", tmp_path / "work", tmp_path / "fake"
+    for d, text in ((work / "venv312" / "bin" / "python", FAKE_PY), (fake / "uv", FAKE_UV)):
+        d.parent.mkdir(parents=True, exist_ok=True)
+        d.write_text(text)
+        d.chmod(0o755)
+    caches = {"home_uv": home / ".cache" / "uv", "home_pip": home / ".cache" / "pip", "work_uv": work / ".cache" / "uv",
+              "work_pip": work / ".cache" / "pip", **{k: Path(v) for k, v in env.items()}}
+    for k, d in caches.items():
+        if k.startswith("home_") or k in env or k in before:
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "entry").write_text("cached")
+    r = subprocess.run([BASH, str(SCRIPT), "--cpu", "--out", str(tmp_path / "out")], capture_output=True, text=True,
+                       env={"PATH": f"{fake}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(home), "WORK": str(work), **env})
+    assert "BOOTSTRAP_FAIL_CHECKPOINT" in r.stderr, f"the run did not reach step 3\nstdout: {r.stdout}\nstderr: {r.stderr}"
+    assert (caches["home_uv"] / "entry").exists() and (caches["home_pip"] / "entry").exists(), "a cache under HOME was touched"
+    return caches
+
+
+def test_bootstrap_removes_only_the_caches_it_made_under_work(tmp_path: Path) -> None:
+    """With no cache named by the caller, the install fills $WORK/.cache/{uv,pip} and step 2 removes exactly those: the
+    caches under HOME, which on a shared node every other user's `uv sync` reads, are left as they were."""
+    c = _through_step2(tmp_path)
+    used = set((tmp_path / "fake" / "caches.log").read_text().splitlines())
+    assert used == {f"{c['work_uv']} {c['work_pip']}"}, f"the install's caches were {used}, not those under $WORK"
+    assert not c["work_uv"].exists() and not c["work_pip"].exists()
+
+
+def test_bootstrap_leaves_a_cache_the_caller_named(tmp_path: Path) -> None:
+    """A UV_CACHE_DIR the caller set is the caller's: step 2 leaves it, and removes only the pip cache it made under $WORK."""
+    c = _through_step2(tmp_path, UV_CACHE_DIR=str(tmp_path / "callers-uv"))
+    assert (c["UV_CACHE_DIR"] / "entry").exists() and (c["UV_CACHE_DIR"] / "filled").exists()
+    assert not c["work_uv"].exists(), "the script made no uv cache under $WORK"
+    assert not c["work_pip"].exists()
+
+
+def test_bootstrap_leaves_a_cache_already_under_work(tmp_path: Path) -> None:
+    """A $WORK/.cache/uv that exists before the script runs (another job's, on a shared WORK) is used and left; the pip
+    cache this run created beside it is removed."""
+    c = _through_step2(tmp_path, before=("work_uv",))
+    assert (c["work_uv"] / "entry").exists() and (c["work_uv"] / "filled").exists()
+    assert not c["work_pip"].exists()
+
+
+def _headers_step(tmp_path: Path, wheels: bool) -> tuple[subprocess.CompletedProcess, Path, Path]:
+    """Run the script in gpu mode through step 2 with a toolkit holding only cuBLAS's headers and a venv whose NVIDIA wheels
+    hold cuSPARSE's and cuSOLVER's (or none); step 3 then fails, which ends a run the header step let through."""
+    work, fake, toolkit, purelib = tmp_path / "work", tmp_path / "fake", tmp_path / "cuda", tmp_path / "site-packages"
+    py = "#!/bin/sh\ncase \"$2\" in *sysconfig*) echo " + str(purelib) + " ;; esac\n" + FAKE_PY.split("\n", 1)[1]
+    for d, text in ((work / "venv312" / "bin" / "python", py), (fake / "uv", FAKE_UV)):
+        d.parent.mkdir(parents=True, exist_ok=True)
+        d.write_text(text)
+        d.chmod(0o755)
+    (toolkit / "include").mkdir(parents=True)
+    for header in ("cublas_v2.h", "cublasLt.h"):
+        (toolkit / "include" / header).touch()
+    for lib, header in (("cusparse", "cusparse.h"), ("cusolver", "cusolverDn.h")) if wheels else ():
+        (purelib / "nvidia" / lib / "include").mkdir(parents=True)
+        (purelib / "nvidia" / lib / "include" / header).touch()
+    r = subprocess.run([BASH, str(SCRIPT), "--gpu", "--out", str(tmp_path / "out")], capture_output=True, text=True,
+                       env={"PATH": f"{fake}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(tmp_path / "home"),
+                            "WORK": str(work), "CUDA_HOME": str(toolkit)})
+    return r, toolkit, purelib
+
+
+def test_the_header_step_names_the_wheels_directories_a_toolkit_lacks(tmp_path: Path) -> None:
+    """A toolkit without cuSPARSE's and cuSOLVER's headers (as a CUDA install of nvcc and the runtime is) builds the taps
+    with those headers from the venv's NVIDIA wheels: the bootstrap says so in one line, before any tap, and goes on."""
+    r, _, purelib = _headers_step(tmp_path, wheels=True)
+    assert "BOOTSTRAP_FAIL_CHECKPOINT" in r.stderr, f"the run did not reach step 3\nstdout: {r.stdout}\nstderr: {r.stderr}"
+    said = [line for line in r.stdout.splitlines() if "cuda_headers:" in line]
+    assert len(said) == 1, r.stdout
+    assert sorted(said[0].split(":")[-1].split()) == sorted(str(purelib / "nvidia" / lib / "include") for lib in ("cusparse", "cusolver"))
+
+
+def test_a_header_in_neither_the_toolkit_nor_the_wheels_fails_before_any_build(tmp_path: Path) -> None:
+    r, toolkit, purelib = _headers_step(tmp_path, wheels=False)
+    line = f"BOOTSTRAP_FAIL_HEADERS: cuda_headers: cusparse.h is in neither {toolkit}/include nor the NVIDIA wheels at {purelib}/nvidia/*/include"
+    assert r.returncode == 3 and r.stderr.splitlines() == [line], f"stdout: {r.stdout}\nstderr: {r.stderr}"
+    assert (tmp_path / "out" / "bootstrap.fail").read_text().splitlines() == [line]
+
+
+def test_the_launcher_it_writes_lets_a_spawned_child_start(tmp_path: Path) -> None:
+    """serve-openai spawns its seal process, which imports the launcher again as `__mp_main__`: an unguarded `main()` there
+    ran the CLI a second time in the child, which exited before its ready and took the server down."""
+    _through_step2(tmp_path)
+    cli = tmp_path / "stub" / "verity_vllm" / "pipeline"
+    cli.mkdir(parents=True)
+    for d in (cli.parent, cli):
+        (d / "__init__.py").write_text("")
+    (cli / "cli.py").write_text("import multiprocessing\n\n\ndef _child():\n    pass\n\n\ndef main():\n"
+                                "    p = multiprocessing.get_context('spawn').Process(target=_child)\n"
+                                "    p.start()\n    p.join()\n    return p.exitcode\n")
+    r = subprocess.run([sys.executable, "-S", str(tmp_path / "work" / "venv312" / "bin" / "verity-vllm")], cwd=tmp_path,
+                       capture_output=True, text=True, env={"PYTHONPATH": str(tmp_path / "stub"), "PATH": "/usr/bin:/bin"})
+    assert r.returncode == 0, f"the spawned child failed\n{r.stderr}"

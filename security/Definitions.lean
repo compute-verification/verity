@@ -47,7 +47,10 @@ public import Definitions.Certifier.MonitoringPeriod
 public import Definitions.Certifier.Witness
 public import Definitions.Certifier.ResponseTie
 public import Definitions.Registration.Sheets
-public import Definitions.Accounting
+public import Definitions.Registration.View
+public import Definitions.Registration.Guarantees
+public import Definitions.Registration.Guarantees.Witnesses
+public import Definitions.ResourceAccounting
 public import Definitions.Spot
 public import Definitions.Claims
 public import Definitions.Claims.Encodings
@@ -104,7 +107,7 @@ public import Definitions.Pouw.Assumptions.CreditedWords
 public import Definitions.Poub.Assumptions.RemoteP2
 public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Pouw.Assumptions.TS.Fixed
-public import Definitions.Accounting.Guarantees
+public import Definitions.ResourceAccounting.Guarantees
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees
 public import Definitions.Certifier.Guarantees.MonitoringPeriodFails

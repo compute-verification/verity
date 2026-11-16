@@ -166,8 +166,8 @@ def test_workers_that_left_a_runs_group_and_environment_count_by_its_session_sco
 
 
 def test_a_train_checks_priority_reservation_ranks_it_below_research_runs(node):
-    """A train check's slot reservation carries "priority": true, so a research job within its own
-    reservation is still picked before the train, and a train over its reservation ranks with a research job within one."""
+    """A candidate's check's slot reservation carries "priority": true, so a research job within its own
+    reservation is still picked before the candidate's check, and a candidate's check over its reservation ranks with a research job within one."""
     train = node.run("r-train", pgid=10)
     (node.ramlock / "check-b.json").write_text(json.dumps({"owner": "check", "gb": 300, "pid": 10, "run_id": "r-train",
                                                             "priority": True}))

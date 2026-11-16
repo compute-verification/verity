@@ -36,7 +36,7 @@ The wipe (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`) is onsite'
 * `WipeAccepts`: what the compiled check accepts is of the period's server and session and carries a signed session
   that is `WipeChecked`, and it publishes `certify` of the commitment's parameters at `EGRESS_MAX_UNITS`, which
   certifies nothing, whatever egress count the evidence names (`WipeProtocol.Evidence.egress`; no session and no
-  network certifier signs one). It is the accepted session that `MemoryChallenger.Properties.WipeSurvivorBound` reads.
+  network attester signs one). It is the accepted session that `MemoryChallenger.Properties.WipeSurvivorBound` reads.
 * `WipeDigest`: the wipe's `RunDigest`.
 
 Each is proved in `Proofs.Properties.Pous.Component` (`Pous.Component.SecurityProofs`) and listed in the lock.
@@ -123,7 +123,7 @@ of `p`'s server and session, and `e` carries a signed session that passes every 
 under `p`'s keys (`WipeChecked`); and it publishes `certify` of `c`'s parameters at `EGRESS_MAX_UNITS`, which
 certifies nothing, whatever count the evidence gives, and profiles `c`'s parameters with the evidence's egress in MiB
 (`e.egress`: the count the evidence gives beside the signed session, `EGRESS_MAX_UNITS` when it gives none). Neither
-the signed session nor a network certifier signs that count. -/
+the signed session nor a network attester signs that count. -/
 def WipeAccepts : Prop :=
   ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence) (out : WipeProtocol.Public)
     (prof : StreamedWipe.Params × Int),

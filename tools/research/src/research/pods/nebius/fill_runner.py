@@ -54,7 +54,7 @@ Every POLL_S seconds the runner:
     a job whose cores aren't free, or any while a queued run waits in the claims' line, stays queued;
   - runs the CPU jobs of an owner listed in FILL_DIR/cpu-sets (`<owner> <cpus> <slots> [mem_gb]  # why`, read each tick) on
     those CPUs instead, up to that many at a time, at nice 19 and ionice idle, with their memory limit lowered to mem_gb if
-    given, and paused (none started) while a train check holds FILL_YIELD_LOCK if those CPUs meet FILL_YIELD_CPUS; and logs
+    given, and paused (none started) while a candidate's check holds FILL_YIELD_LOCK if those CPUs meet FILL_YIELD_CPUS; and logs
     each scoped CPU job's peak memory (mem_peak_gb) when it exits;
   - keeps fill off each fence in FILL_DIR/fences (`<owner> <gpu> <cpus> <until UTC> [<job glob> <minutes>]  # why`, read each
     tick, a line past its until ignored), which `fill_runner.py fence` writes and logs, one per owner, at most 1 GPU, FENCE_MAX_CPUS
@@ -106,7 +106,7 @@ CPU_MEM_GB = int(os.environ.get("FILL_CPU_MEM_GB", "128"))
 # timed, and pous and lent CPU jobs keep their memory off NUMA 0 (numactl --membind=<node>).
 FREEZE_ON_WAIT = os.environ.get("FILL_FREEZE_ON_WAIT", "0") == "1"
 CPU_MEMBIND = os.environ.get("FILL_CPU_MEMBIND", "")
-# slot d's train checks on 0-47 run in a login session's cgroup, beside fill's user scopes, so
+# slot d's candidates' checks on 0-47 run in a login session's cgroup, beside fill's user scopes, so
 # nice 19 can't make a CPU job yield to one: a cpu-sets job on those CPUs pauses while a check holds the slot's lock
 YIELD_LOCK = Path(os.environ.get("FILL_YIELD_LOCK", "/workspace/research/locks/check-d.lock"))
 YIELD_CPUS = os.environ.get("FILL_YIELD_CPUS", "0-47")
@@ -355,6 +355,15 @@ def lease(i: int) -> str | None:
         return "held"
 
 
+def shared_free(fd: int) -> bool:
+    """Whether a shared flock on `fd` is granted at once: False exactly while someone holds the file exclusively."""
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        return True
+    except BlockingIOError:
+        return False
+
+
 def held(lock: Path) -> bool:
     """Whether someone holds `lock` exclusively (flock)."""
     try:
@@ -362,10 +371,7 @@ def held(lock: Path) -> bool:
     except OSError:
         return False
     try:
-        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
-        return False
-    except BlockingIOError:
-        return True
+        return not shared_free(fd)
     finally:
         os.close(fd)
 
@@ -376,7 +382,7 @@ def agent_up() -> bool:
 
 
 def yields(cpus: str | None) -> bool:
-    """Whether a cpu-sets job on `cpus` gives way to a train check: its CPUs meet YIELD_CPUS."""
+    """Whether a cpu-sets job on `cpus` gives way to a candidate's check: its CPUs meet YIELD_CPUS."""
     return bool(cpus) and bool(gpu_set(cpus, 1 << 16) & gpu_set(YIELD_CPUS, 1 << 16))
 
 
@@ -394,11 +400,8 @@ def waiters() -> list[int]:
             print(f"fill: {f.name} skipped, gone while the waits were listed ({type(e).__name__})", file=sys.stderr, flush=True)
             continue
         try:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            if shared_free(fd):
                 continue
-            except BlockingIOError:
-                pass
             text = os.read(fd, 4096).decode(errors="replace")
             m = re.search(r"\bn=(\d+)", text)
             on = re.search(r"\bon=(\S+)", text)
@@ -659,7 +662,10 @@ def repin(f: dict, fs: list[dict]) -> None:
         try:
             pgid = int((d / "stat").read_text().rsplit(")", 1)[1].split()[2])
             cg = (d / "cgroup").read_text().strip()
-        except (OSError, IndexError, ValueError):
+        except (OSError, IndexError, ValueError) as e:
+            if d.exists():
+                print(f"fill: pid {d.name} unread, so its threads stay where they are ({type(e).__name__}: {e})",
+                      file=sys.stderr, flush=True)
             continue
         if pgid not in groups and not (scopes and cg.endswith(scopes)):
             continue
@@ -669,8 +675,10 @@ def repin(f: dict, fs: list[dict]) -> None:
                 if had & off and had - off:
                     os.sched_setaffinity(int(task.name), had - off)
                     moved += 1
-            except OSError:
-                pass
+            except OSError as e:
+                if task.exists():
+                    print(f"fill: thread {task.name} of pid {d.name} left on its CPUs ({type(e).__name__}: {e})",
+                          file=sys.stderr, flush=True)
     event("fence", "-", owner=f["owner"], gpu=f["gpu"], cpus=f["cpus"], jobs=f["jobs"], threads_moved=moved)
 
 

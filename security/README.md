@@ -70,7 +70,7 @@ incorrect set of the trace the extractor recovers.
    - Real: SHA-512 collision resistance (`Vocab.FinderCR`) and LMS unforgeability (`Hash.Assumptions.LmsUnforgeable`),
      read in the error.
    - Open: the targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
-     `NetworkCertifierSound`, `WipeSound`), each open until proved (PoUW's:
+     `NetworkAttesterSound`, `WipeSound`), each open until proved (PoUW's:
      `verity/protocols/resource_accounting/compute/pouw/verifier/`). Remote: the first two, `WiresSound`, `GateARow`.
 
 **The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
@@ -96,9 +96,9 @@ assumptions.
   computed gates has κ(B → E(B)) ≥ b·|E(B)|, E(B) the outputs a MAC inside B feeds that have no wire in B.
 - **The counting bound over kinds of work**, `Slowdown.Formalism.Guarantees.Counting`
   (`Definitions/Slowdown/Guarantees/Formalism.lean`, proved in `Proofs/Slowdown/Formalism/Slowdown.lean`): every partition into
-  inference blocks has slowdown ≥ max(max_K (|B_K|/|C|)/(cap_K/c), max_J Λ_J), for kinds of work B_K, each with a cap cap_K on
+  inference blocks has slowdown ≥ max(max_K (|B_K|/|C|)/(cap_K/c), max_J Λ_J), for kinds of work B_K, each with a bound cap_K on
   the gates of it an inference block holds, and kinds J each bounded by Λ_J over the whole partition; `Slowdown` beside
-  it takes the token kind's cap from the named assumption `training-token-work`.
+  it takes the token kind's bound from the named assumption `training-token-work`.
 
 The rest of this section is the argument they are read in.
 
@@ -162,7 +162,7 @@ The numbers come from the slowdown calculator (`benchmarks/slowdown`), not from 
   outputs B(a_j) = (E_j, 𝒫_j, 𝓘_j, loc_j):
   - E_j, the execution block: a Boolean circuit whose inputs are θ, earlier blocks' outputs and fresh input;
   - 𝒫_j, a partition of E_j's gates into proof blocks, each block's outputs within its public size class and their
-    number within a public cap;
+    number within a public limit;
   - 𝓘_j, a partition of E_j's gates into inference blocks, each of at most c gates reading at most k bits of fresh
     input, which is anything outside θ;
   - loc_j : gates(E_j) → registered devices × ticks, the placement.
@@ -225,8 +225,8 @@ weighted total Ω_*. Uniformly over the programs, the initial information and th
 $$ \Pr\big[\,A(x) \text{ reaches the target} \;\wedge\; |A| < T_{\max} \;\wedge\; \neg\,\mathrm{Core}(A, x)\,\big]
    \;\le\; \eta. $$
 
-Each method may have its own covered structure (products, accumulations, recoveries); none has to reproduce a reference
-circuit. Coverage doesn't say that slow methods of another structure are impossible, only that methods cheap enough to matter
+Each method may have its own covered structure (products, accumulations, recoveries); none has to reproduce the reference
+training algorithm. Coverage doesn't say that slow methods of another structure are impossible, only that methods cheap enough to matter
 can't escape every analysed structure. The question it answers is a trade-off: as a method reduces the updated state or
 dependence the policy restricts, how much more computation does it need for the same target? That full-parameter
 training is the unrestricted optimum isn't enough: if a compact-state method reaches the target at twice the cost and
@@ -320,7 +320,7 @@ The bound degrades with the gate budget instead of failing at a threshold: impor
 spends gates. The g gates are the analysed implementation's certificate, not a lower bound on every algorithm computing
 the same function, and products split between blocks still need their own account. The weights replace "every
 activation is hard" with "enough structurally supported computation": overlapping regions get low weights, and choosing
-ω is a linear program. These caps count the uses a block serves, not its products; over counted products the bound of
+ω is a linear program. These bounds count the uses a block serves, not its products; over counted products the bound of
 record is the min-cut theorem (Start here).
 
 #### Counting and the standard assemblies
@@ -336,7 +336,7 @@ used so far:
 | a recoverable hard source | outputs | (k' + δ + amb)/β_v |
 
 An assembly counts only when its premises hold for the same blocks, and a refuted premise contributes nothing. The
-smallest valid cap wins only among caps on the same count: a served-weight cap and a recovery-output cap bound different
+smallest valid yield wins only among yields on the same count: a served-weight yield and a recovery-output yield bound different
 counts, so they are compared only after conversion to one convention, or applied separately, each with its own coverage
 statement.
 
@@ -393,9 +393,9 @@ reaches the target with probability above η, and **fleet-time** elapsed time ti
 **Remote.** A covered successful computation carries a weighted count of at least Ω_* (part 1; with every weight 1, the
 plain count). The good blocks do at most Σ_I q_I (part 2), and the remainder at most Q_rem (part 3). Replacing the sum
 by (q/c)·Φ_D·|J| needs the accounting to show that the qualifying blocks have exactly c gates and correspond one to one
-to credited actual computation; until that is proved, Σ_I q_I is the safer form. With that conversion and a uniform cap
-q, and f = 1 − Φ_D/Φ the **free share**: the part of the whole fleet's capacity, unregistered hardware included, not
-doing correct credited work of the registered circuit,
+to credited actual computation; until that is proved, Σ_I q_I is the safer form. With that conversion and a uniform
+inference-block yield q, and f = 1 − Φ_D/Φ the **free share**: the part of the whole fleet's capacity, unregistered
+hardware included, not doing correct credited work of the registered circuit,
 
 $$ \Omega_* \;\le\; \Big(\frac{q}{c}\,\Phi_D + \bar\zeta\,(\Phi - \Phi_D)\Big)\,|J|
    \quad\Longrightarrow\quad
@@ -425,7 +425,7 @@ the bound falls to Ω_*/(ζ̄·C_ref), no slowdown at all: part 2 is what keeps 
 **Onsite.** As remote, except that each registered server's remainder is capped per server block: a server block of at
 most c_S gates whose effective fresh input k_S is within the assembly's range does at most q_S of the weighted count,
 its inference blocks and its remainder together. When k_S is large enough for a server block to hold a token's whole
-path, the cap is void, and the available onsite bound reduces to the remote bound.
+path, q_S bounds nothing, and the available onsite bound reduces to the remote bound.
 
 ### What the argument doesn't assume
 
@@ -447,7 +447,7 @@ None of these is assumed silently; each would restate the conclusion:
 
 | Step | Lean | Status |
 |---|---|---|
-| The actual circuit | `Accounting.Placed`, `Accounting.Placed.region` | Defined |
+| The actual circuit | `ResourceAccounting.Placed`, `ResourceAccounting.Placed.region` | Defined |
 | Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.RegisteredCircuit`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
 | Coverage | `Slowdown.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
@@ -456,18 +456,18 @@ None of these is assumed silently; each would restate the conclusion:
 | The repertoire | `Slowdown.Guarantees.HeldBudget`, `Slowdown.Guarantees.StatHeldBudget`, `Slowdown.Guarantees.RecoveredBudget`, `Slowdown.Guarantees.ImportOrRecompute`, `Slowdown.Guarantees.RecomputeByGates`, `Slowdown.Guarantees.RecomputeByState` | Proved (`Proofs/Slowdown/Capability/`), over premises not yet tested |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `Slowdown.Threading.Threaded`, `Slowdown.Assumptions.WeightsIncompressible`, `Slowdown.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
-| Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Slowdown.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
+| Device model | `ResourceAccounting.Placed.ComputeRate`, `ResourceAccounting.Placed.Links`, `ResourceAccounting.Placed.Memory`, `ResourceAccounting.Placed.Causal`, `ResourceAccounting.Slowdown.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
 | The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved for the product rule `check`, which both run |
 | The utilization policy | not yet in Lean | Not a policy yet |
-| Protocol soundness | `Accounting.Slowdown.restricted`; `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
+| Protocol soundness | `ResourceAccounting.Slowdown.restricted`; `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
 | SPOT | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
-| PoUW | `Accounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
+| PoUW | `ResourceAccounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
 | The inference-only policy | `InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses`, `InferenceOnly.CompliesRate`, `InferenceOnly.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `InferenceOnlyCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
-| Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
+| Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` | Proved per period; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Slowdown.Guarantees.SlowdownRemote`; a named Prop not yet in Lean | Open |
 | The floor | `Slowdown.Guarantees.CapabilityFloor` | Proved, under coverage |
-| Slowdown | `Accounting.Slowdown.slowdown`, `Accounting.Slowdown.threshold`, `Accounting.Slowdown.cost` | Defined, with cost in fleet-time; no theorem reads it |
+| Slowdown | `ResourceAccounting.Slowdown.slowdown`, `ResourceAccounting.Slowdown.threshold`, `ResourceAccounting.Slowdown.cost` | Defined, with cost in fleet-time; no theorem reads it |
 | The bounds | `Slowdown.Guarantees.SlowdownRemote`, `Slowdown.Guarantees.SlowdownThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
 
 ## Three trees
@@ -530,11 +530,11 @@ the statement's named assumptions, not the conditions on its inputs and setup (t
 |---|---|---|
 | SPOT | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
 | PoUW | `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditMonitoringPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/MonitoringPeriod.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `verity-verify-proof --zk --registered` accepts) |
-| PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved under named assumptions: the device model `DeviceModel`, the instantiation `Instantiates` (`pous-ring-instantiation`), and `P2RingAuditSecure`, an open conjecture; the coin-game form adds `Hash.Assumptions.Sha512Prf` at the memory challenger's two tests, its `ε_prf` in the bound, and names the certificate's fit (`Fits`) and the run's not reading the primitive (`ReadsNoPrimitive`) |
-| Bandwidth audit, PoUB's per-pass lemma | `Accounting.Guarantees.Remote.AuditRO`, `Definitions/Poub/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
+| PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved under named assumptions: the device model `DeviceModel`, the instantiation `Instantiates` (`pous-ring-instantiation`), and `P2RingAuditSecure`, an open conjecture; the coin-game form adds `Hash.Assumptions.Sha512Prf` at the memory attester's two tests, its `ε_prf` in the bound, and names the certificate's fit (`Fits`) and the run's not reading the primitive (`ReadsNoPrimitive`) |
+| Bandwidth audit, PoUB's per-pass lemma | `ResourceAccounting.Guarantees.Remote.AuditRO`, `Definitions/Poub/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
 | Network certification | `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`, `Definitions/Certifier/Guarantees/MonitoringPeriod.lean` | Proved under named assumptions: `TrustedDevice`, and SPOT's `Claims.SamplingGeneric.Compiled.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
-| PoUB | `Properties.Poub.Line.LineHeld`, `Properties/Poub/Remote/Line.lean` | Inside protocol soundness: its P2 audit (`Poub.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. In its own form it is proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Sample.Assumptions` |
+| PoUB | `Properties.Poub.Line.LineHeld`, `Properties/Poub/Remote/Line.lean` | Inside protocol soundness: its P2 audit (`Poub.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. In its own form it is proved under named assumptions: `ResourceAccounting.Remote.Held.Assumptions`, `ResourceAccounting.Remote.Sample.Assumptions` |
 
 PoUW has other guarantees, outside protocol soundness.
 
@@ -544,7 +544,7 @@ Remote (`verity/protocols/compose/verifier/remote`, `Core.Remote.protocol`) is t
 site. It composes three subprotocols, SPOT (one-stage v2; the recursive audit refused), PoUW's period check
 (`verity/pouw/period/v1`, onsite's work subprotocol too) and the inference-only policy's check (`InferenceOnlyCheck.Protocol`), and
 accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when the
-policy and the one-stage audit commit to one record and every window of the period names it as its Commit record
+policy and the one-stage audit commit to one record and every execution phase of the period names it as its Commit record
 (`Core.Composition.tiedSame`, `Core.Remote.windows`). Onsite holds the same two ties (`Core.Onsite.ties`) and adds PoUS,
 PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store.
 
@@ -573,8 +573,8 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   reads coins only from that log (`VerifierReadsLog`). Under them a sample sampled with a logged coin misses a set fixed
   before it at most as often as the sampling design allows (`Verity.Guarantees.SampleAfterRecorded`, proved); none of
   remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network attesters and memory
-  challengers are onsite's.
-- **Not the remote composite.** `Accounting.Remote` and `Properties.Poub.Remote` are PoUB
+  attesters are onsite's.
+- **Not the remote composite.** `ResourceAccounting.Remote` and `Properties.Poub.Remote` are PoUB
   (`verity/protocols/resource_accounting/memory/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol
   of onsite only.
 

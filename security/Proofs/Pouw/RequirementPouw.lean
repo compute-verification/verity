@@ -1,7 +1,7 @@
 module
 
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Proofs.Accounting.Lemmas.RequirementPouw
+public import Proofs.ResourceAccounting.Lemmas.RequirementPouw
 
 /-!
 # PoUW's credits and help when a node runs a registered circuit as placed
@@ -16,7 +16,7 @@ coin, so `RequirementCredits`, `RequirementHelp` and `RequirementHelpBound` foll
 
 @[expose] public section
 
-namespace Accounting.Requirement
+namespace ResourceAccounting.Requirement
 
 open Finset
 
@@ -86,26 +86,26 @@ theorem Placement.ingress_le_actual (X : Finset L) (I : Set ℕ) : (p.actual W).
   simp only [mem_filter] at ha ⊢
   exact ⟨p.mem_into_of_actual W a ha.1, ha.2⟩
 
-end Accounting.Requirement
+end ResourceAccounting.Requirement
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Requirement
+open ResourceAccounting.Requirement
 
-theorem RequirementCredits : Accounting.Guarantees.RequirementCredits := by
+theorem RequirementCredits : ResourceAccounting.Guarantees.RequirementCredits := by
   intro Ω L n W p P X π m r
   simp only [PouwWork.credits, Placed.work, work]
   rw [Placement.region_actual]
 
-theorem RequirementHelp : Accounting.Guarantees.RequirementHelp := by
+theorem RequirementHelp : ResourceAccounting.Guarantees.RequirementHelp := by
   intro Ω L n W p P X r hW hp
   exact Placement.ingress_actual W (p r) hW hp _ _
 
-theorem RequirementHelpBound : Accounting.Guarantees.RequirementHelpBound := by
+theorem RequirementHelpBound : ResourceAccounting.Guarantees.RequirementHelpBound := by
   intro Ω L n W p P X r
   exact Placement.ingress_le_actual W (p r) _ _
 
-theorem RequirementStepsInner : Accounting.Guarantees.RequirementStepsInner := by
+theorem RequirementStepsInner : ResourceAccounting.Guarantees.RequirementStepsInner := by
   intro G _ L W p X w ts td hp hX
   rw [Finset.subset_iff]
   intro g hg
@@ -115,7 +115,7 @@ theorem RequirementStepsInner : Accounting.Guarantees.RequirementStepsInner := b
   exact ⟨hran, hreg, hin, hx, (hX _ hx).1.trans ((hp _ hx).monotone h1),
     lt_of_lt_of_le ((hp _ hx).lt_iff_lt.mpr h2) (hX _ hx).2⟩
 
-theorem RequirementStepsOuter : Accounting.Guarantees.RequirementStepsOuter := by
+theorem RequirementStepsOuter : ResourceAccounting.Guarantees.RequirementStepsOuter := by
   intro G _ L W p X w ts td hp hX
   rw [Finset.subset_iff]
   intro g hg
@@ -125,11 +125,11 @@ theorem RequirementStepsOuter : Accounting.Guarantees.RequirementStepsOuter := b
   exact ⟨hran, hreg, hin, hx, (hp _ hx).le_iff_le.mp ((hX _ hx).1.trans h1),
     (hp _ hx).lt_iff_lt.mp (lt_of_lt_of_le h2 (hX _ hx).2)⟩
 
-theorem RequirementCreditsSteps : Accounting.Guarantees.RequirementCreditsSteps := by
+theorem RequirementCreditsSteps : ResourceAccounting.Guarantees.RequirementCreditsSteps := by
   intro Ω L n W p P X π m r w hp hX
   rw [RequirementCredits Ω L n W p P X π m r]
   unfold work
   exact Finset.sum_le_sum_of_subset
     (Finset.sdiff_subset_sdiff (RequirementStepsInner W (p r) X w _ _ hp hX) (subset_refl _))
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs
