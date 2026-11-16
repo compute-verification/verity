@@ -75,7 +75,7 @@ PINNED = HERE / "overhead_arm.json"
 #: source tree's root)
 SERVED_PASSES = "benchmarks/pouw/pearl_c_vllm/served_passes.py"
 #: the samples each shape's pass is verified at
-DRAWS = 3
+SAMPLES = 3
 #: the call index of every call the arm makes: the served reference's, whose keys the launch reads
 INDEX = 0
 #: the challenger's epoch for the arm's coins
@@ -89,7 +89,7 @@ DELTA = Fraction(1, 100)
 def verifier() -> dict:
     """The build record's ``verifier`` (`arm.check_verifier`): Pearl+'s verdict on each shape's retained pass alone, the
     Lean's. First the Python twin (`served_passes.py verify --manifest`) judges the pass under the coins `dump` writes
-    beside it, at `DRAWS` samples on the node's sample, and writes its document and the verifier's coin record there; its
+    beside it, at `SAMPLES` samples on the node's sample, and writes its document and the verifier's coin record there; its
     line names no transcript, so the harness never reads it as a verdict, and a twin that rejects ends the shape's commands
     unaccepted. Then the Lean step (`served_passes.py lean`, PouwCheck.PearlPlus's ``pouw-pearlplus`` built in the tree)
     judges the same pass, coins, samples and coin record, held to the twin's verdict: only its line starts ``ACCEPT`` or
@@ -100,7 +100,7 @@ def verifier() -> dict:
                     "held to its Python twin", "per": "shape",
             "transcript": "transcripts/{arm}/{shape}/manifest.json", "control": "negative/{arm}/{shape}/manifest.json",
             "commands": [["{python}", SERVED_PASSES, "verify", *pass_, "--coin-record", "{dir}/coin.json",
-                          "--out", "{dir}/pearlplus-verify.json", "--draws", str(DRAWS), "--commit", "{commit}"],
+                          "--out", "{dir}/pearlplus-verify.json", "--draws", str(SAMPLES), "--commit", "{commit}"],
                          ["{python}", SERVED_PASSES, "lean", *pass_, "--verify", "{dir}/pearlplus-verify.json",
                           "--exe", "build", "--out", "{dir}/pearlplus-lean.json"]]}
 

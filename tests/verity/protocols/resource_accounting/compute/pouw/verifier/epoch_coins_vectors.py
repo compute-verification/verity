@@ -6,7 +6,7 @@ reason in the PR.
 A case's challenger samples from `epoch_coins.entropy(seed)`; the weights' root and the transcript's root are
 SHA-256("verity/pouw/epoch-coins-vectors/v1", case, "weights" | "transcript").  A case pins every coin, hm96 salt,
 committed value and path, the root, the execution phase's salt (`audit.salt_of`), and the clear audit's sample keys, the generic
-sample's (`clear_audit.AUDIT_DOMAIN`) and Pearl-C's (`clear_work.draw_key`) under a records root SHA-256(…, case, "records")."""
+sample's (`clear_audit.AUDIT_DOMAIN`) and Pearl-C's (`clear_work.sample_key`) under a records root SHA-256(…, case, "records")."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def case_vector(case: str, seed: bytes, epoch: int) -> dict:
         "transcript_root": transcript.hex(),
         "audit_key": derive(sample_coin.coin, CA.AUDIT_DOMAIN, {"transcript": transcript, "salt": salt}).value.hex(),
         "records_root": records.hex(),
-        "pearl_c_draw_key": CW.draw_key(sample_coin.coin, transcript, records, salt).value.hex(),
+        "pearl_c_draw_key": CW.sample_key(sample_coin.coin, transcript, records, salt).value.hex(),
     }
 
 

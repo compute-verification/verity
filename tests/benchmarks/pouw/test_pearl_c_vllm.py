@@ -1177,10 +1177,10 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_sampling_design_does(hone
     path, s, epoch, prover, tr, splits, records = honest_pass
     source = b"verifier" * 4
     got = VR.verify(path, 3, 1, "test", source, coins=published(path))
-    want = CW.audit_replay(s, epoch, prover, tr, splits, records, 0, CW.RecordedDraw(1, source), 3)
+    want = CW.audit_replay(s, epoch, prover, tr, splits, records, 0, CW.RecordedSample(1, source), 3)
     assert got["accepted"] and want.audit.accepted, got.get("line") or got.get("error")
     assert tuple(got["tiles"]) == want.audit.selected and got["exclusion_tiles"] == 1
-    assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: clear_work's tiles (3 drawn, 1 for excluded rows)")
+    assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: clear_work's tiles (3 sampled, 1 for excluded rows)")
     assert got["transcript"] == f"{RUN}:{path} sha256:{got['transcript_sha256']}" and got["transcript"] in got["line"]
     assert VR.main([str(path), *coins_args(path), "--jobs", "1", "--commit", "0" * 7]) == 0
     assert VR.main([str(path), *coins_args(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 1
@@ -1194,13 +1194,13 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_sampling_design_does(hone
 
 
 def test_verify_run_counts_the_tiles_it_drew_where_no_tile_is_credited(honest_pass, monkeypatch):
-    """A pass with no credited cell, as a no-write control whose rows are all excluded, samples no tile (`clear_work.draw`), so
+    """A pass with no credited cell, as a no-write control whose rows are all excluded, samples no tile (`clear_work.sample`), so
     its line and counts name none sampled and every exclusion tile, not the samples asked for."""
     path, s, *_ = honest_pass
-    monkeypatch.setattr(VR.CW, "draw", lambda *_: [])
+    monkeypatch.setattr(VR.CW, "sample", lambda *_: [])
     got = VR.verify(path, 3, 1, "test", b"verifier" * 4, coins=published(path))
     assert got["accepted"] and (got["drawn"], got["exclusion_tiles"], len(got["tiles"])) == (0, 1, 1), got.get("line")
-    assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: clear_work's tiles (0 drawn, 1 for excluded rows)")
+    assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: clear_work's tiles (0 sampled, 1 for excluded rows)")
 
 
 @pytest.mark.slow
@@ -1285,7 +1285,7 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     man = json.loads(path.read_text())
     assert answer["public"]["passes"][0]["y"] == [u["y"]["root"] for u in man["matmuls"]]
     assert "y committed and checked on 2 of 2 calls" in doc["line"]
-    assert answer["profile"]["exclusion_tiles"] > 0 and " drawn tiles and the exclusion tiles over 1 passes, " in doc["line"]
+    assert answer["profile"]["exclusion_tiles"] > 0 and " sampled tiles and the exclusion tiles over 1 passes, " in doc["line"]
     assert "; 0 MACs credited at ε " in doc["line"] and f"{work['macs']:,}" not in doc["line"]
     assert not re.search(r"\d[\d,]* (exclusion tiles|of [\d,]+ MACs)", doc["line"])
     rows = path.parent / man["weights"]["0"]["rows"]["path"]
@@ -1497,7 +1497,7 @@ def test_served_passes_verify_credits_the_timed_call_its_passes_less_the_runs_wh
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     served = {"run": RUN, "passes": [{"pass": 0, "timed": False, "units": 2, "tiles": 4, "manifest": str(a)},
                                      {"pass": 1, "timed": True, "units": 2, "tiles": 4, "manifest": str(b)}]}
-    work = VR.credit_at_assumption([VR.load(x, published(x)) for x in (a, b)], SP.DRAWS, Fraction(1, 100))
+    work = VR.credit_at_assumption([VR.load(x, published(x)) for x in (a, b)], SP.SAMPLES, Fraction(1, 100))
     warm = VR.pass_macs(VR.load(a, published(a)))
     got = SP.timed_credit(served, work, published(a))
     assert warm == work["macs"] // 2 and got["passes"] == 1 and got["macs"] == work["macs"] - warm
@@ -1508,7 +1508,7 @@ def test_served_passes_verify_credits_the_timed_call_its_passes_less_the_runs_wh
         "passes": 2, "macs": work["macs"], "credited": work["credited"]}
     # in the grid form the warm-up pass's MACs are its whole records', so the timed credit is at most the exact one
     passes = [VR.load(x, published(x)) for x in (a, b)]
-    grid = VR.grid_work(VR.structural_credit(passes, SP.DRAWS, Fraction(1, 100)), work)
+    grid = VR.grid_work(VR.structural_credit(passes, SP.SAMPLES, Fraction(1, 100)), work)
     whole = VR.pass_macs(VR.whole_pass(passes[0]))
     timed = SP.timed_credit(served, grid, published(a))
     assert whole > warm and VR.pass_macs(passes[0]) == warm and timed["macs"] == grid["macs"] - whole
@@ -1529,7 +1529,7 @@ def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
     assert answer["verdict"] == "reject" and answer["reason"].startswith("unretained: the serve retained no pass")
 
 
-def test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
+def test_a_seeded_serve_flips_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
     """`serve --seeded`'s streams (`served_passes.seeded`) give one label's bytes however they are sampled, so two seeded
     installs (`seed_install`) hold challengers of one coin commitment and take one hm96 salt key (`pearl_c.new_salt_key`,
     which the install's weight commitment calls); ``--seeded`` is refused beside retention and beside the challenger gate,
@@ -1820,7 +1820,7 @@ def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
 
 
-def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_inert_bound(tmp_path, capsys):
+def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_sampled_credited_row_over_its_inert_bound(tmp_path, capsys):
     """The pipelines give the rows over a debit cap up before the coin exactly where ``served_passes.py volunteer-needed``
     says yes, so it says yes exactly where the verdict they call rejects a run on a sampled tile with a credited row over its
     cap: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin that samples them, ``verify``
@@ -1846,15 +1846,15 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
             assert yes in ("yes", "no") and took in SP.OVER_INERT_BOUND and took == (rule or took)
             if verdict == "run":
                 _, doc, answer = served_verify(d, tmp_path / "verify.json", "--draws", "32", *flag)
-                drawn = {v["tile"] for v in doc["verdicts"]}
+                sampled = {v["tile"] for v in doc["verdicts"]}
                 rejects = answer["verdict"] == "reject" and "replayed debit" in answer["reason"]
             else:
                 r = VR.verify(path, 32, 1, "test", source, coins=coins, **({} if rule is None else {"over_cap": rule}))
-                drawn, rejects = set(r["tiles"]), not r["accepted"] and "replayed debit" in r["line"]
-            assert drawn & set(over), (verdict, rule, sorted(drawn), sorted(over))
+                sampled, rejects = set(r["tiles"]), not r["accepted"] and "replayed debit" in r["line"]
+            assert sampled & set(over), (verdict, rule, sorted(sampled), sorted(over))
             assert (yes == "yes") == rejects, (
                 f"volunteer-needed --verdict {verdict} says {yes} under over-cap rule {took}, but the verdict "
-                f"{'rejects' if rejects else 'does not reject'} a run on a drawn row over its cap: served_passes.over_inert_bound_rule "
+                f"{'rejects' if rejects else 'does not reject'} a run on a sampled row over its cap: served_passes.over_inert_bound_rule "
                 "must name the rule the verdict takes")
     for verdict in (v for v, t in takes.items() if not t):
         capsys.readouterr()
@@ -2219,8 +2219,8 @@ def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     assert VR.verify_passes([path], 3, 1, "test", coins, test_instance=True)["answer"]["verdict"] == "accept"
 
 
-def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_draw_again(tmp_path):
-    """``verify_passes``' ``draw(C, asking)``: its source is the sample's coin on the run's commitment C, recorded (v2) with
+def test_the_run_verdict_takes_its_source_from_its_sample_once_and_never_asks_a_sample_again(tmp_path):
+    """``verify_passes``' ``sample(C, asking)``: its source is the sample's coin on the run's commitment C, recorded (v2) with
     the sample before any replay and reused by a later verdict without sampling; a sample that fails before it asks rejects
     and may be asked again, while one that fails after ``asking`` marked the record is refused (``asked-once``) and
     never redrawn."""
@@ -2231,18 +2231,18 @@ def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_dr
     root = VR.run_commitment([VR.load(path, coins)])
     calls = []
 
-    def draw(c, asking):
+    def sample(c, asking):
         calls.append(c)
         asking({"reserved": {"session": "s20261104T090000Z-dr01"}})
-        return b"\x5e" * 64, {"from": VR.DRAW_CHALLENGER, "session": {"session": "s20261104T090000Z-dr01"}}
+        return b"\x5e" * 64, {"from": VR.SAMPLE_CHALLENGER, "session": {"session": "s20261104T090000Z-dr01"}}
 
     record = tmp_path / "coin.json"
-    first = VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw, test_instance=True)
+    first = VR.verify_passes([path], 3, 1, "test", coins, record=record, sample=sample, test_instance=True)
     held = json.loads(record.read_text())
     assert first["answer"]["verdict"] == "accept" and first["draw"] == "challenger" and calls == [root]
     assert (held["schema"], held["commitment"], held["source"], held["draw"]["from"]) == (
         VR.COIN_SCHEMA, root.hex(), "5e" * 64, "challenger")
-    again = VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw, test_instance=True)
+    again = VR.verify_passes([path], 3, 1, "test", coins, record=record, sample=sample, test_instance=True)
     assert again["answer"] == first["answer"] and calls == [root]
 
     def before(c, asking):
@@ -2253,25 +2253,25 @@ def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_dr
         raise Ch.CoinError("the gate's open timed out")
 
     other = tmp_path / "other" / "coin.json"
-    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=before, test_instance=True)
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, sample=before, test_instance=True)
     assert r["answer"]["verdict"] == "reject" and "p1 is open" in r["line"] and not other.exists()
     assert not other.with_name(other.name + VR.ASKED).exists()
-    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=after, test_instance=True)
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, sample=after, test_instance=True)
     assert r["answer"]["verdict"] == "reject" and "timed out" in r["line"] and not other.exists()
     assert json.loads(other.with_name(other.name + VR.ASKED).read_text())["commitment"] == root.hex()
-    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=draw, test_instance=True)
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, sample=sample, test_instance=True)
     assert r["refused"][0] == "asked-once" and r["answer"]["verdict"] == "reject" and calls == [root]
     node = VR.verify_passes([path], 3, 1, "test", coins, record=tmp_path / "node" / "coin.json", test_instance=True)
     assert node["draw"] == "node" and json.loads((tmp_path / "node" / "coin.json").read_text())["draw"] == {
         "from": "node", "claim": VR.NODE_CLAIM}
 
 
-def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_opens_it_on_the_runs_commitment(monkeypatch):
-    """`bench_arm.LiveDraw` (``served_passes.py verify`` under PEARLC_CHALLENGER_GATE/PEER/LANE): with no period of the
+def test_the_live_sample_reserves_a_withheld_sample_session_outside_any_period_and_opens_it_on_the_runs_commitment(monkeypatch):
+    """`bench_arm.LiveSample` (``served_passes.py verify`` under PEARLC_CHALLENGER_GATE/PEER/LANE): with no period of the
     lane's open, it reserves a sample session withheld (``reserve --peer P --scheme S --families [["pouw/draw",1]]
     --withhold``), marks the record with the reserve before its open, and returns the session's ``pouw/draw`` coin 0
     after C with the record's sample.  It refuses before reserving while the lane's period is open, and before its open
-    when the gate reserves it plain or into a period; `live_draw` is None with neither setting and refused with one."""
+    when the gate reserves it plain or into a period; `live_sample` is None with neither setting and refused with one."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 
@@ -2290,24 +2290,24 @@ def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_o
 
     class Session:
         def __init__(self, entry, at, got, call):
-            self.reserved, self.challenger = got, Wd.draw_challenger(0, random.Random(7).randbytes)
+            self.reserved, self.challenger = got, Wd.sample_challenger(0, random.Random(7).randbytes)
             self.session = self.commitment = None
 
         def record(self, c):
             opened.append((self.reserved, c))
             self.session, self.commitment = {"session": self.reserved["session"], "root": c.hex()}, self.challenger.commitment
-            return self.challenger.open(Wd.DRAW, 0, c)
+            return self.challenger.open(Wd.SAMPLE, 0, c)
 
-    monkeypatch.setattr(PHW, "DrawSession", Session)
-    coin, drew = BA.LiveDraw(gate, "vy-dc-h200", "vllm", run)(root, marks.append)
+    monkeypatch.setattr(PHW, "SampleSession", Session)
+    coin, drew = BA.LiveSample(gate, "vy-dc-h200", "vllm", run)(root, marks.append)
     want = {k: v for k, v in reserved.items() if k != "withheld"}
     assert asked == [["ledger"], ["reserve", "--peer", "vy-dc-h200", "--scheme", PHC.SCHEME, "--families",
-                                  PHC.draw_families(), "--withhold"]]
+                                  PHC.sample_families(), "--withhold"]]
     assert marks == [{"reserved": want}] and opened == [(want, root)]
-    assert drew["from"] == "challenger" and (drew["label"], drew["index"]) == (Wd.DRAW, 0) and drew["reserved"] == want
+    assert drew["from"] == "challenger" and (drew["label"], drew["index"]) == (Wd.SAMPLE, 0) and drew["reserved"] == want
     opening = Ch.LiveOpening.from_json(drew["opening"])
     assert coin == opening.coin and len(coin) == 64 and opening.after == root
-    assert Wd.draw_epoch_reason(Ch.LiveCommitment.from_json(drew["commitment"])) is None
+    assert Wd.sample_epoch_reason(Ch.LiveCommitment.from_json(drew["commitment"])) is None
     assert drew["session"] == {"session": reserved["session"], "root": root.hex()}
 
     for case, why in (("plain", "plain, not withheld"), ("period", "joined period p2"), ("open", "period p1 is open")):
@@ -2321,16 +2321,16 @@ def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_o
         else:
             ledger.append({"kind": "period-open", "session": None, "body": {"period": "p1", "lane": "vllm"}})
         with pytest.raises(Ch.CoinError, match=why):
-            BA.LiveDraw(gate, "vy-dc-h200", "vllm", run)(root, marks.append)
+            BA.LiveSample(gate, "vy-dc-h200", "vllm", run)(root, marks.append)
         assert marks == [] and opened == [] and asked[0] == ["ledger"] and len(asked) == (1 if case == "open" else 2)
 
-    assert BA.live_draw(None, None, "vllm") is None
+    assert BA.live_sample(None, None, "vllm") is None
     for one in ((gate, None), (None, "vy-dc-h200")):
         with pytest.raises(ValueError, match="together"):
-            BA.live_draw(*one, "vllm", run)
+            BA.live_sample(*one, "vllm", run)
 
 
-def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_since_its_close_or_asks_no_coin(monkeypatch):
+def test_the_live_sample_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_since_its_close_or_asks_no_coin(monkeypatch):
     """Given the Pearl-C period P the run's salt session joined (``served.json``'s ``coins.reserved.period``), the sample
     is lane vllm's first reserve after P's close, the one a compose takes (`pouw_h1_window.after_close`): it is refused
     before reserving while the ledger doesn't close P or the lane (``for``, else ``by``) reserved since, and before its
@@ -2356,16 +2356,16 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
 
     class Session:
         def __init__(self, entry, at, got, call):
-            self.reserved, self.challenger = got, Wd.draw_challenger(0, random.Random(7).randbytes)
+            self.reserved, self.challenger = got, Wd.sample_challenger(0, random.Random(7).randbytes)
             self.session = self.commitment = None
 
         def record(self, c):
             opened.append(c)
             self.session, self.commitment = {"session": self.reserved["session"], "root": c.hex()}, self.challenger.commitment
-            return self.challenger.open(Wd.DRAW, 0, c)
+            return self.challenger.open(Wd.SAMPLE, 0, c)
 
-    monkeypatch.setattr(PHW, "DrawSession", Session)
-    assert BA.live_draw(gate, "vy-dc-h200", "vllm", run, period="pc1").period == "pc1"
+    monkeypatch.setattr(PHW, "SampleSession", Session)
+    assert BA.live_sample(gate, "vy-dc-h200", "vllm", run, period="pc1").period == "pc1"
     for case, held_ledger, race, why in (
             ("first", [*salt, closed], [], None),
             ("another lane's", [*salt, closed, reserve("s-pous", by="pous")], [reserve("s-pous2", by="pous")], None),
@@ -2381,14 +2381,14 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
         ledger[:], first[:] = held_ledger, race
         for held in (asked, marks, opened):
             held.clear()
-        draw = BA.LiveDraw(gate, "vy-dc-h200", "vllm", run, period="pc1")
+        sample = BA.LiveSample(gate, "vy-dc-h200", "vllm", run, period="pc1")
         if why is None:
-            coin, drew = draw(root, marks.append)
+            coin, drew = sample(root, marks.append)
             assert asked == ["ledger", "reserve", "ledger"] and opened == [root] and drew["reserved"]["session"] == sid
             assert marks == [{"reserved": drew["reserved"]}] and len(coin) == 64, case
             continue
         with pytest.raises(Ch.CoinError, match=why):
-            draw(root, marks.append)
+            sample(root, marks.append)
         assert marks == [] and opened == [], case
         assert asked == (["ledger", "reserve", "ledger"] if case == "raced" else ["ledger"]), case
 
@@ -2480,7 +2480,7 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path, monkeypatch):
             run([a, b], window_class=bad)
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
 
-    # the served verify's node draw on `run`'s source: on the OS's coins its 3 draws can all land over the inert-work
+    # the served verify's node sample on `run`'s source: on the OS's coins its 3 samples can all land over the inert-work
     # bound, at ε 1 and no give-up
     monkeypatch.setattr(PV, "coins", lambda n: (b"verifier" * 4)[:n])
     d = _serve_dir(tmp_path, [a, b])
@@ -3178,13 +3178,13 @@ def test_served_inert_work_per_input_bounds_each_input_on_its_own(honest_pass, t
 
 
 @pytest.mark.slow
-def test_served_inert_work_fresh_draws_measure_each_input_under_salts_of_its_own(honest_pass, tmp_path):
-    """`--fresh-draws`: the per-input mode's inputs, each by N work-weighted trials under a salt of its own derived from the
+def test_served_inert_work_fresh_samples_measure_each_input_under_salts_of_its_own(honest_pass, tmp_path):
+    """`--fresh-samples`: the per-input mode's inputs, each by N work-weighted trials under a salt of its own derived from the
     source, every trial the tile rule on the committed rows under that salt, bounded by Clopper–Pearson; a resume with the
     same source measures nothing again, and another source's trials are refused."""
     path, s, epoch, prover, tr, splits, records = honest_pass
     out, src = tmp_path / "out", "ab" * 32
-    args = [str(path), "--per-input", "1", "--fresh-draws", "4", "--fresh-source", src, "--jobs", "1", "--cross-check", "2",
+    args = [str(path), "--per-input", "1", "--fresh-samples", "4", "--fresh-source", src, "--jobs", "1", "--cross-check", "2",
             *coins_args(path)]
     assert SD.main([*args, "--out", str(out)]) == 0
     doc = json.loads((out / "inputs.json").read_text())
@@ -3217,7 +3217,7 @@ def test_served_inert_work_fresh_draws_measure_each_input_under_salts_of_its_own
         SD.main([*args[:6], "cd" * 32, *args[7:], "--out", str(tmp_path / "other"), *resume])
 
 
-def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tmp_path):
+def test_fresh_trials_sample_exactly_by_work_from_a_source_fixed_in_the_command(tmp_path):
     """Lean's conditions on the fresh-trial ε: sample d is `key.uniform(W, d)` over the input's cumulative credited cells
     (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
     and the source is given in the command, never taken inside the run."""
@@ -3231,7 +3231,7 @@ def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tm
     assert [d for _, _, d, _ in got] == list(range(50)) and len({s for *_, s in got}) == 50
     assert SD.fresh_trials(job | {"sha256": "cd" * 32}, row, 50, src) != got
     with pytest.raises(SystemExit):
-        SD.main(["m.json", "--per-input", "1", "--fresh-draws", "4", "--out", str(tmp_path)])
+        SD.main(["m.json", "--per-input", "1", "--fresh-samples", "4", "--out", str(tmp_path)])
 
 
 ST = load("pearl_c_vllm_served_table", POUW / "pearl_c_vllm" / "served_table.py")
@@ -3446,11 +3446,11 @@ def test_served_inert_work_input_bounds():
     row = {"method": "census", "failures": 0, "failures_weighted": 0, "W": 64 * 4096, "w_max": 4096}
     assert SD.input_bound(row, 0.05)[0] == pytest.approx(math.log(20) / 64)
     a = 4096 / (2048 * 4096)
-    drawn = {"method": "sampled", "failures": 0, "W": 2048 * 4096, "w_max": 4096, "drawn": 64}
-    assert SD.input_bound(drawn, 0.05)[0] == pytest.approx(math.log(20) * a / (1 - math.exp(-64 * a)))
-    assert SD.input_bound(drawn, 0.05)[0] > math.log(20) / 64 > SD.input_bound(drawn | {"drawn": 10 ** 6}, 0.05)[0]
-    assert SD.input_bound(drawn | {"drawn": 10 ** 6}, 0.05)[0] == pytest.approx(math.log(20) * a)
-    assert SD.input_bound(drawn | {"failures": 1, "failures_weighted": 4096}, 0.05) == (1.0, "sampled with failures: measure this input in full")
+    sampled = {"method": "sampled", "failures": 0, "W": 2048 * 4096, "w_max": 4096, "drawn": 64}
+    assert SD.input_bound(sampled, 0.05)[0] == pytest.approx(math.log(20) * a / (1 - math.exp(-64 * a)))
+    assert SD.input_bound(sampled, 0.05)[0] > math.log(20) / 64 > SD.input_bound(sampled | {"drawn": 10 ** 6}, 0.05)[0]
+    assert SD.input_bound(sampled | {"drawn": 10 ** 6}, 0.05)[0] == pytest.approx(math.log(20) * a)
+    assert SD.input_bound(sampled | {"failures": 1, "failures_weighted": 4096}, 0.05) == (1.0, "sampled with failures: measure this input in full")
     up = SD._bernstein_upper(3 * 4096, 4096, 64 * 4096, 0.05)
     assert 3 / 64 < up < 1
     assert SD.input_bound(row | {"failures": 3, "failures_weighted": 3 * 4096}, 0.05)[0] == up
@@ -3459,9 +3459,9 @@ def test_served_inert_work_input_bounds():
 def test_served_inert_work_rebound_recomputes_an_inputs_json(tmp_path):
     """`--rebound` rewrites a recorded inputs.json's bounds from its counts alone, at δ = 0.05/m, with no manifest."""
     rows = [{"pass": "decode", "run": "r", "manifest_sha256": "0", "matmul": i, "weight": i, "m": 1, "k": 4096, "n": 4096,
-             "NT": nt, "W": nt * 4096, "w_max": 4096, "method": method, "drawn": drawn, "openings_failed": 0, "failures": 0,
+             "NT": nt, "W": nt * 4096, "w_max": 4096, "method": method, "drawn": sampled, "openings_failed": 0, "failures": 0,
              "failures_weighted": 0, "share_max": None, "reasons": [], "upper": 0.0, "bound_method": "old"}
-            for i, (nt, method, drawn) in enumerate([(64, "census", 64), (2048, "sampled", 64)])]
+            for i, (nt, method, sampled) in enumerate([(64, "census", 64), (2048, "sampled", 64)])]
     src = tmp_path / "inputs.json"
     src.write_text(json.dumps({"seed": 7, "census_max": 128, "draws": 64, "inputs": rows}))
     assert SD.main(["--rebound", str(src), "--out", str(tmp_path / "out")]) == 0

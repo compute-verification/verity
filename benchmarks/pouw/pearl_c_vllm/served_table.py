@@ -10,7 +10,7 @@ measurement), so the limits are 95% simultaneous over the whole table.
 
 Writes ``<out>/table.json`` and ``<out>/table.md``.  A model's row is refused when its inputs name more than one run, when an
 input's openings failed, or when a verify given for it did not accept its pass (a negative control's, ``control*``, must
-reject).  ``--fresh`` adds a model's ε from fresh-salt trials (``--fresh-draws``) beside the pass-salt one; ``--pending``
+reject).  ``--fresh`` adds a model's ε from fresh-salt trials (``--fresh-samples``) beside the pass-salt one; ``--pending``
 counts trials still running in m, so a table published before them states the limits the finished table will.
 ``--window`` adds a salt-to-deadline window's replay diagnostic from its audit (refused unless the audit accepted), with its
 overhead over cuBLASLt beside the proving cost hidden-zk measures (``--proving-cost``; the cell points to hidden-zk until then).
@@ -93,7 +93,7 @@ def window_row(window_run: str, audit_run: str, audit: dict, proving: dict[str, 
 
 def markdown(table: dict) -> str:
     lines = [f"# FP8 served table at cap {table['cap']}", "",
-             "| model | pass | m | tile draws | failures | worst share | ε (95% simultaneous) | bound | fresh-salt ε | verify |",
+             "| model | pass | m | tile samples | failures | worst share | ε (95% simultaneous) | bound | fresh-salt ε | verify |",
              "|---|---|---:|---:|---:|---:|---:|---|---:|---|"]
     for r in table["models"]:
         if "absent" in r:
@@ -106,10 +106,10 @@ def markdown(table: dict) -> str:
                      f"{r['share_max']:.3g} | {r['epsilon']:.4f} | {r['epsilon_method']} | {fresh} | {verify} |")
     lines += ["", (f"ε is the largest of a model's inputs' upper limits on the input's honest tile-rejection rate at the cap, "
               f"each at δ = 0.05/m with m = {table['m']}, every input the table measures over all its models and "
-              f"measurements (served_inert_work.input_bound); an input is one matmul of the pass. Every draw, pass-salt and fresh, "
+              f"measurements (served_inert_work.input_bound); an input is one matmul of the pass. Every sample, pass-salt and fresh, "
               f"weighs an input's tiles by their area |rows|·|cols|, which within one input (one shape) is proportional to "
               f"`TR.Wref` (`pearlCTilesDevRev1K`: `tileShare` on the tile's rows, not its passing rows). So ε is a rate "
-              f"under Lean's draw, not under the deployed audit's, whose `tile_weight` counts credited cells only and so "
+              f"under Lean's sample, not under the deployed audit's, whose `tile_weight` counts credited cells only and so "
               f"differs on tiles with filler, excluded or voluntary rows.")]
     quality = [r for r in table["models"] if "quality" in r]
     if quality:
@@ -122,7 +122,7 @@ def markdown(table: dict) -> str:
                              f"{q.get('greedy_token_agreement_vs_bf16', float('nan')):.4f} |")
         lines += ["", ("A quality run's scheme may name another hashing format than the served `-h3` (runs before 2026-10-06 "
                   "ran `pearl-c-sm120-v1-h1`): the formats differ only in their hashes. The noise seeds hash A's and B's "
-                  "roots, so a run under one format draws other noise than a run under another, as another salt does; the "
+                  "roots, so a run under one format samples other noise than a run under another, as another salt does; the "
                   "forming, the chain and the peel are the same.")]
     for r in table["models"]:
         if "forming" in r:
@@ -148,9 +148,9 @@ def markdown(table: dict) -> str:
                          f"{w['proving_cost'] or '— (hidden-zk)'} | {w['tiles_accepted']} / {w['tiles']} | {controls} |")
         fr = [w["fraction"] for w in windows]
         lines += ["", ("A replay audit is a diagnostic, not a verification: only a sampled "
-                  "proof over Flock with ZK verifies a computation. Each window's audit recomputes its drawn tiles on the "
+                  "proof over Flock with ZK verifies a computation. Each window's audit recomputes its sampled tiles on the "
                   "CPU (`archive/pouw-blake3/exhaustion/audit.py`), so its fraction is the replay diagnostic: certified = "
-                  "(1 − γ)(1 − ε_s)·credited / capacity, the lower end at δ_s = 1/20 over the audit's draws; uncertified = "
+                  "(1 − γ)(1 − ε_s)·credited / capacity, the lower end at δ_s = 1/20 over the audit's samples; uncertified = "
                   "credited / capacity, with capacity the cards' fastest cuBLASLt FP8 GEMMs in the window (before and after, "
                   "averaged). The overhead is capacity / credited, the served kernel's time per GEMM over cuBLASLt's. Proving "
                   "cost is the cost of the sampled Flock ZK proofs over the same work, which hidden-zk measures; "

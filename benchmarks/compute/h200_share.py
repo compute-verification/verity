@@ -24,7 +24,7 @@ at the lower clock. What the model leaves out makes the number an upper bound on
 share: Pearl+'s own work beside its matmuls (its commitments' hashing, the overhead `benchmarks/overhead/run.py table`
 measures on the H200) takes time and earns nothing; attention, the norms and the rest run below the dense loop's rate;
 and a served matmul's operands are not uniform bytes. Uniform operands are the goal's stated case: of the duty run's
-operand classes they draw the most power, and the tensor pipe held its lowest clock on them.
+operand classes they sample the most power, and the tensor pipe held its lowest clock on them.
 
 It prints the number at each reading as text and one line of JSON; exits 0 with it, 1 with none (the record's answer is
 not an accept, or the Lean verifier's verdict is not the same) and 2 when a run can't be read or holds no such point.

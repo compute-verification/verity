@@ -12,7 +12,7 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   python served_commit.py replay PARAMS LOG OUT [--lean F]                    its requests again, from its recorded coins
   (challenger, replay and check take --python-record: PoUW's checks by their Python references alone)
   python served_commit.py coin-variant MANIFEST COINS OPENING OUT CASE        a control's pass, its salt coin CASE
-  python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
+  python served_commit.py check PARAMS REGISTRATION SAMPLE UNIT PUB OPENING     the verifier: the proof's rows are the unit's
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
 
 Each command runs as `benchmarks/pouw/served_zk/served_commit_run.py COMMAND ...`, which passes `main` the checks of
@@ -75,7 +75,7 @@ verity imports; run from this file, the commands that reach either refuse (NotIm
   (`pouw_pearl_c_device.manifest_epoch`): the pass's salt coin must open against it, as the salt coin, after the
   weights' root, and the pass's salt must be that coin's; a pass recorded before the execution phase's coins (a beacon's salt) is read
   only when the request says it is a recorded replay.  `select` opens the execution phase's sampling coin after the registration (its
-  digest), once, with no retry, and the sample's key is `draw_key` of that coin; Lean ``verity-verify-proof draw --population N
+  digest), once, with no retry, and the sample's key is `sample_key` of that coin; Lean ``verity-verify-proof draw --population N
   --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  An execution phase is received within
   the registration deadline of the salt coin's release and before the execution phase's sampling coin is released, or it is refused
   (`late-registration`); parameters without the deadline are refused.  The challenger records each opening
@@ -153,8 +153,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk 
 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
-#: the execution phase sample's key, from the execution phase's sampling coin (`draw_key`)
-DRAW_DOMAIN = CC.DRAW_DOMAIN
+#: the execution phase sample's key, from the execution phase's sampling coin (`sample_key`)
+SAMPLE_DOMAIN = CC.SAMPLE_DOMAIN
 #: the execution phase root's port: the execution phase's entries
 PORT = "entries"
 #: an execution phase stream's failure budget: its first failure stops it
@@ -357,7 +357,7 @@ def pinned_challenger_key(record: Path) -> Ch.ChallengerKey:
 class Deployment:
     """What a certified execution phase's verifier pins of its deployment: the network attester's public key and its run's id,
     the only ones whose answers the challenger takes (the certifier it reads must be for them), and the key of the verifier's own challenger, under which the challenger reads the execution phase's
-    coin record and the sample's check of record verifies it (`core_check.draw_twin`, ``coin-key``), so no record a prover
+    coin record and the sample's check of record verifies it (`core_check.sample_twin`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
     # TODO: the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
@@ -668,10 +668,10 @@ def core_params(params: dict) -> dict:
     return OR.core_params(params, check_item(params), R.query_digest(PT.template_instance_query(template(params["k"]))))
 
 
-def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True, *,
+def check(params: dict, rec: dict, sample: dict, unit: int, pub: bytes, op: dict, sampled: bool = True, *,
           record: OR.Record, salt: bytes | None = None) -> str | None:
     """None if the proof's public file opens unit `unit`'s rows under the registered execution phase root, else why not: PoUW's
-    rule on the opening (`core_check.opening_twin`, the unit sampled unless not `drawn`), of record (`record`: an
+    rule on the opening (`core_check.opening_twin`, the unit sampled unless not `sampled`), of record (`record`: an
     `of_record.Record`, whose Lean side `of_record_lean.Record` supplies), beside this reading of the registration (its level the execution phase's, its entries' domain the execution phase's served
     one), which may refuse only what the rule refuses (`Record.prelude`).  `salt` is a certified execution phase's salt, the one
     its pass was checked against (`core_check.certified_salt`, which `Challenger.check` passes); the opening refuses
@@ -686,7 +686,7 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
         pre = None if roots.get(PORT, {}).get("domain") == window_domain(params, ell).domain_id.hex() else \
             "the registered window domain is not the window's served domain"
     x = {"params": core_params(params), "commitment": record.hexed(rec),
-         "units": list(draw.get("units", ())) if drawn else None, "unit": unit, "pub": pub.hex(), "opening": op,
+         "units": list(sample.get("units", ())) if sampled else None, "unit": unit, "pub": pub.hex(), "opening": op,
          **({} if salt is None else {"salt": salt.hex()})}
     try:
         out = record.opening(x)
@@ -789,15 +789,15 @@ def _all(units: list[dict], name: str) -> dict[str, Any]:
 Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 
-def draw_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Key:
+def sample_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Key:
     """The execution phase sample's key: the execution phase's sampling coin, under the stream and the registration and receipt it was opened after."""
-    return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
+    return derive(coin, SAMPLE_DOMAIN, CC.sample_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
 
-def draw_bytes(key: Key, sampling_design: Mapping[str, Any], n: int) -> bytes:
+def sample_bytes(key: Key, sampling_design: Mapping[str, Any], n: int) -> bytes:
     """The bytes a subset:k sample over N reads (Lean's ``2 k · width(N) + 64``)."""
     if sampling_design.get("law") != "subset":
-        raise _refused("law", f"the window's draw is a subset law's, not {dict(sampling_design)}")
+        raise _refused("law", f"the window's sample is a subset law's, not {dict(sampling_design)}")
     return key.stream("draw", 2 * sampling_design["k"] * CC.width(n) + 64)
 
 
@@ -828,7 +828,7 @@ class Recorded:
 def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) -> tuple[Ch.LiveCommitment, dict]:
     """A certified execution phase's trusted coin commitment, which the challenger reads itself from the record its challenger
     signed and wrote at `path` under the verifier's `key` (`challenger.trusted_commitment`), and the record with the key
-    as the sample's check of record reads them (`core_check.draw_twin` verifies the record again).  Raises `ValueError` when
+    as the sample's check of record reads them (`core_check.sample_twin` verifies the record again).  Raises `ValueError` when
     there is no such record, or it isn't a live execution phase's sampling session's."""
     if path is None or not isinstance(key, Ch.ChallengerKey):
         raise ValueError("a certified window's challenger reads its coin commitment from its challenger's signed record "
@@ -839,11 +839,11 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
         doc = json.loads(Path(path).read_text(encoding="utf-8"))
         same = Ch.ChallengerRecord.from_json(doc).commitment == trusted
     except (Ch.CoinError, OSError, ValueError) as e:
-        raise ValueError(f"a certified window's draw coin opens against its challenger's signed record: {e}") from None
+        raise ValueError(f"a certified window's sampling coin opens against its challenger's signed record: {e}") from None
     if not same:
         raise ValueError(f"the challenger record at {path} changed while the challenger read it")
-    if (why := Wd.draw_epoch_reason(trusted)) is not None:
-        raise ValueError(f"a certified window's draw coin is a live window's draw session's: {why}")
+    if (why := Wd.sample_epoch_reason(trusted)) is not None:
+        raise ValueError(f"a certified window's sampling coin is a live window's sample session's: {why}")
     return trusted, {"key": key.to_json(), "record": doc}
 
 
@@ -894,7 +894,7 @@ class Challenger:
     With `certifier` the execution phase is certified (module docstring): `certifier` is the network attester as the
     challenger reads it, whose `certifier_run` names the stream (`stream_id`), whose `certifier_key` and `run_id` the
     deployment pins, and whose `committed` and `reveal` are its answers (`salt.committed`, `salt.revealed`); `prover` is its 64-byte
-    id (`salt.prover_id`), `coins` the execution phase's sampling session's challenger (`window.draw_challenger`) whose ``pouw/draw``
+    id (`salt.prover_id`), `coins` the execution phase's sampling session's challenger (`window.sample_challenger`) whose ``pouw/draw``
     coin 0 the sample opens, `coin_record` the path of the record that challenger signed and wrote on its own host
     (`challenger.write_record`), and `deployment` what the verifier pins of its deployment (`Deployment`): the network
     attester's key and run id, which `certifier` must be for, and its challenger's key, under which the
@@ -953,7 +953,7 @@ class Challenger:
         self.replays: dict[str, str] = {}
         self.passes: dict[str, str] = {}
         self.manifests: dict[str, Any] = {}   # each registered execution phase's pass manifest, read (`_distinct`)
-        self.draws: dict[str, S.Draw] = {}
+        self.samples: dict[str, S.Draw] = {}
         self.sessions: dict[str, list[str]] = {}
         self.openings: dict[str, CoinOpening] = {}
         self.salt_released_at: float | None = None
@@ -966,7 +966,7 @@ class Challenger:
 
     def _coins_json(self) -> dict:
         """The coins the checks of record read: a certified execution phase's challenger record and the key it is signed under
-        (`core_check.draw_twin` verifies it), or the seeded execution phase's commitment."""
+        (`core_check.sample_twin` verifies it), or the seeded execution phase's commitment."""
         return self.coins.commitment.to_json() if self.signed is None else self.signed
 
     def open(self, label: str, after: bytes) -> CoinOpening | Ch.LiveOpening:
@@ -977,10 +977,10 @@ class Challenger:
             if label != "draw":
                 raise _refused("coin", f"a certified window's salt is the network certifier's: it opens no {label} coin")
             try:
-                o = self.coins.open(Wd.DRAW, 0, after)
+                o = self.coins.open(Wd.SAMPLE, 0, after)
             except Ch.CoinError as e:
                 raise _refused("coin", str(e)) from None
-            why = Ch.live_reason(self.trusted, o, Wd.DRAW, 0, after)
+            why = Ch.live_reason(self.trusted, o, Wd.SAMPLE, 0, after)
         else:
             try:
                 o = self.coins.open(label, after)
@@ -1050,8 +1050,8 @@ class Challenger:
 
     def _keyed(self, sampling_design: Mapping[str, Any], n: int) -> list[int]:
         if self._key is None:
-            raise _refused("coin", "no draw coin is open for this draw")
-        return self.sampler(sampling_design, n, draw_bytes(self._key, sampling_design, n))
+            raise _refused("coin", "no sampling coin is open for this sample")
+        return self.sampler(sampling_design, n, sample_bytes(self._key, sampling_design, n))
 
     def stream(self, name: str, ell: int, sampler: Callable[[Mapping[str, Any], int], list[int]]) -> S.Stream:
         if (name, ell) not in self.streams:
@@ -1066,10 +1066,10 @@ class Challenger:
             raise _refused("unknown", name)
         return self.regs[name]
 
-    def _drawn(self, name: str) -> S.Draw:
-        if name not in self.draws:
+    def _sampled(self, name: str) -> S.Draw:
+        if name not in self.samples:
             raise _refused("not-drawn", name)
-        return self.draws[name]
+        return self.samples[name]
 
     def register(self, name: str, rec: Mapping[str, Any], stream: str = "window", replay: str | None = None,
                  manifest: bytes | None = None, recorded: bool = False) -> S.WindowCommitmentRecord:
@@ -1077,15 +1077,15 @@ class Challenger:
         execution phase received after the execution phase's sampling coin was released is refused (`late-registration`)."""
         self.witness[name] = []
         if replay is None and not self.predates_deadline and "draw" in self.openings:
-            raise _refused("late-registration", f"received after the epoch's draw coin was released (opened after "
+            raise _refused("late-registration", f"received after the epoch's sampling coin was released (opened after "
                                                 f"registration {self.openings['draw'].after.hex()[:32]}): a window "
-                                                f"registers before the draw coin")
+                                                f"registers before the sampling coin")
         self.registered(name, rec)
         if self.certifier is not None:
             return self._certified(name, rec, stream, replay, manifest, recorded)
         how = self.pass_epoch(manifest, recorded, name) if replay is None else None
         ell = level_of(rec)
-        replayed = None if replay is None else self._drawn(replay)
+        replayed = None if replay is None else self._sampled(replay)
         sampler = self._keyed if replay is None else (lambda sampling_design, n: replayed.units)
         st = self.stream(stream, ell, sampler)
         if not self.predates_deadline and self.salt_released_at is not None and (stream, ell) not in self._salted:
@@ -1165,28 +1165,28 @@ class Challenger:
             raise _refused(*why)
         self.manifests[name] = m
 
-    def check(self, name: str, unit: int, pub: bytes, op: dict, drawn: bool = True) -> str | None:
+    def check(self, name: str, unit: int, pub: bytes, op: dict, sampled: bool = True) -> str | None:
         """`check` of execution phase `name`'s unit `unit` against its registration and sample, of record (`record`), under the salt
         its pass was checked against when it is certified (`salts`)."""
         _, reg = self._held(name)
-        return check(self.params, dict(reg.record), self._drawn(name).draw, unit, pub, op, drawn, record=self.record,
+        return check(self.params, dict(reg.record), self._sampled(name).draw, unit, pub, op, sampled, record=self.record,
                      salt=self.salts.get(name))
 
     def select(self, name: str) -> S.Draw:
-        """The sample, once: an execution phase's opens the execution phase's sampling coin after its registration and samples over `draw_key`;
+        """The sample, once: an execution phase's opens the execution phase's sampling coin after its registration and samples over `sample_key`;
         nothing resamples, and a coin opened once is never opened again (a failed sample's retry is refused)."""
         st, reg = self._held(name)
-        if name in self.draws:
+        if name in self.samples:
             raise _refused("drawn", name)
         if name in self.replays:
-            self.draws[name] = st.select(reg)
-            return self.draws[name]
-        self._key = draw_key(self.open("draw", bytes.fromhex(reg.digest)).coin, st, reg)
+            self.samples[name] = st.select(reg)
+            return self.samples[name]
+        self._key = sample_key(self.open("draw", bytes.fromhex(reg.digest)).coin, st, reg)
         try:
             d = st.select(reg)
         finally:
             self._key = None
-        out = self._of_record(name, self.record.draw, {
+        out = self._of_record(name, self.record.sample, {
             "coins": self._coins_json(), "recorded": self.recorded[name],
             "opening": self.openings["draw"].to_json(), "stream": st.digest, "registration": reg.digest,
             "receipt": dict(reg.receipt), "k": reg.record["law"]["k"], "population": reg.record["population"],
@@ -1194,20 +1194,20 @@ class Challenger:
             "key": None if self.deployment is None else self.deployment.challenger_key.to_json()})
         if out is not None:
             raise _refused(*out["refused"]) if isinstance(out["refused"], list) else _refused("draw", out["refused"])
-        self.draws[name] = d
+        self.samples[name] = d
         return d
 
     def coins_of(self, name: str) -> dict | None:
         """An execution phase's coins, for its outcome: the execution phase's commitment, how its pass's salt was had and its sampling coin."""
         if name not in self.passes:
             return None
-        draw = self.openings.get("draw")
+        sample = self.openings.get("draw")
         return {"commitment": self._commitment().to_json(), "pass": self.passes[name],
-                "draw": draw.to_json() if draw is not None and draw.after == bytes.fromhex(self.regs[name][1].digest) else None}
+                "draw": sample.to_json() if sample is not None and sample.after == bytes.fromhex(self.regs[name][1].digest) else None}
 
     def deliver(self, name: str, sessions: list[str]) -> S.Outcome | None:
         st, _ = self._held(name)
-        o = st.deliver(self._drawn(name), sessions)
+        o = st.deliver(self._sampled(name), sessions)
         self.sessions[name] = list(sessions)
         return o
 
@@ -1217,7 +1217,7 @@ class Challenger:
         is of record: the stream's outcome is final once given, so a refusal here (``pouw-check``, or a disagreement)
         leaves the execution phase with no published outcome."""
         st, reg = self._held(name)
-        d = self._drawn(name)
+        d = self._sampled(name)
         if [u["unit"] for u in units] != D.proved(d.draw):
             raise _refused("units", {"given": [u["unit"] for u in units][:16], "drawn": D.proved(d.draw)[:16]})
         verdicts = {k: v for n in sorted({n for u in units for n in u["verdicts"]}) for k, v in _all(units, n).items()}
@@ -1264,7 +1264,7 @@ def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
     ``register`` (``registration`` a record's file, ``manifest`` its pass's manifest and ``recorded`` true for a pass
     recorded before the execution phase's coins; ``stream`` and ``replay`` for a control; ``out`` the receipt), ``select`` (``out`` the
     sample; the reply adds the stream's digest the sample read), ``deliver`` (``units``: the job's rows, each with its ``session`` record) and ``outcome`` (``units``; ``out`` a
-    directory: outcome.json, audit.json).  Replies: COINS, OPENED, REGISTERED, DRAWN, DELIVERED, ACCEPT, REJECT, LATE,
+    directory: outcome.json, audit.json).  Replies: COINS, OPENED, REGISTERED, SAMPLED, DELIVERED, ACCEPT, REJECT, LATE,
     PENDING, REFUSED, or ERROR for a request it couldn't read."""
     op, name = cmd.get("op"), cmd.get("name")
     try:
@@ -1458,7 +1458,7 @@ def lean_sampler(lean: str, log: Path | None = None) -> Sampler:
     def sample(sampling_design: Mapping[str, Any], n: int, src: bytes) -> list[int]:
         p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(sampling_design["k"]), "--stream", src.hex()],
                            capture_output=True, text=True)
-        lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
+        lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("SAMPLE ")]
         if p.returncode != 0 or len(lines) != 1:
             raise _refused("sampler", f"verity-verify-proof draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
         if log is not None:
@@ -1605,8 +1605,8 @@ def cmd_coin_variant(a) -> int:
 
 def cmd_check(a) -> int:
     record = a.record(lean=False if a.python_record else None)
-    params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
-    why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, record=record)
+    params, reg, d = _json(a.params), _json(a.registration), _json(a.sample)
+    why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), sampled=not a.unsampled, record=record)
     record.close()
     if a.out:
         Path(a.out).write_text(json.dumps({"of_record": False, "accepted": why is None, "why": why or "",
@@ -1735,7 +1735,7 @@ def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
     p.add_argument("pub")
     p.add_argument("opening")
     p.add_argument("--out", help="the opening check's verdict, for the outcome")
-    p.add_argument("--undrawn", action="store_true", help="a control: open a unit the sample did not sample")
+    p.add_argument("--unsampled", action="store_true", help="a control: open a unit the sample did not sample")
     p.add_argument("--expect-reject", action="store_true")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("shape")

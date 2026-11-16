@@ -380,7 +380,7 @@ def test_the_challenger_holds_every_item_to_its_own(served):
 
 @LEAN
 @pytest.mark.slow
-def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(served):
+def test_select_samples_once_over_the_sample_coin_opened_after_the_registration(served):
     """The sample is the sampling design's subset:K′ over the padded population, over the key of the execution phase's sampling coin, which the
     challenger opens after the registration (its digest) and checks against its commitment; Lean's sample on that key's
     stream is `stream_subset`'s.  A second select is refused, and so is a retry after a failed sample: the coin opens once.
@@ -397,7 +397,7 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
     o = ch.openings["draw"]
     assert o.after == bytes.fromhex(reg.digest) and coin_reason(ch.coins.commitment, o, "draw", o.after) is None
     st = ch.regs["honest"][0]
-    src = SC.draw_bytes(SC.draw_key(o.coin, st, reg), d.law, 26)
+    src = SC.sample_bytes(SC.sample_key(o.coin, st, reg), d.law, 26)
     assert len(src) == 2 * k * CC.width(26) + 64 and d.units == CC.stream_subset(k, 26, src)
     assert ch.coins_of("honest") == {"commitment": ch.coins.commitment.to_json(), "pass": "coin", "draw": o.to_json()}
     with pytest.raises(S.Refused) as e:
@@ -510,7 +510,7 @@ def test_a_pass_registered_again_on_another_stream_is_refused(served):
 
 
 @pytest.mark.slow
-def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_path):
+def test_a_window_received_after_the_epochs_sample_coin_is_refused(served, tmp_path):
     """The record's order is each execution phase's receipt before the execution phase's sampling challenge's release: once the sampling challenge is open, an
     execution phase is refused (`late-registration`), even one whose pass and record are honest and within the deadline, and its
     stream is left as it was.  A control replaying the honest sample opens no challenge and still registers.  A record whose
@@ -524,10 +524,10 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     ch.select("honest")
     with pytest.raises(S.Refused) as e:
         _held(ch, "after", rec, stream="later")
-    assert _codes(e) == {"late-registration"} and "after the epoch's draw coin" in e.value.verdict.detail["late-registration"]
+    assert _codes(e) == {"late-registration"} and "after the epoch's sampling coin" in e.value.verdict.detail["late-registration"]
     assert "after" not in ch.regs and ("later", SC.level_of(rec)) not in ch.streams and not ch.witness["after"]
     ch.register("ctl", rec, stream="ctl", replay="honest")
-    assert ch.select("ctl").units == ch.draws["honest"].units
+    assert ch.select("ctl").units == ch.samples["honest"].units
 
     bare = {k: v for k, v in params.items() if k != "registration_deadline"}
     old = SC.Challenger(bare, _coins(), record=ORL.Record(lean=False), predates_deadline=True)
@@ -594,9 +594,9 @@ def _live(path: Path, entropy: str | None = None) -> tuple[Ch.LiveChallenger, Ch
     """A live execution phase's sample session's challenger on its host, its record signed and written to `path`, and the verifier's key for that
     record (`challenger.ChallengerKey`); `entropy` names another challenger's coins, whose record isn't the one written."""
     k = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(str(path).encode()).digest())
-    live = Wd.draw_challenger(0, random.Random(str(path)).randbytes)
+    live = Wd.sample_challenger(0, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("vy-nebius-cpu-1", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
-    return (live if entropy is None else Wd.draw_challenger(0, random.Random(entropy).randbytes)), \
+    return (live if entropy is None else Wd.sample_challenger(0, random.Random(entropy).randbytes)), \
         Ch.ChallengerKey(4, 2, lms.public_key(k))
 
 
@@ -723,19 +723,19 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
     salt = PS.pouw_salt(salts[0], 0, sid, prover)
     assert ch.passes == {"honest": "certifier"} and ch.salts == {"honest": salt} and "draw" not in ch.openings
     assert (0, sid, prover) in ledger
-    samples, sample_of_record = [], ch.record.draw
-    ch.record.draw = lambda x: samples.append(x) or sample_of_record(x)
+    samples, sample_of_record = [], ch.record.sample
+    ch.record.sample = lambda x: samples.append(x) or sample_of_record(x)
     d = ch.select("honest")
     assert [x["key"] for x in samples] == [ch.deployment.challenger_key.to_json()] == [ch.signed["key"]]
-    assert OR.py_draw({**samples[0], "key": _live(tmp_path / "pinned.json")[1].to_json()}) == \
+    assert OR.py_sample({**samples[0], "key": _live(tmp_path / "pinned.json")[1].to_json()}) == \
         {"refused": [CC.COIN_KEY, CC.OTHER_KEY]}
     o, st = ch.openings["draw"], ch.regs["honest"][0]
-    assert (o.label, o.index, o.after) == (Wd.DRAW, 0, bytes.fromhex(reg.digest))
-    assert Ch.live_reason(ch.trusted, o, Wd.DRAW, 0, o.after) is None and ch.trusted == ch.coins.commitment
+    assert (o.label, o.index, o.after) == (Wd.SAMPLE, 0, bytes.fromhex(reg.digest))
+    assert Ch.live_reason(ch.trusted, o, Wd.SAMPLE, 0, o.after) is None and ch.trusted == ch.coins.commitment
     assert ch.trusted == Ch.trusted_commitment(tmp_path / "honest.json", Ch.ChallengerKey.from_json(ch.signed["key"]),
                                                CC.lms_verify)
     k = SC.sampling_design_of(params, SC.level_of(rec))["k"]
-    assert d.units == CC.stream_subset(k, 26, SC.draw_bytes(SC.draw_key(o.coin, st, reg), d.law, 26))
+    assert d.units == CC.stream_subset(k, 26, SC.sample_bytes(SC.sample_key(o.coin, st, reg), d.law, 26))
     assert ch.coins_of("honest") == {"commitment": ch.trusted.to_json(), "pass": "certifier", "draw": o.to_json()}
 
     held, opening = [], CC.opening_twin
@@ -767,7 +767,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
     assert rch.passes == {"restarted": "certifier"} and (0, sid, prover) in ledger and (0, rsid, prover) in ledger
     with pytest.raises(S.Refused) as e:
         rch.select("restarted")
-    assert _codes(e) == {"coin"} and "restarted" not in rch.draws
+    assert _codes(e) == {"coin"} and "restarted" not in rch.samples
 
     live, ck = _live(tmp_path / "init.json")
     _, foreign = _live(tmp_path / "foreign.json")
@@ -899,8 +899,8 @@ def test_stream_subset_is_the_exact_partial_fisher_yates_on_one_stream():
     src = word(top) + word(5) + word(0) + word(199)          # top is refused; then 5 % 26, 0 % 25, 199 % 24 = 7
     assert CC.stream_subset(k, n, src) == [1, 5, 9]
     assert CC.stream_subset(k, n, src[:-1]) is None
-    key = SC.derive(b"\x01" * 32, SC.DRAW_DOMAIN, {"x": "y"})
-    units = CC.stream_subset(8, 1000, SC.draw_bytes(key, {"law": "subset", "k": 8}, 1000))
+    key = SC.derive(b"\x01" * 32, SC.SAMPLE_DOMAIN, {"x": "y"})
+    units = CC.stream_subset(8, 1000, SC.sample_bytes(key, {"law": "subset", "k": 8}, 1000))
     assert len(set(units)) == 8 and units == sorted(units) and all(0 <= u < 1000 for u in units)
 
 
@@ -919,9 +919,9 @@ def test_check_opens_the_sampled_proof_blocks_rows_only(served, tmp_path):
     assert SC.opening(advice, priv, params, 25)["entry_value"]["kind"] == "filler"
     op = SC.opening(advice, priv, params, 5)
     assert "not entry 0's row" in SC.check(params, rec, sample, 5, _unit_pub(advice, priv, 6), op, record=ORL.Record())
-    assert "not drawn" in SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6), record=ORL.Record())
-    assert SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6), drawn=False, record=ORL.Record()) is None
-    assert "not the unit's row" in SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), op, drawn=False, record=ORL.Record())
+    assert "not sampled" in SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6), record=ORL.Record())
+    assert SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6), sampled=False, record=ORL.Record()) is None
+    assert "not the unit's row" in SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), op, sampled=False, record=ORL.Record())
     oparams, opublic, oadvice, opriv = _window(words, run="r-other")
     orec = _register(oparams, opublic)
     assert "row" in SC.check(params, rec, sample, 5, _unit_pub(oadvice, opriv, 5), op, record=ORL.Record())
@@ -1020,9 +1020,9 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
     py = _challenger(params, record=record)
     o2, pub2, _ = _through(py, rec)
     assert o2.accepted and pub2 == pub and all(e["lean"] is None and e["of_record"] == "python" for e in py.witness["honest"])
-    t = ch.draws["honest"].units[0]
+    t = ch.samples["honest"].units[0]
     lean = ORL.Record()
-    assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
+    assert SC.check(params, rec, ch.samples["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
                     record=lean) is None
     assert [(e["check"], e["same"], e["lean"]) for e in lean.witness] == [("opening", True, None),
                                                                            ("prelude", True, {"reason": None})]
@@ -1206,7 +1206,7 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
               lambda ch: _held(ch, "honest", rec))
     disagrees("public", lambda m: m.setattr(SC.S, "check_public", lambda *a: SC.Verdict(False, ("keys",), {})),
               lambda ch: _held(ch, "honest", rec))
-    ch = disagrees("draw", lambda m: m.setattr(OR, "py_draw", lambda x: {"refused": ["draw", "forced"]}),
+    ch = disagrees("sample", lambda m: m.setattr(OR, "py_sample", lambda x: {"refused": ["draw", "forced"]}),
                    lambda ch: (_held(ch, "honest", rec), ch.select("honest")))
     with pytest.raises(S.Refused) as e:
         ch.select("honest")
@@ -1215,12 +1215,12 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     ch = disagrees("answer", lambda m: m.setattr(OR.CC, "case_twin", lambda j: {**case(j), "reason": "forced"}),
                    lambda ch: _through(ch, rec))
     with pytest.raises(S.Refused) as e:
-        ch.outcome("honest", [_unit(t) for t in ch.draws["honest"].units])
+        ch.outcome("honest", [_unit(t) for t in ch.samples["honest"].units])
     assert _codes(e) == {"final"}
-    t = ch.draws["honest"].units[0]
+    t = ch.samples["honest"].units[0]
     monkeypatch.setattr(OR, "py_opening", lambda x: "forced")
     record = ORL.Record()
-    assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
+    assert SC.check(params, rec, ch.samples["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
                     record=record) == f"{OR.DISAGREE}: opening"
     assert record.witness[0]["python"] == "forced" and record.witness[0]["lean"] is None
     record.close()
@@ -1228,7 +1228,7 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     op, served_domain = SC.opening(advice, priv, params, t), SC.window_domain
     monkeypatch.setattr(SC, "window_domain", lambda params, ell: served_domain({**params, "context": "other"}, ell))
     record = ORL.Record()
-    assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), op, record=record) == \
+    assert SC.check(params, rec, ch.samples["honest"].draw, t, _unit_pub(advice, priv, t), op, record=record) == \
         f"{OR.DISAGREE}: prelude"
     assert [(e["check"], e["same"]) for e in record.witness] == [("opening", True), ("prelude", False)]
     record.close()
@@ -1294,7 +1294,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
                     "a = sys.argv\np, k = int(a[a.index('--population') + 1]), int(a[a.index('--k') + 1])\n"
                     "w = (p.bit_length() + 64 + 7) // 8\nsrc = bytes.fromhex(a[a.index('--stream') + 1])\n"
                     "sys.exit(1) if len(src) != 2 * k * w + 64 else None\n"
-                    "print('DRAW ' + json.dumps({'law': 'subset', 'population': p, 'k': k, 'units': stream_subset(k, p, src)}))\n")
+                    "print('SAMPLE ' + json.dumps({'law': 'subset', 'population': p, 'k': k, 'units': stream_subset(k, p, src)}))\n")
     lean.chmod(lean.stat().st_mode | stat.S_IEXEC)
     rec = json.loads((tmp_path / "registration.json").read_text())
     dry = _challenger(params, coins=_coins())        # the process's coins: its sample is the one the job opens

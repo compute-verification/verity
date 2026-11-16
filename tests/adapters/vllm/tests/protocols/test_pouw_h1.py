@@ -1041,7 +1041,7 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
     assert PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings=_remote())) == ()
     no_draw = {k: v for k, v in _remote()["pouw"].items() if k != "draw_session"}
     refused = PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": no_draw}))
-    assert len(refused) == 1 and refused[0].endswith(PHW.NO_DRAW_SESSION)
+    assert len(refused) == 1 and refused[0].endswith(PHW.NO_SAMPLE_SESSION)
     commitment, run = _serve_window(_remote())
     assert host.draw.ended() is None and host.ended() is None and run.details["challenger"] == {"closed": True}
     coins = host.challenger.commitment
@@ -1051,23 +1051,23 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
     assert host.window == {"root": root.hex()} and commitment["rounds"][0]["requests"] == commitment["requests_root"]
     drawn = host.draw.directory
     assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], host.window, host.key,
-                                     pins=[host.ledger.pins_path], main=CH.MAIN, draw_directory=drawn) is None
+                                     pins=[host.ledger.pins_path], main=CH.MAIN, sample_directory=drawn) is None
     assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], host.window, host.key,
-                                     pins=[host.ledger.pins_path], main=CH.MAIN) == PHC.NO_DRAW_SESSION
+                                     pins=[host.ledger.pins_path], main=CH.MAIN) == PHC.NO_SAMPLE_SESSION
     untrusted = "the challenger's session is not trusted: "
     assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], host.window, host.key,
-                                     pins=[host.ledger.pins_path], main=None, draw_directory=drawn) == untrusted + LC.NO_MAIN
+                                     pins=[host.ledger.pins_path], main=None, sample_directory=drawn) == untrusted + LC.NO_MAIN
     assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], host.window, host.key,
-                                     pins=[host.ledger.pins_path], main=CH.MAIN[:1], draw_directory=drawn) == (
+                                     pins=[host.ledger.pins_path], main=CH.MAIN[:1], sample_directory=drawn) == (
         untrusted + LC.first_parent_reason(host.session_id, CH.PINNED, list(CH.MAIN[:1])))
     received = R.released_roots(host.directory / R.RELEASES, coins)
-    assert received[Wd.SALT] == (root,) and Wd.DRAW not in received
+    assert received[Wd.SALT] == (root,) and Wd.SAMPLE not in received
     assert commitment["session"] == {"session": CH.session_id(1), "seq": 1, "root": root.hex(),
                                      "commitment": coins.root.hex()}
     draw_root = commitment["draw"]["root"]
     assert commitment["draw_session"]["session"] == DRAW_RESERVED["session"] == host.draw.session_id
     assert host.draw.window == {"root": draw_root} and LC.withheld_on(host.ledger.lines, draw_root)
-    assert R.released_roots(drawn / R.RELEASES, host.draw.challenger.commitment) == {Wd.DRAW: (bytes.fromhex(draw_root),)}
+    assert R.released_roots(drawn / R.RELEASES, host.draw.challenger.commitment) == {Wd.SAMPLE: (bytes.fromhex(draw_root),)}
     assert received[Wd.ROUND] == tuple(bytes.fromhex(r["root"]) for r in commitment["rounds"]) and len(received[Wd.ROUND]) == 3
     assert all(RQ.request_reason(commitment["rounds"], coins, run.salt, 64, e, run.open_request(e.index),
                                  run.open_first(e.index), admission=RQ.PER_ROUND) is None for e in run.requests)
@@ -1125,9 +1125,9 @@ def _drawn(host, sid, root, withhold=True):
     `withhold`) on the sample root `root`, opened once after it and the session closed and ended."""
     host.open_draw(sid, root.hex(), withhold)
     with host.draw.client as client:
-        opened = client.open(Wd.DRAW, 0, root)
+        opened = client.open(Wd.SAMPLE, 0, root)
     assert host.draw.ended() is None
-    return client.opened[(Wd.DRAW, 0)] if client.withheld else opened
+    return client.opened[(Wd.SAMPLE, 0)] if client.withheld else opened
 
 
 def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after, reserved=True):
@@ -1141,7 +1141,7 @@ def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after, re
     salt = host.client.open(Wd.SALT, 0, salt_after)
     log = [{**r, "coin": host.client.open(Wd.ROUND, s, bytes.fromhex(r["root"])).to_json()}
            for s, r in enumerate(honest["rounds"])]
-    root = RQ.draw_root(bytes.fromhex(honest["calls_root"]), bytes.fromhex(honest["draw"]["receipts"]), log)
+    root = RQ.sample_root(bytes.fromhex(honest["calls_root"]), bytes.fromhex(honest["draw"]["receipts"]), log)
     host.client.close()
     assert host.ended() is None
     draw = _drawn(host, CH.session_id(0xd00 + seed), root)
@@ -1164,14 +1164,14 @@ def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monk
     assert a.ended() is None
     assert a.draw.ended() is None
     assert PHC.trusted_rounds_reason(honest, a.directory, [a.ledger.path], a.window, a.key,
-                                     pins=[a.ledger.pins_path], main=CH.MAIN, draw_directory=a.draw.directory) is None
+                                     pins=[a.ledger.pins_path], main=CH.MAIN, sample_directory=a.draw.directory) is None
     weights, requests = bytes.fromhex(honest["weights_root"]), bytes.fromhex(honest["requests_root"])
     other = bytes.fromhex(a.window["root"])
 
     def why(name, seed, opened_on, salt_after):
         commits, host = _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after)
         return PHC.trusted_rounds_reason(commits, host.directory, [host.ledger.path], host.window, host.key,
-                                         pins=[host.ledger.pins_path], main=CH.MAIN, draw_directory=host.draw.directory)
+                                         pins=[host.ledger.pins_path], main=CH.MAIN, sample_directory=host.draw.directory)
     def opens(seed):
         return PS.window_open_root(weights, requests, CH.session_id(seed))
     assert why("own", 2, opens(2), opens(2)) is None
@@ -1183,7 +1183,7 @@ def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monk
 
     def relabeled(**kw):
         return PHC.trusted_rounds_reason({**honest, **kw}, a.directory, [a.ledger.path], a.window, a.key,
-                                         pins=[a.ledger.pins_path], main=CH.MAIN, draw_directory=a.draw.directory)
+                                         pins=[a.ledger.pins_path], main=CH.MAIN, sample_directory=a.draw.directory)
     assert relabeled(requests_root="ee" * 64) == f"the window's salt: {CC.OTHER_WINDOW}"
     assert relabeled(session={**honest["session"], "session": CH.session_id(2)}) == (
         f"the window records session {CH.session_id(2)!r}, not {CH.session_id(0xa)}, the one the auditor's ledger "
@@ -1328,7 +1328,7 @@ def test_coins_from_a_prover_side_challenger_are_refused(tmp_path, monkeypatch):
     assert prover.ended() is None
     ours, w = prover.ledger.path, prover.window
     assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, prover.key, pins=[prover.ledger.pins_path],
-                                     main=CH.MAIN, draw_directory=prover.draw.directory) is None
+                                     main=CH.MAIN, sample_directory=prover.draw.directory) is None
     assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, auditor.key,
                                      pins=[prover.ledger.pins_path], main=CH.MAIN).startswith(
         "the challenger's session is not trusted: the auditor's ledger entry 1 is signed under challenger key ")
@@ -1391,12 +1391,12 @@ def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path,
     w, later = first.window, second.window
     assert w["root"] != later["root"]
     assert PHC.trusted_rounds_reason(one, first.directory, [ledger.path], w, first.key, pins=[ledger.pins_path],
-                                     main=CH.MAIN, draw_directory=first.draw.directory) is None
+                                     main=CH.MAIN, sample_directory=first.draw.directory) is None
     assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], later, first.key,
-                                     pins=[ledger.pins_path], main=CH.MAIN, draw_directory=second.draw.directory) is None
+                                     pins=[ledger.pins_path], main=CH.MAIN, sample_directory=second.draw.directory) is None
     assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], later, first.key, pins=[ledger.pins_path],
-                                     main=CH.MAIN, draw_directory=first.draw.directory).startswith(
-        "the window's draw session is not trusted: ")
+                                     main=CH.MAIN, sample_directory=first.draw.directory).startswith(
+        "the window's sample session is not trusted: ")
     assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], w, first.key, pins=[ledger.pins_path],
                                      main=CH.MAIN) == (
         "the challenger's session is not trusted: the challenger's record.json is not the one the auditor's ledger sealed "

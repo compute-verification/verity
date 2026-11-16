@@ -8,8 +8,8 @@ challenger's path runs its Lean and its Python reference on one input:
 * ``public``: the service's public-items rule over the Stream's Spec (`spot-difftest check_public`,
   `service.check_public`);
 * ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch_twin`);
-* ``draw``: the sampled proof blocks are the sampling coin's, under the challenger key the window's parameters pin when it is
-  certified (`pouw-check-difftest draw`, `core_check.draw_twin`);
+* ``sample``: the sampled proof blocks are the sampling coin's, under the challenger key the window's parameters pin when it is
+  certified (`pouw-check-difftest sample`, `core_check.sample_twin`);
 * ``opening``: a sampled proof block's opening (`pouw-check-difftest opening`, `core_check.opening_twin`), with ``prelude``,
   `served_commit.check`'s reading of the registration before it, which may refuse only what the opening refuses;
 * ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case_twin` its Python).
@@ -104,14 +104,14 @@ def public_params(spec: Any, record: Mapping[str, Any], scheme: str) -> dict:
 
 
 def service_answer(accepted: bool, codes: list[str], profile: Mapping[str, Any] | None, registration: str,
-                   draw: Mapping[str, Any] | None, delta: str) -> dict:
+                   sample: Mapping[str, Any] | None, delta: str) -> dict:
     """The service's answer (`Core.Answer`) of a stream's outcome: on acceptance its profile (δ as the window's ratio when
     the float is it) and its sample."""
     base = {"protocol": CC.ONE_STAGE, "commitment": registration}
     if accepted:
         d = profile["delta"]
         d = d if isinstance(d, str) else (delta if float(Fraction(delta)) == d else str(Fraction(d).limit_denominator(10**9)))
-        return {**base, "verdict": "accept", "reason": None, "public": {"draw": dict(draw)}, "profile": {**profile, "delta": d}}
+        return {**base, "verdict": "accept", "reason": None, "public": {"draw": dict(sample)}, "profile": {**profile, "delta": d}}
     return {**base, "verdict": "reject", "reason": ", ".join(codes or ["reject"]), "public": None, "profile": None}
 
 
@@ -140,8 +140,8 @@ def py_pass(x: dict) -> dict:
     return {"how": how} if refused is None else {"refused": list(refused)}
 
 
-def py_draw(x: dict) -> dict | None:
-    refused = CC.draw_twin(x["coins"], x["recorded"], x["opening"], x["stream"], x["registration"], x["receipt"], x["k"],
+def py_sample(x: dict) -> dict | None:
+    refused = CC.sample_twin(x["coins"], x["recorded"], x["opening"], x["stream"], x["registration"], x["receipt"], x["k"],
                       x["population"], x["units"], x.get("key"))
     return None if refused is None else {"refused": list(refused)}
 
@@ -241,8 +241,8 @@ class Record:
     def pass_epoch(self, x: dict) -> dict:
         return self._piece("pass", "pouw-check-difftest", POUW, "pass", x, py_pass)
 
-    def draw(self, x: dict) -> dict | None:
-        return self._piece("draw", "pouw-check-difftest", POUW, "draw", x, py_draw)
+    def sample(self, x: dict) -> dict | None:
+        return self._piece("draw", "pouw-check-difftest", POUW, "draw", x, py_sample)
 
     def opening(self, x: dict) -> Any:
         return self._piece("opening", "pouw-check-difftest", POUW, "opening", x, py_opening)

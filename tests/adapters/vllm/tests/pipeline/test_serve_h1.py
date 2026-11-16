@@ -227,7 +227,7 @@ def test_a_window_whose_prover_state_isnt_written_fails_visibly_and_refuses_its_
             raise OSError(28, "No space left on device")
         return savez(path, *arrays)
     monkeypatch.setattr(PV, "_savez", full)
-    monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
+    monkeypatch.setattr(PHC, "sample_k", lambda layout: 1)
     srv, draws = _Server(monkeypatch), SL.Draws((SH.DRAWER,))
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
                        prover=tmp_path / "prover")
@@ -395,7 +395,7 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     assert len(set(sids)) == 2 and ports == [7811] * 4
     reserves = [shlex.split(a[-1]) for a in auditor.argv if shlex.split(a[-1])[0] == "reserve"]
     assert reserves == [["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.families(STEPS)],
-                        ["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(),
+                        ["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.sample_families(),
                          "--withhold"]] * 2
     written = [f.read_bytes() for f in tmp_path.rglob("*") if f.is_file()]
     assert written and not any(PH.WEIGHT_KEY in b or PH.WEIGHT_KEY.hex().encode() in b for b in written)
@@ -708,7 +708,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_sampled_r
         sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
         k = _PeriodAuditor.K
     else:
-        monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
+        monkeypatch.setattr(PHC, "sample_k", lambda layout: 1)
         k = 1
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
                        closer=closer)
@@ -737,7 +737,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_sampled_r
     record = json.loads((tmp_path / "h1" / "w0" / PH.CALLS_FILE).read_text())
     c = record["commitment"]
     stream = c["session"]["root"] if coins == "gate" else c["calls_root"]
-    units, why = PHC.drawn_of(record, {"root": stream}, k, SV.descriptor(arm.program))
+    units, why = PHC.sampled_of(record, {"root": stream}, k, SV.descriptor(arm.program))
     assert why is None and 0 < len(units) < c["units"], (why, units)
     sites, values = _manifest_sites(range(STEPS)), {(s, n): raw for s, v in acquired.items() for n, raw in v}
     want = set()
@@ -791,7 +791,7 @@ def test_a_window_with_no_sample_refuses_its_release_by_name(tmp_path, monkeypat
 
 def test_a_gate_window_that_commits_no_session_root_refuses_its_sample_by_name():
     """A gate window's sample is taken on its gate session's open root: a run that commits no session, or one with no
-    root, is refused by name before any stream reaches `drawn_units`."""
+    root, is refused by name before any stream reaches `sampled_blocks`."""
     arm = SimpleNamespace(sessions=object(), _period_k={"p1": 4})
     held = {"session": "s/7", "period": "p1"}
     for commits in ({}, {"session": {"session": "s/7"}}):

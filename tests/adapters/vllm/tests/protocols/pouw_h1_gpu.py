@@ -272,7 +272,7 @@ def gate_command(argv: list[str]) -> GateCommand:
     challenge phase, reserved withheld, whose commitment is released only when it closes) the answer must say
     ``withheld`` and ``signed`` and carry no ``commitment``. ``reserve(peer, steps)`` is the gate's reserve of a window
     of S = `steps` rounds served on `peer` (with `steps` None, of the window's sample's challenge phase,
-    `pouw_h1_challenger.draw_families`, reserved ``--withhold``; its answer; ValueError naming what the gate said when
+    `pouw_h1_challenger.sample_families`, reserved ``--withhold``; its answer; ValueError naming what the gate said when
     it refuses, or when it reserved a sample's challenge phase plain), and ``ended(session)`` the challenge phase's
     ``status`` once it has its end entry (`await_end`)."""
     def verb(*args: str) -> dict[str, Any]:
@@ -301,7 +301,7 @@ def gate_command(argv: list[str]) -> GateCommand:
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
             window as PHW,
         )
-        families = PHC.draw_families() if steps is None else PHC.families(steps)
+        families = PHC.sample_families() if steps is None else PHC.families(steps)
         p = subprocess.run(gate_argv(argv, ["reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families",
                                             families, *(("--withhold",) if steps is None else ())]),
                            capture_output=True, text=True)
@@ -381,7 +381,7 @@ def period_open_argv(name: str, circuit: str, draw_k: int, decl: Any, files: dic
     """``period-open`` of the Commit window's period `name`: cap 2 (the Commit's window and its sampling session alone, so
     a negative's refused window, which ends complete, is never one of it), its circuit (the period's declared Program's
     digest), its sample K
-    (`pouw_h1_challenger.draw_k` over the declared layout, core's `credit.committed_k`), T, its circuit files
+    (`pouw_h1_challenger.sample_k` over the declared layout, core's `credit.committed_k`), T, its circuit files
     (`period_files`, core's `credit.committed_files`) and the fixed length (`fixed_length`, core's
     `credit.committed_length`)."""
     return ["period-open", "--name", name, "--cap", "2", "--circuit", circuit, "--draw-k", str(draw_k),
@@ -901,7 +901,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
             from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
             layout = SV.declared_layout(period[2]["shapes"], period[2]["modules"], decl.rows, decl.steps)
-            draw_k, files = PHC.draw_k(layout), period_files(Path(a.circuits), period[1], layout, decl)
+            draw_k, files = PHC.sample_k(layout), period_files(Path(a.circuits), period[1], layout, decl)
             doc["period_gate"] = {"name": a.period, "length": fixed_length(decl), "draw_k": draw_k, "circuit_files": files,
                                   "open": period_verb(a.gate, period_open_argv(a.period, period[1], draw_k, decl, files))}
             print(f"[gate] period {json.dumps(doc['period_gate'], default=str)}", flush=True)
@@ -1520,7 +1520,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
         if window_file is not None:
             doc["window"] = json.loads(Path(window_file).read_text())
             doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, ledger, doc["window"], key, pins=pins,
-                                                      main=main, draw_directory=draw_out)
+                                                      main=main, sample_directory=draw_out)
         else:
             newest = PHC.Ledger.load(ledger, key, pins=pins, main=main)
             trees = {sid: tree, **({dsid: draw_tree} if dsid and draw_tree is not None else {})}
@@ -1532,7 +1532,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
         win = doc.get("window") or {"root": (rec["commitment"].get("session") or {}).get("root")}
         run = None if lean_answers is None else A.Answers(Path(lean_answers), by="the challenger check")
         doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor, statements, run=run, pins=pins,
-                                          main=main, live=live, draw_directory=draw_out)
+                                          main=main, live=live, sample_directory=draw_out)
         if run is not None:
             doc["lean_answers"] = {"ran": run.ran, "taken": run.taken, "unkeyed": run.unkeyed}
             print(f"LEAN-ANSWERS {run.summary()}", flush=True)
@@ -1612,7 +1612,7 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
                          "\"by\", \"expires_utc\", \"period\"}")
     ap.add_argument("--draw-session", type=json.loads, metavar="JSON",
                     help="with --session: the gate's reserve answer for the window's draw session (families "
-                         "pouw_h1_challenger.draw_families), which the window opens withheld on its draw root")
+                         "pouw_h1_challenger.sample_families), which the window opens withheld on its draw root")
     ap.add_argument("--gate", type=lambda v: gate_command(shlex.split(v)), metavar="CMD",
                     help="with --challenger: the command the gate's verbs follow (ssh -i KEY -o BatchMode=yes "
                          "research@HOST), which opens the reserved session on the window's open root")

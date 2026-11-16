@@ -122,7 +122,7 @@ class _Session:
         if withhold:
             assert session == DRAW_NAME
             self.draw = _Session(self.tree, self._monkeypatch, session, self.leaf + 10, self.seed + 100,
-                                 challenger=Wd.draw_challenger(0, CH.entropy(self.seed + 100)), reserved=True,
+                                 challenger=Wd.sample_challenger(0, CH.entropy(self.seed + 100)), reserved=True,
                                  withhold=True)
             self.draw.window = {"root": root}
             return {"session": session, "seq": 0, "root": root, "port": CH.DRAW_PORT}
@@ -179,7 +179,7 @@ class _Session:
         path = self.audited(**({"name": "variant", **ledger} if ledger else {}))
         return PHC.trusted_rounds_reason(commits, self.directory, [path], self.window, KEY,
                                          pins=[path.with_name(f"{path.stem}.pins.jsonl")], main=CH.MAIN,
-                                         draw_directory=None if self.draw is None else self.draw.directory)
+                                         sample_directory=None if self.draw is None else self.draw.directory)
 
 
 def _serve(settings, seed: int = 9, prompt: int = 5, run: bool = False):
@@ -217,11 +217,11 @@ def _window(gate, tmp_path, monkeypatch, name: str, seed: int):
     def opened(session: str, root: str, withhold: bool = False) -> dict:
         if withhold:
             assert session == draw
-            gate.reserve(draw, Wd.DRAW_FAMILIES, withheld=True)
+            gate.reserve(draw, Wd.SAMPLE_FAMILIES, withheld=True)
             reply = gate.open(draw, root)
             assert (reply["withheld"], reply["signed"], reply["commitment"]) == (True, True, None)
             d = made["session"].draw = _Session(tmp_path, monkeypatch, draw, gate.take(), seed + 100,
-                                                challenger=Wd.draw_challenger(0, CH.entropy(seed + 100)),
+                                                challenger=Wd.sample_challenger(0, CH.entropy(seed + 100)),
                                                 close=gate.take, reserved=True, withhold=True)
             d.window = {"root": root}
             return {**reply, "port": CH.DRAW_PORT}
@@ -257,7 +257,7 @@ def _regate(g, name: str, root: str, out, draw=None, end: bool = True, closed: b
     g.open(name, root, **(opened or {}))
     g.take()
     if draw is not None:
-        g.reserve(draw.name, Wd.DRAW_FAMILIES, withheld=True)
+        g.reserve(draw.name, Wd.SAMPLE_FAMILIES, withheld=True)
         g.open(draw.name, draw.window["root"])
         g.take()
     if end:
@@ -754,16 +754,16 @@ def test_a_windows_own_session_holds_no_sampling_coin_and_its_sampling_session_i
     probe of the prover's) is refused, and so is one it opened without withholding its coin root (`challenger.WITHHELD`)."""
     early = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=13)
     probe = hashlib.sha512(b"a root of the prover's, before any round").digest()
-    with pytest.raises(LC.CoinError, match=f"no '{Wd.DRAW}' family"):
-        early.client.open(Wd.DRAW, 0, probe)
+    with pytest.raises(LC.CoinError, match=f"no '{Wd.SAMPLE}' family"):
+        early.client.open(Wd.SAMPLE, 0, probe)
     host = _Session(tmp_path, monkeypatch, SA, leaf=2, seed=14, reserved=True)
     honest = _serve(host.remote())
     sample = host.draw
     assert sample is not None
     assert host.ended() is None and sample.ended() is None and host.trusted(honest) is None
     assert sample.window == {"root": honest["draw"]["root"]} and honest["draw_session"]["session"] == DRAW_NAME
-    assert (host.trusted(honest, draw_root=probe.hex()) or "").startswith("the window's draw session is not trusted: ")
-    assert host.trusted(honest, withheld=False) == f"the window's draw session: {LC.WITHHELD}"
+    assert (host.trusted(honest, draw_root=probe.hex()) or "").startswith("the window's sample session is not trusted: ")
+    assert host.trusted(honest, withheld=False) == f"the window's sample session: {LC.WITHHELD}"
 
 
 def _draw_of(host, root: bytes) -> LC.LiveOpening:
@@ -771,9 +771,9 @@ def _draw_of(host, root: bytes) -> LC.LiveOpening:
     the session has closed."""
     host.open(DRAW_NAME, root.hex(), withhold=True)
     with host.draw.client as client:
-        client.open(Wd.DRAW, 0, root)
+        client.open(Wd.SAMPLE, 0, root)
     assert host.draw.ended() is None
-    return client.opened[(Wd.DRAW, 0)]
+    return client.opened[(Wd.SAMPLE, 0)]
 
 
 def test_a_sample_from_another_family_off_its_root_or_never_opened_is_refused(tmp_path, monkeypatch):
@@ -783,14 +783,14 @@ def test_a_sample_from_another_family_off_its_root_or_never_opened_is_refused(tm
     honest = _serve(host.remote())
     assert host.ended() is None
     assert host.trusted(honest) is None
-    assert honest["draw"]["root"] == RQ.draw_root(bytes.fromhex(honest["calls_root"]), bytes.fromhex(
+    assert honest["draw"]["root"] == RQ.sample_root(bytes.fromhex(honest["calls_root"]), bytes.fromhex(
         honest["draw"]["receipts"]), honest["rounds"]).hex()
     swapped = {**honest, "draw": {**honest["draw"], "coin": honest["rounds"][0]["coin"]}}
     assert host.trusted(swapped) == (
-        f"the window's draw coin: coin is the epoch's {Wd.ROUND} coin 0, not its {Wd.DRAW} coin 0")
+        f"the window's draw coin: coin is the epoch's {Wd.ROUND} coin 0, not its {Wd.SAMPLE} coin 0")
     bent = {**honest, "draw": {**honest["draw"], "receipts": "ee" * 64}}
     assert host.trusted(bent) == (
-        "the window's draw root is not over its manifest, its last round's receipts and every round's root and coin")
+        "the window's sample root is not over its manifest, its last round's receipts and every round's root and coin")
     quiet = _Session(tmp_path, monkeypatch, SB, leaf=2, seed=15, reserved=True)
     opened = PS.window_open_root(bytes.fromhex(honest["weights_root"]), bytes.fromhex(honest["requests_root"]), SB)
     quiet.open(SB, opened.hex())
@@ -808,7 +808,7 @@ def test_a_sample_from_another_family_off_its_root_or_never_opened_is_refused(tm
               "session": {**honest["session"], "session": SB, "root": opened.hex()},
               "rounds": [{**r, "coin": o.to_json()} for r, o in zip(honest["rounds"], rounds)]}
     assert quiet.trusted(closed) == (
-        "the draw session closed with no draw coin opened, so the window has no draw of the challenger's")
+        "the sample session closed with no sampling coin opened, so the window has no sample of the challenger's")
 
 
 def test_round_roots_commit_the_windows_a_and_z_and_the_receipts_before_them(monkeypatch):
@@ -947,7 +947,7 @@ def test_the_order_of_roots_and_coins_is_signed_by_the_challengers_close_and_a_r
     log = [{"round": s, "root": late[s].hex(), "coin": {**coins[s].to_json(), "after": late[s].hex()}} for s in range(3)]
     log[0]["requests"] = requests.hex()
     calls_root = hashlib.sha512(b"the manifest").digest()
-    draw_root = RQ.draw_root(calls_root, RQ.NO_RECEIPTS, log)
+    draw_root = RQ.sample_root(calls_root, RQ.NO_RECEIPTS, log)
     host.client.close()
     assert host.ended() is None
     draw = _draw_of(host, draw_root)

@@ -1,4 +1,4 @@
-"""A sampled H1 unit's rows rebuilt from a served window's values, as `drawn` stages them: the word formats both of its forms
+"""A sampled H1 unit's rows rebuilt from a served window's values, as `sampled` stages them: the word formats both of its forms
 read (`split_row`, `split_record`, `receipt_words`), the check that a rebuilt value is the tree the window registered
 (`held`), that a statement's every port is a registered read (`complete`) and that its outputs are the rows the window
 registered (`outputs_held`); and the lanes form's leaf statements (`leaf_lanes`): their rows (`leaf_rows`), a leaf's
@@ -179,8 +179,8 @@ def leaf_ok(kind: str, ln: int | None, x: dict, rows: dict[str, np.ndarray]) -> 
 
 
 def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Registered], tree: G.Registered,
-                   produced: dict[str, str], draw_root: str) -> tuple[dict, dict, dict, dict]:
-    """Sampled leaf u's statement `st` as a stager's `stage` takes it (`drawn.Stager`), on credit's own ``--registered`` file
+                   produced: dict[str, str], sample_root: str) -> tuple[dict, dict, dict, dict]:
+    """Sampled leaf u's statement `st` as a stager's `stage` takes it (`sampled.Stager`), on credit's own ``--registered`` file
     (`credit.leaf_registered_file`): each port's one row, salt and registered read (value, position, path), from the
     window's rebuilt values ``trees`` (each held to the file's root and domain), the leaf's partials ``tree`` (at the
     produced record's root ``produced``) or the known row (`leaf_lanes.known_rows`, committed under
@@ -189,7 +189,7 @@ def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Reg
     lay, shape = win["layout"], win["shape"]
     kind, ln = st
     got, why = CR.leaf_registered_file(win["program"], lay, shape, u, st, win["roots"], win["root"], win["steps"],
-                                       win["salt"], draw_root, produced)
+                                       win["salt"], sample_root, produced)
     if why is not None:
         raise Refused(f"drawn leaf {u}'s statement {list(st)}: credit builds no registered file: {why[1]}")
     reg = got[0]
@@ -198,8 +198,8 @@ def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Reg
     for port, e in reg["ports"].items():
         at = e["reads"][0]
         if port in known:
-            src = PR.commit(win["program"], e["value"], [known[port][1]], draw_root,
-                            [LL.known_salt(draw_root, e["value"])], G.WORD_BITS, G.SCHEMA_V2)
+            src = PR.commit(win["program"], e["value"], [known[port][1]], sample_root,
+                            [LL.known_salt(sample_root, e["value"])], G.WORD_BITS, G.SCHEMA_V2)
         elif e["value"] == tree.value:
             src = tree
         else:

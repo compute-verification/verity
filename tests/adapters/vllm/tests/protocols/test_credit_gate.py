@@ -634,7 +634,7 @@ def _record(run):
 def _credit(host, rec, statements=(), k=None, descriptor=None, run=None, live=None):
     return PHC.credit_reason(rec, host.directory, [host.ledger.path], host.window, host.key,
                              _descriptor() if descriptor is None else descriptor, statements, k, run=run,
-                             pins=[host.ledger.pins_path], main=CH.MAIN, live=live, draw_directory=_draw_dir(host))
+                             pins=[host.ledger.pins_path], main=CH.MAIN, live=live, sample_directory=_draw_dir(host))
 
 
 def _draw_dir(host):
@@ -707,7 +707,7 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     (`window_evidence`) is core's `credit.WINDOW_KEYS`, its registered ``entries`` and its sampled calls' statements
     (proof files, never verdicts), round 0's ``requests`` the request table's root its open root binds. Core's credit
     (`credit.window`) passes its weights and refuses it only for want of its sampled calls' proof files."""
-    k = PHC.draw_k(LAYOUT)
+    k = PHC.sample_k(LAYOUT)
     assert k == 2
     auditor = periodic(k, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
@@ -726,7 +726,7 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     assert [e for e in entries if CR.is_held(e["value"])] == w.entries()
     out = _credit(auditor, rec)
     assert out["manifest"] is None and out["k"] == k, out
-    assert out["drawn"] == PHC.drawn_of(rec, auditor.window, k, _descriptor())[0] == [0, 1]
+    assert out["drawn"] == PHC.sampled_of(rec, auditor.window, k, _descriptor())[0] == [0, 1]
     assert out["window"][0] == "missing" and out["credit"] is None, out
     unpinned = PHC.credit_reason(rec, auditor.directory, [auditor.ledger.path], auditor.window, auditor.key,
                                  _descriptor(), pins=None, main=CH.MAIN)
@@ -777,7 +777,7 @@ def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, 
     prompt's (round 0's ids table is the prompt's, fixed before the salt), each with an honest Commit, whose record
     registers its own tree for those rows. The serving process credits nothing (`pouw_h1_commit.UNTIED`); a prover
     that skips that check and credits anyway is refused by core at ``arow``, before any proof is read."""
-    auditor = periodic(PHC.draw_k(LAYOUT), files=FILES)
+    auditor = periodic(PHC.sample_k(LAYOUT), files=FILES)
     own = CT.roots1
     seen = {}
 
@@ -840,7 +840,7 @@ def test_a_window_opened_over_round_0s_bare_request_table_is_refused_by_core(per
     """ROOTS1's ids@0: the window opens over `credit.requests_root` of round 0's request table's root and its input-ids
     table's root, so the prompt tokens are fixed before the salt. One opened over the bare request table's root, its
     tables otherwise the Commit's, is refused by core at ``arow`` (`credit.IDS_OUTSIDE`)."""
-    auditor = periodic(PHC.draw_k(LAYOUT), files=FILES)
+    auditor = periodic(PHC.sample_k(LAYOUT), files=FILES)
     _bare_table(monkeypatch)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
     assert auditor.ended() is None and not run.served.refused and run.details["roots1"]["tied"]
@@ -852,7 +852,7 @@ def test_a_window_opened_over_round_0s_bare_request_table_is_refused_by_core(per
 def test_round_0s_input_ids_bind_the_windows_session(periodic, monkeypatch, other):
     """ROOTS1's ids@0 binds the window's challenge phase in place of the open root that contains it: core's registration
     (`credit._registration`) holds the served window's entries to it, and refuses an ids@0 bound to another challenge phase."""
-    auditor = periodic(PHC.draw_k(LAYOUT), files=FILES)
+    auditor = periodic(PHC.sample_k(LAYOUT), files=FILES)
     if other:
         _other_session(monkeypatch)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
@@ -974,7 +974,7 @@ def test_a_sampled_session_that_opened_no_weights_is_refused(periodic, tmp_path)
     vllm's own (`pouw_h1_served.register`'s, the one its prover's releases read), its ``b_k<K>_<j>`` ports at
     ``h1/b/<K>`` at the period's root; a release whose registered finding opened its A and record but no ``b`` port
     refuses the window (``registration``), and so does one that opened no A."""
-    auditor = periodic(PHC.draw_k(LAYOUT), files=FILES)
+    auditor = periodic(PHC.sample_k(LAYOUT), files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
     assert auditor.ended() is None
     rec = _record(run)
@@ -1005,7 +1005,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     evidence refuses the whole window. The closed period's credit
     (`period_credit`) is that window's, its period opened with ``--model`` (the auditor's registration, whose
     key salted the window's b/<K>), and a window whose ``b/<K>`` aren't the period's is refused there too."""
-    k = PHC.draw_k(LAYOUT)
+    k = PHC.sample_k(LAYOUT)
     auditor = periodic(k, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
     assert auditor.ended() is None
@@ -1073,10 +1073,10 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
                                 [auditor.window["root"], rec["commitment"]["draw"]["root"]])
     assert len(reasons) == 1 and reasons[0].startswith(f"budget: period {PERIOD}'s open commits no draw K"), reasons
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor(),
-                                   draw_directory=_draw_dir(auditor))
+                                   sample_directory=_draw_dir(auditor))
     assert PHC.period_credit(ledger, PERIOD, [evidence])[1][0] == "budget"
     with pytest.raises(ValueError, match="layout"):
-        PHC.draw_k(None)
+        PHC.sample_k(None)
 
 
 def test_a_window_in_no_period_has_no_committed_k(auditor):
@@ -1089,7 +1089,7 @@ def test_a_window_in_no_period_has_no_committed_k(auditor):
 
 
 def test_the_drawn_set_from_a_fixed_coin_is_cores():
-    """The proof blocks vllm's verifier reads as sampled (`drawn_of`) are core's (`credit.drawn`, and
+    """The proof blocks vllm's verifier reads as sampled (`sampled_of`) are core's (`credit.sampled`, and
     `core_check.work_units` over `credit.strata` under the work sampling design at K), over the layout core reads from the declared
     Program's descriptor (`credit.layout_of`, which `pouw_h1_served.declared_layout` is without building it): the
     population is the proof blocks of ``h1window.program(linears, calls, m, tile)`` in its order, one stratum per K, on the
@@ -1099,7 +1099,7 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
     layout, why = CR.layout_of(desc)
     assert why is None and layout == SV.declared_layout(list(shapes), dict(enumerate(modules)), 64, 2)
     coin, root, reg, receipts = (hashlib.sha512(x).hexdigest() for x in (b"coin", b"window", b"draw", b"receipts"))
-    opening = LiveOpening(0, Wd.DRAW, 0, bytes(64), bytes.fromhex(coin), bytes(16), ()).to_json()
+    opening = LiveOpening(0, Wd.SAMPLE, 0, bytes(64), bytes.fromhex(coin), bytes(16), ()).to_json()
     record = {"commitment": {"draw": {"coin": opening, "root": reg, "receipts": receipts}}}
     ss, why = CR.strata(layout)
     assert why is None and [(s["template"], s["units"], s["work"]) for s in ss] == [
@@ -1107,13 +1107,13 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
     for k in (1, 6, 12):
         assert CR.sampling_design(ss, k) is None
         want = CC.work_units(bytes.fromhex(coin), root, reg, {"receipts": receipts}, ss)
-        got, why = PHC.drawn_of(record, {"root": root}, k, desc)
-        assert why is None and got == want == CR.drawn_twin(coin, root, reg, {"receipts": receipts}, layout, k)[0]
+        got, why = PHC.sampled_of(record, {"root": root}, k, desc)
+        assert why is None and got == want == CR.sampled_twin(coin, root, reg, {"receipts": receipts}, layout, k)[0]
         assert len(got) == len(set(got)) and all(0 <= u < 12 for u in got)
-    assert set(PHC.drawn_of(record, {"root": root}, 12, desc)[0]) >= {4, 5, 10, 11}
-    assert PHC.drawn_of(record, {"root": root}, 13, desc)[1][0] == "budget"
-    assert PHC.drawn_of(record, {"root": root}, 1, None)[1] == ("layout", CR.DESCRIPTOR_HEX)
-    assert PHC.draw_k(layout) == 12
+    assert set(PHC.sampled_of(record, {"root": root}, 12, desc)[0]) >= {4, 5, 10, 11}
+    assert PHC.sampled_of(record, {"root": root}, 13, desc)[1][0] == "budget"
+    assert PHC.sampled_of(record, {"root": root}, 1, None)[1] == ("layout", CR.DESCRIPTOR_HEX)
+    assert PHC.sample_k(layout) == 12
 
 
 def test_the_rehearsals_gate_keeps_each_verb_its_exit_and_its_answer_less_the_secrets(monkeypatch):
@@ -1264,16 +1264,16 @@ def test_the_red_team_hands_the_check_fourteen_cases_of_one_change_each_and_need
 
 def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_reports_its_eps():
     """The proof system sizes the K a period's open commits (`draw_k`) for the share of a window's work it
-    expects credited (`EXPECTED_CREDIT`, 8/9) at `DRAW_EPS` and δ = 2^-40, through `window.k_prime`'s own inputs, since
+    expects credited (`EXPECTED_CREDIT`, 8/9) at `SAMPLE_EPS` and δ = 2^-40, through `window.k_prime`'s own inputs, since
     that share isn't known at the open: 31,178 for the declared 8B window, which at 8/9 credited establishes at most
     0.1% (`window.eps_at`, what `credit.established` reports), and K sized as if all were credited establishes less."""
     shapes, modules = RH.declaration()
     layout = SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps)
     k = RH.declared_draw_k()
-    assert k == PHC.draw_k(layout) == 31178
+    assert k == PHC.sample_k(layout) == 31178
     work = sum(size * w for size, w in CR.call_work(layout))
-    assert Wd.eps_at(k, CR.DELTA, work * 8 // 9, work, 1) <= PHC.DRAW_EPS
-    assert Wd.eps_at(PHC.draw_k(layout, credited=1), CR.DELTA, work * 8 // 9, work, 1) > PHC.DRAW_EPS
+    assert Wd.eps_at(k, CR.DELTA, work * 8 // 9, work, 1) <= PHC.SAMPLE_EPS
+    assert Wd.eps_at(PHC.sample_k(layout, credited=1), CR.DELTA, work * 8 // 9, work, 1) > PHC.SAMPLE_EPS
 
 
 def _two_window_period(tmp_path):
@@ -1342,10 +1342,10 @@ def test_a_credit_bit_changed_after_the_sampling_coin_is_refused(periodic):
     def credited(commitment, calls):
         return _credit(auditor, {"commitment": commitment, "calls": calls})["window"]
     assert credited(c, rec["calls"])[0] == "missing"
-    assert credited(c, rows) == ("draw", CR.DRAW_ROOT)
+    assert credited(c, rows) == ("draw", CR.SAMPLE_ROOT)
     salt = PHC.program_salt_of(c)
     served = SV.digest_of(c["served"]["entries"], c["served"]["refused"])
-    root = CR.draw_root(CR.calls_root(salt, rows, served, CT.digest(c["commit"])), bytes.fromhex(c["draw"]["receipts"]),
+    root = CR.sample_root(CR.calls_root(salt, rows, served, CT.digest(c["commit"])), bytes.fromhex(c["draw"]["receipts"]),
                         c["rounds"])
     kind, why = credited({**c, "draw": {**c["draw"], "root": root.hex()}}, rows)
     assert kind == "coin" and why.startswith("the draw's session is not trusted: "), why

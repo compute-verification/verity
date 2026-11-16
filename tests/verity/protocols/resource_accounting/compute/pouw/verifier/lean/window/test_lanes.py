@@ -81,7 +81,7 @@ def _j10r_statement(x: dict) -> tuple[Any, H.Layout, tuple]:
             d = bind(Z.PouwH1LaneZyChunk2, TILE=tile, CHUNKS=n, CHUNK=ch)
     except ValueError as e:
         raise D.Reject(str(e)) from e
-    assert n == W.chunks(k), f"the drawn n is chunks(K) = {W.chunks(k)} at a leaf's K = {k}, not {n}"
+    assert n == W.chunks(k), f"the sampled n is chunks(K) = {W.chunks(k)} at a leaf's K = {k}, not {n}"
     lay = H.Layout(x["r"], x["c"], k)
     if ln is not None and not 0 <= ln < lay.lanes:
         raise D.Reject(f"an {lay.r} × {lay.c} leaf has {lay.lanes} lanes, not lane {ln}")

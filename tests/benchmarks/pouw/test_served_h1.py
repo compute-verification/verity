@@ -413,7 +413,7 @@ class _Host:
     carrying `secret`) on its own clock, and once it has ended (`ended`) its end entry sealing out/'s files.  The
     ledger's entries, the record and the close are signed with one test key at its next leaf each.  Published as the
     gate does: request.json and open.json beside the challenger's out/ (`directory`).  A sample session (`rounds` None,
-    `open_draw`) is opened withheld (`withhold`) on the sample root, in its `parent`'s ledger and period."""
+    `open_sample`) is opened withheld (`withhold`) on the sample root, in its `parent`'s ledger and period."""
 
     def __init__(self, tmp_path, epoch: int = EPOCH, rounds: int | None = ROUNDS, host: str = "vy-challenger-1",
                  root: bytes = ROOT, secret: bytes = bytes([5]) * 32, sid: str = SID, withhold: bool = False,
@@ -463,7 +463,7 @@ class _Host:
         from verity.commitments.crypto import lms
         return lms.sign_at(self.private, next(self.leaves), message).encode()
 
-    def open_draw(self, root: bytes, withhold: bool = True) -> CO.Endpoint:
+    def open_sample(self, root: bytes, withhold: bool = True) -> CO.Endpoint:
         """The window's sample session, reserved and opened (withheld unless `withhold` is False) on the sample root `root`
         in this host's ledger, as `coins.gate_sample` asks the gate for it: its client's session (no commitment)."""
         self.sample = _Host(self.tmp_path, self.epoch, None, self.host, root, bytes([6]) * 32, SAMPLE_SID, withhold, self)
@@ -521,7 +521,7 @@ def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
                 c["salt"] = HT.live_salt(cs.commitment, opening.coin, s, root).hex()
         log.append({"round": s, "root": root.hex(), "opening": opening.to_json()})
     after = sv.receipts_root("w", calls)
-    sample = cs.draw(after)
+    sample = cs.sample(after)
     cs.close()
     return {"window": "w", "calls": calls,
             "coins": {"mode": "live", **cs.record(), "commitment": cs.commitment.to_json(), "salt_coin": salt.to_json(),
@@ -545,12 +545,12 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     challenger logged."""
     from verity.commitments.crypto import lms
     host = _Host(tmp_path)
-    cs = CO.open_coins(host.session, EPOCH, ROUNDS, open_draw=host.open_draw)
+    cs = CO.open_coins(host.session, EPOCH, ROUNDS, open_sample=host.open_sample)
     assert (cs.source, cs.label) == ("off-node", f"off-node session {SID} at {host.address} (unchecked)")
     assert cs.record()["session"] == SID
     m = _serve_window(cs, SV, _calls(ROUNDS), ROOT)
     assert host.sample.ended() is None and host.ended() is None
-    assert m["coins"]["draw_session"] == SAMPLE_SID and cs.draw_commitment.families == CO.Wd.DRAW_FAMILIES
+    assert m["coins"]["draw_session"] == SAMPLE_SID and cs.sample_commitment.families == CO.Wd.SAMPLE_FAMILIES
     (tmp_path / "manifest.json").write_text(json.dumps(m))
     session, heads, key = host.directory.parent, [host.ledger], host.key
     early = tmp_path / "early.jsonl"
@@ -563,7 +563,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert CO.main(["check", "--challenger-out", str(session), "--ledger", str(early), "--ledger", str(host.ledger),
                     "--pins", str(tmp_path / "pins.jsonl"), "--main", str(tmp_path / "main.txt"),
                     "--manifest", str(tmp_path / "manifest.json"), "--key-record", str(tmp_path / "key-record.json"),
-                    "--period", PERIOD, "--root", ROOT.hex(), "--draw-out", str(host.sample.directory.parent)]) == 0
+                    "--period", PERIOD, "--root", ROOT.hex(), "--sample-out", str(host.sample.directory.parent)]) == 0
     for bad, why in (({"pubkey_sha512": "00" * 64}, "not the one whose SHA-512 it names"),
                      ({"schema": "challenger-key/v2"}, "a challenger key record is challenger-key/v1")):
         (tmp_path / "bad-record.json").write_text(json.dumps({**record, **bad}))
@@ -652,33 +652,33 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     swapped[1] = {**swapped[1], "opening": swapped[2]["opening"]}
     assert refused(coins={**m["coins"], "rounds": swapped}) == {"rounds", "salts"}
     assert refused(salts={**e["salts"], 2: e["salts"][1]}) == {"salts"}
-    assert refused(draw_after=other) == {"draw"}
-    assert refused(draw_after=None) == {"draw"}
-    assert refused(draw_out=None) == {"draw"}
-    assert refused(draw_out=session) == {"draw"}
+    assert refused(sample_after=other) == {"draw"}
+    assert refused(sample_after=None) == {"draw"}
+    assert refused(sample_out=None) == {"draw"}
+    assert refused(sample_out=session) == {"draw"}
     assert refused(heads=resigned("unwithheld", lambda x: x[4]["body"].pop("withheld"))) == {"draw"}
     alone = CO.open_coins(None, EPOCH, ROUNDS, random.Random("prover").randbytes)
     assert refused(coins={**m["coins"], "commitment": alone.commitment.to_json()}) == {"commitment"}
 
 
 def test_an_off_node_sampling_coin_comes_only_from_a_withheld_sample_session(tmp_path, monkeypatch):
-    """Off the node the sampling coin (`Coins.draw`) is its own sample session's, opened withheld on the sample root: with no gate
+    """Off the node the sampling coin (`Coins.sample`) is its own sample session's, opened withheld on the sample root: with no gate
     to open one at, the sample is refused before any coin opens, and so is a sample session whose challenger answers its
     hello with a commitment (one the gate opened plain, so its root was out before the prover's)."""
-    after = hashlib.sha512(b"the draw root").digest()
+    after = hashlib.sha512(b"the sample root").digest()
     for env in (CO.GATE_ENV, CO.PEER_ENV):
         monkeypatch.delenv(env, raising=False)
     gateless = CO.Coins(CO.Wd.live_challenger(EPOCH, ROUNDS, random.Random("prover").randbytes), "off-node",
                         CO.Endpoint("s", "127.0.0.1:1"), EPOCH)
     with pytest.raises(CO.Ch.CoinError, match="names no gate to open it at"):
-        gateless.draw(after)
+        gateless.sample(after)
     host = _Host(tmp_path)
-    cs = CO.open_coins(host.session, EPOCH, ROUNDS, open_draw=lambda root: host.open_draw(root, withhold=False))
+    cs = CO.open_coins(host.session, EPOCH, ROUNDS, open_sample=lambda root: host.open_sample(root, withhold=False))
     with pytest.raises(CO.Ch.CoinError, match="answered its hello with a commitment"):
-        cs.draw(after)
+        cs.sample(after)
     cs.close()
     assert host.sample.ended() is None and host.ended() is None
-    assert cs.draw_commitment is None and not CO.Ch.withheld_on(host.lines, after.hex())
+    assert cs.sample_commitment is None and not CO.Ch.withheld_on(host.lines, after.hex())
 
 
 def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_path):
@@ -712,7 +712,7 @@ def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_pa
 
 
 def test_the_sampling_coin_and_its_time_are_read_under_the_lock_round_roots_are_sent_under():
-    """`RoundPipe.draw` reads its time on the pipe's clock while it holds the lock `send` records each round under, through
+    """`RoundPipe.sample` reads its time on the pipe's clock while it holds the lock `send` records each round under, through
     the sample's open: another thread can't take it then, every round sent before has an earlier time and the one sent
     after a later one; a sample after the coins are closed is refused."""
     ticks = itertools.count()
@@ -720,22 +720,22 @@ def test_the_sampling_coin_and_its_time_are_read_under_the_lock_round_roots_are_
     roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(4)]
     cs.rounds.record(roots[0])
     pipe = CO.RoundPipe(cs, lambda: float(next(ticks)))
-    inner, held = cs.draw, []
+    inner, held = cs.sample, []
 
     def spy(after):
         t = threading.Thread(target=lambda: held.append(pipe._cv.acquire(blocking=False)))
         t.start()
         t.join()
         return inner(after)
-    cs.draw = spy
+    cs.sample = spy
     assert [pipe.send(r) for r in roots[1:3]] == [1, 2]
     after = hashlib.sha512(b"manifest").digest()
-    coin, at = pipe.draw(after)
-    assert held == [False] and coin.label == CO.Wd.DRAW and coin.after == after
+    coin, at = pipe.sample(after)
+    assert held == [False] and coin.label == CO.Wd.SAMPLE and coin.after == after
     assert max(pipe.sent_at.values()) < at < pipe.sent_at[pipe.send(roots[3])]
     pipe.close()
     with pytest.raises(CO.Ch.CoinError, match="closed"):
-        pipe.draw(after)
+        pipe.sample(after)
 
 
 def _pipe_server(sock, challenger, answers: list[str]) -> None:
@@ -847,7 +847,7 @@ def test_a_sample_session_is_reserved_withheld_and_an_open_that_answers_its_root
     own (the gate withholds what its reserve marked): the session holds no commitment, and its secret is the session's
     alone. A reserve the gate answers plain is refused before any open, and so is an open answer that hands out the
     session's coin commitment root before its end, that isn't marked withheld, or whose challenger signed no record."""
-    root, secret, sid = hashlib.sha512(b"the draw root").digest(), bytes(range(32)), "s20261020T130100Z-0a1c"
+    root, secret, sid = hashlib.sha512(b"the sample root").digest(), bytes(range(32)), "s20261020T130100Z-0a1c"
     lay = CO.layout(EPOCH, None)
     reserved = {"session": sid, "seq": 6, "peer": "vy-nebius-2", "by": LANE, "expires_utc": "2026-10-20T13:06:00Z",
                 "period": PERIOD, "withheld": True}
@@ -860,7 +860,7 @@ def test_a_sample_session_is_reserved_withheld_and_an_open_that_answers_its_root
                           json.dumps(lay["families"], separators=(",", ":")), "--epoch", str(EPOCH), "--withhold"]
     assert sent[1][1] == ["open", "--session", sid, "--root", root.hex()]
     assert at == CO.Endpoint(sid, "127.0.0.1:7812", secret) and at.commitment is None
-    with pytest.raises(CO.Ch.CoinError, match=f"reserved {sid} plain: a draw session is withheld"):
+    with pytest.raises(CO.Ch.CoinError, match=f"reserved {sid} plain: a sample session is withheld"):
         CO.gate_sample("research@gate", "vy-nebius-2", EPOCH,
                      run=_gate(sent := [], {k: v for k, v in reserved.items() if k != "withheld"}, opened))(root)
     assert [w[1][0] for w in sent] == ["reserve"], "no open after a plain reserve"

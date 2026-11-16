@@ -64,7 +64,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     HM96,
     HM96_WEIGHTS,
     host_array,
-    in_process_draw,
+    in_process_sample,
     LEAD_BACKEND,
     lead_refusals,
     LEAD_SCHEME,
@@ -560,10 +560,10 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = program_salt(Epoch.start(declared, roots, commitment, opening).salt)
-        draw = in_process_draw(rounds, verifier_coins)
+        draw = in_process_sample(rounds, verifier_coins)
     source = H1_CHALLENGER if session is not None else "in-process"
     run = H1Run(entry, salt, modules, shapes, settings.rows, settings.steps, retain=settings.retain_steps,
-                   transcript_dir=settings.transcript_dir, commit=target.context.stage != "capture", rounds=rounds, draw=draw,
+                   transcript_dir=settings.transcript_dir, commit=target.context.stage != "capture", rounds=rounds, sample=draw,
                    admission=settings.admission or ROUND0, coins_from=source, opener=opener, served=settings.served,
                    session=session.reserved["session"] if session is not None else None, graphs=settings.graphs,
                    commit_record=settings.commit_record)

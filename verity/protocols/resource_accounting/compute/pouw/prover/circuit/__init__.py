@@ -121,8 +121,8 @@ class Traced:
         an = anchors.weight_inputs()
         return [list(b), an["salt"], an["weight"], an["colids"]]
 
-    def draw(self, sampling_design, anchors, ledger):
-        """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one, each
+    def sample(self, sampling_design, anchors, ledger):
+        """The verifier's plan for this call: `plan.sample` over its own layout (`layout`), never a given one, each
         stratum's subset keyed by the call's index (``anchors.call_index``) with its template, under the key of
         ``ledger``, the execution phase's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
         the caller. The sample is refused for a ledger not opened from a receipt or whose sample was sent, and for a call the
@@ -133,11 +133,11 @@ class Traced:
         from .anchors import Ledger
 
         if not isinstance(ledger, Ledger):
-            raise TypeError("a call is drawn only under its window's Ledger")
-        ledger.check_draw()
+            raise TypeError("a call is sampled only under its window's Ledger")
+        ledger.check_sample()
         ledger.admit(anchors, self.shape)
         index = anchors.call_index
-        return plan.draw(ledger.key, self.layout(), sampling_design, index if isinstance(index, tuple) else (index,))
+        return plan.sample(ledger.key, self.layout(), sampling_design, index if isinstance(index, tuple) else (index,))
 
     def check_openings(self, plan, anchors, ledger, domain, openings, limits=None) -> None:
         """Refuse the call's A-row openings unless they are the plan's A rows, once each, and each authenticates under
@@ -183,7 +183,7 @@ class Traced:
             raise DomainError(f"{self.scheme}: the layout is not the verifier's for {self.shape}")
 
     def layout(self):
-        """The closure-draw layout (`plan.layout`), from the shape alone."""
+        """The closure-sample layout (`plan.layout`), from the shape alone."""
         from . import plan
 
         return plan.layout(self.shape, self.kind)

@@ -16,7 +16,7 @@ its served y and its weight side). `replay` checks:
 4. the window's sample (`verity.protocols.resource_accounting.compute.pouw.prover.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
    on its `anchors.Receipt`, sealed before any key exists; `anchors.SaltWindows.open` refuses a call index an earlier window of the salt used, and
    `anchors.Ledger.open` derives the window's key from a fresh
-   source, and each call samples its plan (`Traced.draw`) under the work sampling design at its share of the window's budget
+   source, and each call samples its plan (`Traced.sample`) under the work sampling design at its share of the window's budget
    (`plan.window_sampling_designs`). Every proved unit of a call is opened by the prover (`CallRecord.opening`, regenerated natively),
    and so is every unit it reads; so is each Y unit its sampled tiles read, in its weight side (once per replay). Each
    opening must hash to its committed leaf, the unit's template (`ncp2.templates`) must evaluate, by the IR reference,
@@ -229,7 +229,7 @@ def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: i
             ans = derived(records, salt, first)
             ledger = windows.open(CA.Receipt(tuple((a, r.shape, PC.call_leaf(r)) for a, r in zip(ans, records))))
             sampling_designs = CPL.window_sampling_designs([t.layout() for t in traced], k)
-            plans = [t.draw(sampling_design, a, ledger) for t, sampling_design, a in zip(traced, sampling_designs, ans)]
+            plans = [t.sample(sampling_design, a, ledger) for t, sampling_design, a in zip(traced, sampling_designs, ans)]
             ledger.sent()
             record = ledger.record()
         except (DomainError, ValueError) as e:

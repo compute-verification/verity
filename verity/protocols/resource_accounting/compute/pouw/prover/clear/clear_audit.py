@@ -3,7 +3,7 @@
 window, and its verifier is the Lean (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`, `pouw.verifier`).  Benchmarks
 replay recorded clear runs through it (`pearl_c_vllm/verify_run.py`, `pearl_c4/replay.py`), the schemes' tests run their
 end-to-end vectors through it, and the Lean's samples (`PouwCommit.Samples`) are difftested against `Sampled.select` and
-`draw_coin`.  Each module here has two names: `verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_audit`, and the bare `clear_audit` for
+`sample_coin`.  Each module here has two names: `verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_audit`, and the bare `clear_audit` for
 a caller that puts this directory on ``sys.path``.  A caller keeps to one of the two: they are two copies of every class
 here, and `Verifier.audit` tells a `Sampled` by its class.
 
@@ -56,7 +56,7 @@ def commitment_hash(scheme: PoUWScheme) -> str:
     return getattr(scheme, "commitment_hash", HM96)
 
 
-def draw_coin(epoch: Epoch, challenger: Challenger, after: bytes) -> tuple[bytes | None, str | None]:
+def sample_coin(epoch: Epoch, challenger: Challenger, after: bytes) -> tuple[bytes | None, str | None]:
     """The epoch's sampling coin, asked of the challenger once the verifier recorded `after`, and checked against the
     epoch's coin commitment: (coin, None), or (None, why it is refused)."""
     if epoch.coins is None:
@@ -207,14 +207,14 @@ class WorkProfile:
 
     scheme: str
     work: int
-    drawn: int
+    sample_size: int
     sampled: bool
     certificate: Certificate
 
     def delta_s(self, eps_s: Fraction) -> Fraction | None:
         if not 0 < eps_s <= 1:
             raise ValueError("0 < eps_s <= 1")
-        return (1 - Fraction(eps_s)) ** self.drawn if self.sampled else None
+        return (1 - Fraction(eps_s)) ** self.sample_size if self.sampled else None
 
     def certified(self, eps_s: Fraction) -> Fraction | None:
         """The work certified, (1 − g)(1 − ε_s)·W, or None without a gap or a sampled audit."""
@@ -225,7 +225,7 @@ class WorkProfile:
         """``gamma0`` and ``gamma`` keep the stored names of the target gap g₀ and the gap g (records written before the
         rename hold them); ``eps`` is the advantage ε = g/(1 − g)."""
         c = self.certificate
-        return {"scheme": self.scheme, "work": self.work, "drawn": self.drawn, "sampled": self.sampled,
+        return {"scheme": self.scheme, "work": self.work, "drawn": self.sample_size, "sampled": self.sampled,
                 "conjecture": c.conjecture, "gamma0": None if c.gap0 is None else str(c.gap0), "omega": str(c.omega),
                 "gamma": None if c.gap is None else str(c.gap), "eps": None if c.eps is None else str(c.eps),
                 "claims": list(c.claims), "theorems": list(c.theorems), "hypotheses": list(c.hypotheses),
@@ -306,8 +306,8 @@ class Verifier:
         if len(transcript.activation_roots) != len(self.epoch.workload.matmuls):
             return Audit(False, (), (), None)
         if self.epoch.coins is not None or not isinstance(source, bytes):
-            source, reason = ((None, "an epoch with a coin commitment draws from its draw coin, not from bare bytes")
-                              if isinstance(source, bytes) else draw_coin(self.epoch, source, transcript.commitment.root))
+            source, reason = ((None, "an epoch with a coin commitment samples from its sampling coin, not from bare bytes")
+                              if isinstance(source, bytes) else sample_coin(self.epoch, source, transcript.commitment.root))
             if reason is not None:
                 return Audit(False, (), (Verdict(-1, False, reason),), None)
         selected = selection.select(self.scheme, self.epoch, transcript, source, self.refs, prover.digest)
@@ -320,4 +320,4 @@ class Verifier:
 
 
 __all__ = ["AUDIT_DOMAIN", "Audit", "Lottery", "Prover", "Sampled", "TileOpening", "Transcript", "Verdict", "Verifier",
-           "WorkProfile", "commitment_hash", "draw_coin", "reference_kernel", "tickets"]
+           "WorkProfile", "commitment_hash", "sample_coin", "reference_kernel", "tickets"]

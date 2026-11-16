@@ -365,7 +365,7 @@ def test_the_honest_run_is_accepted(world):
     assert pw["result"] is True and pw["law"].startswith("work") and pw["proved_units"] >= pw["drawn"] > 0, pw["why"]
     assert issues == []
     assert pw["proved_by_role"]["tile"] == 3 and set(pw["proved_by_role"]) == {"digest", "node", "key", "form_y", "form_x", "tile", "dequant"}
-    assert pw["weights"] == 1 and pw["draw"]["domain"] == CPL.DRAW_DOMAIN and len(bytes.fromhex(pw["draw"]["source"])) == 32
+    assert pw["weights"] == 1 and pw["draw"]["domain"] == CPL.SAMPLE_DOMAIN and len(bytes.fromhex(pw["draw"]["source"])) == 32
 
 
 @pytest.mark.slow

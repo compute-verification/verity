@@ -99,8 +99,8 @@ EXPECT = {
     "answer-commitment-type": "evidence: answer.commitment: not a string",
     "answer-shape": "evidence: answer: an accept has no reason", "answer-profile": "evidence: profile.levels: not a list",
     "answer-profile-delta": 'evidence: profile.delta: "2/4" is not in lowest terms',
-    "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset, stratified or work draw",
-    "answer-public": "evidence: public: keys are not draw",
+    "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset, stratified or work sample",
+    "answer-public": "evidence: public: keys are not sample",
     "answer-public-law": "evidence: public.draw: keys are not law, p, population, units",
     "answer-protocol": "outcome: protocol", "answer-other": "outcome: for registration",
     "answer-null": "outcome: for registration null", "answer-reject": "service: the audit's reject",
@@ -110,8 +110,8 @@ EXPECT = {
     "answer-level-bernoulli": "profile: its levels", "answer-level-stratified": "profile: its levels",
     "answer-level-work": "profile: its levels",
     "answer-level-name": "evidence: profile: not in the form toJson writes", "answer-levels-two": "profile: its levels",
-    "answer-delta": "profile: delta", "answer-drawn": "profile: drawn", "answer-draw-k": "draw: subset:",
-    "answer-draw-population": "draw: subset:", "answer-units-order": "draw: its", "answer-units-range": "draw: its",
+    "answer-delta": "profile: delta", "answer-drawn": "profile: drawn", "answer-draw-k": "sample: subset:",
+    "answer-draw-population": "sample: subset:", "answer-units-order": "draw: its", "answer-units-range": "draw: its",
     "answer-units-count": "draw: its", "answer-unsorted-lists": "evidence: profile: not in the form toJson writes",
     "answer-commitment-odd": "evidence: odd-length hex", "answer-commitment-upper": "evidence: not lowercase hex",
     "answer-commitment-empty": "outcome: for registration null", "answer-verdict-type": "evidence: answer.verdict: not a string",
@@ -119,10 +119,10 @@ EXPECT = {
     "answer-public-missing": "evidence: answer: public missing",
     "answer-public-null": "evidence: answer: an accept has no reason",
     "answer-reject-public": "evidence: answer: a reject has a reason, and neither",
-    "answer-profile-type": "evidence: profile: levels missing", "answer-public-bernoulli": "draw: bernoulli:1/2 over",
-    "answer-public-bernoulli-unreduced": "draw: bernoulli:2/4 over",
-    "answer-public-bernoulli-padded": "evidence: public.draw.p: not num/den", "answer-public-stratified": "draw: stratified:",
-    "answer-public-work": "draw: work:", "answer-public-work-bare": "draw: work:",
+    "answer-profile-type": "evidence: profile: levels missing", "answer-public-bernoulli": "sample: bernoulli:1/2 over",
+    "answer-public-bernoulli-unreduced": "sample: bernoulli:2/4 over",
+    "answer-public-bernoulli-padded": "evidence: public.draw.p: not num/den", "answer-public-stratified": "sample: stratified:",
+    "answer-public-work": "sample: work:", "answer-public-work-bare": "sample: work:",
     "answer-public-law-other": "evidence: public.draw.law: not subset, bernoulli, stratified or work",
     "answer-public-law-type": "evidence: public.draw.law: not a string",
     "answer-public-subset-closure": "evidence: public.draw: keys are not k, law, population, units",
@@ -135,7 +135,7 @@ EXPECT = {
     "answer-public-unit-type": "evidence: public.draw.units: not a natural number",
     "answer-public-population-type": "evidence: public.draw.population: not a natural number",
     "answer-drawn-extra": "evidence: profile: not in the form toJson writes",
-    "answer-drawn-type": "evidence: profile.drawn.unit: not a natural number",
+    "answer-drawn-type": "evidence: profile.sampled.unit: not a natural number",
     "answer-linked-type": "evidence: profile.linked: not a boolean",
     "answer-programs-type": "evidence: profile.programs: not a list",
     "answer-program-type": "evidence: profile.programs: not a string",
@@ -257,7 +257,7 @@ def test_a_ratio_reads_a_number_of_any_length():
 
 def test_a_ratio_is_written_at_any_length():
     """`window.ratio_str` is `str` of a Fraction (`Core.Ratio.toString`) past `str`'s limit on digits, under the least
-    limit a process can set, and `core_check.ratio` reads back the text it writes; `_core_draw` and `integrity_json`
+    limit a process can set, and `core_check.ratio` reads back the text it writes; `_core_sample` and `integrity_json`
     write a long ratio with it."""
     rng = random.Random(7)
     least = sys.int_info.str_digits_check_threshold
@@ -274,7 +274,7 @@ def test_a_ratio_is_written_at_any_length():
     big, odd = "1" + "0" * 4300, "1" + "0" * 4999 + "1"
     for s in (big, f"{big}/{odd}", f"7/{odd}", "0", "3/7"):
         assert Wd.ratio_str(CC.ratio(s, "x")) == s
-    assert CC._core_draw({"bernoulli": f"{big}/{odd}"}, "d") == {"bernoulli": f"{big}/{odd}"}
+    assert CC._core_sample({"bernoulli": f"{big}/{odd}"}, "d") == {"bernoulli": f"{big}/{odd}"}
     p = {"programs": [], "prescribed": [], "linked": False, "covered": [], "levels": [], "drawn": [],
          "delta": Fraction(7, 10**5000 + 1)}
     assert CC.integrity_json(p)["delta"] == f"7/{odd}"
@@ -582,7 +582,7 @@ PASS_EXPECT = {
                          "session for this window"),
 }
 
-DRAW_EXPECT = {
+SAMPLE_EXPECT = {
     "honest": None, "verifier-coins": ("coin", "the verifier's coins are malformed"),
     "recorded-scheme": ("coin", "the verifier's coins are malformed: a coin commitment's scheme is"),
     "registration": ("draw", "the registration is not a SHA-512 digest"), "stream": ("draw", "the registration is not a SHA-512"),
@@ -639,44 +639,44 @@ def test_each_honest_pass_is_had_as_it_was_salted():
             assert CC.pass_epoch_twin(*passes.pass_args(case)) == (how, None), (kind, seed)
 
 
-def test_every_draw_mutation_hits_its_refusal():
-    """`core_check.draw_twin` accepts an honest sample under seeded coins or a live execution phase's (a certified execution phase's, held as its
+def test_every_sample_mutation_hits_its_refusal():
+    """`core_check.sample_twin` accepts an honest sample under seeded coins or a live execution phase's (a certified execution phase's, held as its
     challenger's signed record with the key it is signed under, which must be the one the execution phase's parameters pin) and
     refuses each mutation with the refusal it aims at: a bare live commitment, a malformed key, no record, a record
     signed under another key than the one its coins name, a tampered signature or a record whose commitment was
     swapped (``coin``); a record under a key of the prover's own, a pin of another key, no pin or a malformed one, and
     seeded coins under a pin (``coin-key``). A live sample's coin is ``pouw/draw`` 0, so a seeded opening under live
     coins is refused, and so is a live opening under seeded coins."""
-    assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
-    for name, want in DRAW_EXPECT.items():
+    assert set(SAMPLE_EXPECT) == set(passes.SAMPLE_NAMES) | {"honest"}
+    for name, want in SAMPLE_EXPECT.items():
         for seed in range(6):
-            got = CC.draw_twin(*passes.draw_args(passes.draw_instance(random.Random(f"{name}/{seed}"), name)))
+            got = CC.sample_twin(*passes.sample_args(passes.sample_instance(random.Random(f"{name}/{seed}"), name)))
             assert (got is None) if want is None else (got is not None and got[0] == want[0] and got[1].startswith(want[1])), \
                 (name, seed, got)
     for seed in range(6):
-        live, _ = passes.honest_live_draw(random.Random(f"live/{seed}"))
-        seeded, _ = passes.honest_draw(random.Random(f"seeded/{seed}"), Co.SCHEME, early=False)
-        assert CC.draw_twin(*passes.draw_args(live)) is None and CC.draw_twin(*passes.draw_args(seeded)) is None
-        assert CC.draw_twin(*passes.draw_args({**live, "opening": seeded["opening"]}))[1].startswith(
+        live, _ = passes.honest_live_sample(random.Random(f"live/{seed}"))
+        seeded, _ = passes.honest_sample(random.Random(f"seeded/{seed}"), Co.SCHEME, early=False)
+        assert CC.sample_twin(*passes.sample_args(live)) is None and CC.sample_twin(*passes.sample_args(seeded)) is None
+        assert CC.sample_twin(*passes.sample_args({**live, "opening": seeded["opening"]}))[1].startswith(
             "the draw's a live coin opening is")
-        assert CC.draw_twin(*passes.draw_args({**seeded, "opening": live["opening"]}))[0] == "coin"
+        assert CC.sample_twin(*passes.sample_args({**seeded, "opening": live["opening"]}))[0] == "coin"
 
 
-def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: dict, n: int, k: int, pinned: dict) -> dict:
-    """The sample's check of record's input (`pouw_pass_cases.honest_live_draw`'s layout) for a challenger run on coins
+def _live_sample(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: dict, n: int, k: int, pinned: dict) -> dict:
+    """The sample's check of record's input (`pouw_pass_cases.honest_live_sample`'s layout) for a challenger run on coins
     `coins`, its record signed under `sk` and naming that key, in an execution phase whose parameters pin challenger key `pinned`."""
-    ch = Wd.draw_challenger(0, random.Random(coins).randbytes)
+    ch = Wd.sample_challenger(0, random.Random(coins).randbytes)
     message = Ch.record_message(lms.public_key(sk)[:16], "provers-node", ch.commitment)
     record = Ch.ChallengerRecord(ch.commitment, "provers-node", lms.sign_at(sk, 0, message).encode())
-    o = ch.open(Wd.DRAW, 0, bytes.fromhex(reg))
-    ctx, size = CC.draw_key_context(stream, reg, receipt), 2 * k * CC.width(n) + 64
+    o = ch.open(Wd.SAMPLE, 0, bytes.fromhex(reg))
+    ctx, size = CC.sample_key_context(stream, reg, receipt), 2 * k * CC.width(n) + 64
     return {"coins": {"key": Ch.ChallengerKey(4, 2, lms.public_key(sk)).to_json(), "record": record.to_json()},
             "recorded": False, "opening": o.to_json(), "stream": stream, "registration": reg, "receipt": receipt, "k": k,
-            "population": n, "units": CC.stream_subset(k, n, derive(o.coin, CC.DRAW_DOMAIN, ctx).stream("draw", size)),
+            "population": n, "units": CC.stream_subset(k, n, derive(o.coin, CC.SAMPLE_DOMAIN, ctx).stream("draw", size)),
             "key": pinned}
 
 
-def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
+def test_a_sample_record_the_prover_signed_over_its_own_coins_is_refused():
     """A self-run challenger, refused. A prover that runs a challenger on coins of its own and signs its record under a key
     of its own sees each candidate registration's sample before it registers, and keeps one whose sample misses the unit it
     can't prove (unit 0). The sample's check of record now verifies the record under the challenger key the execution phase's
@@ -691,17 +691,17 @@ def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
         reg = hashlib.sha512(b"candidate %d" % i).hexdigest()
         receipt = {"format": "verity/registration-receipt/v1", "received": str(i), "registration": reg,
                    "verifier": "served-zk/challenger/window"}
-        d = _live_draw(prover, "the prover's coins", reg, stream, receipt, n, k, pinned)
+        d = _live_sample(prover, "the prover's coins", reg, stream, receipt, n, k, pinned)
         if bad not in d["units"]:
             break
-    assert CC.draw_twin(*passes.draw_args(d)) == (CC.COIN_KEY, CC.OTHER_KEY)
-    assert CC.draw_twin(*passes.draw_args({**d, "coins": {**d["coins"], "key": pinned}})) == \
+    assert CC.sample_twin(*passes.sample_args(d)) == (CC.COIN_KEY, CC.OTHER_KEY)
+    assert CC.sample_twin(*passes.sample_args({**d, "coins": {**d["coins"], "key": pinned}})) == \
         ("coin", "the challenger record's signature does not verify under the verifier's challenger key")
-    code, why = CC.draw_twin(*passes.draw_args({**d, "key": None}))
+    code, why = CC.sample_twin(*passes.sample_args({**d, "key": None}))
     assert code == CC.COIN_KEY and why.startswith(CC.NO_PINNED_KEY)
-    assert CC.draw_twin(*passes.draw_args({**d, "key": d["coins"]["key"]})) is None
-    honest = _live_draw(verifier, "the verifier's coins", reg, stream, receipt, n, k, pinned)
-    assert CC.draw_twin(*passes.draw_args(honest)) is None
+    assert CC.sample_twin(*passes.sample_args({**d, "key": d["coins"]["key"]})) is None
+    honest = _live_sample(verifier, "the verifier's coins", reg, stream, receipt, n, k, pinned)
+    assert CC.sample_twin(*passes.sample_args(honest)) is None
 
 
 #: the refusal each mutation of the session's pin aims at, `rounds`' and `salt`'s alike

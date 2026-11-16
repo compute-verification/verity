@@ -17,7 +17,7 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
 
 ``stage``:
 
-1. The sample is core's (`challenger.drawn_of`: `credit.drawn` of the record's sampling coin over the descriptor's layout at the
+1. The sample is core's (`challenger.sampled_of`: `credit.sampled` of the record's sampling coin over the descriptor's layout at the
    period's K), grouped by call: a call's sampled proof blocks are one statement (a ``--registered`` port holds one root).
 2. Each sampled call's ``--registered`` file is credit's own (`credit.registered_file` of the record's entries, the
    window's root, its rounds and its Program salt, `challenger.program_salt_of`), so the statement opens every row where
@@ -44,7 +44,7 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
 
 **The lanes form** (`credit`'s, `leaf_lanes`): at a K --circuits' manifest commits as ``lane<K>`` and ``combine<K>``
 (`credit.form_of`; `pouw_h1_circuits --lanes K`), each sampled proof block is a leaf proved as its (R/4)(C/8) lanes and the combine
-(`leaf_lanes.statements`, their rows `drawn_rows`'), each a statement of one instance on its committed file, so a K
+(`leaf_lanes.statements`, their rows `sampled_rows`'), each a statement of one instance on its committed file, so a K
 whose tile statement is past Flock's block (K 2048 on the 32 × 32 tile) is proved in pieces each within it. The leaf is
 v1's (`credit.lanes_shape` refuses any other, J10-R's among them). Its partials (`h1zy.lane_partial` of each lane's
 rows) are committed after the sample, ``<prefix>partials@<u>`` under the window's sample root (`produced.commit`), all of them one produced record
@@ -133,7 +133,7 @@ _random = os.urandom
 #: (n, K) and f32 s_w (n,), in the window's order
 CheckpointWeights = Callable[[Path, Sequence[tuple[str, int, int]], int], list[tuple[np.ndarray, np.ndarray]]]
 #: ``check``'s verifier: (the statements, --circuits' manifest's ``files`` (``k<K>``, or ``lane<K>``, ``combine<K>`` and
-#: ``leaf_programs``), the window (`window_of`, its ``draw`` among it), its sampled proof blocks, the Lean ``verity-verify-proof``) -> each
+#: ``leaf_programs``), the window (`window_of`, its ``sample`` among it), its sampled proof blocks, the Lean ``verity-verify-proof``) -> each
 #: sampled proof block's proof outcomes and None, or None and credit's refusal
 Verified = Callable[[Any, dict, dict, list[int], Path], tuple[Any, tuple[str, str] | None]]
 
@@ -232,7 +232,7 @@ def window_of(serve_dir: Path, window: int) -> dict[str, Any]:
     c = record["commitment"]
     served = c.get("served")
     if not isinstance(served, dict) or not isinstance(served.get("entries"), list):
-        raise Refused("the window's record names no served trees: drawn rebuilds the values they registered")
+        raise Refused("the window's record names no served trees: sampled rebuilds the values they registered")
     if served.get("refused"):
         raise Refused(f"the window's served trees were refused: {served['refused']}")
     roots: dict[str, list[str]] = {}
@@ -244,20 +244,20 @@ def window_of(serve_dir: Path, window: int) -> dict[str, Any]:
             "draw": c.get("draw")}
 
 
-def draw_k(serve_dir: Path, k: int | None) -> int:
+def sample_k(serve_dir: Path, k: int | None) -> int:
     if k is not None:
         return int(k)
     try:
         return int(json.loads((serve_dir / PERIOD).read_text())["draw_k"])
     except (OSError, KeyError, ValueError) as e:
-        raise Refused(f"no draw K: give --k, or a serve dir whose {PERIOD} has the open's draw_k ({e})") from None
+        raise Refused(f"no sample K: give --k, or a serve dir whose {PERIOD} has the open's draw_k ({e})") from None
 
 
-def drawn_calls(win: dict, k: int) -> dict[int, list[int]]:
+def sampled_calls(win: dict, k: int) -> dict[int, list[int]]:
     """Core's sample of the window at K, by call: ``{call: [global unit, ...]}``, ascending."""
-    units, why = PHC.drawn_of(win["record"], {"root": win["root"]}, k, win["raw"])
+    units, why = PHC.sampled_of(win["record"], {"root": win["root"]}, k, win["raw"])
     if why is not None or units is None:
-        raise Refused(f"core draws nothing from the window: {why[0]}: {why[1]}")
+        raise Refused(f"core samples nothing from the window: {why[0]}: {why[1]}")
     starts = list(itertools.accumulate((size for size, _w in CR.call_work(win["layout"])), initial=0))[:-1]
     out: dict[int, list[int]] = {}
     for u in sorted(units):
@@ -514,11 +514,11 @@ def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, 
     lay = win["layout"]
     why = CR.lanes_shape(lay, win["shape"], k)
     if why is not None:
-        raise Refused(f"K = {k}'s drawn leaves: {why}")
-    draw = win["draw"] if isinstance(win.get("draw"), dict) else {}
-    draw_root = draw.get("root")
-    if not isinstance(draw_root, str):
-        raise Refused("the window's record names no draw root, under which a leaf's partials are committed")
+        raise Refused(f"K = {k}'s sampled leaves: {why}")
+    sample = win["draw"] if isinstance(win.get("draw"), dict) else {}
+    sample_root = sample.get("root")
+    if not isinstance(sample_root, str):
+        raise Refused("the window's record names no sample root, under which a leaf's partials are committed")
     stagers = leaf_stagers(k, lay["tile"], circuits, manifest, given(a, "file_stager"))
     plan["leaf_programs"].update({f"{kind}{k}": desc for kind, (_s, _p, desc) in stagers.items()})
     trees = []
@@ -534,11 +534,11 @@ def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, 
                 values[at[v][0]] = rebuild(v, call)
         x = operands(win, u, values)
         name = LL.served(win["shape"]["prefix"], LL.PARTIALS, u)
-        tree = PR.commit(win["program"], name, partials(x).tolist(), draw_root, schema=G.SCHEMA_V2)
+        tree = PR.commit(win["program"], name, partials(x).tolist(), sample_root, schema=G.SCHEMA_V2)
         trees.append(tree)
         for st in LL.statements(*lay["tile"]):
             kind, ln = st
-            rows, salts, registered, reg = leaf_statement(win, u, st, x, values, tree, {name: tree.root.hex()}, draw_root)
+            rows, salts, registered, reg = leaf_statement(win, u, st, x, values, tree, {name: tree.root.hex()}, sample_root)
             stager, circuit, desc = stagers[kind]
             tag = f"u{u}-{kind}" + ("" if ln is None else str(ln))
             d = work / tag
@@ -563,8 +563,8 @@ def stage(a: Any) -> int:
     serve_dir, work = Path(a.serve_dir), Path(a.work)
     prover = Path(a.prover) if a.prover else serve_dir / PROVER.format(w=a.window)
     win = window_of(serve_dir, a.window)
-    k_draw = draw_k(serve_dir, a.k)
-    drawn = drawn_calls(win, k_draw)
+    k_sample = sample_k(serve_dir, a.k)
+    sampled = sampled_calls(win, k_sample)
     manifest = json.loads((Path(a.circuits) / MANIFEST).read_text())
     if manifest.get("program") != win["program"]:
         raise Refused(f"--circuits' manifest is for Program {str(manifest.get('program'))[:16]}..., not the window's "
@@ -573,13 +573,13 @@ def stage(a: Any) -> int:
     bkey, bwhose = weights_key(a, win)
     lay, ks = win["layout"], {name: k for name, k, _n in win["layout"]["linears"]}
     by_k: dict[int, list[int]] = {}
-    for c in drawn:
+    for c in sampled:
         by_k.setdefault(ks[lay["calls"][c][0]], []).append(c)
     work.mkdir(parents=True, exist_ok=True)
-    print(f"DRAWN at K = {k_draw}: {sum(map(len, drawn.values()))} units in calls {sorted(drawn)}", flush=True)
+    print(f"SAMPLED at K = {k_sample}: {sum(map(len, sampled.values()))} units in calls {sorted(sampled)}", flush=True)
     population = sum(size for size, _w in CR.call_work(lay))
     _rows, _salts, ok = CR.ok_table(win["program"], f"{win['shape']['prefix']}{CR.OK_VALUE}", win["root"], population)
-    plan = {"window": a.window, "draw_k": k_draw, "program": win["program"], "calls": [], "leaves": [],
+    plan = {"window": a.window, "draw_k": k_sample, "program": win["program"], "calls": [], "leaves": [],
             "leaf_programs": {}}
     produced: list[G.Registered] = []
     for k, calls in sorted(by_k.items()):
@@ -595,11 +595,11 @@ def stage(a: Any) -> int:
                 if v == LL.ZY:
                     return zy_value(win, prover, pkey, call)
                 return receipt_value(win, pkey, call, values)
-            produced += stage_leaves(a, win, k, sorted(u for c in calls for u in drawn[c]), values, rebuild, work,
+            produced += stage_leaves(a, win, k, sorted(u for c in calls for u in sampled[c]), values, rebuild, work,
                                      Path(a.circuits), manifest, plan)
             continue
         if not win["shape"]["tiles"][k]["j10r"]:
-            raise Refused(f"K = {k}'s template is not J10-R's: drawn stages J10-R units on a k<K> file, and a v1 unit as "
+            raise Refused(f"K = {k}'s template is not J10-R's: sampled stages J10-R units on a k<K> file, and a v1 unit as "
                           f"its lanes (pouw_h1_circuits --lanes {k})")
         if f"k{k}" not in manifest.get("files", {}):
             raise Refused(f"--circuits has no k{k} file: build it (pouw_h1_circuits --strata {k})")
@@ -638,13 +638,13 @@ def stage(a: Any) -> int:
                 elif name.startswith(f"a/{k}@"):
                     values[v] = held(a_value(win, prover, pkey, c), e, "the prover's A codes")
                 else:
-                    raise Refused(f"call {c}'s statement reads {v} at port {port}, which drawn doesn't rebuild")
+                    raise Refused(f"call {c}'s statement reads {v} at port {port}, which sampled doesn't rebuild")
             e = reg["ports"][CR.RECEIPT_PORT]
             values[e["value"]] = held(receipt_table(win, pkey, k, c, reg, values), e,
                                       "the word reference's receipts of the call's units")
         print(f"REBUILT K = {k}: {sorted(values)} at the window's roots", flush=True)
         for c in calls:
-            reg, units = regs[c], drawn[c]
+            reg, units = regs[c], sampled[c]
             pv = reg["ports"][CR.PUB_PORT]
             pub = held(G.Registered.commit(win["program"], pv["value"], pv["known"]["rows"],
                                            [bytes.fromhex(s) for s in pv["known"]["salts"]], G.WORD_BITS, G.SCHEMA_V2,
@@ -692,8 +692,8 @@ def statements(a: Any) -> int:
         d = Path(x["dir"])
         sessions = sorted(p for p in (d / "sessions").glob("*/") if (p / "session.json").is_file())
         if len(sessions) != 1:
-            raise Refused(f"{what}: {len(sessions)} sessions in {d}/sessions, not one: a drawn statement is proved once, "
-                          "every instance drawn (session's subset:N)")
+            raise Refused(f"{what}: {len(sessions)} sessions in {d}/sessions, not one: a sampled statement is proved once, "
+                          "every instance sampled (session's subset:N)")
         return sessions
 
     out: Any = [PHC.statement(x["call"], x["circuit"], Path(x["dir"]) / "pub.bin", session(x, f"call {x['call']}"))
@@ -715,8 +715,8 @@ def check(a: Any) -> int:
         raise Refused("check is credit's own verification, which benchmarks/pouw/h1_prove/drawn.py binds: run that CLI")
     serve_dir = Path(a.serve_dir)
     win = window_of(serve_dir, a.window)
-    drawn = drawn_calls(win, draw_k(serve_dir, a.k))
-    units = sorted(u for us in drawn.values() for u in us)
+    sampled = sampled_calls(win, sample_k(serve_dir, a.k))
+    units = sorted(u for us in sampled.values() for u in us)
     files = json.loads((Path(a.circuits) / MANIFEST).read_text())["files"]
     sts = json.loads(Path(a.statements).read_text())
     proofs, why = a.verified(sts, files, win, units, Path(a.lean))

@@ -81,7 +81,7 @@ tail's receipt roots; every step's units dispatched after its coin came back, an
 or the final round) sent after that and before the sampling coin, no round after it; and the last step's receipts, from its
 ring slot, against h1r v1 under its coin's salt, up to 16 calls' A tables and receipt tables rehashed on the CPU
 (`rehashed_calls`); and three steps opened from the spill (`open_spill`).  The sampling coin's time is read under the
-round pipe's lock (`coins.RoundPipe.draw`), so no round goes out between it and the sample.  Two end faults, each
+round pipe's lock (`coins.RoundPipe.sample`), so no round goes out between it and the sample.  Two end faults, each
 in an execution phase of its own (`end_steps`: 2D + 2 steps) and refused: "fault_tail" (the last step's units dropped: refused on
 its order and every call's receipts) and "fault_late_receipt" (the last step's receipt-tail root withheld from the final
 round and sent in a round after the sampling coin: refused on that leaf and that round alone).  An off-node execution phase's
@@ -631,7 +631,7 @@ class SoWindow(DO.DitherState):
         t_final = time.perf_counter()
         mroot = MF.manifest_root(W, self.k, self.open_root, s0, s1, list(self.pipe.roots[:i_f + 1]))
         t_mf = time.perf_counter()
-        sample, sample_at = self.pipe.draw(mroot)
+        sample, sample_at = self.pipe.sample(mroot)
         t_sample = time.perf_counter()
         late = None
         if withheld is not None:
@@ -2321,7 +2321,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
                  "depth": D, "tail": rec["tail"], "final_index": i_f, "late_index": li}
     mroot = MF.manifest_root(W, rec["k"], rec["open_root"], s0, s1, list(pipe.roots[:i_f + 1]))
     salt_why = CO.Ch.live_reason(com, rec["salt_open"], CO.Wd.SALT, 0, rec["open_root"])
-    sample_why = CO.Ch.live_reason(com, rec["sample"], CO.Wd.DRAW, 0, mroot)
+    sample_why = CO.Ch.live_reason(com, rec["sample"], CO.Wd.SAMPLE, 0, mroot)
     coins = {"source": rec["coins"].source, "salt_after_window_root": salt_why is None, "salt_reason": salt_why,
              "rounds_reason": CO.Wd.rounds_reason(com, pipe.roots, pipe.openings),
              "draw_after_manifest_root": sample_why is None and mroot == rec["mroot"], "draw_reason": sample_why,
