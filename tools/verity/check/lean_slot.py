@@ -1,1 +1,0 @@
-../../check/lean_slot.py

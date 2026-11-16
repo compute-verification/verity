@@ -12,7 +12,9 @@ that finds it held does nothing and says so. Then:
               doesn't list (a site that reads another `main`) is not due, and is said. The rows of one file that share a
               command are one launch, which measures each of them.
     bounds    a due command is launched only when each of these holds, and the pass says which one stopped it:
-              - it is no loop's: a row whose command's script is under infra/ is a loop's number, which the loop sends;
+              - it is no loop's: a row whose command's script is under infra/control/ is a loop's number, which the loop
+                sends;
+              - none of its rows is parked: a row whose `goal` is PARKED (top/parked) is rerun only by hand;
               - its command splits as a shell line, and is a `research run` that names its machine (`--on`): one without
                 `--on` is a local run, which runs where it is launched, and the loop launches nothing on the pod; a command
                 that is no `research run` is run under one;
@@ -88,6 +90,7 @@ NAME = "metrics.toml"
 TREES = ("benchmarks", "demos", "infra", "tools")      # where a metrics.toml may sit (tests/test_metrics_registry.py)
 SKIP = {".git", ".lake", ".venv", "node_modules", "__pycache__", "target", "build", "dist"}
 LOOPS = "infra/control/"                                # a row whose command's script is here is a loop's, which sends it itself
+PARKED = "top/parked"                                   # a row whose goal is this is parked work, rerun only by hand
 SCRIPT = re.compile(rf"(?:^|\s)((?:{'|'.join(TREES)})/\S+\.(?:sh|py))(?:\s|$)")
 EVERY = re.compile(r"^([1-9][0-9]*)([mhd])$")
 UNIT_S = {"m": 60, "h": 3600, "d": 86400}
@@ -405,6 +408,10 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
                 skip(gone)
             continue
         why = "; ".join(due + ([gone] if gone else []))
+        if parked := [str(r.get("id")) for r in job.rows if r.get("goal") == PARKED]:
+            whose = "its goal is" if len(parked) == len(job.rows) else f"{', '.join(parked)}'s goal is"
+            skip(f"{why}; but {whose} parked ({PARKED}): a parked number is rerun only by hand")
+            continue
         try:
             opts, work, wrapped = options(job.command)
         except Refused as x:
