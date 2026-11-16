@@ -4,7 +4,7 @@
  "model": "GLM-5.3",
  "status": "modeled",
  "provisional": true,
- "source": "GLM-5.3's deployment schedule for the network certifier: a response cap of 875 tokens in the id egress form, its other fields NetworkCertifierParams' defaults. No served run has registered this schedule yet, so its fields are the deployment's plan, not a run's, and the defaults stand in for the fields a run would set.",
+ "source": "GLM-5.3's deployment schedule for the network certifier: a response cap of 875 tokens in the id egress form, its other fields NetworkAttesterParams' defaults. No served run has registered this schedule yet, so its fields are the deployment's plan, not a run's, and the defaults stand in for the fields a run would set.",
  "runs": [],
  "owner": "@proofs",
  "value": {

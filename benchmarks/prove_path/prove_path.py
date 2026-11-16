@@ -376,6 +376,27 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
     return f"ran with: {coins}; parameters {word} (the challenger's LMS key at W={key.W}, H={key.H}, its key record's)"
 
 
+def served_forged_partition(honest: Mapping[str, Any], forged: Mapping[str, Any] | None, design: str) -> dict[str, Any]:
+    """The served arm's forged partition. A forgery is the forged run's own commit with one unit's value flipped (``commit
+    --forge``), so it needs that unit in its window and sampled, not other units than the honest run's: by default the honest
+    partition's templates and scope, every unit sampled (``DESIGN:1/1``), at steps the honest run already holds to the window.
+    A given one whose steps fall outside the honest partition's is refused here, before any build, rather than by its commit
+    after the honest arm ran."""
+    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
+
+    if forged is None:
+        return {"templates": list(honest["templates"]), DESIGN: f"{design}:1/1",
+                **({"scope": dict(honest["scope"])} if "scope" in honest else {})}
+    inside = (honest.get("scope") or {}).get("steps")
+    steps = (forged.get("scope") or {}).get("steps")
+    if inside is not None and (steps is None or steps[0] < inside[0] or steps[1] > inside[1]):
+        raise SystemExit(f"PP_FORGED_PARTITION names steps {steps if steps is not None else 'unscoped'}, outside the honest "
+                         f"partition's {inside}, the steps of the window this run proves: its commit would find no unit "
+                         f"there to forge. Unset PP_FORGED_PARTITION, and the served arm forges a unit of the honest "
+                         f"partition's own steps with every unit sampled ({design}:1/1), or give one inside steps {inside}")
+    return dict(forged)
+
+
 def code_identity() -> str:
     """The code a single-GPU window's I2 runs: the served compiler's digest (`served_identity`), so a single-GPU window's
     I2 and a served one's name their code by one formula, the verifier's `interface.compiler_digest`."""
@@ -1981,6 +2002,10 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     p = sub.add_parser("ran-with", help="the line naming the coins and the parameters a run's sessions are sampled under (`ran_with`)")
     p.add_argument("--challenger", required=True, help="run.sh's PP_CHALLENGER: local, or gate:USER@HOST")
     p.add_argument("--challenger-key", help="with gate:USER@HOST: the challenger's key record (challenger-key/v1)")
+    p = sub.add_parser("forged-partition", help="the served arm's forged partition, or its refusal (`served_forged_partition`)")
+    p.add_argument("--honest", required=True, help="the honest run's partition file")
+    p.add_argument("--forged", help="run.sh's PP_FORGED_PARTITION, held to the honest partition's steps (default derived)")
+    p.add_argument("--design", required=True, choices=("rate", "stratified-rate"), help="run.sh's sampling design")
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--serve-run")
@@ -2091,6 +2116,10 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     a = ap.parse_args(argv)
     if a.cmd == "ran-with":
         print(ran_with(a.challenger, json.loads(Path(a.challenger_key).read_text()) if a.challenger_key else None))
+        return 0
+    if a.cmd == "forged-partition":
+        forged = json.loads(Path(a.forged).read_text()) if a.forged else None
+        print(json.dumps(served_forged_partition(json.loads(Path(a.honest).read_text()), forged, a.design), sort_keys=True))
         return 0
     if a.cmd == "compiler":
         print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate, a.serve), sort_keys=True))

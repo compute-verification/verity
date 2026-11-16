@@ -27,10 +27,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_bench.py", "tests/test_bench_engines.py", "tests/test_bench_results.py",
-            "tests/test_bench_resume.py", "tests/test_bench_served.py", "tests/test_spot_status.py",
-            "tests/test_steady_launch.py", "tests/test_steady_node.py", "tests/test_steady_node_kept.py",
-            "tests/test_steady_node_refusals.py", "tests/test_steady_point.py", "tests/test_steady_runs.py",
-            "tests/test_steady_specs.py"]
+            "tests/test_bench_resume.py", "tests/test_bench_served.py", "tests/test_env.py",
+            "tests/test_spot_status.py", "tests/test_steady_launch.py", "tests/test_steady_node.py",
+            "tests/test_steady_node_kept.py", "tests/test_steady_node_refusals.py", "tests/test_steady_point.py",
+            "tests/test_steady_runs.py", "tests/test_steady_specs.py"]
 # The harness is a user of the vLLM integration. Its fake-engine tests import
 # the public hook set and exercise the integration-facing arm contract, and
 # `build_bound` reads the protocol options' `requires_build` to refuse CUDA
@@ -174,6 +174,11 @@ tests = ["tests/test_breakdown.py", "tests/test_overhead_command.py", "tests/tes
          "tests/test_steady_node.py", "tests/test_steady_node_kept.py", "tests/test_steady_node_refusals.py",
          "tests/test_steady_point.py", "tests/test_steady_runs.py"]
 paths = ["artifacts.json"]
+
+# env.sh puts every workspace member's packages on PYTHONPATH, which a test checks reaches everything the adapter imports
+[[tool.verity.tests.reads]]
+tests = ["tests/test_env.py"]
+paths = ["pyproject.toml", "*/pyproject.toml", "adapters/vllm/verity_vllm"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_settings.py"]

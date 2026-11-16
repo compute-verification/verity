@@ -9,7 +9,7 @@ and its Lean.
   session, the one entry the parameters list, its stretch starting at execution phase 0, so the period's numbers are the
   run's own, and one schedule, its integer fields and its response cap when it has one: the period check reads the id
   egress form, and a run in another is refused; its cell limits over the one link's execution phase are the cells,
-  `NetworkCertifierParams.rows_cells`: `egress_cells` for each of the `lanes · window` connections it can carry),
+  `NetworkAttesterParams.rows_cells`: `egress_cells` for each of the `lanes · window` connections it can carry),
   the link `relay_check.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
   the jitter bound `scan_answer.JITTER_BOUND` (K's jitter term T bits an execution phase, `leak_bounds.JITTER`), and the
@@ -66,7 +66,7 @@ from pathlib import Path
 
 from verity.protocols.resource_accounting.network.verifier import scan_answer as SA
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC
-from verity.protocols.resource_accounting.network.verifier.network_attester import INTEGER_FIELDS, NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import INTEGER_FIELDS, NetworkAttesterParams
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import canonical_json
 from verity.commitments.periods.interface import CIRCUIT
@@ -134,7 +134,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     audits = doc.get("audits", [])
     cap = dep["params"].get("max_tokens_cap")
     schedule = {k: dep["params"][k] for k in INTEGER_FIELDS} | ({} if cap is None else {"max_tokens_cap": cap})
-    cells = NetworkCertifierParams(**dep["params"]).rows_cells(1)
+    cells = NetworkAttesterParams(**dep["params"]).rows_cells(1)
     params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": cells,
               "circuit": circuit, "first": x["window"], "jitter": SA.JITTER_BOUND,
               "keys": [{"key": dep["key"]["public"], "session": dep["session"], "start": 0}], "link": RC.LINK,

@@ -17,7 +17,7 @@
 #include <cstdint>
 #include <cuda_runtime.h>
 
-#include "../../../../../commitments/cuda/sha512.cuh"
+#include "../../../../../../commitments/cuda/sha512.cuh"
 
 #ifndef KV_FIELD
 #define KV_FIELD 512

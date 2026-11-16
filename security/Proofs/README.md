@@ -38,7 +38,7 @@ registry, path by path: `research msg owners PATH`.
 
 | Area | What it holds |
 |---|---|
-| `Accounting` | The proofs of resource accounting's guarantees; the joint period's bridges |
+| `ResourceAccounting` | The proofs of resource accounting's guarantees; the joint period's bridges |
 | `Certifier` | The network attester's proofs ([README](Certifier/README.md)) |
 | `Core` | `Verity.SecurityProofs.G` for core's guarantees, and every lemma behind them |
 | `Flock` | Flock's proofs: the verifier's, level3's and soundness's (`Flock/Soundness/README.md`) |

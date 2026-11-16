@@ -45,12 +45,12 @@ sign keys, `h = 512`, `r = 12`, at most `Q + P` candidate seeds and `Q` queries,
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sketch
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sketch
 
-/-- **The sketch bound at P2's receipts** (`Accounting.Guarantees.Remote.SketchBoundP2`). -/
-theorem SketchBoundP2 : Accounting.Guarantees.Remote.SketchBoundP2 := by
+/-- **The sketch bound at P2's receipts** (`ResourceAccounting.Guarantees.Remote.SketchBoundP2`). -/
+theorem SketchBoundP2 : ResourceAccounting.Guarantees.Remote.SketchBoundP2 := by
   intro β Hs _ _ P N S L q Q G qtot ε A T hε hP hRank hG hqtot hH hq hrec hpres
   have h := SketchBoundRun β Hs P N 257 512 S L q 16 12 G qtot ε (((Q : ℝ) + P) ^ 2 / 2 ^ 257) A T (by norm_num)
     hε (by positivity) hP hRank hH hq hrec hpres
@@ -65,4 +65,4 @@ theorem SketchBoundP2 : Accounting.Guarantees.Remote.SketchBoundP2 := by
   have h2 : ((∑ j, qtot j : ℕ) : ℝ) / 2 ^ 96 ≤ (Q : ℝ) / 2 ^ 96 := by gcongr
   exact (add_le_add (add_le_add h1 h2) le_rfl).trans (le_of_eq (by ring))
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

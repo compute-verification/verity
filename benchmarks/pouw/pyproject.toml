@@ -47,7 +47,9 @@ untraced = [
 # with what lean_headline_dc.py writes, and each statement's ε literal in Models' HeadlineDc.lean against the export's
 # ε/B_♭ pair.
 # Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through Flock's Python; harness/price_twins.py
-# reads the lifted PoUW guarantees' sources (Definitions/Pouw/Guarantees) and Security's lock. Of `verity`, the
+# reads the lifted PoUW guarantees' sources (Definitions/Pouw/Guarantees) and Security's lock, and its
+# `repository_names` every Lean file of the audit's trees' Pouw/ (Definitions, Proofs, Proofs/Properties), so those are
+# inputs whole (test_ledger's reads entry below). Of `verity`, the
 # difftest harness, vLLM's integration and `research`, what the
 # tests import, in place of those trees; the Lean the served challenger's `lake build` reads is keyed by the binaries it
 # builds (`artifacts`), and the C++ the tests compile is this suite's own but for the SHA-512 pearl_c/sha512.cuh includes
@@ -168,11 +170,8 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/env.py", "tools/research/src/research/record.py",
           "tools/research/src/research/result.py", "tools/research/src/research/secret_hint.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
-          "security/Definitions/Pouw/Headline", "security/Definitions/Pouw/HeadlineDc",
-          "security/Definitions/Pouw/Guarantees", "security/Definitions/Pouw/Guarantees/HeadlineDc.lean",
-          "security/Proofs/Pouw/Lemmas/PearlCRecords.lean", "security/lean-audit.json",
-          "security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean", "security/Proofs/Pouw/PearlC/Records.lean",
-          "security/Proofs/Accounting/Gates/Rows.lean",
+          "security/Definitions/Pouw", "security/Proofs/Pouw", "security/Proofs/Properties/Pouw", "security/lean-audit.json",
+          "security/Proofs/ResourceAccounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts", "benchmarks/pouw/filler", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler",
           "benchmarks/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
@@ -189,7 +188,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
           "adapters/torch/verity_torch/pouw/h1/tables_device.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/words.py",
-          "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py",
+          "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/__init__.py", "benchmarks/datacenter/datacenter",
           "verity/protocols/registration/__init__.py", "verity/protocols/registration/verifier/__init__.py",
           "verity/protocols/registration/verifier/registration.py",
@@ -232,6 +231,10 @@ tests = [
     "tests/test_served_h1_producer.py",
 ]
 paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_ledger.py"]
+paths = ["security/Definitions/Pouw", "security/Proofs/Pouw", "security/Proofs/Properties/Pouw"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_facet_break.py"]

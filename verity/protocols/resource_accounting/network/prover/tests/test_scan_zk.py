@@ -769,7 +769,7 @@ def test_lean_reads_each_network_attester_port_at_the_root_the_network_attester_
     run = published(tmp_path / "run", sz.TEST, windows=G)
     h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
     dep = json.loads((run / "deployment.json").read_text())
-    key, session, params = RF.read_public(dep["key"]), bytes.fromhex(dep["session"]), sz.W.NetworkCertifierParams(**dep["params"])
+    key, session, params = RF.read_public(dep["key"]), bytes.fromhex(dep["session"]), sz.W.NetworkAttesterParams(**dep["params"])
     signed = {}
     for (d, w), doc in _cells(run).items():
         head, dom = sz.WR.check_registration(doc, key, session, params, RC.LINK, sz.Direction(d), w)
