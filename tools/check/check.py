@@ -1922,7 +1922,8 @@ def opt_in(out: Path, step: str, args: list[str]) -> int:
     if step not in ("pytest", "lean-suites", "all"):
         print(f"check: --opt-in OUT STEP: STEP is pytest, lean-suites or all, not {step!r}", file=sys.stderr)
         return 2
-    names = {s.path: s.name for s in SUITES.select(SUITES.discover(), list(OPT_IN))}
+    suites = SUITES.discover()
+    names = {path: SUITES.select(suites, [path])[0].name for path in OPT_IN}
     d = out / OPT_IN_DIR
     d.mkdir(parents=True, exist_ok=True)
     rc = 0

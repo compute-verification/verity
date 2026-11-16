@@ -86,7 +86,8 @@ CHECK_RE = re.compile(r"^Check: (r20\d{6}-\d{6}-[0-9a-f]{4})$", re.M)
 #: regenerated
 LOCKS_RE = re.compile(r"^Regenerated: \S", re.M)
 ROW_RE = re.compile(r"-(r\d+)\]$")
-CHECK_PY = "tools/verity/check/check.py"
+#: the check a shard runs: records from before the move name the old path
+CHECK_PY = ("tools/check/check.py", "tools/verity/check/check.py")
 SHARD_RE = re.compile(r"(?:auto:)?([1-9]\d*)/([1-9]\d*)")
 #: a twin launch that never took a slot exits this, not started (`train.sh`)
 UNRUN = 75
@@ -181,8 +182,9 @@ def passed(sha: str) -> str | None:
                                "AND state = 'done' AND rc = 0 ORDER BY start_utc DESC LIMIT 1", (sha,))
         if rows:
             return rows[0][0]
+        like = " OR ".join("manifest_json LIKE ?" for _ in CHECK_PY)
         shards = store.index.sql("SELECT id, rc, manifest_json FROM attempts WHERE source_commit = ? AND source_dirty = 0 AND "
-                                 "manifest_json LIKE ? ORDER BY start_utc DESC", (sha, f"%{CHECK_PY}%--shard%"))
+                                 f"({like}) ORDER BY start_utc DESC", (sha, *(f"%{c}%--shard%" for c in CHECK_PY)))
         got = [(rid, rc, (json.loads(m or "{}").get("params") or {}).get("argv") or []) for rid, rc, m in shards]
         return sharded(got, lambda rid: unpassed(store, rid), off_gate(sha))
     except Exception as e:  # noqa: BLE001  (no attempt found: the caller says the commit is no landing)
@@ -192,7 +194,7 @@ def passed(sha: str) -> str | None:
 
 def shard_of(argv: list[str]) -> tuple[int, int] | None:
     """K and N of a shard of the verified queue's check, by its command (`train.sh` runs `check.py ... --shard [auto:]K/N`)."""
-    if CHECK_PY not in argv or "--shard" not in argv[:-1]:
+    if not any(c in argv for c in CHECK_PY) or "--shard" not in argv[:-1]:
         return None
     m = SHARD_RE.fullmatch(argv[argv.index("--shard") + 1])
     return (int(m.group(1)), int(m.group(2))) if m else None

@@ -1,7 +1,7 @@
 # The security review's open findings (`open_findings.py`). Not a package: the suite holds each rule of the count (only the
 # check the script holds for a finding closes it, the guard and address checks, the mark, the value `main` writes) on stand-in
 # findings and toy checkouts, and holds the list itself to naming no address, key or auditor's machine
-# (`uv run tools/verity/check/suites.py benchmarks/security_findings`).
+# (`uv run tools/check/suites.py benchmarks/security_findings`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
