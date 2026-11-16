@@ -23,7 +23,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # challengers.py's gate client, which verifier.py builds for --challenger gate
           "verity/protocols/proofs/spot",
           # verifier.py and its in-process harness, which the stub verifier runs
-          "verity/protocols/resource_accounting/memory/poub/tests/__init__.py", "verity/protocols/resource_accounting/memory/poub/tests/session_harness.py",
+          "tests/verity/protocols/resource_accounting/memory/poub/__init__.py", "tests/verity/protocols/resource_accounting/memory/poub/session_harness.py",
           "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py", "verity/protocols/resource_accounting/memory/poub/prover/__init__.py",
           "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py", "verity/protocols/resource_accounting/memory/poub/prover/remote_session/device.py",
           # the challenger's tunnel client, whose forced pty the challenger's tunnel key allows

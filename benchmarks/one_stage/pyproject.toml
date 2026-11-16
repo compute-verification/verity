@@ -55,7 +55,7 @@ parallel = true
 # every file and running the tests whose node id hashes to K. Its longest test, served_cases' inference-only case on the
 # 4,32,4 class, is most of its time: of seven it hashes to part 2, so ci.toml's plans put part 2 beside the security
 # analysis's audit and the rest with the Rust build, beside verity-vllm's third part, which holds the two-stage driver's
-# round 2 (tools/check/tests/test_shards.py holds the two apart)
+# round 2 (tests/tools/check/test_shards.py holds the two apart)
 parts = 7
 # `verity`: the stream and its verifiers of record, and the Lean packages `spot-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
@@ -96,12 +96,12 @@ parts = 7
 # `security/lean-audit.json` and `security/Properties/lean-audit.json`: onsite_record's guarantees the tight K rests on
 # and the discharges of its premises, each at the statement whose hypotheses and antecedents it names (`RESTS_ON`,
 # `DISCHARGES`), which the locks record by digest and no other way.
-# `benchmarks/one_stage/tests/test_two_stage_driver.py`: the stop class and sessions `test_stop_audit` drives, the
+# `tests/benchmarks/one_stage/test_two_stage_driver.py`: the stop class and sessions `test_stop_audit` drives, the
 # adapter's test of the two-stage driver on its dockets.
 inputs = ["tools/config/verity_config", "verity/protocols/resource_accounting/compute/pouw/prover/clear", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c",
           "benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm",
-          "benchmarks/pouw/tests/test_pearl_c_vllm.py", "benchmarks/pouw/tests/test_pearl_c_hash_decode.py",
-          "benchmarks/pouw/tests/test_pearl_c_sm90_prefill.py", "benchmarks/pouw/run_result.py",
+          "tests/benchmarks/pouw/test_pearl_c_vllm.py", "tests/benchmarks/pouw/test_pearl_c_hash_decode.py",
+          "tests/benchmarks/pouw/test_pearl_c_sm90_prefill.py", "benchmarks/pouw/run_result.py",
           "benchmarks/pouw/settings.py", "verity", "hardware/cards",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/compose/verifier/live_challenger",
           # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
@@ -112,20 +112,20 @@ inputs = ["tools/config/verity_config", "verity/protocols/resource_accounting/co
           "benchmarks/one_stage/interfaces/verity_e2e_demo", "verity/commitments/cuda/commit_slots/slots.py",
           "benchmarks/prove_path/records_audit.py", "adapters/vllm/tools/served_run/serve_load.py", "adapters/vllm/tools/served_run/serve.sh",
           "adapters/vllm/tools/served_run/commit.sh", "adapters/vllm/tools/served_run/published.sh",
-          "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json",
-          "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin",
-          "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json",
+          "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.json",
+          "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.bin",
+          "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-registration.json",
           "benchmarks/census/deployments.json",
           "benchmarks/census/adversary.json", "benchmarks/slowdown/data/reference.toml",
           "benchmarks/spot_figures/cards/workload.glm-5.3.json",
           "security/lean-audit.json", "security/Properties/lean-audit.json",
-          "benchmarks/network_e2e/tests/data/endpoint/advice",
+          "tests/benchmarks/network_e2e/data/endpoint/advice",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
           "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/lakefile.toml", "adapters/vllm/verity_vllm",
-          "benchmarks/one_stage/tests/test_two_stage_driver.py",
+          "tests/benchmarks/one_stage/test_two_stage_driver.py",
           "adapters/torch/verity_torch", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
           "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/tensors.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/gpu.py", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/reference.py",

@@ -33,7 +33,7 @@ log "zk-cost-cpu: source $(git rev-parse HEAD), builds in $W"
 TU=$W/tmpl-unit
 { (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server flock-read-tmpl) && if [ -n "${ZK_UNITS:-}" ]; then
     mkdir -p "$TU" && (cd verity/protocols/proofs/flock/verifier && tar --exclude=.lake -cf - .) | tar -xf - -C "$TU" \
-      && cp verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean "$TU/" \
+      && cp tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean "$TU/" \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$TU/lakefile.toml" \
       && (cd "$TU" && lake build flock-tmpl-unit); fi; } > "$O/build-lean.log" 2>&1 &
 LP=$!

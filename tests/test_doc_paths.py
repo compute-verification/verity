@@ -45,7 +45,7 @@ VERITY_RETIRED = frozenset({"core", "ml"})
 END_STATE_DOCS = ("ARCHITECTURE.md",)
 #: (document, token as written) that reads as a repository path but names something else, each with why.
 NOT_PATHS = {
-    ("verity/circuits/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
+    ("tests/verity/circuits/ops/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
     ("tools/research/README.md", ".cursor/mcp.json"): "the Cursor config the reader writes in their own checkout",
     (".agents/skills/kernel-engineering/SKILL.md", "panel.py"): "the kernel panel, kept in an agent store",
     ("benchmarks/pouw/harness/README.md", "panel.py"): "the kernel panel, kept in an agent store",

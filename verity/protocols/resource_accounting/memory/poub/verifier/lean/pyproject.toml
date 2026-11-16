@@ -78,8 +78,8 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/commitments/attest/lean/lake-manifest.json", "verity/commitments/attest/lean/lean-toolchain",
           "verity/commitments/lms/lean/lakefile.toml",
           "verity/commitments/lms/lean/lake-manifest.json", "verity/commitments/lms/lean/lean-toolchain",
-          "verity/protocols/resource_accounting/memory/poub/verifier/tests/fixtures/p2-c-star.bin",
-          "verity/protocols/resource_accounting/memory/poub/verifier/tests/fixtures/p2-store.json",
+          "tests/verity/protocols/resource_accounting/memory/poub/verifier/fixtures/p2-c-star.bin",
+          "tests/verity/protocols/resource_accounting/memory/poub/verifier/fixtures/p2-store.json",
           # a window decided from a span (`span.py`, `Poub.Span`): the opening unit's rows (`opening.py`,
           # `commitments/gates/block_check.py`), and the sampled proof system's one-stage audit, which `lake` builds
           "verity/protocols/resource_accounting/memory/poub/verifier/span.py", "verity/protocols/resource_accounting/memory/poub/verifier/opening.py",
@@ -92,5 +92,5 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "security/Properties/Poub/Remote/HonestLog/Case.lean",
           # the deployment layer and its wire, which the period hook's verifier side is started through
           # (`verity.runtime.stream.Side`)
-          "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "verity/tests/tests/test_channel.py",
+          "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "tests/verity/tests/test_channel.py",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py"]

@@ -13,7 +13,7 @@ The directory is scripts run by their paths, and no package. Eight are imported 
 bare names: `checked_strip.py`, `cpw_sass_count.py`, `egemm_depthr_check.py`, `fold_kernel_check.py`, `fold_opt_fx.py`,
 `fold_root_sweep.py`, `fold_routes.py` and `narrow_u.py`. Each one's `__all__` lists what its readers and the tests take,
 and every other name is the script's own. Outside the directory and its own tests (`../tests/test_theory_*.py`) only
-`checked_strip.py` is read, by `../tests/test_segment_h1.py`; it loads by file the words the checked kernels commit,
+`checked_strip.py` is read, by `../../../tests/benchmarks/pouw/test_segment_h1.py`; it loads by file the words the checked kernels commit,
 `co_words.py` of `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/`, which that
 directory's references recompute. No Python here touches a GPU: the sm_120 probes are the `*.sh` jobs. A script
 starts only `gcc` and the C program it built, and `run.py` the checks; each writes only in a temporary directory and
@@ -100,7 +100,7 @@ What each one checks, and the Lean or the test that reads it.
 ### The checked strip and attention's noise
 
 - `checked_strip.py`: the exact check of the two-sided noise whose served output is a checked word. It is the one module
-  other code reads (`../tests/test_segment_h1.py`). Its `pv_words`, `pv_served`, `co32c_words` and `digits` are
+  other code reads (`../../../tests/benchmarks/pouw/test_segment_h1.py`). Its `pv_words`, `pv_served`, `co32c_words` and `digits` are
   `edited_gemm`'s `co_words.py`, loaded by file, which `edited_gemm`'s references recompute.
 - `narrow_u.py`: that check with U on ±N for N = 8, 16, 32 (`edited_gemm`'s `co32c-u*`).
 - `zero_routes_check.py`: `checked_strip.py`'s priced zero-instance routes.
