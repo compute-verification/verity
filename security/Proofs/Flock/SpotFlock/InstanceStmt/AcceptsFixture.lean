@@ -5,6 +5,7 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.Rel
 public import Proofs.Flock.SpotFlock.InstanceStmt.ScopeZk
 public import Proofs.Properties.Flock.Nets
 public import Proofs.Flock.Claims.Complete.ZkTables.Sha512
+public import Proofs.Flock.Claims.Complete.Coins
 
 /-! # The verifier accepts the honest run at the two-instance statement
 
@@ -37,5 +38,14 @@ theorem complete_fixture {r : Run} (hr : r.Plain) (ω : (FlockDeploy.deployZk Fl
           (FlockDeploy.deployZk Flock.Readable.relation).V (x r) ω c).out = .acc :=
   FlockComplete.ZkTables.complete_masked_sha512 (x r) (Rel.wX r) (scope_x Properties.Flock.Nets.fixedNetsBuild hr)
     (Rel.rel_x Properties.Flock.Nets.fixedNetsBuild hr) ω
+
+/-- **The fixture's completeness error is below `1`**: `δ_c` at `x r` is at most `190 / 2^128` (`Complete_meets_zk` at the
+statement's session `zkIn_x` and `readyZk_x`), so `complete_fixture` is not empty. -/
+theorem delta_fixture {r : Run} (hr : r.Plain) :
+    (FlockDeploy.deployZk Flock.Readable.relation).δc FlockDeploy.sha512 (x r) ≤ 190 / 2 ^ 128 ∧
+      (FlockDeploy.deployZk Flock.Readable.relation).δc FlockDeploy.sha512 (x r) < 1 :=
+  Claims.Flock.Complete_meets_zk Flock.Readable.relation FlockDeploy.sha512
+    (zkIn_x Properties.Flock.Nets.fixedNetsBuild hr)
+    (readyZk_x Properties.Flock.Nets.fixedNetsBuild hr (recordFits_x Properties.Flock.Nets.fixedNetsBuild hr))
 
 end SpotFlock.InstanceStmt
