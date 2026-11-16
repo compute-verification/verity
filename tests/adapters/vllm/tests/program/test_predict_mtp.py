@@ -214,8 +214,8 @@ def test_a_drafted_step_reads_step_0s_selection_with_its_indexer_off(phi, monkey
     assert [nope[j * 512][:2] for j in range(3)] == [("n", i) for i in latent[:3]]
     assert ("n", latent[3]) not in {r[:2] for r in nope}
     valid, pad = (nodes[b1 - 5 + k] for k in (0, 1))
-    assert len(idx) == 32 * TOPK and valid.fn.id != pad.fn.id
-    assert [idx[32 * j][:2] for j in range(TOPK)] == [("n", b1 - 5)] * 3 + [("n", b1 - 4)] * (TOPK - 3)
+    assert len(idx) == TOPK and valid.fn.id != pad.fn.id
+    assert [idx[j][:2] for j in range(TOPK)] == [("n", b1 - 5)] * 3 + [("n", b1 - 4)] * (TOPK - 3)
     logs = run.draft.logs[run.net.NL]
     assert (len(logs["latent"]), len(logs["ik"])) == (4, 3)
 
