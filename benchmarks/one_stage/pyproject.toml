@@ -37,6 +37,7 @@ untraced = [
     "tests/test_served_bandwidth.py",
     "tests/test_served_overhead.py",
     "tests/test_served_verdicts.py",
+    "tests/test_proof_layers_script.py",
 ]
 # The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step
 # builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/proofs/flock/prover/check_build.sh bin`'s,

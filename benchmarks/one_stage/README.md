@@ -163,6 +163,8 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   and parameters: a development challenger local to each session, never an auditor's device, so a measurement and not
   an audit. The served table's benchmark results are `benchmarks/prove_path/run.sh`'s and `a5_llama1b_h200.sh`'s (`verity bench prove
   layers`). Its rules are the three parts at the end of this file.
+- `proof_layers.sh`: the served table's first three benchmark results from a clone, as one command, from the bootstrap to
+  the printer's table, removing its work directory at the end ("The three benchmarks of the proof-layers table").
 - `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--cases DIR`
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
@@ -370,8 +372,22 @@ bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m
 The proof-layers table's first three benchmarks are three runs of `a5_llama1b_h200.sh` on one work directory: Flock (a
 plain audit), Flock with zero knowledge, and with sampling. They differ in their settings and in their partition file's
 sampling design (its `law` key): `stratified-rate:880/880` and `subset:880` take all 880 proof blocks of the window, and
-`subset:256` samples 256 of them. From a clone of `main` on an H200 node with about 450 GB of memory, at the tree's root,
-with `A5_CARD` the jobs' card, `A5_CORES` their cores and `GPU_LEASE_WHO` who their leases are recorded for:
+`subset:256` samples 256 of them. From a clone of `main` on an H200 node with about 450 GB of memory, at the tree's root:
+
+~~~sh
+A5_CARD=0 A5_CORES=40-59 WORK=/workspace/a5-layers GPU_LEASE_WHO=$USER bash benchmarks/one_stage/proof_layers.sh
+~~~
+
+`A5_CARD` is the jobs' card, `A5_CORES` their cores, `WORK` a new or empty work directory and `GPU_LEASE_WHO` who their
+leases are recorded for; `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
+`research run`), and `--dry-run` makes every check and prints each step's command without running it. What it does:
+before anything is downloaded or built, it refuses a missing setting, a card that is not an H200, under 448 GB of host
+memory, cores this job may not run on, under 25 GB free under `WORK`, a `WORK` that is not empty and results already in
+the results directory. Then it runs the eight steps below, stopping at the first that fails: the bootstrap, the three
+partition files, the three runs and the printer, whose table it keeps as `proof-layers.txt`. Its `steps.log` records
+each step's command, exit code, seconds, peak host memory in use, largest process and `WORK`'s size. At its end, success
+or failure, it copies the three runs' records and the bootstrap's to the results directory and removes `WORK`. It does
+not run the recursion benchmark. By hand, the same steps (the script's bootstrap writes its record under `WORK`):
 
 ~~~sh
 export WORK=/workspace/a5-layers A5_CARD=0 A5_CORES=40-59 GPU_LEASE_WHO=$USER
