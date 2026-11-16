@@ -2348,3 +2348,13 @@ def test_a_root_s_mypy_entries_are_held_to_what_mypy_finds_in_the_base_s_tree(ro
         MYPY_JSON: json.dumps({"rule": "mypy", "environment": env, "entries": [{**wrong, "count": 2}]})})
     [c] = G.gate("main", "pr")["changes"]
     assert c["verdict"] == "failed" and c["why"].startswith(f"grows {MYPY_JSON} assignment 0 -> 2 in total"), c["why"]
+
+
+def test_a_verdict_is_kept_for_the_environment_mypy_runs_in(monkeypatch):
+    """A new root's mypy entries are checked only in the environment their list records, so a verdict reached in another
+    one is not recalled in it."""
+    c = G.Change("a" * 40, "b" * 40, ["b" * 40])
+    monkeypatch.setattr(G, "mypy_environment", lambda: {"python": "3.12", "torch": None})
+    without = G.cache_path(c, None)
+    monkeypatch.setattr(G, "mypy_environment", lambda: {"python": "3.12", "torch": "2.14.0+cpu"})
+    assert G.cache_path(c, None) != without

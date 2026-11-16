@@ -149,7 +149,8 @@ on the first Python whose ``-m ruff`` is the base's pin: this one, else one ``uv
 else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A run judges every change above its BASE,
 and runs overlap (a rerun of one tip, a later tip's run whose BASE lies below changes an earlier run judged), so each
 change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default ``~/.cache/verity/ratchet-gate``; empty: none; the check's
-step keeps it in the check's cache), keyed by this file's bytes and the change's commits, which are all it reads, and BASE
+step keeps it in the check's cache), keyed by this file's bytes, the change's commits and the environment mypy runs in
+here (`mypy_environment`, which decides whether a new root's mypy entries can be checked), which are all it reads, and BASE
 too for a verdict that reads it (a failed change's exemptions run BASE's move_check), under a key of its own with
 ``--every-rule``, where a failure names more: N runs over a change judge it once,
 not N times, and once BASE moves an untouched or passed change is still not judged again.  The source checks' findings
@@ -1068,6 +1069,7 @@ def new_roots(c: Change) -> dict[str, str]:
     return {k: ROOTS[k] for k in sorted(named(c.hi) - named(c.lo))}
 
 
+@functools.cache
 def mypy_environment() -> dict[str, str | None]:
     """This process's environment, as ``test_mypy`` records the one its list was taken in."""
     def version(name: str) -> str | None:
@@ -1777,7 +1779,8 @@ def cache_path(c: Change, base: str | None, part: str = "verdict") -> Path | Non
     if root == "":
         return None
     root = Path(root) if root else Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "ratchet-gate"
-    return root / (hashlib.sha256(json.dumps([SELF, part, base, c.lo, c.hi, c.commits]).encode()).hexdigest() + ".json")
+    key = [SELF, part, base, c.lo, c.hi, c.commits, mypy_environment()]
+    return root / (hashlib.sha256(json.dumps(key).encode()).hexdigest() + ".json")
 
 
 def recall(c: Change, p: Path | None, fields: tuple[str, ...] = JUDGED, verdicts: tuple[str, ...] = VERDICTS) -> bool:
