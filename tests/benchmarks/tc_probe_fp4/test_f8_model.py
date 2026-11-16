@@ -125,7 +125,7 @@ def test_a_misrouted_kind_fails_its_gate_and_the_others_are_still_captured(tmp_p
     assert set(totals) == {"f8_e4m3"} and totals["f8_e4m3"]["sm120_gs32_w26_f133"]["mismatches"] == 0
 
 
-B200_CAPTURE = HERE / "tests" / "fixtures" / "tc-sm100-f8-2026-10-19.json"
+B200_CAPTURE = HERE.parents[1] / "tests" / "benchmarks" / "tc_probe_fp4" / "fixtures" / "tc-sm100-f8-2026-10-19.json"
 
 
 @pytest.mark.parametrize("kind", list(S.KINDS))

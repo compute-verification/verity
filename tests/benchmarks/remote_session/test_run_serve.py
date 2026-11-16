@@ -28,14 +28,14 @@ ROOT = HERE.parents[2]
 def load_serve():
     """`serve.py` as a module of its own name: the auditor device's challenger, which this suite's other tests run,
     imports its own `serve` by that name."""
-    spec = importlib.util.spec_from_file_location("remote_session_serve", HERE.parent / "serve.py")
+    spec = importlib.util.spec_from_file_location("remote_session_serve", HERE.parents[2] / "benchmarks" / "remote_session" / "serve.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
 serve = load_serve()
-RUN = HERE.parent / "run.sh"
+RUN = HERE.parents[2] / "benchmarks" / "remote_session" / "run.sh"
 BASH = shutil.which("bash")
 MACHINE_PATH = os.defpath
 ROW = "llama__bf16__h200__tp1__b1__i256__o32"
