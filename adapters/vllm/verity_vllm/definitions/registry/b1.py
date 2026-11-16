@@ -61,9 +61,9 @@ B0_CONFIG = {
 }
 
 # Two more static configurations of the SAME registered functions (data only; the functions above are unchanged).
-# Values are the checkpoints' config.json (HF revision named), the semantic profile named beside each.
+# Values are the checkpoints' config.json (HF revision named).
 # SMOL360 -- same architecture as B0 (LlamaForCausalLM), different checkpoint: only H/NL/NH/KVH/I change (K of the GEMM coordinates, the
-# rmsnorm divisor literal H); V, D, EPS, ROPE_THETA, BIAS are B0's.  Profile: llama-eager-batch-invariant-v3.
+# rmsnorm divisor literal H); V, D, EPS, ROPE_THETA, BIAS are B0's.
 SMOL360_CONFIG = {
     "model": "HuggingFaceTB/SmolLM2-360M",
     "revision": "f8027fd0eaeea54caa13c31d31b9fdc459c38b49",
@@ -79,7 +79,7 @@ SMOL360_CONFIG = {
 
 # QWEN05 -- a different architecture (Qwen2ForCausalLM): fused QKV projection WITH bias (`BiasAdd` = one aten.add bf16 node per layer between the
 # GEMM and rope/attention), eps 1e-6, rope theta 1e6, vocabulary 151,936 (the whole-scan width), GQA 14/2; head dim 64 (B0's FA2 trait, not B1's
-# <128,...>).  Profile: qwen2-eager-batch-invariant-v2.
+# <128,...>).
 QWEN05_CONFIG = {
     "model": "Qwen/Qwen2.5-0.5B",
     "revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
