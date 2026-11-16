@@ -291,19 +291,36 @@ def test_a_header_in_neither_the_toolkit_nor_the_wheels_fails_before_any_build(t
     assert (tmp_path / "out" / "bootstrap.fail").read_text().splitlines() == [line]
 
 
-@pytest.mark.parametrize("version", ["7.65.3", "7.9.1"])
-def test_a_curl_older_than_7_66_is_refused_before_any_fetch(tmp_path: Path, version: str) -> None:
-    """Its `--retry` does not wait out GitHub's 429, which the taps' and the wheel's fetches rely on."""
+NEEDS = "BOOTSTRAP_FAIL_CURL: the bootstrap needs curl 7.66.0 or later on PATH, whose --retry waits out a 429: "
+
+
+@pytest.mark.parametrize(("printed", "refused"), [
+    ("curl version 7.81.0", True), ("curl v7.81.0 (x86_64-pc-linux-gnu)", True), ("", True), ("\x01\x02 not curl", True),
+    ("curl 7.66 (x86_64-pc-linux-gnu)", True), ("curl 7.65.3 (x86_64-pc-linux-gnu) libcurl/7.65.3", True),
+    ("curl 7.9.1 (x86_64-pc-linux-gnu)", True), ("curl 7.66.0 (x86_64-pc-linux-gnu) libcurl/7.66.0", False),
+    ("curl 8.5.0-DEV (x86_64-pc-linux-gnu) libcurl/8.5.0-DEV", False), (None, True)])
+def test_curl_is_refused_unless_its_first_line_reads_7_66_0_or_later(tmp_path: Path, printed: str | None,
+                                                                      refused: bool) -> None:
+    """The bootstrap's fetches rely on `curl --retry` waiting out GitHub's 429, which curl does from 7.66.0 on. The version
+    is read strictly from `curl -V`'s first line, so a line it can't read, an older curl or no curl (None) is refused in one
+    line quoting what was printed; a curl it accepts goes on to step 1, whose stub `uv` then fails."""
     fake = tmp_path / "fake"
     fake.mkdir()
-    (fake / "curl").write_text(f"#!/bin/sh\necho 'curl {version} (x86_64-pc-linux-gnu) libcurl/{version}'\n")
-    (fake / "curl").chmod(0o755)
+    for tool in ("dirname", "mkdir", "tee", "awk", "date"):
+        found = shutil.which(tool)
+        assert found, f"{tool} not found"
+        os.symlink(found, fake / tool)
+    stubs = {"uv": "#!/bin/sh\nexit 1\n", **({} if printed is None else {"curl": f"#!/bin/sh\nprintf '%s\\n' '{printed}'\n"})}
+    for name, body in stubs.items():
+        (fake / name).write_text(body)
+        (fake / name).chmod(0o755)
     r = subprocess.run([BASH, str(SCRIPT), "--cpu", "--out", str(tmp_path / "out")], capture_output=True, text=True,
-                       env={"PATH": f"{fake}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(tmp_path / "home"),
-                            "WORK": str(tmp_path / "work")})
-    line = f"BOOTSTRAP_FAIL_CURL: the bootstrap needs curl 7.66.0 or later, whose --retry waits out a 429; PATH has curl {version}"
-    assert r.returncode == 3 and r.stderr.splitlines() == [line], f"stdout: {r.stdout}\nstderr: {r.stderr}"
-    assert not (tmp_path / "work" / "venv312").exists()
+                       env={"PATH": str(fake), "HOME": str(tmp_path / "home"), "WORK": str(tmp_path / "work")})
+    if refused:
+        why = "PATH has no curl" if printed is None else f"`curl -V` printed '{printed}'"
+        assert r.returncode == 3 and r.stderr.splitlines() == [NEEDS + why], f"stdout: {r.stdout}\nstderr: {r.stderr}"
+    else:
+        assert "BOOTSTRAP_FAIL_CURL" not in r.stderr and "BOOTSTRAP_FAIL_VENV" in r.stderr, f"stdout: {r.stdout}\nstderr: {r.stderr}"
 
 
 def test_the_launcher_it_writes_lets_a_spawned_child_start(tmp_path: Path) -> None:

@@ -59,10 +59,13 @@ fi
 mkdir -p "$OUT" "$WORK/wheels"
 log() { echo "[bootstrap] $(date -u +%FT%TZ) $*"; }
 fail() { echo "BOOTSTRAP_FAIL_$1: ${*:2}" | tee -a "$OUT/bootstrap.fail" >&2; exit 3; }
-# the fetches below and in the taps retry with `curl --retry`, which waits out a 429 from 7.66.0 on
-cv=$(curl -V 2>/dev/null | awk 'NR == 1 {print $2}')
-[ "$(printf '%s\n' 7.66.0 "$cv" | sort -V | head -n 1)" = 7.66.0 ] || fail CURL "the bootstrap needs curl 7.66.0 or later, whose --retry waits out a 429; PATH has ${cv:+curl }${cv:-no curl}"
-
+# the fetches below and in the taps retry with `curl --retry`, which waits out a 429 from 7.66.0 on. `curl -V`'s first line
+# must start `curl X.Y.Z` (a suffix such as -DEV after the three fields is allowed); anything else is refused, not guessed at.
+cv=$(curl -V 2> /dev/null | awk 'NR == 1')
+if ! [[ $cv =~ ^curl\ ([0-9]{1,6})\.([0-9]{1,6})\.[0-9]{1,6} ]] \
+  || (( 10#${BASH_REMATCH[1]} < 7 || (10#${BASH_REMATCH[1]} == 7 && 10#${BASH_REMATCH[2]} < 66) )); then
+  fail CURL "the bootstrap needs curl 7.66.0 or later on PATH, whose --retry waits out a 429: $(command -v curl > /dev/null && echo "\`curl -V\` printed '$cv'" || echo "PATH has no curl")"
+fi
 # ---- 1. Python 3.12 venv ---------------------------------------------------------------------------------------------------
 if ! command -v uv >/dev/null 2>&1; then
   python3 -m pip install -q uv 2>/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
