@@ -23,7 +23,8 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The cut from the form's acceptance at the deployed two-session history** (`CutAccept.cutBound_accept`): where the
 sampled verdict accepts only where the form does (`Wired`), the two setups' ledger lines are two sessions' in the
-device's order (`LedgerInOrder`) and the vocabulary's signer is the deployment's, an accepted play whose logs the check
+device's order (`LedgerInOrder`) and the vocabulary's signer is the deployment's, at a vocabulary where no device owns
+a family, an accepted play whose logs the check
 didn't read, or read other than the device's, is at most as likely as the read finder's collision plus the forger's
 forgery over both sessions. `LedgerInOrder` is taken, not proved. -/
 theorem cutAccept_dev₂ (V : Vocab d α) (k : Verity.Registration.Composite) (P : Deployment)
@@ -31,11 +32,11 @@ theorem cutAccept_dev₂ (V : Vocab d α) (k : Verity.Registration.Composite) (P
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hw : Wired V k θ)
     (hL : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
       LedgerInOrder (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o))
-    (hD : V.signer θ = P.signer fs₁ fs₂ cut θ) :
+    (hDs : V.devices θ = []) (hD : V.signer θ = P.signer fs₁ fs₂ cut θ) :
     CutBound V k θ F c σ ReadIsDevice (terms V (devOf P fs₁ fs₂ cut) θ F c σ) :=
   cutBound_accept V k (devOf P fs₁ fs₂ cut) θ F c σ hw
     (fun o hθ w₁ w₂ hw' =>
       printsInOrder_dev₂ (P.setup₁ fs₁ cut) (P.setup₂ fs₂ cut) cut o (by rw [hθ]; exact hw') (hL o hθ w₁ w₂ hw'))
-    (signsPlay_dev₂ V P fs₁ fs₂ cut θ F c hD)
+    (signsPlay_dev₂ V P fs₁ fs₂ cut θ F c hDs hD)
 
 end Verity.SampledTwo.Sessions

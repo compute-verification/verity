@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.CutHeld
 public import Proofs.Properties.Verity.Sampled.Device
+public import Properties.Verity.Idle
 
 /-!
 # The device's history at a two-session play: the two runs that printed the play's log
@@ -10,7 +11,7 @@ The cut (`Cut.cutBound`) takes two facts about the device's history at each play
 windows printed the play's log (`PrintsTwo`, through `BindsOfPrints`), and it signed what the play's signatures are on
 (`SignsPlay`). This file builds that history from the play (`dev₂`) and proves both at it.
 
-* **The runs** (`runsAt`, `ledgerAt`): a session's run is the one-stage history's (`Sampled.Device.dev`) at that
+* **The runs** (`runsAt`, `ledgerAt`): a session's run is the one-stage history's (`Sampled.Device.current`) at that
   session's releases, kept where its release log reads as coin trees (`treesOk`), which `PrintsOn` asks of every run
   and which a prover's frame can break (an opening's `after` of another length than a digest's).
 * **The history** (`logs`, `dev₂`): on one window (`oneExecutionPhase`), the two sessions are one (a ledger opens a window's
@@ -31,7 +32,8 @@ windows printed the play's log (`PrintsTwo`, through `BindsOfPrints`), and it si
 * **What the device signs** (`Deployment`, `Deployment.signer`, `signsPlay_dev₂`, `cut_dev₂`): a two-session deployment
   is two one-stage deployments, both under the parameters' key (`keyOf`). Its signer signs before any coin the ledger
   lines the request fixes, and at the close the records and closes of the runs the history holds and the ledger lines
-  at the close, so at a vocabulary whose signer is it the history signed what the play's signatures are on.
+  at the close, so at a vocabulary whose signer is it, where no device owns a family, the history signed what the
+  play's signatures are on.
   `cut_dev₂` is the cut at this history.
 
 **Keys.** The history takes two setups whose keys may differ, so `printsTwo_dev₂` holds where each stage's command
@@ -72,12 +74,12 @@ theorem treesOk_ok {r : Properties.Challenger.Run} (h : treesOk r = true) : ∃ 
 /-- A play that ended with the releases `log`, its other parts empty: what the one-stage history reads of a play is
 its log and the setup. -/
 def ex (log : List Release) : Exchange :=
-  ⟨.empty, #[], .empty, .empty, log, .empty, [], [], .empty, #[]⟩
+  ⟨.empty, #[], .empty, .empty, log, .empty, [], [], [], .empty, #[]⟩
 
-/-- **The run of the setup `S` that released `log`, under `pk`**: the one-stage history's (`Sampled.Device.dev`), where
+/-- **The run of the setup `S` that released `log`, under `pk`**: the one-stage history's (`Sampled.Device.current`), where
 its release log reads as coin trees (`treesOk`). -/
 noncomputable def runsAt (S : RunSetup) (log : List Release) (pk : ByteArray) : List Properties.Challenger.Run :=
-  ((Verity.Sampled.Device.dev (fun _ => S) (ex log)).runs pk).filter treesOk
+  ((Verity.Sampled.Device.current (fun _ => S) (ex log)).runs pk).filter treesOk
 
 open Classical in
 /-- The setup's ledger lines, under its key. -/
@@ -92,7 +94,7 @@ theorem mem_ledgerAt {S : RunSetup} {pk : ByteArray} {x : Json} (h : x ∈ ledge
 theorem runsAt_id {S : RunSetup} {log : List Release} {pk : ByteArray} {r : Properties.Challenger.Run}
     (hr : r ∈ runsAt S log pk) : r.id = S.id := by
   obtain ⟨hr, -⟩ := List.mem_filter.1 hr
-  simp only [Verity.Sampled.Device.dev] at hr
+  simp only [Verity.Sampled.Device.current] at hr
   split at hr
   · split at hr
     · rw [List.mem_singleton] at hr
@@ -341,7 +343,7 @@ theorem mem_runsAt {S : RunSetup} {log : List Release} {lines : List String} (hf
   unfold runsAt
   refine List.mem_filter.2 ⟨?_, ht⟩
   have hl' : printLog S.time PrintState.init (ex log).log = some lines := hl
-  simp only [Verity.Sampled.Device.dev]
+  simp only [Verity.Sampled.Device.current]
   rw [if_pos (show S.key = S.key ∧ Fits S.families (ex log).log from ⟨rfl, hf⟩), hl']
   exact List.mem_singleton_self _
 
@@ -350,7 +352,7 @@ no tree's hello, where each part fits its setup's layout and each printed run re
 under each setup's key, the run that released that part. -/
 theorem holdsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) {fs : List (String × ℕ)}
     {D : Verity.Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {o : Exchange}
-    (h : Verity.Game.Reaches (Verity.play fs D θ F c) o)
+    (h : Verity.Game.Reaches (Verity.play fs D [] θ F c) o)
     (h2 : oneExecutionPhase o.params = false) (hno : NoHello (o.log.take (cut o.log)))
     (hf₁ : Fits (S₁ o).families (o.log.take (cut o.log))) (hf₂ : Fits (S₂ o).families (o.log.drop (cut o.log)))
     (ht₁ : TreesRead (S₁ o) (o.log.take (cut o.log))) (ht₂ : TreesRead (S₂ o) (o.log.drop (cut o.log))) :
@@ -402,18 +404,18 @@ theorem fits_parts {fs : List (String × ℕ)} {log : List Release} (h : Fits fs
 
 /-- **A play's log fits its layout** (`Sampled.Device.coins_fit`). -/
 theorem fits_play {fs : List (String × ℕ)} {D : Verity.Signer} {θ : ByteArray} {F : Array ByteArray}
-    {c : ByteArray} {o : Exchange} (h : Verity.Game.Reaches (Verity.play fs D θ F c) o) : Fits fs o.log := by
+    {c : ByteArray} {o : Exchange} (h : Verity.Game.Reaches (Verity.play fs D [] θ F c) o) : Fits fs o.log := by
   obtain ⟨a, ha⟩ := h
   obtain ⟨log, hlog, hf⟩ := Verity.Game.reaches_bind ha
   obtain ⟨b, ρ, e, he⟩ := hf
   subst he
-  exact Verity.Sampled.Device.coins_fit _ fs [] log hlog
+  simpa [Parties.families] using Verity.Sampled.Device.coins_fit _ _ [] log hlog
 
 /-- **On two windows the history holds both runs, at setups of the play's layout**: `holdsTwo_dev₂`, each part fitting
 the layout as the play's log does (`fits_play`, `fits_parts`). -/
 theorem holdsTwo_play (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) {fs : List (String × ℕ)}
     {D : Verity.Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {o : Exchange}
-    (h : Verity.Game.Reaches (Verity.play fs D θ F c) o) (hfs : (S₁ o).families = fs ∧ (S₂ o).families = fs)
+    (h : Verity.Game.Reaches (Verity.play fs D [] θ F c) o) (hfs : (S₁ o).families = fs ∧ (S₂ o).families = fs)
     (h2 : oneExecutionPhase o.params = false) (hno : NoHello (o.log.take (cut o.log)))
     (ht₁ : TreesRead (S₁ o) (o.log.take (cut o.log))) (ht₂ : TreesRead (S₂ o) (o.log.drop (cut o.log))) :
     ∃ lines₁ lines₂, runOf (S₁ o) (o.log.take (cut o.log)) lines₁ ∈ (dev₂ S₁ S₂ cut o).runs (S₁ o).key ∧
@@ -466,7 +468,7 @@ theorem noHello_firstLen (ℓ : String) (log : List Release) : NoHello (log.take
 whose first session holds no hello (`noHello_firstLen`). -/
 theorem holdsTwo_first (S₁ S₂ : Exchange → RunSetup) (ℓ : String) {fs : List (String × ℕ)}
     {D : Verity.Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {o : Exchange}
-    (h : Verity.Game.Reaches (Verity.play fs D θ F c) o) (hfs : (S₁ o).families = fs ∧ (S₂ o).families = fs)
+    (h : Verity.Game.Reaches (Verity.play fs D [] θ F c) o) (hfs : (S₁ o).families = fs ∧ (S₂ o).families = fs)
     (h2 : oneExecutionPhase o.params = false)
     (ht₁ : TreesRead (S₁ o) (o.log.take (firstLen ℓ o.log)))
     (ht₂ : TreesRead (S₂ o) (o.log.drop (firstLen ℓ o.log))) :
@@ -528,6 +530,8 @@ request fixes (`opensAt`); at the close, the records and closes of the runs the 
 ledger lines at the close (`closing`); each what `Properties.Challenger.signedBy` lists under the parameters' key. -/
 noncomputable def signer (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (θ : ByteArray) :
     Verity.Signer where
+  pin := P.one.pin
+  families := fs₁ θ
   first a := (signedBy ⟨fun _ => [], fun _ => P.opensAt θ a⟩ (pubOf θ)).map (·.data.toList)
   draws := P.one.draws θ
   last a log b ρ := (signedBy (P.closing fs₁ fs₂ cut θ a log b ρ) (pubOf θ)).map (·.data.toList)
@@ -566,7 +570,7 @@ theorem ledger_closes (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : 
 theorem runsAt_length (S : RunSetup) (log : List Release) (pk : ByteArray) : (runsAt S log pk).length ≤ 1 := by
   unfold runsAt
   refine (List.length_filter_le _ _).trans ?_
-  simp only [Verity.Sampled.Device.dev]
+  simp only [Verity.Sampled.Device.current]
   split
   · split <;> simp
   · simp
@@ -630,23 +634,56 @@ noncomputable abbrev devOf (P : Deployment) (fs₁ fs₂ : ByteArray → List (S
     Exchange → History :=
   dev₂ (P.setup₁ fs₁ cut) (P.setup₂ fs₂ cut) cut
 
+/-- The messages of a play's signatures are the messages its signer signs, in order. -/
+theorem signatures_map_fst (D : Verity.Signer) (a : ByteArray) (log : List Release) (b : ByteArray)
+    (ρ : List Bool) : (D.signatures a log b ρ).map Prod.fst = D.signs a log b ρ := by
+  unfold Verity.AuditorParty.signatures
+  exact List.ext_getElem (by simp) fun i _ _ => by simp
+
+/-- **A history signs under `pk` what another signs there**, where it holds the other's runs and ledger lines under
+`pk` (`Properties.Challenger.signedBy`). -/
+theorem signedBy_of_holds {h h' : History} {pk m : ByteArray} (hm : m ∈ Properties.Challenger.signedBy h pk)
+    (hr : ∀ s ∈ h.runs pk, s ∈ h'.runs pk) (hl : ∀ l ∈ h.ledger pk, l ∈ h'.ledger pk) :
+    m ∈ Properties.Challenger.signedBy h' pk := by
+  unfold Properties.Challenger.signedBy at hm ⊢
+  rcases List.mem_append.1 hm with hm | hm
+  · obtain ⟨s, hs, hm⟩ := List.mem_flatMap.1 hm
+    exact List.mem_append.2 (.inl (List.mem_flatMap.2 ⟨s, hr s hs, hm⟩))
+  · obtain ⟨l, hl', hm⟩ := List.mem_filterMap.1 hm
+    exact List.mem_append.2 (.inr (List.mem_filterMap.2 ⟨l, hl l hl', hm⟩))
+
+/-- **With no further party SPOT's live challenger's releases are the log** (`spotLog`). -/
+theorem spotLog_nil (log : List Release) : Verity.spotLog [] log = log := rfl
+
+/-- **A play with no further party signs, at its end, its signer's signatures on its log**: the play's signer signs
+the spot log, which with no further party is the log (`spotLog_nil`). -/
+theorem play_signed {fs : List (String × ℕ)} {D : Verity.Signer} {θ : ByteArray} {F : Array ByteArray}
+    {c : ByteArray} {o : Exchange} (h : Verity.Game.Reaches (Verity.play fs D [] θ F c) o) :
+    o.signed = D.signatures o.request o.log o.close o.drawn := by
+  obtain ⟨_, ha⟩ := h
+  obtain ⟨log, -, b, ρ, e, he⟩ := Verity.Game.reaches_bind ha
+  cases he
+  rfl
+
 /-- **The deployed device's history at each play signed what the play's signatures are on** (`SignsPlay`), at a
-vocabulary whose signer at the parameters is the deployment's. Each message the play's signer signs is one a history of
+vocabulary where no device owns a family and whose signer at the parameters is the deployment's. Each message the play's signer signs is one a history of
 the ledger lines the request fixes, or of the runs and ledger lines at the close, signs (`Deployment.signer`), and the
 two-session history at the play holds those runs and lines under the parameters' key. -/
 theorem signsPlay_dev₂ (V : Vocab d α) (P : Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ))
     (cut : List Release → ℕ) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (hD : V.signer θ = P.signer fs₁ fs₂ cut θ) :
+    (hDs : V.devices θ = []) (hD : V.signer θ = P.signer fs₁ fs₂ cut θ) :
     SignsPlay V (devOf P fs₁ fs₂ cut) θ F c := by
   intro o ho key hk m hm
+  change Verity.Game.Reaches (Verity.play (V.families θ) (V.signer θ) (V.devices θ) θ F c) o at ho
+  rw [hDs] at ho
   obtain hθ := (Verity.Sampled.Binding.play_reaches ho).1
   subst hθ
   have hpub : pubOf o.params = key.pub := by
     simp [pubOf, hk]
   have hm' : m.1 ∈ ((P.signer fs₁ fs₂ cut o.params).signatures o.request o.log o.close o.drawn).map Prod.fst := by
-    rw [← hD, ← Verity.Sampled.Binding.play_signed ho]
+    rw [← hD, ← play_signed ho]
     exact List.mem_map.2 ⟨m, hm, rfl⟩
-  rw [Verity.Sampled.Device.signatures_fst] at hm'
+  rw [signatures_map_fst] at hm'
   change m.1 ∈ (signedBy ⟨fun _ => [], fun _ => P.opensAt o.params o.request⟩ (pubOf o.params)).map
       (·.data.toList) ++ (signedBy (P.closing fs₁ fs₂ cut o.params o.request o.log o.close o.drawn)
       (pubOf o.params)).map (·.data.toList) at hm'
@@ -658,29 +695,69 @@ theorem signsPlay_dev₂ (V : Vocab d α) (P : Deployment) (fs₁ fs₂ : ByteAr
   show Signed _ _ _
   rw [hmx, ← hpub]
   rcases List.mem_append.1 hx with hx | hx
-  · apply Verity.Sampled.Device.signedBy_mono hx
+  · apply signedBy_of_holds hx
     · intro s hs
       exact absurd hs List.not_mem_nil
     · intro l hl
       exact P.ledger_opens fs₁ fs₂ cut o hl
-  · apply Verity.Sampled.Device.signedBy_mono hx
+  · apply signedBy_of_holds hx
     · intro s hs
       exact hs
     · intro l hl
       exact P.ledger_closes fs₁ fs₂ cut o hl
 
+/-- **`signsPlay_dev₂`'s hypotheses are satisfiable together**: `Idle.vocab` with the deployment's signer, its first
+session's layouts as the families and its first session's pin the one pinned key has no further device and the
+deployment's signer at every parameters. -/
+example (δ : ENNReal) (P : Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ)
+    (θ : ByteArray) :
+    ∃ V : Vocab Verity.Idle.device Unit, V.devices θ = [] ∧ V.signer θ = P.signer fs₁ fs₂ cut θ :=
+  ⟨{ Verity.Idle.vocab δ 1 with
+      families := fs₁
+      signer := P.signer fs₁ fs₂ cut
+      pins := ⟨[P.one.pin], fun _ => [], []⟩
+      pinned := fun _ => rfl
+      disjoint := fun _ l h => by
+        change l ∈ List.map (·.1) (Parties.families []) at h
+        simp [Parties.families] at h
+      signer_families := fun _ => rfl
+      extract := fun _ _ _ _ _ => 0
+      finder := fun _ _ _ _ _ => Verity.Idle.finder
+      cost := fun _ _ _ _ => 0
+      finder_calls := fun _ _ _ _ _ _ => Nat.zero_le _
+      finders := fun _ _ _ _ => []
+      premises := fun _ _ _ _ _ => True
+      forger := fun _ i _ _ _ _ => { Verity.Idle.forger with key := (([P.one.pin][i]?).map (·.key)).getD [] }
+      forger_pinned := fun _ _ _ _ _ _ _ => rfl
+      forger_calls := fun _ _ _ _ _ _ _ => Nat.zero_le _
+      signatures := P.signatures
+      signs_le := fun θ Q hQ a log b ρ => by
+        rcases List.mem_cons.1 hQ with rfl | h
+        · exact P.signs_le fs₁ fs₂ cut θ a log b ρ
+        · exact absurd h List.not_mem_nil
+      forger_signed := fun _ _ _ _ _ _ _ => Nat.zero_le _
+      computed := fun _ _ _ _ _ => ∅
+      macs := fun _ _ _ _ _ => 0
+      world := fun _ _ _ _ _ => Verity.Idle.world
+      world_window := fun _ _ _ _ _ => rfl
+      world_capacity := fun _ _ _ _ _ => rfl
+      wipeRun := fun θ F c _ => Verity.Idle.ofRun (Verity.play (fs₁ θ) (P.signer fs₁ fs₂ cut θ) [] θ F c)
+      honest := fun θ F c => Verity.requestThen (fs₁ θ) (P.signer fs₁ fs₂ cut θ) [] θ F c .empty
+        ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩ }, rfl, rfl⟩
+
 /-- **The cut at the deployed two-session history** (`Cut.cutBound`): where the sampled verdict accepts only where the
 form does (`Wired`), the ledger opens neither session's run on the other's window (`Apart`), and the vocabulary's
-signer is the deployment's, an accepted play whose log the check read isn't the device's is at most as likely as the
+signer is the deployment's, at a vocabulary where no device owns a family, an accepted play whose log the check read
+isn't the device's is at most as likely as the
 read finder's collision plus the forger's forgery over both sessions. `Apart` is taken, not proved. -/
 theorem cut_dev₂ (V : Vocab d α) (k : Verity.Registration.Composite) (P : Deployment)
     (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hw : Wired V k θ)
     (hA : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
       Apart (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o) w₁ w₂)
-    (hD : V.signer θ = P.signer fs₁ fs₂ cut θ) :
+    (hDs : V.devices θ = []) (hD : V.signer θ = P.signer fs₁ fs₂ cut θ) :
     CutBound V k θ F c σ LogIsDevice (terms V (devOf P fs₁ fs₂ cut) θ F c σ) :=
   cutBound V k (devOf P fs₁ fs₂ cut) θ F c σ hw (binds_dev₂ (P.setup₁ fs₁ cut) (P.setup₂ fs₂ cut) cut θ hA)
-    (signsPlay_dev₂ V P fs₁ fs₂ cut θ F c hD)
+    (signsPlay_dev₂ V P fs₁ fs₂ cut θ F c hDs hD)
 
 end Verity.SampledTwo.Sessions
