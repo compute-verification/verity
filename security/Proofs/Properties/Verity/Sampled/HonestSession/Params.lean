@@ -353,8 +353,9 @@ so the per-member hypothesis covers every member of it. -/
 private theorem printable_mkObj {L : List (String × Json)} (hd : L.Pairwise fun a b => a.1 ≠ b.1)
     (h : ∀ e ∈ L, (∀ c ∈ e.1.toList, c.toNat < 0x7f) ∧ JsonCanon.Printable e.2) :
     JsonCanon.Printable (Json.mkObj L) := by
-  rw [printable_iff_chars, mkObj_eq, Firewall.jsonChars]
+  rw [printable_iff_chars]
   intro c hc
+  rw [mkObj_eq, Firewall.jsonChars] at hc
   rcases List.mem_cons.1 hc with rfl | hc1
   · decide
   rcases List.mem_append.1 hc1 with hmid | hbr
