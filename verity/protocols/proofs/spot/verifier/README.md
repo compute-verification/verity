@@ -9,8 +9,7 @@ probability δ, at most so many proof blocks are incorrect, a proof block being 
 applied to its committed inputs.
 
 The protocol is stated in Lean, and this README outlines it and lists what the Lean does not state yet. SPOT is a
-protocol of both configurations, remote and onsite; [`DESIGN.md`](DESIGN.md) says which form each one's verifier runs
-and refuses, and holds the docket, the verdicts of record and the guards.
+protocol of both configurations, remote and onsite.
 
 ## Try it
 
@@ -280,8 +279,6 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 
 Tests: `uv run tools/check/suites.py protocols/spot`.
 
-[`DESIGN.md`](DESIGN.md) has the verdicts of record and the guards beside them.
-
 ## Core API
 
 ~~~python
@@ -321,7 +318,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
 - `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
   (the Lean verifier's `--registered`), `verify_read`.
-- `served`: `register_served`, how a served path registers its `ServedTree`s ("Served trees", in `DESIGN.md`).
+- `served`: `register_served`, how a served path registers its `ServedTree`s.
 - `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
   sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
 - `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code

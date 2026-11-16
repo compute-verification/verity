@@ -408,8 +408,7 @@ class Model:
     check: str | None = None
     #: what the command of vLLM's recipe for the model (recipes.vllm.ai) adds to ``args``, for the cards this file
     #: serves the model on, the context limit that command is served at where the job names none, and the recipe's
-    #: tokenizer mode behind each front end (`FRONT_ENDS`): the ``published`` arm's server (`Arm.published`). The
-    #: DESIGN.md says where the arm departs from the recipe's command
+    #: tokenizer mode behind each front end (`FRONT_ENDS`): the ``published`` arm's server (`Arm.published`).
     published: tuple[str, ...] = ()
     published_context: int | str | None = None
     published_tokenizer: dict = field(default_factory=dict)

@@ -4,8 +4,7 @@ The SPOT post's figures, for one model: what an adversary serving the model on a
 exfiltrate, infiltrate or skip while evading detection, against what the audit costs. They are derived from the SPOT
 planner (`verity.protocols.proofs.spot.prover.optimize`) and the model's cards. A model, not a measurement: every input
 is a card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
-plotted series. [`DESIGN.md`](DESIGN.md) has how the points are planned and checked in Lean, the cards, and every
-figure but Figure 1.
+plotted series.
 
 ## Try it
 

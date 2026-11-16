@@ -34,5 +34,4 @@ Code outside this directory uses these names, and nothing else here:
 | The configuration | the rest of `verity.config`: `check`, `digest`, `new`, `parse`, `render`, `canonical`, `declared` and `composite`, with `COMPOSITES`, `LOCAL`, `PARTY`, `CHANNEL` and `TRANSPORT` |
 | A run | `runner`'s `run` and `RunResult`, `stream`'s `Side`, and the sources a caller hands `runner.run` (`sources`): `VirtualClock` on a `VirtualTime`, `RealClock`, `SeededCoins`, `seeded` and `OWNER` |
 
-A refusal by name is raised as the wire's `Refused`: import it from `verity.channel`. [`DESIGN.md`](DESIGN.md) gives
-each entry point's signature and what is internal.
+A refusal by name is raised as the wire's `Refused`: import it from `verity.channel`.

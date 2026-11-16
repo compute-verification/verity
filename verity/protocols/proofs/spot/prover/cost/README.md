@@ -30,5 +30,4 @@ bits, ANDs, MACs and opened row bytes per prefill token, per decode token and pe
 | `cpu_budget.py` | a block's sample sized to a CPU proving budget |
 | `recursion.py` | one recursive session's cost per monitoring period |
 
-Each script's docstring says what it plans, what it writes and its flags. [`DESIGN.md`](DESIGN.md) says what B counts,
-and how a class circuit's size and its window's commit are priced.
+Each script's docstring says what it plans, what it writes and its flags.

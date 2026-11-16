@@ -31,4 +31,3 @@ A day's circuit is registered, not the circuit `B` builds from it. A protocol's 
 protocol's public parameters, not entries of the log.
 
 The check is Lean (`verifier/lean/`), with a Python verifier in `verifier/registration.py` until the Lean replaces it.
-[`verifier/DESIGN.md`](verifier/DESIGN.md) has the digests, each refusal, and what the check makes public.

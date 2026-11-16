@@ -6,8 +6,6 @@ measured against stock compiled vLLM at the adapter's pin (d9105ea80) on the sam
 below is one engine configuration of vLLM's own OpenAI server (`vllm.entrypoints.openai.api_server`), its change
 installed as a vLLM general plugin, and adds its change to the arm it names as its parent (`serve_tax.ARMS`). The
 serving cost is one number with a target: how much more GPU time an arm needs than stock to serve the same tokens.
-[`DESIGN.md`](DESIGN.md) has the arms in detail, the serving cost, the recipe's line and the agentic load, and what a
-job writes.
 
 ## Try it
 
@@ -50,6 +48,11 @@ need a GPU node (below).
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
 | `restore-unseeded` | `restore` with requests that carry no seed, as clients send them in serving | `restore` |
+
+`prod` is sent none, so vLLM samples its requests as it samples any without a seed, and what a seed changes in vLLM's
+sampling is in `prod-record`'s cost over `prod`, a change of ours like the record and the top-k; `prod-seeded` is
+`prod` sent the seeds, the one arm sent them that keeps no record (`Arm.seeds`), which reads that change apart: never
+stock, which a cost is over.
 
 ## Running it
 

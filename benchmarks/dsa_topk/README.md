@@ -36,5 +36,3 @@ every op at GLM-5.3's shapes, unpatched and canonical, across processes, and tim
 ~~~text
 research run --on NODE --project verity --source . --cwd source -- bash benchmarks/dsa_topk/run.sh
 ~~~
-
-[`DESIGN.md`](DESIGN.md) has how the plugin runs and what each measurement and test covers.

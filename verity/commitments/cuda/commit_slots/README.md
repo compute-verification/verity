@@ -15,7 +15,7 @@ uv run tools/check/suites.py verity/commitments/cuda/commit_slots
 ~~~
 
 It holds the reference to the fixture and the host twin to the reference on the CPU, in under a minute; the tests that
-need a GPU skip. [`DESIGN.md`](DESIGN.md) has what each test covers and what measures the call on a GPU.
+need a GPU skip.
 
 ## The call
 

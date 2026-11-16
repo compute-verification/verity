@@ -18,5 +18,5 @@ twenty seconds; without `--no-frontier` it also plans the frontier over budgets.
 assumes.
 
 `inputs.json` holds the models' shapes, the inputs with a low and a high each, and the proving observations the cost
-model is fitted from, with the builds and hardware they key; [`DESIGN.md`](DESIGN.md) lists them in full. The suite
+model is fitted from, with the builds and hardware they key. The suite
 (`tests/benchmarks/sampling_plan/`) holds the cost model's rows to them.

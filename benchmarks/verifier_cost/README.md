@@ -4,8 +4,7 @@ A verifier must work in proportion to the description it reads, never to the cir
 (AGENTS.md "Design rules": O(circuit description), never O(unrolled circuit)). This benchmark holds the verifiers to
 that rule by timing them against both sizes: the inference-only check (`measure`) and the one-stage verifier's
 partition (`partition`) on the Serve_v1 workload at a ladder of configs, and a set of scripts that time the Lean
-verifiers' other steps one by one. [`DESIGN.md`](DESIGN.md) has the workload, both verifiers, most of the scripts,
-the outputs and the suite.
+verifiers' other steps one by one.
 
 ## Try it
 

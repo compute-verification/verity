@@ -43,6 +43,3 @@ outputs and the profile exist only in the `accept` case.
 - `<exe> serve` reads one case per stdin line, `{"commitment":"<hex>","evidence":"<hex>","params":<JSON>}` in canonical
   JSON, and writes one flushed outcome line per case. This is the mode the difftest harness drives.
 - A usage error exits 64, and an outcome that can't be written canonically exits 70.
-
-[`DESIGN.md`](DESIGN.md) has the rest of the interface: how `answer` reads canonical JSON, checks that read large
-files by digest (blobs), a run's record entries, what a protocol accounts for, and where its properties are stated.

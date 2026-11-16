@@ -30,5 +30,3 @@ The proofs are about the Lean definitions, so the running binary also trusts the
 runtime it links, the C compiler that builds both, and the C library under them, and no declaration here swaps a
 definition for code no proof reads (`@[extern]`, `@[implemented_by]`, `unsafe`, `native_decide`), which
 `tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py` refuses.
-
-[`DESIGN.md`](DESIGN.md) has the packages it requires and how its libraries are layered.

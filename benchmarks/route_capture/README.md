@@ -16,7 +16,7 @@ It runs the plugin on stand-ins for both model runners and torch's profiler, and
 CPU in a few seconds.
 
 The capture itself serves GLM-5.3 on eight H200s at TP8 under four concurrent clients for about ten minutes
-(`run.sh`'s header lists its variables; [`DESIGN.md`](DESIGN.md) has the clients and the serving settings):
+(`run.sh`'s header lists its variables):
 
     # on the node, from a checkout of this tree, under research run (VENV's vLLM at the integration's pin)
     research run --on NODE --project verity --source CHECKOUT --cwd source -- bash benchmarks/route_capture/run.sh

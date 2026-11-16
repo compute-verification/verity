@@ -22,5 +22,3 @@ against a scripted auditor.
 
 The reference deployment puts the workers, the ZK server and the verifier on machines of their own, linked so that the
 ZK server is the only exit. None of it is in place today: the ZK server runs on the workers' machines.
-[`DESIGN.md`](DESIGN.md) has each element of that deployment with what it realizes, the ZK server's size, what stays
-trusted, and its two Lean packages.

@@ -20,4 +20,4 @@ the offline SASS gate and the fast F1′ evaluation against the scalar reference
 circuits. It takes about a minute and a half.
 
 Its kernels need an sm_120 card. Its Lean is in PoUW's areas of `security/`, and its device measurements are under
-`benchmarks/pouw/pearl_c4/`. [`DESIGN.md`](DESIGN.md) says what each part of the package is and where the rest lives.
+`benchmarks/pouw/pearl_c4/`.

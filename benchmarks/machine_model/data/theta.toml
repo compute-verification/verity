@@ -632,7 +632,7 @@ what = "SHA-512 compressions (one 128-B block each)"
 unit = "compressions/SM/clk"
 sheet = 0.018741
 grade = "Programming Guide (alu.lop3's 64 lanes over the kernel's 3,415 ALU instructions a compression)"
-source = "CPG Table 7, CC 12.0: 64 lanes a SM-clock for 32-bit shifts and logic; commit_gpu's SASS: 1,728 SHF, 927 LOP3, 760 IADD.64 a block, at 16 lanes a cycle a sub-partition (verity/commitments/cuda/commit_gpu/DESIGN.md 'What decides the speed')"
+source = "CPG Table 7, CC 12.0: 64 lanes a SM-clock for 32-bit shifts and logic; commit_gpu's SASS: 1,728 SHF, 927 LOP3, 760 IADD.64 a block, at 16 lanes a cycle a sub-partition"
 measured = 0.018129
 runs = "7.13 G compressions/s (r20261016-110413-c5d1, commit_gpu README) over 188 SMs at the node's 2,092 MHz lock; r20261016-110829-a28e 6.94 G/s"
 
@@ -843,7 +843,7 @@ rotates = 864
 adds = 760
 add_form = "IADD.64"
 overlap = "yes: θ's census issues LOP3 and IMAD together at 4.0 warp instructions a SM-clock (alu.iadd3's runs); commit_gpu's SHA_ROT r3 (480 rotations, two IMAD.HI and two IMAD each) at 5.28 against 7.13 G/s fits IMAD.HI at about 16 lanes a SM-clock, not a shared pipe, so with IMAD.HI unmeasured here the ceiling without it is the one on measured rates"
-source = "verity/commitments/cuda/commit_gpu/DESIGN.md 'What decides the speed': our kernel's 1728 SHF (864 rotations and shifts), 927 LOP3 and 760 IADD.64 a block, every one on the integer pipe"
+source = "commit_gpu's SASS: our kernel's 1728 SHF (864 rotations and shifts), 927 LOP3 and 760 IADD.64 a block, every one on the integer pipe"
 
 [[public]]
 impl = "hashcat 7.1.2 sha512crypt (mode 1800, 5,000 rounds, each one compression of a block holding the last round's 64-B digest)"

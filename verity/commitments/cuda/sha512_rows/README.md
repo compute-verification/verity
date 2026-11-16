@@ -9,8 +9,7 @@ bit the CPU reference's (`verity.commitments`). It computes:
 
 `commit_slots`, beside this directory, runs on it: the engine is its inner "hash these rows" and "hash this level"
 steps. `engine.py`'s docstrings are the call; `Engine("host", build=DIR)` is a host twin (g++) of the same kernels. The
-compression is `sx::compress<V, ROLL>` from the GPU's one SHA-512 header (`verity/commitments/cuda/sha512.cuh`), and
-[`DESIGN.md`](DESIGN.md) lists its variants.
+compression is `sx::compress<V, ROLL>` from the GPU's one SHA-512 header (`verity/commitments/cuda/sha512.cuh`).
 
 ## Try it
 

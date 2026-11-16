@@ -5,7 +5,7 @@ GPU that produced the values. `commit_gpu` is a CUDA committer whose levels, roo
 `verity.commitments`' bit for bit: `hm96.SHA512` hiding leaves over `sha512/row/v2` or `sha512/row-seg/v1` row
 digests, in a frame-v3-sha512 tree. This is a benchmark: it measures the committer on the e2e slice's o_proj operand
 (8192 x 4096 int8) and on tile leaves of a prefill chunk's operand, beside cuBLASLt's int8 GEMM at the same shape.
-`commit_gpu.cuh`'s header has the construction, and [`DESIGN.md`](DESIGN.md) how it is split, checked and laid out.
+`commit_gpu.cuh`'s header has the construction.
 
 ## Try it
 

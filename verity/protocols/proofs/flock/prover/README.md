@@ -21,6 +21,3 @@ uv run tools/check/suites.py verity-flock --quick
 
 This runs the prover's tests without the slow ones, on the CPU. The proofs themselves run on GPU pods, through
 `research run` (`pod/`).
-
-[`DESIGN.md`](DESIGN.md) has the package's layout, the hill-climb sessions on GPU, the table of which Lean answers
-each question, and the full test commands.

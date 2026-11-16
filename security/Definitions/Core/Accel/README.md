@@ -3,8 +3,7 @@
 How much computing can a card do in `T` seconds? The accounting answers with ACCEL: a machine 𝓜 (`Accel.Machine`) made
 of a card's table of numbers (`Accel.Card`, from its card file under `hardware/cards/`) and a small set of ops, where a
 run fits `T` when its code fits the card's code space and each resource's units are at most its rate times `T`. The card
-itself is untrusted; one named assumption, below, ties it to the model. [`DESIGN.md`](DESIGN.md) has the headline with
-its conditions (P1) and (P2) on the semantics, the table, the ops, what is proved and what is open.
+itself is untrusted; one named assumption, below, ties it to the model.
 
 ## Try it
 

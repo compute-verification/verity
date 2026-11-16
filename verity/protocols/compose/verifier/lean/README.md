@@ -34,9 +34,6 @@ machine with room for one.
 | PoUB-P2 (its session over PoUS's store) | yes | | `Poub.P2Protocol.protocol` (`poub`, `../../../resource_accounting/memory/poub/verifier/lean`) | `verity/remote-bandwidth/p2/v0` |
 | the wipe (the memory attester's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../../resource_accounting/memory/pous/attester/lean`) | `verity/wipe/v0` |
 
-[`DESIGN.md`](DESIGN.md) has the composition's formats and verdict table, which sets of subprotocols a verifier runs,
-how a port replaces a stub, the inference-only policy's case and its stated exception, and the one record.
-
 ## The difftest
 
 `uv run tools/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`

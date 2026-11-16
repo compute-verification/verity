@@ -215,7 +215,7 @@ the measured ones and names the arms that were not served whole.
   given outright: with the limit left to it and the recipe's other flags as they are, vLLM at the benchmark's pin does
   not start this model on them (`limits.json`). The report prints the limit beside the model's own.
 - **`prod` is not the recipe's line whole.** It is behind vLLM's Python front end, with the engine's seed set, and
-  its requests are token ids sent to the completions endpoint (`benchmarks/serve_tax/DESIGN.md` lists each
+  its requests are token ids sent to the completions endpoint (`benchmarks/serve_tax/README.md` lists each
   departure). Every engine, stock too, starts with Python's hash seed and Inductor's block choice pinned.
 - **No circuit is compiled.** Nothing here compiles the settings' circuit ahead of serving or checks a served
   request against it.

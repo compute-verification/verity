@@ -7,7 +7,6 @@ a payload beside it. The block record (`verity_e2e_demo/block_record.py`) is wha
 server block, with the Lean check's verdict on it and the error over the monitoring period. Each module's docstring is
 its format, each has a JSON schema under `verity_e2e_demo/schemas/`, and each one's `check` recomputes every derived
 field. Not a package: run the modules with this directory on `PYTHONPATH` (the suite's `pyproject.toml` sets it).
-[`DESIGN.md`](DESIGN.md) says how the bundle's step commitments are built.
 
 ## Try it
 
