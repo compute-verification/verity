@@ -44,7 +44,8 @@ theorem zkIn_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : ZkIn (x r) (ins 
   obtain ⟨hb3, hall⟩ := hb
   refine ⟨setupOf_x hn hr, by omega, by omega, by omega, fun st hst => ?_⟩
   have h := hall st hst
-  exact ⟨by omega, by omega, show _ ∧ _ ∧ _ from ⟨by omega, by omega, by omega⟩⟩
+  exact ⟨by omega, by omega, show _ ∧ _ ∧ _ from ⟨(by omega : st.c.kLog ≤ 27),
+    (by omega : st.regions.size ≤ 1024), (by omega : (tabAt r).1.mPts ≤ 64)⟩⟩
 
 /-- **The statement's table has each region's bytes its free bits**: the hidden setup refuses any other
 (`setupHidden_regionBytes`). -/
@@ -84,9 +85,9 @@ theorem readyZk_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain)
   revert h1 hct hreg hrec
   generalize tabAt r = T
   obtain ⟨spec, sts⟩ := T
-  intro h1 hct hreg hrec
-  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
-  exact ⟨⟨⟨⟨⟨h1, rfl⟩, hl⟩, hreg⟩, hct⟩, hrec⟩
+  intros
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, and_assoc]
+  exact ⟨‹_›, rfl, hl, ‹_›, ‹_›, ‹_›⟩
 
 /-- **The honest masked prover is accepted at some coins** at the statement, at a witness in scope, where its honest
 masked record fits its length word (`ZkTables.accepts_masked` at `zkIn_x` and `readyZk_x`). -/
