@@ -374,10 +374,7 @@ theorem field?_none_same {a b : Json} (h : Same a b) {k : String} (ha : Spot.fie
     | some _ =>
       rw [hb] at e
       simp at e
-  all_goals first
-    | exact ha
-    | rfl
-    | simp [Spot.field?, Json.getObjVal?, Except.toOption, throw, throwThe, MonadExceptOf.throw]
+  all_goals exact ha
 
 /-- **Parameters `OneStage.paramsOfJson` returns name no `certified`** (`CERTIFIED_REFUSED`). -/
 theorem paramsOfJson_field {x : Json} {b : Spot.OneStage.Params} (h : Spot.OneStage.paramsOfJson x = .ok b) :
