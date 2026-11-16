@@ -17,7 +17,7 @@ subprotocols' packages:
   ss ties components`, `same` whose subprotocols of each tie must name one value (`Tie.lean`); all over blobs
   (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the `#guard`s that pin the rules (`Guards.lean`).
 - `core_onsite` (`verity/protocols/compose/verifier/onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): SPOT, the inference-only policy,
-  PoUW, PoUS, PoUB-P2 (on PoUS's store), network certification and the memory attester's
+  PoUW, PoUS, PoUB-P2 (on PoUS's store), network attestation and the memory attester's
   wipe, the policy and SPOT on one registration record and every window of the period on it, as at remote,
   and PoUS and PoUB-P2 on one store (a `tiedSameB`).
 - `core_remote` (`..`): the composite of record `Core.Remote.V1.protocol` (`verity/remote/v1`): SPOT,
@@ -116,7 +116,7 @@ product is one:
   either form, the one-stage audit's).
 
 Each product's `#guard`s pin that two records reject it with the policy among the subprotocols. Onsite's PoUW period and
-network certification name one record a window, in their evidence and their period commitment, so they join the check
+network attestation name one record a window, in their evidence and their period commitment, so they join the check
 when each window's record names the registration log's head (`Core.Registration`, `../../../interface`), which then is the one
 every subprotocol names.
 
