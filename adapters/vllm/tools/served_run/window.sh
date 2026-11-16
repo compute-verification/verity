@@ -27,8 +27,8 @@ if [ "$held" != 0 ] || [ "${used:-99999}" -ge 1024 ] || [ "${lease%% *}" != free
   log "card $CARD is in use ($held compute process(es), ${used:-?} MiB, lease: ${lease:-none}): nothing run"; exit 75
 fi
 lease_min=$(( (end - $(date -u +%s)) / 60 - 15 ))
-[ "$lease_min" -ge 60 ] || { log "only $lease_min min of card before $END: nothing run"; exit 75; }
-LEASE_MIN=$(( lease_min < 150 ? lease_min : 150 ))
+[ "$lease_min" -ge "${LEASE_MIN:-60}" ] || { log "only $lease_min min of card before $END, under ${LEASE_MIN:-60}: nothing run"; exit 75; }
+LEASE_MIN=${LEASE_MIN:-$(( lease_min < 150 ? lease_min : 150 ))}
 
 case ${PP_CHALLENGER:-local} in
   gate)
@@ -58,22 +58,17 @@ t0=$(date +%s)
 bash benchmarks/one_stage/served_verdicts.sh > "$OUT/served_verdicts.log" 2>&1
 rc=$?
 log "served_verdicts.sh exit $rc after $(( ($(date +%s) - t0) / 60 )) min; its lines in out/verdicts.txt"
-C=$D/private/compose pending=
-if [ -f "$C/inputs.txt" ] && [ -f "$C/compose.env" ]; then
-  why=$(python3 benchmarks/one_stage/served_verdicts.py witness < "$C/inputs.txt") \
-    || { log "HANDOFF NOT PACKED: the list names the witness: $(echo "$why" | head -1 | cut -c1-300)"; exit 4; }
-  mkdir -p "$OUT/handoff"
-  (cd "$D" && { cat private/compose/inputs.txt; echo private/compose/compose.env; } | sort -u \
-     | tar --create --dereference --no-recursion --file="$OUT/handoff/compose.tar" --files-from=-) \
-    || { log "HANDOFF NOT PACKED: tar failed"; exit 4; }
-  (cd "$OUT/handoff" && sha256sum compose.tar > compose.tar.sha256)
-  log "HANDOFF packed: $(wc -l < "$C/inputs.txt") files, $(du -h "$OUT/handoff/compose.tar" | cut -f1); the serve dir $D stays on this node"
-  pending="composed off this node: \`run.sh compose\` with this run's out/handoff/"
+if [ "${PREFLIGHT_ONLY:-}" = 1 ] && [ "$rc" = 0 ]; then
+  log "the preflight passed, nothing served: $(grep -h -m1 'PREFLIGHT passed' "$OUT/served_verdicts.log" | cut -c1-300)"; exit 0
+fi
+. adapters/vllm/tools/served_run/handoff.sh
+pack_handoff
+h=$? pending=
+if [ "$h" = 4 ]; then exit 4
+elif [ "$h" = 0 ]; then pending="composed off this node: \`run.sh compose\` with this run's out/handoff/"
 elif [ -f "$D/private/deferred/deferred.env" ]; then
-  pending="audited and composed off this node: V3c's audit deferred to a prover node from $D/private/deferred (\`served_verdicts.sh copy deferred HOST\`, then \`served_verdicts.sh v3c\` there)"
-else
-  log "no compose hand-off in $C"
-  [ "$rc" != 0 ] || rc=4
+  pending="audited and composed off this node: \`run.sh copy\` and \`run.sh audit\` with SERVED_RUN=$RESEARCH_RUN_ID, then \`run.sh compose\`"
+else [ "$rc" != 0 ] || rc=4
 fi
 [ "$rc" = 2 ] && [ -n "$pending" ] && { log "pending: $pending"; exit 0; }
 exit "$rc"

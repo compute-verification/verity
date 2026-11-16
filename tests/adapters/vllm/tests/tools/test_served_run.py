@@ -34,8 +34,8 @@ def make_tree(tmp_path: Path, tied_build: bool = True) -> Path:
     (tree / SERVED_RUN).mkdir(parents=True)
     shutil.copy(HERE / "run.sh", tree / SERVED_RUN / "run.sh")
     text = (HERE / "placement.toml").read_text().replace(f'TAPS_AT = "{NODE_A["TAPS_AT"]}"', 'TAPS_AT = "HEAD"')
-    if tied_build:
-        text = text.replace("[node.vy-spot-glm53.builds]\n", f'[node.vy-spot-glm53.builds]\n"{PLACEMENT["tied_row"]}" = "r-tied"\n')
+    if not tied_build:
+        text = text.replace(f'"{PLACEMENT["tied_row"]}" = "{NODE_A["builds"][PLACEMENT["tied_row"]]}"\n', "")
     (tree / SERVED_RUN / "placement.toml").write_text(text)
     rows = tree / "adapters" / "vllm" / "workloads"
     rows.mkdir(parents=True)
@@ -111,15 +111,24 @@ def test_the_tied_window_runs_with_the_settings_the_tree_writes(tmp_path):
     got = run(tmp_path, "window", "--tie", "--dry-run", **ROW_OF_CARDS)
     assert got.returncode == 0, got.stderr
     env, tie = env_of(got), PLACEMENT["run"]["window"]["tie"]["env"]
-    assert {k: env[k] for k in tie} == tie
+    design = next(k for k, v in tie.items() if "stratified-rate:" in v)
+    assert {k: env[k] for k in tie} == {**tie, design: "stratified-rate:1/2097152"}
     assert (env["POUW"], env["PEARLPLUS_TIE"], env["V3C_CLASS"], env["PRECISION"]) == ("pearlplus", "1", "4,32,4", "bfloat16")
-    assert any(v.startswith("stratified-rate:") for v in tie.values()) and env["H1_PEER"] == env["PP_PEER"] == "vy-spot-glm53"
+    assert env["H1_PEER"] == env["PP_PEER"] == "vy-spot-glm53" and "COMPOSITE" not in env
     assert int(env["V3C_AUDIT_MEM_GB"]) > 2015, "the records audit defers off node A, which has 2015 GB"
     assert env["ROW_ID"] == PLACEMENT["tied_row"] and "__bf16__" in env["ROW"] and env["ROW"].endswith(PLACEMENT["tied_row"])
     assert not {"H1_TIE", "CERTIFIER_FRONT", "LOAD", "SLOTS", "PROMPTS"} & env.keys()
     assert "--prefix-caching" not in env.get("SERVE_ARGS", "")
     assert [s for s in flags(got, "--send") if s.endswith("/main.txt")], "the gate's Pearl+ salts need main's line too"
     assert f"adapters/vllm/workloads/{PLACEMENT['tied_row']}.json" in flags(got, "--send")
+
+
+def test_the_tied_windows_sampling_design_and_a_windows_length_are_the_launchs(tmp_path):
+    design = next(k for k, v in PLACEMENT["run"]["window"]["tie"]["env"].items() if "stratified-rate:" in v)
+    got = run(tmp_path, "window", "--tie", "--dry-run", **ROW_OF_CARDS, **{design: "uniform:3", "LEASE_MIN": "20"})
+    assert got.returncode == 0, got.stderr
+    assert (env_of(got)[design], env_of(got)["LEASE_MIN"]) == ("uniform:3", "20")
+    assert env_of(run(tmp_path, "window", "--dry-run", **ROW_OF_CARDS))["LEASE_MIN"] == ""
 
 
 def test_a_window_with_no_traced_build_of_its_row_is_refused(tmp_path):
@@ -227,12 +236,33 @@ def test_the_compose_run_without_its_hand_off_starts_nothing(tmp_path):
 
 @pytest.mark.parametrize(("args", "refusal"), [
     (("setup", "--development"), "run.sh: the setup run takes no coins, so --development chooses nothing: drop it"),
-    (("compose", "--tie"), "run.sh: the compose run composes the hand-off it is given, tied or not: drop --tie")])
+    (("compose", "--tie"), "run.sh: the compose run has no tied form: drop --tie")])
 def test_a_flag_that_chooses_nothing_is_refused(tmp_path, args, refusal):
     got = run(tmp_path, *args, "--dry-run", HANDOFF=str(tmp_path), **ROW_OF_CARDS)
     assert (got.returncode, got.stdout, got.stderr.strip()) == (1, "", refusal)
 
 
-@pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "pin_link.sh"])
+@pytest.mark.parametrize("gate", [True, False])
+def test_the_deferred_audit_is_copied_from_node_a_then_run_on_the_audit_node(tmp_path, gate):
+    at = {"SERVED_RUN": "r-window", "AUDIT_NODE": "vy-nebius-cpu-16"}
+    got = run(tmp_path, "copy", "--dry-run", **at)
+    assert got.returncode == 0, got.stderr
+    words = shlex.split(got.stdout)
+    assert words[words.index("--on") + 1] == "vy-spot-glm53" and env_of(got).items() >= at.items()
+    assert words[words.index("--") + 1:] == ["bash", "adapters/vllm/tools/served_run/copy.sh"]
+    got = run(tmp_path, "audit", *([] if gate else ["--development"]), "--dry-run", **at, V3C_WARM_JOBS="8")
+    assert got.returncode == 0, got.stderr
+    words, env = shlex.split(got.stdout), env_of(got)
+    assert words[words.index("--on") + 1] == "vy-nebius-cpu-16" and words[-1] == "adapters/vllm/tools/served_run/audit.sh"
+    assert (env["SERVED_RUN"], env["V3C_PEER"], env["V3C_WARM_JOBS"], env["V3C_AUDIT_TIMEOUT"]) == ("r-window", "vy-nebius-cpu-16", "8", "")
+    assert bool([s for s in flags(got, "--send") if s.endswith("/main.txt")]) == gate == ("PP_GATE_KEY" in env)
+
+
+def test_the_deferred_audit_names_the_window_it_lacks(tmp_path):
+    got = run(tmp_path, "audit", "--dry-run", AUDIT_NODE="vy-nebius-cpu-16")
+    assert (got.returncode, got.stdout) == (1, "") and got.stderr.startswith("run.sh: SERVED_RUN is unset")
+
+
+@pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "pin_link.sh", "copy.sh", "audit.sh", "handoff.sh"])
 def test_the_runs_scripts_parse(script):
     assert subprocess.run(["bash", "-n", str(HERE / script)], capture_output=True, check=False).returncode == 0
