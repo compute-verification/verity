@@ -35,7 +35,7 @@ means = "one file per demo, the configuration `verity run` reads, and nothing el
 
 [[tree]]
 path = "demos/README.md"
-means = "one table: the file, what it shows, its command, how far it runs and is proved"
+means = "one table: each demo, its protocols and how far it runs"
 
 [[tree]]
 path = "demos/remote.toml"

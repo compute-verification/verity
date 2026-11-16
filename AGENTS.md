@@ -392,7 +392,8 @@ and its parameters). What a run measured, what happened and who decided live out
 
 `.agents/skills/`: `testing`, `lean-proofs`, `kernel-engineering` (PoUW GPU kernels on sm_120), `smell-check` (before you
 call something served, end to end, proved or credited), `writing-runs` (a job for `research run`), `friction` (when
-something is in your way, and the standing rulings), `process-design` and `authoring-skills` (at most 16 KB a skill).
+something is in your way, and the standing rulings), `writing-readmes` (a README says what its directory is, then gives
+one thing to try), `process-design` and `authoring-skills` (at most 16 KB a skill).
 The team's own agents start with `team` (machines, landing, lanes, and where work, notes and evidence live), then
 `coordinating`, `using-slack`, `asking-daniel`, `writing-goals` (your goals in the plan Daniel reads) and `team-shapes`
 (which team a piece of work gets, each shape with what its uses measured, and how any agent tries a different practice).
