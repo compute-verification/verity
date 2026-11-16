@@ -1,7 +1,7 @@
 # network_traces
 
 The network attester (`verity/protocols/resource_accounting/network/`) on real served traffic: per-token timing traces for its
-calibration, the certifier in front of a served endpoint as a relay of the egress record's one form (`network_attester`), the
+calibration, the network attester in front of a served endpoint as a relay of the egress record's one form (`network_attester`), the
 zero-knowledge proofs of their proof blocks, and the network chain's run of record end
 to end. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
 
@@ -22,7 +22,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   `verity/protocols/resource_accounting/network/attester/stall_probe.py` finds what makes a tick late.
 - **Endpoints besides vLLM.** `demo_stub.py` stands in for the H200 demo's serving endpoint, and `demo_endpoint.py` is
   the OpenAI endpoint in front of a decoder that isn't vLLM, whose scheduler and records the stub serves through.
-- **The certifier as a relay.** The certifier's `device/network_attester_serve.py` runs
+- **The network attester as a relay.** `verity/protocols/resource_accounting/network/attester/network_attester_serve.py` runs
   `verity.protocols.resource_accounting.network.verifier.network_attester`, the network attester as a relay in front of any
   TCP server and checks what it published offline: `serve` releases only the egress record's id form by default, and
   `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes); `connection_rows_run.py`, beside it, is a
@@ -31,28 +31,27 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   is handed the SHA-512 of the network attester's public key and its session (`check --key-sha512 HEX --session HEX`),
   holds the run's deployment record to them and, with `--registrations FILE` and no problem found, writes what it was
   checked under and then each registration it held, and `cost`, which measures a close); `network_attester_chain.py` is
-  the chain's reads of a relay run, and the certifier's `prover/network_attester_zk.py` reads the relay's bucket rows
+  the chain's reads of a relay run, and network certification's `prover/network_attester_zk.py` reads the relay's bucket rows
   in the proof system.
-- **Proofs in zero knowledge.** Each driver, in the certifier's `prover/` but for `compile_slice_zk.py` here, proves its
+- **Proofs in zero knowledge.** Each driver, in network certification's `prover/` but for `compile_slice_zk.py` here, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
   `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of record), `n2_tie_zk.py`
   (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
   scan's answers held by `NetworkCheck.Period`) and `compile_slice_zk.py` (the compile slice). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
-- **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with the certifier's
+- **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with network certification's
   `prover/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network
-  accounting must refuse, each by the check and code that refuse it), `leak_guard.py` (the record's leak guard, below)
-  and the certifier's `prover/released_keys.py` (the keys a record releases, each declared public by name, below). The
-  certifier's `prover/block_certifier.py` writes a period's accepted answer as the block record's certifier entry.
+  certification must refuse, each by the check and code that refuse it), `leak_guard.py` (the record's leak guard, below)
+  and network certification's `prover/released_keys.py` (the keys a record releases, each declared public by name, below). Its
+  `prover/block_certifier.py` writes a period's accepted answer as the block record's entry `legs.certifier`.
   `served_session.py` is the served session's runbook (below).
-- **The weights' load:** the certifier's `device/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
+- **The weights' load:** `verity/protocols/resource_accounting/network/attester/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
 - **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
   a random string, and tries six ways to send it out, each with a network attester process of its own;
   `deviations.sh` is its tries as a job behind one ssh forward (below).
 - **A second count:** `capture_flows.py` sums a packet capture taken beside a relay run by flow and direction and holds
   it against the relay's record of that run (below).
-- `tool.py`: the harness's store declarations.
 
 ## The demo's load
 
@@ -63,15 +62,15 @@ two gate verbs on the auditor's machine:
 - `vy-challenger-gate weights-write [--shape h200|tiny]` writes the shape's weights stream onto the auditor's store disk
   (`/var/lib/vy-challenger/store`) once. It keeps the stream only when its tensors' SHA-256 fold to the pinned manifest
   digests (`load_relay.STORE_DIGESTS`).
-- `vy-challenger-gate load-relay --peer HOST --port PORT --sink-port PORT --program SHA512 --minutes M` (with
+- `vy-challenger-gate load-relay --peer NAME --port PORT --sink-port PORT --program SHA512 --minutes M` (with
   `warden-rehearse`'s flags) is `warden-rehearse` with the load first. The store goes over 4 TCP streams, an SSH
   tunnel each, to `load_relay.py sink` on the H200's loopback; each value is held to its digest and committed under the
-  reading program's domain as it crosses. The certifier's one signer on that link then signs the load's heads before
+  reading program's domain as it crosses. The network attester's one signer on that link then signs the load's heads before
   its first execution phase, so one LMS key and one attachment carry the load and the execution phases. `load.json`
   (the registrations the server block's record pins) and `load-relay.json` (the relay's counts and the sink's
   acknowledgements) are in the run's `witness/`, which `fetch` gives the run's own lane key; of the load, `out/` holds
   nothing.
-- The witness, every row's salts, is the sink's `--witness` file (0600) on the developer's host. The certifier's host
+- The witness, every row's salts, is the sink's `--witness` file (0600) on the developer's host. The network attester's host
   never writes a salt.
 
 ## The wipe's egress
@@ -111,10 +110,10 @@ The session's fetch, with `witness/`, stays in a 0700 directory outside the run 
 less `witness/` and the session's outcome. `chain` runs the chain's network attester path on the kept fetch, and only
 from a tree with the record's leak
 guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
-the endpoint. `chain --coins gate` samples the scan's units on the gate's coins on the auditor's side, the node the chain
+the endpoint. `chain --coins gate` samples the scan's proof blocks on the gate's coins on the auditor's side, the node the chain
 runs on, which the challenger's coin link reaches through that node's own line of
 `/etc/vy/coin-ports` (ports 7821-7830). It refuses the served node as the sample's peer, since the gate key and the
-certifier run's witness never go on the developer's machine. Without the gate's coins the chain samples on the verifier's
+network attester run's witness never go on the developer's machine. Without the gate's coins the chain samples on the verifier's
 (`--coins verifier`, the default).
 
 `certifier_piece.py` is the network attester's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
@@ -130,7 +129,7 @@ listens, the caller's command (`LOAD_CMD`, given the session's `relay.json` and 
 client address that file names, and `close` (`CERTIFIER_CLOSE`) waits for the session's end and keeps its fetch where a
 rehearsal's is. The runner refuses a session without all three, and under any other `LOAD` each of them. A session's
 records cover the connections that crossed the relay; that no other route reaches the endpoint is the placement's.
-Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
+Its `piece` (`CERTIFIER_CMD`) runs the chain's network attester path on that fetch with the serve dir's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
 form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the network attester's
 records pass `network-rows check` (each record held to its certified head, then the certifier program's rows audit,
@@ -142,8 +141,8 @@ never in the piece's directory, which the run publishes. The certificates of its
 records' and its two row registrations', which the network attester signed where the check accepts them, are
 published beside the answer as `certificates.json`, each certificate with its own fields alone. Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
-late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
-profile names its placement, as labels read from the run: the machine the certifier ran on, and the machine that ran
+late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the network attester's piece missing. An accept's
+profile names its placement, as labels read from the run: the machine the network attester ran on, and the machine that ran
 each of the piece's steps; the piece establishes no `trusted-device` and gives no bound on that ground. The chain's endpoint report,
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ): report.md, the report's
@@ -212,7 +211,7 @@ Then the table again, once the server's record of the tries' sampled ids is ther
   record). Its map is the certified placement, a stand-in for the advice's.
 - The tie needs the Commit's sampled ids of each request: `--ids`, the server's record, or under `--stand-in` the
   stand-in's own. Without them the tie isn't run and the row says so. A line of `--ids` is a request's `output_ids`
-  under its `user`, or under its `id` `verity-RUN-N`, the name the certified tick gives a request: the certifier's
+  under its `user`, or under its `id` `verity-RUN-N`, the name the certified tick gives a request: the network attester's
   run id and the request's release number. A try also names its request i `CLASS-TAG-i` (`--tag`, by default a random
   one a command). Either way one record of the server over every try, and over what it served before them, holds
   each request once.
@@ -317,7 +316,7 @@ result file holds every flow's sums, and the table is:
 
 - The packets read and what was skipped, then the record's connections to the server and how many of its execution
   phases' records (each phase's ingress, egress and reasons) are certified under its key.
-- A line for each direction between the server and the certifier: its flows, `packets` and `wire bytes` (every frame,
+- A line for each direction between the server and the network attester: its flows, `packets` and `wire bytes` (every frame,
   with its headers, ACKs and retransmissions), `payload bytes` (above the TCP header, a retransmitted segment each time
   it was sent), `stream bytes` (each sequence number once, which the record's count is held against), `holes` (bytes
   of sequence numbers the capture missed) and `record bytes`. Then what the direction says: `agrees`; `differs by N
@@ -348,7 +347,7 @@ The run of record takes the network chain end to end on the gate's machines:
    reads.
 5. The verdict is the per-execution-phase acceptance that the certification period's leak bound reads.
 
-**How it runs.** The gate runs on the auditor's machine: `sudo vy-challenger-gate warden-rehearse --scan --peer HOST
+**How it runs.** The gate runs on the auditor's machine: `sudo vy-challenger-gate warden-rehearse --scan --peer NAME
 --port PORT --minutes 30` (the network attester as a relay), then `status` and `fetch`. The fetched tarballs go to one
 job, `chain_record.sh`, with the endpoint's records (`benchmarks/network_e2e/chain.py`'s `ENDPOINT`:
 `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and `serve.json` from the endpoint's serve directory,
@@ -358,7 +357,7 @@ binding and the two provers, and writes `out/report/report.json` and `report.md`
 | step | what it checks | its ε at δ | computed in the clear |
 |---|---|---|---|
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
-| certificates | each execution phase's two certified records, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.TransferBlocks.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads, under no sync (the network attester's link declares none) |
+| certificates | each execution phase's two certified records, at the client, under the network attester's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.TransferBlocks.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads, under no sync (the network attester's link declares none) |
 | endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the certified I/O off the network attester's cells: `chain_record.py endpoint`) | none: in the clear | all of it |
 | N2 | each execution phase's N2 proof block, proved `--zk` and decided by N2's verifier (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no execution phase unsampled; a sample of k of n execution phases hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the sample, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of an execution phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
@@ -384,7 +383,7 @@ false positives are declared data, `leak_guard.json`'s `allow`, each entry writt
 counts and digests. Its entries excuse the stall probe's cgroup counters and cgroup path in the runner's own records,
 each by the record's file. An entry names its witness file and its records and nothing else: the guard refuses one
 that excuses a piece by a key path. A value of the witness that other
-files repeat by chance is written so that they don't: the certifier's usage record holds its CPUs as one string of
+files repeat by chance is written so that they don't: the network attester's usage record holds its CPUs as one string of
 ranges (`runner_parts.cpu_ranges`), not as a list of integers, which an indented list of consecutive integers anywhere
 would repeat. The guard reads pieces of 32 bytes and sees no shorter value of the witness, so what a step may write of
 the witness is held by name where it is written: of the network attester's own check the certificates step writes
@@ -393,7 +392,7 @@ guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`)
 the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
 whole; a SIGKILL leaves the hold where it is, out of the record.
 
-**The keys a record releases** (the certifier's `prover/released_keys.py` and `released_keys.json`). The guard's pieces
+**The keys a record releases** (network certification's `prover/released_keys.py` and `released_keys.json`). The guard's pieces
 find a private value copied into the record; they can't find a value the witness never held as bytes (a count, a length,
 a time). So the guard reads each JSON file bound for `out/` by key as well (`--keys`, which `chain_record.sh` passes): a
 file holds only keys its list in `released_keys.json` declares public by name, each with its kind, which is one of the
@@ -411,7 +410,7 @@ free text) can't be read this way and is only counted. The check is linear in th
 
 **The relay path** (`CR_PATH=warden`, `chain_record.NETWORK_CERTIFIER`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `network_attester_chain.py`), and a proxy rehearsal's run, whose records came
-through the older certifier's proxy in front of the endpoint, is refused by name wherever it is given: that code is
+through the network attester's older proxy in front of the endpoint, is refused by name wherever it is given: that code is
 gone, and kept records of its runs are refused by the form that stays. The certificates step reruns
 the relay's own offline check on its witness (`relay_check.check`) and holds the public `certificates.jsonl` to the
 certified lines. That check requires the session's certified start, so a gate run made by a device that certifies no
@@ -450,7 +449,7 @@ datacenter at δ takes each link at δ / links, and each link pays its own incor
 docstring says why pooling them by weight copy would be unsound).
 
 **K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
-SUMMARY --out FILE`, with RUN a fetched certifier run and SUMMARY its scan's `summary.json` (its sample). It reads
+SUMMARY --out FILE`, with RUN a fetched network attester run and SUMMARY its scan's `summary.json` (its sample). It reads
 `leak_bounds` on the run's parameters (`deployment.json`), its traffic (the requests `request.json` asked for and
 `end.json`'s execution phases) and the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block
 unsampled. The end carries no count of the traffic: the gate takes an end as accepted only when its check counted the
@@ -472,9 +471,9 @@ The terms, in the generator reading of the scan's statement (each proof block's 
 - No term for incorrect proof blocks with every proof block sampled.
 - The jitter term is charged at D_j = 2 (`scan_answer.JITTER_BOUND`): one bit a bucket, T bits an execution phase (the
   record's `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is
-  one bound over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The certifier hands each bucket
+  one bound over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The network attester hands each bucket
   to a pacer that releases it at a time fixed before the bucket is made (`network_attester.NetworkCertifier(paced=…)`, `network_attester_serve.py
-  --paced-ms`), and a certifier on the host's clock always paces. Still, the host's state after the server's writes for
+  --paced-ms`), and a network attester on the host's clock always paces. Still, the host's state after the server's writes for
   the next bucket moves when a bucket reaches the client. The scan's period check (`scan_period.py`) passes the same
   bound as `NetworkCheck.Period`'s `jitter`.
 
@@ -488,7 +487,7 @@ whole body by its closure digest (`entryPins`, `io_shell.SlotEntry_v1` at its ci
 `SelectEntry_v1`'s), so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v1` stand-in's lane-j member,
 whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the
 requests from its own registered `SCAN_STATE`, and the check refuses, next, by name, an execution phase whose scan's
-state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). `EVERY` units read each slot entry, which
+state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). `EVERY` proof blocks read each slot entry, which
 one-stage's registration check lets through only with each lane's `prog<j>` named tied (`lane_kinds`), and its answer
 then names them (`rests_on_period_check`); the check refuses, after that, by name, an execution phase whose scan's
 answer names under that key anything that is no lane's `prog<j>` (`tiedInputWired`), since `wired` ties no other
@@ -499,7 +498,7 @@ names it as `scan/state`.
 A scan proof block's public word, o0, is its ok bit. scan_zk commits a member's o0 rows under the verifier's public
 salts (`ok_salts`, `scan_ok.salt`: row i's from its index alone), so the o0 root of a member whose every proof block is
 ok is a constant of its template and count, and one execution phase's members are a function of the schedule's T
-(`scan_ok.members`: `ingress-0`, `last` and `egress-0`; the start unit, `start`, has no ok bit). The check computes those constants once a period
+(`scan_ok.members`: `ingress-0`, `last` and `egress-0`; the start proof block, `start`, has no ok bit). The check computes those constants once a period
 (`scan_ok.constants`, Lean `ScanOk.consts`) and refuses, last, by name, an execution phase whose scan's registration
 names a member's `<member>/o0` at another root, leaf count or domain, names none for it, or names another port ending
 `/o0` (`held`): comparisons alone, no hash an execution phase. An ok bit is then the verifier's own computation from
