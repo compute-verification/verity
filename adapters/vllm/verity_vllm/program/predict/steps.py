@@ -24,11 +24,17 @@ its account in the output accounting (the advice through `reads.gate`):
   input, the producers' rows, which GP-01 records per block). The one row async scheduling runs past a request's last kept output
   samples nothing kept: it is `discarded`, in no Program; a request its client aborted (finish `abort`) compiles as one that
   stopped at its last kept output, since the endpoint frees it after the step in flight. A request's (LP, T, C, policy) reads
-  its own advice record and body alone, never its batch; requests of one (LP, T, C, policy) share one Program. On a
+  its own advice record and body alone, never its batch; requests of one (LP, T, C, policy) share one Program (where FA3's tile
+  reads the launch, of one launch context too: below). On a
   batch-invariant target a chunked or preempted request compiles to the same Program: chunking and preemption are advice no
   Program there reads.
 - On a batch-invariant target a request's Program does not read its batch, so the advice's steps only place rows: each live row
   is a `RowRef` into its request's Program (positions start..start+n-1; `samples` the tokens the row samples), in I1's row order.
+  One launch static is the batch's: FA3's tile reads the varlen launch's max_seqlen_q, the most rows any one sequence of the step
+  has. Where FA3's tile reads it, a request whose prefill ran in one launch and each decode in one row takes, per step of its
+  Program, the most rows any row of the advice step it ran in has (`RequestUnit.seqlen_q`, `segment.seqlen_q_of`: the advice's
+  schedule, as the Build's `--launch-context [n0, n1, …]` takes it), where any step's exceeds its own rows; FA2's guard is
+  chosen from the request's own rows.
   The Program holds each of its positions C..LP+T-1 once, in the row that first reaches it: a chunked prefill's chunks are its
   prefill rows in turn, and a resume's recompute of positions its request had reached is `discarded`, like the row past the last
   kept output. This rests on the target computing a position's row bit for bit alike however its prefill is chunked or
@@ -137,7 +143,7 @@ from .common import cyclic_gc_off, edge_config
 from .hits import Rows, check_sources, hit_chunks, producers_of
 from .ingress_policy import ingress_body, policy_of, request_of
 from .phi import Phi
-from .segment import edge_groups, edge_of, launch_of, segment_of
+from .segment import edge_groups, edge_of, launch_of, segment_of, seqlen_q_of
 from .traced import NO_EDGE_TRACE, NO_PARTIAL_TRACE, trace_dir
 from .traced import trace_commands as trace_commands
 
@@ -205,7 +211,8 @@ class RequestUnit:
     """A request that ran: its Program's shape and digest, its policy, the seed its `seed` Input takes, its first step and its id;
     with a prefix-cache hit, its C cached rows and the request that computed each cached block; in class G, its launch context and,
     for a prefill the engine ran in several launches, its chunks (`launch_of`), and C its history in the window (`segment_of`), for a
-    request the window carries in its rows at the open."""
+    request the window carries in its rows at the open; on a batch-invariant target where FA3's tile reads the launch, each step's
+    max_seqlen_q where a step's exceeds its own rows (`seqlen_q_of`)."""
 
     request: int
     digest: str
@@ -227,11 +234,13 @@ class RequestUnit:
     recomputed: int = 0           # recompute_hits: its hit's positions 0..recomputed-1, which its Program computes and no row of it ran
     hit_steps: tuple[int, ...] = ()     # class G, recompute_hits: the advice step each chunk of those positions ran in
     entries: tuple[int, ...] = ()   # class G: per prefill chunk, its sequence's rows in that launch, where a chunk computes fewer
+    seqlen_q: tuple[int, ...] = ()  # batch invariant, FA3: per Program step, its launch's max_seqlen_q (`segment.seqlen_q_of`)
 
     def key(self) -> str:
         return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else []), *([{"chunks": self.chunks}] if self.chunks else []),
                            *([{"launch": self.launch}] if self.launch is not None else []), *([edge_config(self.edge)] if self.edge else []),
-                           *([{"stop": self.stop}] if self.stop else []), *([{"entries": self.entries}] if self.entries else [])],
+                           *([{"stop": self.stop}] if self.stop else []), *([{"entries": self.entries}] if self.entries else []),
+                           *([{"seqlen_q": self.seqlen_q}] if self.seqlen_q else [])],
                           sort_keys=True)
 
     def events(self) -> int:
@@ -283,7 +292,8 @@ class Compiled:
                                                      **({"chunks": list(u.chunks)} if u.chunks else {}), **edge_config(u.edge),
                                                      **({"stop": u.stop} if u.stop else {}),
                                                      **({"recomputed": u.recomputed, "hit_steps": list(u.hit_steps)} if u.recomputed else {}),
-                                                     **({"entries": list(u.entries)} if u.entries else {})}
+                                                     **({"entries": list(u.entries)} if u.entries else {}),
+                                                     **({"seqlen_q": list(u.seqlen_q)} if u.seqlen_q else {})}
                              for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())},
@@ -473,7 +483,7 @@ class Plan:
 
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, after its C rows of
-    history, in class G at its launch context and in its prefill chunks, at φ's rank, in the registered compiler's form
+    history, in class G at its launch context and in its prefill chunks (batch invariant: at its launches' max_seqlen_q), at φ's rank, in the registered compiler's form
     (`dead_free`) at any world, batched in class G with its DSA long rows as the registration says (`Registered.dsa_table_reads`),
     its length rule last; `named`: its trace's names (`naming.named_program`, no class-G decoder)."""
     phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
@@ -482,7 +492,7 @@ def request_program(registered: Registered, unit: RequestUnit, named: bool = Fal
         return named_program(phi, unit.LP, unit.T, unit.C, stop=unit.stop)
     r = build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
                       edge=unit.edge, stop=unit.stop, with_desc=False, batched=not phi.target_profile().batch_invariant,
-                      table_reads=registered.dsa_table_reads, entries=unit.entries)
+                      table_reads=registered.dsa_table_reads, entries=unit.entries, seqlen_q=unit.seqlen_q)
     return replace(r, digest=program_digest(r.program))
 
 
@@ -662,6 +672,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
                     entries = tuple(m for _, _, _, m in pre) + chunks
                     chunks = tuple(n for _, _, n, _ in pre) + chunks
                     entries = entries if entries != chunks else ()
+                seqlen_q = seqlen_q_of(phi0.target_profile(), LP, T, C, rows[i], adv.steps) if bi and carry is None and not hit else ()
                 edge = edge_groups(decoder(phi0, 1, 0), q) if i in left and launch is not None else ()
                 policy, seed = policy_of(i, params[i], phi0.target_profile().num_sms, request_id=q.id, salt=salt,
                                          carried=carry is not None)
@@ -679,7 +690,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
             else:
                 parse = bind(IO.IngressPrompt, MODEL=registered.served_model, LP=LP, V=V) if i in wired else None
                 units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C - hit, producers, parse, carry is not None, i in left,
-                                         launch, chunks if len(chunks) > 1 else (), edge, stop, hit, hit_steps, entries))
+                                         launch, chunks if len(chunks) > 1 else (), edge, stop, hit, hit_steps, entries, seqlen_q))
                 placed.update(own)
                 continue
         units.append(None)

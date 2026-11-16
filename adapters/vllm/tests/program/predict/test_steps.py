@@ -19,6 +19,7 @@ import pytest
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 from verity_vllm.engine.served_seed import derived
+from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.build_instances import check_rows
@@ -59,16 +60,22 @@ pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
 FIX = Path(__file__).parent / "fixtures"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
+H200 = {"compute_capability": [9, 0], "num_sms": 132}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 64, "hidden_act": "silu", "eos_token_id": 255}
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 4}
 STOCH = {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "seed": 11, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
+WIDE = {**TINY, "hidden_size": 256, "max_position_embeddings": 128}
 SALT = bytes(range(64))
 STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": registered_splits(188),
                 "rid": 2}
 SERVED = "served-model"
 GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
+INT8_H200_B4 = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
+#: its r3's Program: the Build's `--wrapper request --LP 11 --T 8 --launch-context [256,1,1,1,1,1,1,1,1] --stop …` at the row
+INT8_H200_B4_R3 = ("da5653596efeff0b6b88783db3b213c76e95000bb38009d768cf16ead4057cd135504bc6ac9bf56a34fa054b9ee3d74738da264a745248"
+                   "aa0f7d193a25b76283")
 CLASS_G_ENGINE = {"max_model_len": 131072, "max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256, "max_num_seqs": 256,
                   "enable_prefix_caching": False}
 
@@ -495,6 +502,92 @@ def test_a_decodes_attention_guard_is_chosen_from_the_request_alone():
     ids = {fn.id for _, fn in calls(c.programs[c.requests[0].digest])}
     alone_id, beside_id = (bind(dead_free_versions()[fn.base_id], **fn.bindings).id for fn in (alone_fn, beside_fn))
     assert alone_id in ids and beside_id not in ids
+
+
+def _wide(target: dict) -> tuple[Registered, Phi]:
+    """TINY at head dim 64 (2 query heads per KV head: FA3's one-warpgroup tile, BN 192, up to 32 query rows a sequence, else BN
+    128) on `target`, and its greedy φ."""
+    reg = Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": WIDE}, target=dict(target)), default_seed=7)
+    return reg, Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}})
+
+
+def _declared(phi: Phi, *requests: tuple[int, int, int]) -> Phi:
+    """`phi` with a workload of (prompt_len, max_tokens, arrive_step) requests: the launch context the Build is given
+    (`common.launch_rows`, `launch_context.request_launch_context`)."""
+    return Phi.from_json({**phi.to_json(), "workload": {"requests": [{"prompt_len": lp, "max_tokens": m, "arrive_step": a}
+                                                                     for lp, m, a in requests]}})
+
+
+def _beside() -> tuple[I1.Advice, dict]:
+    """r0 (LP 8, 3 outputs) prefilled beside r1's 40-row prompt, then each decodes."""
+    return _session([(8, 3, {**GREEDY, "max_tokens": 3}), (40, 2, {**GREEDY, "max_tokens": 2})],
+                    [[(0, 0, 8), (1, 0, 40)], [(0, 8, 1), (1, 40, 1)], [(0, 9, 1)]])
+
+
+def _decode_beside() -> tuple[I1.Advice, dict]:
+    """r0 (LP 8, 4 outputs) decodes its first output beside r1's 40-row prefill, a step after its own."""
+    return _session([(8, 4, GREEDY), (40, 2, {**GREEDY, "max_tokens": 2})],
+                    [[(0, 0, 8)], [(0, 8, 1), (1, 0, 40)], [(0, 9, 1), (1, 40, 1)], [(0, 10, 1)]])
+
+
+def _alone(lp: int, outputs: int) -> tuple[I1.Advice, dict]:
+    return _session([(lp, outputs, {**GREEDY, "max_tokens": outputs})], [[(0, 0, lp)], *([(0, lp + k, 1)] for k in range(outputs - 1))])
+
+
+@pytest.mark.parametrize("session, seqlen_q, declared", [
+    (_beside, (40, 1, 1), ((8, 3, 0), (40, 2, 0))),
+    (_decode_beside, (8, 40, 1, 1), ((8, 4, 0), (40, 2, 1))),
+])
+def test_a_batch_invariant_fa3_request_compiles_at_its_launchs_longest_query(session, seqlen_q, declared):
+    """FA3's tile reads the launch's max_seqlen_q: r0's prefill beside r1's 40-row one, or r0's decode beside it, runs the 40 rows'
+    tile (BN 128) where alone it runs BN 192. Its unit keeps, per step of its Program, the longest row of the advice step it ran in,
+    and its Program is the one the Build is given that launch context for (φ's workload), not r0's alone. r1 is the longest
+    sequence of each launch it ran in, so its Program is the one it compiles to alone."""
+    reg, phi = _wide(H200)
+    c = compile_steps(reg, *session())
+    u0, u1 = c.requests
+    assert (u0.seqlen_q, u1.seqlen_q) == (seqlen_q, ())
+    assert u0.digest == build_program(_declared(phi, *declared), "request", LP=u0.LP, T=u0.T, stop=u0.stop).digest
+    assert u0.digest == build_program(phi, "request", LP=u0.LP, T=u0.T, stop=u0.stop, seqlen_q=seqlen_q).digest
+    assert u0.digest != compile_steps(reg, *_alone(u0.LP, u0.T + 1)).requests[0].digest
+    assert u1.digest == compile_steps(reg, *_alone(40, 2)).requests[0].digest
+    assert c.summary()["requests"][0]["seqlen_q"] == list(seqlen_q) and "seqlen_q" not in c.summary()["requests"][1]
+
+
+@pytest.mark.parametrize("session", [_beside, _decode_beside])
+def test_a_target_whose_tile_doesnt_read_the_launch_compiles_each_request_as_alone(session):
+    """On FA2 (cc 12.0) the tile doesn't read the launch, and a decode's guard is chosen from its own rows
+    (`test_a_decodes_attention_guard_is_chosen_from_the_request_alone`): every request compiles to its Program alone, with no
+    launch context in its unit."""
+    reg, _ = _wide(RTXPRO6000)
+    c = compile_steps(reg, *session())
+    assert [u.seqlen_q for u in c.requests] == [(), ()]
+    assert [u.digest for u in c.requests] == [compile_steps(reg, *_alone(u.LP, u.T + 1)).requests[0].digest for u in c.requests]
+
+
+def test_a_launch_context_traces_at_its_build_and_names_its_trace(tmp_path):
+    """The traced side builds a unit with a launch context at `--launch-context [n0, n1, ...]`, in a trace dir of its own."""
+    reg, _ = _wide(H200)
+    s = compile_steps(reg, *_decode_beside()).summary()
+    cmds = trace_commands(s, reg, str(tmp_path))
+    assert [json.loads(c[c.index("--launch-context") + 1]) if "--launch-context" in c else None for c in cmds] == [[8, 40, 1, 1], None]
+    assert trace_dir(s["requests"][0]) != trace_dir({**s["requests"][0], "seqlen_q": None})
+
+
+def test_the_int8_h200_rows_short_request_compiles_to_the_build_at_its_launch():
+    """The H200 int8 B4 row's 11-token request (r3) is prefilled beside its 256-token one and decodes beside decodes, so FA3 ran its
+    prefill at the 256 rows' tile (BN 128) where alone it runs BN 192: compiled from the row's advice under its pinned config, its
+    Program with its length rule is the Build's at `--launch-context [256,1,1,1,1,1,1,1,1]` with `--stop` (da5653596efeff0b…), not
+    the Build at its own rows (596852f18c3bac6f…)."""
+    w = json.loads(workload_file(WORKLOADS / f"{INT8_H200_B4}.json").read_text())
+    phi = S.phi_of({"row": INT8_H200_B4, "workload": w}, config=str(HF_CONFIG_DIR / "LLAMA32_1B_INT8.config.json"))
+    reg = Registered.of(phi, int(w.get("seed") or 0))
+    ingress = {f"r{i}": {"prompt": list(q["prompt_token_ids"]), "max_tokens": int(q["max_tokens"]), "temperature": 0.0}
+               for i, q in enumerate(w["requests"])}
+    u = next(u for u in plan_steps(reg, AW.advice_of_workload(w), ingress).requests if u.id == "r3")
+    assert (u.LP, u.T, u.seqlen_q) == (11, 8, (256, *(1,) * 8))
+    assert u.stop == SR.spec((128001,), max_tokens=9, prompt_len=11, max_model_len=288, outputs=9, finish=2)
+    assert request_program(reg, u).digest == INT8_H200_B4_R3
 
 
 def test_compile_steps_raises_the_batch_rules_refusal_and_partial_records_it(monkeypatch):
