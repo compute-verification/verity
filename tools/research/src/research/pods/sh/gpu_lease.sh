@@ -74,7 +74,8 @@
 # The count covers leases only: a process that holds no lease is not in it, whatever it is pinned to.  And only the leases of this
 # lease directory ($GPU_LEASE_DIR): a machine with a second directory is not counted across them.  A request without --cores is
 # not refused either: where there is a quota and a live lease declared its cores, it starts with one warning line naming that
-# lease, and the next request that declares counts it.
+# lease, and the next request that declares counts it.  Where there is a quota and the request may run on every CPU, it also says
+# that its lease counts as all of them, so every request that declares waits or is refused while it is held.
 # What the count can't see, the machine's own counter shows: every lease writes cpu.stat's nr_throttled and throttled_usec (the
 # file beside cpu.max) into its owner lines when it starts, and end_nr_throttled and end_throttled_usec when it is released, and
 # says the difference on stderr, so a timed run shows whether the machine was throttled while it held its GPUs.
@@ -669,6 +670,23 @@ declared_beside() {
   echo "$out"
 }
 
+counts_whole() {
+  # "N QUOTA" where the machine has a CPU quota and this lease, declaring no cores, may run on all N CPUs of it, which is what
+  # cores_over counts it as (its process tree's Cpus_allowed_list, every CPU where none is read); nothing otherwise
+  local quota="" period="" proc=${GPU_LEASE_PROC:-/proc} n k
+  [ -r "$cpu_max" ] && read -r quota period < "$cpu_max"
+  case $quota$period in ''|*[!0-9]*) return 0 ;; esac
+  [ "$period" -gt 0 ] || return 0
+  n=$(grep -c '^cpu[0-9]' "$proc/stat" 2>/dev/null)
+  [ "${n:-0}" -gt 0 ] || n=$(nproc --all)
+  k=$n
+  [ -r "$proc/self/status" ] && k=$(awk -v n="$n" '$1 == "Cpus_allowed_list:" {
+    split($2, parts, ","); for (i in parts) { m = split(parts[i], r, "-"); for (c = r[1] + 0; c <= r[m] + 0; c++) if (c < n && !(c in seen)) { seen[c]; k++ } }
+  } END { print k + 0 }' "$proc/self/status")
+  [ "$k" = 0 ] || [ "$k" = "$n" ] || return 0
+  echo "$n $(awk -v q="$quota" -v p="$period" 'BEGIN { printf "%g", q / p }')"
+}
+
 report_usage() {
   # report only (the lease's status never depends on it): each leased GPU's held time, and its busy time over the node sampler's
   # readings inside the lease; never NVML, so a timed window stays quiet
@@ -936,6 +954,10 @@ if [ -z "$cores" ]; then
   beside=$(declared_beside)
   [ -z "$beside" ] || echo "gpu-lease: warning: no --cores here, beside a lease that declared its own ($beside): this run's CPUs are" \
     "in no count against the machine's CPU quota until the next request that declares counts them; pass --cores" >&2
+  whole=$(counts_whole)
+  [ -z "$whole" ] || echo "gpu-lease: no --cores: this lease counts as all ${whole% *} CPUs of this machine against its CPU quota" \
+    "of ${whole#* } while it is held, so every other lease that names --cores waits or is refused until it ends; pass --cores LIST" \
+    "(per card, the ten CPUs of its own NUMA node that the slots file gives)" >&2
 fi
 cmdline=$(echo "$*" | cut -c1-200)
 [ -n "$cores" ] && set -- taskset -c "$cores" "$@"

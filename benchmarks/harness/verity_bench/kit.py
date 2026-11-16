@@ -1,4 +1,4 @@
-"""The harness kit: the five calls benchmarks' runners share, each written once.
+"""The harness kit: the calls benchmarks' runners share, each written once.
 
 - `lease(gpus, minutes)`: the `gpu-lease` argv a job's command follows, with its bound.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
@@ -10,9 +10,10 @@
   `writer(out, kind)` writes a result of that `kind`, the artifact kind `research` stores it as.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
   `research` keeps; the first of them writes all three of its keys, so a result that uses none holds none.
-- `report(name, text, doc, measured)`: a command's last step: prints `text` and `doc` as one line of JSON, and where it
-  has a place to write (`$RESEARCH_RUN_DIR/out` under a research run, else `$OUT` where set) writes that line to
-  `<name>.json` there and `measured` to the run's result through the writer; with no place it writes nothing.
+- `record_dir(arg)`, `ran_with(coins, parameters, detail=None, verified=False)` and `report(name, text, doc, measured,
+  ...)`: the core benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface"), written in
+  `kit_report`: what a command takes, the one line of its coins and parameters, and its last step, which prints and
+  writes its number.
 
 **A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
 `validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to the result's
@@ -41,7 +42,8 @@ where the value stands against its target (``"within target"``). **A validation 
 protocol's security verdict: its `status` is the schema's ``"passed"`` or ``"failed"`` and nothing else, which is the
 whole guard, and its `detail` says in the gates' own words what passed or failed.
 
-Standard library and `verity_bench.settings` only, so a kernel's runner imports it without vLLM or torch.
+Standard library and `verity_bench.settings` only (`record_dir` imports research's store client only for a run id), so a
+kernel's runner imports it without vLLM or torch.
 """
 
 from __future__ import annotations
@@ -508,33 +510,9 @@ def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
     return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp(), kind)
 
 
-# ---- the report --------------------------------------------------------------------------------------------------------------
+# the core benchmarks' interface, written in kit_report and called as the kit's
+from verity_bench import kit_report  # noqa: E402
 
-
-def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapping[str, Any]] = (), *,
-           document: bool = True, mark: str = "measured", out: str | os.PathLike | None = None) -> Path | None:
-    """A command's last step, the one way it prints and writes its number: prints `text`, then `doc` as one line of
-    JSON, and where it has a place to write (`out` where the caller names one, its `--out`; else under a research run its
-    `out/`, `$RESEARCH_RUN_DIR/out`, and outside one `$OUT` where set) writes that line to `<name>.json` there and
-    appends each of `measured`, the keywords of a `Writer.measurement`, at `mark` to the run's result (`writer`). An
-    empty variable names no place. With `document` False the place keeps the `<name>.json` it holds. The place
-    it wrote to, or None where there is none and nothing is written."""
-
-    print(text)
-    line = json.dumps(doc)
-    print(line)
-    if out is not None:
-        place = out
-    else:
-        place = Path(settings.RESEARCH_RUN_DIR) / "out" if settings.is_set("RESEARCH_RUN_DIR") else settings.OUT
-    if not place:
-        return None
-    place = Path(place)
-    if document:
-        place.mkdir(parents=True, exist_ok=True)
-        (place / f"{name}.json").write_text(line + "\n")
-    if measured := list(measured):
-        w = writer(place)
-        for m in measured:
-            w.measurement(**m, mark=mark)
-    return place
+COINS, NOT_STATED, PARAMETERS = kit_report.COINS, kit_report.NOT_STATED, kit_report.PARAMETERS
+NoRecord, Record, ran_with = kit_report.NoRecord, kit_report.Record, kit_report.ran_with
+record, record_dir, report = kit_report.record, kit_report.record_dir, kit_report.report

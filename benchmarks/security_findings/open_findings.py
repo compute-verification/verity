@@ -5,32 +5,64 @@ check this script runs closes, measured as `infra/security-findings-open`. Lower
 
 Only a check closes a finding: the one `CHECKS` holds for its id, which the list must name, run on the checkout at the commit
 it is at. A finding with no check is open whatever the list says, and the list says in one line what check would close it.
+A check that can't read its thing where it runs (an agent VM's environment, another machine, a reading older than
+`MAX_AGE_DAYS`) says so: the finding is `unread`, which the value counts as not closed and the output names apart from open.
 The value's mark is `measured` only when every finding is decided by a check of the thing itself (`tree`), and `partial`
-while any has no check or is checked on the tree's declared state (`declared`). It reads no machine, needs no secret, and
-writes under `--out` (`out/` outside a research run).
+while any has no check, is unread, or is checked on the tree's declared state (`declared`), on machines partly through a
+recorded reading (`machine`) or on a recorded reading alone (`recorded`). It reads the machine it runs on and no other,
+needs no secret, and writes under `--out` (`out/` outside a research run). `--probe-store`, run on an agent VM, takes the
+store's reading.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import secrets
 import shlex
+import socket
 import subprocess
+import time
 import tomllib
+import urllib.error
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from research import addresses
 
-from verity_bench import kit
+from verity_bench import kit, settings
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 LIST = HERE / "findings.toml"
+#: what the checks of things outside the tree read: the readings taken where the thing is, the maintained kernels, the machines
+READINGS = HERE / "readings.toml"
+KERNELS = HERE / "kernels.toml"
+DEPLOY = ROOT / "tools/research/src/research/pods/nebius/deploy.toml"
 METRIC = "infra/security-findings-open"
-#: what a check reads: this repository's own files, the thing the finding is about, or the tree's declared state of a VM
-READS = ("tree", "declared")
+#: what a check reads: this repository's own files, the thing the finding is about; the tree's declared state of a VM; each
+#: machine, the one it runs on itself and the others through a recorded reading; or a recorded reading alone
+READS = ("tree", "declared", "machine", "recorded")
+#: how many days a recorded reading decides anything: an older one leaves its finding unread, and the check names the command
+MAX_AGE_DAYS = 7
+#: the account agents log in with on the CPU machines, and the control pod, which the root finding names with them
+AGENTS_LOGIN = "research"
+CONTROL_POD = "vy-control-verity"
+#: the names an agent VM must not hold: a personal Linear key and notes token, and the Google Cloud, RunPod and Nebius keys
+AGENT_KEYS = ("LINEAR_API_KEY", "RESEARCH_NOTES_TOKEN", "GCP_SA_KEY_B64", "RUNPOD_API_KEY", "NEBIUS_SA_PRIVATE_KEY_B64")
+AGENT_ENV_COMMAND = "compgen -e | grep -xE '" + "|".join(AGENT_KEYS) + "'"
+#: one line each: the login, its uid, what `sudo -n id -u` gives it, whether it runs with no new privileges (where sudo refuses
+#: everyone), the kernel, the Ubuntu release, then apt's effective unattended-upgrades lines
+MACHINE_COMMAND = ("id -un; id -u; sudo -n id -u 2>/dev/null || echo refused; grep -m1 NoNewPrivs /proc/self/status | cut -f2; "
+                   "uname -r; (. /etc/os-release && echo \"$VERSION_ID\") || echo unknown; apt-config dump | grep -E "
+                   "\"^(APT::Periodic::Unattended-Upgrade|Unattended-Upgrade::(Allowed-Origins|Origins-Pattern|Package-Whitelist))\"")
+STORE_COMMAND = "uv run python benchmarks/security_findings/open_findings.py --probe-store"
+#: where the store probe copies to, from a key under it that doesn't exist
+SCRATCH = "scratch/security-findings"
+clock = time.time
 #: why an address the rule counts is excepted from finding 6: nobody's machine of ours
 EXCEPT_KINDS = ("version", "example", "third party")
 #: what a [[finding]] may hold, and nothing else
@@ -73,15 +105,18 @@ _HOOK_NAME = re.compile(r"[a-z_]+\.py")
 class Check:
     name: str
     reads: str
-    #: (closed, what it found in words) for the checkout at the root it is given and the finding's entry in the list
-    run: Callable[[Path, Mapping], tuple[bool, str]]
+    #: (closed, what it found in words) for the checkout at the root it is given and the finding's entry in the list; closed is
+    #: None when the check can't read its thing where it runs
+    run: Callable[[Path, Mapping], tuple[bool | None, str]]
 
 
 @dataclass(frozen=True)
 class Status:
     id: str
+    #: not closed: open, refused or unread
     open: bool
-    #: what decided it: a check's `reads`, `none` (no check) or `refused` (an entry the script can't take, which counts open)
+    #: what decided it: a check's `reads`, `none` (no check), `refused` (an entry the script can't take, which counts open) or
+    #: `unread` (its check can't read the thing where it ran)
     basis: str
     why: str
 
@@ -135,9 +170,214 @@ def guard_outside_checkout(root: Path, finding: Mapping) -> tuple[bool, str]:
                                             f"the guard from {GUARD_ROOT} alone")
 
 
+def _at(root: Path, path: Path) -> Path:
+    return root / path.relative_to(ROOT)
+
+
+def reading(root: Path, name: str, command: str) -> tuple[dict | None, str]:
+    """The recorded reading `name` of readings.toml in the checkout at `root` and how old it is, in words; (None, why) when there
+    is none or it is older than `MAX_AGE_DAYS`. A reading names the command it ran, which must be `command`, who ran it
+    (`reader`) and when (`at`, a time with its zone), beside what it found; one that doesn't raises."""
+    path = _at(root, READINGS)
+    entry = tomllib.loads(path.read_text(encoding="utf-8")).get(name) if path.is_file() else None
+    if entry is None:
+        return None, f"no reading is recorded: run `{command}` and record what it prints as [{name}] in {READINGS.name}"
+    if entry.get("command") != command:
+        raise ValueError(f"the reading [{name}] ran {entry.get('command')!r}, not `{command}`")
+    at, reader = entry.get("at"), entry.get("reader")
+    if not (isinstance(at, datetime) and at.tzinfo is not None and isinstance(reader, str) and reader.strip()):
+        raise ValueError(f"the reading [{name}] names who read it (reader) and when, with its zone (at)")
+    days = (clock() - at.timestamp()) / 86400
+    if days < 0:
+        raise ValueError(f"the reading [{name}] is dated after now")
+    if days > MAX_AGE_DAYS:
+        return None, f"the reading [{name}] is {days:.0f} days old, over {MAX_AGE_DAYS}: run `{command}` again"
+    return entry, f"read by {reader} {days:.1f} days ago"
+
+
+def agent_env_names(root: Path, finding: Mapping) -> tuple[bool | None, str]:
+    entry, when = reading(root, "agent-env", AGENT_ENV_COMMAND)
+    if entry is None:
+        return None, f"an agent VM's environment can't be read where this runs, only recorded; {when}"
+    names = entry.get("names")
+    if not (isinstance(names, list) and all(isinstance(n, str) for n in names) and set(names) <= set(AGENT_KEYS)):
+        raise ValueError("the agent-env reading's names are those of AGENT_KEYS that its command printed")
+    held = ", ".join(sorted(names))
+    return not names, f"an agent VM {when} held {len(names)} of the {len(AGENT_KEYS)} names" + (f": {held}" if held else "")
+
+
+@dataclass(frozen=True)
+class Machine:
+    """What `MACHINE_COMMAND` printed on one machine, a line each."""
+    login: str
+    uid: str
+    sudo: str
+    no_new_privs: str
+    kernel: str
+    release: str
+    apt: tuple[str, ...]
+
+    @classmethod
+    def of(cls, lines: Sequence[str]) -> Machine:
+        if not (isinstance(lines, Sequence) and len(lines) >= 6 and all(isinstance(x, str) for x in lines)):
+            raise ValueError(f"a machine's reading is the lines MACHINE_COMMAND prints, six and apt's: {lines!r}")
+        return cls(*(x.strip() for x in lines[:6]), tuple(x.strip() for x in lines[6:]))
+
+
+def cpu_machines(root: Path) -> list[str]:
+    """The CPU machines of the deploy map in the checkout at `root`, but those not made yet (`staged`)."""
+    nodes = tomllib.loads(_at(root, DEPLOY).read_text(encoding="utf-8"))["nodes"]
+    names = [n for n, node in nodes.items() if re.fullmatch(r"vy-nebius-cpu-\d+", n) and "staged" not in node]
+    return sorted(names, key=lambda n: int(n.rsplit("-", 1)[1]))
+
+
+def here() -> str | None:
+    """The machine this runs on: the name the research run that started it recorded (its job.json's `run.remote.machine`), else
+    the host's name."""
+    if not settings.is_set("RESEARCH_RUN_DIR"):
+        return socket.gethostname()
+    try:
+        return json.loads((Path(settings.RESEARCH_RUN_DIR) / "job.json").read_text(encoding="utf-8"))["run"]["remote"]["machine"]
+    except (KeyError, OSError, ValueError, TypeError):
+        return socket.gethostname()
+
+
+def read_here() -> list[str]:
+    """`MACHINE_COMMAND`'s lines on this machine. It changes nothing; a refused sudo is logged as one."""
+    return subprocess.run(["sh", "-c", MACHINE_COMMAND], capture_output=True, text=True, timeout=120).stdout.splitlines()
+
+
+Judge = Callable[[Machine], tuple[bool | None, str]]
+
+
+def over_machines(root: Path, names: Sequence[str], judge: Judge, what: str) -> tuple[bool | None, str]:
+    """`judge` over each machine of `names`: on this run's own read when it runs on that machine and the read decides, else on
+    the recorded [machines] reading. Open when any machine is judged open, unread when any other is undecided or unread."""
+    entry, when = reading(root, "machines", MACHINE_COMMAND)
+    recorded = (entry or {}).get("output", {})
+    if not isinstance(recorded, Mapping):
+        raise ValueError("the machines reading's output is each machine's lines, by its name")
+    me = here()
+    bad: dict[str, list[str]] = {}
+    unread: dict[str, list[str]] = {}
+    for name in names:
+        closed, why = None, f"no fresh reading ({when})" if entry is None else "the reading holds none"
+        if name == me:
+            closed, why = judge(Machine.of(read_here()))
+        if closed is None and name in recorded:
+            closed, why = judge(Machine.of(recorded[name]))
+        if closed is not True:
+            (bad if closed is False else unread).setdefault(why, []).append(name)
+
+    def listed(groups: dict[str, list[str]]) -> str:
+        return "; ".join(f"{why}: {', '.join(ns)}" for why, ns in groups.items())
+    live = f"read {me} itself" if me in names else "read none of them itself (it runs on none)"
+    counts = (f"{sum(map(len, bad.values()))} of {len(names)} machines {what}, {sum(map(len, unread.values()))} unread; {live}, "
+              f"the rest {when if entry else 'unrecorded'}")
+    detail = "; ".join(x for x in (listed(bad), f"unread: {listed(unread)}" if unread else "") if x)
+    return (False if bad else None if unread else True), counts + (f" ({detail})" if detail else "")
+
+
+def root_refused(m: Machine) -> tuple[bool | None, str]:
+    if m.uid == "0":
+        return False, f"{m.login} is root"
+    if m.sudo == "0":
+        return False, f"sudo gives {m.login} root"
+    if m.sudo != "refused":
+        return None, f"sudo printed {m.sudo!r}"
+    if m.no_new_privs != "0":
+        return None, "read with no new privileges, where sudo refuses every login"
+    if m.login != AGENTS_LOGIN:
+        return None, f"read as {m.login}, not the agents' {AGENTS_LOGIN}"
+    return True, "refused"
+
+
+def sudo_refused(root: Path, finding: Mapping) -> tuple[bool | None, str]:
+    return over_machines(root, [*cpu_machines(root), CONTROL_POD], root_refused, "give the agents root")
+
+
+def kernels(root: Path) -> dict[tuple[str, str], date]:
+    """{(series, Ubuntu release): the first day it is no longer maintained} from kernels.toml in the checkout at `root`."""
+    table = tomllib.loads(_at(root, KERNELS).read_text(encoding="utf-8"))
+    if not (isinstance(table.get("source"), str) and table["source"].startswith("https://")):
+        raise ValueError(f"{KERNELS.name} names its source")
+    if not all(type(k.get("until")) is date and isinstance(k.get("series"), str) and isinstance(k.get("release"), str)
+               for k in table["kernel"]):
+        raise ValueError(f"each kernel of {KERNELS.name} is a series, a release and a day (until)")
+    return {(k["series"], k["release"]): k["until"] for k in table["kernel"]}
+
+
+def _apt(lines: Sequence[str]) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for line in lines:
+        if m := re.fullmatch(r'(\S+) "(.*)";', line):
+            out.setdefault(m[1], []).append(m[2])
+    return out
+
+
+def updates_judge(maintained: Mapping[tuple[str, str], date]) -> Judge:
+    def judge(m: Machine) -> tuple[bool | None, str]:
+        apt, today = _apt(m.apt), datetime.fromtimestamp(clock(), UTC).date()
+        series = ".".join(m.kernel.split(".")[:2])
+        problems = []
+        if not (until := maintained.get((series, m.release))) or until <= today:
+            problems.append(f"kernel {series} on {m.release} is not maintained ({KERNELS.name})")
+        if apt.get("APT::Periodic::Unattended-Upgrade", ["0"])[-1] in ("", "0"):
+            problems.append("no unattended upgrades")
+        origins = apt.get("Unattended-Upgrade::Allowed-Origins::", []) + apt.get("Unattended-Upgrade::Origins-Pattern::", [])
+        if not any(re.search(r"(\$\{distro_codename\}|\b[a-z]+)-security\b", o) and "ESM" not in o for o in origins):
+            problems.append("Ubuntu's security pocket is no origin")
+        # any entry limits upgrades to the list; -Strict only decides whether their dependencies come too
+        if any(apt.get("Unattended-Upgrade::Package-Whitelist::", [])):
+            problems.append("a package allow-list")
+        return not problems, "; ".join(problems) or "maintained"
+    return judge
+
+
+def updates_and_kernel(root: Path, finding: Mapping) -> tuple[bool | None, str]:
+    return over_machines(root, cpu_machines(root), updates_judge(kernels(root)), "fall short")
+
+
+def store_write_refused(root: Path, finding: Mapping) -> tuple[bool | None, str]:
+    entry, when = reading(root, "store-write", STORE_COMMAND)
+    if entry is None:
+        return None, f"the agents' store key is on agent VMs, not where this runs; {when}"
+    status, code = entry.get("status"), entry.get("code")
+    if not (isinstance(status, int) and isinstance(code, str)):
+        raise ValueError("the store-write reading holds the status and the code the store answered")
+    if (status, code) == (403, "AccessDenied"):
+        return True, f"the store refused an agent VM's key the scratch write, {when}"
+    if (status, code) == (404, "NoSuchKey") or 200 <= status < 300:
+        return False, f"the store took an agent VM's key's scratch write as allowed ({status} {code}), {when}"
+    return None, f"the store answered {status} {code}, which says nothing of what the key may write; {when}"
+
+
+def probe_store(environ: Mapping[str, str] = os.environ, remote: object | None = None) -> tuple[int, str]:
+    """The status and code the store answers the store key in `environ` for a copy into a scratch key from one that doesn't
+    exist: (403, AccessDenied) when the key may not write, (404, NoSuchKey) when it may. Neither writes anything, since there is
+    nothing to copy, and nothing of the key is printed."""
+    if remote is None:
+        names = ("R2_ENDPOINT", "R2_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
+        if missing := [n for n in names if not environ.get(n)]:
+            raise SystemExit(f"--probe-store reads the agents' store key, and {', '.join(missing)} is not set: run it on an agent VM")
+        from research.store.remote_s3 import S3Remote
+        remote = S3Remote(*(environ[n] for n in names))
+    tag = secrets.token_hex(8)
+    try:
+        with remote._request("PUT", f"{SCRATCH}/{tag}", headers={"x-amz-copy-source": f"/{remote.bucket}/{SCRATCH}/missing-{tag}"}):
+            return 200, "OK"
+    except urllib.error.HTTPError as e:
+        code = re.search(rb"<Code>([^<]+)</Code>", e.read())
+        return e.code, code[1].decode() if code else f"HTTP {e.code}"
+
+
 #: each finding's check, by its id: the list names it, and can't hand a finding another's
 CHECKS: Mapping[str, Check] = {
+    "agent-holds-personal-and-cloud-keys": Check("agent-env-names", "recorded", agent_env_names),
     "guard-runs-from-the-branch": Check("guard-outside-checkout", "declared", guard_outside_checkout),
+    "agents-have-root": Check("sudo-refused", "machine", sudo_refused),
+    "security-updates-and-kernel": Check("updates-and-kernel", "machine", updates_and_kernel),
+    "store-key-writes": Check("store-write-refused", "recorded", store_write_refused),
     "machine-addresses-in-the-tree": Check("no-public-address", "tree", no_public_address),
 }
 
@@ -155,8 +395,10 @@ def status(finding: Mapping, root: Path = ROOT, checks: Mapping[str, Check] = CH
                                             f"open_findings.py runs {check.name} on {check.reads!r}")
     try:
         closed, why = check.run(root, finding)
-    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as e:
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as e:
         return Status(fid, True, "refused", f"its check {check.name} couldn't run: {type(e).__name__}: {e}")
+    if closed is None:
+        return Status(fid, True, "unread", why)
     return Status(fid, not closed, check.reads, why)
 
 
@@ -192,12 +434,22 @@ def main(argv: Sequence[str] | None = None, path: Path = LIST, root: Path = ROOT
          checks: Mapping[str, Check] = CHECKS) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", default="out", help="where the result goes outside a research run")
-    out = ap.parse_args(argv).out
+    ap.add_argument("--probe-store", action="store_true",
+                    help="on an agent VM: print what the store answers its store key for a scratch write, as [store-write] records it")
+    args = ap.parse_args(argv)
+    if args.probe_store:
+        status_, code = probe_store()
+        print(f"status = {status_}\ncode = {json.dumps(code)}")
+        return
+    out = args.out
     statuses = [status(f, root, checks) for f in load(path)]
     n, m = sum(s.open for s in statuses), mark(statuses)
-    print(f"security findings open: {n} of {len(statuses)} (mark {m})")
+    unread = sum(s.basis == "unread" for s in statuses)
+    print(f"security findings open: {n} of {len(statuses)} (mark {m})" +
+          (f", {unread} of them unread: no check could read them where this ran" if unread else ""))
     for s in statuses:
-        print(f"  {s.id}: {'open' if s.open else 'closed'} ({s.basis}): {s.why}")
+        print(f"  {s.id}: unread: {s.why}" if s.basis == "unread" else
+              f"  {s.id}: {'open' if s.open else 'closed'} ({s.basis}): {s.why}")
     w = kit.writer(out)
     w.measurement(METRIC, n, "findings", target=0, mark=m, inputs=[str(path.relative_to(root))])
     refused = [s.id for s in statuses if s.basis == "refused"]

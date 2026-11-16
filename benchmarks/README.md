@@ -100,6 +100,67 @@ Some files here still break these rules: a kernel or a store the integration loa
 holds, the exporter of Lean data a guarantee reads. Each moves out to the package that uses it, and none is a pattern
 for a new benchmark.
 
+## The core benchmarks' interface
+
+The core benchmarks take and print the same things in the same form. Each rule is a call of the harness's kit
+(`harness/verity_bench/kit_report.py`, re-exported by `kit`), so a command follows it by calling it.
+
+1. **What a command takes:** `--from DIR`, a run's record as a directory (the run's directory as `research run` leaves
+   it: its `job.json` and `out/`). It is read with nothing of ours: no store, no host, no key and no import of
+   `research`. A run id is taken only where `research` is installed, and is fetched to such a directory first, past
+   the store's withdrawals: a run withdrawn whole, or in a part that holds a file the command reads, is refused with its
+   reason before anything is fetched, and a withdrawal of only other files of it is printed beside the number and is
+   the document's `withdrawn` (`kit.report(..., withdrawn=...)`). `kit.record_dir(arg, paths=...)` gives the directory,
+   and `kit.record(arg, paths=...)` the directory and the withdrawals (`kit.Record`); each refuses anything else in one
+   line naming the fix (`kit.NoRecord`).
+2. **One line of coins and parameters,** right after the command's first line: `ran with: coins COINS; parameters
+   PARAMETERS (DETAIL)`, and in the document `ran_with: {coins, parameters, detail}`. COINS is `deployed challenger`,
+   `local challenger` (its own process on this machine) or `in-process` (the serve holds the challenger); PARAMETERS
+   is `deployed` or `development`; DETAIL is the command's own words (draws, δ, scheme, key). `kit.ran_with(coins,
+   parameters, detail, verified=...)` refuses other words. `verified=True` is passed only where the command itself
+   checked the challenger's signature on the coins against a pinned key. `deployed challenger` without it is the
+   record's own word: the object holds `verified: false`, and the line `coins by the record's own word, not checked` is
+   printed under the audit line. A record that predates the field prints `ran with: not stated` (`ran_with=None`), and
+   `ran_with` null.
+3. **A number only from a run the Lean verifier accepted:** a command's headline, its number, is its text's first line,
+   opening with `NAME:` (`compute: 0.75 …`). `kit.report(..., accepted=False, why=WHY)` prints `NAME: no number: WHY`
+   in its place: a first line that opens with `NAME:` is dropped, and the rest of the text follows as the command's
+   detail, which states no number of the run. It writes `value` null beside `no_number`, writes each measurement with no
+   value and its why, and returns exit code 1, which `main()` returns; an accepted run returns 0.
+4. **Not an audit:** the document holds `audit: true` only for coins the deployed challenger drew, verified by the
+   command against a pinned key, at `deployed` parameters. Anywhere else the line `a measurement, not an audit` is
+   printed under the `ran with` line, and the document holds `audit: false`. A record's own word about its coins is
+   stated as such and is never an audit. The kit derives it from `ran_with`; the command does not choose it.
+5. **Its README's three parts,** under these headings: `## What you may change`, `## What is fixed` and
+   `## How a cheating change is refused`.
+6. **Its numbers on the dashboard:** every number the command prints is also a measurement, written by the kit's writer
+   (`kit.report`'s `measured`), under the `id` of a row of its directory's `metrics.toml` (a variant of one number,
+   such as a clock reading, is that row's `member`), and the row's `goal` is the benchmark's goal. Only a run of ours
+   through `research run` reaches the Metrics tab ("Metrics" below); a person outside gets the print and `result.json`.
+
+**A made-up record** (a fixture, a test's record, anything no run left) is reported with `kit.report(...,
+made_up=True)`: the line `a made-up record, not a run's` is printed under the audit line, the document holds
+`made_up: true` and is no audit, and every measurement written from it is marked `modeled` (figures no run measured)
+and carries `made_up: true`, so its `result.json` passed on alone never reads as a run's measurement. A fixture record
+passes `made_up=True` wherever it is reported, whatever its own files say of its coins, parameters or commit.
+
+`kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=...)` is the command's
+last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit").
+
+A command declares that it follows the interface in its own directory's `pyproject.toml`, in the change that makes it
+follow:
+
+```toml
+[tool.verity.interface]
+core = "verity bench NAME"
+```
+
+`harness/tests/test_interface.py` reads that key from every `benchmarks/*/pyproject.toml` and holds each directory that
+declares it to its README's three headings, its call of `kit.report` with `ran_with` and `accepted`, and each
+measurement name its source gives as a row of its `metrics.toml` with a `goal` (rule 6, for a directory the test's
+`DASHBOARD_NOT_YET` doesn't name, each entry saying what it writes that is no row). The harness's suite lists the
+directory and its README among its inputs, which the test checks too.
+
 ## Metrics
 
 Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
@@ -338,4 +399,4 @@ How fast the team's leads answer each other: measured on Linear's comments, not 
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `security_findings/` | the security review's serious findings still open (`findings.toml`): each closed only by the check `open_findings.py` holds for it, run on the checkout | maintained |
+| `security_findings/` | the security review's serious findings still open (`findings.toml`): each closed only by the check `open_findings.py` holds for it, run on the checkout, the machine it runs on and the readings of what it can't reach (`readings.toml`) | maintained |
