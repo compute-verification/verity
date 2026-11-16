@@ -274,8 +274,7 @@ theorem pr_fst_true {β : Type} [Fintype β] [Nonempty β] : Pr (fun p : Bool ×
   have hβ : (Fintype.card β : ℝ) ≠ 0 := Nat.cast_ne_zero.2 Fintype.card_ne_zero
   unfold Pr Claims.prUniform
   rw [Finset.card_filter, Fintype.sum_prod_type, Fintype.sum_bool, Fintype.card_prod, Fintype.card_bool]
-  simp only [if_true, Bool.false_eq_true, if_false, Finset.sum_const, Finset.card_univ, smul_eq_mul, mul_one,
-    Finset.sum_const_zero, add_zero]
+  simp only [ite_true, Bool.false_eq_true, ite_false, Finset.sum_const, Finset.card_univ, smul_eq_mul, mul_one]
   push_cast
   field_simp
   ring
