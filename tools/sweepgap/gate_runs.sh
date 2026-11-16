@@ -4,8 +4,8 @@
 set -u -o pipefail
 out=$1; shift; mkdir -p "$out"
 for pr in "$@"; do
-  m=$(git log --first-parent -1 --format=%H --grep="^Queue: $pr " origin/main)
-  [ -z "$m" ] && { echo "$pr no queue merge on origin/main" | tee -a "$out/summary.txt"; continue; }
+  m=$(git log --first-parent -1 --format=%H --grep="^Queue: $pr " HEAD)
+  [ -z "$m" ] && { echo "$pr no queue merge on HEAD" | tee -a "$out/summary.txt"; continue; }
   timeout 900 python3 adapters/vllm/tools/ratchet_gate.py "$m^1" "$m" --every-rule > "$out/${pr#\#}.txt" 2>&1
   echo "$pr merge ${m:0:12} exit $?" | tee -a "$out/summary.txt"
 done
