@@ -16146,21 +16146,22 @@
    }
   },
   "CoreProtocol.Ratio": {
-   "digest": "1f4ead0ebc17d23fa508dae53873219a455b5a73a268eed14b9eb3f994d60b0f",
+   "digest": "8cec9703acbf79b7ceccd3a919ad144a95436b5f9c23867f2ef522cca7edc8f7",
    "definitions": {
     "Core.Ratio": "7c8d146908a79f0b204e2877c04bdf5371a1a591b5fdb155207eaa0027919ef3",
     "Core.Ratio.casesOn": "79348311fc1d9500e7f88cdb99bf1b35e21a32315d58c361f3e5c30a5eca5a19",
     "Core.Ratio.den": "e55382b2df911a759d66e34c02b29457aa68dabe2390543da0957cc16104fd8b",
     "Core.Ratio.mk'": "c20e4b76a8690ce83efe8eacf144a213c36a81185b9e508e9a2ea0dc241034b8",
     "Core.Ratio.num": "8de2230df9d9cd0e696d8fce6f4718e084cb7e460cc1cb186b2f10077859d462",
-    "Core.Ratio.ofString": "f2a665b73fbc306bd50a4c44b130552a74cd66e6970dc77c57103daca2001513",
+    "Core.Ratio.ofString": "f50cae1b87af6280c2451aae404327908320f737482e1895008b0d0b33e611b5",
     "Core.Ratio.rec": "9a4caa7d17753c09d8fbfcf06940914f812cf241903ecdfd29f8ebe477c860ae",
     "Core.Ratio.toString": "7b9dc99348b88f5e0759b76017bd16cfe9769e5092decb03492c48f65bfc3d0a",
     "Core.instBEqRatio": "e1b529d403096727bf52850e50c8a23fe787e50e8a531e06bfa239f54be8e1bc",
     "Core.instBEqRatio.beq": "1af398bd78c516bd9fc42679cd19edde9db632db5e521281502086f99f9d77bc",
     "Core.instDecidableEqRatio": "bc51f0b5c4dd506ef50006646c7746db57e4f015af3d440526ee2dfd2b3c4af9",
     "Core.instDecidableEqRatio.decEq": "f97084fe87d19b3a3c56bc1fdfed9d073caca6351c86fd41d86f3778faf934ba",
-    "_private.CoreProtocol.Ratio.0.Core.natOf": "dd52a4d0265fa019fb204c0a90430954dc053bef4f8e47df1eaa149eed83a970"
+    "_private.CoreProtocol.Ratio.0.Core.natOf": "aa49c8a67d72f15230c18ed70a86ae4a7c00ee003dba95b75d4aebd6f834d9a2",
+    "_private.CoreProtocol.Ratio.0.Core.pieces": "f3d9bc5ea74963c8ce5d4e1c85686b2f4d1d8933dc6b53a255514b700b7d3a60"
    }
   },
   "CoreProtocol.Record": {
