@@ -26,7 +26,7 @@ routes at `q = q_T = 9/8`, the work of ♭ the proofs could miss at the vector's
 checks it the same way, against 0.591%, at the sharper ln(8/7) ≥ 2/15 (`LN_P_M`, the first term of
 `Real.hasSum_log_one_add_inv` at 7). The vector is VF3s-16, facet_break's refit of VF3r-16's joint issue rows, and not
 model.toml's `current` (VF3r-16): measured, bit-exact programs load VF3r-16's π*, JI3s_0, at up to 1.0383 (1.0107 in
-honest's IMMA16832), and no census program loads a VF3s-16 row above 1 (`benchmarks/pouw/tests/test_lean_headline.py`).
+honest's IMMA16832), and no census program loads a VF3s-16 row above 1 (`tests/benchmarks/pouw/test_lean_headline.py`).
 """
 from __future__ import annotations
 
@@ -522,7 +522,7 @@ public import Definitions.Pouw.Headline.Encoding
 # {f.key}'s headline instance: {f.device} and {f.title} (trusted; generated)
 
 Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/machine_model/data`), and
-checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
+checked against it by `tests/benchmarks/pouw/test_lean_headline.py`: edit the data and rerun the exporter, never this
 file. `Accounting.Guarantees.TS.{f.ns}SheetHeadline` reads it.
 
 {doc}
@@ -622,7 +622,7 @@ public import Definitions.Pouw.Headline.Sm120
 # sm_120's measured headline instance: {VECTOR} and H1 + fx1 (trusted; generated)
 
 Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/machine_model/data`), and
-checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
+checked against it by `tests/benchmarks/pouw/test_lean_headline.py`: edit the data and rerun the exporter, never this
 file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 
 * `rowNames`, `{vf}`, `machine`: the measured vector {VECTOR} (the exporter's `VECTOR`, named there, not model.toml's

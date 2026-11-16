@@ -31,4 +31,4 @@ statics and tie are vLLM's compiler's (`adapters/vllm/verity_vllm/compiler`).
 - **Documents**: none. No module writes a file or defines a schema.
 - **Loads from**: `verity.protocols.resource_accounting.network.verifier` (the schedule and records the Definitions are stated over, and
   the Definitions they build on), `verity.protocols.proofs.spot.verifier`, `verity.circuits` and `verity.commitments`.
-- **Tests**: not here. They are in `verity/protocols/resource_accounting/network/verifier/tests`, with the verifier's.
+- **Tests**: not here. They are in `tests/verity/protocols/resource_accounting/network/verifier`, with the verifier's.

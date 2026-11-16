@@ -84,6 +84,6 @@ composite's), and records the pin with the branch it is on (`host.py pinned COMM
 
 `tests/test_host.py` runs the gate in-process with its root steps injected. It holds the whitelist to verifier.py's own
 parser, including the host's main list, and the compose gate's
-receive and compose on toy hand-offs (`benchmarks/one_stage/tests/test_served_verdicts.py` sends one through it with
+receive and compose on toy hand-offs (`tests/benchmarks/one_stage/test_served_verdicts.py` sends one through it with
 `gate-compose`). It also runs one session through `tests/stub_verifier.py` (slow). Run the suite as
 `uv run tools/check/suites.py verity/protocols/resource_accounting/memory/poub/attester/live_verifier`, on a node (the testing skill).

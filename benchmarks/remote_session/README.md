@@ -16,7 +16,7 @@ What code outside this directory may use. Everything else here is internal.
 | `benchmarks/remote_session/gate_run.sh [--dry-run] PERIOD` | A gate run in one command: the developer's whole node serving a model, the verifier on the verifier's host through its gate, the coins from the challenger's host, then the line of record (`auditor.sh`, which runs `auditor_line.py`) and the what-if beside it (`gate_whatif.sh`). Each step is a recorded job, and their ids go to `~/.research/gate-runs/PERIOD.env`. The hosts' addresses come from the launcher's environment (`VY_CHALLENGER_1_HOST`, `VY_AUDITOR_1_HOST`, `VY_NEBIUS_2_HOST`), and one that is unset ends the run by name before anything is written. |
 
 Read from outside `benchmarks/`: `store_layout.py`, `auditor_line.py` and `tests/test_session.py`, which the live
-verifier's tests (`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/tests/`) import with this directory and its `tests/` on
+verifier's tests (`tests/verity/protocols/resource_accounting/memory/poub/attester/live_verifier/`) import with this directory and its `tests/` on
 `sys.path`, `auditor_line.py` also run by its path; and the whole directory, which the verifier's host is pinned with,
 beside `verity`. Neither process is here. The prover's (`prover.py`, `device.py`, `session.cu`) is PoUB's prover's, in
 `verity/protocols/resource_accounting/memory/poub/prover/remote_session/`, and the verifier's is

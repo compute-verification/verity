@@ -9,7 +9,7 @@ of each recorded window whose row differs from the expected one (`diff`), `Audit
 every boundary execution phase (`status`), and whether the audit accepts every execution phase of the first `m` windows
 (`accepted`) and every status there (`complete`), for `m = 0 … W`. The Lean audit runs
 `NetworkCertifier/DifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256), and
-`verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_lean_difftest.py` checks that this script
+`tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_lean_difftest.py` checks that this script
 still writes them.
 
 An instance has one to three egress links and up to two ingress links, varied `T`, `W`, allocation, `Σ_sync` (δ, and ρ

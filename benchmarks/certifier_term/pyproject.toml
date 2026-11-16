@@ -36,7 +36,7 @@ inputs = [
     "verity/commitments/randomness",
     "verity/runtime/__init__.py",
     "tools/config/verity_config",
-    "verity/channel.py", "verity/runtime/handshake.py", "verity/runtime/framing.py", "verity/party.py", "verity/tests",
+    "verity/channel.py", "verity/runtime/handshake.py", "verity/runtime/framing.py", "verity/party.py", "tests/verity",
     "adapters/vllm/verity_vllm/definitions/__init__.py",
     "verity/circuits/census.py",
     "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.circuit-check.json",

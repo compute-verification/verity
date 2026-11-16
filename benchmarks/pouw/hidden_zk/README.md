@@ -37,4 +37,4 @@ for primitives Flock has none for yet, and every result staged through them is l
 `served_stage.py` (`../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/stage_tile.py` with its Flock
 staging) import this directory's modules, and `compact_stage.py`, `fast_stage.py`, `core3_scratch.py`
 and `hash_scratch.py` list in `__all__` the names other files read, the tests' included. Their tests are
-`test_hidden_zk_stage.py` and `test_hidden_zk_summarize.py` under `benchmarks/pouw/tests/`.
+`test_hidden_zk_stage.py` and `test_hidden_zk_summarize.py` under `tests/benchmarks/pouw/`.
