@@ -82,7 +82,7 @@ properties are stated in `security/Properties/Pouw/PearlPlus.lean` (`AcceptMeans
 
 **What the credit rests on.** That a credited MAC was computed rests on SHA-512's collision resistance and on Pearl's
 conjecture TT_OUT rev1 (`TTOutPearlCDevRev1`, per tile `TTOutTilePearlCH100Rev1`), which proofs' red-team rating
-refutes (`verity/protocols/resource_accounting/compute/pouw/verifier/README.md`), and no proved guarantee covers a Pearl+ run's credit:
+refutes (`security/Definitions/Pouw/Guarantees/PearlCS8.lean`), and no proved guarantee covers a Pearl+ run's credit:
 the number counts what the verifier credits, and that this is work done is an open assumption. A bridge from acceptance
 to the audit game is proved (`acceptGivesTheAudit` in `security/Proofs/Pouw/PearlPlus/Sample.lean`).
 
