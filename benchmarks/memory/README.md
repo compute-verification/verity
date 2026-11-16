@@ -77,10 +77,8 @@ target is 0.14 at an error of at most 2^-100.**
 - **It is a measurement to improve on, not an audit.** The verifier and its coins run on the machine being measured,
   so you could re-roll them. The line under it says so, and the JSON's `audit` is false.
 - **Who decided each number is in the document.** `gamma_decided_by` is `lean` where PoUB's Lean verifier decided the
-  share. Where it is `python-ledger`, the share and its error are the Python ledger's reading of the accepted session,
-  which the verifier records beside its own, and a line of the text says so. Where the document holds
-  `numbers_decided_by`, it lists by key which printed numbers are the Lean verifier's and which are the Python
-  ledger's: the error's sketch and sample terms are among the latter.
+  share. Where the document holds `numbers_decided_by`, it lists by key which printed numbers are the Lean verifier's
+  and which are the Python ledger's: the error's sketch and sample terms are among the latter.
 - **It certifies reads, not contents.** The audit certifies reads of the registered store whatever it holds; the
   verifier holds no checkpoint, so the store's bytes are the developer's choice, which the store's line says.
 - **The store is the card's memory, not a request's.** A session whose store is below half the card's memory
@@ -210,9 +208,9 @@ verity bench memory --local                       vLLM serving Llama 3.2 1B on t
   Lean verifier in the tree, so under `research run` it takes `--cwd clone`, and `--store-read` for the references.
   `PLAN` is the prover's plan, `honest` unless set: a cheating one (`skip:0.0625`) is refused by the verifier.
 - **`--local`** is the section above: `remote_session/run.sh` with `ROLE=both SERVE=node GPUS=1`, the node run's
-  engine, prover and paced verifier on one card. Its metric on the Metrics tab says it is no audit, and, where the share
-  is the Python ledger's, says that too. The served workload (`SERVE=row`), whose store is one request's reads and whose
-  share was 1 or more, is not this benchmark: `run.sh` runs it directly.
+  engine, prover and paced verifier on one card. Its metric on the Metrics tab says it is no audit. The served workload
+  (`SERVE=row`), whose store is one request's reads and whose share was 1 or more, is not this benchmark: `run.sh` runs
+  it directly.
 
 It prints the number as text, then one line of JSON whose first keys are `value`, `unit`, `commit` and `run`, and exits
 0. A session that wasn't accepted prints no number and exits 1; a command line or a run that can't be read exits 2;

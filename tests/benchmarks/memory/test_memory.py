@@ -97,16 +97,6 @@ def with_amounts(s: dict, *, span_ns: int = 4 * 10 ** 9, error: float = 2.0 ** -
     return s
 
 
-def undecided(s: dict) -> dict:
-    """Session `s` as its verifier records it where the Lean leaves γ's terms undecided: each reading and the
-    declaration undecided, the reading they would have been beside them (`python_ledger`)."""
-    ledger = s["ledger"]
-    for r in ("spec", "measured", "declared"):
-        ledger[r] = {**({"capacity_bytes_per_s": ledger[r]["capacity_bytes_per_s"]} if r != "declared" else {}),
-                     "undecided": UNDECIDED, "python_ledger": ledger[r]}
-    return s
-
-
 def a_record(*sessions: dict, blocks: int = GIB // 4096, binding: dict | None = None) -> dict:
     """A verifier's record of `sessions` over a store of `blocks` blocks."""
     return {"registration": {"blocks": blocks}, "sessions": list(sessions), "calibration": {}, "rtt": {},
@@ -1262,27 +1252,27 @@ def test_a_store_below_half_the_cards_memory_prints_no_number(store, capsys, wor
 
 def test_a_local_session_under_a_research_run_writes_its_own_metrics_row(store, capsys, work, tmp_path, monkeypatch):
     """Its document is the run's `out/memory.json`, and its number reaches the Metrics tab under its own row, not the
-    node's: a measurement, not an audit, of a share the Python ledger computed, which its entry says."""
+    node's: a measurement, not an audit, which its entry says."""
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "rundir"))
     monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
-    machine = Machine(record=a_local_record(undecided(with_amounts(a_session(gamma=0.199)))))
+    machine = Machine(record=a_local_record(with_amounts(a_session(gamma=0.199))))
     assert bench(store, "--local", run=machine) == 0
     ((_, env),) = machine.runs()
     assert env["RESEARCH_RUN_DIR"] == str(tmp_path / "rundir")
     _, doc, _ = printed(capsys)
-    assert doc["run"] == BENCH and doc["local"] == M.LOCAL and doc["gamma_decided_by"] == M.PYTHON_LEDGER
+    assert doc["run"] == BENCH and doc["local"] == M.LOCAL and doc["gamma_decided_by"] == "lean"
     assert json.loads((tmp_path / "rundir" / "out" / "memory.json").read_text()) == doc
     got = written(tmp_path / "rundir")
     assert M.METRIC not in got and list(got)[:2] == ["metric", M.LOCAL_METRIC]
-    assert list(got) == ["metric", M.LOCAL_METRIC, *SHARED[1:]], "the bytes and the error, from the Python ledger"
+    assert list(got) == ["metric", M.LOCAL_METRIC, *SHARED[1:]]
     assert got["error"]["value"] == 2.0 ** -30 and got["verified"]["inputs"] == ["measured", BENCH,
-                                                                            "ledger.spec.python_ledger.certified_bytes"]
+                                                                            "ledger.spec.certified_bytes"]
     row = got[M.LOCAL_METRIC]
     assert (row["value"], row["target"]) == (0.199, M.TARGET) and row["value"] == doc["value"]
-    assert row["verdict"] == f"past target; {M.HELD_NONE}; {M.ABOVE_BOUND}; {M.PYTHON_LEDGER_PREMISE}"
-    assert row["inputs"] == ["measured", BENCH, "ledger.spec.python_ledger.gamma"]
-    assert (row["bound"], row["audit"], row["gamma_decided_by"]) == (False, False, M.PYTHON_LEDGER)
+    assert row["verdict"] == f"past target; {M.HELD_NONE}; {M.ABOVE_BOUND}"
+    assert row["inputs"] == ["measured", BENCH, "ledger.spec.gamma"]
+    assert (row["bound"], row["audit"]) == (False, False) and "gamma_decided_by" not in row
 
 
 def test_a_local_session_with_out_writes_its_document_and_result_there(store, capsys, work, tmp_path, monkeypatch):
@@ -1416,20 +1406,16 @@ def test_a_refused_local_session_writes_its_row_with_no_value_and_why(store, cap
 
 
 @pytest.mark.parametrize("way", ["--loopback", "--local"])
-def test_where_the_lean_leaves_gamma_undecided_the_one_machine_ways_print_the_python_ledgers_and_say_so_first(
-        store, capsys, work, monkeypatch, way):
-    """A fresh session prints a number: where the Lean's answer for γ's terms isn't written, `--loopback` and `--local`
-    print the Python ledger's γ and error, which the verifier's record carries beside the undecided reading, and the
-    text's first lines and the JSON's `gamma_decided_by` say the Lean verifier has not decided them."""
+def test_where_the_lean_leaves_gamma_undecided_the_one_machine_ways_print_no_number(store, capsys, work, monkeypatch,
+                                                                                    way):
+    """Where the Lean's answer for γ's terms isn't written, `--loopback` and `--local` print no number and exit 1, as
+    every way in does, though the record carries the Python ledger's γ beside the undecided reading."""
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
     machine = Machine(record=a_local_record(a_python_ledger_session(gamma=0.199, error=2.0 ** -40)))
-    assert bench(store, way, run=machine) == 0
-    text, doc, _ = printed(capsys)
-    assert text[0].startswith("memory: 0.199 of the node's memory read rate") and "δ = 9.09e-13" in text[0]
-    assert text[1] == f"  {M.LOOPBACK if way == '--loopback' else M.LOCAL}"
-    assert text[2] == f"  {M.PYTHON_LEDGER_WORDS}" and "has not decided" in text[2]
-    assert (doc["value"], doc["error"], doc["gamma_decided_by"]) == (0.199, 2.0 ** -40, M.PYTHON_LEDGER)
-    assert doc["numbers_decided_by"] == M.NUMBERS_PYTHON
+    assert bench(store, way, run=machine) == 1
+    out, err = capsys.readouterr()
+    assert f"memory: no number: session 0 was accepted and its γ at the specification's rate is {UNDECIDED}" in out + err
+    assert not any(line.startswith("memory: 0") for line in out.splitlines())
 
 
 @pytest.mark.parametrize("way", ["--loopback", "--local"])

@@ -159,21 +159,12 @@ FETCH = ("import sys; from huggingface_hub import snapshot_download as d; "
 COINS = {"local": "local challenger", "serve": "local challenger", "gate": "deployed challenger"}
 #: why `--local` prints no reference beside its number
 NO_STORE = "a --local run reads no evidence store, and the references are other runs' numbers in ours"
-#: `gamma_decided_by` for a share read from the Python ledger where the Lean's answer for γ's terms isn't written, and
-#: the line the text prints for it
-PYTHON_LEDGER = "python-ledger"
-PYTHON_LEDGER_WORDS = ("python ledger: the share and its error are the Python ledger's reading of the accepted session; "
-                       "the Lean verifier has not decided them, so no audit reads them")
-#: and the premise a metric of such a share names in its verdict
-PYTHON_LEDGER_PREMISE = "the share is the Python ledger's: the Lean verifier has not decided it"
 #: `numbers_decided_by`: which of the printed numbers the Lean verifier decided and which are the Python ledger's, each
 #: by its key in the session's ledger.  Where the Lean decided the share, its error is the sum of the three: the
 #: windows' δ and AuditRO's slack (the reading's own error, held to the Lean's), and the sketch's term and the sample's
 #: rejection and binding terms (`draw`), which no Lean computes yet
 NUMBERS_LEAN = {"lean": ["spec.gamma", "spec.error.windows"],
                 "python_ledger": ["declared.gamma.spec.error.sketch", "declared.gamma.spec.error.draw"]}
-NUMBERS_PYTHON = {"lean": [], "python_ledger": ["spec.python_ledger.gamma",
-                                                "declared.python_ledger.gamma.spec.error.windows"]}
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
 #: what an unbound session's number rests on, in its metric's verdict
 HELD_NONE = "the verifier held no checkpoint"
@@ -274,22 +265,20 @@ def _at(ledger: dict, *keys: str) -> float | None:
     return None if isinstance(x, bool) or not isinstance(x, (int, float)) else x
 
 
-def error_of(ledger: dict, *keys: str) -> float | None:
+def error_of(ledger: dict) -> float | None:
     """The session's error as its verifier's ledger declares it at the reading the number is printed at, read window
     by window as γ is: the windows' δ summed, with the sketch's term and the sample's rejection and binding terms.
-    None where the record holds none. `keys` reads it inside the declaration (`python_ledger`)."""
-    return _at(ledger, "declared", *keys, "gamma", next(iter(READINGS)), "error", "windows")
+    None where the record holds none."""
+    return _at(ledger, "declared", "gamma", next(iter(READINGS)), "error", "windows")
 
 
-def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict:
+def session(record: Path, k: int | None) -> dict:
     """Session `k` (the only one when `k` is None) of the verifier's record at `record`, as the printer reads it:
     `NoNumber` unless the Lean verifier accepted it (`accepted`, with `verdict` `lean`) and its ledger holds γ at the
     specification's rate, which is
     `remote_session/summary.py`'s `gamma_spec` of the session. Where the Lean's answer for γ's terms isn't written,
-    the reading is undecided and there is no number, unless `python_ledger`, which only `--loopback` and `--local`
-    pass: then γ and its error are the Python ledger's reading the record carries beside it (`python_ledger`), and
-    `gamma_decided_by` says so (`PYTHON_LEDGER`); else it is `lean`.  `numbers_decided_by` names which of the
-    printed numbers each decided (`NUMBERS_LEAN`, `NUMBERS_PYTHON`)."""
+    the reading is undecided and there is no number.  `numbers_decided_by` names which of the printed numbers the
+    Lean decided and which are the Python ledger's (`NUMBERS_LEAN`)."""
     try:
         v = json.loads(record.read_text())
         sessions = {s["k"]: s for s in v["sessions"]}
@@ -312,21 +301,18 @@ def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict
         raise NoNumber(f"session {vs['k']} is recorded accepted, but its record names no Lean verdict "
                        f"({vs.get('verdict')!r}): only the Lean verifier's accept has a number")
     ledger = vs.get("ledger") or {}
-    spec, decided_by, under = ledger.get("spec") or {}, "lean", ()
+    spec = ledger.get("spec") or {}
     if (undecided := spec.get("undecided")) is not None:
-        if not python_ledger or not isinstance(spec.get("python_ledger"), dict):
-            raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is {undecided}")
-        spec, decided_by, under = spec["python_ledger"], PYTHON_LEDGER, ("python_ledger",)
+        raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is {undecided}")
     if (why := spec.get("refused")) is not None:
         raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is refused: {why}")
     gamma = spec.get("gamma")
     if isinstance(gamma, bool) or not isinstance(gamma, (int, float)):
         raise NoNumber(f"session {vs['k']} was accepted and its ledger holds no γ at the specification's rate")
     binding = v.get("binding") or {}
-    return {"value": gamma, "gamma_decided_by": decided_by,
-            "numbers_decided_by": NUMBERS_PYTHON if decided_by == PYTHON_LEDGER else NUMBERS_LEAN,
+    return {"value": gamma, "gamma_decided_by": "lean", "numbers_decided_by": NUMBERS_LEAN,
             "session": vs["k"], "verdict": vs.get("verdict"),
-            "error": error_of(ledger, *under),
+            "error": error_of(ledger),
             "rate_bytes_per_s": (ledger.get("inputs") or {}).get("spec_bytes_per_s"),
             "store_bytes": blocks * BLOCK_BYTES,
             "node_gpu_bytes": (ledger.get("memory") or {}).get("hbm_bytes"),
@@ -495,7 +481,7 @@ def loopback(run: Callable = subprocess.run) -> dict:
             if (why := refusal(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json")) is not None:
                 raise NoNumber(f"{why} (run.sh exited {done.returncode})")
             raise CouldNotRun(f"the loopback's processes failed (run.sh exited {done.returncode}); their logs are above")
-        s = session(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json", None, python_ledger=True)
+        s = session(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json", None)
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=True)
 
 
@@ -646,7 +632,7 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
             raise NoNumber(f"{why} (run.sh exited {done.returncode}); its logs are above and in {held}/out")
         raise CouldNotRun(f"the node's session failed (run.sh exited {done.returncode}); its logs are above and in "
                           f"{held}/out")
-    s = session(Path(held) / "out" / "verifier.json", None, python_ledger=True)
+    s = session(Path(held) / "out" / "verifier.json", None)
     if s["store_bytes"] < STORE_MIN * hbm_bytes:
         raise NoNumber(f"the store is {_gb(s['store_bytes'])}, {s['store_bytes'] / hbm_bytes:.3f} of the card's "
                        f"{_gb(hbm_bytes)}, below the {STORE_MIN} this benchmark reads: the session read a request's "
@@ -810,9 +796,8 @@ def amounts(doc: dict, ledger: dict, metric: str = METRIC) -> list[dict]:
 
     - `"metric"`: the printed number in its unit.
     - `metric`: the same number, the Metrics tab's metric (this directory's `metrics.toml`; `METRIC`, or `LOCAL_METRIC`
-      for a `--local` session), with `TARGET` and where the number stands against it. A share the Python ledger
-      computed names that in its verdict (`PYTHON_LEDGER_PREMISE`) and its `extra`, with `audit` false where the
-      session's coins or parameters aren't deployed (`ran`). A session whose verifier held no checkpoint still writes the metric, with `"bound": false` and
+      for a `--local` session), with `TARGET` and where the number stands against it, and its `extra` `audit` false
+      where the session's coins or parameters aren't deployed (`ran`). A session whose verifier held no checkpoint still writes the metric, with `"bound": false` and
       its verdict naming that premise (`HELD_NONE`); a bound session's metric holds neither. Where the number's error is
       above 2^`ERROR_BOUND_LOG2` the verdict names that too (`ABOVE_BOUND`): the record's declared error at the first
       reading where it holds one, else the ledger's own, and above it where the record holds neither.
@@ -835,45 +820,39 @@ def amounts(doc: dict, ledger: dict, metric: str = METRIC) -> list[dict]:
     run = [doc["run"]] if doc["run"] else []
     none = {"value": None, "why": doc["no_bound"]} if doc.get("no_bound") else {}
     first = next(iter(READINGS))
-    python = doc.get("gamma_decided_by") == PYTHON_LEDGER
-    # a share the Python ledger computed is read where the verifier records it, beside each undecided reading
-    under = {r: (f"{r}.python_ledger" if python else r) for r in (*READINGS, "declared")}
-    if python:
-        ledger = {**ledger, **{r: (ledger.get(r) or {}).get("python_ledger") or {} for r in under}}
     error = _at(ledger, "declared", "gamma", first, "error", "windows")
     error = _at(ledger, first, "error", "windows") if error is None else error
     premises = [*([] if doc.get("bound") is True else [HELD_NONE]),
-                *([ABOVE_BOUND] if error is None or error > 2.0 ** ERROR_BOUND_LOG2 else []),
-                *([PYTHON_LEDGER_PREMISE] if python else [])]
-    row = {"name": metric, "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{under[first]}.gamma"],
+                *([ABOVE_BOUND] if error is None or error > 2.0 ** ERROR_BOUND_LOG2 else [])]
+    row = {"name": metric, "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"],
            "target": TARGET,
            "verdict": "; ".join([doc["no_bound"] if none else "within target" if doc["value"] <= TARGET
                                   else "past target", *premises])} | none
     said = ran(doc)
     audit = None if said is None else (said[1]["coins"], said[1]["parameters"]) == ("deployed challenger", "deployed")
     extra = {**({} if doc.get("bound") is True else {"bound": False}),
-             **({"audit": False} if audit is False else {}), **({"gamma_decided_by": PYTHON_LEDGER} if python else {})}
+             **({"audit": False} if audit is False else {})}
     if extra:
         row["extra"] = extra
     out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"],
-            "inputs": [*run, f"ledger.{under[first]}.gamma"]} | none, row]
+            "inputs": [*run, f"ledger.{first}.gamma"]} | none, row]
     if (verified := _at(ledger, first, "certified_bytes")) is not None:
         out.append({"name": "verified", "value": max(verified, 0.0), "unit": BYTES,
-                    "inputs": [*run, f"ledger.{under[first]}.certified_bytes"]} | none)
+                    "inputs": [*run, f"ledger.{first}.certified_bytes"]} | none)
     span = _at(ledger, "inputs", "span_ns")
     for reading, rate_is in READINGS.items():
         rate, gamma = _at(ledger, reading, "capacity_bytes_per_s"), _at(ledger, reading, "gamma")
         if span is None or rate is None or gamma is None:
             continue
         capacity = rate * span / 1e9
-        keys = [f"ledger.{under[reading]}.capacity_bytes_per_s", "ledger.inputs.span_ns"]
+        keys = [f"ledger.{reading}.capacity_bytes_per_s", "ledger.inputs.span_ns"]
         out += [{"name": f"capacity at {reading}", "value": capacity, "unit": f"{BYTES}, at {rate_is}: {OWN_RATE}",
                  "inputs": [*run, *keys]},
                 {"name": f"free at {reading}", "value": min(gamma, 1.0) * capacity, "unit": BYTES,
-                 "inputs": [*run, f"ledger.{under[reading]}.gamma", *keys]} | none]
+                 "inputs": [*run, f"ledger.{reading}.gamma", *keys]} | none]
     if (error := error_of(ledger)) is not None:
         out.append({"name": "error", "value": error, "unit": ERROR,
-                    "inputs": [*run, f"ledger.{under['declared']}.gamma.{first}.error.windows"]})
+                    "inputs": [*run, f"ledger.declared.gamma.{first}.error.windows"]})
     return out
 
 
@@ -894,8 +873,6 @@ def text(doc: dict) -> str:
         lines.append(f"  {LOOPBACK}")
     elif doc.get("local"):
         lines.append(f"  {doc['local']}")
-    if doc.get("gamma_decided_by") == PYTHON_LEDGER:
-        lines.append(f"  {PYTHON_LEDGER_WORDS}")
     if m := doc.get("machine"):
         lines.append(f"  card: {m['card']}, the verifier's node one card of hardware/nodes/{m['sheet']}.toml; "
                      f"data sheets sha256 {m['sheet_sha256'][:16]}, verifier sha256 {m['verifier_sha256'][:16]}")
