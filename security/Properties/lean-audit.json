@@ -2304,6 +2304,94 @@
   "ResourceAccounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriod": {
    "type_hash": "d03eac6083dc91f985f258ffa9ba85043337fec435600a11bf6141e46e65c31b",
    "unfolded_hash": "8435f8eb2abc7bfa799171492e4d5c0852d169ed269cac5f47002ecbf7628e41"
+  },
+  "Verity.coins_couple": {
+   "type_hash": "e11a9e40a8666e28598f3e1dd1b9e61a9b0435718454fe4bfd17509cd6f9de36",
+   "unfolded_hash": "690e66106e04ea78f224fdc0d27d6f2ea40024e6e5d1ada50a6ab284bba0c294",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.pouw"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.plain_soundness_of_subprotocols": {
+   "type_hash": "1d1d5352b86264c9d567f36348b5947139ae119b410d5faf3dcc4f3b34190de6",
+   "unfolded_hash": "247e8ffbab868d9b893fd8b427ebcf5409bacbf2bffd40cce6011075e4ffc576",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.sampled", "Verity.Subprotocol.pouw", "Verity.Subprotocol.inferenceOnly"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.remote_soundness_of_subprotocols": {
+   "type_hash": "10dde9d4b2b9d2eaa2bca9c3a6c1f61e31838c8444eb7cd4a10e06fcc47b0686",
+   "unfolded_hash": "01b92f65e5a861032872d59a17d0990cd7ca2f7aaf9eb654c6aada6ff0f099b3",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.sampled", "Verity.Subprotocol.pouw"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.soundness_at_of_componentBounds": {
+   "type_hash": "3de40e1bed659f5abb9db6888f1a04747e488eba9ab6f04694abf6ee4bb3ab8e",
+   "unfolded_hash": "31cab4c0eb3ae4dca174afaf8c4aff2e1feb873f433cad4877749f9d1d77774b",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.sampled", "Verity.Subprotocol.pouw", "Verity.Subprotocol.inferenceOnly"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.soundness_at_of_targets": {
+   "type_hash": "e559b1c46140faa2c230a38cba4ee1d8c15fe7f0c6dc3ca8dcf59bcf33ce8c11",
+   "unfolded_hash": "cd3482eb2e09c71913b341d652c7bc659a869a6860087b72ae185c765f7bbc01",
+   "missing": "below_one",
+   "targets": [
+    "Verity.Subprotocol.sampled",
+    "Verity.Subprotocol.pouw",
+    "Verity.Subprotocol.inferenceOnly",
+    "Verity.Subprotocol.pous",
+    "Verity.Subprotocol.poub",
+    "Verity.Subprotocol.network",
+    "Verity.Subprotocol.wipe"
+   ],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.soundness_of_subprotocols": {
+   "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911",
+   "unfolded_hash": "058b6195667a827d617cf7612ba04ba2316681d129bc2e4bce78ba9427d04f97",
+   "missing": "below_one",
+   "targets": [
+    "Verity.Subprotocol.sampled",
+    "Verity.Subprotocol.pouw",
+    "Verity.Subprotocol.inferenceOnly",
+    "Verity.Subprotocol.pous",
+    "Verity.Subprotocol.poub",
+    "Verity.Subprotocol.network",
+    "Verity.Subprotocol.wipe"
+   ],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.soundness_of_upFront": {
+   "type_hash": "2494f8e3e16e9e95ff2d41d571d5975aa4edb5159e9ab0eb29fd3fd41be59832",
+   "unfolded_hash": "1e5723b27f241fb2ae9c583f9ee5af864bc6c1254ffdc47e021aaf8e26dca903",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.sampled", "Verity.Subprotocol.pouw", "Verity.Subprotocol.inferenceOnly"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.target_of_periods": {
+   "type_hash": "d181e7720c0d275fb70fe100c65ea105f93c383c5dae726079f6f9869a2f1412",
+   "unfolded_hash": "725ad111966218fa746a8d3d1e8bab2da892791dcccf19dea28bc9fc82cf0b43",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.pouw"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.vocab ⊤ 1`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.wipe_target": {
+   "type_hash": "8a7cd3dbe22e55ea70b7eeb6a96fe2c7a1828d90e42a45a4b3d7240773ed3222",
+   "unfolded_hash": "061c4ef546efeecd3d50d2ceed38ec13d6cefe7fd98184fc1d33636c161fc61d",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.wipe"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
   }
  },
  "witnesses_assumed": {

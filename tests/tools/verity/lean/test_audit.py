@@ -1286,6 +1286,9 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
         "witnesses.stale": ({**wrec, "witnesses": wrec["witnesses"] | {"P.gone": wrec["witnesses"]["P.sound"]}}, wfacts),
         "witnesses.assumed-stale": ({**wrec, "witnesses_assumed": {"P.Gone": "assumed as it stands"}}, wfacts),
         "witnesses.unwitnessed-unlisted": ({**bare, "unwitnessed": bare["unwitnessed"] | {"P.gone": sha("listed once")}}, wfacts),
+        "witnesses.below-one-stale": ({**wrec, "unwitnessed": {"P.sound": {
+            "type_hash": wfacts["pins"]["P.sound"]["type_sha256"], "missing": "below_one", "targets": ["S.pouw"],
+            "owner": "@lean", "why": "its honest witness is at an error of top"}}}, wfacts),
         "shape.properties-stale": ({**pol, "shape": frozen | {"properties": {"P.gone": {"function": "P.f",
                                                                                        "outcome": "accept"}}}}, facts()),
         "shape.frozen-stale": ({**pol, "shape": {"frozen": frozen["frozen"] | {"P.gone": "frozen: open"}}}, facts()),
@@ -5350,6 +5353,53 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     assert A.renamed_witnesses(POLICY, {"P": "Q"}) == {"ids": {"Q.Hyp": "p-hyp"}, "assumptions": {"Q.Hyp": {"owner": "@lean"}}}
 
 
+def test_an_honest_witness_bounded_by_an_error_is_held_to_a_below_one_lemma_or_an_entry_listing_the_target():
+    """Each target `Facts.lean` reports for a guarantee (an error its honest witnesses are bounded by) is covered by a
+    lemma its `witnesses` entry lists under `below_one`, or listed by subprotocol in an `unwitnessed` entry {type_hash,
+    missing: below_one, targets, owner, why} beside its witnesses. The refusal is no bookkeeping and prints the entry; a
+    listed target that is covered is stale, and `--update` drops it, and the entry with its last target, and adds none."""
+    def tgt(sub: str, below: bool = False) -> dict:
+        return {"witness": "P.sound_honest", "head": "Verity.Vocab.error", "vocab": "P.top", "params": None,
+                "subprotocol": sub, "below_one": below}
+
+    pol, f = witnessed(guarantee={"targets": [tgt("S.pouw"), tgt("S.wipe")]})
+    h = f["pins"]["P.sound"]["type_sha256"]
+    [refusal] = A.witness_failures(pol, f, WOWN)
+    assert refusal.code == "witnesses.honest-error" and not A.BOOKKEEPING.match(refusal)
+    assert "S.pouw at P.top, every parameter it binds (P.sound_honest)" in refusal and \
+        f'"P.sound": {{"type_hash": "{h}", "missing": "below_one", "targets": ["S.pouw", "S.wipe"], "owner": "@lean"' in refusal
+    entry = {"type_hash": h, "missing": "below_one", "targets": ["S.pouw", "S.wipe"], "owner": "@soundness",
+             "why": "the honest witness is at an instance whose published error is top"}
+    listed = {**pol, "unwitnessed": {"P.sound": entry}}
+    assert witness_codes(listed, f) == []
+    assert A.unwitnessed_kept(listed, f, {}) == {"P.sound": entry}
+    assert witness_codes({**pol, "unwitnessed": {"P.sound": entry | {"targets": ["S.pouw"]}}}, f) == \
+        ["witnesses.honest-error"]
+    for bad in ({"targets": []}, {"targets": "S.pouw"}, {"owner": ""}, {"missing": "finite"}):
+        assert witness_codes({**pol, "unwitnessed": {"P.sound": entry | bad}}, f) == ["witnesses.form"], bad
+    assert witness_codes({**pol, "witnesses": {}, "unwitnessed": {"P.sound": entry}}, f) == ["witnesses.unwitnessed-half"]
+
+    lemma = fact(hyps=[]) | {"body": wbody("Verity.Vocab.ErrorBelowOne")}
+    pins = f["pins"] | {"P.below": lemma}
+    one = facts(pins=pins | {"P.sound": pins["P.sound"] | {"targets": [tgt("S.pouw", True), tgt("S.wipe")]}},
+                own_modules=sorted(WOWN))
+    both = facts(pins=pins | {"P.sound": pins["P.sound"] | {"targets": [tgt("S.pouw", True), tgt("S.wipe", True)]}},
+                 own_modules=sorted(WOWN))
+    ws = {"P.sound": {"honest": ["P.sound_honest"], "nontrivial": "P.sound_nontrivial", "below_one": ["P.below"]}}
+    lemmas = {**pol, "guarantees": pol["guarantees"] | {"P.below": {"owner": "@lean"}}, "witnesses": ws}
+    assert A.claim_witnesses(lemmas) >= {"P.below"} and A.below_one_lemmas(lemmas) == {"P.sound": ["P.below"]}
+    assert witness_codes(lemmas, one) == ["witnesses.honest-error"] and witness_codes(lemmas, both) == []
+    stale = {**lemmas, "unwitnessed": {"P.sound": entry}}
+    [was] = A.witness_failures(stale, one, WOWN)
+    assert was.code == "witnesses.below-one-stale" and A.BOOKKEEPING.match(was)
+    assert A.unwitnessed_kept(stale, one, {}) == {"P.sound": entry | {"targets": ["S.wipe"]}}
+    assert witness_codes(stale, both) == ["witnesses.below-one-stale"] and A.unwitnessed_kept(stale, both, {}) == {}
+    assert witness_codes({**lemmas, "guarantees": pol["guarantees"]}, both) == ["witnesses.unlisted-witness"]
+    for bad in ("P.below", []):
+        assert witness_codes({**lemmas, "witnesses": {"P.sound": ws["P.sound"] | {"below_one": bad}}}, both) == \
+            ["witnesses.witness-form"], bad
+
+
 def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry_is_held_to_its_witnesses():
     """A guarantee in scope that the lock lists with neither witnesses nor an `unwitnessed` entry, as a merge leaves one
     that one side lists and whose entry the other side dropped: the check holds it to its witnesses
@@ -6348,7 +6398,7 @@ def test_a_guarantee_may_list_further_nontrivial_witnesses_each_dropping_another
         shaped = {**pol, "witnesses": {"P.sound": {**pol["witnesses"]["P.sound"], "nontrivial": bad}}}
         assert A.witness_failures(shaped, f, WOWN) == [
             "witnesses: witnesses[P.sound] is {honest: [theorem], nontrivial: theorem or [theorem, …], kind: acceptance "
-            "or exclusion (optional)}"]
+            "or exclusion (optional), below_one: [theorem] (optional)}"]
 
     accept_all = ("P.sound_again", {"body": wbody("P.Holds", negated=True)})
     assert A.witness_failures(*further(accept_all), WOWN) == [
