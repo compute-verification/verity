@@ -76,8 +76,8 @@ open Flock FlockLevel3 FlockSoundness FlockSoundness.Discharge.Hm
 open Flock.HmNets hiding and
 open FlockDeploy.Concrete (UN)
 open SpotFlock.InstanceStmt.TraceRows
-open SpotFlock.InstanceStmt.TraceDelta (PIN ZERO consts EX OX msI padI cs srcA srcB leafX consts_count_zero delta_zero delta_R1
-  delta_R2 delta_R3 delta_R4 delta_R5 delta_R6 delta_O1 delta_O2 delta_selfForm form_flip)
+open SpotFlock.InstanceStmt.TraceDelta (PIN ZERO consts EX OX msI msO padI padO cs csU srcB consts_count_zero delta_zero
+  delta_R1 delta_R2 delta_R3a delta_R3b delta_R4 delta_R5a delta_R5b delta_R6 delta_O1 delta_O2 delta_selfForm form_flip)
 open SpotFlock.InstanceStmt.TraceVal
 
 set_option maxRecDepth 200000
@@ -207,12 +207,14 @@ theorem holds_all (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
       (hz0 r.val ⟨by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩)
       (zIX_h0_past hn (by omega) h7)
   -- hm slot 1
+  by_cases h8a : r.val < 262656
+  · exact holds_hmIn_at L regs (zI := zIX) hk R F.hm1 o (off := r.val - 262144) (by omega) (by omega)
+      ⟨csU msO (r.val - 262144), mk _ (csU_lt4 _ _)⟩
+      (fun j => (delta_R3a F.da ⟨by omega, h8a⟩ j).trans (form_flip _ _ j)) (zIX_R3a hn (by omega) h8a)
   by_cases h8 : r.val < 262704
-  · obtain ⟨sA, hsA⟩ : ∃ s, s = srcA (r.val - 262144) := ⟨_, rfl⟩
-    exact holds_hmIn_at L regs (zI := zIX) hk R F.hm1 o (off := r.val - 262144) (by omega) (by omega)
-      ⟨sA, mk _ (by rw [hsA]; exact srcA_lt4 _)⟩
-      (fun j => by rw [delta_R3 F.da ⟨by omega, h8⟩ j, ← hsA, form_flip])
-      (by rw [zIX_srcA hn (by omega) h8, ← hsA])
+  · exact holds_hmIn_at L regs (zI := zIX) hk R F.hm1 o (off := r.val - 262144) (by omega) (by omega)
+      ⟨cs padO (r.val - 262656), mk _ (cs_lt4 _ _)⟩
+      (fun j => (delta_R3b F.da ⟨by omega, h8⟩ j).trans (form_flip _ _ j)) (zIX_R3b hn (by omega) h8)
   by_cases h9 : r.val < 262712
   · exact holds_hmIn_at L regs (zI := zIX) hk R F.hm1 o (off := r.val - 262144) (by omega) (by omega)
       ⟨786568 + (r.val - 262704), mk _ (by omega)⟩
@@ -249,7 +251,7 @@ theorem holds_all (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
   -- sha slot
   by_cases h17 : r.val < 524800
   · exact holds_shaIn_at L regs (zI := zIX) hk R F.sha o (off := r.val - 524288) (by omega) (by omega)
-      ⟨cs msI (r.val - 524288), mk _ (cs_lt4 _ _)⟩
+      ⟨csU msI (r.val - 524288), mk _ (csU_lt4 _ _)⟩
       (fun j => (delta_R1 F.da ⟨by omega, h17⟩ j).trans (form_flip _ _ j)) (zIX_sha_cv0 hn (by omega) h17)
   by_cases h18 : r.val < 528896
   · exact holds_shaIn_at L regs (zI := zIX) hk R F.sha o (off := r.val - 524288) (by omega) (by omega) r
@@ -271,12 +273,18 @@ theorem holds_all (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
       (hz0 r.val ⟨by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩)
       (zIX_sha_past hn (by omega) h22)
   -- the unit slot
+  by_cases h23a : r.val < 786440
+  · exact holds_unitLeaf_at L regs (zI := zIX) hk F.tmpl F.unit hs1 F.unitSlot o ⟨by omega, by omega⟩
+      ⟨524856 + (r.val - 786432), mk _ (by omega)⟩
+      (fun j => delta_R5a F.da (x := r.val) ⟨by omega, h23a⟩ j)
+      (by rw [zIX_unit_false (i := r.val) (by omega) (by omega)]
+          exact (zIX_sha_in (x := 524856 + (r.val - 786432)) (by omega) (by omega)).symm)
   by_cases h23 : r.val < 786448
-  · obtain ⟨sL, hsL⟩ : ∃ s, s = leafX (r.val - 786432) := ⟨_, rfl⟩
-    exact holds_unitLeaf_at L regs (zI := zIX) hk F.tmpl F.unit hs1 F.unitSlot o ⟨by omega, by omega⟩
-      ⟨sL, mk _ (by rw [hsL]; unfold leafX; split <;> omega)⟩
-      (fun j => by rw [delta_R5 F.da (x := r.val) ⟨by omega, by omega⟩ j, ← hsL])
-      (by rw [zIX_unit_false (i := r.val) (by omega) (by omega), hsL]; exact (zIX_leaf (r.val - 786432) (by omega)).symm)
+  · exact holds_unitLeaf_at L regs (zI := zIX) hk F.tmpl F.unit hs1 F.unitSlot o ⟨by omega, by omega⟩
+      ⟨524848 + (r.val - 786440), mk _ (by omega)⟩
+      (fun j => delta_R5b F.da (x := r.val) ⟨by omega, h23⟩ j)
+      (by rw [zIX_unit_false (i := r.val) (by omega) (by omega)]
+          exact (zIX_sha_in (x := 524848 + (r.val - 786440)) (by omega) (by omega)).symm)
   by_cases h24 : r.val < 786560
   · exact holds_unitPad_at L regs (zI := zIX) hk F.tmpl F.unit hs1 F.unitSlot o ⟨by omega, by omega⟩
       (hz0 r.val ⟨by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩)

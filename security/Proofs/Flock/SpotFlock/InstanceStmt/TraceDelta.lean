@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SessionLoop.Concrete.Trace
+public import Proofs.Flock.SpotFlock.InstanceStmt.Bytes
 import Flock.HmRow
 import Flock.HmNets
 import Flock.Canon
@@ -83,13 +84,15 @@ abbrev PIN : ℕ := 246784
 /-- The unit slot's forced-zero row. -/
 abbrev ZERO : ℕ := 786689
 
-/-- The first row's prefix midstate: the words whose bits `cv0` copies (bit `t` is bit `t % 64` of word `t / 64`). -/
-def msI : Array ℕ := #[9243881230307833572, 18261749186713251112, 2057719281686240326, 7529114398774509093,
-  12208969068885866836, 9051338337454095689, 6359526340538369997, 12360329076681023708]
+/-- The first row's prefix midstate, as `HmRow.delta` reads it: the kernel never computes its words, since `HmRow.delta`
+names the same term. -/
+abbrev msI : Array UInt64 := HmRow.midstateOf i0
 
 /-- The second row's prefix midstate. -/
-def msO : Array ℕ := #[13790316904958914503, 9188748766758119702, 14313488130182321658, 1064149434720119855,
-  3451641496816576099, 9706655598843561619, 4482475992586384646, 9209987525246192034]
+abbrev msO : Array UInt64 := HmRow.midstateOf o0
+
+/-- Bit `t` of a midstate, as `HmRow.delta` tests it. -/
+def ubit (ms : Array UInt64) (t : ℕ) : Bool := (ms[t / 64]! >>> (t % 64).toUInt64) &&& 1 == 1
 
 /-- The first row's padding block (a 128-byte message). -/
 def padI : Array ℕ := #[9223372036854775808, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2048]
@@ -100,14 +103,11 @@ def padO : Array ℕ := #[140737488355328, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 /-- A constant bit's source: the pin for 1, the forced-zero row for 0. -/
 def cs (ws : Array ℕ) (t : ℕ) : ℕ := if wbit ws t then PIN else ZERO
 
-/-- The second `hm96` slot's `cv` and the first 48 bits of its `pad`. -/
-def srcA (t : ℕ) : ℕ := if t < 512 then cs msO t else cs padO (t - 512)
+/-- A midstate bit's source. -/
+def csU (ms : Array UInt64) (t : ℕ) : ℕ := if ubit ms t then PIN else ZERO
 
 /-- The second `hm96` slot's `pad` past its 16 message bits. -/
 def srcB (t : ℕ) : ℕ := cs padO (t + 64)
-
-/-- The unit's leaf bits' sources: the first row's first two bytes in the `sha512x3` slot's message. -/
-def leafX (t : ℕ) : ℕ := if t < 8 then 524856 + t else 524840 + t
 
 /-- The slot constants' pairs. -/
 def consts : List (ℕ × ℕ) :=
@@ -115,17 +115,19 @@ def consts : List (ℕ × ℕ) :=
 
 /-- `HmRow.delta`'s pairs at `x r`'s table. -/
 def EX : List (ℕ × ℕ) :=
-  consts ++ run 524288 512 (cs msI) ++ run 512 1024 (cs padI) ++ run 262144 560 srcA ++ run 262720 960 srcB ++
-    run 786432 16 leafX ++ run 0 512 (778240 + ·)
+  consts ++ run 524288 512 (csU msI) ++ run 512 1024 (cs padI) ++ run 262144 512 (csU msO) ++
+    run 262656 48 (cs padO) ++ run 262720 960 srcB ++ run 786432 8 (524856 + ·) ++ run 786440 8 (524848 + ·) ++
+    run 0 512 (778240 + ·)
 
 /-- The output rows' pairs: the second `hm96` slot's message bits copy the unit's outputs. -/
 def OX : List (ℕ × ℕ) := run 262712 8 (786560 + ·) ++ run 262704 8 (786568 + ·)
 
 theorem count_T (x j : ℕ) : (EX ++ OX).count (x, j) =
-    consts.count (x, j) + (run 524288 512 (cs msI)).count (x, j) + (run 512 1024 (cs padI)).count (x, j) +
-      (run 262144 560 srcA).count (x, j) + (run 262720 960 srcB).count (x, j) + (run 786432 16 leafX).count (x, j) +
-      (run 0 512 (778240 + ·)).count (x, j) + (run 262712 8 (786560 + ·)).count (x, j) +
-      (run 262704 8 (786568 + ·)).count (x, j) := by
+    consts.count (x, j) + (run 524288 512 (csU msI)).count (x, j) + (run 512 1024 (cs padI)).count (x, j) +
+      (run 262144 512 (csU msO)).count (x, j) + (run 262656 48 (cs padO)).count (x, j) +
+      (run 262720 960 srcB).count (x, j) + (run 786432 8 (524856 + ·)).count (x, j) +
+      (run 786440 8 (524848 + ·)).count (x, j) + (run 0 512 (778240 + ·)).count (x, j) +
+      (run 262712 8 (786560 + ·)).count (x, j) + (run 262704 8 (786568 + ·)).count (x, j) := by
   simp only [EX, OX, List.count_append]
   omega
 
@@ -151,34 +153,45 @@ theorem delta_zero {x : ℕ}
 
 /-- **Δ at a `cv0` row of the `sha512x3` slot**: its self pair and its copy of the first midstate's bit. -/
 theorem delta_R1 {x : ℕ} (hx : 524288 ≤ x ∧ x < 524800) (j : ℕ) :
-    deltaEntry da x j = (((if x = j then 1 else 0) + (if cs msI (x - 524288) = j then 1 else 0) : ℕ) : ZMod 2) := by
+    deltaEntry da x j = (((if x = j then 1 else 0) + (if csU msI (x - 524288) = j then 1 else 0) : ℕ) : ZMod 2) := by
   rw [deltaEntry_eq_count, hda, count_T, consts_count_zero (x := x) (by omega) j]
-  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero]
+  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero, Nat.sub_zero]
 
 /-- **Δ at a `pad` row of the first `hm96` slot**: its self pair and its copy of the first padding block's bit. -/
 theorem delta_R2 {x : ℕ} (hx : 512 ≤ x ∧ x < 1536) (j : ℕ) :
     deltaEntry da x j = (((if x = j then 1 else 0) + (if cs padI (x - 512) = j then 1 else 0) : ℕ) : ZMod 2) := by
   rw [deltaEntry_eq_count, hda, count_T, consts_count_zero (x := x) (by omega) j]
-  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero]
+  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero, Nat.sub_zero]
 
-/-- **Δ at a `cv` row and a `pad` row before the message of the second `hm96` slot**: its self pair and its copy of
-the second row's midstate or padding bit. -/
-theorem delta_R3 {x : ℕ} (hx : 262144 ≤ x ∧ x < 262704) (j : ℕ) :
-    deltaEntry da x j = (((if x = j then 1 else 0) + (if srcA (x - 262144) = j then 1 else 0) : ℕ) : ZMod 2) := by
+/-- **Δ at a `cv` row of the second `hm96` slot**: its self pair and its copy of the second midstate's bit. -/
+theorem delta_R3a {x : ℕ} (hx : 262144 ≤ x ∧ x < 262656) (j : ℕ) :
+    deltaEntry da x j = (((if x = j then 1 else 0) + (if csU msO (x - 262144) = j then 1 else 0) : ℕ) : ZMod 2) := by
   rw [deltaEntry_eq_count, hda, count_T, consts_count_zero (x := x) (by omega) j]
-  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero]
+  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero, Nat.sub_zero]
+
+/-- **Δ at a `pad` row of the second `hm96` slot before its message**. -/
+theorem delta_R3b {x : ℕ} (hx : 262656 ≤ x ∧ x < 262704) (j : ℕ) :
+    deltaEntry da x j = (((if x = j then 1 else 0) + (if cs padO (x - 262656) = j then 1 else 0) : ℕ) : ZMod 2) := by
+  rw [deltaEntry_eq_count, hda, count_T, consts_count_zero (x := x) (by omega) j]
+  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero, Nat.sub_zero]
 
 /-- **Δ at a `pad` row of the second `hm96` slot past its message**. -/
 theorem delta_R4 {x : ℕ} (hx : 262720 ≤ x ∧ x < 263680) (j : ℕ) :
     deltaEntry da x j = (((if x = j then 1 else 0) + (if srcB (x - 262720) = j then 1 else 0) : ℕ) : ZMod 2) := by
   rw [deltaEntry_eq_count, hda, count_T, consts_count_zero (x := x) (by omega) j]
-  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero]
+  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero, Nat.sub_zero]
 
-/-- **Δ at a unit leaf row**: its self pair and its copy of the `sha512x3` slot's message bit. -/
-theorem delta_R5 {x : ℕ} (hx : 786432 ≤ x ∧ x < 786448) (j : ℕ) :
-    deltaEntry da x j = (((if x = j then 1 else 0) + (if leafX (x - 786432) = j then 1 else 0) : ℕ) : ZMod 2) := by
+/-- **Δ at the unit's leaf rows `0 … 7`**: the self pair and the copy of the `sha512x3` slot's message bit. -/
+theorem delta_R5a {x : ℕ} (hx : 786432 ≤ x ∧ x < 786440) (j : ℕ) :
+    deltaEntry da x j = (((if x = j then 1 else 0) + (if 524856 + (x - 786432) = j then 1 else 0) : ℕ) : ZMod 2) := by
   rw [deltaEntry_eq_count, hda, count_T, consts_count_zero (x := x) (by omega) j]
-  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero]
+  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero, Nat.sub_zero]
+
+/-- **Δ at the unit's leaf rows `8 … 15`**. -/
+theorem delta_R5b {x : ℕ} (hx : 786440 ≤ x ∧ x < 786448) (j : ℕ) :
+    deltaEntry da x j = (((if x = j then 1 else 0) + (if 524848 + (x - 786440) = j then 1 else 0) : ℕ) : ZMod 2) := by
+  rw [deltaEntry_eq_count, hda, count_T, consts_count_zero (x := x) (by omega) j]
+  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero, Nat.sub_zero]
 
 /-- **Δ at a `cv` row of the first `hm96` slot**: its self pair and its copy of the `sha512x3` slot's first output. -/
 theorem delta_R6 {x : ℕ} (hx : x < 512) (j : ℕ) :
@@ -190,13 +203,13 @@ theorem delta_R6 {x : ℕ} (hx : x < 512) (j : ℕ) :
 theorem delta_O1 {x : ℕ} (hx : 262712 ≤ x ∧ x < 262720) (j : ℕ) :
     deltaEntry da x j = (((if x = j then 1 else 0) + (if 786560 + (x - 262712) = j then 1 else 0) : ℕ) : ZMod 2) := by
   rw [deltaEntry_eq_count, hda, count_T, consts_count_zero (x := x) (by omega) j]
-  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero]
+  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero, Nat.sub_zero]
 
 /-- **Δ at the second `hm96` slot's message bits** `262704 …`. -/
 theorem delta_O2 {x : ℕ} (hx : 262704 ≤ x ∧ x < 262712) (j : ℕ) :
     deltaEntry da x j = (((if x = j then 1 else 0) + (if 786568 + (x - 262704) = j then 1 else 0) : ℕ) : ZMod 2) := by
   rw [deltaEntry_eq_count, hda, count_T, consts_count_zero (x := x) (by omega) j]
-  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero]
+  simp (disch := omega) only [count_run, if_pos, if_neg, Nat.zero_add, Nat.add_zero, Nat.sub_zero]
 
 end rows
 

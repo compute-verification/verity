@@ -74,14 +74,14 @@ block (message 0) and `y` 0. The unit slot holds its constant and nothing else, 
 open Flock FlockSoundness
 open FlockDeploy.Concrete.Trace (wbit)
 open SpotFlock.InstanceStmt.TraceRows
-open SpotFlock.InstanceStmt.TraceDelta (PIN ZERO msI msO padI padO cs leafX srcA srcB)
+open SpotFlock.InstanceStmt.TraceDelta (PIN ZERO msI msO padI padO cs csU ubit srcB)
 
 set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt.TraceVal
 
 /-- The `sha512x3` slot's inputs: `cv0` the first midstate's bits, every other input 0. -/
-def xS (j : ℕ) : Bool := if j < 512 then wbit msI j else false
+def xS (j : ℕ) : Bool := if j < 512 then ubit msI j else false
 
 /-- The `sha512x3` slot's column values. -/
 def vS : ℕ → Bool := vSof xS
@@ -93,7 +93,7 @@ def xH0 (j : ℕ) : Bool := if j < 512 then vS (253952 + j) else if j < 1536 the
 def vH0 : ℕ → Bool := vHof xH0
 
 /-- The second `hm96` slot's inputs: `cv` the second midstate's bits, `pad` the second padding block's bits, `y` 0. -/
-def xH1 (j : ℕ) : Bool := if j < 512 then wbit msO j else if j < 1536 then wbit padO (j - 512) else false
+def xH1 (j : ℕ) : Bool := if j < 512 then ubit msO j else if j < 1536 then wbit padO (j - 512) else false
 
 /-- The second `hm96` slot's column values. -/
 def vH1 : ℕ → Bool := vHof xH1
@@ -154,15 +154,23 @@ theorem zIX_cs (hn : Properties.Flock.Nets.FixedNetsBuild) (ws : Array ℕ) (t :
   · rw [ite_eq_right h, zIX_unit_false (i := ZERO) (by decide) (by decide)]
     exact (Bool.eq_false_iff.2 h).symm
 
+/-- **The trace at a midstate bit's source** is the bit. -/
+theorem zIX_csU (hn : Properties.Flock.Nets.FixedNetsBuild) (ms : Array UInt64) (t : ℕ) : zIX (csU ms t) = ubit ms t := by
+  unfold csU
+  by_cases h : ubit ms t = true
+  · rw [ite_eq_left h, zIX_pin hn, h]
+  · rw [ite_eq_right h, zIX_unit_false (i := ZERO) (by decide) (by decide)]
+    exact (Bool.eq_false_iff.2 h).symm
+
 theorem cs_lt (ws : Array ℕ) (t : ℕ) : cs ws t < 2 ^ 22 := by
   unfold cs
   split <;> decide
 
 theorem cs_lt4 (ws : Array ℕ) (t : ℕ) : cs ws t < 4194304 := lt_of_lt_of_le (cs_lt ws t) (by norm_num)
 
-theorem srcA_lt4 (t : ℕ) : srcA t < 4194304 := by
-  unfold srcA
-  split <;> exact cs_lt4 _ _
+theorem csU_lt4 (ms : Array UInt64) (t : ℕ) : csU ms t < 4194304 := by
+  unfold csU
+  split <;> decide
 
 theorem srcB_lt4 (t : ℕ) : srcB t < 4194304 := cs_lt4 _ _
 
@@ -174,15 +182,6 @@ theorem xH1_input {j : ℕ} (h : j < 4096) : vH1 j = xH1 j := vHof_input h
 
 /-- The second row's padding block has its 16 message bits 0. -/
 theorem padO_msg : ∀ k < 16, wbit padO (48 + k) = false := by decide +kernel
-
-/-- **The trace at the unit's leaf sources** (the `sha512x3` slot's message bits past `cv0`) is 0. -/
-theorem zIX_leaf (t : ℕ) (ht : t < 16) : zIX (leafX t) = false := by
-  have h1 : 524840 ≤ leafX t ∧ leafX t < 524864 := by unfold leafX; split <;> omega
-  have h2 := zIX_s (j := leafX t - 524288) (by omega)
-  rw [show 524288 + (leafX t - 524288) = leafX t by omega] at h2
-  rw [h2, xS_input (by omega)]
-  unfold xS
-  exact ite_eq_right (show ¬ leafX t - 524288 < 512 by omega)
 
 /-- Rows `0 … 511` copy the `sha512x3` slot's first output. -/
 theorem zIX_cv {x : ℕ} (hx : x < 512) : zIX x = zIX (778240 + x) := by
@@ -208,15 +207,22 @@ theorem zIX_h0_past (hn : Properties.Flock.Nets.FixedNetsBuild) {x : ℕ} (h1 : 
   rw [zIX_h0 (i := x) h2]
   exact vHof_past hn xH0 h1
 
-theorem zIX_srcA (hn : Properties.Flock.Nets.FixedNetsBuild) {x : ℕ} (h1 : 262144 ≤ x) (h2 : x < 262704) :
-    zIX x = zIX (srcA (x - 262144)) := by
+theorem zIX_R3a (hn : Properties.Flock.Nets.FixedNetsBuild) {x : ℕ} (h1 : 262144 ≤ x) (h2 : x < 262656) :
+    zIX x = zIX (csU msO (x - 262144)) := by
   have h := zIX_h1 (j := x - 262144) (by omega)
   rw [show 262144 + (x - 262144) = x by omega] at h
-  rw [h, xH1_input (j := x - 262144) (by omega)]
-  unfold srcA xH1
-  by_cases hc : x - 262144 < 512
-  · rw [ite_eq_left hc, ite_eq_left hc, zIX_cs hn]
-  · rw [ite_eq_right hc, ite_eq_right hc, ite_eq_left (show x - 262144 < 1536 by omega), zIX_cs hn]
+  rw [zIX_csU hn, h, xH1_input (j := x - 262144) (by omega)]
+  unfold xH1
+  rw [ite_eq_left (show x - 262144 < 512 by omega)]
+
+theorem zIX_R3b (hn : Properties.Flock.Nets.FixedNetsBuild) {x : ℕ} (h1 : 262656 ≤ x) (h2 : x < 262704) :
+    zIX x = zIX (cs padO (x - 262656)) := by
+  have h := zIX_h1 (j := x - 262144) (by omega)
+  rw [show 262144 + (x - 262144) = x by omega] at h
+  rw [zIX_cs hn, h, xH1_input (j := x - 262144) (by omega)]
+  unfold xH1
+  rw [ite_eq_right (show ¬ x - 262144 < 512 by omega), ite_eq_left (show x - 262144 < 1536 by omega),
+    show x - 262144 - 512 = x - 262656 by omega]
 
 theorem zIX_msg {x : ℕ} (h1 : 262704 ≤ x) (h2 : x < 262720) : zIX x = false := by
   have h := zIX_h1 (j := x - 262144) (by omega)
@@ -251,10 +257,10 @@ theorem zIX_h1_past (hn : Properties.Flock.Nets.FixedNetsBuild) {x : ℕ} (h1 : 
   exact vHof_past hn xH1 (by omega)
 
 theorem zIX_sha_cv0 (hn : Properties.Flock.Nets.FixedNetsBuild) {x : ℕ} (h1 : 524288 ≤ x) (h2 : x < 524800) :
-    zIX x = zIX (cs msI (x - 524288)) := by
+    zIX x = zIX (csU msI (x - 524288)) := by
   have h := zIX_s (j := x - 524288) (by omega)
   rw [show 524288 + (x - 524288) = x by omega] at h
-  rw [zIX_cs hn, h, xS_input (j := x - 524288) (by omega)]
+  rw [zIX_csU hn, h, xS_input (j := x - 524288) (by omega)]
   unfold xS
   rw [ite_eq_left (show x - 524288 < 512 by omega)]
 
