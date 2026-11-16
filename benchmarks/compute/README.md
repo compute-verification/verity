@@ -157,10 +157,10 @@ uv run verity bench compute --from DIR --per-call --top 5
 
 `--from DIR` reads a run's record from the directory DIR, through no network and with no key. `verity bench` starts
 the command at the clone's root, so a relative DIR is taken from the root. Run it from the root too: `uv run` in a
-directory with a `pyproject.toml` of its own, as this one has for its tests, makes that directory's environment instead
-of the workspace's.
-`tests/fixtures/record/` is a record directory written by hand: its shapes are the served model's and its totals add
-up, but no verifier wrote it and no card served it, and the output's fourth line says so, with what the record says
+directory with a `pyproject.toml` of its own, as `tests/benchmarks/compute/` has, makes that directory's environment
+instead of the workspace's.
+`tests/benchmarks/compute/fixtures/record/` is a record directory written by hand: its shapes are the served model's
+and its totals add up, but no verifier wrote it and no card served it, and the output's fourth line says so, with what the record says
 of itself under it; `result.json` marks its numbers modeled and made up, below. `--per-call` also prints where the MACs the credit leaves out went, by cause and by matrix
 multiplication call (the top N, 10 by default).
 
@@ -296,7 +296,8 @@ the number.
 - `run.py`: the command. Its docstring states the number's formula, each file of a record it reads, what it prints
   beside the number, what it writes and when it refuses.
 - `load.toml`: the benchmark's load.
-- `tests/`: the printer, the model's MAC count and the written output, held to the record under `tests/fixtures/`.
+- `tests/benchmarks/compute/`: the printer, the model's MAC count and the written output, held to the record under its
+  `fixtures/`.
 - `h200_share.py`: a modeled share of an H200's capacity (below).
 
 **What it prints:** the number as text and as one line of JSON (`value`, `unit`, `commit`, `run`), beside its target.
