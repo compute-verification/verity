@@ -480,10 +480,7 @@ lemmas of Proposition 2's counts, `card_free`, `card_leftPacked`, `card_counts_e
 three axioms, but they have no record in `lean-audit.json`, so no citation may call them guarantees. Listing one is an
 `--update` like any other.
 
-The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
-ingress bound's statements were frozen before their proofs as well; the review of the first two is on the pull request
-that added them, and the review of the content versions is on the one stacked on it. Every
-statement, lemma and witness here is proved. The reference implementation, `verity/protocols/resource_accounting/network`
+Every statement, lemma and witness here is proved. The reference implementation, `verity/protocols/resource_accounting/network`
 (`verity.protocols.resource_accounting.network.verifier`), mirrors statements and lemmas by name in its tests, and each test module's docstring says what it holds (its `PROTOCOL.md`, "Tests"). The witnesses have no Python counterpart.
 
 ## Modelling choices a reader of the statements checks

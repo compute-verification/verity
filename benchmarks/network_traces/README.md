@@ -19,10 +19,10 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 ## Entry points
 
 - **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving, and
-  `verity/protocols/resource_accounting/network/attester/stall_probe.py` finds what makes a tick late.
+  the network attester's `attester/stall_probe.py` finds what makes a tick late.
 - **Endpoints besides vLLM.** `demo_stub.py` stands in for the H200 demo's serving endpoint, and `demo_endpoint.py` is
   the OpenAI endpoint in front of a decoder that isn't vLLM, whose scheduler and records the stub serves through.
-- **The network attester as a relay.** `verity/protocols/resource_accounting/network/attester/network_attester_serve.py` runs
+- **The network attester as a relay.** Its `attester/network_attester_serve.py` runs
   `verity.protocols.resource_accounting.network.verifier.network_attester`, the network attester as a relay in front of any
   TCP server and checks what it published offline: `serve` releases only the egress record's id form by default, and
   `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes); `connection_rows_run.py`, beside it, is a
@@ -39,13 +39,13 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
   scan's answers held by `NetworkCheck.Period`) and `compile_slice_zk.py` (the compile slice). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
-- **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with network certification's
+- **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with
   `prover/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network
   certification must refuse, each by the check and code that refuse it), `leak_guard.py` (the record's leak guard, below)
-  and network certification's `prover/released_keys.py` (the keys a record releases, each declared public by name, below). Its
-  `prover/block_certifier.py` writes a period's accepted answer as the block record's entry `legs.certifier`.
+  and `prover/released_keys.py` (the keys a record releases, each declared public by name, below).
+  `prover/block_certifier.py` writes a period's accepted answer as the block record's `legs.certifier`.
   `served_session.py` is the served session's runbook (below).
-- **The weights' load:** `verity/protocols/resource_accounting/network/attester/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
+- **The weights' load:** the network attester's `attester/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
 - **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
   a random string, and tries six ways to send it out, each with a network attester process of its own;
@@ -135,13 +135,13 @@ form of the scan's execution phase (`scan_period.rows_case`). The answer is acce
 records pass `network-rows check` (each record held to its certified head, then the certifier program's rows audit,
 which refuses cells cut, clocked or ordered otherwise than the schedule), the chain accepted, every request of the
 audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
-`case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window), is witness, as every
+`case.json`, as the one-stage composite reads a piece's (inline), is witness, as every
 case's evidence and params are: it is kept in the serve dir's `private/pieces/certifier` (0700, the file 0600) and is
 never in the piece's directory, which the run publishes. The certificates of its evidence, the execution phase's three
 records' and its two row registrations', which the network attester signed where the check accepts them, are
 published beside the answer as `certificates.json`, each certificate with its own fields alone. Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
-late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the network attester's piece missing. An accept's
+late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the piece missing. An accept's
 profile names its placement, as labels read from the run: the machine the network attester ran on, and the machine that ran
 each of the piece's steps; the piece establishes no `trusted-device` and gives no bound on that ground. The chain's endpoint report,
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
