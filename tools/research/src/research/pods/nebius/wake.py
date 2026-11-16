@@ -42,6 +42,7 @@ class Refused(Exception):
 
 
 def allowed(iid: str, machines_d: Path, guard_state: dict, now: float) -> str:
+    """The machine `iid` belongs to, when the pod may start it (module docstring); Refused naming why not."""
     if not INSTANCE_RE.fullmatch(iid):
         raise Refused(f"{iid!r} is not a Nebius instance id")
     entries, _ = registry.load_dir(machines_d)
@@ -72,6 +73,7 @@ def load_key(path: Path) -> None:
 
 
 def start(iid: str, nebius: Callable[..., dict]) -> tuple[str | None, bool]:
+    """(the instance's state, whether this started it): only a STOPPED or STOPPING one is started."""
     state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
     if state in ("STOPPED", "STOPPING"):
         nebius("compute", "instance", "start", "--id", iid, "--async")

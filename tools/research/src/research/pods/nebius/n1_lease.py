@@ -105,6 +105,8 @@ def epoch(s: str | None) -> float | None:
 
 
 def gpu_count(field: str, v, most: int) -> int:
+    """A policy's `max` or `borrow`: a whole number of GPUs from 0 to `most`, as an int or a string of digits; ValueError for
+    anything else (-1, 1.5, Infinity, "8x")."""
     if isinstance(v, str) and v.isascii() and v.isdigit():
         v = int(v)
     if type(v) is not int or not 0 <= v <= most:
@@ -117,6 +119,8 @@ def communicate(p: subprocess.Popen, timeout: float) -> tuple[str, str]:
 
 
 def policy_output(cmd: str) -> str:
+    """`cmd`'s stdout, run by a shell in a session of its own whose whole process group is killed after `POLICY_TIMEOUT_S`, so
+    nothing it started (an ssh, a python3 under `cd ... &&`) outlives it; CalledProcessError on a nonzero exit."""
     with subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                           start_new_session=True) as p:
         try:
@@ -134,6 +138,7 @@ def kubectl(*args: str, stdin: str | None = None) -> str:
 
 
 def gpu_table() -> dict[str, int]:
+    """UUID -> nvidia-smi index."""
     out = subprocess.run(["nvidia-smi", "--query-gpu=index,uuid", "--format=csv,noheader"], capture_output=True, text=True,
                          check=True).stdout
     return {u.strip(): int(i) for i, u in (line.split(",") for line in out.splitlines() if line.strip())}
@@ -148,6 +153,7 @@ def owner_fields(line: str) -> dict[str, str]:
 
 
 def foreign_on(i: int) -> list[dict[str, str]]:
+    """What gpu-lease last found holding GPU i's memory under no lease (`$GPU_LEASE_DIR/<i>.foreign`), its processes still alive."""
     if not (DIR / f"{i}.foreign").exists():
         return []
     try:
@@ -160,6 +166,7 @@ def foreign_on(i: int) -> list[dict[str, str]]:
 
 
 def write(path: Path, text: str) -> None:
+    """Atomically, mode 666: the pods' gpu-lease (uid 1000) and this controller (research) both rewrite these files."""
     tmp = path.with_name(f".{path.name}.{os.getpid()}")
     tmp.write_text(text)
     os.chmod(tmp, 0o666)
@@ -176,6 +183,11 @@ def lock_path(i: int) -> Path:
 
 
 def lock_holders(path: Path = Path("/proc/locks")) -> dict[int, list[int]]:
+    """inode -> the pids `path`, /proc/locks or a text in its form, names for its flocks: the process that took each lock,
+    which for gpu-lease is a `flock` helper long gone (the lock lives on in the lease's descriptors), so a lease is
+    attributed by its owner line's pid instead.
+    The kernel hands /proc/locks out a page per read, so with locks coming and going one read can miss a lock held throughout
+    (node 1: 182 lines, 3 pages): use it only where missing a lock costs a tick, and `locked` where it must not."""
     out: dict[int, list[int]] = {}
     for line in path.read_text().splitlines():
         f = line.split()
@@ -185,6 +197,8 @@ def lock_holders(path: Path = Path("/proc/locks")) -> dict[int, list[int]]:
 
 
 def locked(path: Path) -> bool:
+    """Whether a process holds a flock on `path`: a non-blocking exclusive flock fails exactly then.  The file is opened without
+    following a link or waiting on a FIFO (the lease dir is 0777); one this can't open counts as not locked."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
@@ -196,6 +210,7 @@ def locked(path: Path) -> bool:
 
 
 def granted(fd: int) -> bool:
+    """Whether an exclusive flock on `fd` is granted at once: False exactly while another descriptor holds the file."""
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return True
@@ -204,6 +219,7 @@ def granted(fd: int) -> bool:
 
 
 def signalled(pgid: int, sig: int) -> bool:
+    """Whether `sig` reached process group `pgid`: False once the group is gone, or when it isn't this user's to signal."""
     try:
         os.killpg(pgid, sig)
         return True
@@ -215,6 +231,7 @@ def signalled(pgid: int, sig: int) -> bool:
 
 
 def reaped(pid: int) -> bool:
+    """Whether `pid` was this process's child, now reaped: False for another process's (an earlier n1_lease's fence)."""
     try:
         os.waitpid(pid, 0)
         return True
@@ -243,6 +260,7 @@ def pod_uid_of(pid: int) -> str | None:
 
 
 def fence(i: int, t: float) -> int | None:
+    """Hold GPU i's lock from a detached process, its pid; None (holding nothing) when a lease has it."""
     lock = lock_path(i)
     p = subprocess.Popen(["flock", "-n", "-x", str(lock), "sh", "-c", "echo locked; exec sleep 2147483647", FENCE_CMD],
                          stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
@@ -257,6 +275,7 @@ def fence(i: int, t: float) -> int | None:
 
 
 def unfence(pids: list[int]) -> None:
+    """Stop each fence and wait (up to 2 s) until its whole process group is gone, so its GPU's lock is free on return."""
     for pid in pids:
         signalled(pid, signal.SIGTERM)
     for pid in pids:
@@ -290,6 +309,8 @@ def _true(w: dict, kind: str) -> bool:
 
 
 def unborrowed(obs: dict, holders: set[str]) -> int | None:
+    """GPUs the pool queue can give holders without borrowing: its nominal quota less the GPUs its other admitted Workloads
+    reserve. None when the ClusterQueue or the Workloads weren't read."""
     cq, workloads = obs.get("cq"), obs.get("workloads")
     if cq is None or workloads is None:
         return None
@@ -309,6 +330,7 @@ def unborrowed(obs: dict, holders: set[str]) -> int | None:
 
 
 def waiters() -> list[dict]:
+    """gpu-lease's live wait files (a waiter locks its file before naming it `wait.*`, and holds it while it waits), oldest first."""
     out = []
     for f in sorted(DIR.glob("wait.*")):
         try:
@@ -338,6 +360,9 @@ class Controller:
         self.policy_last: dict | None = None
 
     def pool_limits(self, t: float, dry: bool = False) -> dict:
+        """The pool's max, borrow and borrow-until: `$VY_POOL_POLICY`'s while it answers with whole numbers of the node's GPUs
+        and a UTC borrow-until, else those it last answered, else the environment's. Nothing the command prints raises out of
+        here."""
         if not POLICY or (self.policy_at is not None and t - self.policy_at < POLICY_EVERY_S):
             return self.limits
         self.policy_at = t
@@ -391,6 +416,7 @@ class Controller:
         return {"jobs": jobs, "pods": pods, "cq": cq, "workloads": workloads}
 
     def stop(self, t: float, lease: dict, why: str) -> None:
+        """End a lease: delete its pod, or signal a host process's scope (else its owner pid), SIGKILL after `KILL_AFTER_S`."""
         if lease.get("pod") or not (lease.get("pid") and lease.get("owner_alive")):
             self.log(t, why, lease=lease)
             if lease.get("pod"):

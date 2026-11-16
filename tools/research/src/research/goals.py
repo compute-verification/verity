@@ -51,6 +51,9 @@ STORED_ONLY = ("updatedAt", "updatedBy", "wasDue", "priority", "prioritySet", "p
 
 
 class Route:
+    """The page's route. ``key`` is a site key with `events:read`, for a machine that holds no Cursor identity: it only
+    reads. Without one every call carries this agent's identity."""
+
     def __init__(self, url: str = GOALS, key: str | None = None) -> None:
         self.base, self.key = url, key
         self._oidc = _Identity(GOALS)
@@ -93,6 +96,7 @@ def _when(due: str) -> str:
 
 
 def _text(value: str) -> str:
+    """TEXT, or a file's contents for @FILE (@- reads stdin)."""
     if not value.startswith("@"):
         return value
     return sys.stdin.read() if value == "@-" else Path(value[1:]).read_text()
@@ -119,6 +123,7 @@ def show(goals: list[dict]) -> str:
 
 
 def _link(value: str) -> dict:
+    """goal:ID or ask:CARD, as a waitingOn link."""
     kind, _, target = value.partition(":")
     if kind not in ("goal", "ask") or not target:
         raise SlackError(f"--wait {value!r}: expected goal:ID or ask:CARD")
@@ -126,6 +131,7 @@ def _link(value: str) -> dict:
 
 
 def edited(current: dict | None, ns: argparse.Namespace) -> dict:
+    """The goal `set` writes: the current one with the given fields changed, or a new one from them."""
     goal = _clean(current or {"id": ns.id})
     for field in ("title", "status", "due"):
         if getattr(ns, field) is not None:

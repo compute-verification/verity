@@ -37,6 +37,7 @@ def iso(t: float) -> str:
 
 
 def compute_apps() -> list[tuple[int, str]]:
+    """(pid, GPU UUID) of every compute process."""
     out = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,gpu_uuid", "--format=csv,noheader"], capture_output=True,
                          text=True, check=True).stdout
     apps = []
@@ -48,6 +49,7 @@ def compute_apps() -> list[tuple[int, str]]:
 
 
 def gpu_table() -> dict[str, tuple[int, int]]:
+    """UUID -> (nvidia-smi index, /dev/nvidiaN minor)."""
     out = subprocess.run(["nvidia-smi", "-q"], capture_output=True, text=True, check=True).stdout
     table, uuid, index = {}, None, -1
     for line in out.splitlines():
@@ -62,6 +64,7 @@ def gpu_table() -> dict[str, tuple[int, int]]:
 
 
 def dev_minors(pid: int) -> set[int]:
+    """The /dev/nvidiaN minors in the process's root (its container's /dev; the host's for a host process)."""
     r = subprocess.run(["sudo", "-n", "ls", f"/proc/{pid}/root/dev"], capture_output=True, text=True)
     return {int(m.group(1)) for m in (re.fullmatch(r"nvidia(\d+)", n) for n in r.stdout.split()) if m}
 
@@ -70,6 +73,7 @@ GPU_VARS = ("NVIDIA_VISIBLE_DEVICES", "CUDA_VISIBLE_DEVICES")
 
 
 def environ(pid: int) -> dict[str, str]:
+    """The process's `GPU_VARS`; under sudo, `grep` passes only those lines, so nothing else of it reaches this process."""
     path = f"/proc/{pid}/environ"
     pattern = "^(" + "|".join(GPU_VARS) + ")="
     try:
@@ -121,6 +125,7 @@ def ancestors(pid: int) -> set[int]:
 
 
 def leases() -> dict[int, list[tuple[Path, int]]]:
+    """GPU index -> (pool dir, owner pid) of each lease held on it: a flocked lock whose owner line isn't n1_lease.py's fence."""
     locked = set()
     for line in Path("/proc/locks").read_text().splitlines():
         f = line.split()

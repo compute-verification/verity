@@ -82,7 +82,7 @@ class Refused(Exception):
 
 
 class NoRemote(Exception):
-    """No usable remote; the CLI falls back to a pending claim file."""
+    """No usable remote: a claim nobody else can see is not a claim (the CLI falls back to a pending claim file)."""
 
 
 @dataclass
@@ -121,10 +121,12 @@ def manifest(name: str) -> ArtifactManifest:
 
 
 def record_id(name: str) -> str:
+    """The approach's `art:` id: a function of its name alone."""
     return manifest(name).id
 
 
 def exists(store: LocalStore, name: str) -> bool:
+    """Whether the record is here or on the remote (one HEAD; no refresh)."""
     art = record_id(name)
     if store.index.artifact(art) is not None:
         return True
@@ -133,6 +135,7 @@ def exists(store: LocalStore, name: str) -> bool:
 
 
 def _changes(labels: Iterable[Label]) -> list[tuple[str, str, dict[str, list]]]:
+    """(ts, by, {key: [values]}) per change, in ts order (a tie by lane name); one command's labels share ts and by."""
     out: dict[tuple[str, str], dict[str, list]] = {}
     for lab in sorted(labels, key=lambda x: (x.ts, x.by)):
         out.setdefault((lab.ts, lab.by), {}).setdefault(lab.key, []).append(lab.value)
@@ -140,6 +143,8 @@ def _changes(labels: Iterable[Label]) -> list[tuple[str, str, dict[str, list]]]:
 
 
 def handover(owner: str | None, new_owner: str, by: str, reason: str | None) -> bool:
+    """Whether a live -> live change stands: the same owner, or a hand-over with a reason written by someone other than the new
+    owner (the owner itself, or a coordinator).  A lane that makes itself the owner of someone else's live approach lost a race."""
     return new_owner == owner or (bool(reason) and by != new_owner)
 
 
@@ -169,6 +174,7 @@ def fold(name: str, labels: Iterable[Label]) -> Approach:
 
 
 def problems(a: Approach, known=lambda name: True) -> list[str]:
+    """Why the folded state is not a valid registry entry, one line each (empty when it is)."""
     out = []
     for attr in ("title", "hypothesis", "type", "owner", "status"):
         if not getattr(a, attr):
@@ -205,6 +211,7 @@ def problems(a: Approach, known=lambda name: True) -> list[str]:
 
 
 def current_labels(store: LocalStore, art: str) -> list[Label]:
+    """Every assertion about the record on either side; remote-only ones land in this store too (the claim reads the remote)."""
     if store.remote is None:
         return store.labels(art)
     out = []
@@ -219,6 +226,7 @@ def current_labels(store: LocalStore, art: str) -> list[Label]:
 
 
 def load(store: LocalStore) -> list[Approach]:
+    """Every approach this store's catalog knows (after `refresh`, every one on the remote), folded, sorted by name."""
     out = []
     for row in store.index.select_artifacts(kind=KIND):
         meta = (row.get("manifest") or {}).get("meta") or {}
@@ -239,6 +247,7 @@ def similar(approaches: list[Approach], title: str, hypothesis: str, n: int = 5)
 
 
 def _ts(at: str | None, labels: list[Label]) -> str:
+    """The change's ts: strictly after the approach's newest label, so the fold orders it after everything its writer saw."""
     newest = max((x.ts for x in labels), default="")
     if at is None:
         ts = utc_now()
@@ -258,6 +267,7 @@ def _ts(at: str | None, labels: list[Label]) -> str:
 
 def _write(store: LocalStore, name: str, labels: list[Label], change: dict[str, object], by: str, at: str | None,
            cites: list[str], uncites: list[str] = ()) -> Approach:
+    """Validate the folded state with `change` applied, then put the record and the change's labels and push them."""
     if not LANE_RE.match(by or ""):
         raise Refused(f"{by!r} is not a lane name")
     if both := set(cites) & set(uncites):
@@ -288,6 +298,8 @@ def _write(store: LocalStore, name: str, labels: list[Label], change: dict[str, 
 
 
 def pending_claim(root: Path, name: str, lane: str, fields: dict[str, object], why: str) -> Path:
+    """The folder fallback: without a usable remote, the claim goes into the lane's own folder as `<stamp>-claim-….md`, which
+    the steward's rule records in the store at its next pass (a pending claim is not a claim until then)."""
     parse_name(name)
     if not LANE_RE.match(lane or ""):
         raise Refused(f"{lane!r} is not a lane name")
@@ -318,6 +330,7 @@ def read_pending(p: Path) -> dict[str, str]:
 
 
 def import_pending(store: LocalStore, root: Path, now: dt.datetime, done: list[str]) -> list[str]:
+    """Record every pending claim file not yet in `done` (the steward's memory); one line each, and a handoff to a refused lane."""
     lines = []
     for p in sorted((root / "lanes").glob("*/*Z-claim-*--*.md")):
         rel = str(p.relative_to(root))
@@ -340,6 +353,7 @@ def import_pending(store: LocalStore, root: Path, now: dt.datetime, done: list[s
 
 def claim(store: LocalStore, name: str, lane: str, *, title: str | None = None, hypothesis: str | None = None,
           type_: str | None = None, attacks: str | None = None, cites: list[str] = (), reopen: str | None = None) -> tuple[int, str]:
+    """(exit code, one line).  0 claimed (or already yours), 2 refused, 3 lost a race to another claim."""
     if store.remote is None or not store.write_through:
         raise NoRemote("no usable remote with write-through (" + (getattr(store, "remote_error", None) or "write-through off") + ")")
     art = record_id(name)
@@ -368,6 +382,8 @@ def set_status(store: LocalStore, name: str, status: str | None, by: str, *, rea
                superseded_by: str | None = None, cites: list[str] = (), at: str | None = None, title: str | None = None,
                hypothesis: str | None = None, type_: str | None = None, attacks: str | None = None,
                uncites: list[str] = ()) -> Approach:
+    """A change of status, or with `status` None a change of evidence alone (`cites`, `uncites`), which leaves the status, its
+    reason and the history as they are."""
     if status is not None and status not in STATUSES:
         raise Refused(f"status {status!r} is not one of {', '.join(STATUSES)}")
     art = record_id(name)
@@ -392,6 +408,7 @@ def set_status(store: LocalStore, name: str, status: str | None, by: str, *, rea
 
 
 def brief_mode(root: Path, campaign: str) -> tuple[str | None, str | None]:
+    """(registry mode, error) from campaigns/<c>/BRIEF.md's front matter; (None, why) when there is no BRIEF."""
     p = root / "campaigns" / campaign / BRIEF
     if not p.is_file():
         return None, f"campaigns/{campaign}/{BRIEF} is missing: a campaign with approaches needs its brief"
@@ -405,6 +422,7 @@ def brief_mode(root: Path, campaign: str) -> tuple[str | None, str | None]:
 
 
 def orphaned(root: Path, a: Approach) -> str | None:
+    """Why a live approach has no live owner (its lane, or the lane that took it over, is done), or None."""
     from . import notes
 
     lane = notes.latest(a.owner, notes.successors(root))
@@ -418,6 +436,7 @@ def orphaned(root: Path, a: Approach) -> str | None:
 
 
 def check(store: LocalStore, root: Path | None) -> tuple[list[str], list[str]]:
+    """(errors, warnings) over every approach record the catalog knows, and each campaign's brief when `root` is given."""
     errors, warnings = [], []
     rows = store.index.select_artifacts(kind=KIND)
     names = set()
@@ -475,6 +494,7 @@ def render_campaign(campaign: str, approaches: list[Approach], mode: str) -> str
 
 
 def render(store: LocalStore, root: Path, campaign: str | None = None) -> list[Path]:
+    """Write campaigns/<c>/APPROACHES.md for every campaign with approaches (or one); returns the files whose content changed."""
     approaches = load(store)
     changed = []
     for c in sorted({a.campaign for a in approaches if campaign in (None, a.campaign)}):
@@ -489,6 +509,8 @@ def render(store: LocalStore, root: Path, campaign: str | None = None) -> list[P
 
 
 def steward_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = None) -> list[str]:
+    """The steward's `[approaches]` rule (steward.toml: `store`, `every_min` = 10): refresh that store from the remote, then render
+    every campaign's APPROACHES.md for the watch's `--sync` to commit.  A line only when a file changed or the rule failed."""
     import tomllib
 
     path = config or root / "steward.toml"

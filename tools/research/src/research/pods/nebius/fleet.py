@@ -95,6 +95,7 @@ def utc(t: float) -> str:
 
 
 def nb(*args: str, timeout: float = 120) -> dict:
+    """One Nebius CLI call's JSON, authenticated as launch.sh's are."""
     cmd = f'. "{HERE}/common.sh" && nebius_auth && nb ' + " ".join(f"'{a}'" for a in args)
     p = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=timeout)
     if p.returncode != 0:
@@ -114,6 +115,7 @@ def registry() -> dict[str, dict]:
 
 
 def instances() -> list[dict]:
+    """Every VM in the tenant's projects: name, id, state, platform, preset, region."""
     out = []
     for proj in nb("iam", "project", "list", "--parent-id", settings.tenant(), "--page-size", "100").get("items", []):
         pid, region = proj["metadata"]["id"], (proj.get("status") or {}).get("region") or proj["metadata"].get("labels", {}).get("region")
@@ -179,12 +181,14 @@ def sample(now: float | None = None) -> list[dict]:
 
 
 def set_key(name: str, key: str, value: str | None) -> None:
+    """Set (or, with None, remove) one key of machine `name`'s registry file, keeping its other lines as they are."""
     f = MACHINES_D / f"{name}.toml"
     kept = [ln for ln in f.read_text().splitlines() if not ln.startswith(f"{key} =")]
     f.write_text("\n".join([*kept, *([f'{key} = "{value}"'] if value is not None else [])]) + "\n")
 
 
 def serial_tail(instance_id: str, lines: int = SERIAL_LINES) -> list[str]:
+    """The last `lines` lines of a VM's serial console (`nebius compute instance logs`), oldest first, colors stripped."""
     cmd = f'. "{HERE}/common.sh" && nebius_auth && nb compute instance logs --id \'{instance_id}\' --limit {int(lines)}'
     p = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=120)
     if p.returncode != 0:
@@ -195,6 +199,9 @@ def serial_tail(instance_id: str, lines: int = SERIAL_LINES) -> list[str]:
 
 def watch_unreachable(rows: list[dict], now: float, send: Callable[[list[str], str], None],
                       tail: Callable[[str], list[str]] = serial_tail) -> list[str]:
+    """Alert once on each RUNNING VM no sample has read for `UNREACH_S` (with its serial log's tail and any kernel trouble in it),
+    and mark it `unreachable_since` in the registry; clear the mark once it is read again. Only a VM some sample has read counts,
+    so a machine whose ssh is closed to this key (an auditor) never alerts. The machines alerted on this pass."""
     path, reg = FLEET_DIR / "unreachable.json", registry()
     try:
         state = json.loads(path.read_text()) if path.exists() else {}
@@ -246,6 +253,7 @@ def watch_unreachable(rows: list[dict], now: float, send: Callable[[list[str], s
 
 
 def record_deadlines(rows: list[dict], reg: dict[str, dict]) -> list[str]:
+    """Copy each read VM's /etc/research/deadline into its registry file's `deadline` where it differs; one notes sync for all."""
     changed = []
     for r in rows:
         if r.get("deadline") is None or r["name"] not in reg or reg[r["name"]].get("deadline") == utc(r["deadline"]):
@@ -277,6 +285,8 @@ def load_samples(start: float, end: float) -> list[dict]:
 
 
 def report(rows: list[dict], hours: float) -> list[dict]:
+    """Per VM: hours seen RUNNING (samples x INTERVAL_S), $ at its rate, GPU busy share, mean load per core, peak memory, idle
+    hours; most expensive first."""
     by: dict[str, list[dict]] = {}
     for r in rows:
         by.setdefault(r["name"], []).append(r)
@@ -300,6 +310,7 @@ def report(rows: list[dict], hours: float) -> list[dict]:
 
 
 def totals(rep: list[dict]) -> tuple[float, float]:
+    """A report's dollars, and the part of them spent on idle hours; a VM with no rate registered counts for nothing."""
     return sum(r["usd"] or 0 for r in rep), sum((r["rate_usd_per_hour"] or 0) * r["idle_hours"] for r in rep)
 
 
@@ -316,6 +327,7 @@ def render(rep: list[dict], hours: float, end: float) -> str:
 
 
 def idle_by_lane(rep: list[dict], reg: dict[str, dict]) -> dict[str, list[dict]]:
+    """Each owning lane's machines that sat idle in the report: the registry entry's `lane`, else infra's."""
     out: dict[str, list[dict]] = {}
     for r in rep:
         if r["idle_hours"] > 0:
@@ -341,6 +353,8 @@ def _idle_entry(r: dict) -> str:
 
 
 def brief(rep: list[dict], hours: float, end: float) -> str:
+    """The daily post: the window's spend, its idle part and the idlest machines, short enough for `research msg` (the whole report
+    is `fleet.py report`, and each machine by hour the console's Usage tab)."""
     total, idle_usd = totals(rep)
     idlest = sorted((r for r in rep if r["idle_hours"] > 0), key=lambda r: -(r["rate_usd_per_hour"] or 0) * r["idle_hours"])
     return (f"Compute, the {hours:g} h to {utc(end)}: ${total:,.0f} across {len(rep)} VMs, ${idle_usd:,.0f} of it idle."
@@ -349,6 +363,7 @@ def brief(rep: list[dict], hours: float, end: float) -> str:
 
 
 def render_lane(rows: list[dict], hours: float, end: float) -> str:
+    """A lane's doorbell: its own machines' idle hours and idle $, short enough for `research msg`."""
     known = [r for r in rows if r["rate_usd_per_hour"] is not None]
     usd = sum(r["rate_usd_per_hour"] * r["idle_hours"] for r in known)
     return (f"Your machines sat idle {sum(r['idle_hours'] for r in rows):.1f} h (${usd:,.0f}"
@@ -359,6 +374,8 @@ def render_lane(rows: list[dict], hours: float, end: float) -> str:
 
 
 def daily(now: float, send: Callable[[list[str], str], str | None] | None = None) -> list[str]:
+    """The 24 h brief to infra's status thread and the admin lane, and each owning lane's idle machines to its inbox; a post that fails is
+    alerted on in #agent-alerts (once, naming every failure) and logged. What failed."""
     send = send or post
     rep = report(load_samples(now - 86400, now), 24)
     text = brief(rep, 24, now)
@@ -387,6 +404,7 @@ def quota_findings() -> list[dict]:
 
 
 def card_finding(rows_today: list[dict]) -> dict | None:
+    """The card's UTC day so far (rate x hours seen) against $FLEET_CARD_DAILY_USD, when set, at >= 80%."""
     limit = settings.card_daily_usd()
     spent = sum((r.get("rate_usd_per_hour") or 0) * INTERVAL_S / 3600 for r in rows_today)
     return {"spent": round(spent, 2), "limit": limit} if limit and spent >= QUOTA_ALERT * limit else None
@@ -400,6 +418,7 @@ def machine_class(platform: str | None) -> str:
 
 
 def hardware(row: dict) -> str:
+    """What a VM is, from its preset: "8× H200", or "192 CPUs" for a machine with no GPU."""
     preset = row.get("preset") or ""
     if m := re.match(r"(\d+)gpu", preset):
         return f"{m.group(1)}× {machine_class(row.get('platform'))}"
@@ -408,6 +427,8 @@ def hardware(row: dict) -> str:
 
 
 def busy(row: dict) -> tuple[float | None, str]:
+    """A sample's busy share and what it is a share of: its GPUs' mean utilization, or for a machine with no GPU its load over its
+    cores (at most 1). None when the sample wasn't read."""
     gpu = machine_class(row.get("platform")) != "CPU"
     if not row.get("read"):
         return None, "gpu" if gpu else "cores"
@@ -427,6 +448,7 @@ def _panel(pid: str, title: str, columns: list[str], rows: list[list], now: floa
 
 
 def online_panel(rows: list[dict], reg: dict[str, dict], now: float) -> dict:
+    """One row per RUNNING VM in the last sample pass; one with no rate registered is left out and named in the note."""
     out, unpriced = [], []
     for r in rows:
         m = reg.get(r["name"], {})
@@ -443,6 +465,9 @@ def online_panel(rows: list[dict], reg: dict[str, dict], now: float) -> dict:
 
 
 def bucket_panels(samples: list[dict], reg: dict[str, dict], now: float) -> tuple[dict, dict]:
+    """Each VM's cost per UTC hour over `HOURLY_DAYS` and per Pacific day over `DAILY_DAYS`: `usd` (each sample's interval at its
+    rate), `busy_usd` (each sample's cost times its busy share; an unread sample takes its slot's mean share of read ones, else
+    none) and `minutes` sampled, so a gap in sampling shows as fewer minutes rather than as a cheaper slot."""
     hour_from = now - HOURLY_DAYS * 86400
     slots: dict[tuple[str, str, str], dict] = {}
     for r in samples:
@@ -475,6 +500,7 @@ def bucket_panels(samples: list[dict], reg: dict[str, dict], now: float) -> tupl
 
 
 def fitted(panel: dict) -> dict:
+    """``panel`` within `PANEL_MAX_BYTES`: its oldest slots (the first column) dropped until it fits, its note saying from when."""
     rows, size = panel["rows"], lambda p: len(json.dumps(p).encode())
     if size(panel) <= PANEL_MAX_BYTES:
         return panel
@@ -488,13 +514,15 @@ def fitted(panel: dict) -> dict:
 
 
 def put_panel(panel: dict, key: str) -> str | None:
-    """None when the site took it, else why not; only an https site is sent the key."""
+    """PUT one panel; None when the site took it, else why not. Only an https site is sent the key."""
     if not (PANELS_URL or "").startswith("https://"):
         return f"{panel['id']}: $FLEET_PANELS_URL is {PANELS_URL!r}, not an https URL: nothing sent"
     return metrics.send_json("PUT", f"{PANELS_URL}/api/panels/{panel['id']}", panel, key, panel["id"])
 
 
 def publish(rows: list[dict], now: float, put: Callable[[dict, str], str | None] = put_panel) -> list[str]:
+    """The three usage panels from this pass's ``rows`` and the stored samples, PUT to the site; what failed. Nothing is sent
+    without a panels key."""
     if not PANELS_KEY.exists():
         return [f"no panels key at {PANELS_KEY}"]
     key, reg = PANELS_KEY.read_text().strip(), registry()
@@ -503,6 +531,9 @@ def publish(rows: list[dict], now: float, put: Callable[[dict, str], str | None]
 
 
 def store_put(path: Path) -> tuple[str | None, str]:
+    """``path`` into the store (`research data put --kind fleet-samples/v1 --preserve`): its art id, or None and why. The store is
+    $RESEARCH_STORE, else ~/fleet-store, and its remote's credentials are $FLEET_STORE_ENV's KEY=VALUE lines (the pod's r2.env),
+    which the loop's own environment doesn't hold."""
     research = settings.research_bin()
     env = {**os.environ, "RESEARCH_STORE": settings.store_root()}
     creds = settings.store_env()
@@ -524,6 +555,8 @@ def store_put(path: Path) -> tuple[str | None, str]:
 
 
 def archive(now: float, put: Callable[[Path], tuple[str | None, str]] = store_put) -> str | None:
+    """The second copy of the usage record: the last UTC day's samples file put into the store once, its art id kept in
+    $FLEET_DIR/archived.json so a restarted loop doesn't put it again. None when it is stored (or there is no file), else why not."""
     day = utc(now - 86400)[:10].replace("-", "")
     f, state_path = FLEET_DIR / f"samples-{day}.jsonl", FLEET_DIR / "archived.json"
     try:
@@ -543,7 +576,7 @@ def archive(now: float, put: Callable[[Path], tuple[str | None, str]] = store_pu
 
 
 def post(args: list[str], text: str) -> str | None:
-    """None when it went out, else why not."""
+    """Send one post with `research msg send`; None when it went out, else why not (its exit and the end of its stderr)."""
     research = settings.research_bin()
     try:
         p = subprocess.run([str(research), "msg", "send", "--as", "infra", *args, "--text", text], cwd="/workspace", timeout=120,
@@ -557,6 +590,8 @@ TOLD_KEEP_DAYS = 2
 
 
 def load_told(now: float) -> set[tuple[str, str]]:
+    """The (UTC day, quota key) alerts already posted, from $FLEET_DIR/quota-told-YYYY-MM-DD.json, so a restarted loop doesn't post
+    them again; a day's file older than TOLD_KEEP_DAYS is removed."""
     told, oldest = set(), utc(now - TOLD_KEEP_DAYS * 86400)[:10]
     for f in sorted(FLEET_DIR.glob("quota-told-*.json")):
         day = f.name[len("quota-told-"):-len(".json")]

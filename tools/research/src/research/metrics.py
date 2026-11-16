@@ -52,7 +52,7 @@ COMMIT = re.compile(r"[0-9a-f]{7,40}")
 
 
 def off_site(url: str) -> str | None:
-    """None when ``url`` may be sent the panels key: https to the site's own host only."""
+    """Why ``url`` may not be sent the panels key: anything but https to the site's own host. None when it may."""
     u = urlsplit(url)
     if u.scheme == "https" and u.netloc == SITE_HOST:
         return None
@@ -60,6 +60,9 @@ def off_site(url: str) -> str | None:
 
 
 def send_json(method: str, url: str, body: object, key: str, what: str) -> str | None:
+    """One JSON request to the site with ``key`` as its bearer, through `slack.http_open`, the client `http_json` reads with (no
+    redirect followed, 30 s): None when the site took it, else why not, in one line; it never raises. Its answer isn't read.
+    The key goes only to the site's own host."""
     if why := off_site(url):
         return f"{what}: {why}"
     try:
@@ -75,6 +78,7 @@ def send_json(method: str, url: str, body: object, key: str, what: str) -> str |
 
 def reading(metric: str, value: float | None, *, time: str, why: str | None = None, mark: str = "measured",
             **optional: object) -> dict:
+    """One reading of the door's shape; an optional field that is None is left out."""
     r = {"metric": metric, "value": value, **({"why": why} if why else {}), "mark": mark, "time": time}
     return {**r, **{k: v for k, v in optional.items() if v is not None}}
 
@@ -103,6 +107,10 @@ def _refused(r: object) -> str | None:
 
 def send(readings: list[dict], *, command: str | None, commit: str | None, url: str | None = None, key: Path | None = None,
          dry_run: bool = False, post=None, out=print) -> str | None:
+    """POST ``readings`` to the door, each naming ``command`` and ``commit`` where given, with the panels key: None when the
+    site took them (or, with ``dry_run``, when the request is printed with the key left out and nothing sent), else why not,
+    in one line. Never raises on the network or a missing key, so a loop goes on. ``url`` may only be on the site's own
+    host."""
     url, key = url or METRICS, key or PANELS_KEY
     body = {"readings": [{**r, **({"command": command} if command else {}), **({"commit": commit} if commit else {})}
                          for r in readings]}
@@ -162,6 +170,7 @@ class Route:
 
 
 def _key() -> str | None:
+    """`research jobs`' token when it is a site key; an older token, without KEY_PREFIX, isn't sent."""
     key = kept_token()
     return key if key and key.startswith(KEY_PREFIX) else None
 

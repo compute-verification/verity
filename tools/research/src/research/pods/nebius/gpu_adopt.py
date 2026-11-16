@@ -41,6 +41,7 @@ def iso(t: float) -> str:
 
 
 def compute_apps() -> list[tuple[int, str]]:
+    """(pid, GPU UUID) of every compute process."""
     out = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,gpu_uuid", "--format=csv,noheader"], capture_output=True,
                          text=True, check=True).stdout
     apps = []
@@ -52,6 +53,7 @@ def compute_apps() -> list[tuple[int, str]]:
 
 
 def gpu_index() -> dict[str, int]:
+    """UUID -> nvidia-smi index (gpu-lease's lock name; it runs with CUDA_DEVICE_ORDER=PCI_BUS_ID)."""
     out = subprocess.run(["nvidia-smi", "--query-gpu=index,uuid", "--format=csv,noheader"], capture_output=True, text=True,
                          check=True).stdout
     return {u.strip(): int(i) for i, _, u in (ln.partition(",") for ln in out.splitlines()) if i.strip().isdigit()}
@@ -67,6 +69,7 @@ def parent(pid: int) -> int | None:
 
 
 def ancestors(pid: int) -> list[int]:
+    """The process and its ancestors, nearest first."""
     out: list[int] = []
     while pid and pid > 1 and pid not in out:
         out.append(pid)
@@ -89,6 +92,7 @@ def comm(pid: int) -> str:
 
 
 def run_of(chain: list[int]) -> str | None:
+    """The run id of the nearest `research run ... --id RUN` runner among the process's ancestors."""
     for p in chain:
         if "research" in (c := cmdline(p)) and (m := RUN_ID.search(c)):
             return m.group(1)
@@ -106,6 +110,7 @@ def lane_of(run: str | None) -> str | None:
 
 
 def lease_run(i: int) -> str | None:
+    """The run id GPU i's owner line names, else None."""
     if not (LEASE_DIR / f"{i}.owner").exists():
         return None
     try:
@@ -117,6 +122,7 @@ def lease_run(i: int) -> str | None:
 
 
 def lease_owner(i: int) -> int | None:
+    """The owner pid of a lease held on GPU i, else None (the lock is free)."""
     lock = LEASE_DIR / f"{i}.lock"
     if not lock.exists():
         return None

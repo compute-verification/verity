@@ -1,5 +1,80 @@
 #!/usr/bin/env python3
-"""Preemptible fill jobs that run only on GPUs nobody else wants (stdlib only)."""
+"""Preemptible fill jobs on a shared GPU server: run them only on GPUs nobody else wants (stdlib only).
+
+A fill job is an executable script in FILL_DIR/queue/.  Its header says what it needs:
+
+    # fill: owner=bc-... gpus=1 max_min=25 cpus=8 project=pous mem_gb=128
+    #   gpus 0 or 1 (default 1), or 2 for a Commit guest (a TP2 row: two idle GPUs on one NUMA node); max_min <= 30 (default
+    #   25), a Commit guest's <= FILL_COMMIT_MAX_MIN (120), a job FILL_DIR/max-min names <= what it allows (infra's exceptions,
+    #   each with an end: `pous-honest-soak-* 540 2026-10-02T14:45Z  # who, why`); cpus: threads it may use (OMP_NUM_THREADS; default 8); on: the GPU
+#   index or indices the job may run on (3, 2-7 or 2,5; it waits for one of them); prio: higher starts first (default 0; give GPU-heavy jobs more than
+#   ones that hold a GPU while mostly computing on the CPU); within a prio, owners take turns (the owner with the fewest
+#   jobs of that kind running goes next), then the longest-queued job (a requeued job queues afresh);
+    #   project pous (default) or verity (Verity's work, which runs only when no pous job is queued, except circuits' Commit
+#   guests, verity-commit-*.sh, which rank above every other job); mem_gb: a CPU job's memory limit
+#   (default 128; a GPU job's limit is gpu-lease's, 90% of RAM over the GPU count, a timing job's its own scope's, default 128
+#   and at most gpu-lease's);
+#   timing=1: a timing chunk (network accounting's), from an owner FILL_DIR/timing-owners lists (one glob per line, infra's:
+#   `network-accounting  # who, why`; anyone else's goes to failed/), on one GPU with cpus CPUs of its own (1 to 16, whole
+#   cores; see below)
+#   and its thread pools (OMP_NUM_THREADS, OPENBLAS_, MKL_, NUMEXPR_) one per core, max_min <= FILL_TIMING_MAX_MIN (60)
+#   whatever max-min line or fence names it (a Commit guest's timing=1 is ignored);
+#   a value fill reads as a whole number that isn't one sends the job to failed/ (event `failed`, why `header: gpus=one`)
+
+It must be restartable: it can be stopped (SIGTERM, then SIGKILL 20 s later) at any moment and started again from the top,
+so it resumes from checkpoints in its own output directory.  Its exit status says what happened:
+    0 done (moved to done/);  99 more chunks remain (requeued at once);  143 preempted by a waiter (requeued);
+    anything else failed (failed/, after 2 tries).
+A wrapper in the job's own scope writes that status to running/.<job>.rc as the job exits, so a job that ends while a restarted
+runner has adopted it is filed by it too.  A job whose status the runner can't learn goes to held-unknown-exit/, never back to the
+queue: it may have finished, and rerunning a finished job can delete its result.  Exit 0 is done even when a stop raced it.
+It runs with FILL=1, FILL_JOB=<name>, GPU_LEASE_WHO=fill:<owner>; a GPU job through `gpu-lease 1 --preemptible`, so the
+oldest waiter can stop it, and a CPU job in a systemd user scope with its memory limit.
+
+Every POLL_S seconds the runner:
+  - finds the free GPUs (gpu-lease's locks), the waiting `gpu-lease ... --wait` requests, and a timed window (one holder of
+    every GPU, or a waiter for all of them);
+  - stops GPU fill jobs, proofs' and other Verity jobs first, then pous, then Commits, newest first within each, until the free
+    GPUs cover every waiter plus RESERVE (default 0: waiters with --wait preempt fill leases anyway), and all of them while
+    a timed window waits or runs; pauses CPU fill jobs (SIGSTOP) during a timed window and resumes them after;
+    while the node's scheduler agent holds agent.lock it stops nothing for waiters (the agent evicts), but still drains fill
+    for a waiting window, since the agent's eviction signals only gpu-lease's pid;
+  - stops a GPU job through its lease's scope (gpu-lease-<pid>) as well as its process group, and kills whatever is left in a
+    job's scope once the job ends, since `research run` starts its workload in a session of its own that outlives both;
+  - stops a job past its max_min (not counting time paused) and requeues it;
+  - starts GPU jobs on every free GPU beyond RESERVE when nobody waits, except the GPUs listed in FILL_DIR/keep-free
+    (e.g. `1`, or `0,1`, with an optional `# reason`; a waiter pinned inside them doesn't count), and none whose max_min would reach into a window booked in
+    FILL_DIR/windows (`2026-10-01T10:00Z 30 # who`, one per line: start in UTC, minutes; a timing job's max_min plus
+    TIMING_MARGIN_MIN, 2); Commit guests first, then pous,
+    then the rest of Verity's (only with 2+ GPUs free), and a Commit that finds no free GPU stops the newest proofs or pous
+    GPU job outside a window; and CPU jobs up to CPU_SLOTS, pinned
+    to CPU_SET at nice 19; more queued CPU jobs borrow the Verity pool's idle slots while no Verity job waits;
+  - gives each job of the Verity pool (a lent one too) `cpus` CPUs of VERITY_CPU_SET off the fences in whole cores of its own,
+    claimed in CLAIMS beside node 2's queued runs (research's cores.py), at nice 0 in a scope that holds them (AllowedCPUs);
+    a job whose cores aren't free, or any while a queued run waits in the claims' line, stays queued;
+  - runs the CPU jobs of an owner listed in FILL_DIR/cpu-sets (`<owner> <cpus> <slots> [mem_gb]  # why`, read each tick) on
+    those CPUs instead, up to that many at a time, at nice 19 and ionice idle, with their memory limit lowered to mem_gb if
+    given, and paused (none started) while a candidate's check holds FILL_YIELD_LOCK if those CPUs meet FILL_YIELD_CPUS; and logs
+    each scoped CPU job's peak memory (mem_peak_gb) when it exits;
+  - keeps fill off each fence in FILL_DIR/fences (`<owner> <gpu> <cpus> <until UTC> [<job glob> <minutes>]  # why`, read each
+    tick, a line past its until ignored), which `fill_runner.py fence` writes and logs, one per owner, at most 1 GPU, FENCE_MAX_CPUS
+    cores on that GPU's NUMA node and FENCE_MAX_H hours, none a running timing job holds: it stops any other fill job on the GPU,
+    moves running fill jobs' threads
+    off the cores, keeps the GPU as if in keep-free and starts no job on the cores; a job the glob names runs on that GPU alone,
+    pinned to those cores, with max_min up to the minutes (still stopped, like any fill job, for a window or a waiter);
+  - starts a timing job only on a GPU whose NUMA node holds `cpus` free CPUs of TIMING_CPU_SET in whole cores (SMT siblings),
+    and gives it those CPUs alone, at nice 0, in a scope of the top-level TIMING_SLICE (`sudo -n systemd-run`: user.slice and
+    system.slice, where every other fill job, slot d and the Verity pool run, are confined below them); never a CPU a fence, a
+    running timing job or any populated top-level cgroup but PID 1's may use.  Its lease isn't --preemptible and nothing here
+    stops it before its max_min, for a waiter, a window, a Commit or a fence, nor moves its threads (booked windows still bound
+    its start).  While one could start, other 1-GPU jobs take the GPUs it couldn't start on first.  The lease is taken
+    inside the scope (`sudo -n systemd-run --scope ... -- setpriv ... -- gpu-lease 1 --on G --max-min M --mem-gb 0 -- taskset
+    ...`), where a keeper holds it until nothing else is left there: the job is over once its scope is empty, what outlives it
+    by a tick is stopped, and a kill of the scope that fails while it is populated is logged (`scope-kill-failed`).
+Status: FILL_DIR/status.txt; every start, stop and exit: FILL_DIR/events.jsonl.
+A bare `fill_runner.py` is the runner, which exits at once while another holds FILL_DIR/.runner.lock; any argument but `fence`
+prints the usage.
+"""
 from __future__ import annotations
 
 import argparse
@@ -75,12 +150,14 @@ def event(kind: str, job: str, **kw) -> None:
 
 
 def utc(s: str) -> float:
-    """Epoch seconds; UTC when the time names no zone."""
+    """`2026-10-02T14:45Z` (UTC when it names no zone) in epoch seconds."""
     d = datetime.fromisoformat(s.replace("Z", "+00:00"))
     return d.replace(tzinfo=d.tzinfo or UTC).timestamp()
 
 
 def fences(t: float | None = None) -> list[dict]:
+    """FILL_DIR/fences, written by `fill_runner.py fence`: `<owner> <gpu> <cpus> <until UTC> [<job glob> <minutes>]  # why`, one
+    per owner.  A line past its until is ignored, so a fence ends on its own."""
     t = time.time() if t is None else t
     out = []
     try:
@@ -104,10 +181,15 @@ def fences(t: float | None = None) -> list[dict]:
 
 
 def fence_for(name: str, fs: list[dict]) -> dict | None:
+    """The fence among `fs` whose job glob names job `name`."""
     return next((f for f in fs if f["jobs"] and fnmatch.fnmatchcase(name, f["jobs"])), None)
 
 
 def max_min_exception(name: str, t: float | None = None) -> int | None:
+    """FILL_DIR/max-min: exceptions to the 30-min GPU limit, each approved by infra, one per line, read at each start:
+    `<job name glob> <minutes> <until UTC, 2026-10-02T14:45Z>  # who, why`.  A job it names may set max_min up to those minutes
+    and never past the line's until, so the exception ends on its own; a line past its until is ignored.  A job a fence names
+    gets the fence's minutes the same way."""
     t = time.time() if t is None else t
     f = fence_for(name, fences(t))
     if f and f["until"] - t >= 60:
@@ -132,6 +214,8 @@ def max_min_exception(name: str, t: float | None = None) -> int | None:
 
 
 def timing_owners() -> list[str]:
+    """FILL_DIR/timing-owners: the owners whose jobs may be timing jobs, one glob per line (`network-accounting  # who, why`),
+    written by infra.  A timing job holds a GPU and whole cores that nothing preempts, so without the file nobody's may."""
     try:
         lines = (FILL / "timing-owners").read_text().splitlines() if (FILL / "timing-owners").exists() else []
     except OSError as e:
@@ -141,6 +225,7 @@ def timing_owners() -> list[str]:
 
 
 def mem_share(n: int) -> int:
+    """gpu-lease's memory limit per GPU, in GB: GPU_LEASE_MEM_GB_PER_GPU, else 90% of MemTotal over the n GPUs."""
     per = os.environ.get("GPU_LEASE_MEM_GB_PER_GPU", "")
     if per.isdigit():
         return int(per)
@@ -156,6 +241,9 @@ HEADER = {"owner": "unknown", "gpus": 1, "max_min": 25, "cpus": 8, "project": "p
 
 
 def header(p: Path, t: float | None = None) -> dict:
+    """The job's header, normalized.  A value fill reads as a whole number that isn't one (gpus, max_min, prio; a CPU or timing
+    job's mem_gb; a timing job's cpus) keeps its default and is named in h["bad"], as is timing=1 from an owner
+    FILL_DIR/timing-owners doesn't list: the runner files a queued job so under failed/."""
     h = {k: v for k, v in HEADER.items() if k != "mem_gb"}
     for line in p.read_text(errors="replace").splitlines()[:20]:
         m = re.match(r"#\s*fill:\s*(.*)", line)
@@ -198,6 +286,7 @@ def header(p: Path, t: float | None = None) -> dict:
 
 
 def cpu_sets() -> dict[str, dict]:
+    """FILL_DIR/cpu-sets: owners whose CPU jobs get CPUs of their own (such as verifies on 0-47)."""
     out = {}
     try:
         lines = (FILL / "cpu-sets").read_text().splitlines() if (FILL / "cpu-sets").exists() else []
@@ -212,6 +301,7 @@ def cpu_sets() -> dict[str, dict]:
 
 
 def mem_peak_gb(pid: int) -> float | None:
+    """The peak memory of the cgroup `pid` runs in (its scope), in GB."""
     try:
         cg = Path(f"/proc/{pid}/cgroup").read_text().strip().split("::", 1)[1]
         peak = Path(CGROUP_ROOT) / cg.lstrip("/") / "memory.peak"
@@ -237,6 +327,7 @@ def lease(i: int) -> str | None:
 
 
 def shared_free(fd: int) -> bool:
+    """Whether a shared flock on `fd` is granted at once: False exactly while someone holds the file exclusively."""
     try:
         fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
         return True
@@ -245,6 +336,7 @@ def shared_free(fd: int) -> bool:
 
 
 def held(lock: Path) -> bool:
+    """Whether someone holds `lock` exclusively (flock)."""
     try:
         fd = os.open(lock, os.O_RDONLY)
     except OSError:
@@ -256,14 +348,20 @@ def held(lock: Path) -> bool:
 
 
 def agent_up() -> bool:
+    """Whether the node's scheduler agent (`cluster agent --mode live`) holds LEASE_DIR/agent.lock."""
     return held(LEASE_DIR / "agent.lock")
 
 
 def yields(cpus: str | None) -> bool:
+    """Whether a cpu-sets job on `cpus` gives way to a candidate's check: its CPUs meet YIELD_CPUS."""
     return bool(cpus) and bool(gpu_set(cpus, 1 << 16) & gpu_set(YIELD_CPUS, 1 << 16))
 
 
 def waiters() -> list[int]:
+    """How many GPUs each waiting `gpu-lease N --wait` wants, read from gpu-lease's own queue.  A request that can't start at once
+    queues as LEASE_DIR/wait.<ns>.<pid>, holds that file locked while it waits, and removes it once it has its GPUs, so a lease
+    that holds its GPUs (its argv still says --wait) is never a waiter.  A file nobody holds locked is a dead waiter's.  A waiter
+    pinned (`on=`) inside FILL_DIR/keep-free waits for GPUs fill never takes, so it holds back no fill."""
     out = []
     keep = keep_free(1 << 16)
     for f in sorted(LEASE_DIR.glob("wait.*")):
@@ -289,12 +387,16 @@ def waiters() -> list[int]:
 
 
 def scope(j: dict, *args: str) -> bool:
+    """systemctl --user on a job's scope (a Verity or lent CPU job's own, a GPU job's gpu-lease-<pid>), or the system manager's
+    on a timing job's fill-timing-*: freeze, thaw and kill reach every process in it, including a workload that `research run`
+    starts as its own process group, which killpg misses."""
     unit = j.get("unit")
     systemctl = ["sudo", "-n", "systemctl"] if unit and unit.startswith("fill-timing-") else ["systemctl", "--user"]
     return bool(unit) and subprocess.run([*systemctl, *args, f"{unit}.scope"], capture_output=True).returncode == 0
 
 
 def scope_populated(j: dict) -> bool:
+    """Whether a timing job's scope still holds a process (its cgroup.events); one that can't be read counts as holding one."""
     try:
         return "populated 1" in (Path(CGROUP_ROOT) / TIMING_SLICE / f"{j['unit']}.scope" / "cgroup.events").read_text()
     except FileNotFoundError:
@@ -306,6 +408,8 @@ def scope_populated(j: dict) -> bool:
 
 
 def kill(name: str, j: dict, sig: str) -> None:
+    """Signal everything in the job's scope.  Only root's systemctl reaches a timing job's, and what it misses keeps the GPU's
+    lease (KEEP), so a kill that fails while that scope is populated is logged, once a job (`scope-kill-failed`)."""
     if not scope(j, "kill", f"--signal={sig}") and j["h"].get("timing") and scope_populated(j) and not j.get("kill_failed"):
         j["kill_failed"] = True
         event("scope-kill-failed", name, unit=j["unit"], signal=sig)
@@ -327,6 +431,8 @@ def stop(name: str, why: str, requeue: bool = True) -> None:
 
 
 def start(p: Path, h: dict, backfill: bool = False, claim_fd: int | None = None) -> None:
+    """Start a queued job.  A pool job's h["pool_cpus"] are its claimed cores, whose claim `claim_fd` holds: the job inherits it,
+    and the runner's own copy is closed once the job is started."""
     name = p.name
     run = FILL / "running" / name
     shutil.move(str(p), run)
@@ -405,6 +511,7 @@ def gpu_set(on, n: int) -> set[int] | None:
 
 
 def pick_gpus(idle: list[int], allowed: set[int] | None, g: int, n: int) -> list[int] | None:
+    """g of the idle GPUs (highest index first) for one job: two from one NUMA node (0..n/2-1, n/2..n-1) when they can be."""
     ok = [i for i in reversed(idle) if allowed is None or i in allowed]
     if len(ok) < g:
         return None
@@ -416,6 +523,8 @@ def pick_gpus(idle: list[int], allowed: set[int] | None, g: int, n: int) -> list
 
 
 def keep_free(n: int, fs: list[dict] | None = None) -> set[int]:
+    """The GPUs fill keeps its jobs off: FILL_DIR/keep-free's, and those of the fences `fs` (by default every live one), where
+    only a fence's own jobs run."""
     fs = fences() if fs is None else fs
     try:
         kept = (gpu_set((FILL / "keep-free").read_text().split("#")[0].strip() or None, n) or set()
@@ -427,6 +536,7 @@ def keep_free(n: int, fs: list[dict] | None = None) -> set[int]:
 
 
 def cpu_list(cpus: set[int]) -> str:
+    """{96, 97, 98, 100} as `96-98,100`."""
     runs: list[list[int]] = []
     for c in sorted(cpus):
         if runs and runs[-1][1] == c - 1:
@@ -437,6 +547,7 @@ def cpu_list(cpus: set[int]) -> str:
 
 
 def gpu_cpus(i: int) -> set[int]:
+    """The CPUs on GPU i's NUMA node: its PCI device's local_cpulist."""
     bus = subprocess.run(["nvidia-smi", "-i", str(i), "--query-gpu=pci.bus_id", "--format=csv,noheader"], capture_output=True,
                          text=True, check=True).stdout.strip()
     domain, rest = bus.split(":", 1)
@@ -447,6 +558,7 @@ _local: dict[int, set[int]] = {}
 
 
 def local_cpus(i: int) -> set[int]:
+    """gpu_cpus(i), read once a runner; none while it can't be read."""
     if i not in _local:
         try:
             _local[i] = gpu_cpus(i)
@@ -458,6 +570,7 @@ def local_cpus(i: int) -> set[int]:
 
 @functools.cache
 def siblings(c: int) -> frozenset[int]:
+    """CPU c's core: its SMT siblings (CPU_ROOT/cpu<c>/topology/thread_siblings_list); none when that can't be read."""
     try:
         return frozenset(gpu_set((CPU_ROOT / f"cpu{c}" / "topology" / "thread_siblings_list").read_text().strip(), 1 << 16) or ())
     except OSError as e:
@@ -466,7 +579,8 @@ def siblings(c: int) -> frozenset[int]:
 
 
 def carve(free: set[int], local: set[int], k: int) -> str | None:
-    """Whole cores only, lowest first; None when they don't fit."""
+    """At least k CPUs of `free` on `local` (a GPU's NUMA node), lowest first, or None when they don't fit.  A core goes whole,
+    all its SMT siblings or none, so no two jobs share one."""
     ok, got = free & local, set()
     for c in sorted(ok):
         core = siblings(c)
@@ -476,6 +590,9 @@ def carve(free: set[int], local: set[int], k: int) -> str | None:
 
 
 def timing_free(fs: list[dict]) -> set[int]:
+    """TIMING_CPU_SET less every CPU another process may run on: a fence's, a running timing job's, and each populated top-level
+    cgroup's but PID 1's init.scope (user.slice and system.slice hold every other fill job, slot d and the Verity pool): a
+    slice's own cpuset, else that of each populated cgroup in it, as in TIMING_SLICE.  A cgroup that can't be read takes all."""
     free = gpu_set(TIMING_CPU_SET, 1 << 16) or set()
     for cpus in [f["cpus"] for f in fs] + [j["h"].get("timing_cpus") for j in running.values()]:
         free -= gpu_set(cpus, 1 << 16) or set()
@@ -497,6 +614,9 @@ def timing_free(fs: list[dict]) -> set[int]:
 
 
 def repin(f: dict, fs: list[dict]) -> None:
+    """Move every running fill job but fence f's own and the timing jobs off f's cores: each thread in the job's process group or
+    its scope (a GPU job's gpu-lease-<pid>, where `research run` starts its workload in a session of its own).  A thread on f's
+    cores alone stays."""
     off = gpu_set(f["cpus"], 1 << 16) or set()
     jobs = [j for k, j in running.items() if fence_for(k, fs) is not f and not j["h"].get("timing")]
     groups = {j["pid"] for j in jobs if j.get("pid")}
@@ -527,10 +647,12 @@ def repin(f: dict, fs: list[dict]) -> None:
 
 
 def rank(name: str, h: dict) -> int:
+    """Node 2's order: circuits' Commit guests, then pous, then proofs and the rest of Verity's jobs."""
     return 0 if name.startswith(COMMIT_PREFIX) else 1 if h["project"] != "verity" else 2
 
 
 def windows() -> list[tuple[float, float]]:
+    """The timed windows booked in FILL_DIR/windows, as (start, end) in epoch seconds."""
     out = []
     try:
         lines = (FILL / "windows").read_text().splitlines() if (FILL / "windows").exists() else []
@@ -552,6 +674,8 @@ wall = time.time
 
 
 def clears(h: dict, booked: list[tuple[float, float]], t: float) -> bool:
+    """Whether a job started at `t` ends, at its max_min (a timing job, which no window stops, TIMING_MARGIN_MIN after it),
+    before every booked window, or starts after it."""
     end = t + 60 * (h["max_min"] + (TIMING_MARGIN_MIN if h.get("timing") else 0))
     return all(end <= s or t >= e for s, e in booked)
 
@@ -574,6 +698,7 @@ def tries(name: str) -> int:
 
 
 def exit_status(name: str) -> int | None:
+    """The status a job's wrapper wrote as it exited (RC_WRAP), or None when there is none."""
     rc = FILL / "running" / f".{name}.rc"
     try:
         return int(rc.read_text().strip()) if rc.exists() else None
@@ -641,6 +766,9 @@ def reap() -> None:
 
 
 def claim(name: str, k: int) -> tuple[str, int] | None:
+    """k CPUs of VERITY_CPU_SET in whole cores that no fence and no live claim in CLAIMS holds, claimed for job `name`: the CPUs
+    and the descriptor that holds the claim (start passes it to the job).  None while they don't fit, or while a queued run waits
+    for cores (a live CLAIMS/wait.*), which goes first; a claim or ticket nobody holds is a leftover, removed."""
     try:
         CLAIMS.mkdir(parents=True, exist_ok=True)
         with open(CLAIMS / ".lock", "a") as lock:
@@ -737,6 +865,7 @@ NODE_MEMINFO = os.environ.get("FILL_NODE_MEMINFO", "/sys/devices/system/node/nod
 
 
 def numa0_gb() -> dict:
+    """NUMA 0's reclaimable (MemFree + Inactive(file)) and anonymous memory in GB, logged beside each window's freeze."""
     kb = {}
     try:
         for line in Path(NODE_MEMINFO).read_text().splitlines():
@@ -913,6 +1042,7 @@ def tick(n: int) -> str:
 
 
 def adopt() -> None:
+    """Take over the jobs an earlier runner left in running/."""
     for p in (FILL / "running").glob("*"):
         if p.name.startswith("."):
             continue

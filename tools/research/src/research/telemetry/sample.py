@@ -93,6 +93,7 @@ class Sampler:
             self.error_samples.append(f"{kind}: {msg}")
 
     def round(self, final: bool = False) -> bool:
+        """Take one round of readings.  Returns False when the workload root has gone."""
         now = clock()
         alive = True
         try:
@@ -164,6 +165,9 @@ class Sampler:
         return alive
 
     def _pss(self, row: dict[str, Any]) -> dict[str, Any]:
+        """The process's smaps_rollup, unless its RSS is over --pss-max-rss-gb or its last read was less than PSS_HOLD_FACTOR times
+        that read's length ago: the read walks the whole address space under the process's mmap lock, which stalls a large process
+        for seconds."""
         rss = row.get("rss_bytes", row.get("rss_bytes_stat"))
         skipped = {"pid": row["pid"], "pss_bytes": None, "skipped": True, **{k: row.get(k) for k in STATUS_RSS},
                    **({} if "rss_bytes" in row else {"rss_bytes_stat": row.get("rss_bytes_stat")})}

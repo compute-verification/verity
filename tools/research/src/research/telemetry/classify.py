@@ -238,6 +238,7 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     proc_samples = [s for s in samples if s.get("kind") == "process"]
 
     def vanish_in(w: dict[str, Any]) -> dict[str, Any]:
+        """who vanished in (window_start, window_end]: tree pids (gone) and outsiders; largest anon+shmem at the last sample before the window end."""
         a, b = float(w["window_start_mono"]), float(w["window_end_mono"])
         half = 0.5 * max(b - a, 1e-3)
         tree_gone: list[int] = []
@@ -372,6 +373,7 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
             limitations.append(f"check record {check_record} is not JSON")
 
     def oom_attribution() -> dict[str, Any]:
+        """-> {class, why, certainty, limitations, detail}; class is CGROUP_OOM_ATTRIBUTED or OOM_UNRESOLVED_ORIGIN."""
         if own_scope:
             return {"class": "CGROUP_OOM_ATTRIBUTED", "why": "SIGKILL exit and an oom_kill increment in the job's own cgroup during the job",
                     "certainty": "established", "limitations": [], "detail": {"scope": cg_scope}}

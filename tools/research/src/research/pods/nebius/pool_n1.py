@@ -110,6 +110,7 @@ def observe() -> dict:
 
 
 def attempts_by_job(since: str) -> dict[str, list[tuple]]:
+    """Job name -> (state, rc, validation, outputs) of each Attempt its pods launched since `since`, from node 1's store."""
     try:
         with sqlite3.connect(f"file:{STORE_DB}?mode=ro", uri=True) as c:
             rows = c.execute("select a.host, a.state, a.rc, a.validation, (select count(*) from attempt_outputs o where o.attempt = a.id)"
@@ -137,6 +138,7 @@ def _at(w: dict, kind: str) -> float | None:
 
 
 def delivery(obs: dict) -> list[dict]:
+    """`delivered_by_hour` (see the module docstring) from the Workloads, the Jobs' labels and the store's Attempts."""
     t = obs["t"]
     now_h = int(t // 3600) * 3600
     hours = {now_h - 3600 * k: [0.0, 0.0] for k in range(HOURS)}
@@ -159,6 +161,7 @@ def delivery(obs: dict) -> list[dict]:
 
 
 def lease_pool() -> dict[int, dict]:
+    """n1_lease.py's GPUs in the lease pool (index -> its record), when its state is fresh; else none."""
     if not LEASE_STATE.exists():
         return {}
     try:
@@ -184,6 +187,8 @@ def _gpu_request(w: dict) -> int:
 
 
 def build(obs: dict, drift: dict | None = None) -> dict:
+    """The `nodes.n1` entry from one observation (see observe()); `drift` is template_drift()'s monitor, if any.  A GPU in
+    n1_lease.py's pool is attributed to its lease (the lease files), not to the holder pod DCGM names."""
     t = obs["t"]
     admitted: dict[str, dict] = {}
     waiting_gpu = waiting_cpu = 0
@@ -263,6 +268,7 @@ def git(*args: str) -> str:
 
 
 def template_drift() -> dict:
+    """Compare the dispatcher's sky/ with infra/nebius's (as pushed into node 1's bare repo): a `template-drift` monitor, or {}."""
     try:
         ref = json.loads(REF_JSON.read_text())
         want = {}
@@ -295,6 +301,7 @@ def write(out: Path, n1: dict) -> None:
 
 
 def cover_pause(merged: Path, n1: dict, now: float) -> bool:
+    """Rewrite the merged file while node 2's publisher is paused (the module docstring); True when it did."""
     try:
         doc = json.loads(merged.read_text())
         last = doc.get("n2_generated_at") or doc["generated_at"]

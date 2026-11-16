@@ -95,11 +95,14 @@ class Check:
 
 
 def _left(timeout: float) -> float:
+    """`timeout`, cut to what is left of this probe thread's time."""
     return max(0.0, min(timeout, getattr(_probe, "end", math.inf) - time.monotonic()))
 
 
 def run(argv: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> tuple[int | None, str]:
-    """(exit code, output); None when it gave no answer within PROBE_TIMEOUT_S."""
+    """(exit code, output) of `argv`, stdin closed, in a session of its own: None when it gave no answer within PROBE_TIMEOUT_S
+    (or what is left of its probe's time), its whole process group killed, git's remote helpers and ssh's with it; 127 when it
+    could not start. The output is for telling one failure from another, never for printing."""
     try:
         p = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                              text=True, errors="replace", start_new_session=True)
@@ -188,6 +191,8 @@ PUSH_FAILURES = (
 
 
 def push_probe(name: str, root: Path, opts: list[str], where: str, credential_fix: str) -> Check:
+    """`git push --dry-run` of HEAD to PROBE_REF: GitHub asks for the push credential before it answers, nothing is sent, and no
+    pre-push hook runs."""
     argv = ["git", "-C", str(root), *opts, "push", "--dry-run", "--no-verify", "--quiet", where, f"HEAD:{PROBE_REF}"]
     rc, out = run(argv, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     if rc == 0:
@@ -211,6 +216,7 @@ def _git_root(where: Path) -> Path | None:
 
 
 def checkout() -> Path | None:
+    """The git checkout the caller works in (the working directory's), else the one this package runs from."""
     return _git_root(Path.cwd()) or _git_root(REPO)
 
 
@@ -302,14 +308,19 @@ SSH_FAILURES = (
 
 
 def registry_unread() -> bool:
+    """Whether reading the registry would clone the notes repo first (`registry.merged`): synchronously, for up to 15 minutes,
+    before any deadline. The doctor reads machines.toml alone then; notes-push names the missing clone."""
     return not settings.has(registry.REGISTRY_ENV) and not registry.notes_root().exists()
 
 
 def ssh_machines() -> dict[str, dict]:
+    """The machines `research run --on` knows (machines.toml, and the registry unless `registry_unread`) whose entries name an
+    ssh host, the auditor devices (`remote.restricted`) aside."""
     return _ssh_machines()[0]
 
 
 def _ssh_machines() -> tuple[dict[str, dict], list[str]]:
+    """(the machines to probe, the auditor devices left out)."""
     ms = remote.load_machines(remote.machines_path()) if registry_unread() else remote.load_machines()
     ssh = {n: m for n, m in sorted(ms.items()) if isinstance(m, dict) and m.get("provider") == "ssh"}
     skipped = remote.restricted(ssh)
@@ -390,7 +401,7 @@ def check_disk(root: Path | None) -> Check:
 
 
 def server_date(url: str = CLOCK_URL) -> float:
-    """Seconds since the epoch, at the Date header's one-second resolution."""
+    """The time `url`'s Date header gives a HEAD, in seconds since the epoch; its one-second resolution is the caller's."""
     req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "research-doctor"})  # noqa: S310 (CLOCK_URL, a literal https URL)
     try:
         with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT_S) as r:  # noqa: S310 (CLOCK_URL, a literal https URL)
@@ -451,6 +462,8 @@ def checks(role: str, root: Path | None) -> list[Probe]:
 
 
 def gather(probes: list[Probe], deadline_s: float = DEADLINE_S) -> list[Check]:
+    """Every probe at once, in daemon threads: what a probe runs (`run`) is killed KILL_MARGIN_S before the deadline, so the
+    command leaves no git or ssh behind, and a probe still running at the deadline is a finding, and is left behind."""
     done: dict[str, Check] = {}
     end = time.monotonic() + deadline_s
 

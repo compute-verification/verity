@@ -76,6 +76,10 @@ SUPERVISED_ENV = "RESEARCH_GUARD_SUPERVISED"
 
 
 class RunPodAPI:
+    """The three provider calls the guard makes; tests substitute an object with the same methods.  The pod list is REST's, and
+    GraphQL's when REST gives no answer (`runpod.pods`: RunPod counts the two apart), so a spent REST count does not blind the
+    guard: it tallies and decides as before.  A termination is REST's alone, and one it refuses is tried again each poll."""
+
     def pods(self) -> list[dict[str, Any]]:
         from . import runpod
         return runpod.pods()
@@ -107,6 +111,7 @@ def paths(dry_run: bool = False, log: str | None = None) -> dict[str, Path]:
 
 
 def parse_time(s: str | None) -> float | None:
+    """Epoch seconds from ISO 8601 or RunPod's `YYYY-MM-DD HH:MM:SS.fff +0000 UTC`; None when absent or unparseable."""
     if not s:
         return None
     return B.parse_time(re.sub(r" ([+-]\d{4})$", r"\1", str(s).strip().removesuffix(" UTC")))
@@ -137,6 +142,8 @@ def new_state(now: float) -> dict[str, Any]:
 
 
 def load_state(path: Path, now: float, log: Callable[[str], None]) -> dict[str, Any]:
+    """The tallies in `path`, else new ones.  A file that cannot be read or parsed does not stop the guard: it is set aside and new
+    tallies start, with `tally_restarted` saying why (the spend before it is not counted)."""
     try:
         raw = path.read_text()
     except FileNotFoundError:
@@ -182,6 +189,10 @@ def _append(path: Path, text: str) -> None:
 
 
 class Recorder:
+    """The guard's writes: its log, state and pid files, all best effort.  A failure is kept in `faults` (per file kind: since, count,
+    last error), printed to stderr when it starts and when it clears, and never raised, so it can neither end the loop nor delay a
+    termination.  `clock` stamps the log lines."""
+
     def __init__(self, files: dict[str, Path], clock: Callable[[], float]):
         self.files, self.clock = files, clock
         self.faults: dict[str, dict[str, Any]] = {}
@@ -217,6 +228,8 @@ class Recorder:
 
 
 def refresh(cfg: Config, state: dict[str, Any], current: B.Budgets | None, now: float, log: Callable[[str], None]) -> B.Budgets | None:
+    """Read budgets.toml again.  Success replaces the budgets in force (the state keeps their text and view, each change is logged);
+    any failure keeps them and records the error, logged once per distinct error."""
     b = state.get("budgets") or {}
     try:
         text, where = B.read(cfg.source)
@@ -254,12 +267,15 @@ def budgets_from_state(state: dict[str, Any]) -> B.Budgets | None:
 
 
 def listed_rate(v: Any) -> float | None:
+    """A pod's listed costPerHr as dollars an hour, or None when it is not a finite JSON number (a string included)."""
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         return None
     return float(v) if math.isfinite(v) else None
 
 
 def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: float, log: Callable[[str], None]) -> list[dict[str, Any]]:
+    """One guard step over the provider's current pod list: tally, decide, terminate, and only then log.  Returns the terminations it
+    made (or would make)."""
     listed = [p for p in api.pods() if (p.get("desiredStatus") or "").upper() not in DEAD]
     hours = (now - state["last_poll"]) / 3600.0 if state.get("last_poll") else 0.0
     state["terminating"] = {k: t for k, t in (state.get("terminating") or {}).items() if now - t < TERMINATING_S}
@@ -426,6 +442,7 @@ def recorded_pid(pid_path: Path) -> int | None:
 
 
 def api_problem() -> str | None:
+    """Why the real RunPod API cannot be called here (no ~/.runpod/config.toml and no RUNPOD_API_KEY), or None."""
     from . import runpod
 
     try:
@@ -437,6 +454,9 @@ def api_problem() -> str | None:
 
 def run(cfg: Config, api: Any = None, *, poll_s: float = 60.0, log_path: str | None = None, clock: Callable[[], float] = time.time,
         sleep: Callable[[float], None] = time.sleep, iterations: int | None = None) -> int:
+    """The guard loop (`iterations` bounds it for tests).  Exit 3 when another guard is alive here; EXIT_NO_KEY, before any poll, when
+    it would call the real API and no RunPod key is configured.  No local fault ends it (module docstring, "Fail closed"): the
+    directories, pid, log and state go through a `Recorder`."""
     no_key = api_problem() if api is None else None
     api = api or RunPodAPI()
     p = paths(cfg.dry_run, log_path)
@@ -478,6 +498,8 @@ def run(cfg: Config, api: Any = None, *, poll_s: float = 60.0, log_path: str | N
 
 def supervise(cmd: list[str], poll_s: float, *, call: Callable[[list[str]], int] | None = None,
               sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.time) -> int:
+    """Run the guard `cmd` until it stops on purpose (STOP_CODES), starting it again `poll_s` after any other exit: a crash, a kill,
+    an uncaught error.  A crash costs one poll, not the evening.  Returns the guard's last exit code."""
     unsaid = 0
 
     def say(msg: str) -> None:
@@ -506,6 +528,7 @@ def supervise(cmd: list[str], poll_s: float, *, call: Callable[[list[str]], int]
 
 
 def detach(argv: list[str], dry_run: bool, log_path: str | None) -> int:
+    """Start the supervisor (`--supervise`, which runs the guard and restarts it) in a new session, output to the log."""
     p = paths(dry_run, log_path)
     other = recorded_pid(p["pid"])
     if other and _alive(other):
@@ -599,6 +622,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str]) -> int:
+    """`argv` after `guard`."""
     if argv[:1] in (["status"], ["stop"]):
         ap = argparse.ArgumentParser(prog=f"research pods guard {argv[0]}")
         ap.add_argument("--dry-run", action="store_true")

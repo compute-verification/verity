@@ -99,7 +99,7 @@ def iso(t: float) -> str:
 
 
 def utc(s: Any, what: str) -> float:
-    """Epoch seconds; ValueError for anything else, a time without its zone included."""
+    """A UTC time (`2026-10-05T12:00Z`) in epoch seconds; ValueError for anything else, a time without its zone included."""
     try:
         t = datetime.fromisoformat(s)
     except (TypeError, ValueError):
@@ -124,6 +124,7 @@ def check_name(name: str) -> None:
 
 
 def parse_target(doc: Any, name: str) -> dict[str, Any]:
+    """The target, normalized, with `until_t`; ValueError naming the first thing wrong with it."""
     if not isinstance(doc, dict) or doc.get("schema") != SCHEMA:
         raise ValueError(f"schema is not {SCHEMA}")
     check_name(name)
@@ -201,6 +202,7 @@ def state_path(name: str) -> Path:
 
 
 def load_state(name: str) -> dict[str, Any]:
+    """The target's state, a fresh one when it has none; OSError or ValueError when it exists but can't be trusted."""
     try:
         st = json.loads(state_path(name).read_text())
     except FileNotFoundError:
@@ -223,6 +225,7 @@ def log(target: str, event: str, **kv: Any) -> None:
 
 
 def note(st: dict[str, Any], name: str, event: str | None, why: str | None = None) -> None:
+    """Why the target starts nothing, logged when it changes (a tick a minute would otherwise repeat it)."""
     text = f"{event}: {why}" if event else None
     if st.get("note") != text:
         st["note"] = text
@@ -239,6 +242,10 @@ def locked() -> Iterator[None]:
 
 
 def booked() -> list[tuple[float, float]]:
+    """The timed windows in KEEPER_WINDOWS (fill_runner's file: `2026-10-01T10:00Z 30 # who`, start and minutes; blank and comment
+    lines aside); OSError when the file is missing or can't be read, ValueError for a line that isn't a booking. Unlike
+    fill_runner, which reads a missing file as no windows, a node that names a windows file holds without it: a missing file is
+    a broken path more often than a night with nothing booked, and an idle target costs less than a voided window."""
     if not WINDOWS:
         return []
     out = []
@@ -255,6 +262,7 @@ def booked() -> list[tuple[float, float]]:
 
 
 def daily(spec: str, t: float) -> list[tuple[float, float]]:
+    """KEEPER_DAILY_HOLD (`12:10-13:30`, UTC) from the day before `t` to three days after it."""
     if not spec:
         return []
     m = re.fullmatch(r"(\d\d):(\d\d)-(\d\d):(\d\d)", spec.strip())
@@ -270,11 +278,13 @@ def daily(spec: str, t: float) -> list[tuple[float, float]]:
 
 
 def holds(now: float) -> list[tuple[str, float, float]]:
+    """The booked windows and the daily hold around now, (kind, start, end) by start; OSError or ValueError when they can't be read."""
     return sorted([("window", s, e) for s, e in booked()] + [("daily hold", s, e) for s, e in daily(DAILY_HOLD, now)],
                   key=lambda x: x[1])
 
 
 def held(spans: list[tuple[str, float, float]], now: float, end: float) -> str | None:
+    """Why a lease may not run from now to `end`, else None: a hold is on now, or starts before `end`."""
     for kind, s, e in spans:
         if s <= now < e:
             return f"in the {kind} {iso(s)}-{iso(e)}"
@@ -284,6 +294,8 @@ def held(spans: list[tuple[str, float, float]], now: float, end: float) -> str |
 
 
 def grants() -> dict[str, float]:
+    """When each run's lease was granted: the earliest `since` among the gpu-lease owner lines in KEEPER_LEASE_DIR that name it
+    (`run=`, which the runner's RESEARCH_RUN_ID gives). A line stays after its lease ends, until the GPU's next lease replaces it."""
     out: dict[str, float] = {}
     for p in LEASE_DIR.glob("*.owner"):
         try:
@@ -310,12 +322,16 @@ def unit_live(unit: str) -> bool | None:
 
 
 def launch(unit: str, request: Path, description: str) -> str | None:
+    """Start the chunk's transient user unit, which runs `hold` (the user manager forks it, so it outlives the tick's service);
+    None once started, else why not."""
     r = subprocess.run(["systemd-run", "--user", "--quiet", "--collect", "--unit", unit, "--description", description, "--",
                         sys.executable, str(Path(__file__).resolve()), "hold", str(request)], capture_output=True, text=True)
     return None if r.returncode == 0 else (r.stderr.strip() or f"systemd-run exited {r.returncode}")[-300:]
 
 
 def workload_in(pgid: int, run_dir: Path) -> bool:
+    """Whether a process of group `pgid` has the run's RESEARCH_RUN_DIR (the runner gives its workload the resolved run dir), so
+    a status.json left `running` by a runner that died can't aim a cancel at whichever group holds that number now."""
     want = f"RESEARCH_RUN_DIR={run_dir.resolve()}".encode()
     for pid in filter(str.isdigit, os.listdir("/proc")):
         try:
@@ -329,6 +345,8 @@ def workload_in(pgid: int, run_dir: Path) -> bool:
 
 
 def cancel_chunk(chunk: dict[str, Any], reason: str) -> str | None:
+    """SIGTERM to a live chunk's workload process group, recorded in its run dir as a manual cancel (`research cancel`'s
+    cancel-intent, from the chunk's own tool snapshot); None once delivered, else why not."""
     rd = Path(chunk["run_dir"])
     st = read_json(rd / "status.json") or {}
     pgid = st.get("pgid")
@@ -346,6 +364,9 @@ def cancel_chunk(chunk: dict[str, Any], reason: str) -> str | None:
 
 
 def hold(request: Path) -> int:
+    """A chunk's unit: `research launch-request` claims the run dir and starts the detached runner, then the unit waits for the
+    runner to exit (`tail --pid`, so no process holds this file open for the chunk's life and `research deploy drift` asks for
+    no restart), so it is live exactly as long as the chunk."""
     req = json.loads(request.read_text())
     ident = (req.get("remote") or {}).get("tool_identity")
     r = subprocess.run([req["python"], "-m", "research", "launch-request", *(["--expect-tool", ident] if ident else []), str(request)],
@@ -362,6 +383,7 @@ def hold(request: Path) -> int:
 
 
 def outcome(run_dir: Path) -> tuple[str, int | None, str | None]:
+    """How an ended chunk ended, from its run dir: (outcome, rc, why)."""
     refused = read_json(run_dir / "refused.json")
     if isinstance(refused, dict):
         return "refused", None, str(refused.get("reason"))[:300]
@@ -429,6 +451,7 @@ def reap(name: str, st: dict[str, Any]) -> None:
 
 
 def overrun(c: dict[str, Any], granted: float | None, spans: list[tuple[str, float, float]] | None, now: float) -> str | None:
+    """Why a live chunk must stop now, else None (`spans` None: the holds can't be read, so only its until binds)."""
     at = now if granted is None else granted
     waiting = "still waiting for its lease" if granted is None else f"granted at {iso(granted)}"
     if at >= c["until_t"]:
@@ -439,6 +462,7 @@ def overrun(c: dict[str, Any], granted: float | None, spans: list[tuple[str, flo
 
 
 def stop_overruns(name: str, st: dict[str, Any], spans: list[tuple[str, float, float]] | None, now: float) -> None:
+    """Cancel each live chunk that `overrun` names, once delivered; a refusal is tried again each tick, logged when it changes."""
     granted = grants()
     for rid, c in sorted(st["chunks"].items()):
         why = overrun(c, granted.get(rid), spans, now) if c.get("cancel") != DELIVERED else None
@@ -450,6 +474,7 @@ def stop_overruns(name: str, st: dict[str, Any], spans: list[tuple[str, float, f
 
 
 def new_run_id(now: float) -> str:
+    """`research run`'s id format (runs.new_run_id), unused under the runs root and the requests."""
     while True:
         rid = f"r{datetime.fromtimestamp(now, UTC):%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
         if not (ROOT / "runs" / rid).exists() and not (ROOT / "requests" / rid).exists():
@@ -457,6 +482,8 @@ def new_run_id(now: float) -> str:
 
 
 def chunk_request(name: str, t: dict[str, Any], rid: str, seed: int, unit: str) -> dict[str, Any]:
+    """The target's request as this chunk's: its env set inside the lease, so that neither the runner nor gpu-lease sees it, but
+    PYTHONPATH, which the runner appends behind the tool snapshot and the tree's import roots (inside, it would replace them)."""
     req = json.loads(json.dumps(t["request"]))
     env = {k: str(v) for k, v in (req.get("env") or {}).items()}
     inner = [f"{k}={v}" for k, v in env.items() if k != "PYTHONPATH"]
@@ -470,6 +497,7 @@ def chunk_request(name: str, t: dict[str, Any], rid: str, seed: int, unit: str) 
 
 
 def start(name: str, t: dict[str, Any], st: dict[str, Any], now: float) -> bool:
+    """Start one chunk with the next seed; False when it didn't start (a failure)."""
     seed = st["next_seed"]
     rid = new_run_id(now)
     unit = f"keeper-{rid}"

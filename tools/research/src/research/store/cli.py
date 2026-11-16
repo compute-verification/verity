@@ -145,6 +145,7 @@ def _meta(arg: str | None) -> dict:
 
 
 def _refs(items: list[str]) -> dict:
+    """`name=art:...` (repeat a name, or comma-separate, for a list)."""
     out: dict = {}
     for it in items:
         name, sep, v = it.partition("=")
@@ -177,6 +178,7 @@ def _select_parser() -> argparse.ArgumentParser:
 
 
 def _select(st: LocalStore, ns: argparse.Namespace, idx=None) -> tuple[list[dict], dict]:
+    """The catalog's matches, or with ``idx`` (`bucket_index.reader`) the index's plus the catalog's the index lacks (pending here)."""
     from . import bucket_index as BI
 
     labels = [tuple(next(iter(_kv([x], "--label").items()))) for x in ns.label]
@@ -329,6 +331,10 @@ def cmd_where(argv: list[str]) -> int:
 
 
 def cmd_fetch(argv: list[str]) -> int:
+    """Materialise a payload, or with `--path GLOB` (repeatable) just the matching subtree of a tree artifact (`rep1/*`, `*.proof`,
+    a bare directory name selects its subtree); the on-disk layout under `--to` is the artifact's own.  `--list` prints the files
+    instead (path, bytes, local | remote | absent) and fetches nothing: `local` = the blob is in objects/, `remote` = the catalog
+    flags the artifact as on the remote (no per-file HEAD)."""
     ap = _ap("fetch")
     ap.add_argument("art")
     ap.add_argument("--to", default=None, metavar="DIR", help="materialise under this directory (default: the store's own cache)")
@@ -357,6 +363,13 @@ def cmd_fetch(argv: list[str]) -> int:
 
 
 def cmd_evict(argv: list[str]) -> int:
+    """Free local disk by evicting copies whose bytes are PRESERVED on the remote (`evict.py`): store blobs held only by artifacts with a
+    verified remote replica (largest first) and the `trees/` cache, and with `--runs` the big files of finished run directories whose
+    `run_files` artifact is verified (oldest first).  Stops when the free space reaches `--target-free-gb`.  Never touches pending
+    objects, manifests, attempts, labels or the catalog.  `--dry-run` reports without removing anything.  Whatever the target, it
+    also removes what it is pointed at that nothing else removes (`leftovers.py`): request directories whose run dir is gone, the
+    clones of runs that are over or whose run dir is gone, the store's free lock files and a uv cache's idle editable shards and
+    build directories.  One of these passes that fails is its report's `error` and stops no other."""
     from . import evict as EV
     from . import leftovers as LO
 
@@ -468,6 +481,12 @@ PRESERVED_EXITS = ("exit 0: PRESERVED. 1: NOT PRESERVED (something is missing or
 
 
 def cmd_preserved(argv: list[str]) -> int:
+    """The durability gate (F7, `preserved.py`), three parts: the attempt manifest, every artifact it names (outputs + telemetry),
+    and every local assertion about the attempt / its derivation / those artifacts must be verifiably on the remote.  Exit 0 iff so
+    for every target; else 1, the list of what is not, and which parts fail.  Exit 4 (WITHDRAWN) when the only blobs missing were
+    withdrawn on purpose (`research data withdraw`): neither preserved nor lost, their local copies are to be deleted, never kept
+    or put again.  Exit 2 on a usage error (no targets).  Targets are checked
+    `--jobs` at a time and each one's lines are printed as it finishes (completion order); `--json` waits and keeps the given order."""
     from . import preserved as P
 
     ap = _ap("preserved", epilog=PRESERVED_EXITS)
@@ -495,6 +514,11 @@ def cmd_preserved(argv: list[str]) -> int:
 
 
 def cmd_select(argv: list[str]) -> int:
+    """Artifacts by facet, from the index (`bucket_index.reader`: Neon with $STORE_PRIVATE_READER_URL, else this machine's
+    `research data index` build) plus this store's matches the index lacks; from the catalog where there is no index.  Every form
+    (text, `--ids`, `--json`) ends with one stderr line naming the source and, for the index, the time it is complete as of: a
+    stale build answers only for what it had listed.  With no index that ever listed the bucket and a catalog holding no artifact,
+    an empty answer would mean nothing, so it exits 1 naming what is missing (as in a `research run` job's store)."""
     from . import bucket_index as BI
 
     ns = _select_parser().parse_args(argv)
@@ -557,6 +581,8 @@ def cmd_snapshot(argv: list[str]) -> int:
 
 
 def _hide_tokens(v):
+    """``v`` with each JWT (a `label_auth` or `label_delegation` token) replaced by its length: a token read back stays valid for
+    minutes and lands in worker logs, run outputs and agents' transcripts, so `labels` prints one only under `--with-tokens`."""
     if isinstance(v, dict):
         return {k: _hide_tokens(x) for k, x in v.items()}
     if isinstance(v, list):
@@ -572,6 +598,10 @@ def _fmt_label_value(v) -> str:
 
 
 def cmd_labels(argv: list[str]) -> int:
+    """TARGET's assertions, after pulling the ones the remote has and this store lacks (`labels_sync.read_through`; unreachable:
+    a warning, and the local ones).  `--remote` is the durability view (`labels_sync.compare`): every assertion about TARGET on
+    either side, marked `both`, `LOCAL ONLY` (not durable: `research data push` repairs) or `REMOTE ONLY` (asserted elsewhere;
+    `labels-sync` / `reindex --remote` brings it here).  Exit 1 when any local assertion is not on the remote."""
     ap = _ap("labels")
     ap.add_argument("target")
     ap.add_argument("--history", action="store_true", help="every assertion in ts order (default: the latest per key and asserter)")
@@ -657,6 +687,7 @@ def cmd_label(argv: list[str]) -> int:
 
 
 def _run_file(st: LocalStore, run_id: str, rel: str) -> object:
+    """The JSON file `rel` of run `run_id`'s run record (its Attempt's `outputs.run_record`), or None where the store has none."""
     try:
         art = ((st.get_attempt(run_id) or {}).get("outputs") or {}).get("run_record")
         return json.loads((st.fetch(art, paths=[rel]) / rel).read_text()) if art else None
@@ -666,6 +697,8 @@ def _run_file(st: LocalStore, run_id: str, rel: str) -> object:
 
 
 def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:
+    """Upload the target's assertions the remote lacks, in the command that wrote one (README §7.2); the local write stands either way,
+    and a write that stays local says so. Also whether write-through was on and the upload failed (the caller exits 1)."""
     from . import labels_sync as LS
 
     pending = "pending: `research data push --pending` uploads it"
@@ -683,6 +716,9 @@ def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:
 
 
 def cmd_vocab_check(argv: list[str]) -> int:
+    """Read-only audit of labels/ against the vocabulary (`vocab_check.py`): unknown keys, old spellings of keys and values, bool / int /
+    number keys holding strings, enum values off the set, refs written as labels, unreadable files -- each with counts, asserters and
+    example targets.  Exit 0 always (it is a report); `--strict` exits 1 when anything is found."""
     from . import vocab_check as VC
 
     ap = _ap("vocab-check")
@@ -695,6 +731,10 @@ def cmd_vocab_check(argv: list[str]) -> int:
 
 
 def cmd_labels_sync(argv: list[str]) -> int:
+    """Union the local labels/ with the remote's `labels/` prefix (`labels_sync.py`): every assertion goes up under its content hash
+    (`labels/<target>/<sha256>.json`, immutable, so two machines never overwrite each other), and every remote assertion we lack comes
+    down into the store's own layout.  `--from-backup ART` unions a `labels-backup/v1` tarball instead; `--from-dir DIR` any directory of
+    assertion files (another store's labels/).  Read-only for the remote with `--pull-only`; nothing is ever deleted or rewritten."""
     from . import labels_sync as LS
 
     ap = _ap("labels-sync")
@@ -723,6 +763,9 @@ def cmd_labels_sync(argv: list[str]) -> int:
 
 
 def cmd_labels_pack(argv: list[str]) -> int:
+    """Rebuild the labels pack and replace the remote's (`labels_sync.publish_pack`): pull every assertion the remote lists into this
+    store, then upload them as one tarball at a fixed key, which a `labels-sync` that lacks most of them takes in one request before
+    it pulls the rest.  `--every S` repeats, S seconds after each pass; a pass that fails ends the command."""
     from . import labels_sync as LS
 
     ap = _ap("labels-pack")
@@ -775,6 +818,7 @@ def cmd_reindex(argv: list[str]) -> int:
 
 
 def cmd_index(argv: list[str]) -> int:
+    """The derived index (README §5.1).  Exit 1 when a record failed its check (it is left out and read again next pass)."""
     from . import bucket_index as BI
     from .remote import FsRemote, load_export
 
@@ -834,6 +878,8 @@ def cmd_index(argv: list[str]) -> int:
 
 
 def cmd_pending(argv: list[str]) -> int:
+    """The write-through queue (README §7.2): artifacts, attempts and assertions this store holds that the remote does not
+    (`LocalStore.pending`).  `research data push --pending` drains it.  Exit 1 when anything is pending."""
     ap = _ap("pending")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
@@ -854,6 +900,8 @@ def cmd_pending(argv: list[str]) -> int:
 
 
 def cmd_refresh(argv: list[str]) -> int:
+    """Incremental catch-up from the remote (`LocalStore.refresh`): fetch the manifests, attempts and assertions this store lacks and
+    index only those; nothing is wiped.  On a fresh machine this builds the catalog from the remote alone.  Exit 1 on any bad key."""
     ap = _ap("refresh")
     ap.add_argument("--jobs", type=int, default=32, metavar="N")
     ap.add_argument("--json", action="store_true")
@@ -875,6 +923,8 @@ def cmd_refresh(argv: list[str]) -> int:
 
 
 def cmd_parity(argv: list[str]) -> int:
+    """Content parity of this store against a store built from the remote alone (`parity.py`): artifacts, attempts, labels, replica
+    rows.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
     from . import parity as PA
 
     ap = _ap("parity")
@@ -895,6 +945,9 @@ def cmd_parity(argv: list[str]) -> int:
 
 
 def cmd_reconcile_attempts(argv: list[str]) -> int:
+    """Local attempt documents that differ from the remote's copy of the same write-once key (`reconcile.py`): listed (dry run), or
+    with `--apply` superseded by the remote's copy, the local one kept under attempts/.superseded/ and each change logged in
+    <store>/reconcile.log.  Exit 1 when divergent attempts remain (dry run) or one could not be reconciled."""
     from . import reconcile as RC
 
     ap = _ap("reconcile-attempts")
@@ -926,6 +979,9 @@ def cmd_reconcile_attempts(argv: list[str]) -> int:
 
 
 def cmd_catalog(argv: list[str]) -> int:
+    """The catalog's schema version against this code's, what opening it just migrated (older catalogs are brought forward on every
+    open, in one transaction), and row counts per table.  Exit 0 when current, 3 (before printing) when the catalog is NEWER than
+    the code -- see `CatalogVersionError`."""
     ap = _ap("catalog")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--compact", type=Path, metavar="OUT", help="write a copy without manifest_json or the replica records (index.compact)")
@@ -1021,6 +1077,7 @@ def _attempt_artifacts(doc: dict) -> list[str]:
 
 
 def _push_line(x: dict) -> str:
+    """One line per artifact: outcome, then objects / uploaded / skipped, MB, seconds, objects/s and the verification done."""
     head = f"{x['id']}  {x['kind']}  {'PRESERVED' if x['preserved'] else 'NOT preserved: ' + '; '.join(x.get('errors') or ['absent'])}"
     if not x.get("objects"):
         return head
@@ -1031,6 +1088,14 @@ def _push_line(x: dict) -> str:
 
 
 def cmd_push(argv: list[str]) -> int:
+    """Preserve on the remote (README §7): an artifact's blobs go up concurrently (`--jobs`), each verified (`--verify head`: size +
+    MD5 ETag, the default; `--verify readback`: download + sha256), then its manifest; a run id pushes the attempt manifest, every
+    artifact it references, and the assertions about the attempt, its derivation and those artifacts (`labels_sync.push_targets`; an
+    explicit art: id pushes its own assertions) -- an attempt whose assertions did not all land is reported NOT preserved.  `--pending`
+    pushes every local artifact without a verified remote replica, every attempt the remote lacks, and every local assertion the remote
+    lacks.  An artifact withdrawn from the shared store (`research data withdraw`, its `withdrawn` label pulled from the remote first)
+    is refused, so a machine's copy never goes back up.  One object's failure is reported, the batch continues; exit 1 if anything
+    is not PRESERVED."""
     ap = _ap("push")
     ap.add_argument("targets", nargs="*", help="art:<hex> or run ids")
     ap.add_argument("--pending", action="store_true", help="everything local that the remote does not verifiably hold")
@@ -1137,6 +1202,10 @@ def cmd_push(argv: list[str]) -> int:
 
 
 def cmd_mint_credential(argv: list[str]) -> int:
+    """A short-lived, bucket-scoped R2 credential for a pod (`credentials.py`): signed locally with the parent key from the environment
+    (the env vars store.toml names, default AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), or via the Cloudflare API with
+    CLOUDFLARE_API_TOKEN.  Prints JSON, or with `--env` the three `export` lines for a bootstrap; never writes a file.  `--job` mints
+    what a cluster job holds (`custody.job_env`): the key `research run` stages for a run's custody, or its `--store-read` key."""
     from . import credentials as C
     from . import custody as CU
 
@@ -1179,6 +1248,9 @@ def cmd_mint_credential(argv: list[str]) -> int:
 
 
 def cmd_refresh_fixtures(argv: list[str]) -> int:
+    """Re-register every `artifacts.json` entry whose bytes changed (`fixtures.refresh`): put under the new id (content-only
+    identity, as the entries were registered), `--preserve` pushes it, the entry is rewritten and the old id kept under `previous`.
+    Prints `old -> new  path` per changed entry.  Exit 1 when an entry's path is missing, conflicts, or was not PRESERVED."""
     from . import fixtures as F
 
     ap = _ap("refresh-fixtures")
@@ -1223,6 +1295,7 @@ def _fixture_repo(st: LocalStore, cmd: str, repo: str | None) -> Path | None:
 
 
 def _repo_rel(root: Path, p: str) -> str:
+    """A PATH argument as a repo-relative path: absolute, or relative to cwd when that lands inside the repo, else as given."""
     q = Path(p).expanduser()
     q = q if q.is_absolute() else Path.cwd() / q
     try:
@@ -1232,6 +1305,7 @@ def _repo_rel(root: Path, p: str) -> str:
 
 
 def _blob_list(path: str | None) -> list[tuple[str, int]]:
+    """`--blobs FILE`: one `<sha256> <bytes>` per line (the history rewrite's stubbed blobs)."""
     if not path:
         return []
     out = []
@@ -1245,6 +1319,11 @@ def _blob_list(path: str | None) -> list[tuple[str, int]]:
 
 
 def cmd_fetch_fixtures(argv: list[str]) -> int:
+    """Make the fetched entries of `artifacts.json` under each PATH present and exactly their ids (`fixtures.fetch_registry`):
+    manifests and blobs come from the local store, else the private remote when this machine can reach it, else the public export
+    (`--public-url`, `$RESEARCH_PUBLIC_URL`, else the built-in URL), `--jobs` at a time, every byte checked.  A tracked entry is
+    left alone.  `--check` only reports (exit 1 if any is missing or differs).  `--stubs` also restores the history stubs in
+    tracked files (an old commit's checkout)."""
     from . import fetchset, fixtures as F
 
     ap = _ap("fetch-fixtures")
@@ -1290,6 +1369,10 @@ def cmd_fetch_fixtures(argv: list[str]) -> int:
 
 
 def cmd_export(argv: list[str]) -> int:
+    """Copy every `artifacts.json` entry, with the ids under its `previous` block, each `--id` and any `--blobs`, to the
+    public export (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
+    bytes from the repo, the local store or the private remote.  `--verify-url URL` exports nothing: it fetches all of it back
+    through URL into a scratch store and checks every byte against its id (the end-to-end test of a public front end)."""
     from . import fetchset, fixtures as F
     from .remote import load_export
 
@@ -1352,6 +1435,7 @@ def cmd_export(argv: list[str]) -> int:
 
 
 def _json_object(p: Path) -> dict:
+    """A run record as a dict; an unreadable or non-object file reads as `{"error": ...}` (a doctor reports, never trips)."""
     try:
         doc = json.loads(p.read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
@@ -1360,6 +1444,9 @@ def _json_object(p: Path) -> dict:
 
 
 def cmd_doctor(argv: list[str]) -> int:
+    """Run dirs with a `store_publish_error.json` (README §10) whose run *is* now an attempt in this store -- a stale record of a publish
+    that later succeeded (a back-fill, a retry) -- versus those whose run is not (a real failure, or a run still going).  Read-only;
+    `--clean` deletes the stale files and nothing else.  Local attempts only: `reindex --remote` first if an attempt may live only on the vault."""
     from ..runs import runs_root
 
     ap = _ap("doctor")
@@ -1398,6 +1485,8 @@ def cmd_doctor(argv: list[str]) -> int:
 
 
 def cmd_gc(argv: list[str]) -> int:
+    """README §7.4 (`gc.py`): which blobs only uncited artifacts past their kind's TTL hold; `--apply` marks them and deletes those
+    marked at least `gc.GRACE_S` ago that still are.  Read-only without `--apply`."""
     from . import gc
 
     ap = _ap("gc")
@@ -1440,6 +1529,8 @@ def cmd_gc(argv: list[str]) -> int:
 
 
 def cmd_withdraw(argv: list[str]) -> int:
+    """README §7.4 (`withdraw.py`): delete the blobs of artifacts holding values that must never be shared, cited or not, and label
+    each `withdrawn` with the reason.  A blob another artifact also holds is kept and named.  Read-only without `--apply`."""
     from . import gc, withdraw
 
     ap = _ap("withdraw")
@@ -1495,6 +1586,8 @@ def _store_root_arg(argv: list[str]) -> str | None:
 
 
 def _rewrite_token(tok: str, resolve: Callable[[str], str]) -> str:
+    """The token itself, a comma list (`--members a,b`), or `name=<comma list>` (`--ref proof=art:…`, `--where meta.k=art:…`),
+    with every abbreviated id replaced; any other token comes back unchanged."""
     if tok.startswith("--") and "=" in tok:
         flag, _, val = tok.partition("=")
         return tok if flag in _VERBATIM_AFTER else f"{flag}={_rewrite_token(val, resolve)}"
@@ -1506,6 +1599,10 @@ def _rewrite_token(tok: str, resolve: Callable[[str], str]) -> str:
 
 
 def expand_short_ids(cmd: str, argv: list[str]) -> list[str]:
+    """Abbreviated artifact ids (`art:cc59294a`, >= 8 hex digits: the form notes and reports print) resolved against the local
+    catalog, git-style: exactly one catalogued id must start with it.  None -> the catalog may simply not know a remote-only
+    artifact (`reindex --remote`); several -> ambiguous.  Both are a ValueError naming what to do.  The catalog is opened only
+    when some token needs it."""
     if cmd in _VERBATIM_COMMANDS:
         return argv
     st: LocalStore | None = None

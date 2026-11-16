@@ -48,6 +48,12 @@ def _sampler_argv(a: argparse.Namespace, d: Path, root_pid: int) -> list[str]:
 
 
 def _tele_env() -> dict[str, str]:
+    """The sidecar is `python -m research.telemetry` in a NEW process: launched through a script that put its import root on
+    sys.path in-process only, the child would find no package -- its sampler.log reading 'No module named telemetry' and no
+    resources.jsonl written (the workload runs; Level 0 does not).  The package's IMPORT ROOT goes
+    first on the child's PYTHONPATH, so the sidecar resolves the SAME package that runs it.  For research/telemetry/run.py that root is
+    `src/` = parents[2] (research/telemetry/run.py -> telemetry -> research -> src); veritor's parents[1] would name `research/` and
+    reproduce the bug silently (the regression test in tests/test_telemetry.py is the check)."""
     root = str(Path(__file__).resolve().parents[2])
     env = dict(os.environ)
     pp = env.get("PYTHONPATH", "")
@@ -70,6 +76,10 @@ clock = time.monotonic
 
 
 class _TimeoutControl:
+    """`<attempt-dir>/control/timeout_s` -- JSON {"timeout_s": <seconds or null>, "actor": ..., "reason": ...} (a bare number is accepted).
+    poll() re-reads the file only when its mtime/size changed and returns the parsed document, or None when absent/unchanged/unparseable
+    (an unparseable file is reported once on stderr and otherwise ignored: the control surface never becomes the reason a workload stops)."""
+
     def __init__(self, attempt_dir: Path):
         self.path = attempt_dir / CONTROL_TIMEOUT
         self._sig: tuple[int, int] | None = None
@@ -108,6 +118,8 @@ class _TimeoutControl:
 
 
 def _close_cancel(attempt_dir: Path) -> dict[str, Any] | None:
+    """Once the workload has exited: `research cancel`'s request if it claimed CONTROL_CANCEL first, else None, and the file is
+    then claimed as closed, so a cancel that comes later ends the run's processes itself (scope.claim)."""
     try:
         if claim(attempt_dir / CONTROL_CANCEL, {"closed_utc": utc_now_ms(), "by": "runner"}):
             return None
@@ -127,6 +139,7 @@ def _utc_stamp() -> str:
 
 
 def _progress(d: Path, logs: list[str]) -> tuple[int, int, int]:
+    """(newest mtime_ns, total bytes, files) over the attempt dir, less RECORDER_FILES, and the --log files."""
     paths = [os.path.join(r, f) for r, _, fs in os.walk(d) for f in fs]
     paths = [p for p in paths if not any(fnmatch.fnmatchcase(os.path.relpath(p, d), g) for g in RECORDER_FILES)] + list(logs)
     newest = total = n = 0
@@ -140,6 +153,11 @@ def _progress(d: Path, logs: list[str]) -> tuple[int, int, int]:
 
 
 class _StallWatch:
+    """Once nothing in the attempt dir but the recorder's own files, nor a --log file, has changed for `after_s`: a py-spy dump of the
+    workload's Python processes (research.telemetry.pyspy) to logs/stall-<UTC stamp>.txt and a `stall_dump` mark, then none until
+    something changes.  py-spy not on PATH is one `stall_dump_skipped` mark.  `procs`, `run`, `which` and `stamp` are a test's to replace;
+    the time is `clock`."""
+
     def __init__(self, d: Path, em: Emitter, stage: str, after_s: float, logs: list[str], procs: Callable[[], list[tuple[int, str]]], *,
                  run: Callable[..., Any] = subprocess.run, which: Callable[[str], str | None] = shutil.which, stamp: Callable[[], str] = _utc_stamp):
         self.d, self.em, self.stage, self.after_s, self.logs, self.procs = d, em, stage, after_s, logs, procs
@@ -175,6 +193,7 @@ class _StallWatch:
 
 
 def set_timeout(attempt_dir: str | Path, timeout_s: float | None, actor: str, reason: str) -> Path:
+    """Write the control file atomically (the run loop picks it up within one poll interval) and return its path."""
     p = Path(attempt_dir) / CONTROL_TIMEOUT
     p.parent.mkdir(parents=True, exist_ok=True)
     write_json_atomic(p, {"timeout_s": timeout_s, "actor": actor, "reason": reason, "set_utc": utc_now_ms()})
@@ -195,6 +214,10 @@ def set_timeout_main(argv: list[str]) -> int:
 
 
 def _end_leftovers(em: Emitter, stage: str, pgid: int) -> None:
+    """SIGKILL what is left of the workload's process group once its leader has exited, and mark it. A pool's workers whose parent
+    the OOM killer took live on otherwise, holding their memory after the run is recorded as ended (a
+    failed circuit-check run's hundreds of workers can keep the user slice full for tens of minutes). A process that must outlive its run
+    leaves the run's session (setsid), as tmux does."""
     if not (left := live_group(pgid)):
         return
     em.mark(stage, "group_outlived_leader", n=len(left), pids=[f"{st['pid']} {st['comm']}" for st in left[:10]])
@@ -207,6 +230,7 @@ def _end_leftovers(em: Emitter, stage: str, pgid: int) -> None:
 
 
 def _end_record(ended: Callable[[], dict[str, Any]] | None, em: Emitter, stage: str) -> dict[str, Any]:
+    """What `ended` adds to the run's terminal status: nothing without one, and nothing but an `ended_failed` mark when it raises."""
     if ended is None:
         return {}
     try:
@@ -218,6 +242,10 @@ def _end_record(ended: Callable[[], dict[str, Any]] | None, em: Emitter, stage: 
 
 def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None = None,
         ended: Callable[[], dict[str, Any]] | None = None) -> int:
+    """`poll`, when given, is called on each pass of the loop that waits for CMD, and is dropped, with a `poll_failed` mark, the
+    first time it raises: what the caller watches for while CMD runs (`research run`: a file to preserve, store.run_preserve).
+    `ended`, when given, is called once CMD has ended (or could not start), and what it returns is written into status.json
+    in the same write as the terminal state, so no reader finds a run ended without it (`research run`: research.memmark)."""
     d = Path(a.attempt_dir)
     d.mkdir(parents=True, exist_ok=True)
     em = Emitter(d, proc="tele-run")
