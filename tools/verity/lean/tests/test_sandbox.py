@@ -768,7 +768,6 @@ CONNECT = """import socket, sys
 for name in sys.argv[1:]:
     try:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(5)
         s.connect("\\0" + name[1:] if name.startswith("@") else name)
         print(name, "reached")
     except OSError:

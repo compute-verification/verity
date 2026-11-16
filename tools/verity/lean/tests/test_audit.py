@@ -2374,7 +2374,7 @@ def test_setup_refuses_a_package_that_would_make_it_run_the_trees_own_code_befor
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_package_declaring_its_own_cache_executable_is_refused_by_a_real_build_run_before_setup_runs_it(tmp_path):
-    """READER2's toy: a package whose `lakefile.toml` declares `[[lean_exe]] name = "cache"`, an ordinary `main` that
+    """A package whose `lakefile.toml` declares `[[lean_exe]] name = "cache"`, an ordinary `main` that
     writes a source outside the package and a file in another directory. `setup.sh` ran `lake exe cache get` outside
     the sandbox, which built and ran it. A real `check.py --build` refuses the package before `setup`; outside the check,
     `lake exe cache get` runs it, so it is a writer."""
