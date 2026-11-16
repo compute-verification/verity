@@ -1,0 +1,24 @@
+{
+ "blackwell_sm120_s8_m16n8k32": {
+  "dossier": "art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474",
+  "run": "r20261015-084000-06d8",
+  "device": "GPU-415b238c",
+  "int_mm": "r20261015-071801-6d3c"
+ },
+ "blackwell_sm120_s8_m16n8k32_wrap": {
+  "run": "r20261015-084000-06d8",
+  "device": "GPU-415b238c"
+ },
+ "blackwell_sm120_u8s8_m16n8k32": {
+  "run": "r20261015-084000-06d8",
+  "device": "GPU-415b238c"
+ },
+ "hopper_sm90_s8_k32": {
+  "run": "r20261019-043020-f267",
+  "device": "GPU-8ca4992f"
+ },
+ "blackwell_sm100_s8_k32": {
+  "run": "r20261019-042817-8fd3",
+  "device": "GPU-2e39ef52"
+ }
+}

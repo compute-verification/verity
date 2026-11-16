@@ -1,0 +1,10 @@
+schema = "verity-bench/vllm-sweep/v0"
+id = "full"
+batches = [1, 8, 32, 128]
+prompt_tokens = [512, 8192]
+traffic = ["decode-heavy", "prefill-heavy", "mixed"]
+
+[output_tokens]
+decode-heavy = 128
+prefill-heavy = 8
+mixed = 64

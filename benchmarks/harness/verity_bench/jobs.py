@@ -1,0 +1,461 @@
+"""Resolve benchmark jobs, report completion, and dispatch recorded points."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Any
+
+from verity_config import dumps, sha256, value
+
+from verity_bench import settings
+from verity_bench.steady_spec import SteadyPoint, SteadySpec
+from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, former_name, resolve_spec
+
+
+@dataclass(frozen=True)
+class Toolchain:
+    commit: str
+    uv_lock_sha256: str
+    vllm_pin: str
+
+
+@dataclass(frozen=True)
+class PlannedPoint:
+    """A point of a spec with its identity and its passing run. `why`: for a point with none, why the runs that could
+    have been it aren't (a steady-state point's; a vLLM point's runs either passed or aren't found). `again`: named by
+    `--again` (`again`), so `run` launches it though a passing run stands for it."""
+
+    point: SweepPoint | SteadyPoint
+    identity: str
+    passing_run: str | None
+    why: str | None = None
+    again: bool = False
+
+
+@dataclass(frozen=True)
+class Plan:
+    """A spec's points, each with its passing run. `toolchain`: what a point's identity pins beside its spec, a vLLM
+    spec's `Toolchain` or a steady-state spec's files (`steady_plan.Sources`)."""
+
+    spec: ResolvedSpec | SteadySpec
+    spec_sha256: str
+    toolchain: Any
+    points: tuple[PlannedPoint, ...]
+
+
+CompletionLookup = Callable[[str, str], str | None]
+Executor = Callable[[Sequence[str], Path], int]
+#: a direct point's launch: the plan, the spec's source, the point, the root and the node to its `research run` argv
+DirectCommand = Callable[[Plan, str | Path, PlannedPoint, Path, str], list[str]]
+
+
+def repository_root(start: str | Path | None = None) -> Path:
+    here = Path(start or Path.cwd()).resolve()
+    for candidate in (here, *here.parents):
+        if (candidate / "uv.lock").is_file() and (candidate / "pyproject.toml").is_file():
+            return candidate
+    raise ValueError(f"{here}: no Verity workspace root")
+
+
+def _commit(root: Path) -> str:
+    recorded = settings.RESEARCH_SOURCE_SHA
+    if recorded:
+        return recorded
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def toolchain(root: Path, spec: ResolvedSpec, *, commit: str | None = None) -> Toolchain:
+    return Toolchain(commit or _commit(root), _file_sha256(root / "uv.lock"), spec.preset.vllm_pin)
+
+
+def point_identity(spec_sha256: str, pins: Toolchain, point: SweepPoint) -> str:
+    return sha256({
+        "resolved_spec_sha256": spec_sha256,
+        "commit": pins.commit,
+        "uv_lock_sha256": pins.uv_lock_sha256,
+        "vllm_pin": pins.vllm_pin,
+        "point": point.to_json(),
+    })
+
+
+# A point's runs start after its commit exists, and run ids begin with their UTC start; a day's margin covers clocks that
+# disagree.
+COMMIT_MARGIN_S = 86_400
+PULL_JOBS = 64
+
+
+def _show(root: Path, commit: str, field: str) -> str:
+    process = subprocess.run(["git", "show", "-s", f"--format={field}", commit], cwd=root, capture_output=True, text=True)
+    if process.returncode != 0:
+        raise ValueError(f"git doesn't know commit {commit} here, so its runs can't be looked up: fetch it")
+    return process.stdout.strip()
+
+
+class StoreCompletion:
+    """The newest attempt `research data lookup` finds for a point at its commit's tree, with validation passed and rc 0
+    (a killed run's result.json may read as passed; a dirty tree has no reuse key): from this machine's catalog, else,
+    unless `local_only`, from the store's remote, pulled once per commit since `COMMIT_MARGIN_S` before it; no reindex."""
+
+    def __init__(self, store: Any = None, *, root: Path | None = None, local_only: bool = False,
+                 log: Callable[[str], None] | None = None):
+        self._store, self.root, self.local_only = store, root, local_only
+        self._log = log or (lambda message: print(f"verity-bench: {message}", file=sys.stderr))
+        self._pulled: set[str] = set()
+
+    @property
+    def store(self) -> Any:
+        if self._store is None:
+            from research.store.local import LocalStore
+
+            self._store = LocalStore()
+        return self._store
+
+    def __call__(self, identity: str, commit: str) -> str | None:
+        if not re.fullmatch(r"[0-9a-f]{64}", identity) or not re.fullmatch(r"[0-9a-f]{7,64}", commit):
+            raise ValueError("benchmark completion lookup requires hexadecimal identities")
+        found = self._local(identity, commit)
+        if found is None and not self.local_only and commit not in self._pulled:
+            self.pull_since(int(_show(self.root or repository_root(), commit, "%ct")))
+            self._pulled.add(commit)
+            found = self._local(identity, commit)
+        return found
+
+    def _local(self, identity: str, commit: str) -> str | None:
+        from research.store import cli_prov, tools_registry
+
+        root = self.root or repository_root()
+        attempts = cli_prov.lookup(tools_registry.load("verity_bench.tool:VLLM_BENCH_POINT", root), root, store=self.store,
+                                   params={"identity": identity}, source_tree=_show(root, commit, "%T"))["attempts"]
+        passing = [a["id"] for a in attempts if a["status"].get("validation") == "passed" and a["status"].get("rc") == 0]
+        return passing[-1] if passing else None
+
+    def pull_since(self, started: int) -> int:
+        """Fetch and index the remote's attempts started since `started` (Unix seconds, less `COMMIT_MARGIN_S`) that this
+        store lacks; how many it indexed."""
+
+        from research.store import ids
+        from research.store.local import StoreError
+
+        store, remote = self.store, self._remote()
+        since = time.strftime("r%Y%m%d", time.gmtime(started - COMMIT_MARGIN_S))
+        listed = [key[len("attempts/"):-len(".json")]
+                  for key, _ in remote.list_times("attempts/", start_after=f"attempts/{since}")]
+        missing = [run for run in listed if ids.is_run_id(run) and not store.attempt_path(run).exists()]
+        scratch = Path(tempfile.mkdtemp(prefix=".verity-bench-pull-", dir=store.root / "scratch"))
+
+        def get(run: str) -> tuple[str, bytes | None]:
+            target = scratch / f"{run}.json"
+            try:
+                remote.get(f"attempts/{run}.json", target)
+            except KeyError:
+                return run, None
+            return run, target.read_bytes()
+
+        indexed, skipped = 0, []
+        try:
+            with ThreadPoolExecutor(max_workers=PULL_JOBS) as pool:
+                for run, data in pool.map(get, missing):
+                    try:
+                        if data is None:
+                            raise ValueError("vanished from the remote")
+                        store.put_attempt(json.loads(data))
+                        indexed += 1
+                    except (ValueError, StoreError) as error:
+                        skipped.append(f"{run}: {error}")
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+        self._log(f"pulled {indexed} attempts started since {since} from {remote.describe()} "
+                  f"({len(listed) - len(missing)} of {len(listed)} were here)")
+        for line in skipped[:5]:
+            self._log(f"skipped attempt {line}")
+        return indexed
+
+    def pull_labels(self) -> int:
+        """Fetch every label the remote has and this store lacks (one listing of the remote's labels); how many."""
+
+        from research.store import labels_sync
+
+        remote = self._remote()
+        report = labels_sync.sync(self.store, push=False)
+        self._log(f"pulled {len(report['pulled'])} labels from {remote.describe()} "
+                  f"({report['already']} of {report['remote_before']} were here)")
+        for line in report["bad"][:5]:
+            self._log(f"skipped label {line}")
+        return len(report["pulled"])
+
+    def _remote(self) -> Any:
+        remote = self.store.remote
+        if remote is None:
+            why = getattr(self.store, "remote_error", None) or "no remote is configured"
+            raise RuntimeError(f"the evidence store has no remote here ({why}): a point another machine ran would read as "
+                               "missing; pass --local-only to read this machine's catalog alone")
+        return remote
+
+
+def make_plan(
+    source: str | Path,
+    *,
+    root: Path | None = None,
+    commit: str | None = None,
+    lookup: CompletionLookup | None = None,
+) -> Plan:
+    root = root or repository_root()
+    lookup = lookup or StoreCompletion(root=root)
+    spec = resolve_spec(source)
+    pins = toolchain(root, spec, commit=commit)
+    digest = spec.config_sha256
+    points = tuple(
+        PlannedPoint(point, identity, lookup(identity, pins.commit))
+        for point in expand_sweep(spec.sweep.id)
+        for identity in (point_identity(digest, pins, point),)
+    )
+    return Plan(spec, digest, pins, points)
+
+
+def plan_json(plan: Plan) -> dict[str, Any]:
+    return {
+        "schema": "verity-bench/plan/v0",
+        "resolved_spec_sha256": plan.spec_sha256,
+        "resolved_spec": value(plan.spec),
+        "toolchain": value(plan.toolchain),
+        "points": [
+            {"point": item.point.to_json(), "identity": item.identity, "passing_run": item.passing_run,
+             **({"why": item.why} if item.why else {}),
+             **({"again": f"passed by {item.passing_run}"} if item.again and item.passing_run else {})}
+            for item in plan.points
+        ],
+    }
+
+
+def again(plan: Plan, names: Sequence[str]) -> Plan:
+    """The plan with the points `names` names (`--again`, each by its id) launched again by `run`, though a passing run
+    stands for one: a labelled row timed before the harness, or a run at another closure that the point's identity
+    doesn't tell apart. Only named points: there is no form that launches every passed point again. The new run labels
+    and supersedes nothing; the passing run stays the record until a run is labelled on purpose."""
+
+    ids = [item.point.id for item in plan.points]
+    if unknown := [name for name in names if name not in ids]:
+        raise ValueError(f"--again {', '.join(unknown)}: not a point of spec {plan.spec.id!r}, whose points are "
+                         f"{', '.join(ids)}")
+    return replace(plan, points=tuple(replace(item, again=item.point.id in names) for item in plan.points))
+
+
+def _relative_spec(source: str | Path, root: Path) -> str:
+    path = Path(source)
+    if not path.is_file():
+        path = root / "benchmarks" / "harness" / "specs" / f"{former_name(source) or source}.toml"
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        raise ValueError("a recorded benchmark spec must be inside the source tree") from None
+
+
+QUEUE_KINDS = {1: "vllm-bench-1gpu"}
+# A point writes its records, out/ and what its setup builds (a few MB; the venv and model cache are shared). The
+# queue's default 20 GB request would hold every point once the node's disk nears research disk-hold's 80%.
+POINT_DISK_GB = 5
+
+
+def queue_kind(gpu_count: int) -> str:
+    """The queue kind (infra/cluster/kinds/benchmarks.toml) whose shape gives a point's job its CPUs and memory."""
+
+    try:
+        return QUEUE_KINDS[gpu_count]
+    except KeyError:
+        raise ValueError(
+            f"no queue kind for a {gpu_count}-GPU spec: register one in infra/cluster/kinds/benchmarks.toml "
+            "and name it in verity_bench.jobs.QUEUE_KINDS"
+        ) from None
+
+
+def point_environment(spec: ResolvedSpec | SteadySpec) -> dict[str, str]:
+    """What a point's job must run under: the spec's `env`, and its `setup` script (`run_point.sh` sources it before the
+    point's Python starts) as VERITY_BENCH_SETUP."""
+
+    return {**spec.env, **({"VERITY_BENCH_SETUP": spec.setup} if spec.setup else {})}
+
+
+def check_point_environment(spec: ResolvedSpec | SteadySpec, environ: Mapping[str, str]) -> None:
+    expected = point_environment(spec)
+    wrong = sorted(name for name, want in expected.items() if environ.get(name) != want)
+    if "VERITY_BENCH_SETUP" not in expected and environ.get("VERITY_BENCH_SETUP"):
+        wrong.append("VERITY_BENCH_SETUP")
+    if wrong:
+        raise ValueError(f"the point's environment differs from spec {spec.id!r}'s env and setup in {wrong}: "
+                         "launch points with `verity-bench run SPEC`, which forwards them")
+
+
+#: the GPU nodes whose GPUs `--direct` may take: each has its GPU slots in GPU_SLOTS, one per GPU (the nebius nodes and
+#: the eight-card H200 node g0-g7, the single-GPU DC VMs g0). A slot gives a run its CPUs and no GPU: the run takes
+#: its GPUs from the node's gpu-lease
+DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-dc-h200", "vy-dc-h200-2", "vy-dc-h200-3", "vy-dc-b200",
+                "vy-spot-glm53")
+GPU_SLOTS = "/workspace/research/locks/gpu/slots"
+#: how long a direct point waits for one of those slots where its launch states no end: as long as a pool's run waits for
+#: a slot (`research run --pool`'s --pool-wait, `slot_only.POOL_WAIT_S`)
+DIRECT_WAIT_S = 14400
+#: how far short of a stated end a direct point's wait stops: slot.py tries for a slot every 20 s (its POLL_S), and one
+#: that counts --run-max from taking the slot may take it a try past --wait-max, so the run ends before the end
+#: whichever slot.py the node runs
+SLOT_GRACE_S = 60
+
+
+def _env_flags(spec: ResolvedSpec) -> list[str]:
+    flags = []
+    if venv := settings.VERITY_BENCH_VENV:
+        flags += ["--env", f"VERITY_BENCH_VENV={venv}"]
+    for name, setting in point_environment(spec).items():
+        flags += ["--env", f"{name}={setting}"]
+    return flags
+
+
+def _point_command(source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
+    return [
+        "bash", "benchmarks/harness/run_point.sh",
+        "--spec", _relative_spec(source, root),
+        "--point", item.point.id,
+        "--identity", item.identity,
+    ]
+
+
+def vllm_spec(plan: Plan) -> ResolvedSpec:
+    """A vLLM plan's spec; TypeError on a steady-state plan's, whose points `steady_plan` runs."""
+
+    if not isinstance(plan.spec, ResolvedSpec):
+        raise TypeError(f"{plan.spec.id} is a steady-state spec: steady_plan runs its points")
+    return plan.spec
+
+
+def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
+    spec = vllm_spec(plan)
+    command = [
+        "research", "run",
+        "--queue",
+        "--kind", queue_kind(spec.preset.gpu_count),
+        # A guest's GPU job must be; a stopped point reruns whole when requeued, and resume skips only passing points.
+        "--preemptible",
+        "--source", str(root),
+        "--project", "verity",
+        "--campaign", "vllm-bench",
+        "--gpus", str(spec.preset.gpu_count),
+        "--gpu-model", spec.preset.gpu_id,
+        "--disk-gb", str(POINT_DISK_GB),
+        "--cwd", "source",
+        "--require-result",
+        "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
+    ]
+    if spec.admission.max_minutes is not None:
+        command += ["--max-min", str(spec.admission.max_minutes)]
+    return [*command, *_env_flags(spec), "--", *_point_command(source, item, root)]
+
+
+def direct_minutes(spec: ResolvedSpec | SteadySpec, node: str) -> float:
+    """The spec's admission max_minutes, which bounds a direct point's run, slot and lease, once `node` is a GPU node."""
+
+    if node not in DIRECT_NODES:
+        raise ValueError(f"--direct {node}: not a GPU node with gpu slots ({', '.join(DIRECT_NODES)}), so a point there "
+                         f"gets no GPU; a GPU node that has {GPU_SLOTS} joins verity_bench.jobs.DIRECT_NODES")
+    if spec.admission.max_minutes is None:
+        raise ValueError(f"--direct needs spec {spec.id!r}'s admission max_minutes: it bounds the run, its slot and its "
+                         "GPU lease")
+    return spec.admission.max_minutes
+
+
+def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign: str, tool: str,
+             env: Sequence[str], job: Sequence[str], store_read: bool = False, cores: str | None = None,
+             end: float | None = None, now: Callable[[], float] = time.time) -> list[str]:
+    """`job` as a recorded `research run --on NODE` through one of the node's GPU slots, for a node whose launcher takes
+    only slot runs: the one form of a direct point's launch, whatever the point's spec. The run waits for its slot at
+    most until `end` (seconds since the epoch, a booked period's end) less the spec's admission `max_minutes`, or
+    `DIRECT_WAIT_S` where the launch states no end, and then has `max_minutes` from taking it (slot.py's `--wait-max`
+    and `--run-max`); its timeout is the two together. With an `end`, the wait stops `SLOT_GRACE_S` short of it, so
+    the run ends before `end` whichever slot.py the node runs. One whose `max_minutes` don't fit before `end` at its
+    launch is refused here. `tool` records the run; `env` is its `--env` flags; `store_read` gives the job
+    a read-only key to the store for the run's length (`research run --store-read`), for a job that fetches from it.
+    `cores` (`34-43`), a booked slot's: the slot taker runs under `taskset -c CORES`, and takes only a slot within its
+    own CPUs, so it takes that slot or waits for it; without it, the first free slot."""
+
+    run_s = direct_minutes(spec, node) * 60
+    wait_s = DIRECT_WAIT_S if end is None else math.floor(end - now()) - run_s - SLOT_GRACE_S
+    if wait_s <= 0:
+        raise ValueError(f"a point of spec {spec.id!r} runs for up to {run_s / 60:g} min (its admission max_minutes), "
+                         f"which don't fit before its end, {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(end))}: it "
+                         "would not finish, so it isn't launched. State a later end, or a smaller max_minutes")
+    return [
+        "research", "run",
+        "--on", node,
+        "--project", "verity",
+        "--campaign", campaign,
+        "--source", str(root),
+        "--cwd", "source",
+        "--timeout", f"{wait_s + run_s:g}",
+        "--require-result",
+        "--tool", tool,
+        *(["--store-read"] if store_read else []),
+        *env,
+        "--",
+        *(["taskset", "-c", cores] if cores else []),
+        "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/check/slot.py", "--by", "benchmarks",
+        "--wait-max", f"{wait_s:g}", "--run-max", f"{run_s:g}",
+        "--",
+        *job,
+    ]
+
+
+def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, node: str, *,
+                   end: float | None = None, now: Callable[[], float] = time.time) -> list[str]:
+    """The point as a `research run --on NODE` through one of the node's GPU slots (`slot_run`, by `end` where given),
+    its GPUs from the node's gpu-lease: the queued point's tool, identity and environment."""
+
+    spec = vllm_spec(plan)
+    minutes = direct_minutes(spec, node)
+    # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU job is
+    # preemptible, as the queued point's is.
+    lease = ["gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible", "--"]
+    return slot_run(spec, root, node, campaign="vllm-bench", tool="verity_bench.tool:VLLM_BENCH_POINT",
+                    env=_env_flags(spec), job=[*lease, *_point_command(source, item, root)], end=end, now=now)
+
+
+def _execute(command: Sequence[str], root: Path) -> int:
+    return subprocess.run(command, cwd=root, check=False).returncode
+
+
+def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execute: Executor = _execute,
+             direct: str | None = None, command: DirectCommand = direct_command) -> int:
+    """Launch one recorded research run for each incomplete point and each point named again (`again`), in the spec's
+    order: queued, or with `direct` on that
+    node's GPU slots, each as `command` gives it (a vLLM point's `direct_command`; a steady-state point's is
+    `steady_plan.direct_command`). Each launch returns once its run has started on the node, where the runs take the
+    slots in turn. The first launch that fails stops the rest; its exit code, or 0."""
+
+    root = root or repository_root()
+    if direct is not None:
+        direct_minutes(plan.spec, direct)
+    for item in plan.points:
+        if item.passing_run is not None and not item.again:
+            continue
+        argv = research_command(plan, source, item, root) if direct is None else command(plan, source, item, root, direct)
+        rc = execute(argv, root)
+        if rc:
+            return rc
+    return 0
+
+
+def write_resolved(plan: Plan, path: Path) -> None:
+    path.write_bytes(dumps(plan_json(plan)) + b"\n")

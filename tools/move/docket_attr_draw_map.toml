@@ -1,0 +1,95 @@
+# The challenger's sample and the stream's entry hold their docket as `docket`: the attributes `Draw.registration` and
+# `_Entry.registration` of `spot/verifier/service.py` become `docket`, with every read of them (each receiver
+# resolved to `Draw` or `_Entry`). The wire's and the records' keys `"registration"`, `registration_digest`,
+# `Stream._registration`, PoUB's and the certifier's own `registration` attributes and the Lean twins keep their word.
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/prover/scan_zk.py"]
+[words_in.words]
+".registration." = ".docket."
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/verifier/service.py"]
+[words_in.words]
+".registration" = ".docket"
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/verifier/tests/standin.py"]
+[words_in.words]
+"registration" = "docket"
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_service.py"]
+[words_in.words]
+".registration." = ".docket."
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_tie_service.py"]
+[words_in.words]
+".registration." = ".docket."
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_transfer_blocks_lean.py"]
+[words_in.words]
+"registration" = "docket"
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/verifier/tie_service.py"]
+[words_in.words]
+".registration." = ".docket."
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/device/challenger_session.py"]
+[words_in.words]
+".registration" = ".docket"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/device/tests/test_challenger_session.py"]
+[words_in.words]
+"registration" = "docket"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/prover/audit/window_audit.py"]
+[words_in.words]
+".registration" = ".docket"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/service.py"]
+[words_in.words]
+".registration" = ".docket"
+"registration: WindowCommitmentRecord" = "docket: WindowCommitmentRecord"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/tests/fake_challenger.py"]
+[words_in.words]
+"registration" = "docket"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/tests/test_service.py"]
+[words_in.words]
+".registration" = ".docket"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/tests/test_service_fleet.py"]
+[words_in.words]
+".registration" = ".docket"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/tests/test_service_sessions.py"]
+[words_in.words]
+".registration" = ".docket"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/tests/test_two_stage.py"]
+[words_in.words]
+".registration" = ".docket"
+
+[keep]
+patterns = []
+strings = []
+
+[rewrite]
+exclude = ["**/*.json", "**/*.jsonl", "**/*.toml", "**/*.lean", "**/fixtures/**", "tools/move/**",
+           "tools/research/src/research/store/moves.json"]

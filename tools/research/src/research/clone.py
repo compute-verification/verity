@@ -1,0 +1,324 @@
+"""`research run --cwd clone`: the workload's own checkout of the source root.
+
+`--cwd source` runs a workload in the source root, which on a machine is the shipped tree <root>/src/<sha>/ that every run of the
+commit shares: a cancelled duplicate's EXIT trap there can remove `PKG/.lake/packages` under a live Lean audit.
+`--cwd clone` (`clone/SUB`: SUB inside it) runs it in a `git clone --shared` of the source root instead, which borrows the
+source's objects and so costs one checkout (about a second for the repository), detached at the source root's HEAD; on a machine
+that must be the commit the run was shipped for.  The clone lives outside the run dir, so custody never reads it:
+<root>/scratch/<run id>/tree beside src/ on a machine, a temporary directory locally.  The runner removes it once the workload has
+exited, however it ended; on a machine, one it could not remove, or was killed before removing, goes when the next clone is made
+there (`sweep`) or at the node's next eviction pass (`store.leftovers.evict_clones`), once its run is over (`not_over`); one whose
+run dir was deleted, which `not_over` cannot decide, only that pass removes.  A source root that is not a git checkout's top level
+(a tree the archive stream shipped has no .git) is refused, never guessed at.
+"""
+from __future__ import annotations
+
+import errno
+import functools
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+def _lean_driver(flag: str = "") -> str:
+    """tools/verity/lean/merge.py's driver for the mode ``flag`` names, as its `driver` writes it (a test holds the two equal):
+    origin/main's copy of tools/verity/lean when the repository has that ref, else the worktree's.  Git runs a driver from the
+    worktree of the side merged into, so an old branch merging main would otherwise merge main's records by its own older
+    rules; a path base_drivers made absolute runs as it is.  The copy is kept per origin/main commit, at
+    <git common dir>/lean-merge/<full sha>/, extracted into a temporary directory beside it and renamed into place, so a
+    killed extraction leaves nothing at the key and of two racing calls one's rename wins and both run that copy; the two
+    newest stay.  Where origin/main resolves and no copy of it extracts, the file is left to git's conflict."""
+    return ("m=tools/verity/lean/merge.py; f=$m; d=; x() { git archive -o \"$1.tar\" \"$s\" -- tools/verity/lean "
+            "':(exclude)tools/verity/lean/tests' 2>/dev/null && "
+            "tar -x -C \"$1\" -f \"$1.tar\" 2>/dev/null && [ -f \"$1/$m\" ]; r=$?; rm -f \"$1.tar\"; return $r; }; "
+            "case $m in /*) ;; *) if s=$(git rev-parse -q --verify 'origin/main^{commit}'); then f=; "
+            "if g=$(git rev-parse --git-common-dir) && b=$(cd \"$g\" && pwd)/lean-merge && mkdir -p \"$b\"; then c=$b/$s; "
+            "if [ ! -f \"$c/$m\" ] && t=$(mktemp -d \"$b/.tmp-XXXXXX\"); then x \"$t\" && python3 -c "
+            "'import os, sys; os.rename(*sys.argv[1:])' \"$t\" \"$c\" 2>/dev/null; rm -rf \"$t\"; "
+            "ls -t \"$b\" | grep -E '^[0-9a-f]{40,64}$' | tail -n +3 | while read -r o; do "
+            "mv \"$b/$o\" \"$b/.tmp-gone-$o\" 2>/dev/null && rm -rf \"$b/.tmp-gone-$o\"; done; "
+            "find \"$b\" -maxdepth 1 -name '.tmp-*' -mmin +60 -exec rm -rf {} + 2>/dev/null; fi; "
+            "[ -f \"$c/$m\" ] && f=$c/$m; fi; [ -n \"$f\" ] || { d=$(mktemp -d) && x \"$d\" && f=$d/$m; }; "
+            "[ -n \"$f\" ] || { echo \"lean merge driver: origin/main ($s) resolves, but its tools/verity/lean could not be "
+            "extracted, so this file is left to git's conflict, not merged by the worktree's older copy\" >&2; "
+            "[ -z \"$d\" ] || rm -rf \"$d\"; exit 1; }; fi;; esac; "
+            f"python3 \"$f\" {flag}%O %A %B %P; r=$?; [ -z \"$d\" ] || rm -rf \"$d\"; exit $r")
+
+
+#: git's merge drivers for `lean-audit.json`, `.lean` files, lakefiles, pyprojects, the fixture map and the vLLM lints' allowlists
+#: (`.gitattributes`), set in every run clone and for every git a gate runs (research.gates): a clone's config holds it only
+#: after `merge.py --install`, and without it git
+#: merges a record line by line (the queue's own clone, a fresh VM's checkout).  Here, not in gates, because the suites that
+#: read clone.py (vllm's, evaluate's) don't read gates.py
+RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarantees, reads and dependencies (tools/verity/lean/merge.py)",
+                 "merge.lean-audit.driver": _lean_driver(),
+                 "merge.lean-imports.name": ".lean: each side's imports (tools/verity/lean/merge.py)",
+                 "merge.lean-imports.driver": _lean_driver("--lean "),
+                 "merge.lakefile-lists.name": "lakefile.toml: each side's requires and roots (tools/verity/lean/merge.py)",
+                 "merge.lakefile-lists.driver": _lean_driver("--lakefile "),
+                 "merge.fixture-map.name": "artifacts.json: each side's fixtures (tools/check/merge_map.py)",
+                 # a branch cut before tools/verity/check moved to tools/check holds the script only at its old place
+                 "merge.fixture-map.driver": "f=tools/check/merge_map.py; [ -f \"$f\" ] || f=tools/verity/check/merge_map.py; "
+                                             "python3 \"$f\" %O %A %B %P",
+                 "merge.markdown-rows.name": "Markdown: each side's rows of a table (tools/check/merge_rows.py)",
+                 "merge.markdown-rows.driver": "f=tools/check/merge_rows.py; [ -f \"$f\" ] || f=tools/verity/check/merge_rows.py; "
+                                               "python3 \"$f\" %O %A %B %P",
+                 "merge.vllm-allowlist.name": "the vLLM lints' allowlists and dead-code keep map: each side's entries "
+                                              "(tests/adapters/vllm/tests/lint/merge_allowlist.py)",
+                 # a crossing of a layout move merges once in each layout, so the script is found at each of its places:
+                 # the tests' own tree, beside the adapter, and the older integrations/ (the second in two pieces, so
+                 # no move rewrites it to the first)
+                 "merge.vllm-allowlist.driver": "f=tests/adapters/vllm/tests/lint/merge_allowlist.py; "
+                                                "[ -f \"$f\" ] || f=adapters/vllm/"
+                                                "tests/lint/merge_allowlist.py; "
+                                                "[ -f \"$f\" ] || f=integrations/vllm/tests/lint/merge_allowlist.py; "
+                                                "python3 \"$f\" %O %A %B %P",
+                 # `--caps `: origin/main's merge.py, which the command runs, knows `--limits` only once it holds it (merge.LIMITS_FLAG)
+                 "merge.lean-limits.name": "tests/test_lean_packages.py: each side's change to the ratchet limits "
+                                           "(tools/verity/lean/merge.py)",
+                 "merge.lean-limits.driver": _lean_driver("--caps "),
+                 "merge.pyproject-test-lists.name": "pyproject.toml: each side's [tool.verity.tests] lists (tools/verity/lean/merge.py)",
+                 "merge.pyproject-test-lists.driver": _lean_driver("--pyproject "),
+                 # the driver's name before the rename, with the same command, while a branch's `.gitattributes` names it
+                 "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet limits "
+                                         "(tools/verity/lean/merge.py)",
+                 "merge.lean-caps.driver": _lean_driver("--caps ")}
+
+
+CWD_CLONE = "clone"
+
+
+class Refused(Exception):
+    """`--cwd clone` cannot give this run a clone; the message says why."""
+
+
+def sub(cwd: str | None) -> str | None:
+    """SUB of `--cwd clone/SUB` ('' for `--cwd clone`), None for any other --cwd."""
+    if cwd == CWD_CLONE:
+        return ""
+    if cwd and cwd.startswith(CWD_CLONE + "/"):
+        return cwd[len(CWD_CLONE) + 1:].strip("/")
+    return None
+
+
+def home(runs_root: Path, run_id: str, *, machine: bool) -> Path:
+    """The directory that holds the run's clone (its `tree`), created: <root>/scratch/<run id>/ on a machine, beside src/ and the
+    run dir, a fresh temporary directory locally.  On a machine it first removes the clones finished runs left there (`sweep`)."""
+    def cannot(e: OSError) -> Refused:
+        return Refused(f"could not create a directory for the clone ({type(e).__name__}: {e}); pass --cwd source to run in the "
+                       f"source root as it is")
+
+    if not machine:
+        try:
+            return Path(tempfile.mkdtemp(prefix=f"research-{run_id}-"))
+        except OSError as e:
+            raise cannot(e) from None
+    d = Path(runs_root).parent / "scratch" / run_id
+    sweep(Path(runs_root), d.parent)
+    try:
+        d.mkdir(parents=True)
+    except FileExistsError:
+        raise Refused(f"{d} exists already; a run's clone directory is its own") from None
+    except OSError as e:
+        raise cannot(e) from None
+    return d
+
+
+def sweep(runs_root: Path, scratch: Path) -> None:
+    """Remove each scratch/<run id> whose run is over (`not_over`): a runner that could not remove its clone, or was killed before
+    it did, leaves it on the machine's disk, and only this and a node's eviction pass (`store.leftovers.evict_clones`) remove it.
+    A live run's clone is never touched.  Each removal, and each failure, is one line on stderr."""
+    if not os.path.isdir(scratch):
+        return
+    try:
+        entries = list(os.scandir(scratch))
+    except OSError as e:
+        print(f"clone: {scratch} unlisted, so no clone is removed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+        return
+    for e in entries:
+        try:
+            if e.is_symlink() or not e.is_dir(follow_symlinks=False) or not_over(runs_root / e.name) is not None:
+                continue
+        except OSError as err:
+            print(f"clone: {e.path} not checked, so it stays ({type(err).__name__}: {err})", file=sys.stderr, flush=True)
+            continue
+        why = remove(Path(e.path))
+        print(f"research: --cwd clone: removed {e.path}, the clone of finished run {e.name}" if why is None else
+              f"research: --cwd clone: could not remove {e.path}, the clone of finished run {e.name} ({why}); remove it by hand",
+              file=sys.stderr)
+
+
+def not_over(run_dir: Path, proc: str | os.PathLike[str] = "/proc") -> str | None:
+    """Why the run may still use its clone, or None when it is over: its runner (launch.json runner_pid) has exited, and it
+    refused (refused.json), or nothing is left in the workload's process group (status.json's pgid) and either its status.json
+    is final or the process that status records is gone.  The last is a runner killed with its workload, or lost with the
+    machine: it never writes a final status, and its clone would otherwise stay for good.  Gone is decided from the recorded
+    pid and its start time (`procs.gone`): the pid has no /proc entry, or names a process started at another time.  A pid alone
+    never says its process exited, so a status with no start time under a live pid, anything unreadable, or a process that may
+    still be the run's (a recycled pid included) is not over.  Nor is one whose runner died and left a job user's workload
+    behind: that runs in a unit of its own (`jobuser.unit_name`), outside the process group, so its processes are asked for by
+    the unit's cgroup.  The reason starts with its kind: `2:` a process runs, `unknown:` a record is missing."""
+    from .jobuser import unit_name
+    from .runs import TERMINAL
+    from .telemetry.procs import gone, live_group, running, unit_pids
+
+    try:
+        runner = int(json.loads((run_dir / "launch.json").read_text())["runner_pid"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return "unknown: no launch.json names its runner"
+    if running(runner, proc):
+        return f"2: its runner (pid {runner}) runs"
+    if (run_dir / "refused.json").exists():
+        return None
+    try:
+        st = json.loads((run_dir / "status.json").read_text())
+        state, pgid = st["state"], int(st["pgid"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return "unknown: no status.json names its workload's process group"
+    transitions = st["transitions"] if isinstance(st.get("transitions"), list) else []
+    if left := live_group(pgid, proc):
+        return f"2: {len(left)} process(es) of its workload's group {pgid} run"
+    if state in TERMINAL:
+        return None
+    rec = next((t for t in reversed(transitions) if isinstance(t, dict) and t.get("pid") is not None), st)
+    if not gone(pid := rec.get("pid"), rec.get("starttime_ticks"), proc):
+        return f"2: its status is {state} and " + ("it records no process" if pid is None else
+                                                   f"the process it records (pid {pid}) is not known to have exited")
+    if left := unit_pids(f"{unit_name(run_dir.name)}.service", proc):
+        return f"2: {len(left)} process(es) of its job unit {unit_name(run_dir.name)} run"
+    return None
+
+
+@functools.lru_cache(maxsize=1)
+def _repo_env_vars() -> frozenset[str]:
+    """The variables that point git at a repository (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, ...): inherited from the caller, they
+    would make the clone's commands act on that repository instead (a `checkout --detach` detached the source's HEAD)."""
+    clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    return frozenset(subprocess.run(["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True, env=clean).stdout.split())
+
+
+def _git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
+    try:
+        env = {k: v for k, v in os.environ.items() if k not in _repo_env_vars()}
+        return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, env=env)
+    except OSError as e:
+        raise Refused(f"could not run git {args[0]} in {cwd or os.getcwd()} ({type(e).__name__}: {e})") from None
+
+
+def _why(r: subprocess.CompletedProcess) -> str:
+    return (r.stderr.strip().splitlines() or [f"exit {r.returncode}"])[-1]
+
+
+def set_drivers(repo: Path) -> list[str]:
+    """Set each `RECORD_DRIVER` key that ``repo``'s own config lacks or holds another value for, and return those keys: one
+    `git config` read when none is.  Refused on a failed read or write."""
+    r = _git(["config", "--local", "--get-regexp", r"^merge\."], repo)
+    if r.returncode not in (0, 1):
+        raise Refused(f"git could not read {repo}'s config: {_why(r)}")
+    have = dict(line.partition(" ")[::2] for line in r.stdout.splitlines())
+    changed = [k for k, v in RECORD_DRIVER.items() if have.get(k) != v]
+    for k in changed:
+        if (r := _git(["config", "--local", k, RECORD_DRIVER[k]], repo)).returncode:
+            raise Refused(f"git could not set {k} in {repo}'s config: {_why(r)}")
+    return changed
+
+
+def make(source_root: Path, dest: Path, *, commit: str | None = None, clean: bool = False) -> str:
+    """Clone `source_root` into `dest` (absent), detached at its HEAD, and return that commit.  `commit`: the commit the run is for
+    (on a machine, the shipped one), which HEAD must be.  `clean`: refuse a source root with uncommitted or untracked files, which a
+    clone of HEAD would not carry (locally; a machine's shared tree may hold other runs' files, which is what the clone avoids).
+    The clone must come out a clean checkout of that commit.  Refused on any failure, with `dest` removed."""
+    src = Path(source_root)
+    top = _git(["rev-parse", "--show-toplevel"], src)
+    if top.returncode or os.path.realpath(top.stdout.strip()) != os.path.realpath(src):
+        where = f"it is inside {top.stdout.strip()}" if top.returncode == 0 else _why(top)
+        raise Refused(f"{src} is not the top level of a git checkout ({where}), so there is nothing to clone (a tree the archive "
+                      f"stream shipped has no .git); pass --cwd source to run in it as it is")
+    head = _git(["rev-parse", "--verify", "-q", "HEAD^{commit}"], src).stdout.strip()
+    if not head:
+        raise Refused(f"{src} has no commit at HEAD")
+    if commit and head != commit:
+        raise Refused(f"{src} is at {head}, not {commit}, the commit the run was shipped for")
+    if clean:
+        st = _git(["status", "--porcelain", "--untracked-files=all"], src)
+        if st.returncode or st.stdout.strip():
+            raise Refused(f"{src} has uncommitted or untracked files, which a clone of HEAD would not carry: commit them, or pass "
+                          f"--cwd source to run in the checkout as it is")
+    try:
+        r = _git(["clone", "-q", "--shared", "--no-checkout", str(src), str(dest)])
+        if r.returncode == 0:
+            r = _git(["-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head], dest)
+        if r.returncode:
+            raise Refused(f"git could not clone {src} into {dest}: {_why(r)}")
+        set_drivers(dest)
+        got = _git(["rev-parse", "HEAD"], dest).stdout.strip()
+        st = _git(["status", "--porcelain", "--untracked-files=all"], dest)
+        if got != head or st.returncode or st.stdout.strip():
+            raise Refused(f"the clone in {dest} is not a clean checkout of {head} (HEAD {got or 'unknown'}"
+                          f"{', with changes' if st.stdout.strip() else ''})")
+    except Refused:
+        shutil.rmtree(dest, ignore_errors=True)
+        raise
+    return head
+
+
+#: rmtree passes over a clone that is still filling (ENOTEMPTY): a process that has just been SIGKILLed may finish one more write
+REMOVE_ATTEMPTS = 3
+
+
+def remove(path: Path, attempts: int = REMOVE_ATTEMPTS) -> str | None:
+    """Remove a run's clone directory: None once it is gone, else why not (the caller reports it; it never fails a run).  A
+    directory the workload left read-only is made writable first (`_Unprotect`); a symlink is never followed."""
+    if os.path.islink(path):
+        return "it is a symbolic link"
+    why = None
+    for _ in range(attempts):
+        try:
+            _rmtree(path, _Unprotect(path))
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            why = f"{type(e).__name__}: {e}"
+            if e.errno != errno.ENOTEMPTY:
+                return why
+        if not os.path.lexists(path):
+            return None
+    return f"{why or 'it kept filling'} after {attempts} attempts"
+
+
+def _rmtree(path: Path | str, hook: _Unprotect) -> None:
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=hook)
+    else:
+        shutil.rmtree(path, onerror=lambda func, p, exc_info: hook(func, p, exc_info[1]))
+
+
+class _Unprotect:
+    """rmtree's error hook for a tree whose workload left directories read-only (a 0555 build output, a module cache, an
+    unreadable 0000 directory): on a PermissionError it adds u+rwx to the entry's directory and to the entry itself when that is a
+    directory, inside the tree only and never through a symlink, then removes the entry again.  An entry already gone is fine;
+    any other error, or a second PermissionError on one path, is raised."""
+
+    def __init__(self, root: Path | str):
+        self.root = os.path.abspath(root)
+        self.seen: set[str] = set()
+
+    def __call__(self, func: object, path: str | os.PathLike[str], exc: BaseException) -> None:
+        path = os.path.abspath(path)
+        if isinstance(exc, FileNotFoundError):
+            return
+        if not isinstance(exc, PermissionError) or path in self.seen:
+            raise exc
+        self.seen.add(path)
+        for d in (os.path.dirname(path), path):
+            if (d == self.root or d.startswith(self.root + os.sep)) and not os.path.islink(d) and os.path.isdir(d):
+                os.chmod(d, stat.S_IMODE(os.lstat(d).st_mode) | stat.S_IRWXU)
+        if os.path.isdir(path) and not os.path.islink(path):
+            _rmtree(path, self)
+        else:
+            os.unlink(path)

@@ -1,0 +1,15 @@
+{
+ "commit": "4d784714a84d9fee00ca25ea081ac03c93aa287a",
+ "group": 1,
+ "identity": {
+  "class": "w63k4",
+  "cores": 21,
+  "sample": "every unit",
+  "source": "the synthetic run (scan_traffic.serve), signed with the driver's own key",
+  "tick_ms": 100,
+  "ticks": 32,
+  "verifier_cores": 1
+ },
+ "run": "r20261112-135528-7404",
+ "schema": "scan-cost/baseline/v1"
+}

@@ -1,0 +1,278 @@
+{
+ "role": "QWEN3_30B_A3B",
+ "device": "NVIDIA B200",
+ "evidence": "r20261019-030238-74d0",
+ "dispatch": {
+  "capture_sizes": [
+   1,
+   2,
+   4,
+   8,
+   16
+  ],
+  "max_num_seqs": 8,
+  "max_model_len": 4096
+ },
+ "kernels": {
+  "first": {
+   "triton_red_fused_1": "421ee1fb175343ca0cc00453c727c1d4f899b4f34e8984374298163d6b8ac47d",
+   "triton_red_fused__to_copy_embedding_rms_norm_0": "ac67bd90d83873240ced930cf3f9f0356ec9e818117e483f52ccde9a513e0056"
+  },
+  "middle": {
+   "triton_red_fused_2": "c894e8f4ed85c2d21c34b5f590902e87ac7ec900a7c97a72ebf5122ef46617f6",
+   "triton_red_fused_fused_add_rms_norm_1": "01ccb65eb049957f7720e1d4b93c57e3ae2fd8486ce52ac4fe6b5657d40a561c",
+   "triton_red_fused_fused_add_rms_norm_moe_forward_0": "3625145ae3c4501106c125e9eb2f33ed4252a085f5547bff63f87b79c0862f29"
+  },
+  "last": {
+   "triton_red_fused_fused_add_rms_norm_1": "4a940e0357fb79e2e67cbeed26b82b53eaeaac0941b3f9efdd4860aee1549178",
+   "triton_red_fused_fused_add_rms_norm_moe_forward_0": "3625145ae3c4501106c125e9eb2f33ed4252a085f5547bff63f87b79c0862f29"
+  }
+ },
+ "artifact": {
+  "kernels": {
+   "01ccb65eb049957f7720e1d4b93c57e3ae2fd8486ce52ac4fe6b5657d40a561c": {
+    "kwargs": {
+     "XBLOCK": 2,
+     "R0_BLOCK": 1024
+    },
+    "num_warps": 8,
+    "num_stages": 1
+   },
+   "3625145ae3c4501106c125e9eb2f33ed4252a085f5547bff63f87b79c0862f29": {
+    "kwargs": {
+     "XBLOCK": 2,
+     "R0_BLOCK": 1024
+    },
+    "num_warps": 8,
+    "num_stages": 1
+   },
+   "421ee1fb175343ca0cc00453c727c1d4f899b4f34e8984374298163d6b8ac47d": {
+    "kwargs": {
+     "XBLOCK": 2,
+     "R0_BLOCK": 128
+    },
+    "num_warps": 2,
+    "num_stages": 1
+   },
+   "4a940e0357fb79e2e67cbeed26b82b53eaeaac0941b3f9efdd4860aee1549178": {
+    "kwargs": {
+     "XBLOCK": 2,
+     "R0_BLOCK": 1024
+    },
+    "num_warps": 8,
+    "num_stages": 1
+   },
+   "ac67bd90d83873240ced930cf3f9f0356ec9e818117e483f52ccde9a513e0056": {
+    "kwargs": {
+     "XBLOCK": 2,
+     "R0_BLOCK": 1024
+    },
+    "num_warps": 8,
+    "num_stages": 1
+   },
+   "c894e8f4ed85c2d21c34b5f590902e87ac7ec900a7c97a72ebf5122ef46617f6": {
+    "kwargs": {
+     "XBLOCK": 2,
+     "R0_BLOCK": 128
+    },
+    "num_warps": 2,
+    "num_stages": 1
+   }
+  },
+  "winners": {
+   "fn/153e95b3a8a933cf016e7e7c606e45905a0690d884588c0f8fe8b55e5d5a76e4.best_config": {
+    "R0_BLOCK": 128,
+    "XBLOCK": 2,
+    "configs_hash": "d17bd9ccaeeaa2df343ca0e6388249886ef138fe3fe8ae8fa48632d5825131f4",
+    "found_by_coordesc": false,
+    "num_stages": 1,
+    "num_warps": 2,
+    "triton_cache_hash": "UU2ZNLQQCUUS6WNZTUR6J7BHIFUUQ23QGMBEDPD6FRNJACCW3JFQ"
+   },
+   "pl/f0d03d16255b6567e8452abc57dbd976bdc983d1a11acd344a8530b2140b37fd.best_config": {
+    "R0_BLOCK": 128,
+    "XBLOCK": 2,
+    "configs_hash": "d17bd9ccaeeaa2df343ca0e6388249886ef138fe3fe8ae8fa48632d5825131f4",
+    "found_by_coordesc": false,
+    "num_stages": 1,
+    "num_warps": 2,
+    "triton_cache_hash": "GVR6SXWSJOOM6KQEHUWTDK3HNX5QSCZAZUYEQH4NZXOXBEVZOEXQ"
+   },
+   "rs/25c8262a46b612d72f32d45d589269bd4757b22699a9ec7d161c364bcbbeaf2a.best_config": {
+    "R0_BLOCK": 128,
+    "XBLOCK": 8,
+    "configs_hash": "6ffa43f2ca8cb1499f3ff3fbf8c975f2c07eef9b57fcecda113029ab12cbef66",
+    "found_by_coordesc": false,
+    "num_stages": 1,
+    "num_warps": 8,
+    "triton_cache_hash": "XM2T6FQ3XRU5TX4QHP3OBZAXSSV3S3P3HDKNVSRGFBEF4QEMD47A"
+   },
+   "ty/a9496d394bfb53e9c5991cb1ac09ad7f55c930fcf742ac154bb7fa3f853d7374.best_config": {
+    "R0_BLOCK": 128,
+    "XBLOCK": 2,
+    "configs_hash": "d17bd9ccaeeaa2df343ca0e6388249886ef138fe3fe8ae8fa48632d5825131f4",
+    "found_by_coordesc": false,
+    "num_stages": 1,
+    "num_warps": 2,
+    "triton_cache_hash": "6TUMHZKW2VLFYHBA4FSQNWBFP2WVKNB4FEOZ3HEKDDXAUI2PBXKA"
+   },
+   "za/83b674f1131ca92b09188f9c81a9e827740de4551e6f8a5ced06d78606aa9ab3.best_config": {
+    "R0_BLOCK": 128,
+    "XBLOCK": 2,
+    "configs_hash": "d17bd9ccaeeaa2df343ca0e6388249886ef138fe3fe8ae8fa48632d5825131f4",
+    "found_by_coordesc": false,
+    "num_stages": 1,
+    "num_warps": 2,
+    "triton_cache_hash": "KUNEFFUYZTL5ZLXQEJOGFUU2S7A5J6NGVSDY62TT36QFMKX5W3RQ"
+   }
+  }
+ },
+ "moe": {
+  "configs": {
+   "16384": {
+    "False": {
+     "BLOCK_SIZE_K": 64,
+     "BLOCK_SIZE_M": 256,
+     "BLOCK_SIZE_N": 256,
+     "GROUP_SIZE_M": 1,
+     "num_stages": 3,
+     "num_warps": 8
+    },
+    "True": {
+     "BLOCK_SIZE_K": 64,
+     "BLOCK_SIZE_M": 256,
+     "BLOCK_SIZE_N": 256,
+     "GROUP_SIZE_M": 1,
+     "num_stages": 3,
+     "num_warps": 8
+    }
+   },
+   "16": {
+    "False": {
+     "BLOCK_SIZE_K": 128,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 16,
+     "num_stages": 3,
+     "num_warps": 4
+    },
+    "True": {
+     "BLOCK_SIZE_K": 128,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 16,
+     "num_stages": 3,
+     "num_warps": 4
+    }
+   },
+   "8": {
+    "False": {
+     "BLOCK_SIZE_K": 128,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 64,
+     "num_stages": 3,
+     "num_warps": 4
+    },
+    "True": {
+     "BLOCK_SIZE_K": 128,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 64,
+     "num_stages": 3,
+     "num_warps": 4
+    }
+   },
+   "2": {
+    "False": {
+     "BLOCK_SIZE_K": 64,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 1,
+     "num_stages": 5,
+     "num_warps": 4
+    },
+    "True": {
+     "BLOCK_SIZE_K": 64,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 1,
+     "num_stages": 5,
+     "num_warps": 4
+    }
+   },
+   "1": {
+    "False": {
+     "BLOCK_SIZE_K": 64,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 1,
+     "num_stages": 5,
+     "num_warps": 4
+    },
+    "True": {
+     "BLOCK_SIZE_K": 64,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 1,
+     "num_stages": 5,
+     "num_warps": 4
+    }
+   },
+   "4": {
+    "False": {
+     "BLOCK_SIZE_K": 64,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 1,
+     "num_stages": 3,
+     "num_warps": 4
+    },
+    "True": {
+     "BLOCK_SIZE_K": 64,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 1,
+     "num_stages": 3,
+     "num_warps": 4
+    }
+   },
+   "137": {
+    "False": {
+     "BLOCK_SIZE_K": 128,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 1,
+     "num_stages": 2,
+     "num_warps": 4
+    },
+    "True": {
+     "BLOCK_SIZE_K": 128,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 1,
+     "num_stages": 2,
+     "num_warps": 4
+    }
+   },
+   "303": {
+    "False": {
+     "BLOCK_SIZE_K": 128,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 64,
+     "num_stages": 2,
+     "num_warps": 4
+    },
+    "True": {
+     "BLOCK_SIZE_K": 128,
+     "BLOCK_SIZE_M": 16,
+     "BLOCK_SIZE_N": 64,
+     "GROUP_SIZE_M": 64,
+     "num_stages": 2,
+     "num_warps": 4
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,1179 @@
+{
+  "schema": "verity/slack-routing-vectors/v2",
+  "about": "The delivery rule. `vectors` pins research.slack.route_targets: which names a post in #agent-coordination wakes (`msg` the post, `root` its thread's root or null for a top-level post, `inboxes` every inbox thread's ts, `targets` the names in order; a vector with `chat` pins research.slack.chat_targets instead: a post in a chat channel, `thread` its thread so far, empty for a top-level post). `registry` is as `with_routes` folds each handle's route into it: its `holder` and `branch_suffixes` are the route's.",
+  "registry": {
+    "bot_id": "B1",
+    "handles": [
+      {
+        "handle": "infra",
+        "usergroup": "SINFRA",
+        "holder": "bc-00000000-1111-2222-3333-44444444558b"
+      },
+      {
+        "handle": "proofs",
+        "usergroup": "SPROOFS",
+        "holder": "bc-aaaaaaaa-bbbb-cccc-dddd-eeeeeeee95d4"
+      },
+      {
+        "handle": "circuits",
+        "usergroup": "SCIRC",
+        "holder": "bc-11111111-2222-3333-4444-55555555a1c1 (circuits lead)"
+      },
+      {
+        "handle": "console",
+        "usergroup": null,
+        "branch_suffixes": [
+          "c3b2"
+        ]
+      }
+    ],
+    "humans": [
+      {
+        "name": "Daniel Reuter",
+        "slack_user": "UDANIEL"
+      }
+    ]
+  },
+  "inboxes": [
+    "1700000900.000100"
+  ],
+  "vectors": [
+    {
+      "name": "an ask tags its owner's user group",
+      "msg": {
+        "ts": "1700000001.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "<!subteam^SCIRC|@circuits> can node 2 take a job?"
+      },
+      "root": null,
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "several plain names at the start, with commas and a colon",
+      "msg": {
+        "ts": "1700000002.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@proofs, @circuits: please read this"
+      },
+      "root": null,
+      "targets": [
+        "proofs",
+        "circuits"
+      ]
+    },
+    {
+      "name": "a name later in the text does not route",
+      "msg": {
+        "ts": "1700000003.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "please ask @circuits about it"
+      },
+      "root": null,
+      "targets": []
+    },
+    {
+      "name": "a worker's name routes like a handle's",
+      "msg": {
+        "ts": "1700000004.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "@vllm-epoch-run stop using node 2"
+      },
+      "root": null,
+      "targets": [
+        "vllm-epoch-run"
+      ]
+    },
+    {
+      "name": "trailing punctuation is not part of the name",
+      "msg": {
+        "ts": "1700000005.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits. one question"
+      },
+      "root": null,
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "leading whitespace is fine",
+      "msg": {
+        "ts": "1700000006.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "  \n@circuits hi"
+      },
+      "root": null,
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "the author is never a target",
+      "msg": {
+        "ts": "1700000007.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "@circuits @infra a note to both of us"
+      },
+      "root": null,
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "names are lower case; an address-like word is not a name",
+      "msg": {
+        "ts": "1700000008.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "foo@circuits and @Circuits"
+      },
+      "root": null,
+      "targets": []
+    },
+    {
+      "name": "an announcement to every handle wakes every registry handle but its author",
+      "msg": {
+        "ts": "1700000009.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nnode 2 reboots"
+      },
+      "root": null,
+      "targets": [
+        "proofs",
+        "circuits",
+        "console"
+      ]
+    },
+    {
+      "name": "an announcement as Slack stores it (shortcode) to some names, a worker among them",
+      "msg": {
+        "ts": "1700000010.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": ":mega: *Announcement* from @infra to <!subteam^SCIRC|@circuits> @vllm-epoch-run\nnode 2 reboots"
+      },
+      "root": null,
+      "targets": [
+        "circuits",
+        "vllm-epoch-run"
+      ]
+    },
+    {
+      "name": "an announcement to a user group whose mention has no label goes to that group alone, not to every handle",
+      "msg": {
+        "ts": "1700000010.000002",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": ":mega: *Announcement* from @infra to <!subteam^SCIRC>\nheld-idle alert, node 1"
+      },
+      "root": null,
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "a reply wakes the root's poster",
+      "msg": {
+        "ts": "1700000011.000002",
+        "thread_ts": "1700000011.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "yes, from 3 PM"
+      },
+      "root": {
+        "ts": "1700000011.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "<!subteam^SCIRC|@circuits> can node 2 take a job?"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "the poster's own reply wakes the names its root addressed",
+      "msg": {
+        "ts": "1700000012.000002",
+        "thread_ts": "1700000012.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "and by when?"
+      },
+      "root": {
+        "ts": "1700000012.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits @proofs which of you owns this?"
+      },
+      "targets": [
+        "circuits",
+        "proofs"
+      ]
+    },
+    {
+      "name": "a reply that names someone wakes only them, not the root's poster",
+      "msg": {
+        "ts": "1700000013.000002",
+        "thread_ts": "1700000013.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "@console can you check the panel?"
+      },
+      "root": {
+        "ts": "1700000013.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits the panel is stale"
+      },
+      "targets": [
+        "console"
+      ]
+    },
+    {
+      "name": "a handle written bare with a colon addresses it (`console: ...`)",
+      "msg": {
+        "ts": "1700000013.000002",
+        "thread_ts": "1700000013.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "console: can you check the panel?"
+      },
+      "root": {
+        "ts": "1700000013.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits the panel is stale"
+      },
+      "targets": [
+        "console"
+      ]
+    },
+    {
+      "name": "a bare word with a colon that isn't a handle addresses no one, so the reply rings the root's poster",
+      "msg": {
+        "ts": "1700000013.000002",
+        "thread_ts": "1700000013.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "note: the panel is stale since 9"
+      },
+      "root": {
+        "ts": "1700000013.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits the panel is stale"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a status line wakes only the root's poster",
+      "msg": {
+        "ts": "1700000014.000002",
+        "thread_ts": "1700000014.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "✅ done — https://github.com/danielreuter/verity/pull/1 @proofs"
+      },
+      "root": {
+        "ts": "1700000014.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits @proofs please"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a status line as Slack stores it (shortcode)",
+      "msg": {
+        "ts": "1700000015.000002",
+        "thread_ts": "1700000015.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": ":x: declined — node changes need Daniel"
+      },
+      "root": {
+        "ts": "1700000015.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits reboot node 2?"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a status line on your own post wakes no one",
+      "msg": {
+        "ts": "1700000016.000002",
+        "thread_ts": "1700000016.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "✅ done — closed"
+      },
+      "root": {
+        "ts": "1700000016.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits FYI"
+      },
+      "targets": []
+    },
+    {
+      "name": "the poster's follow-up on an announcement to every handle wakes no one",
+      "msg": {
+        "ts": "1700000017.000002",
+        "thread_ts": "1700000017.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "correction: 4 PM"
+      },
+      "root": {
+        "ts": "1700000017.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nnode 2 reboots at 3 PM"
+      },
+      "targets": []
+    },
+    {
+      "name": "nothing in an inbox thread routes (by the table)",
+      "msg": {
+        "ts": "1700000900.000200",
+        "thread_ts": "1700000900.000100",
+        "bot_id": "B1",
+        "username": "router",
+        "text": "from infra: https://x/p1700000001000001 @circuits can node 2"
+      },
+      "root": null,
+      "targets": []
+    },
+    {
+      "name": "nothing in an inbox thread routes (by its root, without the table)",
+      "msg": {
+        "ts": "1700000950.000200",
+        "thread_ts": "1700000950.000100",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits replying here by mistake"
+      },
+      "root": {
+        "ts": "1700000950.000100",
+        "bot_id": "B1",
+        "username": "comms",
+        "text": "Inbox for @comms. This thread holds one-line pointers"
+      },
+      "targets": []
+    },
+    {
+      "name": "an inbox's own root routes nothing",
+      "msg": {
+        "ts": "1700000960.000100",
+        "bot_id": "B1",
+        "username": "comms",
+        "text": "Inbox for @comms. This thread holds one-line pointers"
+      },
+      "root": null,
+      "targets": []
+    },
+    {
+      "name": "a quiet reply wakes no one implicitly: not the root's poster",
+      "msg": {
+        "ts": "1700000018.000002",
+        "thread_ts": "1700000018.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "thanks (quiet)"
+      },
+      "root": {
+        "ts": "1700000018.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits please"
+      },
+      "targets": []
+    },
+    {
+      "name": "Daniel's typed post routes, and he is its author",
+      "msg": {
+        "ts": "1700000019.000001",
+        "user": "UDANIEL",
+        "text": "@circuits pause the epoch run"
+      },
+      "root": null,
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "Daniel's reply wakes the root's poster",
+      "msg": {
+        "ts": "1700000020.000002",
+        "thread_ts": "1700000020.000001",
+        "user": "UDANIEL",
+        "text": "no, keep it"
+      },
+      "root": {
+        "ts": "1700000020.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits reboot node 2?"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a reply to Daniel's post wakes him by name",
+      "msg": {
+        "ts": "1700000021.000002",
+        "thread_ts": "1700000021.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "paused at 3 PM"
+      },
+      "root": {
+        "ts": "1700000021.000001",
+        "user": "UDANIEL",
+        "text": "@circuits pause the epoch run"
+      },
+      "targets": [
+        "daniel"
+      ]
+    },
+    {
+      "name": "a post by an author we don't know (not our bot, not a named human) routes nothing",
+      "msg": {
+        "ts": "1700000022.000001",
+        "user": "USOMEONE",
+        "text": "@circuits hello"
+      },
+      "root": null,
+      "targets": []
+    },
+    {
+      "name": "a quiet post still wakes the names it starts with (people write (quiet) for 'no reply needed'), and only them",
+      "msg": {
+        "ts": "1700000030.000002",
+        "thread_ts": "1700000030.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "@proofs please start the train (quiet)"
+      },
+      "root": {
+        "ts": "1700000030.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits please"
+      },
+      "targets": [
+        "proofs"
+      ]
+    },
+    {
+      "name": "the word quiet without parentheses is not the marker",
+      "msg": {
+        "ts": "1700000031.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits keep node 2 quiet tonight"
+      },
+      "root": null,
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "(quiet) inside the text is prose, not the marker: the marker ends the text or is a footer tag",
+      "msg": {
+        "ts": "1700000031.000003",
+        "thread_ts": "1700000031.000002",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "noted: a post ending in (quiet) still wakes the names it starts with\n\n_fyi_"
+      },
+      "root": {
+        "ts": "1700000031.000002",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits how does the quiet marker work now?"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a user-group mention routes by its label, even with an id the registry lacks",
+      "msg": {
+        "ts": "1700000032.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "<!subteam^SUNKNOWN|@memory-accounting> a question"
+      },
+      "root": null,
+      "targets": [
+        "memory-accounting"
+      ]
+    },
+    {
+      "name": "a user-group mention without a label routes by the registry's id",
+      "msg": {
+        "ts": "1700000033.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "<!subteam^SPROOFS> a question"
+      },
+      "root": null,
+      "targets": [
+        "proofs"
+      ]
+    },
+    {
+      "name": "a reply under a root by an author we don't know wakes only the names it starts with",
+      "msg": {
+        "ts": "1700000034.000002",
+        "thread_ts": "1700000034.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "@proofs see above"
+      },
+      "root": {
+        "ts": "1700000034.000001",
+        "user": "USOMEONE",
+        "text": "@circuits hello"
+      },
+      "targets": [
+        "proofs"
+      ]
+    },
+    {
+      "name": "a reply under an announcement that names no one wakes no one, whatever PRs it names",
+      "msg": {
+        "ts": "1700000040.000010",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": "Landed #1585; #1590 is next"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": []
+    },
+    {
+      "name": "a quiet reply under an announcement wakes no PR's owner",
+      "msg": {
+        "ts": "1700000040.000011",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "#1585 is in tonight's train (quiet)"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": []
+    },
+    {
+      "name": "a train-prep branch named under an announcement wakes no one",
+      "msg": {
+        "ts": "1700000040.000012",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "Built cursor/train-prep-1585-1590-on-041c30713-558b"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": []
+    },
+    {
+      "name": "a branch named under an announcement wakes no one",
+      "msg": {
+        "ts": "1700000040.000013",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "Rebased cursor/pr-owner-doorbells-c3b2 onto main"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": []
+    },
+    {
+      "name": "a PR named under an announcement wakes no one who named it earlier",
+      "msg": {
+        "ts": "1700000040.000014",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "#1600 failed its suites"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": []
+    },
+    {
+      "name": "a run id named under an announcement wakes no one who named it earlier",
+      "msg": {
+        "ts": "1700000040.000015",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "dd21 landed: #1588 + #1589"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": []
+    },
+    {
+      "name": "a year or a PR number is not a run id",
+      "msg": {
+        "ts": "1700000040.000016",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "1585 landed in 2026"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": []
+    },
+    {
+      "name": "a done status line under an announcement wakes no one: roster reads it",
+      "msg": {
+        "ts": "1700000040.000017",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": "✅ done — #1585 landed"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": []
+    },
+    {
+      "name": "a declined status line under an announcement wakes the root's poster",
+      "msg": {
+        "ts": "1700000040.000017",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": "❌ declined — past the budget line"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a reply under a root that isn't an announcement wakes no PR owners",
+      "msg": {
+        "ts": "1700000041.000002",
+        "thread_ts": "1700000041.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "see #1590"
+      },
+      "root": {
+        "ts": "1700000041.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits please review"
+      },
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "one emoji may lead the names (`:mega: @a @b`), as Slack stores 📣",
+      "msg": {
+        "ts": "1700000050.000002",
+        "thread_ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": ":mega: @proofs <!subteam^SCIRC|@circuits> please reread the rules"
+      },
+      "root": {
+        "ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nrules changed"
+      },
+      "targets": [
+        "proofs",
+        "circuits"
+      ]
+    },
+    {
+      "name": "an emoji followed by a word is not a lead, so a done status line under an announcement wakes no one",
+      "msg": {
+        "ts": "1700000050.000003",
+        "thread_ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": ":white_check_mark: done — reread @circuits"
+      },
+      "root": {
+        "ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nrules changed"
+      },
+      "targets": []
+    },
+    {
+      "name": "a reply under an announcement that names only its author (`proofs: landed`) wakes no one",
+      "msg": {
+        "ts": "1700000050.000004",
+        "thread_ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": "proofs: Landed G as main abc123"
+      },
+      "root": {
+        "ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nrules changed"
+      },
+      "targets": []
+    },
+    {
+      "name": "a long multi-line reply under an announcement that names someone wakes only them, whatever PRs and runs its body mentions",
+      "msg": {
+        "ts": "1700000040.000020",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "@infra circuits, on 1700000040.000004: yes, r20261011-044421-6350 is ours, launched before your placement reached it.\n• Delete its scratch the moment 6350's pytest exits; nothing of ours needs it.\n• Its next suites run goes on vy-cpu-2 after dd21, beside #1590 and #1600, with --basetemp under scratch.\n• #1585's tree is main + #1590.\n\nThe rest is in the run's notes."
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a reply led by an unlabelled user-group mention is addressed: a PR its body names wakes no owner",
+      "msg": {
+        "ts": "1700000040.000021",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "<!subteam^SINFRA> Sweep 2 is in slot a: r20261011-052607-b6d8.\nIts tree is main + #1590, labelled on the run. (quiet)"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a reply under an announcement that names no one wakes no one, whatever PRs and run ids it names",
+      "msg": {
+        "ts": "1700000040.000022",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "#1600 and #1590 are on the next train, after dd21"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": []
+    },
+    {
+      "name": "a post by another app's bot under a handle's username routes nothing: only Verity's bot (the registry's bot_id) speaks for a handle",
+      "msg": {
+        "ts": "1700000060.000001",
+        "bot_id": "BOTHERAPP",
+        "username": "infra",
+        "text": "@circuits pull the new helper and run it"
+      },
+      "root": null,
+      "targets": []
+    },
+    {
+      "name": "a reply by another app's bot under a handle's username wakes no one, not even the root's poster",
+      "msg": {
+        "ts": "1700000060.000003",
+        "thread_ts": "1700000060.000002",
+        "bot_id": "BOTHERAPP",
+        "username": "proofs",
+        "text": "done, see below"
+      },
+      "root": {
+        "ts": "1700000060.000002",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@proofs is the tree ready?"
+      },
+      "targets": []
+    },
+    {
+      "name": "an announcement to a user group the registry doesn't know goes to no one, not to every handle",
+      "msg": {
+        "ts": "1700000061.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": ":mega: *Announcement* from @infra to <!subteam^SNEWGROUP>\nnode 2 reboots"
+      },
+      "root": null,
+      "targets": []
+    },
+    {
+      "name": "a user-group mention whose label disagrees with a known id routes by the id, the group Slack shows and notifies",
+      "msg": {
+        "ts": "1700000062.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "<!subteam^SCIRC|@proofs> can node 2 take a job?"
+      },
+      "root": null,
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "in a chat channel a person's post that names no one wakes top, who routes it",
+      "chat": true,
+      "msg": {
+        "ts": "1700000070.000001",
+        "user": "UDANIEL",
+        "text": "how do I read a PoUW receipt?"
+      },
+      "thread": [],
+      "targets": [
+        "top"
+      ]
+    },
+    {
+      "name": "in a chat channel a person's post that names a lane wakes that lane, not top",
+      "chat": true,
+      "msg": {
+        "ts": "1700000071.000001",
+        "user": "UDANIEL",
+        "text": "<!subteam^SCIRC|@circuits> is the TP8 sweep done?"
+      },
+      "thread": [],
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "in a chat channel a person's reply that names no one wakes each lane that posted in its thread, in order",
+      "chat": true,
+      "msg": {
+        "ts": "1700000072.000009",
+        "thread_ts": "1700000072.000001",
+        "user": "UDANIEL",
+        "text": "and the Lean side?"
+      },
+      "thread": [
+        {
+          "ts": "1700000072.000001",
+          "user": "UDANIEL",
+          "text": "what does a receipt prove?"
+        },
+        {
+          "ts": "1700000072.000002",
+          "thread_ts": "1700000072.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "it proves the sum"
+        },
+        {
+          "ts": "1700000072.000003",
+          "thread_ts": "1700000072.000001",
+          "bot_id": "B1",
+          "username": "circuits",
+          "text": "<!subteam^SCIRC|@circuits> here: the TP8 side"
+        },
+        {
+          "ts": "1700000072.000004",
+          "thread_ts": "1700000072.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "it proves the sum"
+        }
+      ],
+      "targets": [
+        "proofs",
+        "circuits"
+      ]
+    },
+    {
+      "name": "in a chat channel a person's reply that names a lane wakes only that lane, not the thread's",
+      "chat": true,
+      "msg": {
+        "ts": "1700000072.000009",
+        "thread_ts": "1700000072.000001",
+        "user": "UDANIEL",
+        "text": "console: can you show it?"
+      },
+      "thread": [
+        {
+          "ts": "1700000072.000001",
+          "user": "UDANIEL",
+          "text": "what does a receipt prove?"
+        },
+        {
+          "ts": "1700000072.000002",
+          "thread_ts": "1700000072.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "it proves the sum"
+        }
+      ],
+      "targets": [
+        "console"
+      ]
+    },
+    {
+      "name": "in a chat channel a person's reply in a thread no lane posted in wakes top",
+      "chat": true,
+      "msg": {
+        "ts": "1700000075.000002",
+        "thread_ts": "1700000075.000001",
+        "user": "UDANIEL",
+        "text": "anyone?"
+      },
+      "thread": [
+        {
+          "ts": "1700000075.000001",
+          "user": "UDANIEL",
+          "text": "is anyone there?"
+        },
+        {
+          "ts": "1700000075.000003",
+          "thread_ts": "1700000075.000001",
+          "bot_id": "B9",
+          "username": "proofs",
+          "text": "another app's bot, posing"
+        }
+      ],
+      "targets": [
+        "top"
+      ]
+    },
+    {
+      "name": "in a chat channel a quiet post that names no one wakes no one, not even top",
+      "chat": true,
+      "msg": {
+        "ts": "1700000073.000001",
+        "user": "UDANIEL",
+        "text": "thanks, that answers it (quiet)"
+      },
+      "thread": [],
+      "targets": []
+    },
+    {
+      "name": "in a chat channel a lane's post that names no one wakes no one: top's rule is for people",
+      "chat": true,
+      "msg": {
+        "ts": "1700000074.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "node 2 is back"
+      },
+      "thread": [],
+      "targets": []
+    },
+    {
+      "name": "in a chat channel a lane's reply that starts with another lane's name hands off to it",
+      "chat": true,
+      "msg": {
+        "ts": "1700000072.000005",
+        "thread_ts": "1700000072.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": "@console over to you for the panel"
+      },
+      "thread": [
+        {
+          "ts": "1700000072.000001",
+          "user": "UDANIEL",
+          "text": "what does a receipt prove?"
+        },
+        {
+          "ts": "1700000072.000002",
+          "thread_ts": "1700000072.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "it proves the sum"
+        }
+      ],
+      "targets": [
+        "console"
+      ]
+    },
+    {
+      "name": "in a chat channel a post by an author we don't know wakes no one",
+      "chat": true,
+      "msg": {
+        "ts": "1700000076.000001",
+        "user": "USTRANGER",
+        "text": "hello?"
+      },
+      "thread": [],
+      "targets": []
+    }
+  ],
+  "doorbells": {
+    "about": "slack.doorbell(author, thread, ts, text, urgent, channel, private): the doorbell's text, posted as `router` in each woken name's inbox thread. A doorbell is for the post whose ts is its `reply R`, or, with no reply, its `thread T` (that is how delivery dedupes). A post outside the front door names its channel (`channel`, absent for the front door) before `thread`. A `private` post's (a chat channel's) carries no text, only where to read it.",
+    "cases": [
+      {
+        "name": "a top-level post: its user-group mention as @name, its footer dropped",
+        "author": "infra",
+        "thread": "1700000100.000001",
+        "ts": "1700000100.000001",
+        "urgent": false,
+        "text": "<!subteam^SCIRCUITS|@circuits> can node 2 take a job?\n\n_ask_",
+        "doorbell": "from infra, thread 1700000100.000001: @circuits can node 2 take a job?"
+      },
+      {
+        "name": "an urgent reply: its footer dropped, link label kept with its url, escapes and date tokens undone",
+        "author": "circuits",
+        "thread": "1700000100.000001",
+        "ts": "1700000200.000002",
+        "urgent": true,
+        "text": "@infra yes &lt;after 3 PM&gt; by <!date^1700006400^{time}|1:00 PM PST (21:00Z)>, see <https://x/plan|the plan> &amp; <https://x/z>\n\n_urgent_",
+        "doorbell": "from circuits (URGENT), thread 1700000100.000001, reply 1700000200.000002: @infra yes <after 3 PM> by 1:00 PM PST (21:00Z), see the plan (https://x/plan) & https://x/z"
+      },
+      {
+        "name": "runs of blank lines collapse to one",
+        "author": "proofs",
+        "thread": "1700000300.000003",
+        "ts": "1700000300.000003",
+        "urgent": false,
+        "text": "@infra first\n\n\n\nsecond",
+        "doorbell": "from proofs, thread 1700000300.000003: @infra first\n\nsecond"
+      },
+      {
+        "name": "a long post is cut at 600 characters, with where to read the rest",
+        "author": "lean",
+        "thread": "1700000400.000004",
+        "ts": "1700000400.000005",
+        "urgent": false,
+        "text": "@proofs xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "doorbell": "from lean, thread 1700000400.000004, reply 1700000400.000005: @proofs xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (the rest: `research msg read --thread 1700000400.000004`)"
+      },
+      {
+        "name": "a person's post in another channel names it, so its reader answers there",
+        "author": "daniel",
+        "thread": "1700000500.000006",
+        "ts": "1700000500.000006",
+        "urgent": false,
+        "channel": "ask-the-team",
+        "text": "<!subteam^SCIRCUITS|@circuits> how far is the TP8 decode point?",
+        "doorbell": "from daniel, #ask-the-team thread 1700000500.000006: @circuits how far is the TP8 decode point?"
+      },
+      {
+        "name": "a reply in another channel names it and its reply",
+        "author": "daniel",
+        "thread": "1700000500.000006",
+        "ts": "1700000600.000007",
+        "urgent": false,
+        "channel": "ask-the-team",
+        "text": "@proofs and the Lean side?",
+        "doorbell": "from daniel, #ask-the-team thread 1700000500.000006, reply 1700000600.000007: @proofs and the Lean side?"
+      },
+      {
+        "name": "a reply in a chat channel is private: the person and the thread, never the text",
+        "author": "luke",
+        "thread": "1700000500.000001",
+        "ts": "1700000500.000002",
+        "urgent": false,
+        "channel": "chat-luke",
+        "private": true,
+        "text": "my draft numbers: 41.7 TFLOP/s, please keep this between us",
+        "doorbell": "from luke, #chat-luke thread 1700000500.000001, reply 1700000500.000002: (a post in a private channel: research msg read --channel chat-luke --thread 1700000500.000001)"
+      },
+      {
+        "name": "a person's post leads with them and how long they have waited",
+        "author": "douglas",
+        "thread": "1700000500.000001",
+        "ts": "1700000500.000002",
+        "urgent": false,
+        "channel": "chat-douglas",
+        "private": true,
+        "waited": 1080,
+        "text": "is the TP8 sweep done?",
+        "doorbell": "from douglas (a person, waiting 18 min), #chat-douglas thread 1700000500.000001, reply 1700000500.000002: (a post in a private channel: research msg read --channel chat-douglas --thread 1700000500.000001)"
+      },
+      {
+        "name": "the watchdog's reminder for a person's post is urgent",
+        "author": "douglas",
+        "thread": "1700000500.000001",
+        "ts": "1700000500.000001",
+        "urgent": true,
+        "channel": "chat-douglas",
+        "private": true,
+        "waited": 7560,
+        "reminder": "no lane reply in 60 min",
+        "text": "is the TP8 sweep done?",
+        "doorbell": "from douglas (a person, waiting 2.1 h) (URGENT), #chat-douglas thread 1700000500.000001: reminder (no lane reply in 60 min): (a post in a private channel: research msg read --channel chat-douglas --thread 1700000500.000001)"
+      }
+    ]
+  }
+}

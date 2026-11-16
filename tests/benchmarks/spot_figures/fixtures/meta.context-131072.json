@@ -1,0 +1,59 @@
+{
+ "schema": "verity-bench/serve-tax/v0",
+ "arm": "boundary",
+ "parent": "tokens-only",
+ "model_id": "glm53",
+ "model": "zai-org/GLM-5.3@aca966e4e02791568aa6a4ced368624b3d897f42",
+ "server_argv": [
+  "-m",
+  "vllm.entrypoints.openai.api_server",
+  "--model",
+  "/workspace/fs/glm53/aca966e4e02791568aa6a4ced368624b3d897f42",
+  "--served-model-name",
+  "glm-5.3",
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "52719",
+  "--tensor-parallel-size",
+  "8",
+  "--max-model-len",
+  "131072",
+  "--max-num-seqs",
+  "256",
+  "--seed",
+  "0",
+  "--disable-uvicorn-access-log",
+  "--middleware",
+  "vllm_accept_stamp.AcceptStamp",
+  "--max-num-batched-tokens",
+  "2048",
+  "--long-prefill-token-threshold",
+  "256",
+  "--moe-backend",
+  "triton"
+ ],
+ "plugin": [
+  "record",
+  "tokens"
+ ],
+ "tick": null,
+ "window_s": 600.0,
+ "kv_window_s": 600.0,
+ "sampling": "greedy",
+ "logprobs": false,
+ "edges": {
+  "every_s": 30.0,
+  "save_kv": [],
+  "kv_dir": null,
+  "kv_copy": "all",
+  "dump": false,
+  "busy": false
+ },
+ "versions": {
+  "vllm": "0.28.1rc1.dev472+gd9105ea80.cu129",
+  "torch": "2.13.0+cu129",
+  "aiohttp": "3.14.5",
+  "transformers": "5.22.2"
+ }
+}

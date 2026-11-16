@@ -1,0 +1,48 @@
+{
+ "row": "68",
+ "row_id": "olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager",
+ "mode": "v2",
+ "build_seconds": 295,
+ "v2_identities_rows": 402938,
+ "v2_complete": true,
+ "v2_unmodelled": {},
+ "v2_manifest_digest": "48f4857616d23421df73c58f01bb2a75c5de30a159a70026846d236f5ae4f5af",
+ "v1_manifest_digest": "f262bc02f5bb6ecff32f2f5c59ea445efd29bf78306a7a1f5356483b2ad48fc1",
+ "program_digest_equal": true,
+ "v1_identities": 380250,
+ "v2_identities": 400954,
+ "common": 380250,
+ "v1_rows": 382234,
+ "v2_rows": 402938,
+ "multiplicity_diff_n": 0,
+ "only_v1_n": 0,
+ "only_v2_n": 20704,
+ "lines": {
+  "member_rename": [],
+  "range": [],
+  "only_v1": [],
+  "only_v2": [
+   {
+    "op_path": "model.layers.<k>.mlp.experts",
+    "member": "out",
+    "spec": "MoeSum_v1",
+    "structural": "out",
+    "returned": "returned",
+    "crossing": "crossing",
+    "family": "instance_outputs",
+    "n": 20704,
+    "reason": "a Value that crosses the module-body boundary in the Program's dataflow which v1's vocabulary called interior (F-r19-int-20 class)"
+   }
+  ]
+ },
+ "multiplicity": [],
+ "residuals_applied": {
+  "Gemm_v1:out->0": 483984,
+  "RoPE_v1:key->1": 161328,
+  "RoPE_v1:query->0": 161328,
+  "encoding:hidden": 20704,
+  "encoding:in": 10083,
+  "encoding:sampled_token_ids": 1294
+ },
+ "aliases": 15
+}
