@@ -79,7 +79,7 @@ calculator's β (`benchmarks/slowdown/data/premises.toml`), the rule that only P
 fleets and periods, and that a number is given only where the record holds a PoUW accept of record and both rules
 comply.
 
-## How a malicious developer's record is refused
+## How a cheating change is refused
 
 A record with a weight left unregistered is refused by the count rule, and by the rate rule, and gives no number. So
 does a record whose PoUW verdict is a development accept or no accept, and one with no Program, which the check can't
