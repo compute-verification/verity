@@ -7,14 +7,16 @@ nothing, and exits 1, naming the paths, when after the maps:
 1. **a test file is in no suite**: `tests/test_repository.py`'s `test_every_test_file_is_in_a_suite` on the moved tree.
    A suite is a directory whose `pyproject.toml` configures pytest, and its `testpaths` are read as written, relative to
    where the pyproject lands.
-2. **a suite has parted from a test file it collects**: the pyproject and each test file under its testpaths today (the
-   innermost suite's, `conftest.py` included) keep their places relative to each other. A test file that lands in
+2. **a suite has parted from a test file it collects**: each test file under its testpaths today (the innermost suite's,
+   `conftest.py` included) keeps its place in the test path that collects it, the testpaths read where the pyproject lands
+   (a map's `[pyproject]` `testpaths_replace` rewrites them: `tests` becomes `.` when the pyproject moves beside its tests).
+   A test file that lands in
    another suite's testpaths passes 1 and fails here: splitting a suite is its owner's change after the moves.
 3. **a suite's inputs no longer hold a file its tests import**: a module the suite's test files import, directly or
    through the modules they import, that its inputs cover today (`tools/check/suites.py`'s `inputs_of`: its
-   directory, its workspace dependencies' directories, the paths `[tool.verity.tests] inputs` declares) and that lands
-   outside them. An input is read as `layout.py` rewrites it: a file's row, a directory's row or `[tokens]` row, else
-   unchanged.
+   directory, its workspace dependencies' directories, the paths `[tool.verity.tests] inputs` declares, each `X` with
+   its mirror `tests/X`) and that lands outside them. An input is read as `layout.py` rewrites it: a file's row, a directory's row or `[tokens]` row, else
+   unchanged; a map's `[pyproject]` `add_inputs` adds its own.
 
 **Archive wins.** A test file goes to `archive/` with the code it tests, and a suite that stays never loads `archive/`.
 So a test file the maps archive is in no suite and parted from none (`tests/test_repository.py` exempts `archive/`
@@ -56,6 +58,8 @@ DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 UNSUITED = re.compile(r"^UNSUITED_TEST_DIRS\s*=\s*\(([^)]*)\)", re.M)
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*")
 ARCHIVE = "archive/"
+#: the root's directory that mirrors the tree by path (`tools/check/suites.py`'s `MIRROR`): an input `X` covers `tests/X` too
+MIRROR = "tests"
 
 
 def is_test(p: str) -> bool:
@@ -144,8 +148,18 @@ def check(m: Moved) -> dict:
               if (ini := d.get("tool", {}).get("pytest", {}).get("ini_options")) is not None}
     pkgs = {norm(d["project"]["name"]): p for p, d in pyprojects.items() if d.get("project", {}).get("name")}
 
+    def written(pyproject: str, where: str) -> list[str]:
+        """The suite's `testpaths` where its pyproject is at `where`: as written today, after the maps as their
+        `[pyproject]` table's `testpaths_replace` rewrites them."""
+        out = list(suites[pyproject])
+        if where != pyproject:
+            for layout in m.layouts:
+                for old, new in layout.data.get("pyproject", {}).get(where, {}).get("testpaths_replace", {}).items():
+                    out = [new if t == old else t for t in out]
+        return out
+
     def paths(pyproject: str, where: str) -> list[str]:
-        return [posixpath.normpath(posixpath.join(posixpath.dirname(where), t)) for t in suites[pyproject]]
+        return [posixpath.normpath(posixpath.join(posixpath.dirname(where), t)) for t in written(pyproject, where)]
 
     tests = [p for p in m.files if is_test(p) or posixpath.basename(p) == "conftest.py"]
     unsuited = [d.strip(" \"'") for d in (UNSUITED.search(m.read("tests/test_repository.py") or "") or [None, ""])[1].split(",")
@@ -188,7 +202,8 @@ def check(m: Moved) -> dict:
         if not owners:
             continue
         p = max(owners, key=lambda q: len(posixpath.dirname(q)))        # the innermost suite collects it
-        want = posixpath.normpath(posixpath.join(posixpath.dirname(m.new[p]), posixpath.relpath(f, posixpath.dirname(p) or ".")))
+        t, after = next((t, a) for t, a in zip(paths(p, p), paths(p, m.new[p])) if under(f, t))
+        want = posixpath.normpath(posixpath.join(after, posixpath.relpath(f, t)))      # where it stands in its test path
         if f in archived and (p in archived or with_its_code(f, p, code)):
             with_code.append({"suite": p, "test": f, "lands": m.new[f]})
             continue
@@ -244,7 +259,8 @@ def check(m: Moved) -> dict:
         if path in m.tracked:
             return m.new[path]
         if path + "/pyproject.toml" in m.tracked and m.directory(path) is None:     # a package: where its pyproject lands
-            return posixpath.dirname(m.new[path + "/pyproject.toml"]) or "."
+            lands = posixpath.dirname(m.new[path + "/pyproject.toml"]) or "."
+            return path if lands == f"{MIRROR}/{path}" else lands       # a suite's pyproject beside its mirrored tests
         return m.directory(path) or path
 
     lost, loads, reached, outside = {}, {}, set(), {}
@@ -253,6 +269,7 @@ def check(m: Moved) -> dict:
             continue
         own = inputs_of(p)
         now = [(posixpath.dirname(m.new[p]) or "." if why == "its directory" else reads(path)) for why, path in own]
+        now += [i.rstrip("/") for layout in m.layouts for i in layout.data.get("pyproject", {}).get(m.new[p], {}).get("add_inputs", [])]
         # a test file sent into this suite: what its suite's inputs cover today must land in this suite's
         for files, inputs in [(collects[p], own), *(([f], inputs_of(q)) for f, q in sent[p])]:
             opened = imports.reach(files, at_import=True)       # what importing the test files imports
@@ -266,7 +283,7 @@ def check(m: Moved) -> dict:
                 reached.add((p, f))
                 if why is None:                             # outside the inputs today already: not the maps' doing
                     outside.setdefault((p, f), {"suite": p, "module": f, "imported_by": importer, "at_import": f in opened})
-                if why is None or any(under(m.new[f], n) for n in now):
+                if why is None or any(under(m.new[f], n) or (n != "." and under(m.new[f], f"{MIRROR}/{n}")) for n in now):
                     continue
                 rest = f[len(path):] if path != "." else "/" + f
                 lost.setdefault((p, f), {

@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import once
 
 from verity_graph import ROOT, contract, graph
 
@@ -17,34 +18,51 @@ HERE = Path(__file__).resolve().parent
 pytestmark = pytest.mark.slow
 
 
-def _listing(root: Path, cwd: Path) -> bytes:
-    p = subprocess.run([sys.executable, "-m", "verity_graph", "--json", "--root", str(root)], cwd=cwd, capture_output=True)
+def _listing(root: Path, cwd: Path) -> subprocess.Popen:
+    """The listing of ``root`` from ``cwd``, started in this process's environment as it is now."""
+    return subprocess.Popen([sys.executable, "-m", "verity_graph", "--json", "--root", str(root)], cwd=cwd,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
+def _listed(p: subprocess.Popen) -> bytes:
+    out, err = p.communicate()
+    assert p.returncode == 0, err.decode(errors="replace")
+    return out
+
+
+def _audit(d: Path) -> None:
+    p = subprocess.run([sys.executable, str(HERE / "audit_listing.py"), str(ROOT), str(d / "outside.json")], cwd=ROOT,
+                       capture_output=True)
     assert p.returncode == 0, p.stderr.decode(errors="replace")
-    return p.stdout
+    (d / "graph.json").write_bytes(p.stdout)
 
 
 @pytest.fixture(scope="module")
-def audited(tmp_path_factory) -> tuple[dict, list[str]]:
-    """This checkout's listing under an audit hook: (its graph, the paths it opened outside the tree)."""
-    out = tmp_path_factory.mktemp("audit") / "outside.json"
-    p = subprocess.run([sys.executable, str(HERE / "audit_listing.py"), str(ROOT), str(out)], cwd=ROOT, capture_output=True)
-    assert p.returncode == 0, p.stderr.decode(errors="replace")
-    return json.loads(p.stdout), json.loads(out.read_text())
+def audited(pytestconfig, tmp_path_factory) -> tuple[dict, list[str]]:
+    """This checkout's listing under an audit hook: (its graph, the paths it opened outside the tree), listed once a run."""
+    d = once(pytestconfig, tmp_path_factory, "audited-listing", _audit)
+    return json.loads((d / "graph.json").read_bytes()), json.loads((d / "outside.json").read_text())
 
 
 def test_two_checkouts_of_one_commit_at_different_paths_list_the_same_bytes(tmp_path, monkeypatch):
     head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
     a, b = tmp_path / "a", tmp_path / "deeper" / "elsewhere" / "b"
+    started: list[subprocess.Popen] = []
     try:
         for w in (a, b):
             subprocess.run(["git", "-C", str(ROOT), "worktree", "add", "-q", "--detach", str(w), head], check=True)
-        one = _listing(a, a)
+        started.append(_listing(a, a))
         monkeypatch.setenv("TMPDIR", str(tmp_path))
         monkeypatch.setenv("TZ", "Pacific/Kiritimati")
         monkeypatch.setenv("LC_ALL", "C")
         monkeypatch.setenv("VERITY_GRAPH_PROBE", "1")
-        two = _listing(b, tmp_path)
+        started.append(_listing(b, tmp_path))
+        one, two = map(_listed, started)
     finally:
+        for p in started:
+            if p.poll() is None:
+                p.kill()
+                p.wait()
         for w in (a, b):
             subprocess.run(["git", "-C", str(ROOT), "worktree", "remove", "--force", str(w)], capture_output=True)
     assert one == two, "the listing depends on where the checkout is, the working directory or the environment"

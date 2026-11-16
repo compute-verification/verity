@@ -35,6 +35,16 @@ def test_each_point_a_number_can_miss():
         ("g/stale", "stale"), ("g/never", "never measured"), ("g/mark", "no mark")])
 
 
+def test_a_goals_own_number_is_the_row_that_names_it():
+    """The dashboard lists under a goal the numbers of the goals beneath it too, and one of those can come first."""
+    run = _runner()
+    beneath = {**_row("b/beneath", target=None), "goal": "g/part"}
+    own = {**_row("a/own"), "goal": "g"}
+    top = [{"id": "g", "metrics": ["b/beneath", "a/own"]}]
+    assert run.running({"metrics": [beneath, own], "top": top}) == (1, 1, [])
+    assert run.running({"metrics": [beneath, {**own, "goal": None}], "top": top}) == (0, 1, [("g", "no target")])
+
+
 def test_the_value_then_the_row():
     run = _runner()
     row = {"id": "a/x", "latest": {"value": 1.0, "target": None, "mark": None}, "target": 3.0, "mark": "modeled",
