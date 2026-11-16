@@ -13,7 +13,9 @@ through `m` in order: a `let` goes into the context (a value with a free variabl
 after the rules rewrite it; a `let` applied to arguments, as a state computation run on its state, takes them under it),
 a jump to a join point takes the join point's body, a bind's computation is evaluated (by a
 rule, by the kernel's `whnf`, or by walking it), an `if` takes the branch its condition decides, a `match` the branch its
-discriminants' values select, and the walk ends at `pure a`, with `?v := a`. Each step's proof is a term the kernel
+discriminants' values select, and the walk ends at `pure a`, with `?v := a`. Where no rule applies to a term the kernel
+can't evaluate, its projections of constructor applications are reduced; a condition still undecided reduces a `match`
+in it whose discriminants evaluate to constructors. Each step's proof is a term the kernel
 rechecks; nothing is unfolded into both arms of a branch. A constant in `block`, or one whose definition reads one, is
 never handed to the kernel's `whnf`: its application is unfolded and walked instead.
 -/
@@ -126,9 +128,9 @@ meta partial def ctorVal? (s : Expr) : MetaM (Option Expr) := do
     return none
   | _ => return none
 
-/-- `e` with each projection of a let-bound constructor application replaced by its field, definitionally. -/
-meta def projReduce (e : Expr) : MetaM Expr := do
-  if !e.hasFVar then return e
+/-- `e` with each projection of a constructor application, let-bound or in place, replaced by its field,
+definitionally. -/
+meta def projReduceAll (e : Expr) : MetaM Expr :=
   Meta.transform e (post := fun e => do
     match e with
     | .proj sn i s =>
@@ -149,11 +151,33 @@ meta def projReduce (e : Expr) : MetaM Expr := do
       unless v.getAppNumArgs == ci.numParams + ci.numFields do return .continue
       return .visit (mkAppN (v.getArg! (ci.numParams + info.i)) (args.extract (info.numParams + 1) args.size)))
 
+/-- `e` with each projection of a let-bound constructor application replaced by its field, definitionally. -/
+meta def projReduce (e : Expr) : MetaM Expr := do
+  if !e.hasFVar then return e
+  projReduceAll e
+
 /-- `(e', e = e')` by `projReduce`, `none` if it changes nothing. -/
 meta def projStep (e : Expr) : MetaM (Option (Expr × Expr)) := do
   let e' ← projReduce e
   if e' == e then return none
   return some (e', ← hint (← mkEqRefl e) (← mkEq e e'))
+
+/-- `(e', e = e')` by `projReduceAll`, `none` if it changes nothing. -/
+meta def projAllStep (e : Expr) : MetaM (Option (Expr × Expr)) := do
+  let e' ← projReduceAll e
+  if e' == e then return none
+  return some (e', ← hint (← mkEqRefl e) (← mkEq e e'))
+
+/-- The `match`es in `e` with no loose bound variable, outermost first. -/
+meta def matchesIn (e : Expr) : MetaM (Array Expr) := do
+  let mut out := #[]
+  if !e.hasLooseBVars && (← isMatcherApp e) then out := out.push e
+  match e with
+  | .app f a => return out ++ (← matchesIn f) ++ (← matchesIn a)
+  | .lam _ t b _ | .forallE _ t b _ => return out ++ (← matchesIn t) ++ (← matchesIn b)
+  | .letE _ t v b _ => return out ++ (← matchesIn t) ++ (← matchesIn v) ++ (← matchesIn b)
+  | .mdata _ b | .proj _ _ b => return out ++ (← matchesIn b)
+  | _ => return out
 
 meta def okArg? (v : Expr) : Option Expr :=
   if v.isAppOfArity ``Except.ok 3 then some v.appArg! else none
@@ -285,6 +309,12 @@ meta partial def rewriteIn (e : Expr) : M (Option (Expr × Expr)) := do
       catch ex =>
         if (← read).trace then tr s!"fwd: a rewrite failed: {((toString (← ex.toMessageData.toString)).take 300).toString}"
         s.restore
+    if !progress && (← exprTainted e) then
+      if let some (e', st) ← projAllStep e then
+        if (← read).trace then tr "fwd: a projection of a constructor reduced"
+        pf := some (← match pf with | some q => mkEqTrans q st | none => pure st)
+        e := e'
+        progress := true
   return pf.map (e, ·)
 
 /-- A `forIn` over a list or an array whose body, walked once over fresh variables (a pair's two fields), yields: its
@@ -335,6 +365,39 @@ meta partial def summarize (x : Expr) : M (Option (Expr × Expr)) := do
     if (← read).trace then tr s!"fwd: a loop not summarized: {((toString (← ex.toMessageData.toString)).take 300).toString}"
     s.restore
     return none
+
+/-- A `match` in `e` whose discriminants evaluate to constructors, reduced to the branch they select: `(e', e = e')`,
+`none` if there is none. -/
+meta partial def matchStep (e : Expr) : M (Option (Expr × Expr)) := do
+  for m in ← matchesIn e do
+    let s : Meta.SavedState ← Meta.saveState
+    try
+      let some mi0 ← matchMatcherApp? m | continue
+      let mut mi := mi0
+      let mut pf : Option Expr := none
+      for i in [0:mi.discrs.size] do
+        let d ← instantiateMVars mi.discrs[i]!
+        if ← isCtorApp d then continue
+        let (v, hd) ← evalVal d
+        unless ← isCtorApp v do throwError "fwd: a discriminant is no constructor"
+        let m0 := mi
+        let motive ← withLocalDeclD `y (← inferType d) fun y =>
+          mkLambdaFVars #[y] ({ m0 with discrs := m0.discrs.set! i y }).toExpr
+        let c ← mkCongrArg motive hd
+        mi := { mi with discrs := mi.discrs.set! i v }
+        pf := some (← match pf with | some q => mkEqTrans q c | none => pure c)
+      let .reduced r ← reduceMatcher? mi.toExpr | throwError "fwd: the match does not reduce"
+      let pm ← match pf with
+        | some p => mkEqTrans p (← hint (← mkEqRefl mi.toExpr) (← mkEq mi.toExpr r))
+        | none => hint (← mkEqRefl m) (← mkEq m r)
+      let ea ← kabstract e m
+      let motive := Expr.lam `y (← inferType m) ea .default
+      if (← read).trace then tr "fwd: a match reduced on its discriminants' values"
+      return some (ea.instantiate1 r, ← mkCongrArg motive pm)
+    catch ex =>
+      if (← read).trace then tr s!"fwd: a match not reduced: {((toString (← ex.toMessageData.toString)).take 300).toString}"
+      s.restore
+  return none
 
 /-- `x`'s value, a constructor application, with `x = v`. -/
 meta partial def evalVal (x : Expr) : M (Expr × Expr) := do
@@ -568,7 +631,9 @@ meta partial def decideCond (c inst : Expr) : M (Bool × Expr) := do
     if let some r ← attempt cur pc then return r
     let s ← match ← projStep cur with
       | some s => pure (some s)
-      | none => rewriteIn cur
+      | none => match ← rewriteIn cur with
+        | some s => pure (some s)
+        | none => matchStep cur
     let some (c2, p) := s | break
     pc := some (← match pc with | some q => mkEqTrans q p | none => pure p)
     cur := c2
