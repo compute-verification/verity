@@ -4,7 +4,7 @@ public import Proofs.Flock.SpotFlock.HeldOf
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.SpotFlock.RunsAs.Outcome
 public import Proofs.Flock.Soundness.ExecSample
-public import Proofs.Flock.Soundness.Refine.Walk
+public import Proofs.Flock.SpotFlock.DoWalk
 public import Proofs.Properties.Verity.SampledTwo.JpWalk
 public import Proofs.Properties.Spot
 
@@ -448,18 +448,30 @@ theorem names_of_check {rec : Json} {v : Verifier} (h : check rec v = #[]) (hn :
 
 /-! ## A verifier with no certified entry -/
 
-open FlockSoundness.Refine in
+open Properties.Spot.SecurityProofs (bind_eq_ok) in
 /-- **Parameters that name no `certified` hold no certified entry**: `OneStage.paramsParsed` reads the entries from
-the parameters' `certified` alone, and none where it is absent. -/
+the parameters' `certified` alone, and none where it is absent. Its join point after the entries is walked with that
+invariant (`jp_step`), every other with none. -/
 theorem paramsParsed_certified {j : Json} {p : Spot.OneStage.Params} (hf : Spot.field? j "certified" = none)
     (h : Spot.OneStage.paramsParsed j = .ok p) : p.verifier.certified = #[] := by
-  revert p
-  show Ret (Spot.OneStage.paramsParsed j) fun p => p.verifier.certified = #[]
-  rw [Spot.OneStage.paramsParsed.eq_def]
-  simp -zeta only [hf]
-  ret_walk_aux [Pure.pure, Spot.OneStage.Params.mk] =>
-    subst_vars
-    exact (Except.ok.inj (by assumption)).symm
+  unfold Spot.OneStage.paramsParsed at h
+  repeat' first
+    | (jp_step h to p with (fun w : Array (Spot.Registered.Entry × String) =>
+          w = #[] ∨ ∃ cj, Spot.field? j "certified" = some cj) by
+        first
+          | exact .inl rfl
+          | exact .inl (Except.ok.inj (by assumption)).symm
+          | exact .inr ⟨_, by assumption⟩)
+    | (jp_step h to p with (fun _ => True) by trivial)
+    | head_zeta at h
+    | (have h' := bind_eq_ok.1 h; clear h; obtain ⟨_, _, h⟩ := h')
+    | throws h
+    | split at h
+  cases h
+  obtain hc | ⟨_, hc⟩ := (by assumption : _ = #[] ∨ ∃ cj, Spot.field? j "certified" = some cj)
+  · exact hc
+  · rw [hf] at hc
+    cases hc
 
 /-- **Parameters `OneStage.paramsOfJson` returns hold no certified entry**: it refuses parameters that name
 `certified` (`CERTIFIED_REFUSED`) and returns `paramsParsed`'s of the rest. -/
