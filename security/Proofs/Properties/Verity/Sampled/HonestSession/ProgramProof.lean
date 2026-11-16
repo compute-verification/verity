@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled
 public import Proofs.Flock.Bridge.SampledDesign
 public import Proofs.Flock.SessionLoop.Concrete.Inputs
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
-public import Proofs.Pouw.Period.Sort
+public import Proofs.Pouw.MonitoringPeriod.Sort
 public import Proofs.Flock.Recursive.ZkServerJson
 public import Std.Data.String.ToNat
 import Circuits.Program
@@ -80,10 +80,10 @@ theorem keys_law : Spot.keys? samplingDesign = some (Spot.sortStrings #["k", "la
 
 theorem sortStrings_kl : Spot.sortStrings #["k", "law"] = #["k", "law"] := by
   apply Array.toList_inj.1
-  exact Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted (as := #["k", "law"]) (by decide +kernel)
+  exact Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_of_sorted (as := #["k", "law"]) (by decide +kernel)
 
 theorem sortStrings_lawk : Spot.sortStrings #["law", "k"] = #["k", "law"] := by
-  have h := Properties.Pouw.Period.SecurityProofs.Sort.qsort_eq_of_perm (as := #["law", "k"]) (bs := #["k", "law"])
+  have h := Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_eq_of_perm (as := #["law", "k"]) (bs := #["k", "law"])
     (List.Perm.swap "k" "law" [])
   apply Array.toList_inj.1
   exact h.trans (congrArg Array.toList sortStrings_kl)

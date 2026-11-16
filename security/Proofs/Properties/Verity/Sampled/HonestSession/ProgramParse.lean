@@ -117,7 +117,7 @@ theorem inputId_not16' (s : String) (h : s = "Not16_v1") : Program.inputId? s = 
 
 /-- A node's keys, already ascending, sort to themselves: the sort is read by `qsort_of_sorted`, never run. -/
 theorem qsort_sorted (a : Array String) (h : a.toList.Pairwise (· < ·)) : a.qsort (· < ·) = a :=
-  Array.toList_inj.1 (Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted h)
+  Array.toList_inj.1 (Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_of_sorted h)
 
 /-- `Ty`'s equality test (well-founded) at the descriptor's two types. -/
 theorem tyBeq_v16 (a b : Program.Ty) (ha : a = .value 16) (hb : b = .value 16) : (a == b) = true := by

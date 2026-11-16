@@ -12,7 +12,7 @@ public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Proofs.Properties.Verity.Sampled.HonestSession.Delta
 import Proofs.Properties.Verity.Sampled.HonestSession.PortsFacts
-import Proofs.Pouw.Period.Sort
+import Proofs.Pouw.MonitoringPeriod.Sort
 import Base.Bytes
 import Flock.Scan
 import Flock.Canon
@@ -589,7 +589,7 @@ private theorem sortStrings_of_sorted {as : Array String} (h : as.toList.Pairwis
     Spot.sortStrings as = as := by
   show as.qsort (· < ·) = as
   calc as.qsort (· < ·) = (as.qsort (· < ·)).toList.toArray := rfl
-    _ = as.toList.toArray := by rw [Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted h]
+    _ = as.toList.toArray := by rw [Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_of_sorted h]
     _ = as := rfl
 
 /-- `sortStrings` equals `sortLt` of its list. `sortStrings = Array.qsort (· < ·)`, which the kernel cannot run
@@ -602,7 +602,7 @@ private theorem sortStrings_eq_sortLt (as : Array String) :
   show as.qsort (· < ·) = (sortLt as.toList).toArray
   have hl : (as.qsort (· < ·)).toList = sortLt as.toList :=
     List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => String.le_antisymm h1 h2)
-      (Properties.Pouw.Period.SecurityProofs.Sort.qsort_sorted as) (sortLt_sorted _)
+      (Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_sorted as) (sortLt_sorted _)
       ((Properties.Poub.qsort_toList_perm as _).trans (sortLt_perm _).symm)
   calc as.qsort (· < ·) = (as.qsort (· < ·)).toList.toArray := rfl
     _ = (sortLt as.toList).toArray := by rw [hl]
