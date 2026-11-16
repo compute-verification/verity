@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # The SASS opcode census of a node's binaries: every file with device code under the given roots, disassembled once with
-# `cuobjdump -sass` (one pass dumps every embedded architecture), its opcodes counted by `sass_count.py`. CPU only;
-# no GPU. Writes under $OUT:
+# `cuobjdump -sass` (one pass dumps every embedded architecture), its opcodes counted by `sass_count.py`, and the
+# opcodes the machine model doesn't price counted by `diff_menu.py record`. CPU only; no GPU. Writes under $OUT:
 #   toolkit.txt    cuobjdump and nvcc --version
 #   corpus.tsv     a line a binary kept: sha256, bytes, the architectures it holds, its path
 #   counts/*.json  `sass_count.py count` for each binary (every architecture it holds)
+#   failed.txt     the binaries whose disassembly or count failed, when any did
 #   census.json    `sass_count.py merge` of them all, a device family each; summary.txt its totals
 #
 #   research run --on MACHINE --cwd source -- bash benchmarks/pouw/sass_census/dump.sh [ROOT ...]
@@ -48,9 +49,11 @@ wc -l <"$OUT/corpus.tsv" >"$OUT/corpus.count"
 
 export CUOBJDUMP HERE OUT
 work() {
+  set -o pipefail
   IFS=$'\t' read -r sha bytes archs f <<<"$1"
   "$CUOBJDUMP" -sass "$f" 2>/dev/null \
-    | python3 "$HERE/sass_count.py" count --source "$(basename "$f")@$sha" >"$OUT/counts/${sha}.json"
+    | python3 "$HERE/sass_count.py" count --source "$(basename "$f")@$sha" >"$OUT/counts/${sha}.json" \
+    || printf '%s\t%s\n' "$sha" "$f" >>"$OUT/failed.txt"
 }
 export -f work
 # the largest binaries first, so the long ones start early; one cuobjdump pass a binary
@@ -58,3 +61,6 @@ sort -t$'\t' -k2,2nr "$OUT/corpus.tsv" | tr '\n' '\0' | xargs -0 -P "$JOBS" -I{}
 
 python3 "$HERE/sass_count.py" merge "$OUT"/counts/*.json >"$OUT/census.json"
 python3 "$HERE/sass_count.py" summary "$OUT/census.json" | tee "$OUT/summary.txt"
+ROOT=$HERE/../../..
+PYTHONPATH="$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 "$HERE/diff_menu.py" record "$OUT"
