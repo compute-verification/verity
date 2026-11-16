@@ -175,9 +175,10 @@ theorem valOver_congr_unheld (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ �
 
 /-- **A check that pins each checked input's run value pins the rows**: where the layout fits and the checked inputs are
 free inputs, the check that the run holds each gate `g ∈ chk` at `c g` meets `CheckedUnique`, at any program, partition,
-design, horizon and values `c`. A checked input the held values don't hold reads its advice, so two valid runs read
-one advice there; off `chk` their advice agrees already, and a held gate reads none: the two runs are one run on one
-advice, which `checkedUnique_empty` pins. -/
+design, horizon and values `c`. It covers the checks that pin each checked input to a constant and no other: a deployed
+check that lets a checked input vary with the run is not covered, and `CheckedUnique` for it is still open. A checked
+input the held values don't hold reads its advice, so two valid runs read one advice there; off `chk` their advice
+agrees already, and a held gate reads none: the two runs are one run on one advice, which `checkedUnique_empty` pins. -/
 theorem checkedUnique_pin {L S : ℕ} {C : Prog} (P : Partition) (d : Design) {lay : BoundaryGates L S} {n : ℕ}
     (hfits : lay.Fits C n) {chk : Finset ℕ} (hchk : chk ⊆ freeInputs C lay n) (c : ℕ → Bool) :
     CheckedUnique C P d lay n chk fun ρ => ∀ g ∈ chk, ρ g = c g := by
