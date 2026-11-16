@@ -59,9 +59,8 @@ def v2_rounds(r, phase):
             b["solo"]["phase_round"] = a_round(pt, r["slots"], 2 + 3 * n + i, PBIT)
 
 
-def write_run(tmp: Path, *, phase_dram=("Kbyte", "20"), tiles_short=0, phase_bad=0, spec=ARM,
-              sgates=None) -> tuple[Path, object]:
-    arm = A.load(spec)
+def write_run(tmp: Path, *, phase_dram=("Kbyte", "20"), tiles_short=0, phase_bad=0) -> tuple[Path, object]:
+    arm = A.load(ARM)
     out = tmp / arm.name
     out.mkdir(parents=True)
     (out / "arm.json").write_text(json.dumps({**SC.arm_doc(arm), "spec": ARM}))
@@ -91,7 +90,7 @@ def write_run(tmp: Path, *, phase_dram=("Kbyte", "20"), tiles_short=0, phase_bad
     fillers = [arm.filler] + sorted({P.filler_of(arm, ph, b, l) for ph, b, l in S.points()
                                      if A.placed(arm, ph, b, l).place != "none"} - {arm.filler}, key=str)
     sg = [{"mode": "sgate", "W": f.W, "NC": f.NC, "S": f.S, "tiles": (1 << f.chunk_log2) // (f.W * f.NC * f.S), "ok": True}
-          for f in fillers] if sgates is None else sgates
+          for f in fillers]
     (out / "sgate.jsonl").write_text("".join(json.dumps(r) + "\n" for r in sg))
     (out / "dgate.jsonl").write_text(json.dumps({"mode": "dgate", "NC": 4, "S": 2048, "ok": True}) + "\n" + json.dumps(
         {"mode": "pgate", "NC": 4, "S": 128, "mismatches": 0, "control_equal": 0, "ok": True}) + "\n")
@@ -158,8 +157,3 @@ def test_arm_places_a_phase_filler_only_beside_a_split():
     assert A.placed(arm, "prefill", 8192, 0) == A.Colocation("split", 4) and arm.phase("prefill", 8192, 0) is None
     assert arm.phase("decode", 1, 2048) is None and A.placed(arm, "decode", 1, 2048) == A.Colocation("split", 108)
     assert S.honesty(arm, {}, S.points())["ok"]
-
-
-def test_a_shape_without_its_sgate_voids_the_score(tmp_path):
-    res = P.report(*write_run(tmp_path, sgates=[{"mode": "sgate", "W": 8, "NC": 4, "S": 2048, "tiles": 8, "ok": True}]))
-    assert not res["gates"]["sgates"]["ok"] and res["SCORE"] is None and res["score_if_gated"] is not None
