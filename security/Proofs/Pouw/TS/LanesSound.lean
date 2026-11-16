@@ -41,15 +41,15 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # A leaf's 33 linked sessions realize one unit (the proof)
 
-`Accounting.SecurityProofs.TS.LeafLanesSound` is the group argument (`Accounting.TS.Group.group_soundAt`) at option A's
-33 statements (`Option (Fin 32)`) and their layer `leafLayer`, where `Accounting.Assumptions.TS.GroupRealizes` is proved
-(`Accounting.TS.Lanes.groupRealizes_lanes32`) rather than assumed. The lanes cover the leaf
-(`Accounting.TS.Lanes.cover`: cell `(i, j)` is lane `4 (i mod 8) + ⌊(j mod 8)/2⌋`'s at row slot `⌊i/8⌋` and column slot
+`ResourceAccounting.SecurityProofs.TS.LeafLanesSound` is the group argument (`ResourceAccounting.TS.Group.group_soundAt`) at option A's
+33 statements (`Option (Fin 32)`) and their layer `leafLayer`, where `ResourceAccounting.Assumptions.TS.GroupRealizes` is proved
+(`ResourceAccounting.TS.Lanes.groupRealizes_lanes32`) rather than assumed. The lanes cover the leaf
+(`ResourceAccounting.TS.Lanes.cover`: cell `(i, j)` is lane `4 (i mod 8) + ⌊(j mod 8)/2⌋`'s at row slot `⌊i/8⌋` and column slot
 `2⌊j/8⌋ + (j mod 2)`), so a leaf whose 33 statements each hold at their committed rows is served right
 (`unitServed_of`): `LeafChecks`, which the circuits computing their Definitions give (`leafChecks_of_computes`), gives
 each lane's `LaneOk` at a `K` the lanes bind at, which the leaf verifier's tile check gives (`k_of_check`), and the
 combine's `CombineOk`, and each lane's view agrees with the leaf on what `LaneOk` reads (`LaneAgrees`). The leaf is the
-one the lanes' committed rows decode to and the receipt the combine's (`Accounting.TS.Lanes.leafOf`, `receiptOf`): each
+one the lanes' committed rows decode to and the receipt the combine's (`ResourceAccounting.TS.Lanes.leafOf`, `receiptOf`): each
 A row as lane `4 (r mod 8)` decodes it, each B row as lane `⌊(j mod 8)/2⌋` does, each cell of the record as the one
 lane whose cell it is. The four lanes that read one A row (or one B row) read one registered tree at one row in full, so
 wherever the sessions' registrants' rows agree they decode it alike (`read_bits`, `decodes_of_checks`); the known
@@ -60,14 +60,14 @@ content (`knownOf`) is the `okKnown` form the group layer reads, its other known
 (`knownOf_okKnown`). The union bound over the 33 sessions gives `33 δ`.
 
 This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Pouw.TS.GroupSound`), whose imports make `X`
-a token, so `Proofs/Accounting.lean` imports it.
+a token, so `Proofs/ResourceAccounting.lean` imports it.
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open Accounting.TS.Checked Flock.SoundAtBridge
+open ResourceAccounting.TS.Checked Flock.SoundAtBridge
 
 /-- **The 32 lanes cover the leaf**: cell `(i, j)` is lane `4 (i mod 8) + ⌊(j mod 8)/2⌋`'s at row slot `⌊i/8⌋` and
 column slot `2⌊j/8⌋ + (j mod 2)`. -/
@@ -105,7 +105,7 @@ theorem unitServed_of {K nw : ℕ} {Pub : Type} {dq : List ℤ → ℤ}
     {sess : Option (Fin 32) → RowsSession} {decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub}
     {decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw} {pub : Pub}
     {parts : Fin 32 → Fin nw → BitVec 32} {receipt : Fin nw → BitVec 32} {L : Leaf K}
-    (hC : Accounting.Assumptions.TS.LeafChecks dq part sess decL decC) (hK32 : 32 ∣ K) (hK : K < 2 ^ 17)
+    (hC : ResourceAccounting.Assumptions.TS.LeafChecks dq part sess decL decC) (hK32 : 32 ∣ K) (hK : K < 2 ^ 17)
     (hL : ∀ l, LaneAgrees (decL (sess (some l)) (openedReg (sess (some l)))) L pub (parts l) l)
     (hCb : decC (sess none) (openedReg (sess none)) = ⟨parts, receipt, true⟩)
     (hV : ∀ k, ∃ vals : Fin (sess k).Circ.N → Bool,
@@ -130,9 +130,9 @@ theorem unitServed_of {K nw : ℕ} {Pub : Type} {dq : List ℤ → ℤ}
   · have hp : parts = fun l => part pub l (laneA L l) (laneB L l) := funext fun l => (hlane l).1
     exact hcomb.symm.trans (congrArg xorAll hp)
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes
 
-open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes
+open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes
 
 /-- **The decodes read the committed leaf, from acceptance**: where each session has a unit, its served roots
 registered, whose units read their one-row ports at their rows (`ReadsOwnRow`), whose registrants' rows agree at one
@@ -145,7 +145,7 @@ decode is those partials, its decoded receipt (`receiptOf`) and `ok = 1`. Lane `
 `4⌊l/4⌋`'s at that slot and its B row at slot `t` lane `l mod 4`'s, one row of one tree each lane reads in full
 (`read_bits`); its cells are its own (`cellLane_rowOf_colOf`, `laneAgrees_of`); its partials row is the combine's
 (`partials_bits`, `part_eq`); its known fields are the checks' (`laneKnownHolds_of_check`, `combKnownOk_of_check`). -/
-theorem Accounting.TS.Lanes.decodes_of_checks {K nw : ℕ} {sess : Option (Fin 32) → RowsSession}
+theorem ResourceAccounting.TS.Lanes.decodes_of_checks {K nw : ℕ} {sess : Option (Fin 32) → RowsSession}
     {salts : Option (Fin 32) → String → ByteArray} {pub : LanePub} {roots : String → _root_.Flock.Registered.Port}
     {place : String → String × ℕ}
     (hc : ∀ k, Flock.Registered.checkComplete (sess k).c (sess k).own = .ok () ∧
@@ -194,7 +194,7 @@ theorem Accounting.TS.Lanes.decodes_of_checks {K nw : ℕ} {sess : Option (Fin 3
     rw [decComb_ok, ho]
     rfl
 
-open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes in
+open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes in
 /-- **`GroupRealizes` at option A's 33 statements, from the circuits' lowerings** (the honest witness of
 `accounting-ts-group-realizes` at the 32 × 32 leaf, one chunk a lane): where the lanes' and the combine's circuits
 compute their pieces' compositions (`LaneLowers`, `CombineLowers`), the 33 statements realize the unit's served checks
@@ -202,11 +202,11 @@ compute their pieces' compositions (`LaneLowers`, `CombineLowers`), the 33 state
 (`knownOf`), the ports read in full (`readFull`) and the leaf verifier's file check at `ownOf`, past its tile check:
 `decodes_of_checks` gives the decodes' agreement with the leaf, `k_of_check` a `K` the lanes bind at, and
 `unitServed_of` the unit's checks from `LeafChecks` (`leafChecks_of_computes`). -/
-theorem Accounting.TS.Lanes.groupRealizes_lanes32 {K nw : ℕ} (sess : Option (Fin 32) → RowsSession)
+theorem ResourceAccounting.TS.Lanes.groupRealizes_lanes32 {K nw : ℕ} (sess : Option (Fin 32) → RowsSession)
     (salts : Option (Fin 32) → String → ByteArray) (pub : LanePub) (roots : String → _root_.Flock.Registered.Port)
     (place : String → String × ℕ) (hL : LaneLowers (servedTile K) (laneChain K nw) Pouw.H1Zy.zyDequant sess)
     (hC : CombineLowers sess (decC nw (servedTile K))) :
-    Accounting.Assumptions.TS.GroupRealizes sess (fun k => knownOf pub (salts k) k)
+    ResourceAccounting.Assumptions.TS.GroupRealizes sess (fun k => knownOf pub (salts k) k)
       (fun k => readFull (servedTile K) (k.map Fin.val)) (fun k => ownOf roots place (servedTile K) (k.map Fin.val))
       (PouwWindow.Lanes.Tile.check ⟨32, 32, K⟩ = .ok ()) (leafOf K (servedTile K) sess)
       (UnitServed (dqOf Pouw.H1Zy.zyDequant) (partOf (laneChain K nw)) pub (receiptOf nw (servedTile K) sess)) := by
@@ -218,25 +218,25 @@ theorem Accounting.TS.Lanes.groupRealizes_lanes32 {K nw : ℕ} (sess : Option (F
 
 /-- **Option A's known content is the group layer's form**: statement `k`'s known rows at the public inputs `P`
 (`knownOf`, `PouwWindow.Lanes.knownRows`) are its other known rows (lane `l`'s `admit` and `pub`, the combine's none)
-followed by its `o0` row 1 under its salt (`Accounting.TS.Group.okKnown`). -/
-theorem Accounting.TS.Lanes.knownOf_okKnown (P : LanePub) (salts : String → ByteArray) (k : Option (Fin 32)) :
-    ∃ pre, knownOf P salts k = Accounting.TS.Group.okKnown pre (salts "o0") := by
+followed by its `o0` row 1 under its salt (`ResourceAccounting.TS.Group.okKnown`). -/
+theorem ResourceAccounting.TS.Lanes.knownOf_okKnown (P : LanePub) (salts : String → ByteArray) (k : Option (Fin 32)) :
+    ∃ pre, knownOf P salts k = ResourceAccounting.TS.Group.okKnown pre (salts "o0") := by
   cases k with
   | none => exact ⟨#[], rfl⟩
   | some l =>
     exact ⟨#[("admit", #[(PouwWindow.Lanes.admitRow (List.ofFn P.admit), salts "admit")]),
       ("pub", #[(PouwWindow.Lanes.pubRow P.salt P.position P.roots l.val, salts "pub")])], rfl⟩
 
-open Accounting.TS.Checked Accounting.TS.Lanes in
-/-- **A leaf's 33 linked Flock sessions realize one unit** (`Accounting.Guarantees.TS.LeafLanesSound`):
-`Accounting.TS.Group.group_soundAt` at `leafLayer` and its 33 statements, at the known content of the path's public
+open ResourceAccounting.TS.Checked ResourceAccounting.TS.Lanes in
+/-- **A leaf's 33 linked Flock sessions realize one unit** (`ResourceAccounting.Guarantees.TS.LeafLanesSound`):
+`ResourceAccounting.TS.Group.group_soundAt` at `leafLayer` and its 33 statements, at the known content of the path's public
 inputs (`knownOf`, which names `o0`), the ports read in full at the layout (`PouwWindow.Lanes.readFull`), the leaf
 verifier's check of each file at `ownOf` (`roots`, `place`) and of the tile (`PouwWindow.Lanes.Tile.check`, its group
 check), the served roots registered by the reads built from `own` and the one-read check
 (`RowsSession.servedRegistered_canon`), and `GroupRealizes` from the 33 circuits' lowerings (`groupRealizes_lanes32`). -/
-theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound := by
+theorem ResourceAccounting.SecurityProofs.TS.LeafLanesSound : ResourceAccounting.Guarantees.TS.LeafLanesSound := by
   intro Ω _ S nπ K nw sess₀ op sess out salts pub roots place right δ hCR hSamplingDesign hδ hδ0 hL hC
-  have h := Accounting.TS.Group.group_soundAt
+  have h := ResourceAccounting.TS.Group.group_soundAt
     (leafLayer sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
       (fun _ _ _ k => PouwWindow.Lanes.readFull (servedTile K) (k.map Fin.val))
       (fun x w i k => PouwWindow.Lanes.ownOf (roots x w i) (place x w i) (servedTile K) (k.map Fin.val))

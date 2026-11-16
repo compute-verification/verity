@@ -49,9 +49,9 @@ words times their odd IMAD multipliers, which `mul_odd_injective` undoes (`fx1_r
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.DuoCPLemmas
+namespace ResourceAccounting.SecurityProofs.TS.DuoCPLemmas
 
-open Accounting.TS Pouw.Receipt Pouw.ReceiptProofs
+open ResourceAccounting.TS Pouw.Receipt Pouw.ReceiptProofs
 
 theorem xor_cancel {n : ℕ} {a c x y : BitVec n} (h : a ^^^ x ^^^ c = a ^^^ y ^^^ c) : x = y := by
   apply BitVec.eq_of_getLsbD_eq
@@ -185,4 +185,4 @@ theorem fx1_right_of_same {Ω U : Type} {n S W C H : ℕ} (D : Fx1CPUnits Ω U n
     (D.pos ω u) (fun t => D.value ω u t * (D.m ω u t (D.pos ω u t)).1) hw (h u) s hs
   exact mul_odd_injective (D.m ω u s (D.pos ω u s)) (a₁ := D.value ω u s) (a₂ := D.honest ω u s (D.pos ω u s)) e
 
-end Accounting.SecurityProofs.TS.DuoCPLemmas
+end ResourceAccounting.SecurityProofs.TS.DuoCPLemmas

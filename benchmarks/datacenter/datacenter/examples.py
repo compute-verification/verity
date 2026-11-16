@@ -3,7 +3,7 @@
 `rtx_node` is one of our two RTX PRO 6000 nodes as both read with `nvidia-smi topo -m`, `lspci -tv` and `lsmem`:
 two sockets, each an Intel Xeon 6776P with its host DRAM and a PCIe root complex (a switch); eight RTX PRO 6000 GPUs,
 GPUs 0–3 on socket 0 and 4–7 on socket 1, each on a root port of its own; one NIC, on socket 1. Its device model is
-`Accounting.Device`'s one Python mirror, `verity.protocols.accounting.poub.verifier.timing`: a GPU's S_chip, read and write
+`ResourceAccounting.Device`'s one Python mirror, `verity.protocols.resource_accounting.memory.poub.verifier.timing`: a GPU's S_chip, read and write
 rates, SHA-512 oracle and squaring ceilings, and half the host's on each socket, so the node sums to
 `ledger.Node.stated(timing.RTX_PRO_6000_NODE)`. Beside them: each GPU's memory and its rate for each kind of work
 (`logical.work`: tensor-core multiply-adds by precision at the dense datasheet peaks `benchmarks/census/hardware.json` names; CUDA-core word
@@ -23,7 +23,7 @@ from __future__ import annotations
 import math
 
 from verity.device import load_card, load_node, number
-from verity.protocols.accounting.poub.verifier import timing as T
+from verity.protocols.resource_accounting.memory.poub.verifier import timing as T
 
 from .physical import Assumption, Cadence, Datacenter, DeviceEntry, Fleet, LinkEntry, Zone
 

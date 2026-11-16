@@ -30,7 +30,7 @@ namespace InferenceOnlyCheck.Properties.Record
 open Lean (Json)
 open Flock.Program (Prog Defn)
 open Spot.RecordText (Row Held)
-open Accounting
+open ResourceAccounting
 
 /-- **A pinned read at the verdict bit `ok`, as a check holds it and its circuit file lays it out**: the hypotheses of
 `PinnedReadBinds`, in its order, with the verdict bit `ok`. The check reads the record and holds its row `r` as an

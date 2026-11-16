@@ -86,6 +86,9 @@ range, so each profiler session stays small, then `--write-routes` (`route_table
                                                      # launch served
     $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --write-routes SCANS/*/scan.json --run-record ART \\
         --out verity_vllm/definitions/registry
+
+That table holds these scans' shapes alone.  A shape another capture scans (GLM-5.3's MTP eh_proj,
+`glm53_mtp_eh_proj_capture_gpu --add-routes`) is added after it, under its own run record in `route_records`.
 """
 from __future__ import annotations
 
@@ -923,7 +926,8 @@ def route_table(scans: list[dict[str, Any]], run_record: str) -> dict[str, Any]:
 
 def route_table_text(table: dict[str, Any]) -> str:
     """`cublas_routes.json`'s layout: the header fields one a line, then one line of runs per shape."""
-    head = "".join(f'  "{k}": {json.dumps(table[k])},\n' for k in ("schema", "run_record", "m_max", "conditions"))
+    head = "".join(f'  "{k}": {json.dumps(table[k])},\n' for k in ("schema", "run_record", "route_records", "m_max", "conditions")
+                   if k in table)
     rows = ",\n".join(f'    "{k}": {json.dumps(v, separators=(",", ":"))}' for k, v in table["routes"].items())
     return "{\n" + head + '  "routes": {\n' + rows + "\n  }\n}\n"
 

@@ -42,16 +42,16 @@ import Proofs.Flock.Soundness.Game
 /-!
 # A checked unit's proof layer is sound through its Flock sessions (the proof)
 
-`Accounting.SecurityProofs.TS.CheckedSessionSound`. `AcceptedLive` holds by the layer's definition. `ServedChecksHold`
+`ResourceAccounting.SecurityProofs.TS.CheckedSessionSound`. `AcceptedLive` holds by the layer's definition. `ServedChecksHold`
 takes the value layer itself as the relation's assignment: `RowsSession.RowsAt` says the circuit's evaluation agrees
 with it on each sampled proof block's wires. `ServedRootsLinked` at `0` is the window's sampling design at an event of probability `0` in
 every session's game: under `kd = n` the sample is every unit (`RowsSession.sample_full`, from `subset_spec`), so at an
 accepted outcome whose units are right `Flock.SecurityProofs.ServedRowsLinked` makes every registered read of the
 value layer the committed row (`RowsSession.servedEv_false`). `SoundAt δ` is then
-`Accounting.SecurityProofs.TS.SessionSoundAt` at `δs = 0`.
+`ResourceAccounting.SecurityProofs.TS.SessionSoundAt` at `δs = 0`.
 
 This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Pouw.TS.SessionSound`), whose imports make `X`
-a token, so `Proofs/Accounting.lean` imports it.
+a token, so `Proofs/ResourceAccounting.lean` imports it.
 -/
 
 @[expose] public section
@@ -81,7 +81,7 @@ theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 
 
 end FlockSoundness.Audit.SamplingDesign
 
-namespace Accounting.TS.Checked
+namespace ResourceAccounting.TS.Checked
 
 open Flock.SoundAtBridge
 
@@ -97,14 +97,14 @@ noncomputable def rowsOn (P : RowsSession → Prop) (s : RowsSession) (vals : Fi
     ℕ → ℕ → Option Bool :=
   if P s then rowsReg s vals else openedReg s
 
-end Accounting.TS.Checked
+end ResourceAccounting.TS.Checked
 
 namespace Flock.SoundAtBridge
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkReg
 open FlockSoundness.Discharge.Tables (LiveOutJ)
-open Accounting.TS.Checked
+open ResourceAccounting.TS.Checked
 open scoped ENNReal
 
 /-- A permutation of `ℕ` that keeps `[0, n)` maps `[0, n)` onto it. -/
@@ -201,28 +201,28 @@ end RowsSession
 
 end Flock.SoundAtBridge
 
-open Accounting.TS Accounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
+open ResourceAccounting.TS ResourceAccounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
 /-- **A checked unit's proof layer is sound at `δ` through its Flock sessions**
-(`Accounting.Guarantees.TS.CheckedSessionSound`). -/
-theorem Accounting.SecurityProofs.TS.CheckedSessionSound : Accounting.Guarantees.TS.CheckedSessionSound := by
+(`ResourceAccounting.Guarantees.TS.CheckedSessionSound`). -/
+theorem ResourceAccounting.SecurityProofs.TS.CheckedSessionSound : ResourceAccounting.Guarantees.TS.CheckedSessionSound := by
   intro Ω _ S nπ sess out ok right δ hCR hSamplingDesign hk hS hok hδ hδ0
-  have hAcc : Accounting.Assumptions.TS.AcceptedLive (checkedLayer sess out ok right) sess out :=
+  have hAcc : ResourceAccounting.Assumptions.TS.AcceptedLive (checkedLayer sess out ok right) sess out :=
     fun _ _ _ h => h
-  have hChk : Accounting.Assumptions.TS.ServedChecksHold (checkedLayer sess out ok right) sess out rowsReg :=
+  have hChk : ResourceAccounting.Assumptions.TS.ServedChecksHold (checkedLayer sess out ok right) sess out rowsReg :=
     fun x w i _ hD => ⟨hok x w i, (sess x w i).Xv, rfl, fun u hu g hg => ((hD u hu).2 g hg).2.symm⟩
-  have hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkedLayer sess out ok right) sess out rowsReg 0 := by
+  have hLink : ResourceAccounting.Assumptions.TS.ServedRootsLinked (checkedLayer sess out ok right) sess out rowsReg 0 := by
     intro w i
     refine (hSamplingDesign w i fun s o => s.ServedEv o).trans (avg_le _ le_rfl fun x => le_of_eq ?_)
     exact (congrArg ENNReal.toReal (RowsSession.prob_servedEv (sess x w i) (hk x w i) (hS x w i))).trans
       ENNReal.toReal_zero
   refine ⟨hAcc, hChk, hLink, ?_⟩
   simpa only [zero_add] using
-    Accounting.SecurityProofs.TS.SessionSoundAt (checkedLayer sess out ok right) sess out rowsReg 0 δ hCR hAcc hSamplingDesign
+    ResourceAccounting.SecurityProofs.TS.SessionSoundAt (checkedLayer sess out ok right) sess out rowsReg 0 δ hCR hAcc hSamplingDesign
       hChk hLink hδ hδ0
 
-namespace Accounting.TS.Checked
+namespace ResourceAccounting.TS.Checked
 
-open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
@@ -243,27 +243,27 @@ the `ok` port (`PortsOk`) and registered served roots asked only of a session `P
 and the committed rows where it fails, so nothing is asked there (`prob_servedOn`). -/
 theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String) (P : RowsSession → Prop) (δ : ℝ)
-    (hCR : ∀ x w i, (sess x w i).CR) (hSamplingDesign : Accounting.Assumptions.TS.ExecutionPhaseDesign sess out)
+    (hCR : ∀ x w i, (sess x w i).CR) (hSamplingDesign : ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign sess out)
     (hP : ∀ s, P s → PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)
     (hδ : ∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ) :
     (checkedOnLayer sess out ok P).SoundAt δ := by
-  have hAcc : Accounting.Assumptions.TS.AcceptedLive (checkedOnLayer sess out ok P) sess out :=
+  have hAcc : ResourceAccounting.Assumptions.TS.AcceptedLive (checkedOnLayer sess out ok P) sess out :=
     fun _ _ _ h => h
-  have hChk : Accounting.Assumptions.TS.ServedChecksHold (checkedOnLayer sess out ok P) sess out (rowsOn P) := by
+  have hChk : ResourceAccounting.Assumptions.TS.ServedChecksHold (checkedOnLayer sess out ok P) sess out (rowsOn P) := by
     intro x w i _ hD
     show P (sess x w i) → _
     intro hp
     have e : rowsOn P (sess x w i) (sess x w i).Xv = rowsReg (sess x w i) (sess x w i).Xv := if_pos hp
     rw [e]
     exact ⟨(hP _ hp).1, (sess x w i).Xv, rfl, fun u hu g hg => ((hD u hu).2 g hg).2.symm⟩
-  have hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 := by
+  have hLink : ResourceAccounting.Assumptions.TS.ServedRootsLinked (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 := by
     intro w i
     refine (hSamplingDesign w i fun s o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.IncorrectAt u ∧ s.RowsAt o u) ∧
       rowsOn P s s.Xv ≠ openedReg s).trans (avg_le _ le_rfl fun x => le_of_eq ?_)
     exact (congrArg ENNReal.toReal (RowsSession.prob_servedOn (sess x w i) P
       (fun hp => ⟨(hP _ hp).2.1, (hP _ hp).2.2⟩))).trans ENNReal.toReal_zero
   simpa only [zero_add] using
-    Accounting.SecurityProofs.TS.SessionSoundAt (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 δ hCR hAcc hSamplingDesign
+    ResourceAccounting.SecurityProofs.TS.SessionSoundAt (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 δ hCR hAcc hSamplingDesign
       hChk hLink hδ hδ0
 
-end Accounting.TS.Checked
+end ResourceAccounting.TS.Checked

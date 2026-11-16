@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/poub/prover/p2_stage/stage.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py").parent))
 import layout as L
 
 _JOB: dict = {}
@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout", type=Path, required=True)
     ap.add_argument("--weights", type=Path, required=True)
     ap.add_argument("--w", type=Path, help="the stream's bytes at their offsets (else the generator's)")
-    ap.add_argument("--generator", default="verity.protocols.accounting.pous.prover.served_weights")
+    ap.add_argument("--generator", default="verity.protocols.resource_accounting.memory.pous.prover.served_weights")
     ap.add_argument("--shape", default="h200")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1")
     store = ap.add_mutually_exclusive_group(required=True)

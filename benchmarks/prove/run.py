@@ -12,8 +12,9 @@ file).
     verity bench prove lean-verify --lean VERIFIER --proof TREE      the Lean verifier timed on one kept proof, as the
                                                                      record the table's Lean verifier figures read
     verity bench prove layers --flock DIR|RUN --zk DIR|RUN --sampling DIR|RUN --recursion DIR|RUN
-                                                                     the proof system by layer, a row each from its
-                                                                     run's output (`verity-bench prove-layers`)
+                                                                     the proof benchmark by layer, the benchmark result
+                                                                     for each layer read from its run's output
+                                                                     (`verity-bench prove-layers`)
 
 Under a research run, `--system spot` also writes `METRICS` into the run's result (`prove_records.record`), and `layers`
 writes `LAYER_METRICS`.

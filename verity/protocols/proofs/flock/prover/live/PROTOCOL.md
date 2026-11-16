@@ -502,7 +502,7 @@ to its one tree, and the pads trees take `next_id() ≥ 1`.
 
 **Several tables per session** (the public-circuit ZK proof's §2.3) are on the CPU prover, `--session-tables J`; the
 device prover proves one table per session and refuses J above 1:
-- the sample's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
+- the sample's proof blocks split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
   table's Σ. The server refuses at configuration a Bernoulli sampling design (its count is random), a count J does not
   divide, and tables `--zk` cannot prove. The session's sampling design is the record's `unit_draw`: each table's
   header carries only its part as a subset sample;
@@ -620,7 +620,7 @@ outcome of each session, and is not capped over a monitoring period (`Flock.Guar
 What the deferral costs: a bad worker is caught only at its session's `Finish`, one session's latency later than at its
 first bad message, and the rest of a doomed session's device and ZK server work is spent for nothing (the ZK server's share
 is the Lean finish's opening and inner proof, which it runs on every session anyway). Timing (when a message leaves) is not in
-this rule; the network certifier covers it.
+this rule; the network attester covers it.
 
 **A worker that fails is a failed check like any other.** The device runs on a thread of its own (`zk_server::run_worker`),
 and the ZK server serves its rounds and its `Commit` on the session's thread, so where a rep ends never depends on its worker.
@@ -810,7 +810,7 @@ under the ZK server's own OS user, which no worker and no serving stack shares (
 | `Commit`'s tables and their order | constant | the pinned schedule's `roots`, each with its node count, in the schedule's order (their names, sorted: `Flock.ZkServer.Schedule.tables`); the ZK server refuses any other order, so the order carries nothing of the prover's |
 | a round's caps (its `BYTES` frames that commit a tree) | salted, or counted | a fresh top as the roots, one fresh salt per node; a copy of a level-0 top committed at `Commit` (the rep's binding round's cap, which must be `root_B`, and Ligerito's first absorb) is counted (`level0`), never committed again. Copies are by position, never by value: the round's first `level0` caps, as the schedule names them, must each be its table's top committed at `Commit`, and every other cap is a fresh top, whatever its value (`Flock.ZkServer.copiesOf`) |
 | a round's free message | salted | `c_k`, its one row committed under a fresh salt (as before) |
-| `Register` | constant | the ZK server answers it itself with the verifier's sample, every unit of the population (`rec_live --draw FILE`, `rec_live.full_draw`: the stratified sampling design at `K = N`, so each stratum's `k` is its size), and the record holds that sample as `unit_draw` from the session's start; `verify --stratified N --program --partition` derives the same sample and refuses any other |
+| `Register` | constant | the ZK server answers it itself with the verifier's sample, every proof block of the population (`rec_live --draw FILE`, `rec_live.full_draw`: the stratified sampling design at `K = N`, so each stratum's `k` is its size), and the record holds that sample as `unit_draw` from the session's start; `verify --stratified N --program --partition` derives the same sample and refuses any other |
 | statement digest, labels, domain, nonces | dropped | public constants or functions of the hidden statement; never forwarded |
 | `Link`'s `y` | constant `0` | the schedule fixes its length (`link.y` elements of 16 bytes); the ZK server refuses any other byte length, and any nonzero byte |
 | the order of `Hello`, `Commit`, `Link` and `Finish` | constant | the ZK server itself refuses a `Commit` before `Hello` or after the first, a `Link` before `Commit` or after the first, and a `Finish` before the schedule's last round (counted from its own streams, never by reading the challenger), each before any call on the challenger: a request out of its place reaches the challenger as a plain stop at the same point |

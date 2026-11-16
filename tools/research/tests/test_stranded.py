@@ -61,7 +61,7 @@ def shard(minutes: int = 40, run: str = "r-shard", **kw) -> dict:
 # ---- a place --------------------------------------------------------------------------------------------------------------
 
 def test_a_shard_in_one_line_with_a_check_slot_free_elsewhere_is_stranded():
-    """The class: a candidate's shard waits on cpu-7's slot while a train slot stands free on another machine."""
+    """The class: a candidate's shard waits on cpu-7's slot while a candidate slot stands free on another machine."""
     docs = {A: machine(check=pool(slot("t", "0-95", held=True, trains=True, mem=520), waiters=(shard(),))),
             B: machine(check=pool(slot("t", "0-95", trains=True, mem=400))), C: machine()}
     doc = stranded.analyse(docs, T0, CPUS)
@@ -108,7 +108,7 @@ def test_none_of_these_is_a_place(there, job, why):
 
 def test_an_idle_trains_slot_over_the_same_cores_leaves_a_lanes_check_its_lane_slot():
     """Overlapping idle check slots are one place among those that fit the job: a lane's check, which takes no only=trains
-    slot, still finds the lane slot under an idle train slot."""
+    slot, still finds the lane slot under an idle candidate slot."""
     docs = {A: machine(check=pool(slot("c", "0-15", held=True), waiters=(waiter(40, "r-lane", by="proofs"),))),
             B: machine(check=pool(slot("t", "0-95", trains=True, mem=400), slot("c", "0-15")))}
     (w,) = stranded.analyse(docs, T0, CPUS)["waits"]
