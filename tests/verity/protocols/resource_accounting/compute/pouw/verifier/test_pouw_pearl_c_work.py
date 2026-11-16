@@ -520,15 +520,15 @@ def test_census_row_inert_share_leaves_k_from_k_min_unchanged():
         "credit)")
 
 
-def test_the_sample_coin_must_open_against_the_epochs_commitment_after_the_commitment():
+def test_the_sampling_coin_must_open_against_the_epochs_commitment_after_the_commitment():
     """The sampling coin is the execution phase's, asked of the challenger once the verifier recorded the transcript and records roots
-    (`sample_after`): a foreign challenger's coin, a coin not under the commitment, the execution phase's salt coin, a coin opened
+    (`flip_after`): a foreign challenger's coin, a coin not under the commitment, the execution phase's salt coin, a coin opened
     before the commitment, another execution phase's coin and an execution phase with no coin commitment are each refused before any tile
     is opened; the honest challenger's coin selects the tiles `sample_key` gives."""
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     digest = W.records_root(epoch.salt, epoch.weights_root, SPLITS, records)
-    after = CW.sample_after(tr.commitment.root, digest)
+    after = CW.flip_after(tr.commitment.root, digest)
     honest = E.challenger().open("draw", after)
     out = CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
     want = CW.sample(S, records, CW.sample_key(honest.coin, tr.commitment.root, digest, epoch.salt), 8)

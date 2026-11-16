@@ -451,7 +451,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     if name == "never-received":
         received = [rng.randbytes(64) for _ in log]
 
-    def sample_after(rec) -> bytes:
+    def flip_after(rec) -> bytes:
         opened = rec.openings if name != "never-received" else [
             dataclasses.replace(o, after=bytes.fromhex(x["root"])) for o, x in zip(rec.openings, log)]
         d["rounds"] = [{**x, "coin": o.to_json()} for x, o in zip(log, opened)]
@@ -459,7 +459,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
         return bytes.fromhex(d["draw"]["root"])
 
     s = rc.Session(rng, ch, received, salt=None, sid=sid, leaf=leaf)
-    root = sample_after(s.rounds)
+    root = flip_after(s.rounds)
     dch = Wd.sample_challenger(ch.commitment.epoch, rng.randbytes)
     ds = rc.Session(rng, dch, [], salt=None, sid=rc.session_id(rng), leaf=sample_leaf,
                     sample=None if name == "no-sample" else (lambda _: rng.randbytes(64)) if name == "sample-after-other"
@@ -1058,7 +1058,7 @@ SAMPLED_NAMES = ["budget", "coin-form", "args-form", "layout-form", "named-twice
 SAMPLED_KEYS = ("coin", "stream", "registration", "receipt", "layout", "k")
 
 
-def _sample_coin(rng: random.Random) -> dict:
+def _flip_coin(rng: random.Random) -> dict:
     """A live opening of an execution phase's sampling coin as the challenger gives it (`challenger.LiveOpening`), at random bytes:
     `credit._window_sampled` reads only its coin."""
     return Ch.LiveOpening(rng.randrange(1 << 20), Wd.SAMPLE, 0, bytes.fromhex(_hex(rng)), bytes.fromhex(_hex(rng)),
@@ -1072,7 +1072,7 @@ def window_sampled_instance(rng: random.Random, name: str = "honest") -> dict:
     lay, j10r = layout(rng), rng.random() < 0.5
     if j10r:
         lay["m"] = 2 * lay["tile"][0]
-    d = {"window": {"root": _hex(rng)}, "draw": {"coin": _sample_coin(rng), "root": _hex(rng), "receipts": _hex(rng)},
+    d = {"window": {"root": _hex(rng)}, "draw": {"coin": _flip_coin(rng), "root": _hex(rng), "receipts": _hex(rng)},
          "descriptor": descriptor(rng, lay, j10r=j10r), "k": _k(rng, lay)}
     match name:
         case "honest":

@@ -15,8 +15,8 @@ random row and tile-digest trees under `sha256`, `sha512` and `hm96-sha512` (row
 size, missing or short salt keys); openings of those trees, honest and tampered (value, path, position, root, count, schema,
 path and value lengths); execution phase coin openings from a `Challenger`, honest and tampered to hit each of `coin_reason`'s
 refusals and each refusal of the JSON forms; `salt_of` and `Epoch.unverified`'s salt over random coins, seeds (empty among
-them), execution phases and weights' roots; `Epoch.start`'s salt and `sample_coin`'s coin from honest and tampered openings, and a sample
-with no coin commitment; the audit, sample and replay keys and `sample_after`; and the clear audit's work-weighted samples
+them), execution phases and weights' roots; `Epoch.start`'s salt and `flip_coin`'s coin from honest and tampered openings, and a sample
+with no coin commitment; the audit, sample and replay keys and `flip_after`; and the clear audit's work-weighted samples
 (``verity/protocols/resource_accounting/compute/pouw/prover/clear``: `Sampled.select`'s and `clear_work.sample`'s), each run as written with only its tickets given
 (`tickets` patched), over ticket lists with zeros, totals past 64 bits, none, or all zero.
 """
@@ -282,11 +282,11 @@ def generate(seed: int = 0) -> list[dict]:
         add("epoch_salt", {"commitment": cj, "opening": oj, "weight_roots": [[k, v.hex()] for k, v in roots.items()]},
             refusable(start))
 
-    def sample_coin_case(cj: dict | None, oj: dict, after: bytes) -> None:
+    def flip_coin_case(cj: dict | None, oj: dict, after: bytes) -> None:
         def sample() -> dict:
             c = None if cj is None else coins.CoinCommitment.from_json(cj)
             o = coins.CoinOpening.from_json(oj)
-            coin, why = CA.sample_coin(SimpleNamespace(coins=c), SimpleNamespace(open=lambda _label, _after: o), after)
+            coin, why = CA.flip_coin(SimpleNamespace(coins=c), SimpleNamespace(open=lambda _label, _after: o), after)
             return {"ok": coin.hex()} if why is None else {"reason": why}
         add("draw_coin", {"commitment": cj, "opening": oj, "after": after.hex()}, refusable(sample))
 
@@ -305,14 +305,14 @@ def generate(seed: int = 0) -> list[dict]:
         epoch_salt_case(cj, salt_op | {"coin": flip(bytes.fromhex(salt_op["coin"])).hex()}, roots)
         epoch_salt_case(cj, salt_op | {"path": [rng.randbytes(33).hex()]}, roots)
         epoch_salt_case(cj, salt_op, roots | {10**6 + 1: rng.randbytes(64)})
-        sample_coin_case(cj, sample_op, wr)
-        sample_coin_case(None, sample_op, wr)
-        sample_coin_case(cj, sample_op, flip(wr))
-        sample_coin_case(cj, salt_op, wr)
-        sample_coin_case(cj, other_sample, wr)
-        sample_coin_case(other.commitment.to_json(), other_sample, wr)
-        sample_coin_case(cj, sample_op | {"salt": flip(bytes.fromhex(sample_op["salt"])).hex()}, wr)
-        sample_coin_case(cj, sample_op | {"path": [rng.randbytes(65).hex()]}, wr)
+        flip_coin_case(cj, sample_op, wr)
+        flip_coin_case(None, sample_op, wr)
+        flip_coin_case(cj, sample_op, flip(wr))
+        flip_coin_case(cj, salt_op, wr)
+        flip_coin_case(cj, other_sample, wr)
+        flip_coin_case(other.commitment.to_json(), other_sample, wr)
+        flip_coin_case(cj, sample_op | {"salt": flip(bytes.fromhex(sample_op["salt"])).hex()}, wr)
+        flip_coin_case(cj, sample_op | {"path": [rng.randbytes(65).hex()]}, wr)
 
     for _ in range(COUNTS["key"]):
         which = rng.choice(["audit", "draw", "replay", "after"])
@@ -326,7 +326,7 @@ def generate(seed: int = 0) -> list[dict]:
                 return CW.sample_key(source, tr, rd, salt).value.hex()
             if which == "replay":
                 return CW.replay_key(CW.RecordedSample(rnd, source), tr, rd, salt).value.hex()
-            return CW.sample_after(tr, rd).hex()
+            return CW.flip_after(tr, rd).hex()
         add("key", {"which": which, "source": source.hex(), "transcript": tr.hex(), "records": rd.hex(), "salt": salt.hex(),
                     "round": rnd}, _outcome(key))
 

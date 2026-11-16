@@ -737,7 +737,7 @@ def run(a: argparse.Namespace) -> dict:
         openings = [Ch.LiveOpening.from_json(r["opening"]) for r in round_log]
         commitment = Ch.LiveCommitment.from_json(cs.commitment.to_json())
         sample_after = receipts_root(window, calls)
-        sample = cs.sample(sample_after)
+        sample = cs.flip(sample_after)
         cs.close()
         rng = gate_rng(commitment, sample.coin, sample_after)
         gate_picks = {"from": f"the sampling coin ({cs.label}), opened after the receipts root", "domain": GATE_SAMPLE_DOMAIN,

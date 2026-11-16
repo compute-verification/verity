@@ -143,7 +143,7 @@ def verified_instance(rng: random.Random, name: str = "honest") -> dict:
     files = {f"k{k}": C._hex(rng) for k in sorted({k for _lin, k, _n in lay["linears"]})}
     case = {"statements": statements, "files": files, "descriptor": C.descriptor(rng, lay, prefix), "entries": entries,
             "window": C._hex(rng), "units": units, "steps": steps, "salt": C._hex(rng),
-            "draw": {"root": C._hex(rng), "coin": C._sample_coin(rng)}, "runs": None}
+            "draw": {"root": C._hex(rng), "coin": C._flip_coin(rng)}, "runs": None}
     s = rng.choice(statements)
     match name:
         case "honest" | "error" | "refused" | "rejected" | "pub-other" | "ok-other" | "ok-none" | "unit-other":
@@ -255,7 +255,7 @@ def lanes_instance(rng: random.Random, name: str = "lanes-honest") -> dict:
         reads |= {table for v, (table, _row) in Cr.leaf_place(layout, shape, u, steps).items() if v != LL.PARTIALS}
     entries = [{"value": v, "root": C._hex(rng)} for v in sorted(reads)]
     rng.shuffle(entries)
-    sample = {"root": C._hex(rng), "coin": C._sample_coin(rng)}
+    sample = {"root": C._hex(rng), "coin": C._flip_coin(rng)}
     lanes = (r // LL.LANE_ROWS) * (c // LL.LANE_COLS)
     produced, openings = [], {}
     for u in leaves:

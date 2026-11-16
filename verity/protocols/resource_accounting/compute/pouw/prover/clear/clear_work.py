@@ -47,7 +47,7 @@ package's as `verity.protocols.resource_accounting.compute.pouw.prover.clear.cle
   claimed.
 * **The samples (F8)** are keyed by the epoch's sampling coin, through `verity.commitments.randomness.derive`.
   - `audit` asks the challenger for the coin once the verifier has recorded the prover's commitment (the transcript root
-    and the records root, `sample_after`), and checks it against the epoch's coin commitment (`verity.protocols.resource_accounting.compute.pouw.verifier.coins`).
+    and the records root, `flip_after`), and checks it against the epoch's coin commitment (`verity.protocols.resource_accounting.compute.pouw.verifier.coins`).
     A coin that doesn't open against it, or that was opened after anything else, is refused.
   - `audit_replay` keeps the unverified sample of a recorded run (`RecordedSample`), for replays whose samples are Fiat–Shamir
     on the commitment. It supports no claim about the sample.
@@ -71,10 +71,10 @@ from math import floor, lcm
 
 if __package__:
     from .clear_audit import (Audit, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash,
-                              sample_coin)
+                              flip_coin)
 else:
     from clear_audit import (Audit, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash,
-                             sample_coin)
+                             flip_coin)
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, opened_value
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
@@ -89,7 +89,7 @@ from verity.commitments.domains import POUW_PEARL_C_SAMPLING, POUW_PEARL_C_SAMPL
 from verity.commitments.randomness import Key, derive
 
 SAMPLE_DOMAIN = POUW_PEARL_C_SAMPLING
-SAMPLE_AFTER_TAG = POUW_PEARL_C_SAMPLING_AFTER
+FLIP_AFTER_TAG = POUW_PEARL_C_SAMPLING_AFTER
 
 
 #: V-EX's count limits: at most ⌈m/64⌉ voluntary A rows per unit and ⌈n/64⌉ voluntary B rows per weight.
@@ -358,9 +358,9 @@ class RecordedSample:
     value: bytes
 
 
-def sample_after(transcript_root: bytes, records_digest: bytes) -> bytes:
+def flip_after(transcript_root: bytes, records_digest: bytes) -> bytes:
     """What the verifier records before the challenger opens the sampling coin: the transcript root and the records root."""
-    return tagged(SAMPLE_AFTER_TAG, transcript_root, records_digest)
+    return tagged(FLIP_AFTER_TAG, transcript_root, records_digest)
 
 
 def sample_key(coin: bytes, transcript_root: bytes, records_digest: bytes, salt: bytes) -> Key:
@@ -433,15 +433,15 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
           split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
     """Check the splits and the records, sample t tiles by the records' credit with the epoch's sampling coin, open one tile
     per excluded row, and accept iff every opened tile passes `check_sampled`.
-    - The verifier asks `challenger` for the sampling coin only once it has recorded the commitment (`sample_after`), and the
-      coin must open against the epoch's coin commitment (`clear_audit.sample_coin`).
+    - The verifier asks `challenger` for the sampling coin only once it has recorded the commitment (`flip_after`), and the
+      coin must open against the epoch's coin commitment (`clear_audit.flip_coin`).
     - `split_check(weight, split)` recomputes S from the calibration data by the pinned rule, and is required when any S
       is nonempty.
     - `tile_map(f, picks)` applies `check_sampled` to the opened tiles in order (a process pool's map checks them in
       parallel)."""
     def key_of(digest: bytes) -> tuple[Key | None, str | None]:
         root = transcript.commitment.root
-        coin, reason = sample_coin(epoch, challenger, sample_after(root, digest))
+        coin, reason = flip_coin(epoch, challenger, flip_after(root, digest))
         return (None, reason) if reason is not None else (sample_key(coin, root, digest, epoch.salt), None)
 
     return _audit(scheme, epoch, prover, transcript, splits, records, t, split_check, tile_map, key_of)

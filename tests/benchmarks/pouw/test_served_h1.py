@@ -521,7 +521,7 @@ def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
                 c["salt"] = HT.live_salt(cs.commitment, opening.coin, s, root).hex()
         log.append({"round": s, "root": root.hex(), "opening": opening.to_json()})
     after = sv.receipts_root("w", calls)
-    sample = cs.sample(after)
+    sample = cs.flip(after)
     cs.close()
     return {"window": "w", "calls": calls,
             "coins": {"mode": "live", **cs.record(), "commitment": cs.commitment.to_json(), "salt_coin": salt.to_json(),
@@ -652,8 +652,8 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     swapped[1] = {**swapped[1], "opening": swapped[2]["opening"]}
     assert refused(coins={**m["coins"], "rounds": swapped}) == {"rounds", "salts"}
     assert refused(salts={**e["salts"], 2: e["salts"][1]}) == {"salts"}
-    assert refused(sample_after=other) == {"draw"}
-    assert refused(sample_after=None) == {"draw"}
+    assert refused(flip_after=other) == {"draw"}
+    assert refused(flip_after=None) == {"draw"}
     assert refused(sample_out=None) == {"draw"}
     assert refused(sample_out=session) == {"draw"}
     assert refused(heads=resigned("unwithheld", lambda x: x[4]["body"].pop("withheld"))) == {"draw"}
@@ -662,7 +662,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
 
 
 def test_an_off_node_sampling_coin_comes_only_from_a_withheld_sample_session(tmp_path, monkeypatch):
-    """Off the node the sampling coin (`Coins.sample`) is its own sample session's, opened withheld on the sample root: with no gate
+    """Off the node the sampling coin (`Coins.flip`) is its own sample session's, opened withheld on the sample root: with no gate
     to open one at, the sample is refused before any coin opens, and so is a sample session whose challenger answers its
     hello with a commitment (one the gate opened plain, so its root was out before the prover's)."""
     after = hashlib.sha512(b"the sample root").digest()
@@ -675,7 +675,7 @@ def test_an_off_node_sampling_coin_comes_only_from_a_withheld_sample_session(tmp
     host = _Host(tmp_path)
     cs = CO.open_coins(host.session, EPOCH, ROUNDS, open_sample=lambda root: host.open_sample(root, withhold=False))
     with pytest.raises(CO.Ch.CoinError, match="answered its hello with a commitment"):
-        cs.sample(after)
+        cs.flip(after)
     cs.close()
     assert host.sample.ended() is None and host.ended() is None
     assert cs.sample_commitment is None and not CO.Ch.withheld_on(host.lines, after.hex())
@@ -712,7 +712,7 @@ def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_pa
 
 
 def test_the_sampling_coin_and_its_time_are_read_under_the_lock_round_roots_are_sent_under():
-    """`RoundPipe.sample` reads its time on the pipe's clock while it holds the lock `send` records each round under, through
+    """`RoundPipe.flip` reads its time on the pipe's clock while it holds the lock `send` records each round under, through
     the sample's open: another thread can't take it then, every round sent before has an earlier time and the one sent
     after a later one; a sample after the coins are closed is refused."""
     ticks = itertools.count()
@@ -720,22 +720,22 @@ def test_the_sampling_coin_and_its_time_are_read_under_the_lock_round_roots_are_
     roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(4)]
     cs.rounds.record(roots[0])
     pipe = CO.RoundPipe(cs, lambda: float(next(ticks)))
-    inner, held = cs.sample, []
+    inner, held = cs.flip, []
 
     def spy(after):
         t = threading.Thread(target=lambda: held.append(pipe._cv.acquire(blocking=False)))
         t.start()
         t.join()
         return inner(after)
-    cs.sample = spy
+    cs.flip = spy
     assert [pipe.send(r) for r in roots[1:3]] == [1, 2]
     after = hashlib.sha512(b"manifest").digest()
-    coin, at = pipe.sample(after)
+    coin, at = pipe.flip(after)
     assert held == [False] and coin.label == CO.Wd.SAMPLE and coin.after == after
     assert max(pipe.sent_at.values()) < at < pipe.sent_at[pipe.send(roots[3])]
     pipe.close()
     with pytest.raises(CO.Ch.CoinError, match="closed"):
-        pipe.sample(after)
+        pipe.flip(after)
 
 
 def _pipe_server(sock, challenger, answers: list[str]) -> None:

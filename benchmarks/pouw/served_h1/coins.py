@@ -269,7 +269,7 @@ class Coins:
     def salt(self, after: bytes) -> Ch.LiveOpening:
         return self.challenger.open(Wd.SALT, 0, after)
 
-    def sample(self, after: bytes) -> Ch.LiveOpening:
+    def flip(self, after: bytes) -> Ch.LiveOpening:
         """The window's sampling coin, opened after `after` (the sample root, the prover's commitment) in a sample session of its
         own. Off the node the session is opened withheld on `after`, so its challenger released no commitment before
         it: the coin comes back raw, and its commitment and full opening at the session's close, which `close` checks."""
@@ -413,7 +413,7 @@ class RoundPipe:
                 raise Ch.CoinError(f"the challenger's session ended ({self._error}): a retry never redraws")
             return None
 
-    def sample(self, after: bytes) -> tuple[Ch.LiveOpening, float]:
+    def flip(self, after: bytes) -> tuple[Ch.LiveOpening, float]:
         """The window's sampling coin opened after `after` once every sent round's coin is back, and the time it was asked
         for on `clock`, read under the lock `send` records each round's root and time under and held through the sample:
         every round sent before the sample has an earlier time and every round sent after it a later one, whatever thread
@@ -426,7 +426,7 @@ class RoundPipe:
             if self._closed:
                 raise Ch.CoinError("the round coins are closed")
             at = self._clock()
-            return self.coins.sample(after), at
+            return self.coins.flip(after), at
 
     def reason(self) -> str | None:
         return Ch.order_reason(self.commitment, self.label, self.roots, self.openings)
@@ -453,7 +453,7 @@ def open_coins(at: Endpoint | None, epoch: int, rounds: int, entropy: Callable[[
     in-process challenger over `entropy` (the Lean verifier's coins by default).  The client connects once
     the session's tunnel listens (`remote.connect_when_listening` over `connect`, for up to `wait_s`: a caller that knows
     the window's coin deadline passes the time left to it).  The sampling coin's session is `open_sample`'s (default
-    `env_sample`), opened on the sample root when the window asks for its sample (`Coins.sample`)."""
+    `env_sample`), opened on the sample root when the window asks for its sample (`Coins.flip`)."""
     if at is None:
         if entropy is None:
             from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
@@ -552,7 +552,7 @@ def sampling_reason(directory: str | os.PathLike | None, heads: Sequence[str | o
 
 
 def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.PathLike], pins: Any, main: Any,
-          rounds: list[bytes], salts: dict[int, str] | None = None, sample_after: bytes | None = None,
+          rounds: list[bytes], salts: dict[int, str] | None = None, flip_after: bytes | None = None,
           key: Ch.ChallengerKey | None = None, period: str | None = None, root: bytes | None = None,
           sample_out: str | os.PathLike | None = None) -> dict:
     """The verifier's check of a window's coins against the session `directory` as infra's gate publishes it
@@ -561,7 +561,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     `main`, which the session's pin must be on (`audited_window`).
     `coins` is the manifest's ``coins`` item (the openings the prover received, the session id and the window's root and
     period), and the rest is what the verifier recomputes from the window's committed roots: the round roots `rounds` in
-    order, round r's unit salt `salts[r]` (hex) where it holds them, and `sample_after`, the root the sampling coin follows
+    order, round r's unit salt `salts[r]` (hex) where it holds them, and `flip_after`, the root the sampling coin follows
     (None: the window opened no sample); `key` is the challenger's key from its deployment record (`key_record`), `period`
     the window's period and `root` the window's root, each None while the verifier names none (`root` then the
     manifest's).  It holds: key.json is `key`; core's verifier takes the session the ledger opens on the window's root
@@ -569,9 +569,9 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     and its period is `period` (`window_reasons`); the window's commitment is the record's, a live epoch's; the salt coin
     opened after the window's root; the challenger received exactly `rounds`, and round r's coin opened once after round
     r's root (`rounds_reason` over the challenger's roots); each salt is `h1tile.live_salt` of the opened coin; and the
-    sampling coin, or none opened when `sample_after` is None, is its own sample session's, `sample_out` as infra's gate publishes
-    it: the session the ledger opens on `sample_after` (`audited_window`), opened withheld (`challenger.withheld_on`), a
-    sample session's layout (`window.sample_epoch_reason`), and its sampling coin opened once after `sample_after`.  ``ok`` only
+    sampling coin, or none opened when `flip_after` is None, is its own sample session's, `sample_out` as infra's gate publishes
+    it: the session the ledger opens on `flip_after` (`audited_window`), opened withheld (`challenger.withheld_on`), a
+    sample session's layout (`window.sample_epoch_reason`), and its sampling coin opened once after `flip_after`.  ``ok`` only
     when all hold."""
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
     d = published(directory)
@@ -600,7 +600,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     except (KeyError, TypeError, Ch.CoinError) as e:
         return {**out, "reason": f"{type(e).__name__}: {e}"}
     got = roots[Wd.ROUND]
-    sample_reason = sampling_reason(sample_out, heads, sample_after, sample, key, pins, main)
+    sample_reason = sampling_reason(sample_out, heads, flip_after, sample, key, pins, main)
     bad_salts = sorted(r for r, s in (salts or {}).items()
                        if not (0 <= r < min(len(got), len(openings)))
                        or HT.live_salt(commitment, openings[r].coin, r, got[r]).hex() != s)

@@ -451,7 +451,7 @@ def test_a_sample_at_the_record_k():
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_the_sampled_units_are_the_sample_coins(seed):
+def test_the_sampled_units_are_the_sampling_coins(seed):
     """`credit.sampled` derives the sampled proof blocks from the sampling coin: each stratum's units are its own, its count the work
     sampling design's k_s, and another coin, stream, registration or receipt samples another set; never a list handed in."""
     d = cases.sampled_instance(random.Random(f"honest/{seed}"))

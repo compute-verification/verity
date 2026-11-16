@@ -380,7 +380,7 @@ def test_the_challenger_holds_every_item_to_its_own(served):
 
 @LEAN
 @pytest.mark.slow
-def test_select_samples_once_over_the_sample_coin_opened_after_the_registration(served):
+def test_select_samples_once_over_the_sampling_coin_opened_after_the_registration(served):
     """The sample is the sampling design's subset:K′ over the padded population, over the key of the execution phase's sampling coin, which the
     challenger opens after the registration (its digest) and checks against its commitment; Lean's sample on that key's
     stream is `stream_subset`'s.  A second select is refused, and so is a retry after a failed sample: the coin opens once.
@@ -510,7 +510,7 @@ def test_a_pass_registered_again_on_another_stream_is_refused(served):
 
 
 @pytest.mark.slow
-def test_a_window_received_after_the_epochs_sample_coin_is_refused(served, tmp_path):
+def test_a_window_received_after_the_epochs_sampling_coin_is_refused(served, tmp_path):
     """The record's order is each execution phase's receipt before the execution phase's sampling challenge's release: once the sampling challenge is open, an
     execution phase is refused (`late-registration`), even one whose pass and record are honest and within the deadline, and its
     stream is left as it was.  A control replaying the honest sample opens no challenge and still registers.  A record whose

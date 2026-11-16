@@ -81,7 +81,7 @@ tail's receipt roots; every step's units dispatched after its coin came back, an
 or the final round) sent after that and before the sampling coin, no round after it; and the last step's receipts, from its
 ring slot, against h1r v1 under its coin's salt, up to 16 calls' A tables and receipt tables rehashed on the CPU
 (`rehashed_calls`); and three steps opened from the spill (`open_spill`).  The sampling coin's time is read under the
-round pipe's lock (`coins.RoundPipe.sample`), so no round goes out between it and the sample.  Two end faults, each
+round pipe's lock (`coins.RoundPipe.flip`), so no round goes out between it and the sample.  Two end faults, each
 in an execution phase of its own (`end_steps`: 2D + 2 steps) and refused: "fault_tail" (the last step's units dropped: refused on
 its order and every call's receipts) and "fault_late_receipt" (the last step's receipt-tail root withheld from the final
 round and sent in a round after the sampling coin: refused on that leaf and that round alone).  An off-node execution phase's
@@ -631,7 +631,7 @@ class SoWindow(DO.DitherState):
         t_final = time.perf_counter()
         mroot = MF.manifest_root(W, self.k, self.open_root, s0, s1, list(self.pipe.roots[:i_f + 1]))
         t_mf = time.perf_counter()
-        sample, sample_at = self.pipe.sample(mroot)
+        sample, sample_at = self.pipe.flip(mroot)
         t_sample = time.perf_counter()
         late = None
         if withheld is not None:
@@ -2324,10 +2324,10 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     sample_why = CO.Ch.live_reason(com, rec["sample"], CO.Wd.SAMPLE, 0, mroot)
     coins = {"source": rec["coins"].source, "salt_after_window_root": salt_why is None, "salt_reason": salt_why,
              "rounds_reason": CO.Wd.rounds_reason(com, pipe.roots, pipe.openings),
-             "draw_after_manifest_root": sample_why is None and mroot == rec["mroot"], "draw_reason": sample_why,
+             "flip_after_manifest_root": sample_why is None and mroot == rec["mroot"], "draw_reason": sample_why,
              "rounds_cover_steps": i_f == n + 1 and len(rows) == n}
     coins["ok"] = bool(coins["salt_after_window_root"] and coins["rounds_reason"] is None
-                       and coins["draw_after_manifest_root"] and coins["rounds_cover_steps"])
+                       and coins["flip_after_manifest_root"] and coins["rounds_cover_steps"])
     doc["coins"] = coins
     bad = []
     for r in range(n):
@@ -2401,9 +2401,9 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
         o_, units, nw = win.plan.offs[w]
         if (plan.receipts(w) != last["receipts"][o_:o_ + units * nw].view(units, nw)).any():
             rc_bad.append(w)
-    doc.update(order_bad=order_bad[:8], order_bad_n=len(order_bad), rounds_after_draw=after, salts_bad=salts_bad[:8],
+    doc.update(order_bad=order_bad[:8], order_bad_n=len(order_bad), rounds_after_flip=after, salts_bad=salts_bad[:8],
                salts_expected_bad=rearly, tail_leaves_bad=tail_bad, final_root_ok=final_ok,
-               receipts_after_draw=late_steps, last_step=s, last_m=m, a_roots_bad=a_bad, receipt_roots_bad=rr_bad,
+               receipts_after_flip=late_steps, last_step=s, last_m=m, a_roots_bad=a_bad, receipt_roots_bad=rr_bad,
                receipts_vs_h1r_bad=rc_bad[:8], receipts_vs_h1r_bad_n=len(rc_bad))
     sp = open_spill(win, rec, kinds)
     if sp is not None:
