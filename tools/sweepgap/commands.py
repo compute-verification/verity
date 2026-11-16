@@ -13,7 +13,7 @@ import scan as S
 m = S.lint(); owner = S.owners(); by = m.terms()[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from today import today_words
-files = [f for f in subprocess.run(["git", "ls-files", "-z"], capture_output=True).stdout.decode().split("\0") if f]
+files = [f for f in subprocess.run(["git", "ls-files", "-z"], capture_output=True).stdout.decode().split("\0") if f and not f.startswith("tools/sweepgap/")]
 rows = []
 def hit(text):
     out = []
@@ -67,18 +67,38 @@ for f in files:
             for flag in re.findall(r"--[A-Za-z0-9-]+", mo.group(0)):
                 for old, term in hit(flag.replace("--", "").replace("-", " ")):
                     rows.append((f, t.count("\n", 0, mo.start()) + 1 + (1 if t[mo.start()] == "\n" else 0), "shell-flag", flag, old, term))
+# `verity bench NAME` and `verity demo NAME`: a name is a benchmark directory holding run.py or run.sh (a `-` in NAME is a `_`),
+# and a demo is a file of demos/
+tracked = set(files)
+for f in files:
+    parts = f.split("/")
+    if parts[0] == "benchmarks" and parts[-1] in ("run.py", "run.sh") and len(parts) in (3, 4):
+        name = "/".join(parts[1:-1])
+        for old, term in hit(name.replace("_", " ").replace("/", " ")):
+            rows.append((f, 1, "bench-name", name, old, term))
+    if parts[0] == "demos" and len(parts) == 2 and f.endswith(".toml"):
+        name = parts[1][:-5]
+        for old, term in hit(name.replace("_", " ").replace("-", " ")):
+            rows.append((f, 1, "demo-name", name, old, term))
 # callers: who names the flag or subcommand elsewhere (the reader of an old name)
-names = sorted({r[3] for r in rows if r[2] in ("flag", "subcommand", "shell-flag", "choice") and len(r[3]) > 2})
-callers = {n: collections.Counter() for n in names}
+names = sorted({r[3] for r in rows if r[2] in ("flag", "subcommand", "shell-flag", "choice", "bench-name", "demo-name") and len(r[3]) > 2})
+callers = {n: {} for n in names}
+IGNORE = ("tools/move/", "tests/lint/", ".agents/", "GLOSSARY.md", "tools/sweepgap/")
 for n in names:
-    out = subprocess.run(["git", "grep", "-I", "-l", "-F", "--", n], capture_output=True, text=True).stdout.split()
-    for f in out:
-        callers[n][f] += 1
-HELD_DIRS = ("infra/", "deploy", ".github/")
+    if not n.startswith("--") and len(n) < 6:
+        continue
+    out = subprocess.run(["git", "grep", "-I", "-n", "-F", "--", n], capture_output=True, text=True, errors="replace").stdout.split("\n")
+    for ln in out:
+        mo = re.match(r"^(.*?):(\d+):(.*)$", ln)
+        if mo and not mo.group(1).startswith(IGNORE):
+            callers[n].setdefault(mo.group(1), (mo.group(2), mo.group(3)))
+def held_of(f, ln):
+    return (f.startswith(("infra/", "demos/", ".github/")) or f.endswith((".service", ".timer")) or "/fixtures/" in f
+            or (f.endswith("metrics.toml") and re.search(r"command", ln)))
 outp = []
 for f, line, kind, text, old, term in rows:
-    cs = [c for c in callers.get(text, {}) if c != f]
-    held = [c for c in cs if c.startswith(HELD_DIRS) or c.endswith((".service", ".timer", ".json", ".jsonl", ".toml", ".yaml", ".yml")) or "/fixtures/" in c or "records" in c]
+    cs = {c: v for c, v in callers.get(text, {}).items() if c != f}
+    held = [f"{c}:{v[0]}" for c, v in cs.items() if held_of(c, v[1])]
     cls = "HELD" if held else "RENAME"
     area = collections.Counter(c.split("/")[0] for c in cs)
     ev = (held[0] if held else "")

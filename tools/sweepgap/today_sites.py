@@ -61,7 +61,7 @@ def read(f):
     except Exception:
         return None
 for f in files:
-    if f.startswith("tools/move/") or f == "GLOSSARY.md" or not f.endswith(TEXT):
+    if f.startswith(("tools/move/", "tools/sweepgap/")) or f == "GLOSSARY.md" or not f.endswith(TEXT):
         continue
     t = read(f)
     if t is None:
@@ -87,6 +87,8 @@ for f in files:
             ph = phrase(line, s, e)
             tier = ""
             if term == "unit":
+                if f.endswith((".json", ".jsonl")) or any(d in m.FIXTURE_DIRS for d in f.split("/")[:-1]):
+                    excluded[("unit", "a json file or a fixture directory (data a reader holds)")] += 1; continue
                 if lean and re.fullmatch(r"Unit|PUnit", mo.group(0)):
                     excluded[("unit", "Lean's Unit type")] += 1; continue
                 if UNIT_OUT.search(line):

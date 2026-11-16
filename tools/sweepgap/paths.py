@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scan as S
 m = S.lint(); owner = S.owners(); by = m.terms()[1]
 out = Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
-files = [f for f in subprocess.run(["git", "ls-files", "-z"], capture_output=True).stdout.decode().split("\0") if f]
+files = [f for f in subprocess.run(["git", "ls-files", "-z"], capture_output=True).stdout.decode().split("\0") if f and not f.startswith("tools/sweepgap/")]
 WORDS2 = {  # today's words that the table does not list (sweep README), as they stand in a name
     "certifier": re.compile(r"certifier", re.I), "memory challenger": re.compile(r"memory[ _-]?challenger", re.I),
     "proof table": re.compile(r"proof[ _-]?table", re.I), "row/cell": re.compile(r"(?<![a-z])(rows?|cells?)(?![a-z])", re.I),
