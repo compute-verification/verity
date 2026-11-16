@@ -135,7 +135,7 @@ EXPECT = {
     "answer-public-unit-type": "evidence: public.draw.units: not a natural number",
     "answer-public-population-type": "evidence: public.draw.population: not a natural number",
     "answer-drawn-extra": "evidence: profile: not in the form toJson writes",
-    "answer-drawn-type": "evidence: profile.sampled.unit: not a natural number",
+    "answer-drawn-type": "evidence: profile.drawn.unit: not a natural number",
     "answer-linked-type": "evidence: profile.linked: not a boolean",
     "answer-programs-type": "evidence: profile.programs: not a list",
     "answer-program-type": "evidence: profile.programs: not a string",

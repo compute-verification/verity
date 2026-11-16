@@ -67,6 +67,7 @@ patterns = [
   "(?<![\\w-])drawn(?:_cost)?\\.(?:py|sh)\\b",
   "(?#shared-phrase)\\bnever redraw\\w*",
   "(?#port-verdict)(?<=[\"'])[\\w-]*draw[\\w-]*(?= (?:accept|reject)\\b)",
+  "(?#key-path)\\bprofile\\.drawn(?:\\.\\w+)?\\b",
   "(?<=\\ \\ \\ \\ record\\[\"windows\"\\]\\[w1\\]\\.update\\(registration=reg\\.hex\\(\\),\\ )draw_opening(?==)",
   "(?<=\\ \\ \\ \\ \\ \\ \\ \\ out\\.update\\()draw(?==)",
   "(?<=\\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ )draw_wref(?==)",
