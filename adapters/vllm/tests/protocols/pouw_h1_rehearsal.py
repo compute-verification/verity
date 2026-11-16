@@ -15,7 +15,7 @@ the lane's period (`period_open_argv`: ``period-open --name P --cap 2 --circuit 
 --circuit-files FILES --length LENGTH``, which signs the registration's W, K the proof system's committed sample K, `declared_draw_k`, which core's credit reads as the
 open's ``draw_k``, FILES ``{"k<K>": SHA-512}``, each stratum's file's, which core's credit verifies statements
 against, `credit.committed_files`, and LENGTH `FILL`'s fixed length, `fill_length`, which core's credit holds the
-window's served rows to, `credit.committed_length`; cap 2, the window's challenge phase and its sample's), reserves the
+window's served rows to, `credit.committed_length`; limit 2, the window's challenge phase and its sample's), reserves the
 window's challenge phase (``reserve --peer PEER --scheme S --families F``) and its sample's (``--families`` the sampling
 coin alone, `pouw_h1_challenger.draw_families`), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
@@ -185,14 +185,14 @@ def declared_draw_k(layers: int = 32) -> int:
 
 def fill_length() -> dict:
     """The fixed length `pouw_h1.FILL` serves (``--length``, `credit.LENGTH_FIELD`): each of its requests' public
-    max_tokens, every one admitted at step 0 and run to its cap (``ignore_eos``, the public-cap done source)."""
+    max_tokens, every one admitted at step 0 and run to its limit (``ignore_eos``, the public-cap done source)."""
     from verity.protocols.accounting.pouw.prover.serving import h1 as PH
     return {"max_tokens": [PH.FILL.max_tokens] * PH.FILL.slots, "stop": "fixed"}
 
 
 def period_open_argv(name: str, cap: int, circuit: str, draw_k: int, model: str | None,
                      circuit_files: dict[str, str]) -> list[str]:
-    """The gate's ``period-open`` of period `name`: its cap, its circuit (the declared Program's digest), its sample K,
+    """The gate's ``period-open`` of period `name`: its limit, its circuit (the declared Program's digest), its sample K,
     the served tables' rows T (``--rows``, `pouw_h1.FILL`'s), its model when it serves the registered weights
     (``--model``, whose registration's weights' root the open signs; never a ``--weights-root`` of the prover's), each
     stratum's circuit file's SHA-512 (``--circuit-files``, `pouw_h1_circuits.build`'s ``files``) and the fixed length

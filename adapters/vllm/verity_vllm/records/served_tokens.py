@@ -3,7 +3,7 @@
 Three writers write it: the one-process capture (`pipeline.match_capture`), the TP capture (`pipeline.tp.capture`) and the TP
 Match arms (`pipeline.tp.match`).  Each writes `requests`, and per request its `request_id` and `generated_token_ids`; those are
 required here.  Only the one-process capture writes the realized schedule, the served and executed lengths and the scheduler's
-`lag`, so on a TP record they are None and G6 has no driver claim to hold them to.  The prompt and the cap are the Program's,
+`lag`, so on a TP record they are None and G6 has no driver claim to hold them to.  The prompt and the limit are the Program's,
 which both read instead, so they are not typed here.
 
     t = ServedTokens.of(json.loads(text), "capture/tokens.json")

@@ -295,7 +295,7 @@ def _report(oracle: MatchOracle, wcheck: dict[str, Any], max_report: int, query_
             # one per (layer, engine step); its entries are per member)
             "not_compared_by_query_family": {qf: {"identities": (int(query_families[qf]) if isinstance(query_families, dict) and qf in query_families else None),
                                                   "binding_entries": int(n),
-                                                  # on a PADDED record the manifest count is the FULL cap (executed + inactive); the
+                                                  # on a PADDED record the manifest count is the FULL limit (executed + inactive); the
                                                   # live (executed) identities are the manifest's minus the padding entries stated apart in `padding` for
                                                   # this family (a per-request stream identity is one entry; a shared plane's cells are per member)
                                                   **({"identities_basis": "required manifest at full cap (executed + inactive by enablement)",

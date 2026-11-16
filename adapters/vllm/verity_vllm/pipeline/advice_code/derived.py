@@ -479,7 +479,7 @@ def _want(K: int, start: int, admits: bool, cfg: Config) -> int:
 
 def stop_rule(output: Sequence[int], prompt_len: int, max_tokens: int, cfg: Config) -> str | None:
     """The tie's check that forces output_len and gives finish, in vLLM d9105ea8's `check_stop` order: a stop id first,
-    then the length cap (max_tokens, or the model's length). None when the committed ids can't be an honest output."""
+    then the length limit (max_tokens, or the model's length). None when the committed ids can't be an honest output."""
     stops = cfg.stops
     if not output or len(output) > max_tokens or any(t in stops for t in output[:-1]):
         return None

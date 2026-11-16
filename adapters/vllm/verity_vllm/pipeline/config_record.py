@@ -127,7 +127,7 @@ def row_part(row: str, profile: str | None = None) -> dict[str, Any] | None:
 
 
 def index_refusal(row: str) -> str | None:
-    """Why `INDEX` may not list `row`: a row it lists is a row of record, so its file must be done only at its public cap
+    """Why `INDEX` may not list `row`: a row it lists is a row of record, so its file must be done only at its public limit
     (`config.done_source_refusal`, with `of_record`); None when it is.  `records publish`, `pull` and `switch` refuse with it before
     they touch the index, and `row chain` before any stage when it would publish."""
     p = workload_file(WORKLOADS / f"{row}.json")

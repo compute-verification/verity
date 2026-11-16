@@ -41,8 +41,8 @@ row: the Lean verifier checks each read's path (`registered.verify_read`).
   state ends with each running slot's `fin` and `cap` and each waiting slot's `cap`, and an arrival carries its
   `cap` (O is its max_tokens): `q_cap` here, the step's `arr_cap` and the load's `a_cap`.
 - A `Row`'s and a `QueueRow`'s entries are tuples of their fields in `replay_step.Req`'s order, those the shape has:
-  running (id, P, O, out, computed[, cap, fin][, pfx]), waiting (id, P, O, out[, cap]) and an arrival
-  (id, P, O[, cap]) (`running_names`, `waiting_names`, `arrival_names`).
+  running (id, P, O, out, computed[, limit, fin][, pfx]), waiting (id, P, O, out[, limit]) and an arrival
+  (id, P, O[, limit]) (`running_names`, `waiting_names`, `arrival_names`).
 - `qh` and `dh` are how many of the window row's arrivals and decisions the window's steps so far took and read;
   `steps` counts the window's executed steps still to come.
 - `queue` is the arrivals in certified order, the step's `arr_*` the A at `qh`; `dec` the decisions, the step's `bits`
@@ -54,7 +54,7 @@ row: the Lean verifier checks each read's path (`registered.verify_read`).
   later row is a proved proof block's output.
 
 **A window** is two produced values (`one_stage.produced`) in `hm96-sha512/row/v2` bit rows: `VALUE`, its state rows
-S_0 … S_{P+1}, and `WINDOW`, the last window's row and its own; P, the step proof blocks a window, is a public cap.
+S_0 … S_{P+1}, and `WINDOW`, the last window's row and its own; P, the step proof blocks a window, is a public limit.
 Proof block 0 is the load: it reads state rows 0 and 1 and window rows 0 and 1 with the window's arrivals, decisions and
 step count n ≤ P. Proof block u ≥ 1 is step u: ReplayStep_v1 on state row u's state with the arrivals and bits
 `ReplayAdvance` checks against window row 1, which also checks state row u + 1, so a row two proof blocks read is the
@@ -245,9 +245,9 @@ def window_width(S: Shape) -> int:
 
 # --- the rows ---------------------------------------------------------------------------------------------------------------
 
-Running = tuple[int, ...]   # (id, P, O, out, computed[, cap, fin][, pfx]): `running_names`
-Waiting = tuple[int, ...]   # (id, P, O, out[, cap]): `waiting_names`
-Arrival = tuple[int, ...]   # (id, P, O[, cap]): `arrival_names`
+Running = tuple[int, ...]   # (id, P, O, out, computed[, limit, fin][, pfx]): `running_names`
+Waiting = tuple[int, ...]   # (id, P, O, out[, limit]): `waiting_names`
+Arrival = tuple[int, ...]   # (id, P, O[, limit]): `arrival_names`
 
 
 @dataclass(frozen=True)

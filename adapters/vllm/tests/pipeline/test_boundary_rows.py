@@ -91,7 +91,7 @@ def _u32s(words: np.ndarray) -> list[int]:
 
 def test_each_span_is_one_ingress_row_and_one_egress_row_laid_out_as_the_spec_says():
     """`b.ingress`: lp, the sampling inputs (floats as f32 bits, a negative top_k two's complement, the seed a u64 low
-    first), then the prompt's ids at the class's cap, zero past it; `b.egress`: the ids served n, the finish's code, then
+    first), then the prompt's ids at the class's limit, zero past it; `b.egress`: the ids served n, the finish's code, then
     the ids, zero past them; every u32 two u16 words, low first."""
     s = BR.Span("e", (70000, 5), {**GREEDY, "temperature": 0.75, "top_k": -1, "seed": (1 << 40) + 3, "max_tokens": 9},
                 (1, 2, 3), "stop")

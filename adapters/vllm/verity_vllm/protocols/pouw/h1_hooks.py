@@ -136,8 +136,8 @@ def traced(run: H1Run, w: int, orig: Any) -> Any:
 
 def new_requests(scheduler_output: Any) -> list[tuple[str, Sequence[int] | None, int]]:
     """The requests vLLM's scheduler admitted in this step (`SchedulerOutput.scheduled_new_reqs`, where Model Runner V2
-    also puts requests resumed after a preemption), each (req_id, prompt token ids, token cap). A request with prompt
-    embeddings has no prompt token ids here, and a pooling request no cap."""
+    also puts requests resumed after a preemption), each (req_id, prompt token ids, token limit). A request with prompt
+    embeddings has no prompt token ids here, and a pooling request no limit."""
     out = []
     for r in getattr(scheduler_output, "scheduled_new_reqs", None) or ():
         params = getattr(r, "sampling_params", None)

@@ -28,7 +28,7 @@ A pair is a pair row; its layer is the op_path of the router row its expert id r
 router's ids, and its token that router row.  Units go layer by layer, the layers in the order they first appear: a read's
 table-major, ((l B + b) TOPK + k) T + t, so a table's declarations are three and a member's key reads one router slot; a block
 GEMM's slot-major, ((l TOPK + k) T + t) B + b, so a pair's blocks are consecutive and a member's routed weight reads one router
-slot.  A member holds one table's units of one slot (a read) or one layer's of one slot (a block GEMM), at most its chunk cap
+slot.  A member holds one table's units of one slot (a read) or one layer's of one slot (a block GEMM), at most its chunk limit
 (`cut`).  The wires (`wire`): a read's ``in0`` is its token's router unit's ``o<TOPK + k>``, a block GEMM's ``g`` its ``o<k>``,
 its ``w`` the ``o0`` of the read of its block's rows and its ``ws`` that of the read of its G-block's scale row.  A fused block's
 units go as a read's and are cut as a read's; it is wired as a read (its key) and as a block GEMM (``g`` and ``ws``), and it
@@ -303,7 +303,7 @@ def _bases(ms: Sequence[CS.Member]) -> dict[str, int]:
 
 def cut(ms: Sequence[CS.Member], plan: Plan) -> list[CS.Member]:
     """``ms`` (`serving_rows.members`') with each template of the cut but the router's cut again where its units' table or slot
-    changes (a read: one table's units of one slot; a block GEMM: one layer's units of one slot) and at its chunk cap (its first
+    changes (a read: one table's units of one slot; a block GEMM: one layer's units of one slot) and at its chunk limit (its first
     chunk's size), named ``<descriptor id>/c<j>`` in order."""
     out: list[CS.Member] = []
     for t in dict.fromkeys(m.template for m in ms):

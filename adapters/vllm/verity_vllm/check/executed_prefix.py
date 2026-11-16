@@ -2,7 +2,7 @@
 `commit.executed_prefix` states (the rule, the two lengths and the three conditions are its docstring).
 
 `load_match_account` reads the Match attempt's serving transcript and GM-01's account beside the Commit; `link_to_match_account`
-accepts a prefix reduced from its cap only when the Commit's served tokens equal the Match record's, G6 passed with the same two lengths
+accepts a prefix reduced from its limit only when the Commit's served tokens equal the Match record's, G6 passed with the same two lengths
 per request, and the lag agrees in every record.  A config run has no Match stage: its link is `check.commit_tokens`.
 """
 from __future__ import annotations
@@ -64,8 +64,8 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
     PASSED and its G6 lengths_by_request agree; the lag rule is attested in every record (Program declared == the Match record's tokens.json
     lag == G6's declared / record_attests; no variable lag).  `order`: {workload request_id: r<i>}.
 
-    A request whose prefix was REDUCED from its cap (an EOS stop) with no linkable Match account is a problem: the committer's count alone
-    is never sufficient (condition (a)).  With no reduction anywhere (every request ran its cap) a missing account is recorded, not a
+    A request whose prefix was REDUCED from its limit (an EOS stop) with no linkable Match account is a problem: the committer's count alone
+    is never sufficient (condition (a)).  With no reduction anywhere (every request ran its limit) a missing account is recorded, not a
     problem -- nothing was placed on the committer's word.  `served_tokens` {r<i>: [the Commit's served ids]}: when given, tokens_equal
     is the FULL generated_token_ids list equality; without it, length + last token.  Returns {"ok", "required",
     "problems", "tokens_equal", "g6", ...}."""

@@ -383,7 +383,7 @@ def test_a_salt_only_session_is_refused_by_name_while_the_lanes_open_period_is_h
     would be a window H1's checks refuse, so the period would earn nothing: `reserve_salt` refuses by name before
     reserving, reading the lane's open period from the gate's ledger. A challenge phase reserved in it anyway (here by hand) is
     refused by the install by name, before any patch and before the gate opens it, so no challenge phase is opened; so is a
-    reserve that joined a period the install isn't given. A Pearl-C period (its cap and circuit alone), another lane's H1
+    reserve that joined a period the install isn't given. A Pearl-C period (its limit and circuit alone), another lane's H1
     period, or none is reserved and installs."""
     gate = CH.Gate(PRIVATE, KEY)
     gate.period_open("p-h1", **H1_OPEN)

@@ -424,7 +424,7 @@ def windows(out, latents: BT.Latents, make, lines: list, keep: BT.Kept | None = 
 
 
 def finish(sched: Scheduler) -> None:
-    """Requests a (a 5-id prompt, 4 ids served, stopped) and b (a 3-id prompt, 3 served, at its cap), as `serve` computed
+    """Requests a (a 5-id prompt, 4 ids served, stopped) and b (a 3-id prompt, 3 served, at its limit), as `serve` computed
     them, finish in one step: the window closes with a in class (8, 4) and b in class (4, 4)."""
     for rid, prompt in (("a", [1, 2, 3, 4, 5]), ("b", [6, 7, 8])):
         sched.add_request(NS(request_id=rid, prompt_token_ids=prompt, sampling_params=NS(**GREEDY)))

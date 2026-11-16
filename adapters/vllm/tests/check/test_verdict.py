@@ -393,7 +393,7 @@ def test_account_missing_is_insufficient_evidence_not_fail():
     groups = V.group_checks(V.aggregate_runs([(0, checks)]))
     g = {x.name: x.outcome for x in groups}
     assert g["execution_extent"] == V.INSUFFICIENT, g
-    # the SAME missing files on a record where no request stopped before its cap: recorded, not gating (v1 passes it too)
+    # the SAME missing files on a record where no request stopped before its limit: recorded, not gating (v1 passes it too)
     c2 = _base()
     c2["sampled_replay"]["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 8, "cap": 8, "linked": False, "account_missing": ["tokens.json"]}}}
     c2["binding"]["coverage"]["match_account_link"] = _link(ok=False, required=False, problems=["tokens.json: not beside the Commit"])
@@ -408,7 +408,7 @@ def _commit_link(ok: bool = True, problems: list | None = None) -> dict:
 
 
 def test_a_config_run_early_stop_rests_on_the_commit_token_record():
-    """No Match stage: a request that stopped at EOS before its cap is linked by the Commit's token record (check.commit_tokens), and the
+    """No Match stage: a request that stopped at EOS before its limit is linked by the Commit's token record (check.commit_tokens), and the
     Match link's refusal is not the account of record.  The same record with the token record refused fails in v1 and v2, by name."""
     c = _base()
     cov = c["binding"]["coverage"]

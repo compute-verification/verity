@@ -193,7 +193,7 @@ class LLM:
     * ``max_num_seqs`` (int, default 8): requests the scheduler runs together.
     * ``max_num_batched_tokens`` (int): tokens per scheduler step; default vLLM's for the model length.
     * ``long_prefill_token_threshold`` (int): the most tokens of one prompt a scheduler step prefills, the rest in later
-      steps; default vLLM's, 0, no cap.
+      steps; default vLLM's, 0, no limit.
     * ``max_model_len`` (int): context length; default the pin's, and -1 the longest request the KV pool holds, which vLLM fits
       when the engine starts.
     * ``gpu_memory_utilization`` (float): fraction of device memory the engine may take; default the engine profile's.

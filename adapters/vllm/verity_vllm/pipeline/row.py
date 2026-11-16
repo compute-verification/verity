@@ -15,7 +15,7 @@ A row id with ``__tp<N>__``, N >= 2, runs the tensor-parallel stages (``row_tp``
 ``MatchConfig``, ``CommitConfig`` and ``RunEnv``; each also reads the environment variable it names.  ``--protocols``
 (``PROTOCOLS``) runs the row with protocol options beside SPOT (`verity_vllm.protocols`): a set it cannot
 run is refused here, before any stage, for single-GPU and TP rows alike (exit 3), and so is a row of record that is not done only at
-its public cap (``PRECHECK_FAIL_DONE_SOURCE``, ``config.done_source_refusal``).
+its public limit (``PRECHECK_FAIL_DONE_SOURCE``, ``config.done_source_refusal``).
 
 The row's config is its file (``config.RowConfig``); the flags and variables change how its stages run, never it.  Every run first
 writes what it used, ``<row dir>/effective_config.json`` (``effective_config``), which the row's config record carries.

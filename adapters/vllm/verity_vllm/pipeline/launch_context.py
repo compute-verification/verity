@@ -153,7 +153,7 @@ def _requests(workload: dict[str, Any]) -> list[dict[str, Any]]:
 
 def spec_for(workload: dict[str, Any], LP: int, T: int, C: int = 0) -> str:
     """The `--launch-context` argument for the (LP, T[, C]) shape: a JSON list, {"batch": ...} (`batch_dispatch`), 'conflict', or ''
-    when the workload has no such shape (the row's default `build_request` of the longest prompt / largest cap is a shape too)."""
+    when the workload has no such shape (the row's default `build_request` of the longest prompt / largest limit is a shape too)."""
     v = shape_contexts(workload).get(shape(LP, T, C))
     if v is None:
         return ""

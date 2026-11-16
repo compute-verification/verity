@@ -545,7 +545,7 @@ def test_a_period_is_its_lanes_windows_between_its_signed_open_and_close_and_cre
 def test_the_ledger_refuses_periods_and_reserves_off_the_gates_rules():
     """Core's ``verify_periods`` and two-step windows: `Ledger.of` refuses a period entry with a challenge phase, a
     period-open under another key's pin, a period off its name and lane, a period name used twice, a lane's second open
-    period, a cap or circuit off form, a window past its cap, a close of a period that isn't its lane's open one or that
+    period, a limit or circuit off form, a window past its limit, a close of a period that isn't its lane's open one or that
     doesn't list exactly its windows and their outcomes; a reserve that isn't first in its challenge phase or whose expiry isn't
     its start plus its minutes; and an open that binds no reserve of its challenge phase, doesn't carry its request, isn't by its
     prover, falls outside its minutes or after its period's close, or is one-step after the first reserve. A two-step
@@ -660,7 +660,7 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
     whose hellos.jsonl its end seals; c's two-step windows bind their reserves, one complete and one killed (refused);
     d's one window was reserved and never opened (refused). Every challenge phase of the head predates the challenger's signed
     close, its challenger.json the gate's status and its release log's times floats, so core reads none of them
-    as a challenge phase of record: 1355's end seals no close or refused hellos, a's period commits no cap or circuit, and b's
+    as a challenge phase of record: 1355's end seals no close or refused hellos, a's period commits no limit or circuit, and b's
     and c's windows carry no signed close. Every open of the head also predates the host's pins log, so b's
     and c's windows, which core's ledger check passes, are refused for it first: with no pins log, and with one, since
     their opens seal none. One edited byte of the head, or a published head with an entry cut, is refused."""

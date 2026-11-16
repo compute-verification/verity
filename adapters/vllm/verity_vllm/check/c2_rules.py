@@ -702,7 +702,7 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     if not account_missing and link is not None and not by_commit:
         account_missing = [name for name, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
     # v1 gated the link THROUGH the replay's not-executed class: it faults (-> population_scope FAIL) only when applied, i.e. when a request's
-    # prefix is reduced from its cap (`link.required`) or the class names the fault.  Outside that the link is recorded, not gating.
+    # prefix is reduced from its limit (`link.required`) or the class names the fault.  Outside that the link is recorded, not gating.
     acct = clink if by_commit else link
     gating = (acct is not None and acct.required) or any(f.get("account_missing") or f.get("linked") is not True for f in _faulted_prefix_facts(sr))
     if link is None:

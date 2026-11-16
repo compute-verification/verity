@@ -1,6 +1,6 @@
 """(d) The executed prefix of record re-derives: `executed_prefix.executed_prefix_of_record` run with the CURRENT code over the
 record's own facts (the driver's served token ids per request from `match/capture/tokens.json` -- `match/control/tokens.json` when the
-capture dir was moved -- the workload's caps and request order, the Program's declared EOS ids and LAG from
+capture dir was moved -- the workload's limits and request order, the Program's declared EOS ids and LAG from
 `build_workload/workload_program.json.stop_rule`) must give, per request, the `served_output_len` / `executed_prefix_len` /
 `cap_exhausted` / `eos_stop` the record states (tokens.json's own columns, and G6's `lengths_by_request` in `global_match.json`), the
 same EOS-stopped set as `global_match.json.lag.eos_stop_requests`, and `ok`.

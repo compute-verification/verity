@@ -19,7 +19,7 @@ def _wl(tmp_path, batch, max_in, max_out, mnbt=None):
 
 @pytest.mark.parametrize("batch,max_in,max_out,mnbt,expect", [
     (1, 256, 32, 2048, 288),       # the crashing B1 coverage rows: max(2048, prompt + B) for one request of max_model_len 288
-    (1, 256, 32, 257, 257),        # a budget under the cap is the workload's
+    (1, 256, 32, 257, 257),        # a budget under the limit is the workload's
     (8, 1024, 128, 8256, 8256),    # B8 rows: 8 x 1152 = 9216 >= the workload's budget, unchanged
     (2, 256, 32, None, 288),       # no budget declared: max_model_len, as before
 ])

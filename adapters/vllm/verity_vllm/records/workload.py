@@ -54,7 +54,7 @@ def _put(out: dict[str, Any], **kv: Any) -> dict[str, Any]:
 @dataclass(frozen=True)
 class WorkloadRequest:
     request_id: str                                   # the workload's id of the request (a UUID); the Program's is r<index>
-    max_tokens: int                                   # the public cap
+    max_tokens: int                                   # the public limit
     index: int | None                                 # its position: a holdout workload has none
     prompt_len: int | None                            # a holdout workload has none: the length of `prompt_token_ids`
     # a lengths-only plan (`pipeline.workload` without the model's tokenizer) has no prompt
@@ -106,12 +106,12 @@ class WorkloadSampling:
     variant: str                                      # a key of `variants` (`greedy`, `stoch-t<T>-p<P>[-k<K>]`)
     seed: int | None                                  # every writer writes it, null for greedy
     n: int | None                                     # absent: 1 (the driver's default)
-    ignore_eos: bool | None                           # true: every request runs to its cap (`config.done_source`)
+    ignore_eos: bool | None                           # true: every request runs to its limit (`config.done_source`)
     # explicit parameters beside the variant's table: no writer writes them; the global match's G1 compares them when a hand edit adds them
     temperature: float | None
     top_p: float | None
     top_k: int | None
-    # stops before the cap: no writer writes them; `config.done_source_refusal` refuses them on a workload of record
+    # stops before the limit: no writer writes them; `config.done_source_refusal` refuses them on a workload of record
     stop_token_ids: Sequence[Any] | None
     stop: Sequence[Any] | str | None
     # the EOS set pinned into the workload: no writer writes it; the global Program's stop rule takes it as the declaration of record, and a

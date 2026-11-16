@@ -61,7 +61,7 @@ engine facts, G1), `record` (the capture log, canonical request ids), `attributi
 
 PROTOCOL SUMMARY (Match stage: the record checker -- GM-01, the runtime match verdict of record for any B >= 1)
   Purpose: establish that THIS row's Build workload Program (GP-01: weights once, one component per declared request, declared arrivals,
-    caps, stop rule + LAG) corresponds to the batched execution the Match stage recorded -- all requests, all executed steps, global I/O
+    limits, stop rule + LAG) corresponds to the batched execution the Match stage recorded -- all requests, all executed steps, global I/O
     associations and chronology -- as eight named checks G1..G8, each PASS/FAIL with evidence; the verdict is PASS iff every check passes.
   Inputs: --gprog build_workload/workload_program.json (+ --workload wl.json), --oracle <match dir> (program.json + instances.jsonl =
     the fold, capture/log.jsonl.gz, capture/tokens.json), --within-step dag|sequence, [--derived dirs, --decomp-out match_decomp.json].
@@ -360,7 +360,7 @@ def impl_info(mod) -> dict:
     if getattr(mod, "IMPL_NAME", "record") == "fast":   # memo hit/miss counters + worker count: telemetry beside the verdict
         # after check() returned its caches are released (unit 4) -- the outermost run's counters live in last_stats
         info["stats"] = dict(GMF.last_stats) if GMF.last_stats else {k: int(v) for k, v in sorted(GMF.stats.items())}
-        # the DECLARED configuration (workers cap, operand form, switches as read), beside the counters
+        # the DECLARED configuration (workers limit, operand form, switches as read), beside the counters
         info["config"] = dict(GMF.config)
         # the same fold_load under the DECLARED configuration too: earlier fast documents of record named it there; readers keep working
         info["config"]["fold_load"] = dict(PL.LOAD_NOTES)

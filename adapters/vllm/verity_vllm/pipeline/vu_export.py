@@ -125,7 +125,7 @@ class _Picker:
 
 def select(pool: list[dict], limits: Limits, key: Key) -> list[dict]:
     """Per family: `limits.for_family` VUs, sampled per stratum (`challenge.stratum_picks` under the family's shard of `key`) and emitted
-    round-robin across the family's strata, so a small cap still reaches every stratum it can.  The families are interleaved (one VU
+    round-robin across the family's strata, so a small limit still reaches every stratum it can.  The families are interleaved (one VU
     of each in turn), so a spent time budget truncates every family alike."""
     by_fam: dict[str, dict[str, list[dict]]] = {}
     for v in pool:
@@ -136,7 +136,7 @@ def select(pool: list[dict], limits: Limits, key: Key) -> list[dict]:
     for fam in sorted(by_fam):
         cap = limits.for_family(fam)
         fkey = key.shard(("family", fam))
-        # the strata in a keyed order: in name order a cap below the stratum count takes one shape's strata first (all K=1536 of #4's GEMMs)
+        # the strata in a keyed order: in name order a limit below the stratum count takes one shape's strata first (all K=1536 of #4's GEMMs)
         names = sorted(by_fam[fam], key=lambda k: fkey.stream(("stratum-order", k), 16))
         picks = CH.stratum_picks([by_fam[fam][k] for k in names], cap, None, fkey)
         per.append(_round_robin(picks)[:cap])

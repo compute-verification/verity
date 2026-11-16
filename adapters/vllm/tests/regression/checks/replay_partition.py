@@ -1,9 +1,9 @@
 """(e') [T1] The sampled-replay PARTITION reproduces: `commit/sampled_replay_p<k>.json`'s population (every Program row classified: the VUs
 by family, the not-evaluable rows by name, the strata and their sizes, the window-lifetime split), its `not_executed_by_rule` split,
-the seeded stratified sample (the per-stratum sample counts, the round-robin cap, the picks per (request, request-relative step)) and the
+the seeded stratified sample (the per-stratum sample counts, the round-robin limit, the picks per (request, request-relative step)) and the
 per-request phase anchors -- recomputed with `verity_vllm.check.replay`'s own pure functions (`ProgramIndex`, `population`,
 `executed_prefix_of_record`, `phase_anchor`, `split_not_executed`, `sample`) over the row's request Programs under the v2 query's address
-rule + the facts the record states (seed, per-stratum count, cap, targets, ring depth, arrivals, the executed-prefix facts of record).
+rule + the facts the record states (seed, per-stratum count, limit, targets, ring depth, arrivals, the executed-prefix facts of record).
 STRONG: a row classified into another family / stratum, a moved phase boundary, a different sample -- each moves a count.
 
 What this does NOT recompute: the VU evaluations themselves (the `evaluated` / `equal` / `mismatch` counts and the Q(P) reconciliation

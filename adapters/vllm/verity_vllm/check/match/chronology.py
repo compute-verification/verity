@@ -31,7 +31,7 @@ class LagRule:
 
 def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine_step_of: dict[int, int]) -> None:
     """G6: declared == realized == observed arrival; contiguous rows; output events = TokenSelects, the k-th = the k-th token, fed to
-    the next row; bounded by the cap and the declared LAG."""
+    the next row; bounded by the limit and the declared LAG."""
     res, gp, tokens, steps, samples, rec, B = run.res, run.gp, run.tokens, run.steps, run.samples, run.rec, run.fold
     tokens_optional, tokens_path, oracle_dir = run.tokens_optional, run.tokens_path, run.oracle_dir
     c = NamedCheck(res, "chronology", "declared == realized == observed arrival; contiguous rows; output events = TokenSelects, k-th = k-th token, feed the next row; bounded")
@@ -76,7 +76,7 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
     # every top-p TokenSelect of the fold must carry the registered split count S = registered_splits(num_SMs), whatever the live
     # batch (the launch's S; serving pins it, `engine.topp_pin`). Nothing to check on a greedy fold; a top-p fold against a Program
     # without a declared num_SMs fails closed.
-    # |live(t)| is the SCHEDULED workload state -- declared arrivals, served lengths (the cap, or the
+    # |live(t)| is the SCHEDULED workload state -- declared arrivals, served lengths (the limit, or the
     # verified EOS position), the declared lag rows after an EOS stop (the post-EOS step is active computation: its row is in the sampler
     # batch) and the prefill chunks -- derived from the per-request facts established above; the record's logits rows and the SampleEnd
     # batch must equal it at every step. The observed row count is never the source of |live(t)|. The live transitions go on the record.
@@ -84,7 +84,7 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
     geo = sampler_geometry_check(gp, B, engine_step_of, steps, rec.get("sampler_batch"), scheduled)
     for p in geo["problems"]:
         c.fail(p)
-    # the lag finding of the record as a whole: exercised iff some request stopped on an EOS before its cap; VARIABLE lag (two
+    # the lag finding of the record as a whole: exercised iff some request stopped on an EOS before its limit; VARIABLE lag (two
     # EOS-stopped requests of ONE record with different post-EOS row counts) is evidence the profile is not the constant-lag scheduler
     # the Program declares -- surfaced by name (a G6 FAIL + res.alerts entry), never absorbed into whichever value most requests show
     li = c.info["lag"]
@@ -279,7 +279,7 @@ def _output_events(c: NamedCheck, steps: dict, samples: dict, g: dict, ent: dict
 
 def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps: dict, g: dict, ent: dict, ps: list[int],
                     tr: ServedRequest | None, events: list, served: list) -> None:
-    """One request's answer and lag rows: its stop against the cap, the declared EOS ids and LAG, and the driver's claims (none
+    """One request's answer and lag rows: its stop against the limit, the declared EOS ids and LAG, and the driver's claims (none
     when `tr` is None)."""
     eos_ids, decl_lag, lag_declared, rec_lag = rule.eos_ids, rule.decl_lag, rule.lag_declared, rule.rec_lag
     rec_lag_src, eos_lag, eos_lag_src = rule.rec_lag_src, rule.eos_lag, rule.eos_lag_src
@@ -293,10 +293,10 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
     # is absent from the driver's generated_token_ids; the fold holds a TokenSelect for it (token_selects == events). Anything
     # else -- more rows than attested, fewer (a deleted step), a lag row after a length stop -- FAILS by name.
     first_eos = next((j for j, (_s, t) in enumerate(served) if eos_ids and int(t) in eos_ids), None)
-    # an EOS sampled AT the cap is a length stop (vLLM checks max_tokens before the EOS; the scheduler knows the length ahead: no
-    # placeholder row); an EOS before the cap is an EOS stop and the lag rule applies
+    # an EOS sampled AT the limit is a length stop (vLLM checks max_tokens before the EOS; the scheduler knows the length ahead: no
+    # placeholder row); an EOS before the limit is an EOS stop and the lag rule applies
     eos_at = first_eos if first_eos is not None and first_eos + 1 < cap else None   # the EOS stop's output event; None: a length stop
-    # a length stop's served output is AT MOST the cap: rows beyond it are execution past the cap (named below), never output
+    # a length stop's served output is AT MOST the limit: rows beyond it are execution past the limit (named below), never output
     a_r = eos_at + 1 if eos_at is not None else min(len(served), cap)
     lag_rows = len(served) - a_r
     ent["answer_events"] = a_r
@@ -327,8 +327,8 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
         c.fail(f"{rid}: the driver's generated_token_ids has {len(list(gen))} tokens but the request's answer is {a_r} event(s) "
                f"(up to its first declared EOS): {'the rows after the EOS are not output (a lag row sample reported)' if len(list(gen)) > a_r else 'output tokens the record never sampled'}")
     if len(served) > cap:
-        # REQUIRED from the trace, not assumed: a length stop runs no row after the cap under ANY lag (vLLM knows the
-        # length ahead; the scheduler computes a post-EOS row only for an EOS stop) -- an executed row past the cap is execution past cap
+        # REQUIRED from the trace, not assumed: a length stop runs no row after the limit under ANY lag (vLLM knows the
+        # length ahead; the scheduler computes a post-EOS row only for an EOS stop) -- an executed row past the limit is execution past limit
         c.fail(f"{rid}: execution past cap -- {len(served)} output events executed but the declared max_tokens is {cap} (executed_prefix_len "
                f"{len(served)} > served_output_len {a_r} = cap; a length stop computes no post-cap row under any LAG, the Program's LAG "
                f"{eos_lag if eos_lag is not None else 'undeclared'} applies to EOS stops only) (output interface)")
@@ -392,7 +392,7 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
                 if gen is not None and len(list(gen)) > k and int(list(gen)[k]) == int(t_k):
                     ent["eos_verified"] = False   # already failed above (gen longer than a_r): the leak is named there
     elif lag_rows:
-        # a length stop with rows past the cap (a_r = cap < executed): already named 'execution past cap' above; the explicit rule for the record
+        # a length stop with rows past the limit (a_r = limit < executed): already named 'execution past limit' above; the explicit rule for the record
         c.fail(f"{rid}: {lag_rows} row(s) executed after a length stop: the scheduler computes no placeholder row when the cap ends the request "
                f"(LAG applies to EOS stops only)")
     if ent.get("eos_verified") and eos_lag:
@@ -453,9 +453,9 @@ def _achieved_concurrency(c: NamedCheck, res: dict, gp: dict, steps: dict, prese
     if obs_max != prog_max and not (trunc and all(e.get("eos_verified") is True for e in trunc)):
         c.fail(f"achieved concurrency {obs_max} != programmed {prog_max} with no EOS-verified truncated request "
                f"({len(trunc)} truncated, {sum(1 for e in trunc if e.get('eos_verified') is True)} EOS-verified): declared schedule not exercised")
-    # per ENGINE STEP: the waiver applies only to steps AFTER a verified EOS. A request that reached its cap or
+    # per ENGINE STEP: the waiver applies only to steps AFTER a verified EOS. A request that reached its limit or
     # stopped on a verified EOS occupies exactly the steps it was observed in; one that stopped early WITHOUT a verified EOS was
-    # programmed to continue for (cap - served) more steps -- those steps are named here as "declared schedule not exercised"
+    # programmed to continue for (limit - served) more steps -- those steps are named here as "declared schedule not exercised"
     expected_per_step: dict[int, int] = collections.defaultdict(int)
     for e in res["requests"]:
         rid = e["request_id"]

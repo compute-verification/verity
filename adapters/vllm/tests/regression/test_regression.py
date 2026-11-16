@@ -32,7 +32,7 @@ with the current code, and the two are diffed as canonical JSON on every field t
     stoch_value           stochastic rows: stoch_recompute re-run over the capture's sampler-chain snapshots (GumbelTopPTokenSelect_v1
                           lane walk under the declared seed / T / top-p) == match_stoch.json verdict, summary, per-row tokens and
                           statuses (sha256), declared facts, Program S; the snapshot steps (every engine step)             STRONG   T0
-    executed_prefix       executed_prefix_of_record re-run over the record's served tokens / caps / declared EOS + LAG == tokens.json,
+    executed_prefix       executed_prefix_of_record re-run over the record's served tokens / limits / declared EOS + LAG == tokens.json,
                           G6 lengths, eos_stop_requests                                                                               weak*   T0
     coverage              coverage_check(manifest of record, instrumented layouts) == the Commit's recorded coverage                    STRONG   T0(+manifest)
     commit_summary        commit_summary.summarize re-derivation == recorded (stable fields) + commit/verdict.json lifted as the verdict   STRONG   T0

@@ -232,8 +232,8 @@ def test_the_shape():
 
 def test_the_async_fields_ride_the_chain():
     """With AS and EW the chain's parts move the fields the sync rows lack, each refusal the circuit's too: the load
-    writes the window's arrivals' caps into the window row's `q_cap` behind the queue's, the step's arrivals carry their
-    caps from the window row, and the step's next state (`fin`, `cap`, `pfx`) is the next row's."""
+    writes the window's arrivals' limits into the window row's `q_cap` behind the queue's, the step's arrivals carry their
+    limits from the window row, and the step's next state (`fin`, `cap`, `pfx`) is the next row's."""
     S = ASYNC
     last = RC.QueueRow(((3, 1, 1, 0), (4, 3, 3, 1)), (1,))
     prev = RC.Row(((1, 5, 3, 1, 6, 1, 0, 7),), ((2, 4, 2, 0, 1),), 11, 1, 1, 0)

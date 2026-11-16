@@ -150,16 +150,16 @@ def test_the_verdict_names_the_prescribed_input_through_the_boundary_linkage_pat
 # ----------------------------------------------------------------------------------------------- sixth consumer: the linkage horizon
 
 def test_linkage_horizon_is_the_program_of_records_steps_capped_by_the_declared_cap():
-    # B=1 eos-truncated: cap 32, served-shape Program build_request_LP32_T11 has 12 steps -> 12 steps linked, not 32
+    # B=1 eos-truncated: limit 32, served-shape Program build_request_LP32_T11 has 12 steps -> 12 steps linked, not 32
     assert LK.linkage_horizon(0, 32, 12) == list(range(12))
     assert LK.linkage_horizon(5, 32, 12) == list(range(5, 17))
-    assert LK.linkage_horizon(0, 32, None) == list(range(32))                     # unknown Program steps: the cap (older records)
-    assert LK.linkage_horizon(0, 8, 12) == list(range(8))                         # a Program longer than the cap: the cap
+    assert LK.linkage_horizon(0, 32, None) == list(range(32))                     # unknown Program steps: the limit (older records)
+    assert LK.linkage_horizon(0, 8, 12) == list(range(8))                         # a Program longer than the limit: the limit
     assert LK.linkage_horizon(3, 0, 12) == []
 
 
 def test_an_eos_truncated_request_links_completely_over_its_program_of_record_and_a_short_record_still_fails_by_name():
-    # committed world: r0 executed 12 steps (0..11); the workload cap is 32
+    # committed world: r0 executed 12 steps (0..11); the workload limit is 32
     store, wreq = _world({"r0": (0, 12, None)})
     cap_steps = [dict(r, steps=LK.linkage_horizon(0, 32, None), max_tokens=32, program_steps=None) for r in wreq]
     lk_cap = _lk(store, cap_steps)
@@ -204,7 +204,7 @@ def test_an_early_stopped_request_must_end_on_a_declared_eos_id_at_the_horizons_
     # ignore_eos: the declared set is EMPTY -> every early stop fails
     store, lk4 = _truncated([])
     assert lk4["result"] is False and lk4["unlinked"][0]["kind"] == "eos"
-    # a request that reaches its cap has no eos_of_record entry and needs no stop rule
+    # a request that reaches its limit has no eos_of_record entry and needs no stop rule
     store5, wreq5 = _world({"r0": (0, 4, None)})
     full = [dict(r, steps=LK.linkage_horizon(0, 4, 4), max_tokens=4, program_steps=4) for r in wreq5]
     lk5 = _lk(store5, full)
@@ -212,7 +212,7 @@ def test_an_early_stopped_request_must_end_on_a_declared_eos_id_at_the_horizons_
 
 
 def _sys_int3_earlystop_world(eos_at_10=0, ph_sample=504, ph_input=None):
-    """An early-stop record in miniature: served T_r 11 -> Program of record LP32_T11, 12 steps 0..11, cap 32;
+    """An early-stop record in miniature: served T_r 11 -> Program of record LP32_T11, 12 steps 0..11, limit 32;
     async_scheduling attested True (LAG 1): the EOS 0 is SAMPLED at step 10, step 11 is the placeholder fed the EOS whose sample
     504 ('The') the driver discards.  `ph_input`: forge the placeholder's committed embed input (default: the EOS, the honest record)."""
     store, wreq = _world({"r0": (0, 12, None)})
@@ -262,7 +262,7 @@ def test_padrev_m0517_lag_1_negatives_name_the_eos_step_and_the_placeholder():
     store, req = _sys_int3_earlystop_world()
     assert "declares no stop rule (eos_token_ids)" in _lk(store, req, None, lag=1)["why"]
     assert _lk(store, req, [], lag=1)["unlinked"][0]["kind"] == "eos"
-    # (e) a request that reaches its cap needs neither a stop rule nor a lag
+    # (e) a request that reaches its limit needs neither a stop rule nor a lag
     store5, wreq5 = _world({"r0": (0, 4, None)})
     full = [dict(r, steps=LK.linkage_horizon(0, 4, 4), max_tokens=4, program_steps=4) for r in wreq5]
     assert _lk(store5, full, None, lag=None)["result"] is True

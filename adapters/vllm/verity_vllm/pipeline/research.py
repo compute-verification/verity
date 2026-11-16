@@ -12,7 +12,7 @@
   database (``verity-vllm records publish``, citing them, the Commit's summary.json and each property's newest capture of
   record) and prints ``publish - <artifact-id> rc=<rc>``; a refusal exits 21, and ``--no-publish`` skips it.  The record's tree
   is ``--ref`` (else the branch EXPORT.json or git names) at the Commit Attempt's source commit; its tier ``--tier``, else the
-  index's; both, ``--by`` and the row's file (done only at its public cap, ``config_record.index_refusal``) are checked before any
+  index's; both, ``--by`` and the row's file (done only at its public limit, ``config_record.index_refusal``) are checked before any
   stage runs.  A pod's job tree keeps the index entry it wrote; ``records pull
   ART`` brings it to a checkout.  ``--build-run RUN`` cites a passing Build Attempt in place of the build stage (``--stages``
   without it), whose row dir the chain's must be: the Match's precheck holds that dir's Build to the cited Program digest.
@@ -210,7 +210,7 @@ def _row_json(d: str, path: tuple[str, ...], value: Any) -> None:
 def publishing(o: Any) -> dict[str, str | None] | None:
     """What the chain publishes its row's record with (``ref``, ``by``, ``tier``), None when it publishes none (``--no-publish``,
     or stages without a Build, Match and Commit); refused before any stage runs when one is missing, or when the row's file is not
-    done only at its public cap (``config_record.index_refusal``: the row it publishes becomes a row of record)."""
+    done only at its public limit (``config_record.index_refusal``: the row it publishes becomes a row of record)."""
     if not o.publish or not set(OF_RECORD) <= {*o.stages.split(","), *cited_runs(o)}:
         return None
     if why := CR.index_refusal(o.row):

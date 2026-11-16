@@ -127,7 +127,7 @@ def test_one_table_per_engine_step_and_linear_in_the_canonical_order_and_each_ch
     assert all(t.words == SRW.s8_words(K) and RTB.layer(t.name) == 0 for t in w.row_tables)
     assert (w.segments, w.places) == (((0, (0, 1)), (1, (2, 3))), (0, 1, 0, 1))
     # units: r0 qkv t0 [0, 6), t1 [6, 12), up t0 [12, 16), t1 [16, 20), r0 decode qkv [20, 26), up [26, 30), r1 qkv [30, 36), up [36, 40)
-    # each chunk at most CAP units of one table: a chunk ends at the cap or where the next token row is another table's
+    # each chunk at most CAP units of one table: a chunk ends at the limit or where the next token row is another table's
     assert [(m.base, m.n, m.links, m.link_units) for m in ms] == [
         (0, 7, ((1, 0), (1, 1)), (6, 1)), (7, 5, ((1, 1),), (5,)), (12, 7, ((0, 0), (0, 1)), (4, 3)), (19, 1, ((0, 1),), (1,)),
         (20, 6, ((3, 0),), (6,)), (26, 4, ((2, 0),), (4,)), (30, 6, ((3, 1),), (6,)), (36, 4, ((2, 1),), (4,))]
@@ -436,7 +436,7 @@ def test_window_bytes_are_the_bytes_the_window_writes(monkeypatch, tmp_path, row
         assert b["x_private"] == x * UNITS and b["x_public"] == 128 * UNITS
 
 
-#: Llama-3.1-8B's int8 linears (K, N), its layers, and the chunk caps of record
+#: Llama-3.1-8B's int8 linears (K, N), its layers, and the chunk limits of record
 LLAMA8B = {"self_attn.qkv_proj": (4096, 6144), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (4096, 28672), "mlp.down_proj": (14336, 4096)}
 LAYERS, B = 32, 32
 CAPS = {4096: 2048, 14336: 1024}
@@ -456,7 +456,7 @@ def llama_b32_decode_step() -> tuple[list[str], list[list], dict[str, int]]:
 
 def test_the_bytes_of_llama_8bs_b32_decode_step_n_copies_and_one_table():
     """Llama-3.1-8B, B = 32, one decode step: the ScaledMmS8Coordinate units' committed bytes in each layout, from the layout
-    rule `window_bytes` holds to the written files (above).  Every chunk is one token row's (the caps divide every N)."""
+    rule `window_bytes` holds to the written files (above).  Every chunk is one token row's (the limits divide every N)."""
     tmpls, rows, caps = llama_b32_decode_step()
     ms = SRW.members(tmpls, rows, None, caps)
     linked, tables = SRW.with_row_tables(ms, tmpls, rows, {f"r{q}": 0 for q in range(B)})

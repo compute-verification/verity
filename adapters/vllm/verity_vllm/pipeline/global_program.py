@@ -3,7 +3,7 @@
     verity-vllm global-program --workload <manifest.json> --derived <dir> [--derived <dir> ...] --out <dir>
 
 Inputs (pre-execution only): the request manifest, read through the workload record (`records.workload.Workload`, which refuses a
-missing or unknown field by name: request ids, prompt lengths, caps, `arrive_step`, the sampling parameters, the row's declared `target`
+missing or unknown field by name: request ids, prompt lengths, limits, `arrive_step`, the sampling parameters, the row's declared `target`
 block) and derive_step request artifacts (`descriptor.json.gz` + `construction_manifest.json` / `instances.json.gz`) — one per
 distinct (prompt_len, cap-1) shape, exactly the shapes X-09's Build derives. Nothing from an execution record is read. Exit 4 lists
 the shapes still to derive.  `LAG` (the declared scheduler's post-EOS rows, `TargetProfile.lag()` of the manifest's target) is a
@@ -96,7 +96,7 @@ def manifest_requests(w: Workload) -> list[dict]:
 
 
 def shape_of(r: dict) -> tuple[int, ...]:
-    """A manifest request's component shape (`manifest_requests` row): (LP, cap - 1[, cached rows])."""
+    """A manifest request's component shape (`manifest_requests` row): (LP, limit - 1[, cached rows])."""
     return PP.shape(r["prompt_len"], r["cap"] - 1, r.get("cached", 0))
 
 
@@ -393,7 +393,7 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
 
 
 def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampling: WorkloadSampling | None = None) -> dict:
-    """The STOP RULE the workload Program declares for a request that ends before its cap: the model's
+    """The STOP RULE the workload Program declares for a request that ends before its limit: the model's
     EOS token ids, read from the checkpoint the verifier pinned (config.json / generation_config.json `eos_token_id`, int or list) or
     given explicitly.  The bounded request Program has no EOS semantics of its own, so GM-01 needs this declaration to verify that an
     early stop IS an EOS stop (served[-1] in the set) and not a dropped / aborted / stop-string request recorded as `finish_reason=stop`.
@@ -404,7 +404,7 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
     if eos_token_ids:
         sources["--eos-token-ids"] = sorted(ids)
     # the manifest's sampling parameters may add per-workload stop ids (vLLM stop_token_ids) or switch EOS off (ignore_eos: every request
-    # must then reach its cap -- any early stop FAILS); both are declared here so GM-01 reads one rule
+    # must then reach its limit -- any early stop FAILS); both are declared here so GM-01 reads one rule
     if checkpoint_dir:
         for fn in ("generation_config.json", "config.json"):
             p = os.path.join(checkpoint_dir, fn)

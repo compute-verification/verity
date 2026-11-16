@@ -516,7 +516,7 @@ def test_producers_of_reads_spec_and_ordinal_from_manifest_rows():
 
 
 def test_foreign_oracle_is_refused_by_name_before_any_value_compare(tmp_path):
-    """A Match record of ANOTHER workload given as --match-dir: refused by name (request ids / prompt lengths / caps),
+    """A Match record of ANOTHER workload given as --match-dir: refused by name (request ids / prompt lengths / limits),
     nothing compared, result False 'foreign oracle' -- never a value mismatch that happens to point the right way."""
     d, vals = make_match(str(tmp_path))
     bmap, committed = make_bmap(vals)

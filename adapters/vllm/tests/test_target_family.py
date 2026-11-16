@@ -186,7 +186,7 @@ def test_the_cli_opens_the_build_summary_by_the_name_as_it_is_handed(tmp_path):
 
 
 def test_the_row_match_argv_carries_the_explicit_snapshot_cap_only_when_set(tmp_path):
-    """--snapshot-max-bytes N (MATCH_SNAP_MAX_BYTES) arms the Match's cap; unset -> the argv without it."""
+    """--snapshot-max-bytes N (MATCH_SNAP_MAX_BYTES) arms the Match's limit; unset -> the argv without it."""
 
     def argv(*flags, environ=None):
         r = _row(tmp_path, *flags, environ=environ)

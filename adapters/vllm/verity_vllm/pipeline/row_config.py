@@ -6,8 +6,8 @@ A config run (`--config-run 1`) is the Build, the strict word check of its manif
 `config_record.json` (`config_record`), written however the run ends.  No Match, no manifest-verify rebuild, no VU export: the Commit's
 decision is the instrumented run's own verdict (`commit_verdict`: coverage, openings, the replay).  Without a Match the account the
 executed-prefix class (`commit.executed_prefix`) links to is the Commit's own token record (`check.commit_tokens`, `commit/tokens_p<pair>.json`):
-when every request ran to its cap the class has nothing to classify and the replay's population is the whole manifest; a request stopped
-before its cap is accepted only when every token it served opens from the run root to the committed sampled id.  Every derive of
+when every request ran to its limit the class has nothing to classify and the replay's population is the whole manifest; a request stopped
+before its limit is accepted only when every token it served opens from the run root to the committed sampled id.  Every derive of
 a Build goes through the host's Program cache when one is named (`derive_cached`, `pipeline.program_cache`).
 """
 from __future__ import annotations

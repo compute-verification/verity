@@ -1,6 +1,6 @@
 """`SnapshotStore` and the capture's `skipped` index entries.
 
-A tensor over the snapshot cap (D87 `--snapshot-max-bytes`, or the lower dispatcher-call cap `--snapshot-max-bytes-op`)
+A tensor over the snapshot limit (D87 `--snapshot-max-bytes`, or the lower dispatcher-call limit `--snapshot-max-bytes-op`)
 is listed in `snapshots.json` with its view and a `skipped` reason and NO `file`.  The store must keep such entries out
 of `entries` / `by_alloc` (a file-less Snapshot resolved to the capture root; `_raw` then raised IsADirectoryError the
 first time a boundary value lived in a skipped alloc — OLMoE B8-static C256, 1300-token step 0) and expose them as

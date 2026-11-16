@@ -79,7 +79,7 @@ COMMITTER = {"key": bytes(range(32)), "program": "ab" * 64}
 
 
 def fused(proj: str, n: int = N, nr: int = NR) -> tuple[list[str], dict[str, int]]:
-    """A fused window's templates and chunk caps: the router's slots, the reads of the scale rows and the fused blocks."""
+    """A fused window's templates and chunk limits: the router's slots, the reads of the scale rows and the fused blocks."""
     t = ids(proj, n, nr).fused
     return [SLOTS, READ_WS, t], {SLOTS: 4, READ_WS: 4, t: 4}
 
@@ -371,7 +371,7 @@ FRESH = "import sys\nfrom verity_vllm.pipeline import serving_templates as ST\np
 
 
 def test_a_fresh_process_resolves_a_partitions_read_and_fused_templates():
-    """A process that resolves a partition's templates before anything imported the read's module (a verifier's circuit, a cap
+    """A process that resolves a partition's templates before anything imported the read's module (a verifier's circuit, a limit
     builder) resolves its reads and fused blocks: this module imports `gates.embedding` itself, so only a fresh interpreter sees it."""
     r = subprocess.run([sys.executable, "-c", FRESH, READ_WS, PROJ["w2"].fused], capture_output=True, text=True, check=True)
     assert r.stdout.split() == ["read", "fused"]

@@ -79,7 +79,7 @@ when:
   violation neither run finds goes.  A module's row may so change in the change whose new module first imports it,
   while a row edited to admit an import between two modules of the base fails, naming the import: the row lands in one
   change and that import in the next.
-  So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
+  So loosening a lint to drop its entries (raising P10's limit, skipping a kind, ignoring a ruff rule, deleting the lint)
   fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
   finds.
 

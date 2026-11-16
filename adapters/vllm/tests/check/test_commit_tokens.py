@@ -1,9 +1,9 @@
-"""The Commit's token record (`check.commit_tokens`).  A config run has no Match stage, so a request that stops at EOS before its cap has
+"""The Commit's token record (`check.commit_tokens`).  A config run has no Match stage, so a request that stops at EOS before its limit has
 its executed prefix accepted on the tokens the driver served, each opened from the run root and verified equal to the committed sampled
 id it was served from.
 
 The world: two requests arrive at engine step 0 under LAG 1.  r0 serves [11, 12, EOS] and stops (its fourth step is the LAG row, whose
-sampled id 99 is committed and never served); r1 runs its cap of 5.  Every tensor is committed by the serving host committer and read
+sampled id 99 is committed and never served); r1 runs its limit of 5.  Every tensor is committed by the serving host committer and read
 back through `OpenedReader`, so each refusal here is the one a tampered or inconsistent record meets on a pod."""
 from __future__ import annotations
 
@@ -236,7 +236,7 @@ def test_a_length_stop_needs_no_reduction():
     assert link["ok"] and link["required"] is False and link["executed_by_request"] == {"r0": CAP, "r1": CAP}
     match = _no_match(w)
     assert match["ok"] and CT.account_link_error(match, link) is None
-    # an EOS exactly at the cap reduces nothing, under either finish reason the engine reports for it
+    # an EOS exactly at the limit reduces nothing, under either finish reason the engine reports for it
     at_cap = {"r0": [11, 12, 13, 14, EOS], "r1": SERVED["r1"]}
     for fin in (C.STOP, C.LENGTH):
         link = world(sampled=at_cap, served=at_cap, finish={"r0": fin, "r1": C.LENGTH}).link()
@@ -480,7 +480,7 @@ def test_the_boundary_linkage_runs_over_the_same_executed_prefix_and_the_facts_l
     for n in (3, CAP):
         moved = dict(lk, horizon={**lk["horizon"], "r0": {**h0, "linked_steps": n}})
         assert EP.executed_prefix_facts(w.epr, binding, moved, ARRIVALS, STOP)["r0"]["linked"] is False, n
-    assert _linkage(w, executed={"r0": CAP})["result"] is False           # the cap's horizon: r0 has no committed row at step 4
+    assert _linkage(w, executed={"r0": CAP})["result"] is False           # the limit's horizon: r0 has no committed row at step 4
     assert EP.executed_prefix_facts(w.epr, binding, dict(lk, result=False), ARRIVALS, STOP)["r0"]["linked"] is False
     # a token not bound to the commitment, an unattested LAG: not linked, not attested, and the population faults by name
     bad = dict(link, ok=False, tokens_committed={"r0": False, "r1": True}, lag_attested=False)

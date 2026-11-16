@@ -38,8 +38,8 @@ class TableAssignment:
     window: int                                        # the window's index in its serve
     run: str                                           # its run, which every table's name binds
     program: str                                       # the class's registration's program digest, which each domain binds
-    prompt: int                                        # the class's prompt cap P
-    outputs: int                                       # its output cap O
+    prompt: int                                        # the class's prompt limit P
+    outputs: int                                       # its output limit O
     layers: tuple[int, ...]                            # the tables' layers
     capacity: int                                      # each table's leaves
     spans: tuple[tuple[str, int, int, str | None], ...]  # each slot's span (`SPAN`)

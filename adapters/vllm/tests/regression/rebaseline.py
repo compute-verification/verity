@@ -18,7 +18,7 @@ check names -- nothing the actual states beyond the contract is added, nothing t
 results were produced by (the previous, frozen v1 reference is kept under `reference.frozen`); `checks.<name>.rebaselined` records
 which side the result matched (`decision <finding>` = the reason the new expected differs from the R2 record).  Checks without a
 recorded result keep their previous contract and are listed.  A recorded FAILURE refuses the write (`--force` overrides, per check,
-and is itself recorded).  Output serialisation is `lift_expected.dumps_expected` (compact per-check lines: the 5 MiB blob cap).
+and is itself recorded).  Output serialisation is `lift_expected.dumps_expected` (compact per-check lines: the 5 MiB blob limit).
 The four accepted decisions stay in fixtures.toml as history; `--oracle frozen` still consults them.
 """
 from __future__ import annotations

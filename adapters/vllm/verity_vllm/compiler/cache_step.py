@@ -35,7 +35,7 @@ the hit while the bound holds. The walk's entry after each unit is `trail`. A hi
 table at the end of the engine step (`sources`). An owner can still drop later in the same step, when a lower-numbered
 request completes the unit.
 
-**ok = 0 refuses**: a hit unit not cached or past the lookup's cap; a derived hit shorter than the cached prefix; wh or
+**ok = 0 refuses**: a hit unit not cached or past the lookup's limit; a derived hit shorter than the cached prefix; wh or
 nins past the window; an append to a full table.
 
 **Statics** (all public): the size class N entries; U the hit unit; TW a token id's width; RW a request number's width;

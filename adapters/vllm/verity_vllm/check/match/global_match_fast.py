@@ -97,7 +97,7 @@ def enter() -> None:
     _depth += 1
 
 
-config: dict = {}       # the declared configuration of the fast path as `ops()` read it (workers cap, operand form,
+config: dict = {}       # the declared configuration of the fast path as `ops()` read it (workers limit, operand form,
                         # switches as read from the environment) -- stated on the document's impl block
 last_stats: dict = {}   # the outermost check()'s counters, snapshotted at leave() BEFORE the release: the CLI's impl block
                         # (impl_info, called after check() returned) reports the run's configuration -- MATCH_WORKERS used, MATCH_COMPACT,
@@ -513,7 +513,7 @@ def ops() -> Ops:
     compact = settings.get(COMPACT_ENV)
     stats["compact_args"] = int(compact)
     # the run's DECLARED configuration, stated on the document's impl block beside the counters:
-    # the effective worker cap (MATCH_WORKERS or the default), the operand form, and the switches as read -- not inferred from hits
+    # the effective worker limit (MATCH_WORKERS or the default), the operand form, and the switches as read -- not inferred from hits
     raw_w = settings.get(WORKERS_ENV)
     config.clear()
     config.update({"match_workers": workers(1 << 30), "match_workers_env": raw_w or None, "cpu_count": os.cpu_count(),

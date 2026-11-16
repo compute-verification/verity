@@ -318,7 +318,7 @@ def main(args: Options) -> int:
                 raise SystemExit(f"fail-closed: --build-rank{r} Program {of_build[:16]} != manifest Program for rank {r} {str(pdr.get(str(r)))[:16]}")
         if int(man_doc.get("ranks") or 1) != world:
             raise SystemExit(f"fail-closed: manifest ranks={man_doc.get('ranks')} != tp={world}")
-    # workload -> request order / arrivals / caps (B>1 population; commit_delta's convention: r<i> in workload order)
+    # workload -> request order / arrivals / limits (B>1 population; commit_delta's convention: r<i> in workload order)
     request_order = [str(r.get("request_id")) for r in reqs]
     # request ids are r<index>: the workload's declared `index` when present, else declaration position -- the same
     # rule commit_delta applies, so the manifest's r<k> rows and the rank's request->rows map name the same request

@@ -1,5 +1,5 @@
 """the required population is placed on the committed-step axis by the engine's schedule of record, not by the
-declared arrive_steps: on a workload with a gap (r0's cap 2, r1 declared at step 7) the serving loop admits r1 as soon as the engine idles
+declared arrive_steps: on a workload with a gap (r0's limit 2, r1 declared at step 7) the serving loop admits r1 as soon as the engine idles
 and the bookkeeping iteration after a finish advances no committed step, so the declared axis drifts (measured: 8,850 of 180,540
 identities 'unbound' = the drift, every launch exact).  Torch-free."""
 from __future__ import annotations
@@ -65,6 +65,6 @@ def test_a_request_never_scheduled_or_preempted_or_short_is_named_and_the_declar
     del rows[10]                                                    # r1 preempted at step 10
     sch = es(rows, declared, caps)
     assert sch["use"] == "declared" and "non-contiguous" in sch["why"]
-    sch = es(_rows({"r0": (0, 2), "r1": (2, 18)}), declared, caps)  # r1 ran one step short of its cap
-    # the expected count per request is its executed prefix of record (the cap on a length stop)
+    sch = es(_rows({"r0": (0, 2), "r1": (2, 18)}), declared, caps)  # r1 ran one step short of its limit
+    # the expected count per request is its executed prefix of record (the limit on a length stop)
     assert sch["use"] == "declared" and "scheduled steps != expected (executed prefix of record): ['r1']" in sch["why"]

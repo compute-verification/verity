@@ -89,14 +89,14 @@ def name(run: str, prompt: int, outputs: int, slot: int, layer: int) -> str:
 
 
 def computed(prompt: int, served: int, finish: str | None) -> tuple[int, int]:
-    """The positions a request's tables hold, at least and at most: a request that stopped or hit its cap computed every
+    """The positions a request's tables hold, at least and at most: a request that stopped or hit its limit computed every
     position but its last id's; one aborted, errored or still running computed some prefix of its prompt and ids."""
     n = int(prompt) + int(served)
     return (n - 1, n - 1) if finish in ("stop", "length") and n else (0, n)
 
 
 def class_rows(prompt: int, outputs: int, capacity: int = CAPACITY) -> int:
-    """C, the rows every table of class (``prompt``, ``outputs``) holds: the class's cap on positions, ``prompt`` +
+    """C, the rows every table of class (``prompt``, ``outputs``) holds: the class's limit on positions, ``prompt`` +
     ``outputs``, since a request computes at most its prompt's and its ids' (`computed`), and at most the tables'
     ``capacity``. A function of the class alone, so a table's published strings show nothing of its request's length."""
     for k, v in (("prompt", prompt), ("outputs", outputs)):

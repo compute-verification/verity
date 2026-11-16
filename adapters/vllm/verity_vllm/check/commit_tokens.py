@@ -1,6 +1,6 @@
 """The Commit's token record (`commit/tokens_p<pair>.json`) and the link that accepts a shorter executed prefix on it.
 
-A request that stops at EOS before its cap has an executed prefix shorter than its cap (`executed_prefix.executed_prefix_of_record`), and
+A request that stops at EOS before its limit has an executed prefix shorter than its limit (`executed_prefix.executed_prefix_of_record`), and
 the committer's own count of it is never sufficient by itself.  A full row links it to the Match account of the same attempt
 (`executed_prefix.link_to_match_account`); a config run has no Match stage, so the Commit writes its own account beside the commitment:
 the tokens the driver served (the engine's request outputs, recorded apart from the committed store) and, for each served token, the
@@ -215,7 +215,7 @@ def link_to_commit_account(epr: dict[str, Any], record: dict[str, Any], *, opene
     reads the committed sampled id at an identity, opened from the run root and verified; `served_tokens` / `finish_reasons`: the driver's,
     {r<i>: ...}; `stop`: stop_rule_of_record; `family`: the sampled-id (op_path, member); `past`: rows_past_the_stop.  The record must be
     this attempt's (`program_digest`, `run_root`, `pair`) and its tokens the engine's served output.  `required`: some prefix was reduced
-    from its cap (an EOS stop) -- only then does the link decide (`account_link_error`).  Returns {"ok", "required", "problems",
+    from its limit (an EOS stop) -- only then does the link decide (`account_link_error`).  Returns {"ok", "required", "problems",
     "tokens_committed", "served_by_request", "executed_by_request", "lag_attested", "record", ...}."""
     C = CommitTokens
     problems: list[str] = []
@@ -272,7 +272,7 @@ def link_to_commit_account(epr: dict[str, Any], record: dict[str, Any], *, opene
 def account_link_error(match_link: dict[str, Any], commit_link: dict[str, Any] | None) -> str | None:
     """The one decision over the executed prefix's two account links.  With a Match record beside the Commit (`match_dir`) the Match link
     must hold, and so must the commit link when it places a prefix; with none, the commit link is the account.  A commit link that places
-    nothing (every request ran its cap, or it was not applied) is recorded, not decisive.  With no commit link at all the Match link
+    nothing (every request ran its limit, or it was not applied) is recorded, not decisive.  With no commit link at all the Match link
     decides alone."""
     errs = []
     if (match_link.get("match_dir") or commit_link is None) and not match_link.get("ok"):

@@ -18,7 +18,7 @@ does: its keys are the ragged row's blocks, its RB run the addresses its calls t
 
 **The edge.** A window ends at its edge, and a request still open there (running, waiting, or certified and not yet
 taken) is cut: its registered ``a_cut`` bit is 1 and its ``a_O`` the outputs it emitted by the edge, so the load reads
-its O as L − P and its cap as 0 (`CompileCut`) and it doesn't leave at ``a_O``. After the last step `CompileEdge`
+its O as L − P and its limit as 0 (`CompileCut`) and it doesn't leave at ``a_O``. After the last step `CompileEdge`
 preempts every running slot in vLLM's preemption order, the last slot first, each a free on the bus whose returns are the
 registered ``erets``, and holds the open requests to the cut ones: each running or waiting request cut, having emitted
 its ``a_O``, each certified arrival not taken cut with ``a_O`` 0, and as many open as cut, so every other request left.
@@ -239,7 +239,7 @@ def _sig_counts(S):
 
 
 def _cut_head(C, S, a_P, a_O, a_cut, *a_cap):
-    """The O and cap of each arrival the load reads: a cut arrival's L − P and 0, so it doesn't leave at its a_O, and
+    """The O and limit of each arrival the load reads: a cut arrival's L − P and 0, so it doesn't leave at its a_O, and
     another's a_O and a_cap."""
     LW = _bitlen(S.L)
     out = []
@@ -879,7 +879,7 @@ def cuts(S, sl: CS.Slice, cut: Sequence[int] | None = None) -> tuple[int, ...]:
 
 def effective(S, sl: CS.Slice, cut: Sequence[int] | None = None) -> CS.Slice:
     """The slice the steps replay (`CompileCut`): `sl`, each arrival's O its served a_O, with each cut arrival's O its
-    length past its prompt, L − P, and its cap 0."""
+    length past its prompt, L − P, and its limit 0."""
     cut = cuts(S, sl, cut)
     arr = tuple(((a[0], a[1], S.L - a[1]) + ((0,) if S.AS else ())) if c else tuple(a)
                 for a, c in zip(sl.arrivals, cut))

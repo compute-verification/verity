@@ -55,7 +55,7 @@ HW = bitlen(⌈L / B⌉), AC = bitlen(A). Every field is little-endian.
   is vLLM's null block), so the state's own invariants (valid slots a prefix, computed < P + out ≤ L, out < O) hold
   by induction and the step doesn't recheck them. With EW each running slot's walk entry `run_pfx` follows `run_comp`.
   With AS the state ends with its async group: each running slot's `fin` and `cap`, then each waiting slot's `cap`;
-- the next A certified arrivals (valid, id, P, O, and with AS cap), in order from the scan's cursor;
+- the next A certified arrivals (valid, id, P, O, and with AS limit), in order from the scan's cursor;
 - A residual bits: the a-th open arrival's decision is bit a;
 - the prefix layer's counts, read only with PC: per candidate (W waiting slots, then A arrivals) its hit h and how
   many of those blocks are evictable (cached, unreferenced: taking them shrinks the free count), and per running slot
@@ -944,7 +944,7 @@ def evaluate(st_: dict, cases: Sequence[tuple[State, Inputs]]) -> list[Out]:
 
 
 def _req(r: Req) -> list[int]:
-    """(id, P, O, out, comp), then (cap, fin, pfx) up to the last nonzero."""
+    """(id, P, O, out, comp), then (limit, fin, pfx) up to the last nonzero."""
     x = [r.id, r.P, r.O, r.out, r.comp, r.cap, r.fin, r.pfx]
     while len(x) > 5 and not x[-1]:
         x.pop()

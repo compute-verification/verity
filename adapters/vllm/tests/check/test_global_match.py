@@ -1,5 +1,5 @@
 """GM-01: `cb_a.global_match` on the CPU toy of `test_batch_decomp_e2e` extended with DECLARED ARRIVALS and
-output caps -- positives (B=2 unequal LP/T; staggered arrivals with a co-scheduled prefill+decode step; EOS-truncated request
+output limits -- positives (B=2 unequal LP/T; staggered arrivals with a co-scheduled prefill+decode step; EOS-truncated request
 against its bounded component) and the reviewer's five mutations of the global assembly, each of which must FAIL the named
 check: omit a request, duplicate one, swap two requests' outputs, alter an arrival association, break a dependency
 (a cross-request KV read in the record; a component wired to the wrong request shape in the Program)."""
@@ -94,8 +94,8 @@ KC = V(e2e.A_KC, (8, BS, 1, 8))   # 8 KV pages: two private pages per request fo
 VC = V(e2e.A_VC, (8, BS, 1, 8))
 
 
-# ------------------------------------------------------------------------------------------------- toy log with arrivals + caps
-# request: {"id", "prompt", "sampled", "arrive" (engine step, default 0), "cap" (max_tokens, default len(sampled))}
+# ------------------------------------------------------------------------------------------------- toy log with arrivals + limits
+# request: {"id", "prompt", "sampled", "arrive" (engine step, default 0), "limit" (max_tokens, default len(sampled))}
 
 
 def _cap(r):
@@ -456,11 +456,11 @@ def _check(res, cid):
     return next(k for k in res["checks"] if k["id"] == cid)
 
 
-R0 = {"id": "r0", "prompt": [5, 7, 2], "sampled": [9, 3, 1]}                 # LP 3, cap 3 (served to cap)
-R1 = {"id": "r1", "prompt": [4, 6], "sampled": [8, 11]}                      # LP 2, cap 2
+R0 = {"id": "r0", "prompt": [5, 7, 2], "sampled": [9, 3, 1]}                 # LP 3, limit 3 (served to limit)
+R1 = {"id": "r1", "prompt": [4, 6], "sampled": [8, 11]}                      # LP 2, limit 2
 R1_LATE = {"id": "r1", "prompt": [4, 6], "sampled": [8, 11], "arrive": 1}    # arrives at engine step 1: prefill co-scheduled with r0's decode
 R2_LATE = {"id": "r2", "prompt": [3, 3, 3, 3], "sampled": [6, 2, 2], "arrive": 2}
-R1_EOS = {"id": "r1", "prompt": [4, 6], "sampled": [8, 11], "cap": 4}        # declared cap 4, stopped after 2 (EOS)
+R1_EOS = {"id": "r1", "prompt": [4, 6], "sampled": [8, 11], "cap": 4}        # declared limit 4, stopped after 2 (EOS)
 
 
 # ------------------------------------------------------------------------------------------------------------------- positives
@@ -509,7 +509,7 @@ def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, 
     if hasattr(gm, "impl_info"):   # mfast's dispatch block (their branch): the CLI's impl block reads the snapshot
         info = gm.impl_info(GMF)
         assert info["stats"] == GMF.last_stats
-        # the DECLARED configuration is on the block: the workers cap as read, the operand form, the switches
+        # the DECLARED configuration is on the block: the workers limit as read, the operand form, the switches
         cfg = info["config"]
         assert cfg["match_workers"] >= 1 and cfg["operand_form"] in ("progressions/v1", "runs") and isinstance(cfg["match_compact"], bool)
         assert cfg["operand_form"] == ("progressions/v1" if cfg["match_compact"] else "runs")
@@ -596,7 +596,7 @@ def test_eos_truncated_request_is_compared_over_its_executed_prefix_and_labelled
 
 @pytest.mark.slow
 def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memory, tmp_path):
-    """A request that stopped before its cap on a NON-EOS token -- an engine that dropped or aborted it, a
+    """A request that stopped before its limit on a NON-EOS token -- an engine that dropped or aborted it, a
     stop string, or a prover that skipped the tail -- was accepted as 'eos-truncated' on the strength of finish_reason alone. The EOS is
     the evidence: G6 requires served[-1] in the declared set; finish_reason None and 'stop' both fail; and the achieved-concurrency
     shortfall such a request causes is not waived."""
@@ -622,7 +622,7 @@ def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memor
     assert res2["verdict"] == "FAIL" and "G6" in res2["failed_checks"]
     assert any("declares no EOS set" in p and "fail closed" in p for p in _check(res2, "G6")["problems"]), _check(res2, "G6")["problems"]
     # the concurrency waiver (G7) needs EOS-VERIFIED truncation: r1's early stop leaves step 2 with 2 live requests where the Program
-    # schedules 3 (r0, r1 to its cap, r2 arriving) -- verified EOS explains the shortfall and PASSES; the same stop on a non-EOS token does not
+    # schedules 3 (r0, r1 to its limit, r2 arriving) -- verified EOS explains the shortfall and PASSES; the same stop on a non-EOS token does not
     gp4, oracle4 = assemble([R0, R1_EOS, R2_LATE], tmp_path / "waiver_ok")
     res4 = gm.check(gp4, oracle4)
     conc = res4["achieved_concurrency"]
@@ -647,7 +647,7 @@ def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memor
     assert res6["verdict"] == "FAIL" and "G6" in res6["failed_checks"]
     r1 = next(e for e in res6["requests"] if e["request_id"] == "r1")
     assert r1["eos_verified"] is False and "G6 problem" in r1["eos_verified_note"] and res6["eos_verified"] == {"r1": False}
-    # and a request that reached its cap is untouched by the rule (no EOS needed, no declaration needed)
+    # and a request that reached its limit is untouched by the rule (no EOS needed, no declaration needed)
     gp3, oracle3 = assemble([R0, R1], tmp_path / "cap", eos_token_ids=None)
     res3 = gm.check(gp3, oracle3)
     assert res3["verdict"] == "PASS", res3["reasons"]
@@ -1107,7 +1107,7 @@ def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_a
 def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(memory, tmp_path):
     from verity_vllm.pipeline import global_program as G
     # this test rewrites headers WITHOUT async_scheduling to exercise G1's other engine facts; a lag-declaring Program would (rightly)
-    # also fail G6 on every such header, so the Program here declares no lag (a mock without one) and no request stops before its cap
+    # also fail G6 on every such header, so the Program here declares no lag (a mock without one) and no request stops before its limit
     gp, oracle = assemble([R0, R1], tmp_path, lag=None)
     gp["applicability"] = {"execution": "bi-eager", "row_execution": "bi-eager", "engine": dict(G.MODELLED_ENGINE), "refusal": None}
 
@@ -1463,7 +1463,7 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
 
 def test_execution_past_a_declared_eos_fails_g6(memory, tmp_path):
     """The served prefix n_r must equal the declared activity a_r in BOTH directions.
-    r0 serves [9, 3, 1] to its cap; with 3 declared as an EOS id the Program calls r0 finished after event 1 and the two further
+    r0 serves [9, 3, 1] to its limit; with 3 declared as an EOS id the Program calls r0 finished after event 1 and the two further
     events are execution past EOS -> FAIL named (n_r 3 > a_r 2). With the EOS set {11} (r0 never emits it) the same record passes."""
     gp, oracle = assemble([R0, R1], tmp_path, eos_token_ids=(3, EOS))
     res = gm.check(gp, oracle)
@@ -1540,7 +1540,7 @@ R1_EOS_X_EOS = {"id": "r1", "prompt": [4, 6], "sampled": [EOS, 5, EOS], "cap": 5
 
 def test_served_past_the_first_eos_fails_g6_by_name_f_r17_14(memory, tmp_path):
     """The GM-01 negative for the first-EOS rule, the same record the Commit's executed_prefix_of_record refuses:
-    r1 sampled [EOS, 5, EOS] (cap 5) under a LAG-1 Program on a record attesting async_scheduling True, the driver reporting all three as
+    r1 sampled [EOS, 5, EOS] (limit 5) under a LAG-1 Program on a record attesting async_scheduling True, the driver reporting all three as
     generated_token_ids with finish_reason 'stop'.  The Program's rule stops at the FIRST EOS: a_r = 1, so the two rows after it are
     execution past EOS (2 > LAG 1) and the driver's three-token output is not the record's answer -- G6 FAILS by name on both; the second
     EOS launders nothing (served_output_len 1, executed_prefix_len 3).  Continuation_v1 stops at the same index."""
@@ -1570,7 +1570,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     for a request after its EOS sample (input = the EOS, sample discarded by the driver): under LAG 1 that row is active internal
     computation -- its VUs required, its sampled token NOT a served output.  G6 consumes the Program's lag and nothing else; the record's
     attested async_scheduling (the engine's resolved read-back) must AGREE (G1 + G6 by name); nothing is inferred from the trace.  Per request
-    the two lengths are kept distinct: served_output_len (a_r) and executed_prefix_len (a_r + LAG on an EOS stop before the cap).  FAILS by
+    the two lengths are kept distinct: served_output_len (a_r) and executed_prefix_len (a_r + LAG on an EOS stop before the limit).  FAILS by
     name: a LAG-0 header on a LAG-1 Program (and the reverse), an unattested record against a declaring Program, a deleted lag row, a second
     lag row, a reported lag sample, a driver finish_step on the lag row, a Program with no lag and an EOS stop, VARIABLE lag."""
     # (1) LAG 1 Program, record attests async_scheduling True, the lag row served: PASS -- the row accepted and labelled, the lengths distinct
@@ -1593,7 +1593,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert g6["lengths_by_request"]["r1"] == {"served_output_len": 2, "executed_prefix_len": 3, "cap": 4, "cap_exhausted": False}
     assert g6["lengths_by_request"]["r0"] == {"served_output_len": 3, "executed_prefix_len": 3, "cap": 3, "cap_exhausted": True}
     assert res["eos_truncated_requests"] == ["r1"] and res["eos_verified"] == {"r1": True}
-    r0 = _r(res, "r0")   # r0 ran to its cap: the rule does not touch it
+    r0 = _r(res, "r0")   # r0 ran to its limit: the rule does not touch it
     assert r0["finish"] == "length" and r0["lag_rows"] == 0 and "eos_verified" not in r0 and "eos_lag_rows_accepted" not in r0
 
     # (2) LAG=0 HEADER on the LAG-1 trace under the LAG-1 Program: the record is not an execution of the declared scheduler -- G1 (engine fact)
@@ -1684,7 +1684,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
                                              for p in _check(res7, "G6")["problems"]), _check(res7, "G6")["problems"]
 
     # (8) a Program with no lag declared: an EOS stop FAILS by name -- the record's attestation is NOT read as the rule (True attested,
-    # the lag row present: a reader of the attestation would have passed it); with every request at its cap the record passes, labelled exercised=false
+    # the lag row present: a reader of the attestation would have passed it); with every request at its limit the record passes, labelled exercised=false
     from verity_vllm.program.workload import eos_lag_rows_declared
     assert eos_lag_rows_declared({"async_scheduling": True}) == 1 and eos_lag_rows_declared({"async_scheduling": False}) == 0
     assert eos_lag_rows_declared({}) is None and eos_lag_rows_declared(None) is None and eos_lag_rows_declared({"async_scheduling": "maybe"}) is None
@@ -1699,15 +1699,15 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
                "(Program declares no lag; record attests async_scheduling=True (RunHeader.profile.engine_kwargs) (NOT used as the rule))"
                in p and "nothing is inferred from the trace or read from the header as the rule" in p for p in pr8), pr8
     assert _check(res8, "G6")["lag"]["declared"] is None and _check(res8, "G6")["lag"]["exercised"] is True and "Program declares no lag" in _check(res8, "G6")["lag"]["note"]
-    gp8b, oracle8b = assemble([R0, R1], tmp_path / "undeclared_caps", lag=None)      # every request to its cap
+    gp8b, oracle8b = assemble([R0, R1], tmp_path / "undeclared_caps", lag=None)      # every request to its limit
     res8b = gm.check(gp8b, oracle8b)
     assert res8b["verdict"] == "PASS", res8b["reasons"]
     assert res8b["lag"]["declared"] is None and res8b["lag"]["exercised"] is False and res8b["lag"]["record_attests"] == 0
     assert "not exercised" in res8b["lag"]["note"] and "labelled, not accepted as a lag-N record" in res8b["lag"]["note"]
 
-    # (9) an EOS sampled AT the cap is a length stop (vLLM checks max_tokens first; no placeholder row): the lag rule is not exercised, the
+    # (9) an EOS sampled AT the limit is a length stop (vLLM checks max_tokens first; no placeholder row): the lag rule is not exercised, the
     # declaration still has to be attested (the toy attests False = LAG 0, the Program declares 0)
-    gp9, oracle9 = assemble([R0, R1], tmp_path / "eos_at_cap", lag=0)   # R1 = [8, 11] to its cap 2, 11 the declared EOS
+    gp9, oracle9 = assemble([R0, R1], tmp_path / "eos_at_cap", lag=0)   # R1 = [8, 11] to its limit 2, 11 the declared EOS
     res9 = gm.check(gp9, oracle9)
     assert res9["verdict"] == "PASS", res9["reasons"]
     assert _r(res9, "r1")["finish"] == "length" and _r(res9, "r1")["cap_exhausted"] is True and res9["lag"]["exercised"] is False
@@ -1730,8 +1730,8 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
                                "action": "ALERT"}]
     assert _r(resv, "r1")["executed_prefix_len"] == 3 and _r(resv, "r2")["executed_prefix_len"] == 2 and _r(resv, "r2")["served_output_len"] == 2
 
-    # A LENGTH stop runs no post-cap row under any LAG -- REQUIRED from the trace: r1 = [8, 5, 77] executed against cap 2
-    # (no EOS among them) under the LAG-1 Program is 'execution past cap', named with the two lengths (served 2 = cap, executed 3)
+    # A LENGTH stop runs no post-cap row under any LAG -- REQUIRED from the trace: r1 = [8, 5, 77] executed against limit 2
+    # (no EOS among them) under the LAG-1 Program is 'execution past limit', named with the two lengths (served 2 = limit, executed 3)
     R1_PASTCAP = {"id": "r1", "prompt": [4, 6], "sampled": [8, 5, 77], "cap": 2}
     gpp, oraclep = assemble([R0, R1_PASTCAP], tmp_path / "pastcap", lag=1)
     _set_async_scheduling(oraclep, True)
@@ -1989,10 +1989,10 @@ def _present(reqs, extra=None):
 
 
 def test_scheduled_live_counts_builds_the_workload_state_from_g6_facts_and_names_every_transition():
-    """|live(t)| is derived from the facts G6 established per request -- the declared arrival, the served length (cap or
+    """|live(t)| is derived from the facts G6 established per request -- the declared arrival, the served length (limit or
     verified EOS), the DECLARED lag rows after an EOS stop (the post-EOS step is active computation, its row IS in the sampler batch)
     and the prefill chunks -- never from the record's per-step row list. Transitions carry their causes."""
-    # r0 arrives 0, cap 6 (length); r1 arrives 1, cap 6, EOS after 2 answers + 1 declared lag row -> sampler rows at steps 1, 2, 3;
+    # r0 arrives 0, limit 6 (length); r1 arrives 1, limit 6, EOS after 2 answers + 1 declared lag row -> sampler rows at steps 1, 2, 3;
     # r2 arrives 2 with a 2-chunk prefill (one discarded chunk sample) and 2 answers -> steps 2, 3, 4
     reqs = [_req("r0", 0, 6), _req("r1", 1, 2, cap=6, lag=1, finish="eos", eos_verified=True), _req("r2", 2, 2, chunks=2)]
     sc = SG.scheduled_live_counts(reqs, _present(reqs))
@@ -2062,8 +2062,8 @@ def test_sampler_geometry_check_reads_live_from_the_scheduled_state_and_names_an
 
 
 def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
-    """The B8 staggered stoch record (157 engine steps, 8 requests arriving 0..44 with caps 2..128, every request served to its cap):
-    the scheduled state from (arrival, cap, length stop) alone equals the recorded live count at every step and its S transitions are the
+    """The B8 staggered stoch record (157 engine steps, 8 requests arriving 0..44 with limits 2..128, every request served to its limit):
+    the scheduled state from (arrival, limit, length stop) alone equals the recorded live count at every step and its S transitions are the
     kernel's flips (0,1,32) -> (32,5,16) -> (101,4,32)."""
     p = os.path.join(os.path.dirname(gm.__file__), "..", "..", "..", "tests", "program", "data", "topp_split_fixture", "b8_s_schedule_r15_attempt2.json")
     d = json.loads(Path(p).read_text())

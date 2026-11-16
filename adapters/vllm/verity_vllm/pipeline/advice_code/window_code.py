@@ -55,9 +55,9 @@ or less) holds when the charge is at least the length of a prefix-free encoding.
   prefix-free and canonical, and its bits, the termination's 2 among them, are charged to its window; a string with
   none codes as before, bit for bit.
 
-**The registered codebook.** `Book` holds the caps and every model, and is fit on historical traces, never on the
+**The registered codebook.** `Book` holds the limits and every model, and is fit on historical traces, never on the
 run: a codebook fit to the run would be advice. Its digest (`Book.digest`, SHA-512 of its canonical JSON) is
-registered with the codec, `compile` and the cap c before the audit's first window (the certifier PROTOCOL's A7). The
+registered with the codec, `compile` and the limit c before the audit's first window (the certifier PROTOCOL's A7). The
 decoder reads the book that digest names. It is integer only and uses no hash.
 """
 
@@ -80,7 +80,7 @@ __all__ = ["Book", "capped", "Caps", "code_executionPhase", "CoderState", "conte
 
 @dataclass(frozen=True)
 class Caps:
-    """The registered caps: each field's count a window, and each value's range."""
+    """The registered limits: each field's count a window, and each value's range."""
 
     arrived: int = 1 << 16          # decisions a window
     hits: int = 1 << 12             # hits a window
@@ -105,7 +105,7 @@ def ints(caps: Caps) -> dict[str, tuple[int, int]]:
 
 @dataclass(frozen=True)
 class Book:
-    """The registered codebook: the caps, an Exp-Golomb bin table per integer symbol, and a Krichevsky–Trofimov prior
+    """The registered codebook: the limits, an Exp-Golomb bin table per integer symbol, and a Krichevsky–Trofimov prior
     `(n0, n1)` per bit symbol and context (`"name/ctx"`), all fixed before the run."""
 
     caps: Caps

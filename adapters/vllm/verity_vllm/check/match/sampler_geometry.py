@@ -68,7 +68,7 @@ def scheduled_live_counts(requests: list[dict], present: dict[str, list[int]]) -
     For every request r with rows: its sampler-active steps are the contiguous range
         E_r = [first_r, first_r + (prefill_chunks_r - 1) + a_r + lag_r)
     where first_r is its verified arrival (== the declared step, or admitted by the declared idle rule), prefill_chunks_r - 1 the chunk
-    steps whose sample is discarded, a_r its answer length (the cap on a length stop; the position of the first declared EOS on a
+    steps whose sample is discarded, a_r its answer length (the limit on a length stop; the position of the first declared EOS on a
     VERIFIED EOS stop) and lag_r the placeholder rows after an EOS stop = the attested AND declared scheduler lag (`eos_lag_rows`:
     LAG is a declared specialization parameter; the post-EOS step is active internal computation whose row IS in the sampler batch).
     |live(t)| = #{r : t in E_r}.  A request whose G6 evidence is not established (a problem on it, an unverified early stop) leaves the

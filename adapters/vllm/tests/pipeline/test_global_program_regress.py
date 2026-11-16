@@ -7,11 +7,11 @@ codec as derive_step's request wrappers, as in `tests/program/test_workload_prog
      aliased output positions, no root node beyond the Input batches and the one call per request — i.e. no flag object).
   2. FIXED REQUEST POPULATION — the Program, its digest, address map, chronology and output population are functions of the
      manifest (prompt_len, max_tokens, arrive_step) only: two builds from the same manifest are byte-equal, the builder reads no
-     execution record, `T != cap-1` is refused, and D_MAX = cap positions exist per request whatever an execution later serves.
+     execution record, `T != cap-1` is refused, and D_MAX = limit positions exist per request whatever an execution later serves.
   3. DAG WITHIN-STEP CRITERION — `dag_multiset` is invariant under a DAG-safe permutation of independent
      instances and sensitive to an operand swap (a-b vs b-a), a repeated operand ([v,v] vs [v,w]) and a re-wiring.
   4. ARRIVAL CHRONOLOGY — engine-step membership follows `arrive_step` (not manifest order); every (request, step) is programmed
-     exactly once; the horizon is max(arrive + cap); an early stop is never a builder input.
+     exactly once; the horizon is max(arrive + limit); an early stop is never a builder input.
   5. batch_decomp WITH MANY WEIGHTS INPUT NODES — a fold whose weights RecordType is not width-homogeneous
      lowers to one Input node per leaf field (FP8: e4m3 weights + f32 scales + bf16 norms = 435 nodes at Qwen3-4B-FP8); `decompose`
      must treat EVERY Input node that is not a request's prompt/seed parameter as weights (shared), never as another request's
@@ -148,13 +148,13 @@ def test_every_gate_has_exactly_one_address_and_the_weights_are_one_interval():
 def test_no_second_identity_per_output_position_and_no_root_node_beyond_inputs_and_calls():
     """A position has one identity: the root body is exactly [Input batches..., one call per request] (no live-flag array, no side
     object, no scheduler node — the lifted Program must keep this, LIFTING-SPEC §4.2 'the flag object is gone'); the output tuple
-    references every request's D_MAX = cap output leaves exactly once (no aliased, duplicated or missing position)."""
+    references every request's D_MAX = limit output leaves exactly once (no aliased, duplicated or missing position)."""
     wl = _wl([(3, 2), (5, 0), (2, 3)], arrivals=[0, 1, 3])
     body = wl.program.root.body
     K = wl._K
     assert [n.form for n in body.nodes[:K]] == ["batch"] * K and [n.form for n in body.nodes[K:]] == ["call"] * len(wl.requests)
     assert len(body.nodes) == K + len(wl.requests)
-    # ret: one leaf per (request, position), each a distinct (node, leaf) reference, in manifest order, cap leaves per request
+    # ret: one leaf per (request, position), each a distinct (node, leaf) reference, in manifest order, limit leaves per request
     ret_runs = runs(body.ret)
     assert all(sp == "n" for sp, _, _, _ in ret_runs)
     leaves = [(idx, j) for sp, idx, lo, hi in ret_runs for j in range(lo, hi)]
@@ -181,23 +181,23 @@ def test_program_is_a_function_of_the_manifest_only_two_builds_are_byte_equal():
     assert canonical_json(a.descriptor) == canonical_json(b.descriptor)
     assert json.dumps(a.address_map(), sort_keys=True) == json.dumps(b.address_map(), sort_keys=True)
     assert json.dumps(a.chronology(), sort_keys=True) == json.dumps(b.chronology(), sort_keys=True)
-    # D_MAX = cap positions per request exist structurally: cap sampling events per component, cap output leaves
+    # D_MAX = limit positions per request exist structurally: limit sampling events per component, limit output leaves
     for r in a.requests:
         assert len(r.component.step_nodes) == r.cap, f"{r.request_id}: {len(r.component.step_nodes)} steps != cap {r.cap}"
     ch = a.chronology()
     assert ch["component_steps_equal_cap"] is True
     assert "programmed-but-unexecuted" in ch["future_dependent_events"]["eos_stop"]   # the tail stays in the Program
-    # the manifest facts ARE the identity: a different cap / arrival / prompt_len is a different Program
+    # the manifest facts ARE the identity: a different limit / arrival / prompt_len is a different Program
     assert _wl([(4, 3), (2, 1)], arrivals=[0, 3]).digest != a.digest        # arrival is part of the declared workload
-    assert _wl([(4, 2), (2, 1)], arrivals=[0, 2]).digest != a.digest        # cap
+    assert _wl([(4, 2), (2, 1)], arrivals=[0, 2]).digest != a.digest        # limit
     assert _wl([(5, 3), (2, 1)], arrivals=[0, 2]).digest != a.digest        # prompt_len
 
 
 def test_a_program_rebuilt_from_a_served_length_is_refused_by_name():
     """The population is D_MAX steps x declared requests: a component whose T is not cap-1 (a Program rebuilt to the served
-    length) is refused by name, at every cap and for every request position."""
+    length) is refused by name, at every limit and for every request position."""
     canon: dict = {}
-    c = W.request_component(_desc(3, 2), REGISTRY, _WP(3), canon=canon)          # a T=2 component: cap must be 3
+    c = W.request_component(_desc(3, 2), REGISTRY, _WP(3), canon=canon)          # a T=2 component: limit must be 3
     for cap in (1, 2, 4, 8):
         with pytest.raises(ValueError, match="never from a served length"):
             W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, cap, 0, c, T=2)], lag=0)
@@ -241,7 +241,7 @@ REQUESTS = [{"LP": 3, "cap": 3}, {"LP": 5, "cap": 1, "arrive": 1}, {"LP": 3, "ca
 
 def test_gp01_build_reads_no_execution_record_and_is_stable_across_builds(tmp_path):
     """`global_program.build` (the GP-01 driver) composes from the manifest + derived components only: `execution_record_read` is
-    false, two builds give one digest, and a request's declared cap fixes its component shape — a manifest whose requests were
+    false, two builds give one digest, and a request's declared limit fixes its component shape — a manifest whose requests were
     served 1 or 3 tokens composes to the SAME Program because served lengths are not in the manifest."""
     reqs = REQUESTS
     derived = [_derived_dir(tmp_path, 3, 2), _derived_dir(tmp_path, 5, 0)]
@@ -255,7 +255,7 @@ def test_gp01_build_reads_no_execution_record_and_is_stable_across_builds(tmp_pa
     assert [r["request_id"] for r in a["requests"]] == ["r0", "r1", "r2"]         # r<k> identity, manifest position
     assert [r["cap"] for r in a["requests"]] == [3, 1, 3] and [r["arrive_step"] for r in a["requests"]] == [0, 1, 2]
     assert json.loads((tmp_path / "out_a" / "address_map.json").read_text()) == json.loads((tmp_path / "out_b" / "address_map.json").read_text())
-    # a component of the wrong shape for a declared cap is not silently reused: the missing shape is named (exit 4 path)
+    # a component of the wrong shape for a declared limit is not silently reused: the missing shape is named (exit 4 path)
     m2 = _manifest(tmp_path, [{"LP": 3, "cap": 2}], name="w2.json")
     r = gp.build(m2, derived, str(tmp_path / "out_c"))
     assert r["ok"] is False and r["reason"] == "missing_derived" and r["missing_derived"] == [(3, 1)]
@@ -385,14 +385,14 @@ def test_dag_hash_carries_the_producer_hash_not_its_position():
 
 def test_chronology_follows_arrivals_not_manifest_order_and_programs_every_step_once():
     """Arrival chronology (no Ingress/Egress primitives: arrivals are the declaration): r1 arrives BEFORE r0 —
-    engine-step membership follows `arrive_step`, the address map follows manifest order; every (request, s) for s in [0, cap) is
-    programmed exactly once (fixed population, no step dropped after an early stop); the horizon is max(arrive + cap)."""
+    engine-step membership follows `arrive_step`, the address map follows manifest order; every (request, s) for s in [0, limit) is
+    programmed exactly once (fixed population, no step dropped after an early stop); the horizon is max(arrive + limit)."""
     wl = _wl([(3, 3), (5, 1), (2, 2)], arrivals=[2, 0, 5])
     ch = wl.chronology()
     assert ch["programmed_horizon_steps"] == max(2 + 4, 0 + 2, 5 + 3) == 8
     es = {e["e"]: e for e in ch["engine_steps"]}
     assert [m["request_id"] for m in es[0]["members"]] == ["r1"] and [m["request_id"] for m in es[1]["members"]] == ["r1"]
-    assert [(m["request_id"], m["s"]) for m in es[2]["members"]] == [("r0", 0)]     # r1 is done (cap 2), r0 prefill
+    assert [(m["request_id"], m["s"]) for m in es[2]["members"]] == [("r0", 0)]     # r1 is done (limit 2), r0 prefill
     assert [(m["request_id"], m["s"]) for m in es[5]["members"]] == [("r0", 3), ("r2", 0)]
     assert es[5]["co_scheduled"] and es[5]["mixed_prefill_decode"]
     assert [(m["request_id"], m["s"]) for m in es[7]["members"]] == [("r2", 2)]
@@ -589,8 +589,8 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
 
 
 # ------------------------------------------------------- 6. the derived S reads the Program's activity
-# GM-01's own e2e fixtures (test_global_match: toy fold + batched record with declared arrivals / caps / an EOS stop) are the record of
-# reference here; `memory` is their fold fixture.  R1_EOS: cap 4, stops on the declared EOS 11 after 2 events -> a_r = n_r = 2.
+# GM-01's own e2e fixtures (test_global_match: toy fold + batched record with declared arrivals / limits / an EOS stop) are the record of
+# reference here; `memory` is their fold fixture.  R1_EOS: limit 4, stops on the declared EOS 11 after 2 events -> a_r = n_r = 2.
 
 from verity_vllm.definitions.registry.topp_geometry import registered_splits, splits_for  # noqa: E402
 
@@ -604,14 +604,14 @@ S_REG = registered_splits(NSM)   # 4: the split count the pinned engine launches
 
 # this section regresses GM-01's derived-S unit: on a tree without it there is nothing to regress -- named skip
 def _declared_to_cap(gpd: dict) -> list[int]:
-    """The live count per engine step of the schedule that serves every request to its cap: (arrive_step, cap) alone."""
+    """The live count per engine step of the schedule that serves every request to its limit: (arrive_step, limit) alone."""
     reqs = [(int(g["arrive_step"]), int(g["max_tokens"])) for g in gpd["requests"]]
     return [sum(a <= t < a + c for a, c in reqs) for t in range(max((a + c for a, c in reqs), default=0))]
 
 
 def _program_activity(gpd: dict, transcripts: dict[str, list[int]], eos_ids: set[int], lag: int = 0) -> dict[int, int]:
     """The Program's activity count per engine step under scheduler lag `lag`: request r is live at t iff arrive_r <= t <= arrive_r + n_r - 1, n_r = its committed tokens up to and INCLUDING the
-    first declared EOS plus `lag` placeholder rows when the EOS came before the cap (an EOS AT the cap is a length stop: no placeholder),
+    first declared EOS plus `lag` placeholder rows when the EOS came before the limit (an EOS AT the limit is a length stop: no placeholder),
     capped at max_tokens.  A function of the declaration, the committed tokens and the attested lag only -- never of which rows the
     engine happened to launch."""
     live: dict[int, int] = collections.Counter()
@@ -676,7 +676,7 @@ def _topp_fold_for(live_per_step: dict[int, int], s_of: dict[int, int], form: st
 @pytest.mark.parametrize("form", _S_FORMS)
 def test_the_registered_s_holds_on_every_step_of_a_passing_record_whatever_its_activity(memory, tmp_path, form):
     """On a record GM-01 PASSES, the record's row count at every engine step equals the Program's activity (declared arrival x committed
-    tokens, truncated at the verified EOS) -- not the declared-to-cap schedule: r1 (cap 4) stops on EOS at event 1, so steps 2 and 3 of
+    tokens, truncated at the verified EOS) -- not the declared-to-cap schedule: r1 (limit 4) stops on EOS at event 1, so steps 2 and 3 of
     its declared schedule are NOT live, and step 3 is not a step of the record at all.  S reads none of it: the registered
     S = registered_splits(4 SMs) = 4 passes at 2 live rows as at 1, and vLLM's own batch-derived S (2 live -> S=2) is refused by name."""
     gpd, oracle = TGM.assemble([TGM.R0, TGM.R1_EOS], tmp_path)
@@ -687,7 +687,7 @@ def test_the_registered_s_holds_on_every_step_of_a_passing_record_whatever_its_a
     activity = _program_activity(gpd, _transcripts(oracle), eos)
     observed = {s: len(rec["steps"][s]["logits_rows"]) for s in rec["steps"]}
     assert activity == observed == {0: 2, 1: 2, 2: 1}
-    # every request to its cap: the schedule GP-01 declares beside the Program (builder-side rows carry `cap`)
+    # every request to its limit: the schedule GP-01 declares beside the Program (builder-side rows carry `cap`)
     declared = _declared_to_cap(gpd)
     assert declared == [2, 2, 2, 1] and declared[2] == 2 != activity[2] == 1 and 3 not in observed and declared[3] == 1
     gsm = dict(gpd, sampler_geometry={"num_sms": NSM})

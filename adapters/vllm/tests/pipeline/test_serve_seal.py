@@ -531,7 +531,7 @@ def test_the_served_target_carries_the_int8_scope_its_layers_ran(monkeypatch):
         ss.target_of(model(int8, bf16))
 
 
-# ---------------------------------------------------------------------------------------------------------------- the advice's cap
+# ---------------------------------------------------------------------------------------------------------------- the advice's limit
 
 def test_the_registered_compiler_is_prove_paths_capped_compiler():
     """registration.json's compiler digest is the one PROVE-PATH's capped re-commit binds: `advice_windows.Capped`'s formula."""

@@ -14,7 +14,7 @@
 #   bash /workspace/cp/cov_pod.sh queue <case> <name1> <name2> …    # run several workloads of one case serially (GPU), CPU phases in
 #                                                                   # the background (at most COV_CPU_PAR at a time, default 2)
 # <workload-name> is the stem of workloads/workload_<name>.json (e.g. cov_b0_b8-mixed_c256); <run-name> = <case>-<name>.
-# Env: COV_K (tier A k, default 3), COV_PAR (replay stages in parallel, default 8), COV_SNAP_MB (snapshot cap in MiB for B8 / C1024
+# Env: COV_K (tier A k, default 3), COV_PAR (replay stages in parallel, default 8), COV_SNAP_MB (snapshot limit in MiB for B8 / C1024
 # runs, default 256), COV_CPU_PAR (concurrent CPU phases in `queue`, default 2), COV_EXTRA (extra driver args for every run).
 set -uo pipefail
 # COV_REPO: the adapters/vllm directory to run (the campaign runner points it at a per-attempt code snapshot); default: the tree
@@ -51,14 +51,14 @@ sys.exit(f"no local snapshot for case {case}")
 EOF
 }
 
-snap_args() {  # <workload-name>: raise the snapshot cap for batched / long prefills (the 32 MiB default blinds MLP rows > ~936 tokens)
+snap_args() {  # <workload-name>: raise the snapshot limit for batched / long prefills (the 32 MiB default blinds MLP rows > ~936 tokens)
   # MoE (OLMoE, top-8): the observer copies every event's tensors into pinned host memory until the step flushes (~30 MiB of
   # copies per prefill token for OLMoE: B1 C256 155 tokens = 4.55 GiB in step 0; B8-mixed step 14, 363 tokens = 11.6 GiB), and
   # the fused-MoE intermediates [T*TOPK, 2I] / [T, TOPK, H] (~62% of it) are re-snapshotted ~23x per layer by aten view churn.
   # B8-static's ~1300-token step 0 is ~40 GiB of copies (x1.5 pinned-allocator rounding + ~8 GB baseline) = the pod's 62 GB
-  # cgroup: SIGKILLed twice (once at a flat 48 MiB cap, which those ~42 MB buffers pass).  MoE runs therefore keep the full
-  # cap at Triton launch events (each expert-GEMM output is copied once, at the launch whose snapshot tier A reads) and apply
-  # the lower COV_SNAP_MB_MOE cap (24 MiB) at dispatcher-call events (--snapshot-max-bytes-op): cache2 [T*TOPK, I] = 21 MB and
+  # cgroup: SIGKILLed twice (once at a flat 48 MiB limit, which those ~42 MB buffers pass).  MoE runs therefore keep the full
+  # limit at Triton launch events (each expert-GEMM output is copied once, at the launch whose snapshot tier A reads) and apply
+  # the lower COV_SNAP_MB_MOE limit (24 MiB) at dispatcher-call events (--snapshot-max-bytes-op): cache2 [T*TOPK, I] = 21 MB and
   # qkv [T, 6144] = 16 MB at T=1300 still pass; only the ~42 MB MoE buffers and their views are dropped there.
   case "$1" in
     *olmoe*b8-*|*olmoe*c1024*) echo "--snapshot-max-bytes $((SNAP_MB << 20)) --snapshot-max-bytes-op $((SNAP_MB_MOE << 20))" ;;

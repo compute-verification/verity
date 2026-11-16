@@ -234,10 +234,10 @@ def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
 
 
 def test_fill_declares_every_served_step_full_and_serve_h1_is_119_of_1152():
-    """`FILL`: 64 one-token prompts at cap 16 in T = 64, S = 18 prefill at step 0 and decode together, so each of
+    """`FILL`: 64 one-token prompts at limit 16 in T = 64, S = 18 prefill at step 0 and decode together, so each of
     the 16 served steps carries 64 rows and u = 16/18; the engine runs all 64 in flight with no prefix
     cache. The 5 batched prompts (`tests/engine/int8_exact_gpu.PROMPTS`, 44 tokens with BOS under the int8 Llama-3.1-8B's
-    tokenizer) at the same cap are 44 + 15 x 5 rows: 119/1152."""
+    tokenizer) at the same limit are 44 + 15 x 5 rows: 119/1152."""
     assert PH.FILL.schedule() == [64] * 16 + [0, 0] and PH.FILL.u == Fraction(16, 18)
     assert PH.FILL.engine_args() == {"max_num_seqs": 64, "max_num_batched_tokens": 64, "enable_chunked_prefill": True,
                                      "enable_prefix_caching": False}
@@ -357,7 +357,7 @@ class Runner:
 
 
 def _so(*new, running=None, tokens=None):
-    """A scheduler output admitting requests ``new``, each (req_id, prompt token ids, cap) scheduled whole, after the
+    """A scheduler output admitting requests ``new``, each (req_id, prompt token ids, limit) scheduled whole, after the
     ``running`` requests' {req_id: rows}, in the scheduler's order (running, then new)."""
     reqs = [SimpleNamespace(req_id=i, prompt_token_ids=p, sampling_params=SimpleNamespace(max_tokens=c)) for i, p, c in new]
     scheduled = dict(running or {}) | {i: len(p or ()) for i, p, _c in new}

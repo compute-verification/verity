@@ -46,7 +46,7 @@ class MatchCheck:
     what: str
     problems: tuple[str, ...]                         # the first 20
     n_problems: int
-    # G6's (chronology): recorder request id -> {served_output_len, executed_prefix_len, cap, cap_exhausted}; the other checks have none
+    # G6's (chronology): recorder request id -> {served_output_len, executed_prefix_len, limit, cap_exhausted}; the other checks have none
     lengths_by_request: Mapping[str, Mapping[str, Any]] | None
     lag: Mapping[str, Any] | None                     # G6's: declared, record_attests, tokens_json_lag, exercised, variable_lag
     entry: Mapping[str, Any]                          # as written, the check's own evidence with it

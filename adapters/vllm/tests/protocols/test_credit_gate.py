@@ -293,7 +293,7 @@ def _served(**kw) -> SV.Served:
 
 @pytest.fixture
 def periodic(tmp_path, monkeypatch):
-    """`auditor` with its challenge phase and its sample's reserved inside lane vllm's period `PERIOD` (cap 2, the one
+    """`auditor` with its challenge phase and its sample's reserved inside lane vllm's period `PERIOD` (limit 2, the one
     window's two challenge phases), whose open commits `_circuit` and (unless
     None) the sample K ``draw_k`` and the fixed length `LENGTH`, opened with ``--model`` `CH.MODEL` (unless ``model`` is
     False) on ``registry`` (default `_registry`), and ``files`` its circuit files: ``periodic(draw_k)`` is the host; close the period with

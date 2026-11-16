@@ -32,7 +32,7 @@ def _served(tmp_path, *, seed: int = 0, n: int = 12, gap: bool = True, **sched_k
         prompt, cap = rng.randint(1, 40), rng.randint(1, 12)
         outputs = [rng.randint(3, 99) for _ in range(cap)]
         if rng.random() < 0.5:
-            outputs[rng.randrange(cap)] = 2                     # EOS before the cap
+            outputs[rng.randrange(cap)] = 2                     # EOS before the limit
         r = FakeRequest(f"e{i}", [rng.randint(3, 99) for _ in range(prompt)], outputs, cap,
                         sampling_params=SimpleNamespace(temperature=0.0, max_tokens=cap))
         at += 60 if gap and i == n - 2 else rng.randint(0, 3)

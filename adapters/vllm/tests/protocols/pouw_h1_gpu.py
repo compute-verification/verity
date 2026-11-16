@@ -22,7 +22,7 @@ One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw
             round coins; `requests_check`), one entry a served request and no served row without one.
 
 ``--workload fill`` serves `pouw_h1.FILL` instead: 64 one-token prompts (`fill_prompts`) under
-the static schedule (``ignore_eos``, every request to its cap, host prefix cache off), with ``max_num_seqs`` 64 and T = 64,
+the static schedule (``ignore_eos``, every request to its limit, host prefix cache off), with ``max_num_seqs`` 64 and T = 64,
 so all 64 prefill at step 0 and decode together for the 16 served steps of an S = 18 window. Without the option it serves
 the 64 and then the first alone (the 1-sequence workload); with it, the 64 in one window (`<out>/pouw-h1-calls.json`) and the
 first alone in a second (`<out>/solo/`). It records each window's step rows against the declaration (`Static.check`), its
@@ -365,12 +365,12 @@ def session_end(gate: Any, reserved: dict[str, Any]) -> dict[str, Any]:
 
 def fixed_length(decl: Any) -> dict[str, Any]:
     """The fixed length `decl`'s window serves (``period-open --length``, core's `credit.LENGTH_FIELD`): each request's
-    public max_tokens, every one admitted at step 0 and run to its cap (``ignore_eos``, the public-cap done source)."""
+    public max_tokens, every one admitted at step 0 and run to its limit (``ignore_eos``, the public-cap done source)."""
     return {"max_tokens": [decl.max_tokens] * decl.slots, "stop": "fixed"}
 
 
 def period_open_argv(name: str, circuit: str, draw_k: int, decl: Any, files: dict[str, str]) -> list[str]:
-    """``period-open`` of the Commit window's period `name`: cap 2 (the Commit's window and its sampling session alone, so
+    """``period-open`` of the Commit window's period `name`: limit 2 (the Commit's window and its sampling session alone, so
     a negative's refused window, which ends complete, is never one of it), its circuit (the period's declared Program's
     digest), its sample K
     (`pouw_h1_challenger.draw_k` over the declared layout, core's `credit.committed_k`), T, its circuit files
@@ -616,7 +616,7 @@ def fill_prompts(tokenizer: Any, n: int) -> list[int]:
 
 
 def generate_static(llm: Any, prompts: list[int], max_tokens: int) -> list[dict[str, Any]]:
-    """Greedy one-token prompts under the static schedule (``ignore_eos``: every request runs to its cap)."""
+    """Greedy one-token prompts under the static schedule (``ignore_eos``: every request runs to its limit)."""
     from vllm import SamplingParams
     outs = llm.generate([{"prompt_token_ids": [t]} for t in prompts],
                         SamplingParams(temperature=0.0, max_tokens=max_tokens, seed=0, ignore_eos=True), use_tqdm=False)
@@ -625,7 +625,7 @@ def generate_static(llm: Any, prompts: list[int], max_tokens: int) -> list[dict[
 
 
 def static_check(gen: list[dict[str, Any]], max_tokens: int) -> dict[str, Any]:
-    """`engine.static_schedule.check` of each request: by length at its cap, no prefix-cache read."""
+    """`engine.static_schedule.check` of each request: by length at its limit, no prefix-cache read."""
     from verity_vllm.engine import static_schedule
     reqs = [{"request_id": str(i), "max_tokens": max_tokens} for i in range(len(gen))]
     timing = {"requests": {str(i): {"finish_reason": g["finish_reason"], "n_generated": len(g["token_ids"])} for i, g in enumerate(gen)}}
@@ -1105,7 +1105,7 @@ def host_memory() -> dict[str, float | None]:
 
 def declared_of(a: argparse.Namespace) -> Any:
     """The fill workload's declaration: `pouw_h1.FILL`, or with ``--declare SLOTS,CAP,T,S`` SLOTS one-token prompts at
-    cap CAP, T rows a call and S steps (`pouw_h1.Static`)."""
+    limit CAP, T rows a call and S steps (`pouw_h1.Static`)."""
     from verity.protocols.accounting.pouw.prover.serving import h1 as PH
     if not a.declare:
         return PH.FILL

@@ -4,14 +4,14 @@ Program's chronology programs segment s of request r for engine step `arrive_ste
 family leaves the body as ONE segment: every step past s = 0 has no programmed input set (`chronology.json` member `nodes: null`) and
 `component_steps_equal_cap` is false -- v1's rule named `TokenSelect_v1` only, so a seeded-Gumbel row records exactly that.
 
-Lifted from the row's OWN documents: per declared request (`build_workload/workload_program.json` `requests[*]`) its cap, component
+Lifted from the row's OWN documents: per declared request (`build_workload/workload_program.json` `requests[*]`) its limit, component
 digest, `n_nodes`, `steps`, sha256 of `step_nodes`, and the component's sampling events as its Build counted them (`result.json`
 `spec_histogram`, the families of `verity_vllm.program.sampling_event`); from `build_workload/chronology.json` the flag and the number of
 members with no segment.  Recomputed: `request_component` over each component's `descriptor.json.gz` with the CURRENT code, the
 sampling events counted in the decoded body, the chronology facts by `WorkloadProgram.chronology`'s rule (segment s exists iff
 s < len(step_nodes)).  In candidate mode the candidate's own build_workload/ documents are lifted the same way.
 
-`actual` also states `consistent` (not in the contract, not diffed): steps == cap == sampling events per request and every segment
+`actual` also states `consistent` (not in the contract, not diffed): steps == limit == sampling events per request and every segment
 ending at a sampling event -- what a correct segmentation of a one-token-per-step request is, whichever side of the diff it is on.
 """
 from __future__ import annotations

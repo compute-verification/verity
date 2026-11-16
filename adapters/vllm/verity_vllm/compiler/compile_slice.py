@@ -385,7 +385,7 @@ def demo() -> tuple[dict, Slice]:
 
 def demo_async() -> tuple[dict, Slice]:
     """The asynchronous demonstration class's statics and slice: `DEMO_ENGINE` at two sequences under async scheduling
-    without prefix caching (AS = 1, so ``wit`` has a ``map``), (R 2, W 1, A 2), three arrivals (id, P, O, cap), two
+    without prefix caching (AS = 1, so ``wit`` has a ``map``), (R 2, W 1, A 2), three arrivals (id, P, O, limit), two
     decisions and six units. Units 0 to 3 run two rows each, so a served batch in another order than the slots is a
     map other than the identity."""
     engine = {**DEMO_ENGINE, "max_num_seqs": 2, "enable_prefix_caching": False, "async_scheduling": True}
@@ -424,7 +424,7 @@ class Case:
 
 
 def _state(Sc: RC.Shape, row: RC.Row) -> RS.State:
-    """A state row's entries as ReplayStep_v1's requests, by the chain's names at its shape (AS = 1 adds cap and fin)."""
+    """A state row's entries as ReplayStep_v1's requests, by the chain's names at its shape (AS = 1 adds limit and fin)."""
     return RS.State(tuple(RS.Req(**dict(zip(RC.running_names(Sc), x))) for x in row.running),
                     tuple(RS.Req(**dict(zip(RC.waiting_names(Sc), x))) for x in row.waiting), row.free)
 

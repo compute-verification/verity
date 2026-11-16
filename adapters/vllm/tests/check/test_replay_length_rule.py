@@ -61,7 +61,7 @@ def _checks(d, ids: list[int], n_exec: int = 3) -> dict:
     (2, [11, 12, 13], True),             # an honest length finish
     (1, [11, 12, 13], False),            # cut short before its first stop
     (1, [11, 255, 255], False),          # run past a stop to finish on another
-    (2, [11, 255, 13], False),           # run past a stop to its cap
+    (2, [11, 255, 13], False),           # run past a stop to its limit
 ])
 def test_the_replay_evaluates_the_length_rule_from_the_committed_ids(tmp_path, finish, ids, result):
     rec = _checks(_build(tmp_path, finish), ids)

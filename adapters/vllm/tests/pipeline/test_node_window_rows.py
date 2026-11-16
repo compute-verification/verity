@@ -133,7 +133,7 @@ def test_each_rank_commits_the_window_the_join_names(stated, tmp_path):
                                             keep_rows=True)}}, "registered"),
 ], ids=["ingress", "no-cap", "cap-0", "registered-missing", "registered-extra", "registered-shape"])
 def test_refused_by_name_before_anything_is_written(edit, name, tmp_path):
-    """A rank window that declares an ingress (its prompt is a boundary read), a cap that is not a positive count, and
+    """A rank window that declares an ingress (its prompt is a boundary read), a limit that is not a positive count, and
     registered values that are not the ones its reads read (one missing, one it doesn't register, one of another row
     shape) are refused (ValueError) by name, and nothing is written under ``out``."""
     out = tmp_path / "rank1"

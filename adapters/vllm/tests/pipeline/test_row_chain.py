@@ -1,6 +1,6 @@
 """`verity-vllm row chain`: a row whose Build, Match and Commit Attempts pass publishes its record in the circuit database with their
 artifacts, the Commit's summary.json, the newest captures of record and the tree the Commit ran; any other row publishes nothing,
-and a chain that would publish a row whose file is not done only at its public cap is refused before any stage runs.  The research
+and a chain that would publish a row whose file is not done only at its public limit is refused before any stage runs.  The research
 CLI and `records publish` are stand-ins that record what they were asked.
 
 Then the run store's driver beside the chain (`pipeline/research.py`, private with this file in the public boundary's `team` group,
@@ -62,7 +62,7 @@ class _Research:
 
 @pytest.fixture(autouse=True)
 def capped(tmp_path, monkeypatch) -> Path:
-    """ROW's file done only at its public cap, as the file of a row the chain publishes must be; returns its path."""
+    """ROW's file done only at its public limit, as the file of a row the chain publishes must be; returns its path."""
     doc = json.loads(workload_file(WORKLOADS / f"{ROW}.json").read_text())
     p = tmp_path / "workloads" / f"{ROW}.json"
     p.parent.mkdir()

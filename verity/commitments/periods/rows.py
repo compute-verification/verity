@@ -12,7 +12,7 @@ period: no query of core's selects template instances inside another Program (th
 an instance).
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, or a template's units in
-consecutive chunks, one member per statement (a circuit's spec shape caps its instances), each with its row ports and output
+consecutive chunks, one member per statement (a circuit's spec shape limits its instances), each with its row ports and output
 ports in the order of Flock's circuit prover (``verity_flock.circuit``).  Each output port is a row too, after the member's
 input rows: its words zero-padded to whole SHA-512 blocks, committed under its own salt like an input row (an output is a
 value: no output word is ever public).  A bit-row member
@@ -230,7 +230,7 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
 class Member:
     """One statement's units of the population: its template's descriptor id, row and output ports ``(name, words)`` in the
     circuit prover's order, its instance count and the global index of its first unit.  A template is one member, or
-    consecutive chunks of its units (``name`` ``<descriptor id>/c<j>``), one per statement of at most the circuit's chunk cap.  ``schemas``: a bit-row
+    consecutive chunks of its units (``name`` ``<descriptor id>/c<j>``), one per statement of at most the circuit's chunk limit.  ``schemas``: a bit-row
     member's row schema per port (``hm96-sha512/row/v2`` or ``…/row-seg/v1``, Flock's ``row_schemas``), each row the bits
     of its u16 words and each output row exactly its words; else every row is ``hm96-sha512/row/v1``."""
     template: str

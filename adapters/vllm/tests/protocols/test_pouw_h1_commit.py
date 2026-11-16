@@ -59,7 +59,7 @@ K, ROWS, STEPS = 64, 32, 2
 ENTRY = f"pouw:{PH.SCHEME}"
 #: the committer's engine step at the window's step 0 (its steps count from the engine's start, H1's from the window's)
 FIRST = 7
-#: step 0 admits a and b (prompt tokens, cap); step 1 decodes one row of each
+#: step 0 admits a and b (prompt tokens, limit); step 1 decodes one row of each
 PROMPTS = {"a": [5, 6, 7], "b": [8, 9]}
 
 

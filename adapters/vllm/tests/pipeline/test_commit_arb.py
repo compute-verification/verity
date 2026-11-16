@@ -1,4 +1,4 @@
-"""`pipeline.commit_arb`'s traffic, verdict and Commit, without an engine: CERT-VARLEN's lengths and caps, the sampling mix,
+"""`pipeline.commit_arb`'s traffic, verdict and Commit, without an engine: CERT-VARLEN's lengths and limits, the sampling mix,
 seeded and in arrival order; a run passes only when every request and every window did; it commits under serve-openai's
 rows-sha512 committer."""
 from __future__ import annotations

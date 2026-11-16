@@ -22,8 +22,8 @@ FILE = "commit.json"
 class BoundaryCommit:
     window: int                                       # the window's index in its serve
     run: str                                          # the window's run, which every value's domain binds
-    prompt: int                                       # the class's prompt cap P
-    outputs: int                                      # its output cap O
+    prompt: int                                       # the class's prompt limit P
+    outputs: int                                      # its output limit O
     check: str                                        # the check template's id
     per_prompt: int                                   # its instances a prompt row
     per_output: int                                   # its instances an output

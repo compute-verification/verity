@@ -10,7 +10,7 @@ at a time, in four records:
    period's ``circuit.json`` (`circuit_record`) holds the whole layout the verifier reads, stated per template and wire
    rather than per member, and the registration binds its SHA-512.
 2. **A compiler and its advice** (optional, `advice_binding`): the registered compiler's name and digest (which carries the
-   public cap on the advice's length; `compiler_digest`, over its code) with the commit that code is at, and the advice's
+   public limit on the advice's length; `compiler_digest`, over its code) with the commit that code is at, and the advice's
    hiding commitment (`verity.commitments.advice`): its root and its length in bits, which is charged. Verity never
    reads the advice.
 3. **The values** (:class:`Window`): each unit's values as computed (`Window.record`: one array per parameter and one per
@@ -353,7 +353,7 @@ def proof_block_k_log(in_bytes: Sequence[int], out_bytes: Sequence[int] = (), an
     hm96 slots (one a row, a power of two in all), that slot and the mask, then the sha512x3 slots; and the composer
     packs proof blocks into it while it stays within 2^`PACK_LOG` bits or one proof block's size, which doubling, at most
     doubling the block, ends at exactly the larger. ``packed=False``: one proof block's own block before that packing
-    (compose's ``k1``, at least 2^`K_MIN`), which a sampling plan's statement cap reads, counting the packing itself."""
+    (compose's ``k1``, at least 2^`K_MIN`), which a sampling plan's statement limit reads, counting the packing itself."""
     def cells(row_bytes: Sequence[int]) -> int:
         return 128 << (-(-8 * sum(row_bytes) // 128) - 1).bit_length() if sum(row_bytes) else 0
 
@@ -2168,7 +2168,7 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
 
 def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
     """``circuit``'s ``circuit.json`` less its `RUN_FIELDS` (`circuit_of`) but ``cap``, from its description alone: what a
-    compiler emits before any unit runs, at the cap its members are stated by. Its partition is the one `members` tiles, its
+    compiler emits before any unit runs, at the limit its members are stated by. Its partition is the one `members` tiles, its
     members stated by ``cap``, its wires and its cuts, so building it is work per template and per wire, never per unit."""
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
@@ -2191,9 +2191,9 @@ def templates_of(w: CS.Binding) -> list[tuple[str, int]]:
     return [(t, n) for _k, t, _lo, n in CS.template_partition(w.program, w.query).ranges]
 
 
-#: the circuit record's fields its period's run fixes rather than its circuit (the run root, the coins' context, the cap its
+#: the circuit record's fields its period's run fixes rather than its circuit (the run root, the coins' context, the limit its
 #: members are cut at), which the registration binds itself (`window.circuit`, the whole record, before any coin): a
-#: compiler's output is the record less these (`circuit_of`), so a circuit's digest holds at whatever cap a serve commits
+#: compiler's output is the record less these (`circuit_of`), so a circuit's digest holds at whatever limit a serve commits
 RUN_FIELDS = ("run", "context", "cap")
 
 
@@ -2206,7 +2206,7 @@ def circuit_bytes(doc: Mapping[str, Any]) -> bytes:
     return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode() + b"\n"
 
 
-#: a stated record's optional fields beside its cap and wires (`Circuit.declared`), of which a listed record declares only
+#: a stated record's optional fields beside its limit and wires (`Circuit.declared`), of which a listed record declares only
 #: its registered reads, tables, table reads and openings (`listed_reads`)
 DECLARED = ("cuts", "registered", "ingress", "order", "boundary_reads", "ranks", "free")
 #: a listed record's optional field beside its members for its period's ingress (`listed_ingress`)
@@ -2821,7 +2821,7 @@ class Window:
         return {"format": LABELS, "run": self.run, "members": [{"name": m.key, "labels": of(m)} for m in self.window.members]}
 
     def circuit_record(self) -> dict[str, Any]:
-        """The period's ``circuit.json`` (`circuit_record`), its members stated by its cap and the circuit's wires, each
+        """The period's ``circuit.json`` (`circuit_record`), its members stated by its limit and the circuit's wires, each
         template's statement its bit rows under its cuts and row-seg rows (`unit_rows`; `seg_ports`, `seg_rows`)."""
         sts, seg = {}, _seg(self.circuit.registered, self.circuit.wires, self.circuit.cuts)
         for fn, tid in zip((f for f, _ in self.circuit.templates), self.circuit.ids):

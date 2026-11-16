@@ -40,7 +40,7 @@ records (the tie: prompt and output lengths against the certified ids, `finish` 
 The hits, the resumes and the order of new requests that `derived.walk_steps` would otherwise read are the replay's, so
 v1 sends none. Every prefix-cache lookup's hit is the replay's block pool's (`pool.BlockPool`, its LRU and eviction
 included), past the cumulative pool bound too, as the compile slice's pool derives it
-(`verity_vllm.compiler.compile_slice_v4`), so no hit is the prover's choice. The registered caps hold the
+(`verity_vllm.compiler.compile_slice_v4`), so no hit is the prover's choice. The registered limits hold the
 hits, the resumes and the lag bits at 0 (`CAPS`), so their counts code in 0 bits. The KV pool's size is registered
 before the run, never sent: a prover that chose it could declare a bigger pool and buy hits with it.
 
@@ -57,8 +57,8 @@ the replay asks for it (`kept.Reader`). I1 v0's rows emit one output each, so `e
 **Under the certified tick** (`Registered.tick`, an engine served with ``--admit tick``), the engine adds each request
 once a logical clock has passed its release bucket's close, in release order, and the replay runs that rule from the
 record's `end`s and the registered τ (`replay.replay`'s ``tick``). It asks nothing, so there are no decisions, and v1
-requires the arrival order to be release order, so there are no order entries. The registered caps hold no count
-(`TICK_CAPS`, and a registered book's caps must too), so every window's segment codes nothing, in 0 bits: a window is
+requires the arrival order to be release order, so there are no order entries. The registered limits hold no count
+(`TICK_CAPS`, and a registered book's limits must too), so every window's segment codes nothing, in 0 bits: a window is
 charged its length terms alone, and 0 bits where the registration sends no lengths.
 
 **The windows** (the certifier PROTOCOL's A5: no later than the first window whose rows the value changes). Step s's
@@ -296,7 +296,7 @@ class Registered:
     and charges each request's output_len and finish (the module's "Sent, the lengths").
 
     `send_lengths` is on, in every registration (class G's included), until a proof holds both halves of the length
-    rule on main: the stop ids, a stop-id rule in each request Program, and the `max_tokens` cap. Until then the
+    rule on main: the stop ids, a stop-id rule in each request Program, and the `max_tokens` limit. Until then the
     certified record's output_len is the prover's choice and v1 charges it; a registration that turns it off names
     the proof of each half."""
 
@@ -518,7 +518,7 @@ def _residual(record: Record, reg: Registered, order: Sequence[int], rp: Any, de
 
 # --- the string --------------------------------------------------------------------------------------------------------
 
-#: v1's caps where the registration gives no book: no window sends a hit, a resume or a lag bit, and an order entry
+#: v1's limits where the registration gives no book: no window sends a hit, a resume or a lag bit, and an order entry
 #: ranks one arrival
 CAPS = CV.Caps(hits=0, resumes=0, order_len=1, lag=0)
 #: and under the certified tick, where no window sends anything

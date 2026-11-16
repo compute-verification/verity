@@ -213,7 +213,7 @@ def test_a_unit_committed_under_other_advice_is_refused(advice_tp):
 
 
 def test_the_stand_in_advice_states_the_workloads_requests_at_their_arrivals(advice_tp):
-    """I1 advice of the workload: each request's whole-prompt prefill at its arrival, then a decode row a step to its cap, every
+    """I1 advice of the workload: each request's whole-prompt prefill at its arrival, then a decode row a step to its limit, every
     output kept and released in its step's bucket; the compiler's requests read back from it are the workload's."""
     c = advice_tp
     advice = A.decode(c["bytes"]["A"])

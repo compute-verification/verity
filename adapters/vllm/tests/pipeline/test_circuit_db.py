@@ -1,6 +1,6 @@
 """The circuit database (`verity_vllm.pipeline.circuit_db`): the index, a TP row published from its row dir, pinned and loaded back
 by row id, its conformance (captures of record, named gaps, a property left silent refused), the in-stage manifest a manifest of record
-supersedes, a row file not done only at its public cap refused by publish, pull and switch before anything is written, a job's
+supersedes, a row file not done only at its public limit refused by publish, pull and switch before anything is written, a job's
 bundle read with no store, a checkpoint's staging event, and the index's rule on its writers: a row names a record only beside that
 record's Programs."""
 from __future__ import annotations
@@ -91,7 +91,7 @@ def _capped(doc: dict) -> dict:
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     """The store the research CLI selects: a local root with a directory as its remote; no capture map but the test's; and ROW's
-    file done only at its public cap, as the file of a row `publish` indexes must be."""
+    file done only at its public limit, as the file of a row `publish` indexes must be."""
     (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "store.toml"))

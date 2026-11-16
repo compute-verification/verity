@@ -3,7 +3,7 @@ string decodes to a well-formed v0 advice" (`advice`, PROTOCOL.md "Advice v0").
 
     AdviceCheck_v1{L} (bits: Array<L, Value<1>>, length: Array<LW, Value<1>>) -> Value<1>
 
-**Statics.** L is the public cap in bits, a multiple of 40; LW = bitlen(L / 8).
+**Statics.** L is the public limit in bits, a multiple of 40; LW = bitlen(L / 8).
 
 **Inputs.** `bits` is the committed bit string in stream order (bit 8k + j is bit 7 − j of byte k, as `advice.encode`
 writes it), and `length` its length in bytes, least significant bit first. Bits past 8·length are read as nothing.

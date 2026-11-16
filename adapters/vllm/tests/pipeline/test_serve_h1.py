@@ -53,7 +53,7 @@ from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
-#: each window's two requests: step 0 admits both (prompt tokens, cap), step 1 decodes a row of each
+#: each window's two requests: step 0 admits both (prompt tokens, limit), step 1 decodes a row of each
 PROMPTS = ({"a": [5, 6, 7], "b": [8, 9]}, {"c": [11, 12], "d": [13, 14, 15, 16]})
 
 

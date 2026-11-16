@@ -135,7 +135,7 @@ def test_the_compose_pool_is_sized_by_every_requests_programs(tmp_path, monkeypa
 
 
 def test_the_memory_headroom_is_the_jobs_own_cgroup_chain_and_the_hosts_available(tmp_path):
-    """`research run --queue --mem-gb G` caps the job's own scope, not the mount root: read at the root, a Build plans its composes
+    """`research run --queue --mem-gb G` limits the job's own scope, not the mount root: read at the root, a Build plans its composes
     from the host's 1.5 TB available and its 250 GB scope OOM-kills them."""
     root, proc, meminfo = tmp_path / "cg", tmp_path / "cgroup", tmp_path / "meminfo"
     scope = root / "user.slice" / "app.slice" / "job.scope"

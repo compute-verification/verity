@@ -33,7 +33,7 @@ def _match_link(epr: dict) -> dict:
 
 
 def _binding() -> dict:
-    """A single-GPU binding as `binding_record` assembles it: r0 stopped at EOS with LAG 1, r1 ran its cap; the token-record link was
+    """A single-GPU binding as `binding_record` assembles it: r0 stopped at EOS with LAG 1, r1 ran its limit; the token-record link was
     not applied (the workload committed no sampled id)."""
     epr = EP.executed_prefix_of_record(["r0", "r1"], {"r0": [5, EOS], "r1": [1, 2, 3]}, caps={"r0": 3, "r1": 3}, eos_of_record=[EOS], lag=1)
     cov = B.coverage_check([], {"digest": "d" * 64, "entries_n": 0, "entries": []})

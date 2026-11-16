@@ -28,7 +28,7 @@ the advice's length go public, as the binding a window's registration carries (`
 ``binding``, which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
 
     registration.json     public: the binding (the compiler's name and digest, the advice's root and ``total_bits``), the
-                          registered compiler, `advice_windows.Capped` with ℓ (the cap on the advice's length its digest covers)
+                          registered compiler, `advice_windows.Capped` with ℓ (the limit on the advice's length its digest covers)
                           and the compiler it wraps (``compiler``), the bits
                           I1 charges each egress window of `--T` buckets (``bits_by_window``), and with `--weights-of-record`
                           the committer's hiding root of each weight parameter the window circuit registers, as its weights
@@ -88,7 +88,7 @@ CAP_BITS = AW.CAP_BITS
 
 @dataclass(frozen=True)
 class Compiler:
-    """The compiler the cap wraps (`advice_windows.Capped`): ``name`` and ``digest`` (128 hex digits)."""
+    """The compiler the limit wraps (`advice_windows.Capped`): ``name`` and ``digest`` (128 hex digits)."""
     name: str
     digest: str
 

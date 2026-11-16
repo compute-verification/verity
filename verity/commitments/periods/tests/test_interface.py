@@ -6,7 +6,7 @@ against the Definitions before it commits, a wire pattern wires whole members un
 cut port's rows are each wired from their own writer, a registered read's ports are tables of the registered rows under
 the value's salts, every other input row is
 declared registered, ingress or free and counted from the description, the verifier's period (and its registered
-reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads, and a history table's
+reads) is rebuilt from the circuit record alone, its members stated by limit, wires, cuts and reads, and a history table's
 writer commits each row as the table's leaf, whose root the verifier pins from the public bodies, and a commit into a
 period directory is the whole commit, made a run of rows at a time. A period written under
 core's registration, and `of_records` against it, are the records audit's tests
@@ -938,7 +938,7 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
 def test_cap_is_a_run_field_the_registration_binds_and_the_circuits_digest_does_not():
     """A stated record's members are derived from its ``cap`` (`window_of_record`), so ``cap`` stays a key of the record and
     under its registration's ``window.circuit`` (the whole record's SHA-512, before any coin); it is a run field, out of the
-    circuit's digest ``H`` (`circuit_of`), so a Definition that names ``H`` before the serve holds whatever cap it commits at."""
+    circuit's digest ``H`` (`circuit_of`), so a Definition that names ``H`` before the serve holds whatever limit it commits at."""
     a, b = (window(cap=cap)[0].circuit_record() for cap in (4, 3))
     assert (a["cap"], b["cap"]) == (4, 3) and {k for k in a.keys() | b.keys() if a.get(k) != b.get(k)} == {"cap"}
     assert hashlib.sha512(I.circuit_bytes(a)).digest() != hashlib.sha512(I.circuit_bytes(b)).digest()
@@ -2021,7 +2021,7 @@ def _loop_turns(f) -> int:
 
 
 def _long_chain(layers: int, d: Path) -> None:
-    """A ``Gemm_v2{K=16, N=16}`` chain of ``layers`` layers of two units, a member a unit (cap 1), layer 0's ``x`` a
+    """A ``Gemm_v2{K=16, N=16}`` chain of ``layers`` layers of two units, a member a unit (limit 1), layer 0's ``x`` a
     ``Gemm_v2{K=32, N=16}`` feed's output and layer l's layer l - 1's, a wire each, and each layer's ``w`` its own row of
     a registered value, a read each, both recorded by reference: the period built, recorded, closed and written, and the
     verifier's period, wiring check and ``--registered`` files made from its record."""

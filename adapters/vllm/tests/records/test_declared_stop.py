@@ -120,7 +120,7 @@ def _outcome(gp: dict, oracle: str) -> dict:
 
 
 def _corpus(tmp_path: Path) -> dict[str, dict]:
-    """The global match over the Program's two blocks as each writer writes them and as each G6 path reads them: served to the cap, an EOS stop
+    """The global match over the Program's two blocks as each writer writes them and as each G6 path reads them: served to the limit, an EOS stop
     under a synchronous Program, an EOS stop under a LAG-1 Program; declared, undeclared, disagreeing with the record."""
     out: dict[str, dict] = {}
 

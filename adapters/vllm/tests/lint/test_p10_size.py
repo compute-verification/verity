@@ -3,11 +3,11 @@
 A module's size is its line count; a function's is the span of its ``def`` statement (``lineno`` to ``end_lineno``,
 decorators excluded), methods and nested functions each counted on their own.  Today's offenders are recorded in
 ``allowlists/p10_size.json`` at their current size, as ``count`` (in lines) of the key
-``(file, "module" | "function", symbol, "lines")``.  The recorded size is a cap:
+``(file, "module" | "function", symbol, "lines")``.  The recorded size is a limit:
 
 * an unlisted module or function over the limit fails;
-* a listed one that grew more than `slack` past its recorded size fails (split it; do not raise the cap), so a fix in a
-  file at its cap needs no line-trimming;
+* a listed one that grew more than `slack` past its recorded size fails (split it; do not raise the limit), so a fix in a
+  file at its limit needs no line-trimming;
 * a listed one that is now within the limit (or gone) fails until its entry is deleted.  One that only shrank keeps its
   recorded size: the allowlist is a file every change would otherwise edit.
 """

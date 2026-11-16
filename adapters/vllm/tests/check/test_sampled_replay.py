@@ -656,8 +656,8 @@ def test_catch_probability_is_evaluated_over_population_per_stratum(world):
 @pytest.mark.slow
 def test_module_strata_cap_floor_and_targets(world):
     """(1) the stratum key carries the module op_path: one stratum per (spec, request, rank, phase, module) so every module of every
-    request/phase is sampled; (2) the cap never truncates below one VU per stratum (round-robin order); (3) `--replay-target` pins every VU
-    of a module (at a step) outside the cap and the record says so; (4) a flipped mid-phase identity the stratified sample misses is caught
+    request/phase is sampled; (2) the limit never truncates below one VU per stratum (round-robin order); (3) `--replay-target` pins every VU
+    of a module (at a step) outside the limit and the record says so; (4) a flipped mid-phase identity the stratified sample misses is caught
     when targeted."""
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, max_evaluate=1)
@@ -680,7 +680,7 @@ def test_module_strata_cap_floor_and_targets(world):
     bmap2, committed2 = world.bmap_and_reader(mutate=mutate)
     rep2 = SR.sampled_replay(_programs(world), bmap2, committed2, _weights(world), per_stratum=1, seed=3)
     assert rep2["result"] is False and any(x["op_path"].endswith("mlp.down_proj") and x["request_id"] == "r0" and x["step"] == 1 for x in rep2["mismatch"])
-    # targets: every VU of a module at a step joins the sample outside the cap, recorded by name with its count
+    # targets: every VU of a module at a step joins the sample outside the limit, recorded by name with its count
     rep3 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=3, max_evaluate=1,
                              targets=["model.layers.0.mlp.gate_up_proj@0", "no.such.module"])
     assert rep3["result"] is True
