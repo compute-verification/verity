@@ -1,5 +1,5 @@
 """The I/O tie's prototype (`io_tie`) on the network attester's own egress: variable-length responses on a link served
-through the network attester's schedule (`network_attester.NetworkCertifier._egress` cuts every cell, the certifier's grid lays them out a
+through the network attester's schedule (`network_attester.NetworkAttester._egress` cuts every cell, the certifier's grid lays them out a
 row a bucket, as `network_attester_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's
 map (through advice v1's order permutation where the engine's numbering isn't the arrival order, as on the corpus's
 heavy trace); and the Commit's sampled ids, one hiding row a step, which each bucket's proof block reads at its outputs'
@@ -43,9 +43,9 @@ def _h(label: bytes) -> bytes:
     return hashlib.sha512(label).digest()
 
 
-def network_certifiers(shape: IT.Shape, slots: int, delay: int) -> W.NetworkCertifierParams:
+def network_certifiers(shape: IT.Shape, slots: int, delay: int) -> W.NetworkAttesterParams:
     """The network attester's schedule a shape reads: B, T and lanes·r = R."""
-    return W.NetworkCertifierParams(cell_bytes=shape.B, slots=slots, delay=delay, lanes=shape.R // slots, window=shape.T)
+    return W.NetworkAttesterParams(cell_bytes=shape.B, slots=slots, delay=delay, lanes=shape.R // slots, window=shape.T)
 
 
 class Link(NamedTuple):
@@ -54,7 +54,7 @@ class Link(NamedTuple):
     bucket and arrival order (`order`), the Commit's rows of sampled ids (one a step of the session), the network
     attester's `fails` frames, and the egress records its grid closed, a window each."""
 
-    params: W.NetworkCertifierParams
+    params: W.NetworkAttesterParams
     rows: list[list[bytes]]
     outputs: list[IT.Output]
     release: list[int]
@@ -65,10 +65,10 @@ class Link(NamedTuple):
     records: tuple = ()
 
 
-def serve(shape: IT.Shape, params: W.NetworkCertifierParams, arrivals: list[int], responses: list[list[int]], buckets: int,
+def serve(shape: IT.Shape, params: W.NetworkAttesterParams, arrivals: list[int], responses: list[list[int]], buckets: int,
           engine: list[int] | None = None, late: frozenset[int] = frozenset()) -> Link:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with response responses[k] (its ids), and the network
-    attester's own egress (`network_attester.NetworkCertifier._egress`) serves it for `buckets` buckets: admitted at the first bucket with
+    attester's own egress (`network_attester.NetworkAttester._egress`) serves it for `buckets` buckets: admitted at the first bucket with
     a free lane in arrival order, its server's bytes all there (its events of P bytes each, then `TRAILER`), but for a
     connection in `late`, whose last event never comes, so the network attester fails it there. Advice request i is
     arrival engine[i] (the identity by default), its output j sampled at step r·s + (i mod 2) + j, in the batch row of
@@ -91,7 +91,7 @@ def serve(shape: IT.Shape, params: W.NetworkCertifierParams, arrivals: list[int]
             c.admitted, c.pad = t, W.cell(PAD, c.ordinal, b"", B)
             active.append(c)
         for c in active:
-            for frame in W.NetworkCertifier._egress(network_attester, c, t):
+            for frame in W.NetworkAttester._egress(network_attester, c, t):
                 grid.enqueue(frame)
         active = [c for c in active if c.ended is None]
         rows.append([bytes(B) if f is None else f for f in grid.tick()])
@@ -530,7 +530,7 @@ def serve_trace(shape: IT.Shape, trace: dict) -> tuple[Link, list[int]]:
     def token(i: int, k: int) -> int:
         return (1_000_003 * i + 7_919 * k) % V
 
-    params = W.NetworkCertifierParams(cell_bytes=shape.B, slots=1, delay=delay, lanes=trace["lanes"], window=shape.T,
+    params = W.NetworkAttesterParams(cell_bytes=shape.B, slots=1, delay=delay, lanes=trace["lanes"], window=shape.T,
                             egress_cells=1 << 20)
     responses = [[token(i, k) for k in range(lens[i])] for i in arrival]
     end = max(a + delay + n for a, n in zip(admitted, lens)) + 1

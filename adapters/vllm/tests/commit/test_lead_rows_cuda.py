@@ -18,7 +18,9 @@ else:
 if not torch.cuda.is_available():
     pytest.skip("the lead kernels need a GPU", allow_module_level=True)
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import rows as L  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import (  # noqa: E402
+    rows as L,
+)
 from verity_torch.pouw.lead import rows_device as LD  # noqa: E402
 
 from verity_vllm.commit import step_rows as R  # noqa: E402

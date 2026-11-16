@@ -6,7 +6,7 @@ The network attester's device: its party on the deployment layer, what it needs 
 the challenges' link, and the certifier program in executable Lean (the executable forms of the certifier's
 definitions). It has no console script.
 
-- **Python**: the package `verity.protocols.resource_accounting.network.attester`. `device_party.NetworkCertifier` is the
+- **Python**: the package `verity.protocols.resource_accounting.network.attester`. `device_party.NetworkAttester` is the
   manifest's `network-certifier` (`../verifier/parties.py`) as a party, and `device_party.PROTOCOL` the manifest with
   it; the parts of its life the runtime has no form for yet raise `NotImplementedError` naming their goal.
   `device_needs` holds those needs, one proposed type each. `coin_link.CoinLink` is the link for a window's challenges,
@@ -14,7 +14,7 @@ definitions). It has no console script.
   Their tests are in `../verifier/tests`. The relay (`../verifier/network_attester.py`) and its pacer stay in `../verifier`,
   whose modules read the schedule and the cells' layout from them.
 
-- **Lean**: `program/lean/` is the Lake package `certifier_program`, whose library `NetworkCertifier` the packages at
+- **Lean**: `program/lean/` is the Lake package `certifier_program`, whose library `NetworkAttester` the packages at
   `../verifier/lean` and `security/Proofs` require by path.
 - **Commands** (`lake exe`, in `program/lean/`): `certifier-difftest`, `certifier-charge-difftest` and
   `certifier-window-difftest`, each `INSTANCES PYTHON N`.

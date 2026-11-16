@@ -8,7 +8,7 @@ under the row's salt, and it must climb its path to the signed root at the row t
 The verifier derives that row from the proof block's (connection, cell) and the network attester's wiring (`port`). No
 gate of the proof block hashes the row, and the verifier receives no row and no salt.
 
-**The rows** (`window_rows`). An execution phase w of the network attester's schedule (`NetworkCertifierParams`: T buckets of S =
+**The rows** (`window_rows`). An execution phase w of the network attester's schedule (`NetworkAttesterParams`: T buckets of S =
 lanes·r slots of B-byte cells) is T rows of S·B bytes. Row t − w·T is bucket t, slot j at bytes j·B to (j + 1)·B (words
 j·B/2 onward), in the grid's order: a bucket's cells sorted by stream (the connection's ordinal), a connection's r cells
 together and in order, and a slot no connection holds B zero bytes. So T and a row's size are the schedule's, whatever
@@ -104,7 +104,7 @@ from verity.protocols.resource_accounting.network.verifier.certificate import (D
                                                          _u)
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
@@ -120,17 +120,17 @@ SALT_BYTES = _INST.salt_bytes
 WIRING_SALT_BYTES = DIGEST_BYTES
 
 
-def rows_of(params: NetworkCertifierParams) -> int:
+def rows_of(params: NetworkAttesterParams) -> int:
     """An execution phase's rows: one a bucket, T."""
     return params.window
 
 
-def row_bytes(params: NetworkCertifierParams) -> int:
+def row_bytes(params: NetworkAttesterParams) -> int:
     """A row's bytes: its bucket's S = lanes·r slots of B bytes."""
     return params.grid.allocation * params.cell_bytes
 
 
-def window_rows(record: BlockGrid, params: NetworkCertifierParams) -> list[bytes]:
+def window_rows(record: BlockGrid, params: NetworkAttesterParams) -> list[bytes]:
     """The execution phase's rows: each bucket's slots in order, a slot no connection holds B zero bytes."""
     grid = params.grid
     if len(record.grid) != grid.buckets or any(len(row) != grid.allocation for row in record.grid):
@@ -155,7 +155,7 @@ class Wiring:
     def digest(self) -> bytes:
         return tagged_sha512(WIRING_TAG, self.salt + self.encode())
 
-    def live(self, params: NetworkCertifierParams) -> list[list[int]]:
+    def live(self, params: NetworkAttesterParams) -> list[list[int]]:
         """Each row's live connections by ordinal, or ValueError naming how the wiring isn't the schedule's."""
         T, r = params.window, params.slots
         if len(self.salt) != WIRING_SALT_BYTES:
@@ -182,7 +182,7 @@ class Wiring:
                 raise ValueError(f"row {t} has {len(live)} live connections, past the schedule's {params.lanes} lanes")
         return rows
 
-    def place(self, params: NetworkCertifierParams, reads: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
+    def place(self, params: NetworkAttesterParams, reads: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
         """The (row, slot) of each read (q, k), connection q's cell k of the execution phase: the row its bucket's, the
         cell at the slot's words j·B/2 … (j + 1)·B/2 − 1. ValueError for a wiring that isn't the schedule's (`live`), or
         a read of a connection the wiring doesn't hold, of a cell past its cells, or of a cell another read opens."""
@@ -208,7 +208,7 @@ class Wiring:
         return out
 
 
-def wiring(record: BlockGrid, params: NetworkCertifierParams, salt: bytes | None = None) -> Wiring:
+def wiring(record: BlockGrid, params: NetworkAttesterParams, salt: bytes | None = None) -> Wiring:
     """The execution phase's wiring, read off its record (a cell's stream field is its connection's ordinal), under `salt`
     (default: 64 bytes fresh from the operating system); ValueError when the record's cells aren't where the schedule
     puts them."""
@@ -264,7 +264,7 @@ def words(row: bytes) -> list[int]:
     return [int.from_bytes(row[i:i + 2], "little") for i in range(0, len(row), 2)]
 
 
-def domain(params: NetworkCertifierParams, session: bytes, link: str, direction: Direction, window: int) -> CommitmentDomain:
+def domain(params: NetworkAttesterParams, session: bytes, link: str, direction: Direction, window: int) -> CommitmentDomain:
     """The frame-v3-sha512 domain of one execution phase's rows in one session of one schedule."""
     binding = identity_digest_sha512(DOMAIN_TAG, {
         "parameters": params.digest.hex(), "session": session.hex(), "link": link, "direction": direction.value,
@@ -329,7 +329,7 @@ class Cells:
     link: str
     direction: Direction
     window: int
-    params: NetworkCertifierParams
+    params: NetworkAttesterParams
     session: bytes
     rows: tuple[bytes, ...]
     salts: tuple[bytes, ...]
@@ -337,7 +337,7 @@ class Cells:
 
     @classmethod
     def commit(cls, link: str, direction: Direction, window: int, rows: Sequence[bytes], wiring: Wiring,
-               params: NetworkCertifierParams, session: bytes, salts: Sequence[bytes] | None = None) -> Cells:
+               params: NetworkAttesterParams, session: bytes, salts: Sequence[bytes] | None = None) -> Cells:
         """`rows` and `wiring` as the execution phase's (`of` reads both off a record). `salts`: one a row, sampled once
         (default: fresh from the operating system) and never for another row."""
         rows = tuple(bytes(r) for r in rows)
@@ -352,7 +352,7 @@ class Cells:
         return cls(link, direction, window, params, bytes(session), rows, salts, wiring)
 
     @classmethod
-    def of(cls, link: str, direction: Direction, record: BlockGrid, params: NetworkCertifierParams, session: bytes,
+    def of(cls, link: str, direction: Direction, record: BlockGrid, params: NetworkAttesterParams, session: bytes,
            salts: Sequence[bytes] | None = None, wiring_salt: bytes | None = None) -> Cells:
         """`record`'s rows and wiring committed as `link`'s execution phase in `direction`."""
         return cls.commit(link, direction, record.window, window_rows(record, params),
@@ -422,7 +422,7 @@ def read_witness(blob: bytes) -> tuple[list[bytes], bytes]:
     return [blob[i:i + SALT_BYTES] for i in range(0, rows, SALT_BYTES)], blob[rows:]
 
 
-def attest(issuer: Issuer, record: BlockGrid, params: NetworkCertifierParams, direction: Direction,
+def attest(issuer: Issuer, record: BlockGrid, params: NetworkAttesterParams, direction: Direction,
            salts: Sequence[bytes] | None = None, wiring_salt: bytes | None = None) -> tuple[Cells, Certificate | None]:
     """The execution phase's rows and wiring committed and their head signed by `issuer` (None when its signer
     refuses)."""
@@ -430,12 +430,12 @@ def attest(issuer: Issuer, record: BlockGrid, params: NetworkCertifierParams, di
     return cells, issuer.sign(record.link, direction, record.window, cells.head.digest())
 
 
-def _layout(params: NetworkCertifierParams, window: int) -> dict[str, int]:
+def _layout(params: NetworkAttesterParams, window: int) -> dict[str, int]:
     return {"buckets": params.window, "slots": params.grid.allocation, "connection_slots": params.slots,
             "first_bucket": window * params.window}
 
 
-def registration(head: CellsHead, certificate: Certificate, params: NetworkCertifierParams) -> dict[str, Any]:
+def registration(head: CellsHead, certificate: Certificate, params: NetworkAttesterParams) -> dict[str, Any]:
     """The record a proof block's registered port reads: the head, the rows' format and order, and the
     certificate. A run keeps it whole on its private side; the auditor's gate publishes it less the wiring."""
     return {"format": REGISTRATION, "value": head.value, "link": head.link, "direction": head.direction.value,
@@ -447,7 +447,7 @@ def registration(head: CellsHead, certificate: Certificate, params: NetworkCerti
                             "signature": certificate.signature.hex()}}
 
 
-def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: NetworkCertifierParams, link: str,
+def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: NetworkAttesterParams, link: str,
                        direction: Direction, window: int) -> tuple[CellsHead, CommitmentDomain]:
     """The verifier's read of a registration for the execution phase it expects, under the network attester's key and
     session and the schedule's parameters: the head and the domain the verifier derived, or ValueError naming what
@@ -479,7 +479,7 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
     return head, dom
 
 
-def _schedules(head: CellsHead, params: NetworkCertifierParams) -> None:
+def _schedules(head: CellsHead, params: NetworkAttesterParams) -> None:
     if (head.parameters, head.cell_bytes, head.slots, head.rows) != \
             (params.digest, params.cell_bytes, params.grid.allocation, rows_of(params)):
         raise ValueError("the head isn't of the schedule's rows")
@@ -492,7 +492,7 @@ def _port(head: CellsHead, value: str, rows: Sequence[int], reads_from: int) -> 
         ({G.READS_FROM: int(reads_from)} if reads_from else {})
 
 
-def port(head: CellsHead, wiring_: Wiring, params: NetworkCertifierParams, reads: Units | Sequence[tuple[int, int]],
+def port(head: CellsHead, wiring_: Wiring, params: NetworkAttesterParams, reads: Units | Sequence[tuple[int, int]],
          reads_from: int = 0) -> dict[str, Any]:
     """The verifier's own `--registered` port of a proof block population that opens the head's rows: proof block
     `reads_from + i` opens the row of its read (q, k), connection q's cell k of the execution phase, under the network
@@ -508,7 +508,7 @@ def port(head: CellsHead, wiring_: Wiring, params: NetworkCertifierParams, reads
     return _port(head, head.value if units is None else units.value(head), rows, reads_from)
 
 
-def bucket_port(head: CellsHead, params: NetworkCertifierParams, reads_from: int = 0) -> dict[str, Any]:
+def bucket_port(head: CellsHead, params: NetworkAttesterParams, reads_from: int = 0) -> dict[str, Any]:
     """The verifier's own `--registered` port of a population of one proof block a bucket (`IoTieBucket`): proof block
     `reads_from + t` opens row t, its bucket's every slot, held or not. It names no connection, so it reads no
     wiring, and the head's rows alone fix its reads, so there is no proof blocks' wiring to name: the port names the

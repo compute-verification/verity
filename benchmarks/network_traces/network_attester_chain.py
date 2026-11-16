@@ -14,7 +14,7 @@ the refusal stays with the form that reads them.
   attester's key and session are the auditor's, never a file the prover's node holds; a copy beside the one the
   record was read off (`recorded`) adds only the auditor's device's keys (`relay_check.DEVICE_KEYS`). `own_record`
   is the record a job that ran the network attester itself holds (a local rehearsal's, the job its own auditor).
-* `link`: N2's link on the run (`service.TransferBlocks` with its `service.NetworkCertifierProfile`): the network attester's link
+* `link`: N2's link on the run (`service.TransferBlocks` with its `service.NetworkAttesterProfile`): the network attester's link
   name, its one grid both ends', its key and session, its windows and parameters digest, and no sync (the network
   attester runs no shaper clock and signs none, so no clock certificate enters N2 here).
 * `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
@@ -109,7 +109,7 @@ def witness(run: Path) -> Path:
     return found(run, "certified.jsonl").parent
 
 
-def deployment(run: Path) -> tuple[dict, W.NetworkCertifierParams]:
+def deployment(run: Path) -> tuple[dict, W.NetworkAttesterParams]:
     """The run's ``deployment.json`` and the network attester's schedule, refused by name where the run is a certifier
     rehearsal's (`PROXY`) or its digest isn't its parameters'."""
     for d in (run, run / "witness", run / "out", run / "out" / "honest", run / "honest"):
@@ -118,7 +118,7 @@ def deployment(run: Path) -> tuple[dict, W.NetworkCertifierParams]:
     dep = json.loads(found(run, "deployment.json").read_text())
     if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != RC.LINK:
         raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a network certifier's)")
-    params = W.NetworkCertifierParams(**dep["params"])
+    params = W.NetworkAttesterParams(**dep["params"])
     if params.digest.hex() != dep.get("digest"):
         raise SystemExit(f"{run}: deployment.json's digest isn't its parameters'")
     if not dep.get("run_id"):
@@ -126,7 +126,7 @@ def deployment(run: Path) -> tuple[dict, W.NetworkCertifierParams]:
     return dep, params
 
 
-def deployment_of(run: Path, record: dict) -> tuple[dict, W.NetworkCertifierParams]:
+def deployment_of(run: Path, record: dict) -> tuple[dict, W.NetworkAttesterParams]:
     """The run's deployment (`deployment`) held to ``record``, the auditor's record of it (`RECORD`), never the kept
     fetch's: the prover's node holds that, and could rewrite it and re-sign the records under another key
     (`trusted-device` covers the device and its host, not a file there). The record's key and session must be its
@@ -153,7 +153,7 @@ def deployment_of(run: Path, record: dict) -> tuple[dict, W.NetworkCertifierPara
             raise SystemExit(f"{run}: {f.relative_to(run)} " + (
                 f"names another {field} than the auditor's record's" if field else
                 "isn't the bytes the auditor's record hashes"))
-    return dep, W.NetworkCertifierParams(**dep["params"])
+    return dep, W.NetworkAttesterParams(**dep["params"])
 
 
 def recorded(run: Path) -> Path:
@@ -172,12 +172,12 @@ def own_record(run: Path) -> dict:
             "deployment_sha512": hashlib.sha512(data).hexdigest(), "deployment": dep}
 
 
-def link(run: Path) -> tuple[SVC.TransferBlocks, dict, W.NetworkCertifierParams]:
+def link(run: Path) -> tuple[SVC.TransferBlocks, dict, W.NetworkAttesterParams]:
     """N2's link on the run (the module docstring's `link`), its deployment and the network attester's schedule."""
     dep, params = deployment(run)
     lw = SVC.TransferBlocks(dep["link"], params.grid, UNREAD_SYNCS, RF.read_public(dep["key"]), dep["run_id"],
                          bytes.fromhex(dep["session"]), ingress=params.grid, proof_deadline=RC.PROOF_DEADLINE_S,
-                         network_attester=SVC.NetworkCertifierProfile(dep["windows"], params.digest))
+                         network_attester=SVC.NetworkAttesterProfile(dep["windows"], params.digest))
     return lw, dep, params
 
 

@@ -55,7 +55,7 @@ also `$RESEARCH_RUN_DIR/out/memory.json`, and outside one `$OUT/memory.json` whe
 run that ran `--loopback` keeps a loopback's document there whatever it prints afterwards, since that document is how
 `--from` knows the run's session for a loopback.
 
-There an accepted session of a node run or of `--from` also writes the run's result,
+There an accepted session of a node run or of `--from` also writes the run's benchmark result,
 `$RESEARCH_RUN_DIR/result.json` (where `research` reads it) or `$OUT/result.json`, through the harness kit's writer
 (`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`), each from the verifier's record
 alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), the same number under
@@ -106,9 +106,9 @@ SETTINGS = of(__file__)
 #: openings a window
 UNPACED = re.compile(r"([1-9]\d*):(\d+(?:\.\d{1,3})?):([1-9]\d*)")
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
-#: the number's row on the console's Metrics tab (this directory's `metrics.toml`), and the goal's target for it
+#: the number's metric on the console's Metrics tab (this directory's `metrics.toml`), and the goal's target for it
 METRIC, TARGET = "memory-accounting/node-read-rate-uncertified", 0.14
-#: a `--local` session's row: a share of one card's read rate against its own sheet, another quantity from a node's
+#: a `--local` session's metric: a share of one card's read rate against its own sheet, another quantity from a node's
 LOCAL_METRIC = "memory-accounting/one-machine-read-rate-uncertified"
 #: how the number's error reads, in PoUB's ledger's words (its `DELTA_FORM`): δ is the session's, in its verifier's
 #: ledger, and the windows' PRF advantages are in no δ
@@ -154,7 +154,7 @@ STORE_MIN = 0.5
 PIN = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "check" / "models.json"
 FETCH = ("import sys; from huggingface_hub import snapshot_download as d; "
          "print(d(sys.argv[1], revision=sys.argv[2], allow_patterns=sys.argv[3:], max_workers=8))")
-#: who drew a session's coins, by its verifier's `--challenger`, in the kit's words (`kit.COINS`): its own challenger
+#: who flipped a session's coins, by its verifier's `--challenger`, in the kit's words (`kit.COINS`): its own challenger
 #: or serve.py's on the verifier's machine, or the auditor device's through its gate
 COINS = {"local": "local challenger", "serve": "local challenger", "gate": "deployed challenger"}
 #: why `--local` prints no reference beside its number
@@ -164,7 +164,7 @@ NO_STORE = "a --local run reads no evidence store, and the references are other 
 PYTHON_LEDGER = "python-ledger"
 PYTHON_LEDGER_WORDS = ("python ledger: the share and its error are the Python ledger's reading of the accepted session; "
                        "the Lean verifier has not decided them, so no audit reads them")
-#: and the premise a Metrics row of such a share names in its verdict
+#: and the premise a metric of such a share names in its verdict
 PYTHON_LEDGER_PREMISE = "the share is the Python ledger's: the Lean verifier has not decided it"
 #: `numbers_decided_by`: which of the printed numbers the Lean verifier decided and which are the Python ledger's, each
 #: by its key in the session's ledger.  Where the Lean decided the share, its error is the sum of the three: the
@@ -175,11 +175,11 @@ NUMBERS_LEAN = {"lean": ["spec.gamma", "spec.error.windows"],
 NUMBERS_PYTHON = {"lean": [], "python_ledger": ["spec.python_ledger.gamma",
                                                 "declared.python_ledger.gamma.spec.error.windows"]}
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
-#: what an unbound session's number rests on, in its Metrics row's verdict
+#: what an unbound session's number rests on, in its metric's verdict
 HELD_NONE = "the verifier held no checkpoint"
 #: a node's store that its verifier bound to no model, in the store's line
 UNBOUND = f"{HELD_NONE}: the store's bytes are the developer's choice"
-#: the goal's bound on the number's error, as log2: a Metrics row whose error the record holds above it, or holds
+#: the goal's bound on the number's error, as log2: a metric whose error the record holds above it, or holds
 #: none of, names that premise in its verdict
 ERROR_BOUND_LOG2 = -100
 ABOVE_BOUND = f"its error is above 2^{ERROR_BOUND_LOG2}"
@@ -435,7 +435,9 @@ def from_run(store, run: str, k: int | None) -> dict:
 def from_dir(tree: Path, k: int | None) -> dict:
     """The printed document of the run whose record is the directory `tree` (`kit.record_dir`), read with nothing of
     ours: its `out/verifier.json` (or its verifier host's, under `out/host/`), the run and commit `job.json` names, or
-    else the document this command left there (`out/memory.json`)."""
+    else the document this command left there (`out/memory.json`). `tree` may be the run's directory or its `out/`."""
+    if tree.name == "out" and not (tree / "out").is_dir():
+        tree = tree.parent
     try:
         job = json.loads((tree / "job.json").read_text()) if (tree / "job.json").is_file() else {}
     except (OSError, ValueError) as e:
@@ -589,15 +591,15 @@ def checkpoint(work: Path, vllm_py: str, run: Callable) -> Path:
     return snap
 
 
-def local(run: Callable = subprocess.run) -> dict:
+def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
     """The node's session on one card of this machine: `run.sh` with ROLE=both, SERVE=node and GPUS=1, a vLLM engine
     serving ROLE's pinned checkpoint with its weights in one arena (`engine.py`), the store, which the node prover
     (`node.py`) reads whole in paced, timed passes, and the verifier beside them on cores of its own, in the one
     session form (`PACE`), read from its records. VLLM_PY is the vLLM interpreter; the checkpoint and the caches are
     kept in LOCAL_WORK, and on a machine with no lease of its own (no `gpu-lease` and no `LEASE_DIR`) the tree's
     lease's locks too, while a machine's own lease directory stays the one every lane there counts in. The run's records are kept, in
-    the research run's directory under one and else in a directory of LOCAL_WORK/runs/. A session whose store is
-    below `STORE_MIN` of the card's memory prints no number."""
+    the research run's directory under one and else in a directory of LOCAL_WORK/runs/, which is returned with the
+    document. A session whose store is below `STORE_MIN` of the card's memory prints no number."""
     given = SETTINGS.environ()
     other = [f"{k}={given[k]}" for k, v in PACE.items() if given.get(k, v) not in (v, "")]
     if other := other + [f"{k}={given[k]}" for k in WINDOWED if given.get(k)]:
@@ -636,7 +638,8 @@ def local(run: Callable = subprocess.run) -> dict:
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
         env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
     print(f"memory: --local serves {ROLE} on {name} with a {arena} GiB arena of its {hbm_bytes / 2 ** 30:.0f} GiB, the "
-          f"verifier's node one card of {kind}; its records go to {held}/out", file=sys.stderr)
+          f"verifier's node one card of {kind}; its records go to {held}/out, which `verity bench memory --from {held}` "
+          "reads back", file=sys.stderr)
     done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
     if done.returncode:
         if (why := refusal(Path(held) / "out" / "verifier.json")) is not None:
@@ -650,7 +653,8 @@ def local(run: Callable = subprocess.run) -> dict:
                        "bytes and not the card's memory, so its share is not this benchmark's")
     machine = {"card": name, "sheet": kind, **engine_args(Path(held)), "sheet_sha256": digest(SHEETS),
                "verifier_sha256": digest(VERIFIER)}
-    return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True, machine=machine)
+    return (document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True, machine=machine),
+            Path(held))
 
 
 def refusal(record: Path) -> str | None:
@@ -805,11 +809,11 @@ def amounts(doc: dict, ledger: dict, metric: str = METRIC) -> list[dict]:
     run and the keys of the session's entry in that record it was read from.
 
     - `"metric"`: the printed number in its unit.
-    - `metric`: the same number, the Metrics tab's row (this directory's `metrics.toml`; `METRIC`, or `LOCAL_METRIC`
+    - `metric`: the same number, the Metrics tab's metric (this directory's `metrics.toml`; `METRIC`, or `LOCAL_METRIC`
       for a `--local` session), with `TARGET` and where the number stands against it. A share the Python ledger
       computed names that in its verdict (`PYTHON_LEDGER_PREMISE`) and its `extra`, with `audit` false where the
-      session's coins or parameters aren't deployed (`ran`). A session whose verifier held no checkpoint still writes the row, with `"bound": false` and
-      its verdict naming that premise (`HELD_NONE`); a bound session's row holds neither. Where the number's error is
+      session's coins or parameters aren't deployed (`ran`). A session whose verifier held no checkpoint still writes the metric, with `"bound": false` and
+      its verdict naming that premise (`HELD_NONE`); a bound session's metric holds neither. Where the number's error is
       above 2^`ERROR_BOUND_LOG2` the verdict names that too (`ABOVE_BOUND`): the record's declared error at the first
       reading where it holds one, else the ledger's own, and above it where the record holds neither.
     - `verified`: the bytes the verifier certified read over the session's span, its own `certified_bytes` at the
@@ -972,7 +976,7 @@ def detail(p: dict, machine: dict | None = None, error: float | None = None, sto
 def refused(why: str, *, local: bool, run: Callable = subprocess.run) -> int:
     """A `--local` or `--loopback` session with no number, through the kit (`kit.report`'s `accepted` false): `memory: no
     number: WHY` first, its coins the verifier's own and its parameters development, as `run.sh` runs them, and under
-    `--local` its row written with no value and that reason."""
+    `--local` its metric written with no value and that reason."""
     doc = {"value": None, "unit": UNIT, "commit": source_commit(run), "run": SETTINGS.RESEARCH_RUN_ID or None,
            "loopback": not local, "local": LOCAL if local else None}
     measured = [{"name": LOCAL_METRIC, "unit": UNIT, "target": TARGET, "inputs": [doc["run"]] if doc["run"] else []}]
@@ -993,7 +997,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     ap.add_argument("period", nargs="?", help="the node run: the challenger's period, a name its ledger hasn't used")
     ap.add_argument("--dry-run", action="store_true", help="the node run with nothing sent to either gate; no number")
     ap.add_argument("--from", dest="run", metavar="DIR|RUN", help="print from a recorded run: the directory of its record "
-                    "(its job.json and out/), read with nothing of ours, or a run id, read through the evidence store")
+                    "(its job.json and out/, or that out/), read with nothing of ours, or a run id, read through the "
+                    "evidence store")
     ap.add_argument("--session", type=int, metavar="K", help="the session, in a run that holds several")
     ap.add_argument("--loopback", action="store_true", help="both processes on this machine; certifies nothing")
     ap.add_argument("--local", action="store_true",
@@ -1002,11 +1007,12 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     a = ap.parse_args(argv)
     if sum((a.period is not None, a.run is not None, a.loopback, a.local)) != 1:
         ap.error("one of PERIOD (the node run), --from RUN, --loopback or --local")
+    records = None
     try:
         if a.loopback:
             doc = loopback(run)
         elif a.local:
-            doc = local(run)
+            doc, records = local(run)
             store_of = _no_store
         elif a.run and Path(a.run).is_dir():
             doc = from_dir(kit.record_dir(a.run), a.session)
@@ -1032,7 +1038,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
         print(f"memory: {e}", file=sys.stderr)
         return 2
     doc["beside"] = beside(store_of)
-    # a loopback certifies nothing, so it writes no result, and a --local session writes its own row; a result holds
+    # a loopback certifies nothing, so it writes no result, and a --local session writes its own metric; a result holds
     # one measurement a name, so a run that prints a second session keeps its first one's result
     printed = text(doc)
     measured = [] if doc["loopback"] else amounts(doc, ledger, LOCAL_METRIC if doc["local"] else METRIC)
@@ -1040,6 +1046,9 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
         kit.report("memory", printed, doc, measured, document=not kept, ran_with=ran(doc), accepted=True)
     except ValueError as e:
         print(f"memory: the result ({', '.join(m['name'] for m in measured)}) is not written: {e}", file=sys.stderr)
+    if records is not None and not SETTINGS.RESEARCH_RUN_DIR:
+        # the document says the records are a --local session's, which `--from` that directory reads them as
+        (records / "out" / "memory.json").write_text(json.dumps(doc))
     if kept:
         which = "the loopback" if was == "loopback" else "--local"
         print(f"memory: this run ran {which}, and its out/memory.json stays {which}'s document", file=sys.stderr)

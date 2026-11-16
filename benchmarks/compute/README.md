@@ -215,7 +215,10 @@ in `/tmp`.
 It needs:
 
 - one idle H100 or H200 (the scheme follows the H100's FP8 tensor core): `GPU` is its index, default 0 (`nvidia-smi
-  -L` lists them), and serve.sh checks before any step that it is a compute capability 9.0 card with no process on it;
+  -L` lists them), and serve.sh checks before any step that it is a compute capability 9.0 card with no process on it.
+  Run under a `gpu-lease` already held (`research run --gpus 1`, or your own `gpu-lease 1 --on 0 --cores CPUS -- bash
+  benchmarks/compute/serve.sh` to pin the run to some CPUs), it serves on that lease's card and takes no lease of its
+  own;
 - nvcc from CUDA 13.0 (12.8 or newer) at /usr/local/cuda-13.0, or wherever `CUDA_HOME` names: the kernel is built by
   `benchmarks/harness/setup/pearl_c_sm90.sh`, which hands `build.sh` that toolkit;
 - vLLM at commit d9105ea80 with torch 2.13.0+cu129 and the checkpoint `unsloth/Llama-3.2-1B` at the revision
@@ -323,7 +326,7 @@ directory, outside one where `OUT` names a directory, and otherwise nothing.
 **Exit code:** 0 with the number printed; 1 with none; 2 when the command line, the record or its policy can't be read,
 when the policy's load is not the benchmark's (`load.toml`), or when the split `--per-call` reads is not the answer's.
 
-## Ours: the evidence store and the metric rows
+## Ours: the evidence store and the metrics
 
 On our machines `--from` also takes a run id of our evidence store, read through research's store client with a key
 that reads the store; a withdrawal of part of a stored record is honored (a withdrawn required file refuses the record,

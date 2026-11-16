@@ -125,7 +125,7 @@ inputs = [
     # door's runner, which a test runs
     "benchmarks/slowdown/data/reference.toml",
     "benchmarks/prove/run.py",
-    # `verity bench exfiltration` reads the network certifier's calculator of K for its term, which its tests run beside
+    # `verity bench exfiltration` reads the network attester's calculator of K for its term, which its tests run beside
     # fixture rows; the calculator counts the sampling plan's requests, which it reads from the break-even planner (its
     # modules, with the figure's model, the cost model, the second stage's bound the cost model imports and the cards
     # they read, and the slowdown calculator's world fleet); a test runs its runner. How the calculator charges the stop class is the stop

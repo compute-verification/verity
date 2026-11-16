@@ -95,7 +95,7 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     of one bit, bitFmt)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
     each a `def G : Prop` under the same namespace (`Guarantees.G`)
-../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
+../NetworkAttester.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
 Occupancy.lean  Proposition 2 (the occupancy counts, fill, and the FIFO certifier's tightness)
 Counting.lean   Theorem 1(b) (the tree lemma on accepted runs, zero error, W6 on accepted runs)
 Advice.lean     Theorem 3 (the 2^A cap, and at k bits per execution block)
@@ -206,7 +206,7 @@ CountWitnesses.lean  the six ingress counts' pairs: the honest run has every sta
     false at the verifier that accepts everything (`acceptAll`)
 MonitoringPeriodWitnesses.lean  two more instances of PooledLeakAccepted: its schedule premises at `fxQueue`'s, and its bound
     false at one incorrect proof block
-Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
+Code.lean       the certifier program (`certifier_program`, `NetworkAttester`), which the difftests run, equal to the
     definitions above: five theorems, not guarantees (below)
 
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
@@ -435,23 +435,23 @@ The other 16 are the rest of the Capacity table's bounds:
 
 **The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
-to the certifier program (`verity/protocols/resource_accounting/network/attester/program/lean/`, Lean core only, `NetworkCertifier`), and
+to the certifier program (`verity/protocols/resource_accounting/network/attester/program/lean/`, Lean core only, `NetworkAttester`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
 (`tests/test_lean_packages.py`) and so `Definitions/` cannot name the program:
 
-- `CodeExpectedRow`: `NetworkCertifier.expectedRow` over its `W` windows is `expectedRow` of one execution block of
-  them, for frames with the same payloads sent at the program's hand ticks (`NetworkCertifier.handingBuckets`) under
+- `CodeExpectedRow`: `NetworkAttester.expectedRow` over its `W` windows is `expectedRow` of one execution block of
+  them, for frames with the same payloads sent at the program's hand ticks (`NetworkAttester.handingBuckets`) under
   its syncs (the difftest's `rows`, `diff` and `mismatch`);
-- `CodeAcceptedConstantRate`: `NetworkCertifier.Accepted` of `NetworkCertifier.constantRate` is `Accepted` of
+- `CodeAcceptedConstantRate`: `NetworkAttester.Accepted` of `NetworkAttester.constantRate` is `Accepted` of
   `constantRate` with one execution block of the `W` windows, for observations with the same rows and complete
   statuses, operators giving the same ingress on them, and frames with the same payloads sent at the program's hand
   ticks under the syncs the advice names (`accepted`);
-- `CodeStatusComplete`: `NetworkCertifier.StatusComplete` is `StatusComplete` for observations with the same complete statuses
+- `CodeStatusComplete`: `NetworkAttester.StatusComplete` is `StatusComplete` for observations with the same complete statuses
   (`complete`);
-- `CodeChargesV1`: `NetworkCertifier.AdviceV1.charges` of the windows' decision streams is `AdviceV1.charges` for books
+- `CodeChargesV1`: `NetworkAttester.AdviceV1.charges` of the windows' decision streams is `AdviceV1.charges` for books
   with the same fields (the charge difftest's `charges`);
-- `CodeChargesWhole`: `NetworkCertifier.WindowCharge.charges` of the windows is `WindowCharge.charges` for books with
+- `CodeChargesWhole`: `NetworkAttester.WindowCharge.charges` of the windows is `WindowCharge.charges` for books with
   the same tables and priors and windows with the same decisions, hits and order entries (the window difftest's
   `charges`).
 
@@ -534,7 +534,7 @@ The constant-rate Program adds these:
 13. **Send ticks, one FIFO per execution block.** `NetTiming.Protocol.Schedule` takes each frame's send tick as the
     Program gives it: a frame is handed at `max(send, last)`, so hand ticks only rise in canonical order, and the FIFO
     starts empty at each execution block's first bucket, a frame handed at or after its span's end never enqueued. The
-    certifier program (`NetworkCertifier.Schedule`, `schedule.py`) still computes its hand ticks from a declared clock
+    certifier program (`NetworkAttester.Schedule`, `schedule.py`) still computes its hand ticks from a declared clock
     sync per window, and over its `W` windows it is one execution block (`CodeExpectedRow`). The audit checks `E`
     execution blocks, so the counts take `n ≤ E·g·T` (`hn`): every step they count is a step the audit checks.
 14. **The frames are the Program's computation, left abstract.** `frames ins e v ℓ` gives link `ℓ`'s frames of

@@ -125,7 +125,7 @@ class ChallengePhase:
     @classmethod
     def reserve(cls, gate: ChallengerGate, peer: str, runs: int, **kw: Any) -> ChallengePhase:
         if runs < 1:
-            raise SystemExit("--challenger-gate draws the coins of the Commit's instrumented runs: not without one")
+            raise SystemExit("--challenger-gate flips the coins of the Commit's instrumented runs: not without one")
         return cls(gate, gate.call("reserve", "--peer", peer, "--scheme", SCHEME_TAG, "--families", json.dumps(families(runs))),
                    runs, **kw)
 
@@ -152,7 +152,7 @@ class ChallengePhase:
             raise CoinError(f"the challenger's coins follow a {ROOT_BYTES}-byte root of record (rows-sha512, the TP run root "
                             f"v2), not this run's {len(root)}-byte root (vllm-v1)")
         if self.index >= self.runs:
-            raise CoinError(f"the Commit's session holds coins for {self.runs} runs, and each is drawn")
+            raise CoinError(f"the Commit's session holds coins for {self.runs} runs, and each is flipped")
         if self.client is None:
             self._open(root)
         i, self.index = self.index, self.index + 1
@@ -204,7 +204,7 @@ def _key(rc: Any, family: str) -> bytes:
     extra = getattr(rc, "extra", None)
     rec = extra.get("coins") if extra else None  # a run that holds no coins record drew none
     if not rec or rec.get("root") != bytes(rc.run_root).hex():
-        raise ValueError(f"run root {bytes(rc.run_root).hex()[:16]}: no coins drawn after it (commit_coins.draw)")
+        raise ValueError(f"run root {bytes(rc.run_root).hex()[:16]}: no coins flipped after it (commit_coins.draw)")
     return bytes.fromhex(rec["keys"][family])
 
 
@@ -256,7 +256,7 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     if not runs or len(runs) != len(roots):
         return f"the Commit's coins name {len(runs)} runs' draws, not one for each of its {len(roots)} runs of record"
     if any(r.get("source") != CHALLENGER for r in runs):
-        return ("the Commit's coins were drawn in its own process, not by the auditor device's challenger: a measurement, "
+        return ("the Commit's coins were flipped in its own process, not by the auditor device's challenger: a measurement, "
                 "which credits nothing")
     roots = [bytes(r) for r in roots]
     if any(len(r) != ROOT_BYTES for r in roots):
@@ -282,7 +282,7 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     for f in FAMILIES:
         if tuple(received.get(f, ())) != tuple(roots):
             return (f"the challenger's log shows its {f} coins released after roots other than the runs' roots of record, "
-                    "in order: a coin drawn before its run's root, or after another")
+                    "in order: a coin flipped before its run's root, or after another")
     for i, (run, root) in enumerate(zip(runs, roots)):
         openings, keys = run.get("openings"), run.get("keys")  # a record with neither block holds no family's opening or key
         for f in FAMILIES:
