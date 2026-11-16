@@ -64,7 +64,7 @@ def test_every_refusal_comes_before_the_first_step():
 
 @pytest.mark.parametrize("missing", ["A5_CARD", "A5_CORES", "WORK"])
 def test_a_missing_setting_is_refused_by_name(missing, tmp_path):
-    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "A5_CARD": "0", "A5_CORES": "0", "WORK": str(tmp_path / "w")}
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "A5_CARD": "0", "A5_CORES": "0", "WORK": str(tmp_path / "w")}
     del env[missing]
     run = subprocess.run(["bash", str(SCRIPT), "--dry-run"], cwd=ROOT, env=env, capture_output=True, text=True)
     assert run.returncode == 2
@@ -75,7 +75,7 @@ def test_a_missing_setting_is_refused_by_name(missing, tmp_path):
 def test_a_lease_without_its_owner_is_refused(tmp_path):
     (tmp_path / "gpu-lease").write_text("#!/bin/sh\nexit 9\n")
     (tmp_path / "gpu-lease").chmod(0o755)
-    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}", "HOME": str(tmp_path), "A5_CARD": "0", "A5_CORES": "0", "WORK": str(tmp_path / "w")}
+    env = {"PATH": f"{tmp_path}:{os.defpath}", "HOME": str(tmp_path), "A5_CARD": "0", "A5_CORES": "0", "WORK": str(tmp_path / "w")}
     run = subprocess.run(["bash", str(SCRIPT), "--dry-run"], cwd=ROOT, env=env, capture_output=True, text=True)
     assert run.returncode == 2
     assert run.stderr.startswith("proof_layers.sh: no GPU_LEASE_WHO:")
