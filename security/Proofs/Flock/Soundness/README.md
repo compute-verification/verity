@@ -135,7 +135,7 @@ binding error per audit.
   decoded forms) are restated over `Verifies` (accepted, and in scope) with no hypothesis on the circuit, the public file
   or the statement's form. The old forms, which take those hypotheses, are the lemmas they apply. The zero-knowledge
   views take the statement's avoidance of the mask slot from the setup (`Mask.lean`): `verify --zk` refuses a statement
-  whose Δ or regions meet it (`Zk.maskFree`). `FailClosed.flock_verify_sound` (`One.lean`) is the one theorem: at every statement, with or without `--zk`, the
+  whose Δ or regions meet it (`Zk.maskFree`). `FailClosed.flock_verify_sound` (`One.lean`) is protocol soundness: at every statement, with or without `--zk`, the
   headline of its case (public or hidden outputs; under `--zk`, one table or several).
 - **`registered_weights`** (`Binding/Weights.lean`). At each of a sampled proof block's wires, the row a satisfying witness of
   its table holds is the registered row (any opening of the registered leaf: the weights and salt the registrant

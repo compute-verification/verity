@@ -2286,7 +2286,7 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
 
 #: what puts a guarantee under the witnesses rule (`witness_scope`) beside a property of a function's acceptance: a read of
 #: a definition of a module with a `SCOPE_COMPONENT` component (a claim: what an acceptance means), under `SCOPE_MODULES`
-#: (the one theorem's vocabulary, `Verity.Soundness` and its subprotocols' targets), or whose name's last component
+#: (protocol soundness's vocabulary, `Verity.Soundness` and its subprotocols' targets), or whose name's last component
 #: starts with one of `VERIFIER_PREFIXES`, in any case (a verifier's acceptance: `PeriodRun.accepts`, `Audits.Accepts`,
 #: `Flock.Zk.verify`), the
 #: `acceptance` kind; with none, a read of a module whose last component is one of `EXCLUSION_MODULES` and a conclusion
@@ -2314,7 +2314,7 @@ def accepted(policy: dict, name: str) -> list[str]:
 def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
     """(kind, why) when the guarantee ``name`` (its facts ``pin``) is held to witnesses (`witness_failures`), else None:
     `acceptance` when it states what an acceptance means (a property of a function's acceptance, `accepted`, or a
-    statement reading a claim, a `SCOPE_COMPONENT` module, the one theorem's vocabulary, `SCOPE_MODULES`, or a verifier's
+    statement reading a claim, a `SCOPE_COMPONENT` module, protocol soundness's vocabulary, `SCOPE_MODULES`, or a verifier's
     acceptance, `VERIFIER_PREFIXES`); `exclusion` when it reads none of those but a partition or a covering
     (`EXCLUSION_MODULES`) and concludes a bound (`BOUND_HEADS`, or a definition that unfolds to one, `concluded`). A
     guarantee with no such read is about something else (a bound on a hash, a count, a device), where neither form means

@@ -77,7 +77,7 @@ EXCEPTIONS = {
         "it in the clear tonight as a stated exception.\"); v1's private form (division committed under hiding leaves, "
         "compliance proved, padded profile) replaces it after 15:00Z on 28 Oct"),
 }
-#: The listed guarantee each product's accept rests on, as its lock names it: the one theorem over the compiled check its
+#: The listed guarantee each product's accept rests on, as its lock names it: protocol soundness over the compiled check its
 #: executable runs. A product with none listed accepts with no theorem behind it, and its record says so.
 CITES = {"remote": "Verity.Sampled.remote_soundness_deployedReady"}
 #: The lock that lists `CITES`' guarantees, at the tree's commit.
