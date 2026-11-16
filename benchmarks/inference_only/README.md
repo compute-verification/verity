@@ -87,7 +87,7 @@ run on. A malicious developer who gives up credit raises the uncredited share `s
 1/slowdown)`. A verdict crediting below 0, above the blocks' work or above the MACs it counts, or counting other MACs
 than the class's linears, is refused; so are a verdict tied to another record than the check's, a record holding
 counts of two classes with no `--served-class`, and a record missing a file, which is named. The coins line never
-says the deployed challenger from a record's own word. `tests/test_served_record.py` holds each.
+says the deployed challenger from a record's own word. `tests/benchmarks/inference_only/test_served_record.py` holds each.
 
 ## What it prints
 
@@ -224,6 +224,36 @@ there is named as one the run did not write. Before anything else it prints, und
   keys it: `linears`, the linears' outputs, and `scan_state`, the scan state row. A policy with no `k_by_kind` (one
   written before its writer stated it), or with kinds other than the linears' outputs and those `tied.toml`'s source
   names, gives no figure and says why.
+
+A serve under the Pearl+ tie writes no Program, no limits and no count. `assemble.py --from DIR` writes them after the
+serve from what it did write, before `--from DIR` reads it:
+
+~~~sh
+uv run python benchmarks/inference_only/assemble.py --from DIR [--first FILE ...] [--registration R] [--pins WREG] \
+    [--circuit FILE] [--phi FILE] [--window FILE]
+~~~
+
+`--circuit`, `--phi` and `--window` name the serve's circuit record, φ and W where it keeps them elsewhere than its
+`out/record/`. With `--registration`, the circuit record is the one R commits: the `circuit.json` that window-commit
+writes beside it.
+
+- **The Program** (`registered/program.json`) is rebuilt from the serve's `record/serve-phi.json`, the policy's class
+  and its `pearl_tables` scheme. The call is the one the serve's circuit record was written by
+  (`prove_path.py class-circuit`: `window_circuit.class_circuit`). It is refused unless its digest is the circuit
+  record's `program` and R's.
+- **The circuit record** (`registered/circuit.json`) is the serve's own, byte for byte.
+- **The log** (`registered/log.jsonl`) is the `--first` records (the deployment's registration of the weights, first),
+  then W (`record/window-record.json`), then `--registration R`, the window's registration chained right after W. The
+  chain is held from its first record, and R must name the Program and the circuit record's SHA-512. Without R no record
+  names the Program, so the check refuses the record.
+- **The limits** (`inference-only-limits.json`) are written only where the serve wrote none: α = k/c and Γ = c of the
+  policy, by `rate_limits.py`, which loads only the standard library. A test holds `served_verdicts.sh`'s `limits()`
+  to the same file of one policy.
+- **The count** (`block-counts-CLASS.json`) is the integration's count of the class circuit record's blocks against
+  the policy, at `--pins`. With no `--pins` no weight is held, so every weight read counts as fresh bits, and the step
+  says so. Its exact counts go to the run directory's `private/`.
+
+A refusal exits 2 before anything is written.
 
 ## What it does not mean
 
