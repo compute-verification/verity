@@ -21,13 +21,14 @@ regenerate_locks = true
 # unread_gate (tools/verity/lean/unread_gate.py) refuses a change that grows a package's unread Lean modules past its limit
 landing_gates = ["tools/verity/lean/unread_gate.py"]
 # scripts the preflight runs as it runs the landing gates, whose failure refuses nothing: the ready mark prints it as a
-# warning. A Markdown file a change puts over its size limit (tests/test_repository.py)
-warn_gates = ["tools/check/gates/markdown_caps.py"]
+# warning. A Markdown file a change puts over its size limit (tests/test_repository.py), and a retired term, an issue id or a
+# run id a change adds to a file (tools/check/added_lines.py)
+warn_gates = ["tools/check/gates/markdown_caps.py", "tools/check/added_lines.py"]
 # the check's steps whose failure holds no candidate where the whole check gates (the loop's `--gate check`): its verdict
 # leaves them out beside policy.toml's `off_gate` (`vqueue_slim._gate`), and what a candidate failed of one that the run
 # beside its base's check didn't is rung once, ratchet-gate's to the lane of each member whose merge it fails; nothing is
 # held or ejected for it (`Loop._off_gate`)
-warn_steps = ["ratchet-gate"]
+warn_steps = ["ratchet-gate", "added-lines"]
 # parsed (`DriveFlags`: "review", its one value) and read by no other code: the verified queue takes a PR on its land verdict,
 # or on its ready mark alone under the low-risk lane (`World.ready`)
 land = "review"

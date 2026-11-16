@@ -209,7 +209,7 @@ environment names: a `research run` job on a node with no store config of its ow
 one the task is an error that says so. Each runner reports a fail only for the tree's fault and an error for the
 machine's: a toolchain that didn't set up, a pin that didn't fetch, check.py's `cannot run here`, a command a signal killed,
 and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. The verified
-queue's loop counts no lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a
+queue's loop counts no lean-agreement task's result: it takes lean-agreement, and ratchet-gate and added-lines, which no family lists, from a
 train.sh run beside the executor's check (`research.landing.SLIM_STEPS`, `research.vqueue_slim`).
 
 ## Writing a family

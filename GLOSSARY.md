@@ -443,7 +443,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Landing gate**: a script at `main` that a head must pass at its mark's preflight (drive.toml's `landing_gates`).
   - **Warn gate**: a script run as a landing gate is, whose failure only warns (drive.toml's `warn_gates`).
   - **Off-gate step**: a step of the check off the merge gate (policy.toml's `off_gate` and drive.toml's `warn_steps`:
-    circuit-check, ratchet-gate); a candidate's check still runs it, and its red holds nothing. Under `--gate check`, a
+    circuit-check, ratchet-gate, added-lines); a candidate's check still runs it, and its red holds nothing. Under `--gate check`, a
     red the run beside its base's check doesn't share rings who acts on it.
   - **Low-risk lane**: the verified queue taking a PR on its ready mark alone, when its change touches nothing drive.toml's
     `lowrisk_excludes` names (no Lean, lock, soundness-path or `tools/move/` change); a layout move's PR only once its move
@@ -455,7 +455,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     verified queue runs with `--gate check` (under `--gate verdict`, every candidate but a plain one): one beside each
     candidate and beside `main` each time it moves, `main`'s saying
     which failures a candidate inherits. Under `--gate graph2`, the default, graph2's tasks check a candidate, with
-    lean-agreement and ratchet-gate run beside them.
+    lean-agreement, ratchet-gate and added-lines run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
     lands on its ready mark alone once the queue's rerun of its map on its batch's tip is certified (`tools/move/README.md`).
