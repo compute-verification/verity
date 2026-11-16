@@ -4,11 +4,10 @@ A training run's slowdown is the Glossary's: its training cost inside the protoc
 slowdown(𝒢, 𝒜, η), which the slowdown lower bound bounds below by T_min/T_ref through the count of a subcomputation
 every run that trains must compute and the yield of a block. This package is the harness of the paused attack search,
 and what it gives is that search's own measurement of a run, not the slowdown's definition. It counts a run's circuit
-|C| in Boolean gates, traces one training step to measure what the training formalism reads (the update's dependence,
-the cuts, the step's matrix products), and gives a record's slowdown at a policy (c, k), read off that one traced step:
-Fit's c/(c − d) where the training fits in a block, else the one bound's products term (the theorem of record on M, the
-products whose two operands both depend on the update, given (H) and (E)), with Slowdown's token form and the
-sensitivities beside it. The search scores a config by S, p times that record's slowdown (Grading a config). A change
+|C| in Boolean gates, traces one training step to measure what the bound reads (its gates, τ and its matrix products),
+and gives ρ at a policy (c, k), the bound evaluated on that one traced step: the theorem of record on M, the products
+whose two operands both depend on the update, given T1 and T2. The search scores a config by S = p × ρ (Grading a
+config). A change
 to what it measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record carries.
 
 ## Modules
@@ -25,12 +24,11 @@ to what it measures bumps `VERSION` (`training_slowdown/__init__.py`), which eve
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions, in the dtype its record names for it (`kind_of`); a dtype no Definition prices is refused (`Unpriced`), and a record that names none is priced by `ASSUMED`; its docstring has the TF32 rule |
 | `annotate.py` | a record's maximal annotation: per step U and D_t, the depth profile and the cut |
-| `capture/` | one training step as the PyTorch adapter traces it on fake tensors (`verity_torch.frontend.train_step.export_steps`; `capture_step` takes any PyTorch step, `capture_steps` a step among the steps before and after it, with its step circuit): |C|, the update's dependence and the cuts (`capture.circuit`) and the step's matrix products as rows (`capture.products`) |
+| `capture/` | one training step as the PyTorch adapter traces it on fake tensors (`verity_torch.frontend.train_step.export_steps`; `capture_step` takes any PyTorch step, `capture_steps` a step among the steps before and after it, with its step circuit): |C|, τ and the share an update reaches (`capture.circuit`) and the step's matrix products as rows (`capture.products`) |
 | `work.py` | the work a step's record states for the theorem of record: M, the products whose two operands both depend on the update, from a trace's product rows (`priced`, `products_of_trace`, `he_of_rows`), and each reason a record states none. It computes no slowdown |
-| `formalism.py` | a record's quantities (`of_record`, `measure`), Fit at (c, k) (`at`), the one bound's products term, which is the entry point's, and its sensitivities, Slowdown's token form among them (`bound`), and a record's published slowdown with what it rests on (`published`) |
 | `as_math.py` | a record that holds a fused attention kernel as one row, rewritten as the counter writes the kernel: `python -m training_slowdown.as_math SRC DST [--partial none\|SUBSET:CALLS]`; which gradients a backward call asked for is read from the record's trace or given by `--partial`, and the module's docstring has the cases it refuses |
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
-| `grade.py` | the attack search's grade of a config: S, p times the record's slowdown, from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
+| `grade.py` | the attack search's grade of a config: S = p × ρ, ρ the bound on its search record's own traced step, from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
 | `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the entry point's on that step) and what binds, and its planned run over each fleet and period |
 | `of_record.py`, `of_record.toml` | an entry beside its run of record: the entry's counted step set beside the run's record's (`compare`), equal, or what differs, each expected difference named by its rule; the data file names each held entry's run, the record's artifact, its path and its sha256, the gradients its attention's backward asked for where the record can't say, and the lines of the record's own program a route doesn't compute |
 | `calculator.py` | the slowdown calculator (`benchmarks/slowdown`) as this package reads it, and the one module here that does: the benchmark's one slowdown (`slowdown`, below), a fixed policy's numbers, the fleets and periods a figure is presented over and the rows of β(k) |
@@ -46,8 +44,8 @@ The reference shapes are the lf model's (`tests/adapters/torch/tests/frontend/tr
 
 ## The one entry point
 
-`calculator.slowdown(policy, step, run=None)` is the one place the benchmark computes a slowdown: the grade (through
-`formalism.bound`) and the library's table call it, and `tests/test_one_calculator.py` fails on a second one. `policy`
+`calculator.slowdown(policy, step, run=None)` is the one place the benchmark computes a slowdown: the grade (once, in
+`grade.slowdown_of`) and the library's table call it, and `tests/test_one_calculator.py` fails on a second one. `policy`
 is a block's `c_gates` and `k_bits`; `step` is a step's record, a job's trace (`run.trace_step`'s) or the products
 stated from one (`work.products_of_trace`'s); `run` adds the run's `gates` (|C|; else the trace's own circuit's),
 `tau_bits` and `code_bits`. The work and the circuit it is divided by have one price: a trace's products are priced
@@ -61,8 +59,8 @@ work it read; `figure`, the choice of that work; and `read`, what the record say
 A job's record counts each step's positions that repeat another's tokens (`repeats`), which M leaves out; the work
 then takes `work.P_REPEATS`: two positions hold equal words only by their tokens. A record without the count, and the
 library, take `work.P_BATCH`: past each row's first position, no two positions hold equal words. Every published
-string naming what the products term rests on states which: `formalism.RESTS_ON`, `RESTS_ON_CELL` and `he_rests_on`
-(a row's `rests_on`, the grade's "rests on"), the library's `premise` and the grade's periods' `proved`.
+string naming what the products term rests on states which: the grade's `rho_rests_on` (its "rests on"), the library's
+`premise` and the grade's periods' `proved`.
 
 ## The library of training algorithms
 
@@ -326,9 +324,8 @@ reads are traced again. The
 capture takes the run's last three steps in one graph and measures the middle one (`capture_steps`),
 so the measured step reads what the step before it wrote and the step after it reads what it makes; where the three
 aren't the run's first steps, the first of them reads the run's own weights, not θ's (`mid_run`). That gives the
-step a circuit, which the trace keeps as the capture measures it (`circuit`: the gradient's cut and a token group's
-partial, the carried state, τ, a, the update's profile, and the shares of its gates in token ops and in ops an update
-reaches, at the gate prices of the code that took it), with that code's version (`capture_code`). A tensor an
+step a circuit, which the trace keeps as the capture measures it (`circuit`: its gates, τ, and the share of its gates in
+ops an update reaches, at the gate prices of the code that took it), with that code's version (`capture_code`). A tensor an
 optimizer holds and the model doesn't own (a latent, a second copy of a weight) is traced as the optimizer's, under
 `optimizers.I.params.J`. A step the capture refuses is recorded as refused, with the reason, and the job stays valid:
 among them a step that reads a tensor of the run it reached around its arguments, whose refusal says where to hold it.
@@ -339,7 +336,7 @@ A job has its record whether or not its trace is taken. The route's process writ
 trace and again with it, so a trace that raises, or that ends the process, leaves the count, the digests and the
 scores, with the reason where the trace would be (`trace.failed`: the error, or the signal or status the process
 ended with). Such a job is as valid as its count, exits as one whose trace was taken and says on stderr that it has
-none; the grade reads its record's slowdown as unmeasured, with the reason.
+none; the grade reads ρ as unmeasured, with the reason.
 
 A job's output is its record, `OUT/run.json`, which its own process writes once, when the route's process has ended,
 with the scores in. It holds no weights by default: beside the record, its last checkpoint's E when E is under
@@ -377,31 +374,25 @@ python -m training_slowdown.grade --config attacks/NAME.toml --starts starts.tom
 ~~~
 
 The grade is the attack search's scoring of a config: S ranks an attack by its gates to the target gain over its
-honest config's, times the record's slowdown on one traced step. It is neither the Glossary's slowdown nor the
+honest config's, times ρ, the bound evaluated on one traced step. It is neither the Glossary's slowdown nor the
 slowdown lower bound. The command above grades a config's own jobs; this one, over whole directories, is for `--also` and `--as-if-assumed`.
 
 A config names its `start`, its `target.gain`, its `policy`, its `honest` config and its `seeds`; each DIR holds one
 config's records as its jobs wrote them, `DIR/<seed>/<split>/run.json` (`split` is `search` or `final`). The grade
-reads no file of a served run. It prints one block and writes `OUT/slowdown.json` (`slowdown/v1`):
+reads no file of a served run. It prints one block and writes `OUT/slowdown.json` (`slowdown/v2`):
 
 - **the gain** each seed reached, through the fit of the starts on the start's data (loss to effective compute);
 - **H**, the least counted |C| reaching the target gain: over the honest config's records, and over every config's
   given (`--also` adds configs at the same start and gain);
 - **p**, the attack's |C| over H, against the honest route and against any route, each with its range over the seeds;
-- **the record's slowdown**, the attack's own cost at the config's policy: `formalism.published` at (c, k) on the search record, read
-  with its `trace`, whose raw product rows are priced with `capture.products.priced` (the grade holds no price);
-  where Fit fails it is the one entry point's slowdown on those products;
-- **the sensitivities** beside the record's slowdown and never in it, reduction and update, from the trace's `circuit`, and the version
-  of the code that took the trace. A record whose trace has no `circuit` or no `capture_code` still grades: the record's slowdown reads
-  the rows either way (the circuit's τ stands in for a stub, which moves the record's slowdown only where it changes how many steps a
-  block's inputs cover), and the block says which of these figures are blank, why, and how the trace is taken again;
-- **S**, p times the record's slowdown, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
-- **the bound of record** at the same policy: the least slowdown of any partition of the attack's traced circuit, by
-  the theorem's count solved for the fewest blocks, times c/|C| (the calculator's `min_cut.slowdown_of`, the `bound` of
-  `calculator.slowdown`'s result). The products term of the record's slowdown is this bound, so where products bind the record's slowdown is it and S is p times
-  it. It is "not available", with what is missing, where the search record
-  gives the bound no traced step to read;
-- **per period**: the run's AND gates at S and their share of one datacenter's and of the world's compute over an
+- **ρ**, the bound on the route's own traced step (S := p × ρ): `calculator.slowdown`, called once, at (c, k) on
+  the search record's prefix, read with its `trace`, whose raw product rows are priced with `capture.products.priced`
+  (the grade holds no price); its |C| is the prefix's counted gates, its τ the trace's `circuit`'s (else a token's
+  ⌈log2 V⌉ bits) and its code E's bits. The traced step stands for every step after the first update: the page's way of
+  evaluating the theorem's bound (given T1 and T2), not a theorem about one step, and never the config's slowdown. The block prints its inputs (c, k, |C|, N, ν, μ, β_w, β_x, b_y,
+  F, τ), the theorem with its least blocks, and what ρ rests on;
+- **S** = p × ρ, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
+- **per period**: the run's AND gates at S (|C| × ρ) and their share of one datacenter's and of the world's compute over an
   execution phase, a week, a month and a year, with the measured, proved and scaled parts named.
 
 A config's `policy` is a name, and `policy.named` resolves it: `console` is the rule relative to the start (c one
@@ -425,12 +416,12 @@ and no S, since C over H would compare a count in one pricing with a count in th
 records and the two ways out. One is to count the configs whose records name no dtype again, with a job of this
 version. The other is `--as-if-assumed`, which counts every record by the assumed dtypes whatever its log names: its
 block says so in its first two lines and begins every other line with `as-if`, and it writes
-`OUT/slowdown.as-if.json` (`slowdown-as-if/v1`), never `slowdown.json`. An as-if figure is no config's slowdown.
+`OUT/slowdown.as-if.json` (`slowdown-as-if/v2`), never `slowdown.json`. An as-if figure is no config's slowdown.
 
-The record's slowdown divides the work of the search record's traced products by the record's count, so the two have one price too: a
+ρ divides the work of the search record's traced products by the record's count, so the two have one price too: a
 product the term's M holds is priced, in the trace, in the dtype the record's op log names for it. A record whose
 trace prices one in another (`grade.priced_apart`, which matches a product to the log's ops by its shape and by
-whether it is the backward's) has no slowdown, and then there is no S. The reason names the product, the two dtypes and the
+whether it is the backward's) has no ρ, and then there is no S. The reason names the product, the two dtypes and the
 way out: for a product its capture's rule prices in another dtype than its circuit counts it in, the job traced again
 at capture `capture.products.CAPTURE`, which prices each product as its circuit counts it; for one priced so, whose
 traced step ran it in another dtype than the job did, the job traced again on a device of the kind the
@@ -445,7 +436,7 @@ whether it was on, off or not stated (a record written before one stated it, whi
 torch's says a product ran in TF32, so a record that states the switch on while its op log names a GEMM float32 is
 refused: the reason names the ops and the way out, the job run again with the switch off. Those rows named `tf32`
 would be priced as the TF32 GEMM, but only a GEMM outside the term's M can be: a trace names no TF32, so a product
-of M named `tf32` is priced apart from its trace, and the record's slowdown is refused.
+of M named `tf32` is priced apart from its trace, and ρ is refused.
 
 ## Limits of the count
 
@@ -455,9 +446,7 @@ of M named `tf32` is priced apart from its trace, and the record's slowdown is r
 - The measured quantities are one traced step's: a record's updated steps take its representative step's structure,
   scaled to their tokens. A cut counts a value at its dtype's width, and values are whole tensors.
 - A job traces one step, one that reads an update. The steps before the run's first update read θ alone and are not
-  traced, so they have no Δ_grad and Fit's check on the training holds at no (c, k): the record's slowdown in a grade is never Fit's.
-  It is the products term where that exceeds 1, else 1. The reduction and update sensitivities sum the steps that
-  have the traced step's cuts, and the block says so where an untraced step's token work fills two blocks or more.
+  traced: ρ is the products term where that exceeds 1, else 1.
 - The products count leaves out the positions a step's batch repeats by its tokens: a prefix shared with another
   row, or a row's leading run of one token (`work.batch_count`). A step reading its batch otherwise counts none.
   Without a count (`work.P_BATCH`), those break it, and so, on a model with no rotation, do two positions of one
