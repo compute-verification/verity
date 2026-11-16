@@ -1,0 +1,8 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# PoUS's prover's weight store (`../../../../../../verity/protocols/resource_accounting/memory/pous/prover/weight_store.py`) and the P2 store's package it loads from its files
+inputs = ["verity"]
