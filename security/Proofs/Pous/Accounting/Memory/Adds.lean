@@ -35,6 +35,23 @@ section progMap
 
 variable {I : IdealModel} {α β : Type} (g : α → β) (f : I.Qry → I.Ans)
 
+theorem run_progMap (P : OracleAlgorithm I α) : (progMap g P).run f = g (P.run f) := by
+  induction P with
+  | ret a => rfl
+  | round qs k ih => simp only [progMap, OracleAlgorithm.run]; exact ih _
+
+theorem depth_progMap (P : OracleAlgorithm I α) : (progMap g P).depth f = P.depth f := by
+  induction P with
+  | ret a => rfl
+  | round qs k ih => simp only [progMap, OracleAlgorithm.depth, ih]
+
+theorem work_progMap (P : OracleAlgorithm I α) : (progMap g P).work f = P.work f := by
+  induction P with
+  | ret a => rfl
+  | round qs k ih => simp only [progMap, OracleAlgorithm.work, ih]
+
+theorem bounded_progMap {D Q : ℕ} {P : OracleAlgorithm I α} (h : P.Bounded D Q) : (progMap g P).Bounded D Q :=
+  fun ω => by rw [depth_progMap, work_progMap]; exact h ω
 
 end progMap
 

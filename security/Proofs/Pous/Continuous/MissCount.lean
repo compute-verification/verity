@@ -56,6 +56,15 @@ theorem sum_exp_ind (θ : ℝ) (P : α → Prop) :
   rw [Finset.sum_sub_distrib, ← Finset.mul_sum, Finset.sum_boole]
   simp
 
+/-- One round keeps the supermartingale's mean: `e^{c q}·(N − c·p·N) ≤ N` when `q ≤ p`, `c ≥ 0`, `N ≥ 0`. -/
+theorem step_le (c q p N : ℝ) (hc : 0 ≤ c) (hqp : q ≤ p) (hN : 0 ≤ N) :
+    Real.exp (c * q) * (N - c * (p * N)) ≤ N := by
+  have h1 : N - c * (p * N) ≤ N * (1 - c * q) := by nlinarith [mul_le_mul_of_nonneg_left hqp hc]
+  have h2 : 1 - c * q ≤ Real.exp (-(c * q)) := by linarith [Real.add_one_le_exp (-(c * q))]
+  calc Real.exp (c * q) * (N - c * (p * N))
+      ≤ Real.exp (c * q) * (N * Real.exp (-(c * q))) :=
+        mul_le_mul_of_nonneg_left (h1.trans (mul_le_mul_of_nonneg_left h2 hN)) (Real.exp_pos _).le
+    _ = N := by rw [mul_left_comm, ← Real.exp_add, add_neg_cancel, Real.exp_zero, mul_one]
 
 open Classical in
 /-- **The supermartingale's mean.** `Σ_I exp(−θ·#misses(I) + (1 − e^−θ)·Σ_j q_j(I)) ≤ |α|^n`. -/

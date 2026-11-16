@@ -24,6 +24,11 @@ namespace PousP3Forward
 
 open scoped ENNReal
 
+theorem two_pow_mul_inv_pow (a b : ℕ) (h : a ≤ b) :
+    (2 : ℝ≥0∞) ^ a * (2⁻¹ : ℝ≥0∞) ^ b = (2⁻¹ : ℝ≥0∞) ^ (b - a) := by
+  obtain ⟨c, rfl⟩ := Nat.exists_eq_add_of_le h
+  rw [pow_add, ← mul_assoc, ← mul_pow, ENNReal.mul_inv_cancel two_ne_zero ENNReal.ofNat_ne_top, one_pow, one_mul,
+    Nat.add_sub_cancel_left]
 
 end PousP3Forward
 

@@ -55,6 +55,14 @@ theorem LengthCode : Guarantees.LengthCode := by
   have := congrFun h ⟨i, by omega⟩
   simpa only [lengthCode, hi, hi', dite_true] using this
 
+theorem pr_mono {β : Type} [Fintype β] {P Q : β → Prop} (h : ∀ x, P x → Q x) : Pous.pr P ≤ Pous.pr Q := by
+  classical
+  simp only [Pous.pr_eq_card]
+  refine ENNReal.div_le_div_right ?_ _
+  exact_mod_cast Finset.card_le_card fun x hx => by
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hx ⊢
+    exact h x hx
+
 
 theorem TimelyTicks : Guarantees.TimelyTicks := by
   intro t span k ht j hj

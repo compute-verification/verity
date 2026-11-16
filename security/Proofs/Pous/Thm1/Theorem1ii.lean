@@ -128,6 +128,44 @@ theorem exists_code {X : Type} [Fintype X] [Nonempty X] (T : Finset X) (β : ℕ
   simp only [hx, dite_true, hex]
   exact congrArg Subtype.val (e.injective hex.choose_spec)
 
+/-- **Counting patches.** Assignments of an optional `ℓ`-bit block to each of `B` positions, with at most `L` bits
+of blocks in total: at most `2^B · 2^L`. -/
+theorem card_patches_le (B ℓ L : ℕ) :
+    (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
+      (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ L).card ≤ 2 ^ B * 2 ^ L := by
+  classical
+  let t : Finset (Fin B) → (i : Fin B) → Finset (Option (Bits ℓ)) := fun D i =>
+    if i ∈ D then Finset.univ.erase none else {none}
+  have hsub : (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
+      (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ L) ⊆
+      (Finset.univ.filter fun D : Finset (Fin B) => D.card * ℓ ≤ L).biUnion
+        fun D => Fintype.piFinset (t D) := by
+    intro g hg
+    rw [Finset.mem_filter] at hg
+    rw [Finset.mem_biUnion]
+    refine ⟨Finset.univ.filter fun i => g i ≠ none, by simpa using hg.2, ?_⟩
+    rw [Fintype.mem_piFinset]
+    intro i
+    by_cases hi : g i = none <;> simp [t, hi]
+  refine (Finset.card_le_card hsub).trans ((Finset.card_biUnion_le).trans ?_)
+  have hD : ∀ D ∈ (Finset.univ.filter fun D : Finset (Fin B) => D.card * ℓ ≤ L),
+      (Fintype.piFinset (t D)).card ≤ 2 ^ L := by
+    intro D hD
+    rw [Finset.mem_filter] at hD
+    rw [Fintype.card_piFinset]
+    have : ∀ i, (t D i).card = if i ∈ D then 2 ^ ℓ else 1 := by
+      intro i
+      by_cases hi : i ∈ D
+      · simp [t, hi, Finset.card_erase_of_mem, Fintype.card_option]
+      · simp [t, hi]
+    simp_rw [this]
+    rw [Finset.prod_ite_mem, Finset.univ_inter, Finset.prod_const, ← pow_mul]
+    exact Nat.pow_le_pow_right (by norm_num) (by rw [mul_comm]; exact hD.2)
+  refine (Finset.sum_le_card_nsmul _ _ _ hD).trans ?_
+  rw [smul_eq_mul]
+  refine Nat.mul_le_mul_right _ ?_
+  refine (Finset.card_filter_le _ _).trans ?_
+  rw [Finset.card_univ, Fintype.card_finset, Fintype.card_fin]
 
 /-- The compressor's message: the responder's state, and a replacement for each block it gets wrong. -/
 abbrev Desc (S B ℓ : ℕ) : Type := Bits S × (Fin B → Option (Bits ℓ))
@@ -162,6 +200,18 @@ theorem card_fits_le (S B ℓ β : ℕ) : (fits S B ℓ β).card ≤ 2 ^ β := b
 def patch {B ℓ : ℕ} (P C : Fin B → Bits ℓ) : Fin B → Option (Bits ℓ) :=
   fun i => if P i = C i then none else some (C i)
 
+/-- The patched block where there is one, else the prediction: this is `C`. -/
+theorem patch_getD {B ℓ : ℕ} (P C : Fin B → Bits ℓ) (i : Fin B) : (patch P C i).getD (P i) = C i := by
+  by_cases h : P i = C i <;> simp [patch, h]
+
+/-- If the blocks where `P` differs from `C` fit (`S + B + #wrong·ℓ ≤ β`), so does the message `(σ, patch P C)`. -/
+theorem mem_fits_patch {S B ℓ β : ℕ} (σ : Bits S) (P C : Fin B → Bits ℓ) {_ : DecidablePred fun i => ¬ P i = C i}
+    (h : S + B + (Finset.univ.filter fun i => ¬ P i = C i).card * ℓ ≤ β) : (σ, patch P C) ∈ fits S B ℓ β := by
+  rw [fits, Finset.mem_filter]
+  refine ⟨Finset.mem_univ _, ?_⟩
+  convert h using 4
+  ext i
+  by_cases hi : P i = C i <;> simp [patch, hi]
 
 end PousThm1ii
 

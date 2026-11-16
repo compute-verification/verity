@@ -53,6 +53,13 @@ theorem pr_false' {α : Type} [Fintype α] : pr (fun _ : α => False) = 0 := by
   rw [pr_def]
   simp
 
+theorem pr_or_le {α : Type} [Fintype α] (P Q : α → Prop) : pr (fun a => P a ∨ Q a) ≤ pr P + pr Q := by
+  classical
+  simp only [pr_def]
+  rw [← ENNReal.add_div]
+  gcongr
+  rw [Finset.filter_or]
+  exact_mod_cast Finset.card_union_le _ _
 
 theorem pr_add_pr_not {α : Type} [Fintype α] [Nonempty α] (P : α → Prop) :
     pr P + pr (fun a => ¬ P a) = 1 := by

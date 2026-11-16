@@ -72,6 +72,7 @@ open scoped ENNReal
 
 /-! ### Bits as numbers -/
 
+theorem bitsVal_lt {w : ℕ} (x : Bits w) : bitsVal x < 2 ^ w := (bitsEquiv w x).isLt
 
 theorem bitsVal_bitsOfNat {w n : ℕ} (h : n < 2 ^ w) : bitsVal (bitsOfNat w n) = n := by
   simp [bitsVal, bitsOfNat, Nat.mod_eq_of_lt h]

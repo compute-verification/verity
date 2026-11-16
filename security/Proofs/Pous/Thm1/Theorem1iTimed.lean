@@ -65,6 +65,23 @@ section progMap
 
 variable {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans)
 
+theorem run_progMap (p : OracleAlgorithm M α) : (progMap g p).run f = g (p.run f) := by
+  induction p with
+  | ret a => rfl
+  | round qs k ih => exact ih _
+
+theorem depth_progMap (p : OracleAlgorithm M α) : (progMap g p).depth f = p.depth f := by
+  induction p with
+  | ret a => rfl
+  | round qs k ih => exact congrArg (· + 1) (ih _)
+
+theorem work_progMap (p : OracleAlgorithm M α) : (progMap g p).work f = p.work f := by
+  induction p with
+  | ret a => rfl
+  | round qs k ih => exact congrArg (qs.length + ·) (ih _)
+
+theorem bounded_progMap {D Q : ℕ} {p : OracleAlgorithm M α} (h : p.Bounded D Q) : (progMap g p).Bounded D Q :=
+  fun ω => by rw [depth_progMap, work_progMap]; exact h ω
 
 end progMap
 

@@ -146,6 +146,14 @@ theorem pr_sample_le {A T I : Type} [Fintype A] [Fintype T] [Fintype I] [Nonempt
         ((Fintype.card A : ℝ≥0∞) * Fintype.card I * Fintype.card T) := by rw [mul_right_comm]
     _ = _ := ENNReal.mul_div_mul_right _ _ hT0 (ENNReal.natCast_ne_top _)
 
+/-- Any event of the 105 indices the code reads from the streams is at most as likely as under uniform indices. -/
+theorem pr_samples_le {A : Type} [Fintype A] [Nonempty A] (N : ℕ) [NeZero N] (F : A → (Fin 105 → Fin N) → Prop) :
+    pr (fun x : A × Streams => ∃ I : Fin 105 → Fin N,
+        (∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (x.2 j)) = some (I j).val) ∧ F x.1 I) ≤
+      pr (fun x : A × (Fin 105 → Fin N) => F x.1 x.2) :=
+  pr_sample_le (fun (s : Streams) (I : Fin 105 → Fin N) =>
+      ∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (s j)) = some (I j).val)
+    (card_samples_le N (Nat.pos_of_ne_zero (NeZero.ne N))) F
 
 theorem drawAtMost : DrawAtMost := by
   intro N P

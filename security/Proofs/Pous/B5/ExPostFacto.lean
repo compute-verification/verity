@@ -474,6 +474,17 @@ open scoped ENNReal
 
 variable {N w : ℕ}
 
+/-- **Union bound** (from `thm1-family`). -/
+theorem pr_exists_le {α ι : Type} [Fintype α] (s : Finset ι) (P : ι → α → Prop) :
+    pr (fun a => ∃ x ∈ s, P x a) ≤ ∑ x ∈ s, pr (P x) := by
+  classical
+  simp only [pr_def, div_eq_mul_inv]
+  rw [← Finset.sum_mul]
+  gcongr
+  have : (Finset.univ.filter fun a => ∃ x ∈ s, P x a) = s.biUnion fun x => Finset.univ.filter (P x) := by
+    ext a; simp
+  rw [this]
+  exact_mod_cast Finset.card_biUnion_le
 
 /-! ### Pebbling -/
 

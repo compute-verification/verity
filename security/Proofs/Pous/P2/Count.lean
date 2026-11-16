@@ -285,6 +285,218 @@ theorem Ssum_succ (T g : ℕ) : Ssum (T + 1) (g + 1) = Ssum T (g + 1) + Ssum T g
 
 variable (G : Finset (Fin B)) (Wv : Fin B → X)
 
+/-- Guessing: the targets of the unhit blocks `s` at fixed points `o i` hold on at most a
+`∏_{i ∈ s} 1/(M − r_i)` fraction of the consistent tuples. -/
+theorem base (o : Fin B → X) : ∀ (s : Finset (Fin B)) (L : List (Ent B X)), (∀ i ∈ s, Wv i ∉ R L i) →
+    ((cons L).filter fun ω => ∀ i ∈ s, ω i (o i) = Wv i).card *
+      ∏ i ∈ s, (Fintype.card (X) - (R L i).card) ≤ (cons L).card := by
+  classical
+  intro s
+  induction s using Finset.induction_on with
+  | empty => intro L _; simp
+  | @insert i s hi ih =>
+    intro L hL
+    have hR : ∀ i' ∈ s, R (((i, o i), Wv i) :: L) i' = R L i' := fun i' hi' =>
+      R_cons_ne L (by rintro rfl; exact hi hi') _ _
+    have h1 := ih (((i, o i), Wv i) :: L) (fun i' hi' => by rw [hR i' hi']; exact hL i' (mem_insert_of_mem hi'))
+    have hp : ∏ i' ∈ s, (Fintype.card (X) - (R (((i, o i), Wv i) :: L) i').card) =
+        ∏ i' ∈ s, (Fintype.card (X) - (R L i').card) := prod_congr rfl fun i' hi' => by rw [hR i' hi']
+    rw [hp] at h1
+    have h2 := cons_step_le L i (o i) (hL i (mem_insert_self i s))
+    have heq : ((cons L).filter fun ω => ∀ i' ∈ insert i s, ω i' (o i') = Wv i') =
+        (cons (((i, o i), Wv i) :: L)).filter fun ω => ∀ i' ∈ s, ω i' (o i') = Wv i' := by
+      ext ω
+      simp only [mem_filter, cons_cons, forall_mem_insert]
+      tauto
+    rw [heq, prod_insert hi]
+    calc _ = (((cons (((i, o i), Wv i) :: L)).filter fun ω => ∀ i' ∈ s, ω i' (o i') = Wv i').card *
+          ∏ i' ∈ s, (Fintype.card (X) - (R L i').card)) * (Fintype.card (X) - (R L i).card) := by ring
+      _ ≤ (cons (((i, o i), Wv i) :: L)).card * (Fintype.card (X) - (R L i).card) :=
+          Nat.mul_le_mul_right _ h1
+      _ ≤ _ := h2
+
+/-- **The invariant.** Along a transcript `L`, a tree of at most `T` further queries gets every block of `G` right
+on at most a `Σ_{h ≤ |G'|} C(T, h) / ∏_{i ∈ G'} (M − r_i)` fraction of the consistent tuples. -/
+theorem inv (t : T0 B X) : ∀ (L : List (Ent B X)) (T : ℕ), (∀ ω ∈ cons L, t.work (ans ω) ≤ T) →
+    cnt G Wv t L * Pi G Wv L ≤ Ssum T (Gp G Wv L).card * (cons L).card := by
+  classical
+  induction t with
+  | ret o =>
+    intro L T _
+    have hsub : cnt G Wv (.ret o) L ≤
+        ((cons L).filter fun ω => ∀ i ∈ Gp G Wv L, ω i (o i) = Wv i).card := by
+      apply card_le_card
+      intro ω hω
+      rw [mem_filter] at hω ⊢
+      exact ⟨hω.1, fun i hi => hω.2 i (filter_subset _ _ hi)⟩
+    have hb := base Wv o (Gp G Wv L) L (fun i hi => (mem_filter.1 hi).2)
+    calc cnt G Wv (.ret o) L * Pi G Wv L
+        ≤ ((cons L).filter fun ω => ∀ i ∈ Gp G Wv L, ω i (o i) = Wv i).card * Pi G Wv L :=
+          Nat.mul_le_mul_right _ hsub
+      _ ≤ (cons L).card := hb
+      _ ≤ _ := Nat.le_mul_of_pos_left _ (Ssum_pos _ _)
+  | ask q k ih =>
+    obtain ⟨j, x⟩ := q
+    intro L T hT
+    rcases (cons L).eq_empty_or_nonempty with h0 | ⟨ω0, hω0⟩
+    · simp [cnt, h0]
+    obtain ⟨T', rfl⟩ : ∃ T', T = T' + 1 := by
+      have := hT ω0 hω0
+      simp only [Tree.work] at this
+      exact ⟨T - 1, by omega⟩
+    have hmem : ∀ y ω, ω ∈ cons (((j, x), y) :: L) → ω ∈ cons L ∧ ω j x = y := fun y ω hω => by
+      rw [cons_cons, mem_filter] at hω; exact hω
+    have hTy : ∀ y, ∀ ω ∈ cons (((j, x), y) :: L), (k y).work (ans ω) ≤ T' := by
+      intro y ω hω
+      obtain ⟨hω', hωy⟩ := hmem y ω hω
+      have := hT ω hω'
+      simp only [Tree.work, ans] at this
+      rw [hωy] at this
+      simpa [ans] using (by omega : (k y).work (ans ω) ≤ T')
+    have hsplit : cnt G Wv (.ask (j, x) k) L = ∑ y, cnt G Wv (k y) (((j, x), y) :: L) := by
+      unfold cnt
+      rw [card_split L j x]
+      refine sum_congr rfl fun y _ => ?_
+      congr 1
+      apply filter_congr
+      intro ω hω
+      have hωy := (hmem y ω hω).2
+      simp only [Tree.run, ans, hωy]
+    by_cases hj : j ∉ Gp G Wv L
+    · -- a query to a block outside `G'`: nothing to hit
+      have hGp : ∀ y, Gp G Wv (((j, x), y) :: L) = Gp G Wv L := by
+        intro y; ext i
+        simp only [Gp, mem_filter]
+        by_cases hij : i = j
+        · subst hij
+          rw [R_cons_self]
+          simp only [Gp, mem_filter, not_and, not_not] at hj
+          constructor
+          · rintro ⟨hG, hn⟩; exact absurd (mem_insert_of_mem (hj hG)) hn
+          · rintro ⟨hG, hn⟩; exact absurd (hj hG) hn
+        · rw [R_cons_ne L hij]
+      have hPi : ∀ y, Pi G Wv (((j, x), y) :: L) = Pi G Wv L := by
+        intro y; unfold Pi; rw [hGp y]
+        refine prod_congr rfl fun i hi => ?_
+        have : i ≠ j := fun h => hj (h ▸ hi)
+        rw [R_cons_ne L this]
+      rw [hsplit, sum_mul]
+      calc ∑ y, cnt G Wv (k y) (((j, x), y) :: L) * Pi G Wv L
+          = ∑ y, cnt G Wv (k y) (((j, x), y) :: L) * Pi G Wv (((j, x), y) :: L) := by simp only [hPi]
+        _ ≤ ∑ y, Ssum T' (Gp G Wv (((j, x), y) :: L)).card * (cons (((j, x), y) :: L)).card :=
+            sum_le_sum fun y _ => ih y _ _ (hTy y)
+        _ = Ssum T' (Gp G Wv L).card * (cons L).card := by
+            simp only [hGp]; rw [← mul_sum, ← card_cons_split]
+        _ ≤ _ := Nat.mul_le_mul_right _ (Ssum_mono (by omega) _)
+    push Not at hj
+    have hWj : Wv j ∉ R L j := (mem_filter.1 hj).2
+    by_cases hx : ∃ v, ((j, x), v) ∈ L
+    · -- a repeated query: its answer is known
+      obtain ⟨v, hv⟩ := hx
+      have hconsv : cons (((j, x), v) :: L) = cons L := by
+        rw [cons_cons]
+        exact filter_true_of_mem fun ω hω => mem_cons.1 hω _ hv
+      have hRv : ∀ i, R (((j, x), v) :: L) i = R L i := by
+        intro i
+        by_cases hij : i = j
+        · subst hij; rw [R_cons_self, insert_eq_of_mem (mem_R.2 ⟨x, hv⟩)]
+        · rw [R_cons_ne L hij]
+      have hGp : Gp G Wv (((j, x), v) :: L) = Gp G Wv L := by simp only [Gp, hRv]
+      have hPi : Pi G Wv (((j, x), v) :: L) = Pi G Wv L := by simp only [Pi, hGp, hRv]
+      have hc : cnt G Wv (.ask (j, x) k) L = cnt G Wv (k v) (((j, x), v) :: L) := by
+        unfold cnt
+        rw [hconsv]
+        congr 1
+        apply filter_congr
+        intro ω hω
+        have : ω j x = v := mem_cons.1 hω _ hv
+        simp only [Tree.run, ans, this]
+      have := ih v _ _ (hTy v)
+      rw [hGp, hPi, hconsv] at this
+      rw [hc]
+      exact this.trans (Nat.mul_le_mul_right _ (Ssum_mono (by omega) _))
+    push Not at hx
+    -- a fresh query to a block of `G'`: a hit, or a miss that shrinks the free range
+    obtain ⟨m, hm⟩ : ∃ m, Fintype.card (X) - (R L j).card = m := ⟨_, rfl⟩
+    obtain ⟨P0, hP0⟩ : ∃ P0, ∏ i ∈ (Gp G Wv L).erase j, (Fintype.card (X) - (R L i).card) = P0 :=
+      ⟨_, rfl⟩
+    have hPiL : Pi G Wv L = m * P0 := by rw [← hm, ← hP0]; exact (mul_prod_erase _ _ hj).symm
+    have hempty : ∀ y ∈ R L j, cnt G Wv (k y) (((j, x), y) :: L) = 0 := by
+      intro y hy
+      obtain ⟨x', hx'⟩ := mem_R.1 hy
+      unfold cnt
+      rw [card_eq_zero, filter_eq_empty_iff]
+      intro ω hω
+      obtain ⟨hω', hωy⟩ := hmem y ω hω
+      have h1 : ω j x' = y := mem_cons.1 hω' _ hx'
+      have : x' = x := (ω j).injective (h1.trans hωy.symm)
+      exact absurd (this ▸ hx') (hx y)
+    have hRne : ∀ i ∈ (Gp G Wv L).erase j, ∀ y, R (((j, x), y) :: L) i = R L i :=
+      fun i hi y => R_cons_ne L (ne_of_mem_erase hi) _ _
+    -- the hit
+    have hGpW : Gp G Wv (((j, x), Wv j) :: L) = (Gp G Wv L).erase j := by
+      ext i
+      simp only [Gp, mem_filter, mem_erase]
+      by_cases hij : i = j
+      · subst hij; simp [R_cons_self]
+      · rw [R_cons_ne L hij]; tauto
+    have hPiW : Pi G Wv (((j, x), Wv j) :: L) = P0 := by
+      unfold Pi; rw [hGpW, ← hP0]
+      exact prod_congr rfl fun i hi => by rw [hRne i hi]
+    have hcardE : ((Gp G Wv L).erase j).card + 1 = (Gp G Wv L).card := card_erase_add_one hj
+    have hW : cnt G Wv (k (Wv j)) (((j, x), Wv j) :: L) * (m * P0) ≤
+        Ssum T' ((Gp G Wv L).erase j).card * (cons L).card := by
+      have h := ih (Wv j) _ _ (hTy (Wv j))
+      rw [hGpW, hPiW] at h
+      calc _ = (cnt G Wv (k (Wv j)) (((j, x), Wv j) :: L) * P0) * m := by ring
+        _ ≤ (Ssum T' ((Gp G Wv L).erase j).card * (cons (((j, x), Wv j) :: L)).card) * m :=
+            Nat.mul_le_mul_right _ h
+        _ = Ssum T' ((Gp G Wv L).erase j).card * ((cons (((j, x), Wv j) :: L)).card * m) := by ring
+        _ ≤ _ := Nat.mul_le_mul_left _ (hm ▸ cons_step_le L j x hWj)
+    -- the misses
+    obtain ⟨rest, hrest0⟩ : ∃ rest, (insert (Wv j) (R L j))ᶜ = rest := ⟨_, rfl⟩
+    have hrest : rest.card = m - 1 := by
+      rw [← hrest0, card_compl, card_insert_of_notMem hWj]; omega
+    have hmiss : ∀ y ∈ rest, cnt G Wv (k y) (((j, x), y) :: L) * (m * P0) * (m - 1) ≤
+        Ssum T' (Gp G Wv L).card * (cons L).card := by
+      intro y hy
+      rw [← hrest0] at hy
+      simp only [mem_compl, mem_insert, not_or] at hy
+      have hGpy : Gp G Wv (((j, x), y) :: L) = Gp G Wv L := by
+        ext i
+        simp only [Gp, mem_filter]
+        by_cases hij : i = j
+        · subst hij; rw [R_cons_self]; simp only [mem_insert, not_or]
+          exact ⟨fun h => ⟨h.1, h.2.2⟩, fun h => ⟨h.1, Ne.symm hy.1, h.2⟩⟩
+        · rw [R_cons_ne L hij]
+      have hPiy : Pi G Wv (((j, x), y) :: L) = (m - 1) * P0 := by
+        unfold Pi; rw [hGpy, ← mul_prod_erase _ _ hj, R_cons_self, card_insert_of_notMem hy.2, ← hP0]
+        have e1 : Fintype.card (X) - ((R L j).card + 1) = m - 1 := by omega
+        exact congrArg₂ (· * ·) e1 (prod_congr rfl fun i hi => by rw [hRne i hi])
+      have h := ih y _ _ (hTy y)
+      rw [hGpy, hPiy] at h
+      have hs := hm ▸ cons_step_le L j x hy.2
+      generalize cnt G Wv (k y) (((j, x), y) :: L) = c at h ⊢
+      generalize (cons (((j, x), y) :: L)).card = d at h hs ⊢
+      calc _ = (c * ((m - 1) * P0)) * m := by ring
+        _ ≤ (Ssum T' (Gp G Wv L).card * d) * m := Nat.mul_le_mul_right _ h
+        _ = Ssum T' (Gp G Wv L).card * (d * m) := by ring
+        _ ≤ _ := Nat.mul_le_mul_left _ hs
+    have hmiss' : ∑ y ∈ rest, cnt G Wv (k y) (((j, x), y) :: L) * (m * P0) ≤
+        Ssum T' (Gp G Wv L).card * (cons L).card := by
+      rcases Nat.eq_zero_or_pos (m - 1) with h0 | hpos
+      · rw [card_eq_zero.1 (hrest.trans h0), sum_empty]; exact Nat.zero_le _
+      · refine Nat.le_of_mul_le_mul_right ?_ hpos
+        rw [sum_mul]
+        calc _ ≤ ∑ _y ∈ rest, Ssum T' (Gp G Wv L).card * (cons L).card := sum_le_sum hmiss
+          _ = _ := by rw [sum_const, hrest, smul_eq_mul, mul_comm]
+    have hsum : ∑ y, cnt G Wv (k y) (((j, x), y) :: L) * (m * P0) =
+        cnt G Wv (k (Wv j)) (((j, x), Wv j) :: L) * (m * P0) +
+          ∑ y ∈ rest, cnt G Wv (k y) (((j, x), y) :: L) * (m * P0) := by
+      rw [← sum_add_sum_compl (insert (Wv j) (R L j)), hrest0, sum_insert hWj,
+        sum_eq_zero (fun y hy => by rw [hempty y hy, zero_mul]), add_zero]
+    rw [hsplit, hPiL, sum_mul, hsum, ← hcardE, Ssum_succ, add_mul, add_comm (Ssum T' _ * _)]
+    exact add_le_add hW (hcardE ▸ hmiss')
 
 end Count
 

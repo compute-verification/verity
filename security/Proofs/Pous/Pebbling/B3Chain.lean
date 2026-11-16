@@ -97,6 +97,19 @@ theorem pre_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg :
     · have : qs.map f = qs.map g := List.map_congr_left fun x hx => hfg x fun h => hp (h ▸ hx)
       rw [this, ih]
 
+/-- A program that never asks `p` does not depend on the answer to `p`. -/
+theorem run_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg : ∀ x, x ≠ p → f x = g x)
+    (P : OracleAlgorithm M α) (hp : p ∉ pre p f P) : P.run g = P.run f := by
+  induction P with
+  | ret a => rfl
+  | round qs k ih =>
+    simp only [pre, List.mem_append, not_or] at hp
+    obtain ⟨hq, hrest⟩ := hp
+    simp only [hq, ↓reduceIte] at hrest
+    have : qs.map f = qs.map g := List.map_congr_left fun x hx => hfg x fun h => hq (h ▸ hx)
+    simp only [OracleAlgorithm.run]
+    rw [← this]
+    exact ih _ hrest
 
 /-- If `c (i+1)` is never asked by the first round that asks `c i`, for every `i < k`, and `c k` is asked at all,
 then the first rounds asking `c 0, …, c k` strictly increase, so there are at least `k + 1` rounds. -/

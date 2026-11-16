@@ -354,6 +354,22 @@ theorem stacked_audit_seq {ℓ n N : ℕ} {V : Type} [Fintype V] [DecidableEq V]
 
 /-! ### Numbers: the audit length for 1% -/
 
+/-- `Σ_{j<t} n^j ≤ n^t` for `n ≥ 2`. -/
+theorem sum_pow_le (n t : ℕ) (hn : 2 ≤ n) : ∑ j ∈ Finset.range t, (n : ℝ≥0∞) ^ j ≤ (n : ℝ≥0∞) ^ t := by
+  have h : ∑ j ∈ Finset.range t, n ^ j ≤ n ^ t := by
+    induction t with
+    | zero => simp
+    | succ t ih =>
+      rw [Finset.sum_range_succ, pow_succ]
+      nlinarith [pow_pos (by omega : 0 < n) t]
+  exact_mod_cast h
+
+/-- `2^a · 2^-b = 2^-(b − a)` for `a ≤ b`. -/
+theorem two_pow_mul_inv_pow (a b : ℕ) (h : a ≤ b) :
+    (2 : ℝ≥0∞) ^ a * (2⁻¹ : ℝ≥0∞) ^ b = (2⁻¹ : ℝ≥0∞) ^ (b - a) := by
+  obtain ⟨c, rfl⟩ := Nat.exists_eq_add_of_le h
+  rw [pow_add, ← mul_assoc, ← mul_pow, ENNReal.mul_inv_cancel two_ne_zero ENNReal.ofNat_ne_top, one_pow, one_mul,
+    Nat.add_sub_cancel_left]
 
 /-- `2^a · (2^b · 2^c · 2^-d) = 2^-(d − (a + b + c))` for `a + b + c ≤ d`. -/
 theorem two_pow_combine (a b c d : ℕ) (h : a + b + c ≤ d) :
