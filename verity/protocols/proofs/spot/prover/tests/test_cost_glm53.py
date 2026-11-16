@@ -2,7 +2,7 @@
 proof-block Definition is a planner candidate whose outputs fit a size class, its units one request's count times the
 requests, its work its own ANDs and a statement at most `cap` of it; no served row is a gap; the totals per token and per
 request are the Definitions' sums; the planner certifies a sample over the card's candidates; `main` prints the totals and
-each gap's rows, ANDs and why; and `main --stop` refuses without the stop block and the network certifier's response tie,
+each gap's rows, ANDs and why; and `main --stop` refuses without the stop block and the network attester's response tie,
 which SPOT never imports. A stop class's populations, with the adapter's stop rule and the certifier's tie, are tested
 where they may be imported
 (`benchmarks/sampling_plan/tests/test_glm53_stop_class.py`)."""

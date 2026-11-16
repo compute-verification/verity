@@ -160,7 +160,7 @@ def test_the_hand_computation_is_reproduced_from_the_rows_it_read(tmp_path):
 
 def test_the_rows_requests_are_the_count_they_are_priced_over(tmp_path):
     """A row is priced over its sampled replays / the probability a request is sampled, which is the planner's count and
-    the network certifier's part's, and not the row's `requests` field. Rows priced over another count are refused: the
+    the network attester's part's, and not the row's `requests` field. Rows priced over another count are refused: the
     fixture's variant of the row whose indexer is stated against fewer linears is."""
 
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)

@@ -1,19 +1,19 @@
-"""The active network certifier: the network certifier as a relay that retransmits everything on a fixed schedule, so
+"""The active network attester: the network attester as a relay that retransmits everything on a fixed schedule, so
 it rebuilds the framing of every connection it carries, and that releases a server's bytes only in the egress record's
 one form.
 
-The network certifier runs on an auditor device (`trusted-device`; co-located with the server for the demo, a named
+The network attester runs on an auditor device (`trusted-device`; co-located with the server for the demo, a named
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
-bytes unchanged in content or not at all: no tokenizer, API, request or stop string is the network certifier's. The one
+bytes unchanged in content or not at all: no tokenizer, API, request or stop string is the network attester's. The one
 addition is on the server's side (`release`): each HTTP request's place in the release order and its release bucket on
-the server's copy, and, with `watermark`, a stream that tells the server each bucket's close. What the network certifier
+the server's copy, and, with `watermark`, a stream that tells the server each bucket's close. What the network attester
 decides is the framing and the timing, both public functions of the schedule (`NetworkCertifierParams`), and it certifies every
 cell it sends with the certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `link_frame.encode_frame(kind, ordinal, payload)`: the header (kind u8,
 the connection's ordinal u32, the payload's length u32), at most P = B − 9 payload bytes, zero fill. `DATA` carries
 exactly P bytes, `END` the last 0 … P of a direction, `PAD` none (marked padding), `FAIL` none (the connection failed
-closed, for whatever reason), and `REFUSED` none (a connection the network certifier doesn't take). Both directions are
+closed, for whatever reason), and `REFUSED` none (a connection the network attester doesn't take). Both directions are
 cut the same way: byte k of a direction is in its cell ⌊k/P⌋, so a cell's content is fixed by the bytes and never by how
 they were read. The client speaks cells both ways through a thin, workload-blind shim (`cells`, `Shim`); the server
 gets the ingress payloads as bytes (co-located in the demo; deployed, its own shim strips the cells as the client's
@@ -25,21 +25,21 @@ taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell,
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
 until its last bucket. Nothing admitted is dropped or reordered. A refusal is traffic past what the window's Programs
 can hold (`every`: a slot stride of `every` buckets has `program_slots` = `lanes` Program slots, the scan's
-`ingress_scan.Class`), so the network certifier certifies no record of a window in which it refused a connection:
+`ingress_scan.Class`), so the network attester certifies no record of a window in which it refused a connection:
 `withhold` gets that window's three records in place of `publish`, and the period check refuses an execution phase
 missing any record's certificate. Under the lengths rows' form 2 the queue's head is admitted only at a bucket from
 which it ends inside the run, and an arrival past the last such bucket is turned away, which is no refusal ("The
 lengths rows").
 
-**The schedule.** Connection q, admitted at bucket s on the network certifier's own schedule, carries r = `slots` cells
+**The schedule.** Connection q, admitted at bucket s on the network attester's own schedule, carries r = `slots` cells
 a bucket each way from s on:
 - ingress: the client's bytes as `DATA` cells, as soon as a whole cell's bytes have arrived, then `END` once the
   client's `END` cell (or its end of stream) has arrived, `PAD` in a slot with neither; the bucket of the `END` is a,
   and ingress has no cells after it. Ingress must end within `ingress_buckets` buckets and `ingress_cells` cells, and
   in a schedule with content rows within the bytes its largest class holds (the schedule's `request_bound`). Its
   release never waits on the server: the server gets a connection's ingress whole once its `END` is released, as
-  `release.with_release` puts it, N the count of `END`s the network certifier released before (so the order of the `END`
-  cells in the ingress records), the run the network certifier's `run_id` and the bucket a; what it releases before
+  `release.with_release` puts it, N the count of `END`s the network attester released before (so the order of the `END`
+  cells in the ingress records), the run the network attester's `run_id` and the bucket a; what it releases before
   then, or before the server's connection opens, is held for the server (at most the `ingress_cells` cells' bytes the
   ingress bound allows; past them the connection fails closed, and the server gets none of it);
 - egress: `PAD` in every slot of the buckets before s + D, D = `delay`; then egress cell i is in bucket
@@ -52,7 +52,7 @@ the number of egress cells, the failure's cell) and the public parameters alone,
 rule; the ingress cells are a function of s and the client's bytes.
 
 **The egress form** (`NetworkCertifierParams.egress`). `id`, the default, is the egress record (`PROTOCOL.md`'s "The egress
-record"): the network certifier releases a `DATA` or `END` cell it cut only if `io_tie.parse_cell` reads it, so only an
+record"): the network attester releases a `DATA` or `END` cell it cut only if `io_tie.parse_cell` reads it, so only an
 `io_tie.data_cell` or `io_tie.end_cell` on the connection's ordinal leaves, and it fails the connection (format) at any
 other cell, refusing and never rewriting. An honest id-form server writes one `io_tie.id_event` of exactly P bytes an
 output and then `io_tie.TRAILER`, so the cut gives one event a `DATA` cell and an `END` holding the trailer; any other
@@ -61,7 +61,7 @@ any server's bytes in cells: a rehearsal's form, for a server that answers in an
 parameters' digest is no id form's, and the period check reads only the id form's schedules.
 
 **The response cap** (`NetworkCertifierParams.max_tokens_cap`, none by default): a schedule may register a cap on every response,
-in the id egress form, where a response's tokens are its `DATA` cells, one id event each. The network certifier then
+in the id egress form, where a response's tokens are its `DATA` cells, one id event each. The network attester then
 reads each request's `max_tokens` from its first request cell, where `id_form.id_request` puts it
 (`id_form.id_request_max_tokens`), before cutting that cell. A request whose field isn't there as a u32, is 0 or exceeds
 the cap is refused (cap), never clamped: none of its bytes is cut into a cell or reaches the server, its ingress is
@@ -74,14 +74,14 @@ cap and its reason enter the parameters' digest, so every record head binds them
 neither and keeps its digest. The period check reads the cap with the schedule and publishes it (`max_tokens_cap`).
 
 **The lengths rows** (`NetworkCertifierParams.lengths`, none by default; 1 and 2 are their forms, `LENGTHS_FORMS`): a schedule
-may have its network certifier keep, of each request it releases, its place in the release order, its request's
+may have its network attester keep, of each request it releases, its place in the release order, its request's
 bytes, its response's outputs and whether it failed, a row of K = `NetworkCertifierParams.stride_releases` slots a slot stride.
 Such a schedule has the id egress form, `ingress_buckets` ≤ D, a cell that holds an id request's head and first prompt
 field (`io_request.layout`), at most 2^16 egress cells, D + ⌊(`egress_cells` − 1)/r⌋ ≤ `window`, so that a connection
 ends within a window of its admission, and a K one proof block returns a row of (`connection_rows.check_slots`);
 `NetworkCertifierParams` takes no other. The form enters the parameters' digest; a schedule without lengths rows hashes nothing
-of it and keeps its digest, and its network certifier does nothing of this section. With lengths rows the network
-certifier:
+of it and keeps its digest, and its network attester does nothing of this section. With lengths rows the network
+attester:
 - releases no connection whose client has failed: once a client's problem is set (ingress, malformed, cap) it cuts no
   further request cell of it, so the connection has no `END`, no place in the release order and nothing for the
   server. Every released connection therefore ends at an egress slot, in its `END` or a server's `FAIL`, and holds its
@@ -103,8 +103,8 @@ certifier:
   their one head. That is form 1, which says nothing of an execution phase it doesn't hand.
 
 Form 2 ends every execution phase of a run (a window here), once and in their order: in its hand, or in the same
-call without releases, on which the network certifier signs that the execution phase has no head
-(`connection_rows`' "The word that no head comes"). Under it the network certifier:
+call without releases, on which the network attester signs that the execution phase has no head
+(`connection_rows`' "The word that no head comes"). Under it the network attester:
 - hands execution phase w where the one before it (if there is one), w itself and the one after it (if there is one)
   were each published complete, their three records, none withheld. Every cell of a release of w is in those three:
   its request's cells begin at most `ingress_buckets` − 1 buckets before its `END`, and its connection ends at most
@@ -132,7 +132,7 @@ call without releases, on which the network certifier signs that the execution p
 - ends each execution phase it has not ended without releases when the run ends early, whatever ended it.
 
 **The content rows** (`NetworkCertifierParams.content`, none by default: the classes of a schedule with lengths rows, each
-(P, O, rows) under form 1 and (P, O) under form 2, `content_rows`' "The classes"): the network certifier also keeps,
+(P, O, rows) under form 1 and (P, O) under form 2, `content_rows`' "The classes"): the network attester also keeps,
 of each request it releases, the request's bytes as it cut them into cells and the id of each `DATA` cell it released,
 four bytes an id, and hands them with the release (`Released.request`, `Released.ids`), so that `connection_rows` lays
 three more tables a class under the same head. Under form 2 those tables hold a row a release filed in the class and
@@ -151,17 +151,17 @@ in a `FAIL` before any `DATA` cell, of which it released no id.
 Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries
 it, or to where that hand would have been for a release it never hands (the lengths rows' hand, under either form),
 and no longer; of a connection it never released it keeps nothing. The classes enter the parameters' digest; a
-schedule without content rows hashes nothing of them and keeps its digest, and its network certifier keeps and hands
+schedule without content rows hashes nothing of them and keeps its digest, and its network attester keeps and hands
 what it did.
 
 **The head's tick** (`NetworkCertifierParams.head_offset` and `NetworkCertifierParams.head_wait`, none by default, set together and only
 in a schedule with lengths rows). Whoever takes an execution phase's hand lays its tables, commits them and signs
 their head off the tick, in a time that follows the execution phase's releases. Without the two fields that head
 is published when that work ends, and its time is held to no tick. With them the head is handed back to the network
-certifier (`NetworkCertifier.head_back`), and a tick of the schedule publishes it (`leave`); nothing off the tick does:
+attester (`NetworkCertifier.head_back`), and a tick of the schedule publishes it (`leave`); nothing off the tick does:
 - execution phase w's head is due at tick `NetworkCertifierParams.head_tick` = c + `head_offset`, c the last bucket of the
   window whose close hands it: window w + 1's, and the run's last window's for the run's last execution phase. The
-  network certifier counts the offset in its own buckets and has no other clock;
+  network attester counts the offset in its own buckets and has no other clock;
 - a head back before its tick waits for it, and leaves at that tick and never sooner;
 - a head not back at its tick leaves at the first tick it is back by, at most W = `head_wait` ticks after the due
   one. At W = 0 a head that is late is no head;
@@ -170,7 +170,7 @@ certifier (`NetworkCertifier.head_back`), and a tick of the schedule publishes i
 - the run ticks `head_offset` + W buckets past its last window while a head may still leave. Those ticks carry no
   cell.
 What a hand ends in under form 2 where it has no releases, the word that no head comes, is held to its tick the same
-way. The network certifier says nothing of what a late head or a missing one is charged: that is its reader's. Both
+way. The network attester says nothing of what a late head or a missing one is charged: that is its reader's. Both
 fields enter the parameters' digest, and a schedule without them keeps the one it had.
 
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
@@ -179,42 +179,42 @@ cap (limit), the server's connection failing (upstream), an egress cell out of t
 its bounds (ingress), a client cell of another kind than `DATA` or `END`, a request to the watermark's path or one
 that isn't one request to a server (malformed), a request refused under the response cap (cap). Its `FAIL` cell is in
 the slot of the next egress cell, and it is in the egress record.
-Every `FAIL` is the same bytes: the reason is a frame of the network certifier's `fails` record (`reason_frame`),
+Every `FAIL` is the same bytes: the reason is a frame of the network attester's `fails` record (`reason_frame`),
 witness the client never sees. The server's four reasons show only at an egress slot, so the server, which controls
 whether and where a connection fails, chooses one of at most (cells + 1) outcomes; the client's three fail at once
 (with lengths rows at the connection's first egress slot), and are the client's own doing. A tick that runs more than `slack` past its boundary faults every grid's window
 (`monitor-unavailable`).
 
-**The clock.** The network certifier has one clock, the host's raw monotonic clock (`pacer.raw_clock`), which no time
+**The clock.** The network attester has one clock, the host's raw monotonic clock (`pacer.raw_clock`), which no time
 service steers: `origin` is a reading of it, a tick runs once it reads the tick's boundary and never before, a tick's
-lateness is read on it, and the pacer releases on it. Where the host gives no raw clock the network certifier does
+lateness is read on it, and the pacer releases on it. Where the host gives no raw clock the network attester does
 not start (`pacer.ClockRefused`): it runs on no other.
 
-**The pacer** (`NetworkCertifier(paced=…)`, which a network certifier on the host's clock must have): a bucket written on the loop leaves
+**The pacer** (`NetworkCertifier(paced=…)`, which a network attester on the host's clock must have): a bucket written on the loop leaves
 when its tick runs, and the loop reads every server, so when a server writes within a bucket, which the prover chooses,
 moves when the bucket reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket, every live
 connection's cells as a part for that connection's socket, to a process of its own (`pacer.Pacer`), which releases it
-at `origin` + t·τ + `paced` on the network certifier's clock, a time fixed before the bucket is made; each connection's
+at `origin` + t·τ + `paced` on the network attester's clock, a time fixed before the bucket is made; each connection's
 socket reaches the pacer at its admission, and its last bucket's part closes the pacer's copy. A bucket that reached
 the pacer after its time, whose release started more than `slack` after it, or that the pacer released with a
 connection's socket not yet its own, faults every grid's window `monitor-unavailable`, as a late tick does. Only a
-network certifier on an injected clock, a test's, writes each bucket on its loop (`paced` None). A window's three records are
+network attester on an injected clock, a test's, writes each bucket on its loop (`paced` None). A window's three records are
 published once every bucket of it that was handed is released, or by the
 next window's first tick, faulted `monitor-unavailable` if one isn't by then. A client that reads slowly holds only its
 own bytes in the pacer, and one more than `WRITE_BACKLOG` behind is closed, as on the loop.
 
 **The watermark** (`NetworkCertifier(watermark=…)`, off by default): one connection to the server, opened by `watermark` when the
-run starts, on which the network certifier sends `release.watermark_head` and then a line for each tick t,
+run starts, on which the network attester sends `release.watermark_head` and then a line for each tick t,
 `release.watermark_chunk(t, n, lost)`, n the `END`s released through bucket t. Tick t makes the line, and it is sent,
 in order, once each release of bucket t has been written whole to its server connection with that transport's buffer
 emptied, or is lost, its connection closing, failed or ended first; the line names the lost ones. A release still on
 its way (its connection opening, its bytes buffered) holds its line and the later ones until it arrives or its
-connection ends. The run's end sends the lines still held, then the terminating chunk. The network certifier never
+connection ends. The run's end sends the lines still held, then the terminating chunk. The network attester never
 reads that connection and no tick waits on it: the lines sent before it opens are kept for it, and once more than
-`WRITE_BACKLOG` of them are unwritten it is closed. It is the one connection to the server the network certifier opens
+`WRITE_BACKLOG` of them are unwritten it is closed. It is the one connection to the server the network attester opens
 with no admission: every other is opened by `connect` when the client's connection is admitted. Each line's t and n
 are functions of the ingress record, its lost releases the server connections' state, and no cell or record changes.
-The stream's path is the network certifier's alone, with `watermark` or without: released, a client's request to it
+The stream's path is the network attester's alone, with `watermark` or without: released, a client's request to it
 would reach the server under the run's id, as the stream does, and a server would read its body as the watermark's
 lines. So a request whose first cell opens as one to that path (`release.to_watermark`: the path as a server reads it
 off the request line) is refused before that cell is cut: none of its bytes is cut into a cell or reaches the server,
@@ -230,13 +230,13 @@ release headers but its sender's own, to any path, the watermark's included. So 
 no place in the release order, no byte for the server) unless it is at most one request to a server: bytes that open
 none (a first line of one word, or no head's end), or one whose head is the one the headers go in, with each field a
 name, a colon and a value on one line, no transfer coding and at most one `content-length`, a decimal count, and with
-no byte past the body that length gives it. The network certifier reads the head and counts the body, so a line of
+no byte past the body that length gives it. The network attester reads the head and counts the body, so a line of
 the body that looks like a request line is the body's. A head it doesn't read that way is one servers end
 differently, so it is refused whole: line breaks that aren't CRLF or come before the request line, a field folded
 onto a second line or with a space before its colon, a chunked body, two lengths.
 
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
-cells the network certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included.
+cells the network attester sent that way: every connection's r cells of the bucket, in ordinal order, padding included.
 So the records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it, but
 for the one cell that is on no connection, a refusal's or a turn-away's `REFUSED`: a refusal's window has no
 certificate, and a turn-away's is one constant in the bucket its arrival sets. The
@@ -245,7 +245,7 @@ third, `fails`, has `lanes` slots a bucket and one frame a failed connection, it
 schedule's and the egress form's, every `FAIL` has its one reason, and no connection failed (with lengths rows, none
 that was released).
 
-`PROTOCOL.md`'s "The active network certifier" has the leak bound. The module imports only the standard library and
+`PROTOCOL.md`'s "The active network attester" has the leak bound. The module imports only the standard library and
 `verity`.
 """
 
@@ -272,7 +272,7 @@ from verity.protocols.resource_accounting.network.verifier.release import RUN_ID
 from verity.protocols.resource_accounting.network.verifier.release import one_request, to_watermark
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v3"
-#: the network certifier's cell kinds, beside `link_frame`'s PAD and DATA
+#: the network attester's cell kinds, beside `link_frame`'s PAD and DATA
 END, FAIL, REFUSED = 0x20, 0x21, 0x22
 KIND_NAMES = {PAD: "pad", DATA: "data", END: "end", FAIL: "fail", REFUSED: "refused"}
 #: why a connection failed: the server's three, the client's two, the server's out-of-form cell, then the client's
@@ -283,9 +283,9 @@ REASONS = ("late", "limit", "upstream", "ingress", "malformed", "format", "cap")
 CLIENT_REASONS = ("ingress", "malformed", "cap")
 #: what egress releases (the module docstring's egress form): the egress record's id-form cells, or any bytes
 EGRESS_FORMS = ("id", "bytes")
-#: the bytes the network certifier reads from a server at once
+#: the bytes the network attester reads from a server at once
 READ_BYTES = 1 << 16
-#: the most a client connection may hold unwritten before the network certifier stops writing to it
+#: the most a client connection may hold unwritten before the network attester stops writing to it
 WRITE_BACKLOG = 1 << 22
 #: the pacer's key of a run's n-th turned-away arrival, from 1, is `AWAY_KEYS` − n: its keys are u32, and a
 #: connection's is its ordinal, which counts up from 1
@@ -309,7 +309,7 @@ async def wait_until(deadline: float, clock: Callable[[], float],
 
 async def precise_sleep(delay: float, clock: Callable[[], float] | None = None) -> None:
     """`asyncio.sleep(delay)` in waits of at most `MAX_WAIT_S` against `clock`, the loop's unless one is given: the
-    network certifier's sleep against its own clock unless its caller injects one. An injected sleep (a `VirtualClock`)
+    network attester's sleep against its own clock unless its caller injects one. An injected sleep (a `VirtualClock`)
     gets one wait a tick."""
     if clock is None:
         clock = asyncio.get_running_loop().time
@@ -417,7 +417,7 @@ class NetworkCertifierParams:
     @property
     def program_slots(self) -> int:
         """A slot stride's Program slots, one a lane (`ingress_scan.Class.SLOTS`, for a class that serves the
-        network certifier)."""
+        network attester)."""
         return self.lanes
 
     @property
@@ -428,13 +428,13 @@ class NetworkCertifierParams:
     def rows_cells(self, windows: int) -> list[int]:
         """Each connection's cell limit over `windows` windows, the period check's rows-form `cells`
         (`NetworkCheck.Period.Schedule.rowsCells`): `egress_cells` for each of the `lanes · windows · window`
-        connections the network certifier can carry, as `_tick` admits only while fewer than `lanes` are live and serves
+        connections the network attester can carry, as `_tick` admits only while fewer than `lanes` are live and serves
         each connection in its admission bucket."""
         return [self.egress_cells] * (self.lanes * windows * self.window)
 
     @property
     def stride_releases(self) -> int:
-        """K: the most requests the network certifier releases in one slot stride with lengths rows, a lengths row's
+        """K: the most requests the network attester releases in one slot stride with lengths rows, a lengths row's
         slots. A released connection holds its lane from its release through its admission's bucket + D, at least
         L = D + 2 − `ingress_buckets` buckets, so any L buckets hold at most `lanes` releases; and it holds it D + 1
         buckets around its release, so a stride's releases are live at one of 1 + ⌈(`every` − 1) / (D + 1)⌉ buckets.
@@ -443,7 +443,7 @@ class NetworkCertifierParams:
 
     @property
     def phase_releases(self) -> int:
-        """R: a bound on the requests the network certifier releases in one execution phase with lengths rows,
+        """R: a bound on the requests the network attester releases in one execution phase with lengths rows,
         `lanes` · ⌈(T + `ingress_buckets` − 1) / (D + 1)⌉. A release is at most `ingress_buckets` − 1 buckets after
         its connection's admission, so an execution phase's releases are of connections admitted in T +
         `ingress_buckets` − 1 buckets in a row; and a connection holds its lane through its admission's bucket + D,
@@ -490,7 +490,7 @@ class NetworkCertifierParams:
     def request_bound(self) -> int:
         """The bytes of the longest request ingress admits: `ingress_cells` cells' payloads and, in a schedule with
         content rows, no more than its largest class holds (`content_rows.request_room`), so that every request
-        the network certifier releases is one a class of the schedule holds."""
+        the network attester releases is one a class of the schedule holds."""
         most = self.ingress_cells * self.payload
         if self.content is None:
             return most
@@ -578,7 +578,7 @@ def cell(kind: int, ordinal: int, payload: bytes, cell_bytes: int) -> bytes:
 
 
 def read_cell(data: bytes, cell_bytes: int) -> tuple[int, int, bytes]:
-    """(kind, ordinal, payload) of a cell the network certifier makes, or ValueError: its kind, length and zero fill
+    """(kind, ordinal, payload) of a cell the network attester makes, or ValueError: its kind, length and zero fill
     exact."""
     if len(data) != cell_bytes:
         raise ValueError(f"a cell is {cell_bytes} bytes, not {len(data)}")
@@ -610,7 +610,7 @@ def read_reason(data: bytes, cell_bytes: int) -> tuple[int, str]:
 
 def cells(data: bytes, cell_bytes: int, ordinal: int = 0) -> bytes:
     """A direction's bytes as cells: `DATA` cells of P bytes, then one `END` with the rest (the client shim's sending
-    half, and the network certifier's own cut)."""
+    half, and the network attester's own cut)."""
     p = cell_bytes - HEADER.size
     whole = (len(data) - 1) // p if data else 0
     out = [cell(DATA, ordinal, data[i * p:(i + 1) * p], cell_bytes) for i in range(whole)]
@@ -619,7 +619,7 @@ def cells(data: bytes, cell_bytes: int, ordinal: int = 0) -> bytes:
 
 @dataclass
 class Shim:
-    """The client's thin shim, reading half: every cell the network certifier sends on one connection, until it closes,
+    """The client's thin shim, reading half: every cell the network attester sends on one connection, until it closes,
     each kept with the time it arrived; `data` is the `DATA` and `END` payloads, `outcome` "end", "fail" or "refused",
     or "cut" when the connection closed before any of those, or inside a cell."""
 
@@ -664,11 +664,11 @@ class _Connection:
     ingress: bytearray = field(default_factory=bytearray)  # received, not yet released
     held: bytearray = field(default_factory=bytearray)  # released, held for the server until the END's release
     unsent: bytearray = field(default_factory=bytearray)  # released whole before the server's connection opened
-    release: int | None = None  # N: its END's place in the network certifier's release order
+    release: int | None = None  # N: its END's place in the network attester's release order
     wrote: bool = False  # its release was written whole to its server connection, open
     written: bool | None = None  # with the watermark: its release reached the server's transport (True) or was lost
     ingress_ended: bool = False  # the client's END has been received
-    ingress_end: int | None = None  # a: the bucket the network certifier released ingress's END
+    ingress_end: int | None = None  # a: the bucket the network attester released ingress's END
     ingress_cells: int = 0
     egress: bytearray = field(default_factory=bytearray)  # the server's bytes, not yet released
     egress_ended: bool = False
@@ -692,7 +692,7 @@ class Released(NamedTuple):
     """One released request as the lengths rows hold it (the module docstring's "The lengths rows"): `order`, N, its
     place in the release order; `request_bytes`, its request's; `outputs`, n, its response's `DATA` cells before its
     `END` or `FAIL`; and `failed`, whether it ended in a `FAIL`. With content rows (the module docstring's "The
-    content rows") also `request`, those bytes as the network certifier cut them, and `ids`, each of those cells' id
+    content rows") also `request`, those bytes as the network attester cut them, and `ids`, each of those cells' id
     in order, a little-endian u32 each (`content_rows.ids_of` reads them); without them both are empty."""
 
     order: int
@@ -711,7 +711,7 @@ def _pad(c: _Connection, cell_bytes: int) -> bytes:
 
 
 class NetworkCertifier:
-    """The active network certifier (the module docstring): `handle(reader, writer)` serves one client connection,
+    """The active network attester (the module docstring): `handle(reader, writer)` serves one client connection,
     `run()` ticks the schedule from `origin`, the clock's time of bucket 0, for `windows` record windows, then cuts
     whatever is still served or queued. `connect()` opens a server connection, a (reader, writer) pair. `clock` is the
     host's raw clock (the module docstring's "The clock") unless a caller that drives the run injects its own, and
@@ -746,8 +746,8 @@ class NetworkCertifier:
       docstring's "The pacer"), which releases it `paced` after its boundary on the host's raw clock, `origin`'s
       clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each bucket's
       `pacer.Report` once its writes end. On a clock of the host's (`pacer.CLOCKS`: the raw one, its default, or the
-      steered one) `paced` is required: only a network certifier on an injected clock writes each bucket on its loop;
-    - `until(predicate)` waits until the network certifier's state satisfies it, for a caller that drives a `VirtualClock`."""
+      steered one) `paced` is required: only a network attester on an injected clock writes each bucket on its loop;
+    - `until(predicate)` waits until the network attester's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: NetworkCertifierParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  windows: int, clock: Callable[[], float] = raw_clock,
@@ -1145,7 +1145,7 @@ class NetworkCertifier:
 
     async def _client(self, c: _Connection) -> None:
         """Read the client's cells into `c.ingress` until its `END` (or its end of stream), at most the ingress
-        bound's bytes (the schedule's `request_bound`). Only the payload of each passes: the network certifier makes
+        bound's bytes (the schedule's `request_bound`). Only the payload of each passes: the network attester makes
         every cell it sends."""
         B, p = self.params.cell_bytes, self.params.payload
         try:
@@ -1400,7 +1400,7 @@ class NetworkCertifier:
 
 def audit(params: NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid],
           fails: Sequence[BlockGrid]) -> dict:
-    """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a network certifier
+    """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a network attester
     cell; in every bucket of each direction each live connection has r cells, in ordinal order, and admissions are in
     ordinal order; each connection's ingress is data and padding, then one `END` and padding to its bucket a; and its
     egress is exactly the schedule's for (its admission s, its egress cells): padding through bucket s + D − 1 (up to
@@ -1408,7 +1408,7 @@ def audit(params: NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: 
     to the bucket's end. Every `FAIL` has one reason in the `fails` record, in its bucket, and every reason its `FAIL`.
     In the id egress form every egress `DATA` and `END` cell is one `io_tie.parse_cell` reads. Every reason is the
     schedule's (`NetworkCertifierParams.reasons`). Under a response cap each connection's `max_tokens` is read from its first
-    request cell as the network certifier read it: a request cut into cells has one from 1 to the cap, its response
+    request cell as the network attester read it: a request cut into cells has one from 1 to the cap, its response
     at most that many `DATA` cells, and only a request with no cells is refused (cap). A window is accepted when its
     three records are complete, its cells are the schedule's and the egress form's and no connection failed in it. With
     lengths rows every `FAIL` is at an egress slot, a client's reason (`CLIENT_REASONS`) is a connection's whose request

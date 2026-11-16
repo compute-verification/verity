@@ -1,4 +1,4 @@
-"""The network certifier's manifest (`parties`): its three parties and two channels as its docstring states them, the
+"""The network attester's manifest (`parties`): its three parties and two channels as its docstring states them, the
 workers and the verifier as SPOT declares them, a placement that holds the certifier to the auditor's machine
 and takes one a link, and a committed output value's two parts as the two messages: the witness to the workers alone,
 the record to the verifier alone, each refused by name past its schema; and its id and its check are the Lean's."""

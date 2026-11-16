@@ -1,14 +1,14 @@
-"""The lengths rows' proof block: one row of the network certifier's lengths table (`connection_rows`) computed, as the
-proof block's gates, from the compute side's committed row of the same requests and the network certifier's fails row.
+"""The lengths rows' proof block: one row of the network attester's lengths table (`connection_rows`) computed, as the
+proof block's gates, from the compute side's committed row of the same requests and the network attester's fails row.
 Nothing here is in a Spec.
 
 **One proof block a link, execution phase and slot stride** (`LengthsRow`). It reads two rows and no cell:
 ``requests``, the compute side's committed row of the stride's K request slots, and ``fails``, row j of the network
-certifier's fails table, a registered read (a certified input). Its outputs are ``o0``, a u16 whose bit 0 is 1
+attester's fails table, a registered read (a certified input). Its outputs are ``o0``, a u16 whose bit 0 is 1
 (`ACCEPT`) exactly when the fails row is of its form against the request row and whose other 15 bits are 0, ``o1``, a
 u16, the row's failures F, and ``o2``, the lengths row. The row is gates of the circuit, never an input: the proof
-block's statement commits o2 under the salt of the network certifier's lengths row j and registers it as a read of that
-row (`connection_rows.port`: proof block `reads_from + j` reads row j), so the proof opens the network certifier's
+block's statement commits o2 under the salt of the network attester's lengths row j and registers it as a read of that
+row (`connection_rows.port`: proof block `reads_from + j` reads row j), so the proof opens the network attester's
 signed root only when the row the request row gives is the signed one, bit for bit. Every switch is computed from the
 two rows and none is witness, so the proof block has no free input of its own: a request's length on the wire is held
 to the output count its request row states, the count a tied audit already counts among its free inputs.
@@ -18,7 +18,7 @@ least significant bit first, then zero bits to a whole 16-bit word (unread): `va
 `O` K×LW: the layout vLLM's compiler commits for K arrival slots, without a cap bit
 (`verity_vllm.compiler.replay_chain.arrival_fields`), to which
 `benchmarks/network_traces/tests/test_lengths_row_arrivals.py` holds this row. A slot's `id` is the request's place N
-in the network certifier's release order, `P` its prompt's ids and `O` its outputs. A slot whose `valid` is 0 reads as
+in the network attester's release order, `P` its prompt's ids and `O` its outputs. A slot whose `valid` is 0 reads as
 empty whatever its other fields hold.
 
 **The fails row** is `connection_rows`' (`SLOT`): slot k is u16 class ‖ u16 at, little-endian, (0, 0) where the
@@ -57,7 +57,7 @@ schedule with lengths rows is held to when its parameters are built (`NetworkCer
 size an id request's head and first prompt field fit (`io_request.layout`); 1 <= IW <= 32; 1 <= LW <= 32 with the
 longest prompt's request below 2^32 bytes.
 
-**The prover's side** (`blocks`): from the network certifier's opening of an execution phase's connection rows
+**The prover's side** (`blocks`): from the network attester's opening of an execution phase's connection rows
 (`connection_rows.Rows`, witness) and the compute side's request rows, one a slot stride, each row's proof block: its
 arguments, its outputs and the two registered reads its statement makes (`reads`). It refuses, naming the row, the slot
 and the field, request rows whose proof block would not accept or would return another row than the signed one, which
@@ -193,7 +193,7 @@ def request_fields(sh: Shape) -> list[tuple[str, int, int]]:
 # --- the reference ---------------------------------------------------------------------------------------------------
 
 class Request(NamedTuple):
-    """A slot of the request row: `valid` (0 or 1), the request's place in the network certifier's release order, its
+    """A slot of the request row: `valid` (0 or 1), the request's place in the network attester's release order, its
     prompt's ids and its outputs."""
 
     valid: int
@@ -421,7 +421,7 @@ LengthsRow = part(
 # --- the prover's side -----------------------------------------------------------------------------------------------
 
 class Refused(ValueError):
-    """Request rows no lengths row's proof block proves against the network certifier's signed rows."""
+    """Request rows no lengths row's proof block proves against the network attester's signed rows."""
 
 
 class Read(NamedTuple):
@@ -451,8 +451,8 @@ class RowBlock(NamedTuple):
 
 
 def reads(table: Table, position: int) -> Read:
-    """What a statement that reads row `position` of one of the network certifier's connection-rows tables commits
-    and names: the fails row a block reads, or the lengths row it returns, under the network certifier's own salt."""
+    """What a statement that reads row `position` of one of the network attester's connection-rows tables commits
+    and names: the fails row a block reads, or the lengths row it returns, under the network attester's own salt."""
     if not 0 <= position < len(table.rows):
         raise ValueError(f"row {position} is outside the table's {len(table.rows)} rows")
     return Read(WR.words(table.rows[position]), table.salts[position],
@@ -460,10 +460,10 @@ def reads(table: Table, position: int) -> Read:
 
 
 def blocks(sh: Shape, opened: Rows, requests: Sequence[Sequence[Request]]) -> list[RowBlock]:
-    """Each lengths row's proof block of an execution phase, row by row, from the network certifier's opening of its
+    """Each lengths row's proof block of an execution phase, row by row, from the network attester's opening of its
     connection rows and the compute side's request rows, one a slot stride in the table's order. `Refused`, naming the
     row, the slot and what differs, where a block would refuse its rows or return another lengths row than the signed
-    one: the request rows are then not the ones the network certifier released, and no statement of them opens its
+    one: the request rows are then not the ones the network attester released, and no statement of them opens its
     root."""
     if sh != Shape.of(opened.params, sh.IW, sh.LW):
         raise ValueError(f"{sh} doesn't read the schedule's rows of {opened.params.stride_releases} slots in "

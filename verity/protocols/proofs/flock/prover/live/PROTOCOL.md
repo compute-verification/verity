@@ -620,7 +620,7 @@ outcome of each session, and is not capped over a monitoring period (`Flock.Guar
 What the deferral costs: a bad worker is caught only at its session's `Finish`, one session's latency later than at its
 first bad message, and the rest of a doomed session's device and ZK server work is spent for nothing (the ZK server's share
 is the Lean finish's opening and inner proof, which it runs on every session anyway). Timing (when a message leaves) is not in
-this rule; the network certifier covers it.
+this rule; the network attester covers it.
 
 **A worker that fails is a failed check like any other.** The device runs on a thread of its own (`zk_server::run_worker`),
 and the ZK server serves its rounds and its `Commit` on the session's thread, so where a rep ends never depends on its worker.
