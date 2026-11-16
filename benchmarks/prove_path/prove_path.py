@@ -143,9 +143,9 @@ Two kinds of committed run:
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
   (`window_rows.standin_state`), a per-window value under the run root, whose rows and salts it also writes whole, prover
-  only, for the network certifier's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
-  the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
-  the network certifier's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
+  only, for the network attester's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
+  the certifier front kept the network attester's run under the serve dir, slot k is instead the request whose Program
+  the network attester's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
   records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
   verifier's own ``window-circuit`` record is the circuit it holds it to. ``--sampling-design`` is the rate that audit states as
   its stream's rule, and the window is committed under the sampling design that rate names over the circuit's proof
@@ -1447,7 +1447,7 @@ def window_class_of(arg: str | None) -> Any:
 def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's advice through I2 as its window class's one Circuit (V3: `window_circuit.window_circuit` at
     ``--class``, a class Program a slot flattened into units, every input row wired or registered, the weights' or the
-    network certifier's scan state rows), written to
+    network attester's scan state rows), written to
     ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
     length in bits and the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
@@ -1555,18 +1555,18 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
 
 
-#: what a caller passes for the network certifier run a serve kept: serve dir -> None where it kept none, else the run's
+#: what a caller passes for the network attester run a serve kept: serve dir -> None where it kept none, else the run's
 #: deployment parameters, its certified I/O and its certified ingress, each execution phase's number and rows
 KeptIngress = Callable[[Path], tuple[Any, Mapping[str, Any], Sequence[tuple[int, Sequence[Any]]]] | None]
 
 
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: KeptIngress | None = None,
               ) -> tuple[list[list[int]], list[str | None]] | None:
-    """The network certifier's scan of its run the certifier front kept under ``serve_dir``, as a window of class
+    """The network attester's scan of its run the certifier front kept under ``serve_dir``, as a window of class
     ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's state rows and slot k's request, the I1 id
     (its id request's ``user``) of the one whose Program starts there, None for a slot no request starts
     (`scan_state.scan_state`). The window is the execution phase, of the class's buckets, whose Programs start its
-    requests (their anchors, `scan_state.scan_anchors`); the scan reads the network certifier's certified ingress rows
+    requests (their anchors, `scan_state.scan_anchors`); the scan reads the network attester's certified ingress rows
     from execution phase 0 and the outputs its egress cells carry. ``kept_ingress`` reads the kept run
     (`KeptIngress`): the caller passes it, since SPOT reads the certifier's record as a certified input and imports
     neither the certifier nor a benchmark. None where the front kept no run; ValueError, naming why, where the kept run
@@ -1612,7 +1612,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: 
 
 def scan_state_opening(value: Any, path: Path) -> Path:
     """The window's `SCAN_STATE` value ``value`` (`window_rows.state_value`'s) opened whole at ``path`` for the network
-    certifier's scan, which reads it as its state tree (``scan_zk.py --v3c``, under the name its caller passes,
+    attester's scan, which reads it as its state tree (``scan_zk.py --v3c``, under the name its caller passes,
     `scan_zk.SCAN_STATE_FILE`), prover only, every row (u16 little-endian) and then every salt. The window's
     ``v<j>-private.bin`` holds only the rows its members read."""
     import numpy as np
@@ -1733,7 +1733,7 @@ def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | N
     its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
     under the record's run root, the weights it serves committed under the committer's key ``--key`` as the docket
     ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
-    window's own value. Where the certifier front kept the network certifier's run under the serve dir, the scan state is
+    window's own value. Where the certifier front kept the network attester's run under the serve dir, the scan state is
     its scan of that run (`kept_scan`), whose state rows the scan's state ports open, and slot k holds the request whose
     Program the scan starts there, its row the scan's (`place_slots`, refused where the scan starts a request in two
     slots, a served request in none or one that wasn't served, or the scan's prompt or ``max_tokens`` isn't the served
@@ -1923,7 +1923,7 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None, scan_state_file: str | None = None) -> int:
-    """The commands (the module docstring). ``kept_ingress`` reads the network certifier run a serve kept
+    """The commands (the module docstring). ``kept_ingress`` reads the network attester run a serve kept
     (`KeptIngress`), which ``window-commit``'s scan needs (`kept_scan`), and ``scan_state_file`` is the name its scan
     reads the window's opened scan state under (`scan_state_opening`): a caller that may import the certifier and
     ``benchmarks/`` passes both."""

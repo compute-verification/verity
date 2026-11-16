@@ -24,7 +24,7 @@ continues in the next window, hitting its own cached blocks. Each open request i
 whether a cut moves any request's output ids, and each edge's record (``raw/cut.PID.jsonl``) holds its hold, its cut set
 and its cost.
 
-`NETWORK_CERTIFIER`'s traces serve a trace's server and load through the active network certifier: `network_certifier_serve.py serve` in front of the
+`NETWORK_CERTIFIER`'s traces serve a trace's server and load through the active network attester: `network_certifier_serve.py serve` in front of the
 server, a process beside it on its host (``network certifier beside the server, not on the auditor device``), and the client
 (`drive_network_certifier`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
 their own (`cpu_plan`), the relay under `network_certifier_probe.py` (its every tick, publish and collection) and the host's load
@@ -40,16 +40,16 @@ the wire.
 ``tick``): the server loads `tick_plugin.register` (`verity_vllm.pipeline.tick_plugin`) as a general plugin beside the
 tracer, configured by ``VERITY_TICK``, and `tick_plugin.TickFeed` as its outermost middleware, which writes the release
 headers and the watermark the server gets to its feed (``raw/tick-feed.jsonl``). In a `NETWORK_CERTIFIER` trace they come from the
-network certifier in front of the server: it numbers each request it releases, in its release order, with the bucket of
+network attester in front of the server: it numbers each request it releases, in its release order, with the bucket of
 its release, and streams the watermark to the server (`network_certifier_serve.py serve --watermark`), its bucket τ_b
-(`tick_for`). In every other trace the client stands in for the network certifier, which isn't in front of the server
+(`tick_for`). In every other trace the client stands in for the network attester, which isn't in front of the server
 (`StandIn`): it numbers the requests in the order it sends them, puts each in the bucket of its send (`TICK_BUCKET_MS`
 buckets from the trace's origin), sends both in the release headers, and streams the watermark's line for each bucket as
 it closes. The hostile schedulers' traces don't take the tick. τ_sat and τ_free are the engine class's: given
 (``--tick-ms``), or calibrated on a trace of the same server on the same host (``--tick-from``, `tick_from`, which `tick`
 prints): `TICK_SAT` and `TICK_FREE` times its mean busy cycle (`summary.busy_cycle`). The trace's meta.json records them
 with the origin, the run, the watermark's outcome and where the releases came from (``tick``), and requests.jsonl each
-request's ``release`` and ``bucket`` (a `NETWORK_CERTIFIER` trace's as the server got them, checked against the network certifier's
+request's ``release`` and ``bucket`` (a `NETWORK_CERTIFIER` trace's as the server got them, checked against the network attester's
 log: `summary.feed_releases`), which `replay.read_corpus_trace` reads.
 
 Every model runs eager under the integration's engine switches (`verity_vllm.engine.env.ENGINE`) but the in-process engine
@@ -149,11 +149,11 @@ TRACES |= {name: (["--enable-chunked-prefill", "--max-num-batched-tokens", "8192
 CUT = {"cut-8": {"every_steps": 8}, "cut-64": {"every_steps": 64}, "cut-1s": {"every_s": 1.0}}
 TRACES |= {name: (TRACES["honest"][0], f"{TRACES['honest'][1]}, cut at every window edge ({json.dumps(c)})")
            for name, c in CUT.items()}
-#: network certifier trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
-#: active network certifier (`verity.protocols.resource_accounting.network.verifier.network_certifier`, run by `verity/protocols/resource_accounting/network/attester/network_certifier_serve.py serve`), in
-#: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the network certifier's egress base
-#: (`egress_base`), covers the slowest request's send to last token without the network certifier (heavy 10.7 s, small KV 55.7 s,
-#: async greedy). Under ``--admit tick`` it is kept, so that a tick trace's network certifier has an arrival trace's
+#: network attester trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
+#: active network attester (`verity.protocols.resource_accounting.network.verifier.network_certifier`, run by `verity/protocols/resource_accounting/network/attester/network_certifier_serve.py serve`), in
+#: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the network attester's egress base
+#: (`egress_base`), covers the slowest request's send to last token without the network attester (heavy 10.7 s, small KV 55.7 s,
+#: async greedy). Under ``--admit tick`` it is kept, so that a tick trace's network attester has an arrival trace's
 #: schedule: the gate adds to a request at most a bucket and its clock's lag behind the engine (τ_sat below a saturated
 #: step's time) before its admission, and stretches each engine step of its life to at most τ_free (`serve_admit`),
 #: which on these traces' busy cycles is estimated, not measured, to stay inside D's headroom over those figures. A cell
@@ -163,28 +163,28 @@ NETWORK_CERTIFIER = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv
 NETWORK_CERTIFIER_WHERE = "network certifier beside the server, not on the auditor device"
 #: a stall of the client's event loop it records (`drive_network_certifier`), in seconds: a fifth of a bucket
 LOOP_LAG_S = 0.02
-#: the descriptors the client holds beside its connections' (the server's and network certifier's pipes, the loop's, the logs')
+#: the descriptors the client holds beside its connections' (the server's and network attester's pipes, the loop's, the logs')
 FD_MARGIN = 256
-#: the network certifier's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the network certifier never
+#: the network attester's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the network attester never
 #: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in
 #: memory; and the bytes egress form, as vLLM streams its text completions (`network_certifier`'s "The egress form")
 NETWORK_CERTIFIER_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
                    "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096, "egress": "bytes"}
-#: seconds the network certifier runs past the last arrival's D, for the last responses' egress cells
+#: seconds the network attester runs past the last arrival's D, for the last responses' egress cells
 NETWORK_CERTIFIER_TAIL_S = 60.0
-#: seconds the trace waits for the network certifier past its last window: a spawned publisher may still be committing the last
+#: seconds the trace waits for the network attester past its last window: a spawned publisher may still be committing the last
 #: windows' records (`network_certifier_probe`'s `publisher`)
 NETWORK_CERTIFIER_END_S = 900.0
 TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active network certifier, D = {d} buckets of 100 ms "
                                    f"({NETWORK_CERTIFIER_WHERE})")
            for name, (base, d) in NETWORK_CERTIFIER.items()}
-#: the certified tick (``--admit tick``): the network certifier's bucket τ_b in ms, and τ_sat, τ_free as multiples of a
+#: the certified tick (``--admit tick``): the network attester's bucket τ_b in ms, and τ_sat, τ_free as multiples of a
 #: calibrating trace's mean busy cycle (`tick_from`)
 TICK_BUCKET_MS = 100
 TICK_SAT, TICK_FREE = 0.9, 1.1
 #: how long the gate waits on a released request that hasn't reached the engine, or on a silent watermark, before it goes on
 TICK_HOLD_MS = 5000
-#: `tick_plugin.TickFeed`, the server's side of the release headers and the watermark (the network certifier's or
+#: `tick_plugin.TickFeed`, the server's side of the release headers and the watermark (the network attester's or
 #: `StandIn`'s)
 TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
 CUT_MIDDLEWARE = "verity_vllm.pipeline.cut_plugin.SentFeed"
@@ -308,7 +308,7 @@ def plugin_site(site: Path, tick: bool = False, cut: bool = False) -> Path:
 
 
 class StandIn:
-    """The network certifier's side of ``--admit tick`` where none is in front of the server: what it sends in the release
+    """The network attester's side of ``--admit tick`` where none is in front of the server: what it sends in the release
     headers and the watermark (`verity_vllm.pipeline.serve_admit`), from the client's sends. `release` numbers a request
     N, in the order of the calls, and puts it in the bucket of `now`, counted from `origin` in buckets of `bucket_s`;
     `close` gives the watermark's next line, ``t n`` with n the releases of buckets up to t, once bucket t has closed
@@ -387,7 +387,7 @@ def tick_modules():
 async def drive(port: int, served: str, requests: list[dict], arrivals: list[float], ids: list[str], out: Path,
                 drain_s: float, sampling: str, tick_bucket_s: float | None = None) -> dict:
     """Send each request at its arrival (seconds from now) and stream its tokens; one client.jsonl line per request. With
-    `tick_bucket_s`, stand in for the network certifier (`StandIn`): release each request as it is sent, its number and
+    `tick_bucket_s`, stand in for the network attester (`StandIn`): release each request as it is sent, its number and
     bucket in the release headers and in client.jsonl (``release``, ``bucket``), and stream the watermark to the server's
     ``POST /verity/watermark`` from the origin until every request is released and its bucket's line is out."""
     import aiohttp
@@ -481,14 +481,14 @@ async def drive(port: int, served: str, requests: list[dict], arrivals: list[flo
 
 
 def http_request(body: dict, rid: str, host: str) -> bytes:
-    """The bytes of `drive`'s request on a connection of its own (`Connection: close`), as the network certifier's client sends them."""
+    """The bytes of `drive`'s request on a connection of its own (`Connection: close`), as the network attester's client sends them."""
     data = json.dumps(body, separators=(",", ":")).encode()
     return (f"POST /v1/completions HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nX-Request-Id: {rid}\r\n"
             f"Content-Length: {len(data)}\r\nConnection: close\r\n\r\n").encode() + data
 
 
 def read_response(data: bytes, times: list[float], payload: int, sent: float) -> dict:
-    """What `drive` records of a streamed completion, read from the bytes the network certifier's cells carried: `data`, and `times`,
+    """What `drive` records of a streamed completion, read from the bytes the network attester's cells carried: `data`, and `times`,
     when each `DATA` or `END` cell arrived (cell k carries bytes kP ... (k+1)P - 1, P = `payload`). A server-sent event's
     tokens arrived with the cell that completed it, so `chunks` has the seconds from `sent` to that cell's arrival."""
     head, sep, _ = data.partition(b"\r\n\r\n")
@@ -545,7 +545,7 @@ def read_response(data: bytes, times: list[float], payload: int, sent: float) ->
 
 
 def network_certifier_modules():
-    """`verity`'s network_certifier and its device's `network_certifier_serve`, imported only for a network certifier trace; benchmarks/network_traces
+    """`verity`'s network_certifier and its device's `network_certifier_serve`, imported only for a network attester trace; benchmarks/network_traces
     is on the path for what `network_certifier_serve` still loads from there by name."""
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
@@ -558,9 +558,9 @@ def network_certifier_modules():
 
 async def drive_network_certifier(deployment: dict, endpoints: dict, served: str, requests: list[dict], arrivals: list[float],
                        ids: list[str], out: Path, drain_s: float, sampling: str, cpus: list[int] | None = None) -> dict:
-    """`drive` through the network certifier: from the network certifier's origin, each request at its arrival on a connection of its own to the
-    network certifier's listener, sent as cells and read through the client shim (`network_certifier.cells`, `network_certifier.Shim`), to the network certifier's
-    close. client.jsonl has `drive`'s fields (`read_response`) and each request's network certifier ordinal and outcome, and
+    """`drive` through the network attester: from the network attester's origin, each request at its arrival on a connection of its own to the
+    network attester's listener, sent as cells and read through the client shim (`network_certifier.cells`, `network_certifier.Shim`), to the network attester's
+    close. client.jsonl has `drive`'s fields (`read_response`) and each request's network attester ordinal and outcome, and
     warden/client.json the shim's record of every connection in `network_certifier_serve.connection_log`'s form, for its `check`.
 
     The shim times each cell when the event loop reads it, so the loop must not stall: on `cpus` when given (`cpu_plan`),
@@ -680,7 +680,7 @@ def pin_threads(cpus) -> None:
 
 
 def cpu_plan(cpus: list[int]) -> dict | None:
-    """The job's cores split for a network certifier trace, so that nothing else runs on the network certifier's or the client's: the network certifier the
+    """The job's cores split for a network attester trace, so that nothing else runs on the network attester's or the client's: the network attester the
     last one (the last two from 8 cores, its publisher beside its ticker), the client the one before, and
     the server, its engine core and the host sampler the rest. None under 4 cores (nothing is pinned)."""
     cpus = sorted(cpus)
@@ -732,7 +732,7 @@ def start_network_certifier(d: Path, port: int, delay: int, span_s: float, key: 
 
 
 def check_network_certifier(d: Path) -> int:
-    """`network_certifier_serve.py check` of a network certifier trace's d/warden (its certificates, the audit of its records and the client's
+    """`network_certifier_serve.py check` of a network attester trace's d/warden (its certificates, the audit of its records and the client's
     cells against them), into d/warden/check.json."""
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
     with open(d / "warden" / "check.log", "w") as log:
@@ -775,7 +775,7 @@ def tick_from(d: Path) -> dict:
 
 def tick_for(traces: list[str], trace: str | None, given_ms: str | None) -> dict:
     """``--admit tick``'s constants for a run of `traces` (`tick_args`). Refused for the hostile schedulers' traces, and
-    for a `NETWORK_CERTIFIER` trace unless its network certifier's bucket is τ_b, since that certifier's release buckets and
+    for a `NETWORK_CERTIFIER` trace unless its network attester's bucket is τ_b, since that certifier's release buckets and
     watermark lines are then the tick's buckets."""
     if bad := [n for n in traces if n in HOSTILE]:
         raise SystemExit(f"--admit tick doesn't serve the hostile schedulers' traces {bad}")

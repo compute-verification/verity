@@ -31,7 +31,7 @@ ALLOWED_EXTRA = (
     "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
 )
 #: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. Flock
-#: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
+#: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network attester's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
 SPLIT_DOCUMENT_DIRS = {"security/Proofs/Flock/Soundness/assumption-notes/": "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
                        "verity/protocols/resource_accounting/network/verifier/protocol/": "verity/protocols/resource_accounting/network/verifier/PROTOCOL.md"}

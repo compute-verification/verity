@@ -1,11 +1,11 @@
-"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a network certifier run's execution phase
+"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a network attester run's execution phase
 and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror
 and its Lean.
 
     python verity/protocols/resource_accounting/network/prover/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         [--v3c PERIOD_JSON --circuit CIRCUIT_RECORD] NAME=NETWORK_CERTIFIER_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of execution phase W: the parameters the network certifier run's ``deployment.json`` (its key and its
+* **The case** (`rows_case`) of execution phase W: the parameters the network attester run's ``deployment.json`` (its key and its
   session, the one entry the parameters list, its stretch starting at execution phase 0, so the period's numbers are the
   run's own, and one schedule, its integer fields and its response cap when it has one: the period check reads the id
   egress form, and a run in another is refused; its cell limits over the one link's execution phase are the cells,
@@ -27,7 +27,7 @@ and its Lean.
   (``<round>-<W>/registration.json``, `scan_zk.round_name`) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
 * **forged**: the honest case with the responses record's certificate's signature changed: a certificate the network
-  certifier didn't sign.
+  attester didn't sign.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
   ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
   answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's), or with ``--v3c`` at the state
@@ -91,7 +91,7 @@ def certificates(run: Path, w: int) -> list[dict]:
 
 def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None,
               circuit: str | None = None, answers: Path | None = None) -> dict:
-    """The rows form's case (module docstring) of the network certifier run ``run``'s execution phase, as scan_zk.py
+    """The rows form's case (module docstring) of the network attester run ``run``'s execution phase, as scan_zk.py
     proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,

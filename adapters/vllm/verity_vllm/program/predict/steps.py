@@ -10,11 +10,11 @@ its account in the output accounting (the advice through `reads.gate`):
 - `advice`: I1 v0 (`verity.protocols.resource_accounting.network.verifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
   the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
   that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Under the advice
-  code it is a v1 string (`pipeline.advice_code.codec`), which `advice_of` decodes against the network certifier's certified record
+  code it is a v1 string (`pipeline.advice_code.codec`), which `advice_of` decodes against the network attester's certified record
   into the I1 v0 it carries, planned from as I1's bytes would be; ℓ bounds the string's bits. Nothing else is advice.
 - `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
   OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice. A body
-  given as the network certifier's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
+  given as the network attester's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
   request gets the parse unit `IngressPrompt_v1{MODEL, LP, V}` (`RequestUnit.parse`): the unit that reads the ingress transfer
   gates, whose ids output is the request Program's `prompt` input and whose ``ok`` proves the bytes are in the schema.
 
@@ -158,7 +158,7 @@ class Registered:
     seed serving fills in (`engine.served_seed.DEFAULT_SEED`, under which no request compiles: `reads.seed_of`), ℓ, the bound on
     the advice's length in bits, the served model name ingress v0's ``"model"`` carries (`io_shell`; None: no ingress is bytes),
     the advice code (None: the advice is I1's): advice v1's registration (`pipeline.advice_code.codec.Registered`), private
-    like the network certifier's protocol, read only through `decode(string, record, cap_bits)`, which gives the I1 v0 `Advice`
+    like the network attester's protocol, read only through `decode(string, record, cap_bits)`, which gives the I1 v0 `Advice`
     the string carries under the certified record or a `ValueError` naming why not; ℓ then bounds its strings; and whether
     class G's DSA rows past INDEX_TOPK keys read their history by table (`dsa_table_reads`, `program.dsa_table`; off: the rows
     network), which no other Program reads and which takes the prefix cache off."""

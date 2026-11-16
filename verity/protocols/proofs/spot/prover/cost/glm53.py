@@ -19,7 +19,7 @@ model's stop ids (`STOP_IDS`), taken as a block of its own: the serving adapter'
 (``stop``). That is the leaf holding every gate of the served block but its
 ``ignore_eos`` choice, and its rows are the rule's five parameters and its word, six rows, where the served block opens
 three: its ids, one request row for two of the parameters, and its word, the stop ids and the model's length being its
-statics. Its response tie (`ResponseTieStop_v1{O}`, O = T) holds the response row the network certifier released to
+statics. Its response tie (`ResponseTieStop_v1{O}`, O = T) holds the response row the network attester released to
 those ids and that stop word: the certifier's Definition, which the caller passes (``tie``). SPOT imports neither the
 adapter nor the certifier. Each is a candidate as the card's are, with its ANDs, its rows and its output bits read
 from its Definition, and a statement holding as many of it as its block allows, as Flock's composer sizes that block.
@@ -82,7 +82,7 @@ def candidates(card: dict, requests: int = 1) -> list[Candidate]:
 
 def response_blocks(stop: Any, tie: Any, responses: int = 1) -> list[Candidate]:
     """A stop class's two populations over ``responses`` of its responses: the stop block ``stop`` (`StopRule16_v2` at
-    the class's T and the model's stop ids) and the response tie ``tie`` (the network certifier's at O = T), one a
+    the class's T and the model's stop ids) and the response tie ``tie`` (the network attester's at O = T), one a
     response, each a candidate whose ANDs are its Definition's Boolean circuit's, whose rows are a row a parameter and a
     row an output, and whose replay grain is the request, which holds one."""
     out = []

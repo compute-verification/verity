@@ -160,7 +160,7 @@ step units are its sampled class. On the statements in scope (`ScopeAcc`), at ev
 Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and Pr[B_ext] are
 the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
 - the incorrect set is in M_δ = {B : P_a(B) > δ} (`RelS`);
-- no incorrect proof block is in a class sampled `all`: the transfer-gate units and the network certifier's head checks
+- no incorrect proof block is in a class sampled `all`: the transfer-gate units and the network attester's head checks
   (`allSlots`);
 - the advice (`traceVal`, free), its inputs pinned to the trace's committed values and `free` holding values exactly at
   the incorrect proof blocks' committed gates (`FaultyGate`), makes NetTiming's `Accepted` hold over every observation
