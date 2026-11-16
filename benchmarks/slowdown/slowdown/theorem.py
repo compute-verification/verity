@@ -33,15 +33,15 @@ with `share_S` each server block's local minimum over the reference's weight in 
 `μ` the gates the algorithm needs in multiples of the reference's. `u = w` is `s_×` at the reference's gates per
 counted product; a construction runs the reference's operations, so an attack is at `w` throughout.
 
-The **slowdown** is the hardware multiple over the reference training algorithm at its MFU, `MFU₀`: the adversary's
-GPU-hours over the reference's, `T_0 / (MFU₀ Φ)`, at least 1 (Lean's `hardwareMultiple`). A bound's is
+The **slowdown** is the malicious developer's GPU-hours over the reference training algorithm's at its MFU, `MFU₀`
+(the reference's are `T_0 / (MFU₀ Φ)`), at least 1 (Lean's `hardwareMultiple`). A bound's is
 `multiple_bound(MFU₀, s, x)`, `max(1, 1/(s + a x))`, with the unregistered leaves `s` training like the reference and the
-monitored share `x` converted into the reference's work at `a`: 1 under reference efficiency (`GLOSSARY.md`'s task
+registered share `x` converted into the reference's work at `a`: 1 under reference efficiency (`GLOSSARY.md`'s task
 assumption: no run uses the hardware more efficiently than the reference, so free compute counts at `MFU₀`), and
 `1/MFU₀` without it, free compute at peak, which is Lean's `remoteSlowdown` (`Slowdown.Guarantees.SlowdownRemote` states it
 for the remote composition). A construction's is its padded size ratio times `MFU₀`, since its circuit already carries
 the capacity it leaves idle (it trains at `MFU₀`, as the assumption has it).
-The time to the target, wall-clock, is then at least the overhead times `T_0 / (MFU₀ Φ_total)`
+The time to the task, wall-clock, is then at least the slowdown times `T_0 / (MFU₀ Φ_total)`
 (`scenario.Scenario.seconds`).
 
 This module knows no GPU, protocol or training class: `envelopes` builds the server blocks from the physical model,
@@ -191,9 +191,9 @@ def aggregate(partition: Partition, block_yield: Yield, w: float, u: float | Non
 
 @dataclass(frozen=True)
 class Slowdown:
-    """The overhead for one algorithm under one yield, `value` (the hardware multiple at `mfu`), from the padded size ratio
+    """The slowdown for one algorithm under one yield, `value` (the GPU-hours ratio at `mfu`), from the padded size ratio
     `padded = efficiency / (unregistered + (1 − ε_unreg) g)`, with each server block's share and `g`'s terms summed over server
-    blocks (each a share of the reference's weight in the monitored fleet at capacity). `unregistered` is the unregistered leaves'
+    blocks (each a share of the reference's weight in the registered fleet at capacity). `unregistered` is the unregistered leaves'
     weight over the reference's in the whole inventory: `(u/w) ε_unreg` under a bound (`q_U(unregistered)`), and `ε_unreg` times
     what a construction uses of them under an attack."""
 
@@ -205,26 +205,26 @@ class Slowdown:
     serving: Mapping[str, Share]
     terms: Mapping[str, float]
     side: Side = "bound"
-    #: the reference training algorithm's MFU, `MFU₀`, which the overhead is against
+    #: the reference training algorithm's MFU, `MFU₀`, which the slowdown is against
     mfu: float = 1.0
     #: reference efficiency: a bound converts free compute into the reference's work at `a = 1`, not `1/MFU₀`
     reference_efficiency: bool = True
 
     @property
     def value(self) -> float:
-        """The overhead: the hardware multiple over the reference at `mfu` (`multiple`)."""
+        """The slowdown: the GPU-hours over the reference's at `mfu` (`multiple`)."""
         return self.multiple(self.mfu)
 
     @property
     def monitored(self) -> float:
-        """The share of the adversary's counted weight held on monitored gates: the protocols do their job for this
+        """The share of the malicious developer's counted weight held on registered gates: the protocols do their job for this
         algorithm when it is small (`g ≪ ε_unreg`), and not when it is near 1."""
         rate = self.unregistered + (1 - self.eps_unreg) * self.g
         return (1 - self.eps_unreg) * self.g / rate if rate > 0 else 0.0
 
     def multiple(self, mfu: float) -> float:
-        """The hardware multiple over the reference training algorithm at `mfu`. Under a bound, `multiple_bound`: the
-        unregistered leaves train like the reference, and the monitored share `(1 − ε_unreg) g` counts at `a` (1 under
+        """The GPU-hours over the reference training algorithm's at `mfu`. Under a bound, `multiple_bound`: the
+        unregistered leaves train like the reference, and the registered share `(1 − ε_unreg) g` counts at `a` (1 under
         reference efficiency, so the multiple is `max(1, padded)`; `1/mfu` without it), each per the algorithm's
         `efficiency`. A construction's is `max(1, mfu · padded)`: its padded circuit already holds the capacity it leaves
         idle."""
@@ -246,7 +246,7 @@ class Slowdown:
 def slowdown(partition: Partition, block_yield: Yield, w: float, efficiency: float = 1.0, side: Side = "bound",
              aggregate_only: bool = False, u: float | None = None, mfu: float = 1.0,
              reference_efficiency: bool = True, per_bit: float | None = None) -> Slowdown:
-    """The overhead from the server-block bound: each server block's local minimum (or, with `aggregate_only`, the
+    """The slowdown from the server-block bound: each server block's local minimum (or, with `aggregate_only`, the
     minimum of the global sums), and the unregistered leaves. `w` is the reference's weight per gate, `u` the most a gate holds
     under a bound (`q_U`'s, default `w`), `mfu` the reference training algorithm's MFU, `reference_efficiency`
     whether a bound counts free compute at it (`multiple_bound`), and `per_bit` the boundary term's `ω_max μ`."""
@@ -269,13 +269,13 @@ def slowdown(partition: Partition, block_yield: Yield, w: float, efficiency: flo
 
 def padded(unregistered: float, g: float, efficiency: float = 1.0, eps_unreg: float | None = None) -> float:
     """The padded size ratio `|A| / T_0` when the unregistered leaves hold `unregistered` of the inventory's weight at capacity and the
-    monitored `1 − ε_unreg` hold `g` of theirs (`eps_unreg` defaults to `unregistered`)."""
+    registered `1 − ε_unreg` hold `g` of theirs (`eps_unreg` defaults to `unregistered`)."""
     rate = unregistered + (1 - (unregistered if eps_unreg is None else eps_unreg)) * g
     return efficiency / rate if rate > 0 else math.inf
 
 
 def multiple_bound(mfu: float, s: float, x: float, reference_efficiency: bool = True) -> float:
-    """`max(1, 1/(s + a x))`: the hardware multiple a developer needs over an unconstrained one at `MFU₀ = mfu`
+    """`max(1, 1/(s + a x))`: the GPU-hours a developer needs over an unconstrained one's at `MFU₀ = mfu`
     (`hardwareMultiple`), when the unregistered share `s` trains like it and the other terms `x`, shares of capacity,
     convert into its work at `a`. Under reference efficiency (`GLOSSARY.md`: no run uses the hardware more efficiently
     than the reference) free compute runs at `MFU₀` too, so `a = 1`; without it `x` counts at peak, `a = 1/MFU₀`, Lean's
