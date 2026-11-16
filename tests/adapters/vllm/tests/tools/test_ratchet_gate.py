@@ -2008,8 +2008,8 @@ def test_a_violation_is_compared_by_its_file_and_what_it_is_with_a_count_and_nev
     assert G.beyond([two], [three]) == ([three], []) and G.beyond([three], [two]) == ([], [three])
     assert G.beyond([two], [keyed]) == ([keyed], []) and G.beyond([keyed], [two]) == ([two], [])
     assert G.beyond(["l: test_x raised E", "l: nothing here"], ["l: test_x raised E"]) == (["l: test_x raised E"], ["l: nothing here"])
-    was, now = (f"r: f.md:{n} 'warden' is retired; say the attester; its {s} (GLOSSARY.md)" for n, s in ((3, "certs"), (4, "records")))
-    other = now.replace("'warden'", "'tap'")
+    was, now = (f"r: f.md:{n} 'kettle' is retired; say the pot; its {s} (GLOSSARY.md)" for n, s in ((3, "lids"), (4, "tops")))
+    other = now.replace("'kettle'", "'teapot'")
     assert G.beyond([now], [was]) == ([was], []) and G.beyond([other], [was]) == ([], [other])
 
 
