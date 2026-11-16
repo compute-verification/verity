@@ -1033,14 +1033,46 @@ ENABLED = ("enabled", "enabled-runtime", "static", "indirect", "generated", "ali
 EXPECTED_OFF: dict[tuple[str, str], str] = {}     # (machine, `systemd:UNIT`): why a unit deploy.toml runs is off there by design
 
 
-def expected_units(machine: str, manifest: str) -> list[str]:
-    """`systemd:UNIT` / `user-systemd:UNIT` for each unit a `run` of deploy.toml names on `machine`, less held entries' and
-    EXPECTED_OFF; a unit without a suffix is a service (ops deploy's unit_name)."""
+def hold(entry: dict, machine: str, steps: dict) -> str | None:
+    """Why deploy.toml holds `entry` (a [[file]] or [[tree]] table) on `machine` whatever the machine holds: its `hold`, else
+    its step's `held` for the machine (`steps`: deploy.toml's [step] table)."""
+    return entry.get("hold") or (steps.get(entry["step"], {}).get("held", {}).get(machine) if entry.get("step") else None)
+
+
+def held(why: str | None, step: str | None, installed: bool, on: set[str]) -> str | None:
+    """Why an entry is held on a machine, else None: `why` (hold()), else its `step` while neither its file nor any other file
+    of that step is installed there (`on`: the steps with a file installed). `research deploy drift` reports such an entry
+    `held` and the units-expected monitor expects none of its units: this is the one rule both read."""
+    if why:
+        return why
+    if step and not installed and step not in on:
+        return f"step {step}, not installed"
+    return None
+
+
+def there(path: Path) -> bool:
+    """Whether a file is at `path`, as deploy drift's probe reads one: only a path that isn't there is missing."""
+    try:
+        path.stat()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        pass
+    return True
+
+
+def expected_units(machine: str, manifest: str, installed: Callable[[str], bool]) -> list[str]:
+    """`systemd:UNIT` / `user-systemd:UNIT` for each unit a `run` of deploy.toml names on `machine`, less held entries' (held(),
+    with `installed` saying whether a path is installed there) and EXPECTED_OFF; a unit without a suffix is a service (ops
+    deploy's unit_name)."""
     import tomllib
 
     m, out = tomllib.loads(manifest), set()
-    for e in m.get("file", []) + m.get("tree", []):
-        if machine not in e.get("nodes", []) or e.get("hold"):
+    mine = [e for e in m.get("file", []) + m.get("tree", []) if machine in e.get("nodes", [])]
+    present = {e["path"] for e in mine if e.get("step") and installed(e["path"])}
+    on = {e["step"] for e in mine if e["path"] in present}
+    for e in mine:
+        if held(hold(e, machine, m.get("step", {})), e.get("step"), e["path"] in present, on):
             continue
         for r in e.get("run", []):
             kind, _, name = r.partition(":")
@@ -1065,8 +1097,8 @@ def unit_states(ctx: Ctx, scope: str, names: list[str]) -> dict[str, dict[str, s
 
 def units_expected(ctx: Ctx) -> list[Finding]:
     """A unit deploy.toml runs on this machine (its `run`s, beside this file) that was never installed, isn't enabled or isn't
-    active, held for 5 minutes; less EXPECTED_OFF."""
-    want = expected_units(ctx.machine, MANIFEST.read_text())
+    active, held for 5 minutes; less those of an entry deploy holds there (held()) and EXPECTED_OFF."""
+    want = expected_units(ctx.machine, MANIFEST.read_text(), lambda p: there(ctx.path(p)))
     out = []
     for scope in ("systemd", "user-systemd"):
         names = [u.split(":", 1)[1] for u in want if u.startswith(scope + ":")]
