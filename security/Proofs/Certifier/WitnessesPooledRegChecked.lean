@@ -129,6 +129,7 @@ theorem notProg_valOver_one (inp : ℕ → Bool) {free : ℕ → Option Bool} (h
   rw [valOver_of_none_some notProg inp h1 (show notProg.gates[1]? = some (.not 0) from rfl)]
   show (!(valOver notProg inp free 0)) = !(inp 0)
   rw [valOver_of_none_some notProg inp h0 (show notProg.gates[0]? = some .input from rfl)]
+  rfl
 
 /-- **The pin passes at the output lane**: the check that pins the free input `0` to `false` meets `CheckedUnique` at
 `notProg` under `outLay` (`checkedUnique_pin`, which needs the layout to fit). -/
@@ -149,10 +150,13 @@ theorem outLay_refuses_allTrue :
     rfl rfl (fun _ _ => rfl) (fun g hg => by simp only [Finset.mem_singleton] at hg; simp [hg])
     (fun g b hb => by simp at hb) trivial trivial 0
   have hv1 : valOver notProg (outLay.inputOf 1 [[]] (fun _ => false)) (fun _ => none) 1 = true := by
-    rw [notProg_valOver_one _ rfl rfl, inputOf_of_mem_freeInputs rfl (fun _ => false) zero_mem_freeInputs_notProg]
+    have hi : outLay.inputOf 1 [[]] (fun _ => false) 0 = false :=
+      inputOf_of_mem_freeInputs (ins := [[]]) rfl (fun _ => false) zero_mem_freeInputs_notProg
+    rw [notProg_valOver_one _ rfl rfl, hi]
   have hv2 : valOver notProg (outLay.inputOf 1 [[]] (fun g => decide (g = 0))) (fun _ => none) 1 = false := by
-    rw [notProg_valOver_one _ rfl rfl,
-      inputOf_of_mem_freeInputs rfl (fun g => decide (g = 0)) zero_mem_freeInputs_notProg]
+    have hi : outLay.inputOf 1 [[]] (fun g => decide (g = 0)) 0 = decide ((0 : ℕ) = 0) :=
+      inputOf_of_mem_freeInputs (ins := [[]]) rfl (fun g => decide (g = 0)) zero_mem_freeInputs_notProg
+    rw [notProg_valOver_one _ rfl rfl, hi]
   have hc := congrFun hrow 0
   simp [rowOf, outLay, hv1, hv2] at hc
 
