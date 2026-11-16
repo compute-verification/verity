@@ -56,6 +56,7 @@ verity_vllm.pipeline.tick_plugin      # --admit tick under vLLM's own server: vL
 verity_vllm.pipeline.cut_plugin       # the carried pool's cut at each window edge under vLLM's own server: vLLM imports its general plugin (register) by name
 verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a library entry point, read by benchmarks/prove_path
 verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
+verity_vllm.program.predict.class_masked   # a decode step's key-block units masked by its bit: a library entry point (`masked`), for a class's window
 verity_vllm.pipeline.window_replay      # a window's circuit as one replay Definition: a library entry point (`replay`), for a class's replay block
 verity_vllm.pipeline.node_window_rows   # a rank's node window on the served path: a library entry point (`commit_rank_window`), no serve calls it yet
 verity_vllm.program.predict.class_window   # a request's Program at its size class and its node window: a library entry point (`class_request`, `class_window`, `rank_window`)
