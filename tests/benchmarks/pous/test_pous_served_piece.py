@@ -999,6 +999,38 @@ def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_i
     assert opening["row"] == lean["commitment"] and opening["root"] == bw["commitment"]
 
 
+#: the key a prover makes itself, never the memory challenger's
+OWN_KEY = b"the prover's own key"
+
+
+def _signed_by_its_own_key(held: Path) -> None:
+    """The prover's edit of the case it holds (`HELD`) between the session and its answer: its close signed again under
+    a key the prover made (`OWN_KEY`), which its params name as the one trusted key."""
+    case = json.loads(held.read_text())
+    own = ts.AtLeaf(OWN_KEY)
+    evidence = json.loads(bytes.fromhex(case["evidence"]))
+    close = p2_case.close_of(own, bytes.fromhex(case["params"]["session"]), p2_case.head_of(case), evidence["log"])
+    held.write_bytes(canonical_json_bytes(case | {
+        "params": case["params"] | {"trusted": [own.public_key.hex()]},
+        "evidence": canonical_json_bytes(evidence | {"close": close}).hex()}) + b"\n")
+
+
+@pytest.mark.slow
+def test_a_close_the_prover_signed_under_a_key_it_listed_itself_is_refused(registered, tmp_path, monkeypatch, case_exe):
+    """The case the bandwidth answer hands `poub-p2-protocol` is the prover's to keep (`HELD`), so its list of trusted
+    keys is the prover's word: a prover that signs the close under its own key and lists that key is refused by the
+    Lean (`closeRefusal`), since the answer trusts only the key the configuration pins for the memory challenger's
+    bandwidth close, whatever the case lists."""
+    s = registered
+    private = s.serve / "private" / "bandwidth"
+    answer = _parts(s, tmp_path, monkeypatch, between=lambda: _signed_by_its_own_key(private / SP.HB.HELD),
+                    **_bandwidth(tmp_path, bw_case_exe=str(case_exe)))
+    assert answer["verdict"] == "accept", answer["reason"]
+    _, bw, _ = _bandwidth_files(s)
+    assert bw["verdict"] == "reject" and bw["reason"].startswith(
+        "the close is signed by a key that is not a trusted memory challenger's"), bw
+
+
 @pytest.mark.slow
 def test_a_bandwidth_lean_that_does_not_answer_leaves_the_bandwidth_undecided(registered, tmp_path, monkeypatch):
     """A `poub-p2-protocol` that fails on the case (`p2_case.serve` stood in for): the session's own answer is
