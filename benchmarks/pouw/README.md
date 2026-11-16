@@ -59,5 +59,6 @@ The noised GEMMs (`edited_gemm/`, `masked_gemm/`, `floored_gemm/`) and the timin
 in `../../verity/protocols/accounting/pouw/prover/kernels/`; what only times them stays here and loads them from there.
 `edited_gemm/`'s references import `floored_gemm/derive.py`'s `tile_receipts` (the duo receipts of one 128 x 128 tile)
 beside `floored_gemm/ref.py`;
-`edited_gemm/receipt_folds_r9.py` is the r9 folds' reference as recorded, held by its sha256, so leave it
+The r9 folds' reference as recorded is the receipts' fixture
+(`verity/protocols/accounting/pouw/verifier/receipts/tests/fixtures/receipt_folds_r9.py`), held by its sha256, so leave it
 unedited.

@@ -25,10 +25,10 @@ every product, is a reference, not an answer.
   1. `Pouw.Guarantees.EndToEnd` (`Pouw/Guarantees/Game.lean`): the audit accepts while the work done is below the
      scheme's discounted share of (1 − ε_s)·W, and the run breaks no SHA-512 collision, with probability at most
      (1 − ε_s)^t plus TT's error. Assumes TT (`Pouw.Assumptions.TT`), the scheme's conjecture.
-  2. `Accounting.Guarantees.ComputeOfPouwPerRun` (`Accounting/Guarantees/PerRun.lean`): the same certificate and error
+  2. `Accounting.Guarantees.ComputeOfPouwPerRun` (`Pouw/Guarantees/PerRun.lean`): the same certificate and error
      as the compute audit's per-run guarantee, on any device whose compute audit realizes PoUW's game. Assumes TT and
      `Accounting.BudgetAbort`.
-  3. `Pouw.Guarantees.MonitoringPeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`): in each verification phase
+  3. `Pouw.Guarantees.MonitoringPeriodBindingPerProver` (`Compose/Guarantees/PeriodBinding.lean`): in each verification phase
      of a credit period the openings fail to bind with probability at most |L|·√(q/2^256 + κ), L every position of the
      credit period. That is one phase's bound, and the credit period's term is n times it, n its phases. Assumes `Claims.ExpectedCR`;
      κ is not yet bounded, and no deployed |L| is stated.
