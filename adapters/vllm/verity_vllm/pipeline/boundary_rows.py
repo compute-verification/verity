@@ -736,6 +736,7 @@ def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None =
 
 
 __all__ = ["COMMIT", "EGRESS", "FORMAT", "INDEX", "INGRESS", "LOGITS", "MIN_CAP", "PARAMS", "PARTS", "PORTS", "PROMPT",
-           "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "U32", "Committed", "Layout", "Span", "cap", "check_template",
-           "class_signature", "class_size", "commit", "ends", "inlined", "layout_of", "linked", "port_rows", "record",
-           "reopen", "return_port", "row_type", "run_root", "window_domain", "write"]
+           "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "TABLES_UNDER_A_RULE", "U32", "Committed", "Layout", "Span",
+           "cap", "check_template", "class_signature", "class_size", "commit", "descriptor_id", "ends", "inlined",
+           "layout_of", "linked", "port_rows", "record", "reopen", "return_port", "row_type", "run_root", "table_roots",
+           "window_domain", "write"]

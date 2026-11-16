@@ -432,10 +432,10 @@ def _stratum_spec(fam: str, spec: str, statics: dict[str, Any]) -> str:
     (~0.1 ms x T per row; B8 1024/128: 8 x 32k rows x up to 1152 committed reads each), not a sample.  The stratum keeps the numerical
     MECHANISM the length selects -- NB = ceil(T / BN), the number of key tiles visited, and `last=full|partial`: whether
     the last tile is FULL (T mod BN == 0: no masked lane) or PARTIAL (masked lanes -> exact zeros through exp2 and the lane sums) -- three
-    chains (single tile / multi-tile / partial last tile) that NB alone does not keep apart: measured on llama L40S B8 256/32, 32 of 80
-    NB-only strata mixed the one full-tile row (T = 128) with 127 partial ones, so the full-tile chain was picked with probability
-    per_stratum / 128 where the spec-as-stratum key had made it certain.  The phase axis keeps prefill / first-decode / mid / last:
-    `Attention_v2{NB=9,last=partial,NH=..,...}` x request x phase x module x lifetime; <= +1 stratum per formerly mixed stratum.  Every
+    chains (single tile / multi-tile / partial last tile) that NB alone does not keep apart: an NB-only stratum can hold one full-tile
+    row among many partial ones, whose chain is then picked with probability per_stratum over the stratum's rows.  The phase axis
+    keeps prefill / first-decode / mid / last: `Attention_v2{NB=9,last=partial,NH=..,...}` x request x phase x module x lifetime;
+    <= +1 stratum per NB-only stratum.  Every
     other family's spec is its own key (Gemm{K,N}, RMSNorm{N}, ... carry no per-row length)."""
     if fam not in ATTENTION_ROW_FAMILIES or "T" not in statics or "BN" not in statics:
         return spec
