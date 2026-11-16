@@ -1,5 +1,19 @@
 # Locking the Nebius nodes down
 
+`research` is the account agents and their runs use on the Nebius nodes. The lock-out takes root away from it, so
+that what an agent can do on a node is what a short allowlist names and nothing else, and an ended run's directory can
+no longer be changed. The steps run once on each node, as `vy-admin`, each with its own rollback.
+
+## Try it
+
+~~~sh
+python3 tools/research/src/research/pods/nebius/lockout/lockout.py plan vy-nebius-1
+~~~
+
+This prints node 1's steps in order, each with what it runs and its rollback. It changes nothing and runs anywhere.
+
+## What it does
+
 This directory takes root away from `research` on both nodes and on a CPU node (vy-nebius-cpu-N). Its four tools are installed by
 deploy.toml: `vy-admin-setup`, `vy-seal-runs`, `vy-sudo` and `vy-lockout` (`vy-lockout plan NODE` prints the node's steps with their
 checks). After the lock-out, agents can read run dirs but not change them. Each ended run is sealed: `vy-seal-runs.timer` makes a run
@@ -17,7 +31,9 @@ also reloads ssh once deploy has staged `/etc/ssh/sshd_config.d/11-vy-admin.conf
 vy-admin before the node's fallback expires (`EXCLUDED`); `vy-lockout audit --node NODE` lists what would be refused, before the
 lock-out too, and anyone may run it.
 
-Apply order. Every step runs as vy-admin on the node and has its own rollback. Without `--apply`, a step only says what it would do.
+## Apply order
+
+Every step runs as vy-admin on the node and has its own rollback. Without `--apply`, a step only says what it would do.
 
 1. Deploy: `research deploy install NODE --by WHO --apply` on a node; on a CPU node, whose lock-out files are deploy.toml's
    step `lockout`, which an install of the whole machine leaves out, `research deploy install NODE --only lockout --by WHO`
@@ -54,9 +70,4 @@ Apply order. Every step runs as vy-admin on the node and has its own rollback. W
    sudo did refuse. It prints command shapes, never arguments. Fix each such form by PR before the fallback expires. Once the fallback is gone, research's
    `sudo -n true` still passes, since it is on the allowlist, and any other root command (`sudo -n id`) is refused.
 
-On a sealed run, `research retention gc` and `rm` used to fail: gc reported it as read-only, and rm refused it as
-read-only. `research data evict --runs` would have raised on its first unlink. Now each passes the whole run dir to the root
-helper once its own checks pass (store/sealed.py): gc and rm run `sudo -n vy-seal-runs delete DIR`, and evict runs
-`vy-seal-runs evict DIR --min-bytes N`. The helper checks again, as root, that the dir sits directly under a runs root, is
-sealed and still has custody. Evict removes only the files `.custody` lists, at the size it recorded and unchanged since.
-A path inside a sealed run is refused.
+[`DESIGN.md`](DESIGN.md) says how the store's commands remove a sealed run, through the root helper.
