@@ -135,7 +135,7 @@ print(collections.Counter(r["verdict"] for r in table), file=sys.stderr)
 
 
 def commit_info(map_name: str):
-    h = git("log", "--diff-filter=A", "--format=%H %cI", "--", f"tools/move/{map_name}").split("\n")
+    h = git("log", "--full-history", "--diff-filter=A", "--format=%H %cI", "--", f"tools/move/{map_name}").split("\n")
     h = [x for x in h if x.strip()]
     if not h:
         return "", "", ""
