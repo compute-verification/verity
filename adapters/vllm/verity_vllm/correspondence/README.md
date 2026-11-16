@@ -1,16 +1,10 @@
 # verity_vllm.correspondence
 
-Where each Call of a derived Program lives at runtime.
+A derived Program says what is computed. The correspondence says where each of its Calls happens when vLLM runs the
+model: the module that owns it, its graph node, and its row. The query reads it to decide which values a Commit must
+commit, and the acquisition plan reads it too.
 
-## Interface
-
-- **Provides:** the `runtime-correspondence/v1` record (`runtime`) and its two readers: `reader_for_query` for the query
-  and `reader_for_acquire` for the acquisition plan.
-- **Loaded by:** the integration's `check`, `pipeline`, `acquire`, `program` and `query` packages, `circuit-check` and
-  `benchmarks/served_commit`.
-- **Loads:** `verity.circuits`, and the integration's `query` and `records`.
-
-What the integration's other packages and the benchmarks import, module by module; each module lists these names in
-its `__all__`. From `reader_for_query`: `Correspondence`, `CallName`, `runtime_rows`, `parse_call_name` and
-`call_name_of`. From `reader_for_acquire`: `AcquireCorrespondence`, `ReturnSlot`, `RuntimeTree` and `RUNNER_PATH`.
-From `runtime`: `RuntimeCorrespondence`, `NAMESPACE`, `SCHEMA` and `correspondence_digest`.
+The record itself, `runtime-correspondence/v1`, is the PyTorch adapter's (`verity_torch.correspondence.runtime`),
+which the translator writes into the Program it derives. This package holds its two readers, `reader_for_query` and
+`reader_for_acquire`, and each one's docstring says what it reads. [`DESIGN.md`](DESIGN.md) lists the names other
+packages import from here.
