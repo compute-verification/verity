@@ -403,7 +403,7 @@ def count(entry: object) -> int:
 
 def ratchets(rev: str, moved: Iterable[str] = ()) -> tuple[dict[str, list], dict[str, str], list[str]]:
     """({slug: entries}, {slug: path}, the ratchet-named files that aren't readable allowlists) at ``rev``, with ``moved``,
-    the paths a change moves its base's ratchets to, wherever they are."""
+    the paths of the base's ratchets a change moves, or that it moves them to, wherever they are."""
     entries: dict[str, list] = {}
     paths: dict[str, str] = {}
     bad: list[str] = []
@@ -1052,11 +1052,11 @@ def held(c: Change, before: dict[str, list], after: dict[str, list], moved: dict
     return out, widened
 
 
-def public_commands(rev: str) -> dict[str, str]:
-    """The commands P16's list at ``rev`` declares public, each with the file that runs it (none without the list or its
-    table)."""
+def public_commands(rev: str, path: str = CALLERS_LIST) -> dict[str, str]:
+    """The commands P16's list at ``rev``, at ``path`` there, declares public, each with the file that runs it (none without
+    the list or its table)."""
     try:
-        doc = json.loads(git("show", f"{rev}:{CALLERS_LIST}"))
+        doc = json.loads(git("show", f"{rev}:{path}"))
     except (GitError, ValueError):
         return {}
     table = doc.get(PUBLIC) if isinstance(doc, dict) else None
@@ -1089,11 +1089,12 @@ def callers_lint_at(rev: str) -> types.ModuleType:
     return lint
 
 
-def public_callers(c: Change) -> tuple[list[str], list[str]]:
+def public_callers(c: Change, was_at: str = CALLERS_LIST) -> tuple[list[str], list[str]]:
     """(each command P16's ``public`` table gains in the change, a new one or one with another caller, whose caller doesn't
     run it in the change's tree, with what is wrong; each whose caller does): as the base's P16 lint finds a call (its
-    ``runs``), so a public command is a declaration the gate checks rather than an exception it holds."""
-    was, now = public_commands(c.lo), public_commands(c.hi)
+    ``runs``), so a public command is a declaration the gate checks rather than an exception it holds.  The base's table is
+    its list at ``was_at``, where the base holds the list the change moves."""
+    was, now = public_commands(c.lo, was_at), public_commands(c.hi)
     added = {k: v for k, v in now.items() if was.get(k) != v}
     if not added:
         return [], []
@@ -1479,15 +1480,15 @@ def judge(c: Change, base: str, every: bool = False) -> None:
         return
     grown, added, bad, found, uncalled, public = [], [], [], [], [], []
     if c.touched:
-        before, was_at, _ = ratchets(c.lo)
         to = renamed(c)
+        before, was_at, _ = ratchets(c.lo, (old for old, new in to.items() if is_ratchet(new)))
         after, now_at, bad = ratchets(c.hi, (to[p] for p in was_at.values() if p in to))
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
         moved = {new: old for old, new in to.items()}
         placed_before = carried(before, moved)
         grown, added, c.pooled = growth(placed_before, after, {**was_at, **now_at}, *held(c, placed_before, after, moved))
-        uncalled, public = public_callers(c)
+        uncalled, public = public_callers(c, moved.get(CALLERS_LIST, CALLERS_LIST))
     noqa_grows = c.noqa_added > c.noqa_removed
     early = bool(grown or bad or uncalled or noqa_grows)
     inherited: list[str] = []
