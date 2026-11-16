@@ -4,6 +4,7 @@ public import Properties.NetworkScan
 public import Proofs.Properties.NetworkScan.Fits
 public import Proofs.Properties.NetworkScan.Causal
 public import Proofs.Properties.NetworkScan.Parsed
+public import Proofs.Properties.NetworkScan.Members
 public import Proofs.Properties.NetworkScan.MembersSpotFlock
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 import Mathlib.Algebra.Order.Floor.Extended
