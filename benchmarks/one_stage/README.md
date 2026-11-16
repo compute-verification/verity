@@ -372,7 +372,8 @@ bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m
 The proof-layers table's first three benchmarks are three runs of `a5_llama1b_h200.sh` on one work directory: Flock (a
 plain audit), Flock with zero knowledge, and with sampling. They differ in their settings and in their partition file's
 sampling design (its `law` key): `stratified-rate:880/880` and `subset:880` take all 880 proof blocks of the window, and
-`subset:256` samples 256 of them. From a clone of `main` on an H200 node with about 450 GB of memory, at the tree's root:
+`subset:256` samples 256 of them. The job's own processes peak at 37.1 GB of memory, in the bootstrap's builds (each run
+at 7 to 14 GB), and its work directory at about 20 GB. From a clone of `main` on an H200 node, at the tree's root:
 
 ~~~sh
 A5_CARD=0 A5_CORES=40-59 WORK=/workspace/a5-layers GPU_LEASE_WHO=$USER bash benchmarks/one_stage/proof_layers.sh
@@ -381,13 +382,14 @@ A5_CARD=0 A5_CORES=40-59 WORK=/workspace/a5-layers GPU_LEASE_WHO=$USER bash benc
 `A5_CARD` is the jobs' card, `A5_CORES` their cores, `WORK` a new or empty work directory and `GPU_LEASE_WHO` who their
 leases are recorded for; `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
 `research run`), and `--dry-run` makes every check and prints each step's command without running it. What it does:
-before anything is downloaded or built, it refuses a missing setting, a card that is not an H200, under 448 GB of host
-memory, cores this job may not run on, under 25 GB free under `WORK`, a `WORK` that is not empty and results already in
-the results directory. Then it runs the eight steps below, stopping at the first that fails: the bootstrap, the three
-partition files, the three runs and the printer, whose table it keeps as `proof-layers.txt`. Its `steps.log` records
-each step's command, exit code, seconds, peak host memory in use, largest process and `WORK`'s size. At its end, success
-or failure, it copies the three runs' records and the bootstrap's to the results directory and removes `WORK`. It does
-not run the recursion benchmark. By hand, the same steps (the script's bootstrap writes its record under `WORK`):
+before anything is downloaded or built, it refuses a missing setting, a card that is not an H200, under 64 GB of host
+memory available, cores this job may not run on, under 25 GB free under `WORK`, a `WORK` that is not empty and results
+already in the results directory. Then it runs the eight steps below, stopping at the first that fails: the bootstrap,
+the three partition files, the three runs and the printer, whose table it keeps as `proof-layers.txt`. Its `steps.log`
+records each step's start, command, exit code and seconds; the peaks of the job's own memory (PSS over its session), of
+the machine's memory in use (other jobs' included) and of `WORK`'s size; and the largest process. At its end, success or
+failure, it copies the three runs' records and the bootstrap's to the results directory and removes `WORK`. It does not
+run the recursion benchmark. By hand, the same steps (the script's bootstrap writes its record under `WORK`):
 
 ~~~sh
 export WORK=/workspace/a5-layers A5_CARD=0 A5_CORES=40-59 GPU_LEASE_WHO=$USER
