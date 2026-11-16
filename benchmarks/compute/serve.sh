@@ -41,7 +41,8 @@
 # on exit with the local gate's key; PASSES names a directory to keep them in instead.
 # Env: VERITY_BENCH_VENV (the pinned-vLLM Python's venv, else benchmarks/harness/env.sh's search), HF_HOME, CUDA_HOME,
 # RUN_DIR (the run directory, default $RESEARCH_RUN_DIR, else ./compute-run), COINS (local), GPU (0), DRAWS (459),
-# DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc), LEASE_MIN (30). The load is
+# DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc), LEASE_MIN (30), LEAN_TIMEOUT (the seconds
+# the Lean verdict has: 3,600 on 96 or more cores, 3,600 x 96 / nproc on fewer). The load is
 # benchmarks/compute/load.toml's, which run.py holds the record to. Before any step it exits 3 on a RUN_DIR already
 # holding a record, a missing verity_torch or lake, or a GPU that isn't an idle H100 or H200. A failed step exits 1 with
 # a sentence naming it and compute-run.json written, and run.py isn't run on what it left. Exit 0 only where Python and
@@ -54,6 +55,9 @@ TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}
 OUT=$RUN/out
 COINS=${COINS:-local} GPU=${GPU-0} DRAWS=${DRAWS:-459} DELTA=${DELTA:-1/100} FAST=${FAST-1} JOBS=${JOBS:-$(nproc)}
+# the Lean verdict runs on every core it may: 1,917 s on 96, 3,451 s on 36, and more than 3,600 s on 20, so its limit grows
+# as the cores fall
+CORES=$(nproc) && LEAN_TIMEOUT=${LEAN_TIMEOUT:-$(( CORES >= 96 ? 3600 : 3600 * 96 / CORES ))}
 # under a caller's gpu-lease (which exports GPU_LEASE_UUID, the cards it holds) the card is the lease's, and serve.sh takes
 # no lease of its own: gpu-lease isn't re-entrant, so a second lease of the held card would wait forever
 [ -z "${GPU_LEASE_UUID:-}" ] || GPU=${GPU_LEASE_UUID%%,*}
@@ -266,7 +270,7 @@ if [ "$failed" = 0 ]; then
   step python-verify "$PY" "$SP" verify --passes "$P" --tie "$WR" --class "$CLASS" --out "$PIECE/verify.json" \
     --answer "$PIECE/pearlplus-answer.json" --draws "$DRAWS" --delta "$DELTA" --jobs "$JOBS" ${FAST:+--fast} || failed=1
   [ -s "$PIECE/verify.json" ] && step lean "$PY" "$SP" lean --passes "$P" --verify "$PIECE/verify.json" \
-    --exe "${PEARLPLUS_LEAN_EXE:-build}" --out "$PIECE/pearlplus-lean.json" --timeout "${LEAN_TIMEOUT:-3600}" || failed=1
+    --exe "${PEARLPLUS_LEAN_EXE:-build}" --out "$PIECE/pearlplus-lean.json" --timeout "$LEAN_TIMEOUT" || failed=1
   if [ -s "$P/coin.json" ]; then step publish publish && step piece piece || failed=1
   else echo "serve.sh: the python-verify step left no verifier's coin ($P/coin.json), so no piece" >&2; failed=1; fi
 fi
