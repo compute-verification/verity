@@ -270,3 +270,17 @@ def test_a_run_sent_a_lender_hands_it_to_both_suite_steps_unless_uncached(tmp_pa
     got = suites()
     assert set(got) == {"pytest", "lean-suites"} and all("--lend-from 0123abcd" in argv for argv in got.values()), got
     assert not any("--lend-from" in argv for argv in suites(cache=False).values())
+
+
+def test_a_run_sent_its_base_runs_both_suite_steps_under_the_allowances_there(tmp_path):
+    """The commit a recorded run was sent as its base (`BASE_FILE`, where the verified queue reads the allowances) reaches
+    `suites.py --allowances` in the pytest and lean-suites steps alike, cached or not; a run sent none passes no such flag."""
+    def suites(**kw) -> dict[str, str]:
+        return {s[0]: " ".join(s[1]) for g in CHECK.groups(tmp_path, 16, **kw) for s in g if s[0] in ("pytest", "lean-suites")}
+
+    assert suites() and not any("--allowances" in argv for argv in suites().values())
+    (tmp_path / "inputs").mkdir()
+    (tmp_path / "inputs" / CHECK.BASE_FILE).write_text("4567cdef\n")
+    for cache in (True, False):
+        got = suites(cache=cache)
+        assert set(got) == {"pytest", "lean-suites"} and all("--allowances 4567cdef" in a for a in got.values()), got

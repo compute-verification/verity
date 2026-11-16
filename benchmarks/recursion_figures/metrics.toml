@@ -4,7 +4,7 @@
 # Each is modeled from the recursion bench's run of record, the run its command names, read from the evidence store
 # with this tree's reader, and written for each fleet's week,
 # month and year; the world's year, the one each id names, is written last. Recursion is parked (top/parked), so the
-# figures are remade monthly, from a newer run once one is recorded.
+# loop doesn't rerun them.
 [[metric]]
 id = "benchmarks/recursion-core-years-world-year"
 title = "Recursive audit cost, world year"

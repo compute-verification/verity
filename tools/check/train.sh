@@ -227,7 +227,7 @@ for _ in $(seq $((launch_wait_s / 5))); do
   [ -z "$on" ] || want=$(( $(tr -cd , <<<"$on" | wc -c) + 1 ))
   [ "$(wc -w <<<"$ids")" -ge "$want" ] && break
   if [ -z "$on" ]; then
-    grep -qE "refused|Traceback" "$log" && break
+    grep -qE "refused|Traceback" "$log" && ! grep -qE '^check: --on: twins ' "$log" && break  # twins line comes before a twin's refusal
   elif [ $(( $(wc -w <<<"$ids") + $(grep -cE "$twin_lost" "$log" || true) - $(grep -cE "$twin_chained" "$log" || true) )) -ge "$want" ]; then
     break
   fi

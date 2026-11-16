@@ -1383,13 +1383,13 @@ class Landing:
     def beside_args(self, tip: str, base: str) -> tuple[dict, list[str], str]:
         """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_after_landing`'s
         keywords, the steps it skips by name, its flags as a message gives them).  It sends the upstream build (`--agreement`)
-        when the merges above ``base`` change what lean-agreement checks (as check.py finds against that base), and skips
-        lean-agreement else; lean-audit fails on a record difference (`--no-regenerate`), since the records it checks are the
-        candidate's own (`vqueue_records`); ratchet-gate judges the merges above `--base`: ``base``, or ``tip``'s first parent
-        when they are one.  Every pass a step may reuse, it reuses."""
+        when the merges above ``base`` change what lean-agreement checks (as ``base``'s own declaration names it, not the
+        loop's checkout's, which can be days behind), and skips lean-agreement else; lean-audit fails on a record difference
+        (`--no-regenerate`), since the records it checks are the candidate's own (`vqueue_records`); ratchet-gate judges the
+        merges above `--base`: ``base``, or ``tip``'s first parent when they are one.  Every pass a step may reuse, it reuses."""
         from .merge import required_steps
 
-        extra = {"agreement": "lean-agreement" in required_steps(self.repo, base, tip, "check"), "no_regenerate": True}
+        extra = {"agreement": "lean-agreement" in required_steps(self.repo, base, tip, "check", at=base), "no_regenerate": True}
         skip = [] if extra["agreement"] else ["lean-agreement"]
         below = (base if base != tip else
                  _git(self.repo, "rev-parse", "--verify", "-q", f"{tip}^1", check=False).stdout.strip()) or None

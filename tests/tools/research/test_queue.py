@@ -3051,6 +3051,21 @@ def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(wo
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
+def test_the_preflight_collects_each_suite_without_the_suites_under_its_test_paths(world, capsys):
+    """The root's `tests/` holds every suite's tests, so a suite's test paths hold the suites mirrored under them (the root's
+    hold them all, the PoUW verifier's its `lean/window` difftest), which `suites.py` has its pytest ignore (`Suite.inner`).
+    Collected without them, the root suite imports the nested suite's `test_doc_paths.py` beside its own and fails, on the
+    merged tree alone, so the head was refused; collected as `suites.py` runs them, both suites pass and the head is marked."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world, {"tests/inner/pyproject.toml": '[project]\nname = "inner"\nversion = "0"\n\n[tool.pytest.ini_options]\n'})
+    world.gh.put(2, h2 := world.change({"tests/inner/test_doc_paths.py": "def test_inner():\n    pass\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight" in s)
+    assert "nothing refused" in said and "collected 2 suite(s) (., tests/inner)" in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
 #: a fetched fixture's bytes, and the tree that reads it: pkg's test reads it at import, as benchmarks/numerical's
 #: tests/explore/test_authentication.py reads tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0's K=1536 vector
 #: (`auth.read_openings()`), so the suite's collection fails without it; `other` registers one too, in a suite no change

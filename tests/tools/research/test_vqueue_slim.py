@@ -84,7 +84,7 @@ def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple
     (`merge.required_steps`), which finds it changed with ``agreement``."""
     _move_main(world, {**GATED_TREE, "tools/check/policy.toml": _policy(off_gate=off_gate), **(tree or {})})
     asked: list[tuple[str, str, str]] = []
-    monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
+    monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool, at=None: asked.append((base, commit, tool)) or (
         {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]} if agreement else {}))
     h = Beside(world, monkeypatch, **kw)
     h.q._clone()
