@@ -19,11 +19,12 @@ verity bench exfiltration --from DIR      read one run's record directory instea
 verity bench exfiltration --help          every parameter and its default
 ```
 
-To try it with nothing of ours, no store and no key, read the made-up record in this directory. It prints the same
-tables from rows written by hand, and says the record is made up:
+To try it with nothing of ours, no store and no key, read the made-up record in this directory from the repository's
+root. It prints the same tables from rows written by hand, and says the record is made up:
 
 ```text
-verity bench exfiltration --from benchmarks/exfiltration/made_up
+uv sync --all-packages --extra torch-cpu
+uv run verity bench exfiltration --from benchmarks/exfiltration/made_up
 ```
 
 ## The two parts
