@@ -553,6 +553,7 @@ files = ["adapters/vllm/verity_vllm/pipeline/serve_h1.py"]
 files = ["adapters/vllm/verity_vllm/protocols/pouw/__init__.py"]
 [words_in.words]
 "in_process_draw" = "in_process_sample"
+"draw=" = "sample="
 
 # adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py: our names it uses
 [[words_in]]
@@ -561,6 +562,7 @@ files = ["adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py"]
 "window.draw_challenger" = "window.sample_challenger"
 "draw_challenger" = "sample_challenger"
 "COIN_DRAW" = "COIN_SAMPLE"
+"draw=" = "sample="
 
 # adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py: our names it uses
 [[words_in]]
