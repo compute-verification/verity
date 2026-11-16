@@ -6,6 +6,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -194,3 +195,23 @@ def test_a_run_that_gets_no_tree_in_its_wait_runs_nothing_and_lets_its_slot_go(t
     assert err.index("slot: check slot a") < err.index("refused: another run's Lean build held the shared tree"), "it had its slot"
     assert _free(slot_lock) and not _free(lock), "the slot is the next run's; the tree is still the build's"
     os.close(building)
+
+
+def test_the_slotted_runs_read_nothing_of_the_check_that_runs_them(tmp_path):
+    """A check's run hands its tests what it asks of its slot and research.mem's ledger, and the slot.py these runs start took
+    the ask as slot a's mem=, found less than that free on the node, less its live reservations, and exited 75 before taking
+    the slot. Under an ask no machine has and a ledger reserving more than any holds, with the guard loaded as the suite
+    runner loads it, the two slotted runs above still pass, and the ledger is left as it was."""
+    ledger = tmp_path / "ramlock"
+    ledger.mkdir()
+    hostile = json.dumps({"owner": "check", "gb": 1e9, "pid": os.getpid(), "note": "check slot a: the enclosing check"})
+    (ledger / "check-a.json").write_text(hostile)
+    env = {k: v for k, v in os.environ.items() if k != "VERITY_SUITE_REPORT"}     # the guard loads inert: no second report
+    env.update(PYTHONPATH=os.pathsep.join(filter(None, [str(SLOT_PY.parent / "guard"), env.get("PYTHONPATH")])),
+               RESEARCH_RAMLOCK_DIR=str(ledger), CHECK_RUN_MEM_GB="1e7", CHECK_MIN_MEM_GB="999999", CHECK_SLOT="a")
+    run = subprocess.run([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "verity_suite_guard",
+                          f"--basetemp={tmp_path / 'probe'}", Path(__file__).name, "-k",
+                          "in_its_slot_builds or no_tree_in_its_wait"], capture_output=True, text=True, env=env,
+                         cwd=Path(__file__).resolve().parent)
+    assert run.returncode == 0 and "2 passed" in run.stdout, run.stdout[-3000:] + run.stderr[-2000:]
+    assert [p.name for p in ledger.iterdir()] == ["check-a.json"] and (ledger / "check-a.json").read_text() == hostile
