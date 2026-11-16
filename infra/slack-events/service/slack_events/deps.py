@@ -24,6 +24,8 @@ LAST_SUCCESS = "last-success-at"                                 # when a delive
 LAST_DONE = "last-done-at"                                       # when the consumer last finished a message (no cron writes it)
 LAST_ENQUEUED = "last-enqueued-at"                               # when the app last published an event
 STALL_RUNG = "stall-rung-at"                                     # when the watchdog last rang STALL_TO for a stalled consumer
+SLACK_HEARD = "slack-heard-at"                                   # when Slack last sent the events route a signed request
+SILENCE_RUNG = "silence-rung-at"                                 # when reconciliation last rang STALL_TO for Slack's silence
 CANARY_SENT = "canary-sent-at"                                   # when the watchdog last published its synthetic event
 CANARY_DONE = "canary-done-at"                                   # when the consumer last finished one
 DEAD = "dead-letters"                                            # {"count", "since"}: dead letters since the record began
@@ -69,6 +71,12 @@ class Deps:
             self.cache.set(key, value, {"ttl": ttl_s} if ttl_s else None)
         except Exception as e:  # noqa: BLE001
             self.log("cache-write-failed", key=key, error=error(e))
+
+
+def message_key(channel: str, ts: str) -> str:
+    """A message's idempotency key on the topic: the same from Slack's event and from reconciliation's read of the channel,
+    so whichever comes second is dropped."""
+    return f"message:{channel}:{ts}"
 
 
 def error(e: BaseException) -> str:

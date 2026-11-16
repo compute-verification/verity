@@ -1326,6 +1326,9 @@ def inside(a: argparse.Namespace) -> int:
         state = torch.load(a.inside / kept["tensors"], map_location=a.device, weights_only=True)
         (a.inside / kept["tensors"]).unlink()
         own.holds(kept_sha512(state))
+    # the capture and the PyTorch adapter's trace under it, which takes over torch's dispatch as the screen refuses a
+    # route to, are imported before any route code runs, so what the trace runs is the tree's source
+    from .capture import steps  # noqa: F401
     imports = Imports()
     with no_bytecode():
         cfg = config.load(a.config, reg)

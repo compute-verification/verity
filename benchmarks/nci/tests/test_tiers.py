@@ -82,7 +82,7 @@ def test_free_compute_charges_pouws_deficit_on_the_certified_work():
 
 
 def test_the_gpus_free_compute_leaves_pouws_deficit_to_eps_w():
-    """The C7 dossier's GPU free-compute share 1 − (1 − ε)((1 − φ)/q_sched + φ)/q_clock (Notion, "Monitored compute residual")
+    """The C7 dossier's GPU free-compute share 1 − (1 − ε)((1 − φ)/q_sched + φ)/q_clock
     takes PoUW's deficit off the credited time; `eps_w` charges it in `free_share`, so the default is that form at
     ε = 0 (0.323 at the locked clock, against C7's 0.326 at its ε = 0.54%), and the deficit is charged once."""
     q_sched, q_clock, phi = 1.482, 1.162, 0.345

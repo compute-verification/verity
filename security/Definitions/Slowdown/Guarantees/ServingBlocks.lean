@@ -46,9 +46,9 @@ The proofs are in `security/Proofs/Slowdown/ServingBlocks.lean`.
 
 @[expose] public section
 
-namespace Accounting.Guarantees.ServingBlocks
+namespace ResourceAccounting.Guarantees.ServingBlocks
 
-open Verity Finset Accounting.ServingBlocks
+open Verity Finset ResourceAccounting.ServingBlocks
 
 /-- **The serving-block bound**. For a declaration `d` with counted operations `J`, a partition `P` whose units `S` are
 the serving blocks (the others the dark remainder) and a `(c, k)`-partition `Pf` of inference blocks refining it: when
@@ -88,4 +88,4 @@ def UncertifiedElementary : Prop :=
     UncertifiedCap J (Pc.gates s) (fun i : {i // r.parent i = s} => Pf.gates i)
       (J.split (Pc.gates s) (fun i : {i // r.parent i = s} => Pf.gates i))
 
-end Accounting.Guarantees.ServingBlocks
+end ResourceAccounting.Guarantees.ServingBlocks

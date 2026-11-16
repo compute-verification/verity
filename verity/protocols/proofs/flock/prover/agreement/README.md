@@ -26,7 +26,7 @@ the verifier follows upstream because the paper is silent are listed below.
 | the pinned configuration: profile, reps, flavour, link shape, coin scheme, statement versions | `Flock.Tags` |
 | the session record (`flock-live-session/v1`), its session checks and its one canonical text | `Flock.Record`, `Flock.RecordText` |
 | the replay transcript (transcript-v2 framing; coins read from the record, never derived) | `Flock.Transcript` |
-| the unit sample (subset, bernoulli, stratified, work; derived by the verifier, never taken as stated) | `Flock.Draw` (`HmRow.stratifiedLaw`, `HmRow.workLaw`; commitment readers sampled in full: `Registered.checkFull`) |
+| the proof-block sample (subset, bernoulli, stratified, work; derived by the verifier, never taken as stated) | `Flock.Draw` (`HmRow.stratifiedLaw`, `HmRow.workLaw`; commitment readers sampled in full: `Registered.checkFull`) |
 | a `--zk` session's keyed coin tree | `Flock.CoinTree` (`checkFresh`) |
 | the proof container (bincode, refused unless canonical, every nonce 0) | `Flock.Proof` (`decodeProof_canonical`), `Flock.ZkProof` |
 | statement binding, zerocheck, lincheck, the claims handed to the opening | `Flock.Piop` |
@@ -41,7 +41,7 @@ the verifier follows upstream because the paper is silent are listed below.
 | the partition invariant and the width rule, on the verifier's own program | `Flock.Partition` (`checkCut`), `Flock.Qword`, `Flock.Qcall`, `Flock.Program`, `Flock.Extract`, `Flock.Sigma` |
 | hm96-sha512 rows, their nets, template queries, registered reads | `Flock.HmRow`, `Flock.HmNets`, `Flock.TemplateQuery`, `Flock.Registered`, `Flock.KnownRead` |
 | hidden outputs and links | `HmOut`, `HmLinks` (in `Flock/HmRow.lean`) |
-| the recursion's units and their composition | `Flock.RecOpen`, `Flock.RecResiduals`, `Flock.RecOpening`, `Flock.RecVStar`, `Flock.RecSetup`, `Flock.RecCompose`, and `VStar` |
+| the recursion's proof blocks and their composition | `Flock.RecOpen`, `Flock.RecResiduals`, `Flock.RecOpening`, `Flock.RecVStar`, `Flock.RecSetup`, `Flock.RecCompose`, and `VStar` |
 | the typed statement | `Flock.Typed`, `Flock.CircuitType`, `Flock.Layout`, `Flock.DeriveAll` (`deriveChecked`) |
 | the templated statement | `Flock.Tmpl` and its `Flock.Tmpl*` modules |
 | sessions of several tables | `Stmt.setupTables`, `Draw.tablesWhy` |
@@ -204,7 +204,7 @@ one before it reads a file (`Flock.ProvedScope.legacyStatements`, `ProvedScope.l
 that, and that every statement before hm96-sha512 rows is refused once every check has passed.
 
 The other subcommands of `verity verify proof` run one part on its own: `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
-`verity/commitments/hm96/vectors.json`) and `comp-check` (`Flock.Comp`'s checks); `draw` and `draw-test` (the unit
+`verity/commitments/hm96/vectors.json`) and `comp-check` (`Flock.Comp`'s checks); `draw` and `draw-test` (the proof-block
 sample); `unit-cut`, `cut-check`, `qword-program`, `qcall-program`, `input-ids`, `sigma-check` and `template-query` (the
 partition and program checks); `net-check`, `region-words`, `typed-expand`, `typed-rows`, `circuit-type` and `layout`
 (statement setup); `archive-put` (the object store); `evaluate`; and `rec-inner`, `rec-statements`, `rec-transcript` and
@@ -259,8 +259,8 @@ sampling design or missing sample alone as accepted, and every set so compares a
 | D10 | an `identifier` other than the verifier's own `--identifier F` |
 | D11 | an output group past its slot |
 | D12 | a statement form, sampling design or session the soundness proof doesn't cover (`Flock.ProvedScope`), upstream's plain proof files (`--upstream-plain`), and a `--zk` mask slot below 2^13 bits or met by Δ or a region |
-| D13 | a `rec-open` unit whose name, bits, rows or net aren't the verifier's |
-| D14 | a sample that doesn't take in full each unit reading a round's commitment |
+| D13 | a `rec-open` proof block whose name, bits, rows or net aren't the verifier's |
+| D14 | a sample that doesn't take in full each proof block reading a round's commitment |
 | D15 | an inner statement's registered description that isn't the registration |
 | D16 | a V* session whose instance labels aren't its sampled proof blocks |
 | D17 | a plain file in the form its statement doesn't pin, or a byte after a proof's end |

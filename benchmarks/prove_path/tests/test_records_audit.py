@@ -19,7 +19,7 @@
   (`window_tie.py`) is that one on their toys;
 * the workload side's copy of the Lean verifier's ``--registered`` port (`spot/prover/registered_reads.py`) is the
   verifier's own;
-* a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
+* a window's audit is one compute audit of the network attester's period (`period`), its scan state's reads registered;
 * a declared day (``--day``, `declared_day`) hands R2 the registration log's declarations, so a program other than the
   day's is refused;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
@@ -66,7 +66,7 @@ COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
 TID = descriptor_id(COORD)
 SAMPLING_DESIGN = "stratified:2"
 RUN = "ab" * 64
-#: the value a period ties to its scan's state tree, which `period` takes from its caller (the network certifier's scan state)
+#: the value a period ties to its scan's state tree, which `period` takes from its caller (the network attester's scan state)
 TIED = "verity/certifier/scan-state/v1"
 
 
@@ -387,7 +387,7 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
     def group(**roots: str) -> dict:
         return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
 
-    from verity.protocols.accounting.pouw.verifier import operands as OP
+    from verity.protocols.resource_accounting.compute.pouw.verifier import operands as OP
 
     w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
          "registered": group(w="cd" * 64)}
@@ -507,7 +507,7 @@ def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp
     import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
-    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
 
     s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
 
@@ -848,7 +848,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     output class (its readers sampled like any other unit), and the summary names W's digest and the values. The sessions
     (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass."""
     import a5 as A5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     got = _tied(tmp_path / "w")
     assert got.rec["previous"] == R.digest(got.w) and got.rec["registered"] == [{**got.entry, "value": got.name}]
@@ -895,7 +895,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     assert summary["registered"]["roots"] == summary["registered"]["pins"] == {got.name: got.entry["root"]}
     assert summary["leak"]["registered"] == 8 * 8 * K and "unpinned" not in summary["leak"]
     assert seen["declared"] == {} and "day" not in summary
-    from verity.protocols.accounting.registration.verifier import registration as G
+    from verity.protocols.registration.verifier import registration as G
     day = G.chain("remote", [G.Declaration(0, got.rec["program"])])
     (tmp_path / "log.json").write_bytes(G.committed("remote", day))
     named = tmp_path / "w-day.json"
@@ -930,7 +930,7 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
     takes with the day. The window's program declared for its day passes R2; a day declared to another program is refused
     (``R2-declared``), and a day the log doesn't declare too (``R2-undeclared``). A log declaring a day twice is core's
     ``duplicate-declaration``, and day options without ``--day`` are refused, each before any session."""
-    from verity.protocols.accounting.registration.verifier import registration as G
+    from verity.protocols.registration.verifier import registration as G
 
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(SAMPLING_DESIGN), None)
     program, log = written.rec["program"], tmp_path / "log.json"
@@ -961,7 +961,7 @@ def test_a_declared_day_holds_the_tied_ws_naming_to_a_declaration_of_that_day_in
     naming another day, a digest the log doesn't hold for day 3 (day 4's), the log's chained digest of day 3's entry, or a
     day without ``--day`` is refused before any session. A W naming no day under no ``--day`` (Pearl+'s, every window
     without the switch) is as before."""
-    from verity.protocols.accounting.registration.verifier import registration as G
+    from verity.protocols.registration.verifier import registration as G
 
     log = tmp_path / "log.json"
     entries = G.chain("remote", [G.Declaration(3, "5d" * 64), G.Declaration(4, "6e" * 64)])
@@ -985,13 +985,13 @@ DAY0, PIN, S1, S2 = 20746, "c" * 40, "s20261020T093000Z-0001", "s20261020T093000
 
 def _auditor():
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
-    return LC._module("a5_auditor", Path(__file__).resolve().parents[3] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    return LC._module("a5_auditor", Path(__file__).resolve().parents[3] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "auditor.py")
 
 
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
     """The challenger device's own ledger of ``events`` (kind, session, body), chained and signed by the live challenger's
-    code (`verity/protocols/compose/device/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
-    from verity.protocols.proofs.spot.device import challenger as Ch
+    code (`verity/protocols/compose/verifier/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
     from verity.commitments.crypto import lms
     A = _auditor()
     (tmp_path / "var" / "sessions").mkdir(parents=True)
@@ -1027,7 +1027,7 @@ def _window(session: str, reserve_seq: int, root: str, by: str = "hash", reserve
 
 
 def _verify(key: object):
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     return AC.lms_verify
 
 
@@ -1037,7 +1037,7 @@ def test_the_device_day_is_the_challengers_declared_day_over_its_own_ledger_and_
     UTC day of the window's signed open and the declarations its lane signed before it, which R2 takes in place of
     ``--day``. W's naming is held to the Declaration rebuilt from the device's entry (no ``previous``): the prover log's
     chained digest, or another day's, is refused."""
-    from verity.protocols.accounting.registration.verifier import registration as G
+    from verity.protocols.registration.verifier import registration as G
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(SAMPLING_DESIGN), None)
     program, root = written.rec["program"], "01" * 64
     lines, key, _record = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
@@ -1059,7 +1059,7 @@ def test_a_window_opened_before_its_days_declaration_or_of_a_lane_that_never_dec
     (``R2-undeclared``) and W's naming of the later declaration is refused, while a window opened after it passes. A lane
     that never declares isn't gated at the challenger, so its windows open, but under ``--day-ledger`` they read no
     declaration (another lane's binds them not) and R2 refuses them too; with the switch off R2 reads no day."""
-    from verity.protocols.accounting.registration.verifier import registration as G
+    from verity.protocols.registration.verifier import registration as G
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(SAMPLING_DESIGN), None)
     program = written.rec["program"]
 
@@ -1084,7 +1084,7 @@ def test_the_device_day_reads_the_devices_own_ledger_and_refuses_a_copy_pous_cut
     """memory-accounting's third point: PoUS cuts its copies of the ledger to the entries a window cites
     (`pous.period_prover.cited`), which drops the day's declaration; ``declared_day`` refuses such a copy as a ledger (its chain
     no longer runs from seq 0), so R2 reads the device's own ledger or nothing, never a copy that would read undeclared."""
-    from verity.protocols.accounting.pous.prover import period_prover
+    from verity.protocols.resource_accounting.memory.pous.prover import period_prover
     program, root = written.rec["program"], "01" * 64
     lines, key, _ = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
     cut = [lines[i] for i in period_prover.cited([json.loads(x) for x in lines], {S1})]
@@ -1100,7 +1100,7 @@ def test_a_window_that_crosses_utc_midnight_belongs_to_its_opens_day(written, tm
     though the lane declares D+1 after midnight while it runs, and W's naming of D+1's declaration is refused. Declared
     only for D+1, after midnight, it reads no declaration and R2 refuses it (``R2-undeclared``). Declared only for D+1
     ahead of the open, the device would have refused the open, and a ledger holding it is refused."""
-    from verity.protocols.accounting.registration.verifier import registration as G
+    from verity.protocols.registration.verifier import registration as G
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(SAMPLING_DESIGN), None)
     program, root = written.rec["program"], "01" * 64
 
@@ -1165,7 +1165,7 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     docket that records no root for the table is refused before any session. The sessions (`a5.audit`) are stubbed
     and sample nothing, so the audit doesn't pass."""
     import a5 as A5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.commitments import history as HT
 
     got, seen = _history(tmp_path / "w"), {}
@@ -1215,7 +1215,7 @@ def _audited(window: Path, out: Path, docket: dict | None = None, accepted: bool
 
 
 def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_registered(tmp_path, capsys):
-    """`period`: a window whose circuit reads its own scan state (`TIED`) gives the network certifier's period its
+    """`period`: a window whose circuit reads its own scan state (`TIED`) gives the network attester's period its
     docket, the Program the audit sampled (the one the docket names), the audit's answer, ``steps`` 0 and
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
     where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
@@ -1415,7 +1415,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
     """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
     `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
     ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     args = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
@@ -1461,7 +1461,7 @@ def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_pat
     the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""
     import a5 as A5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     got = _write(tmp_path / "w", n=20, cap=1)
     mine, _doc, _sets = RA.verifier_window(got.dir, D.parse_design(SAMPLING_DESIGN), None)
@@ -1510,7 +1510,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     that passes as a forged read carries that verdict under ``forged``, as a forged unit's does, so no reader of it
     takes the pass for an accepting audit (the weights tie's pins refuse a summary that holds it)."""
     import a5 as A5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     why = "setup: registered reads: port w: table row 0 does not open weights's registered root at position 0"
     self_checks = []
@@ -1575,7 +1575,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     is the records' alone. a5's workers' flags (`a5.lean_options`) reach the stub as given, a5's defaults otherwise, and
     the summary carries a5's ``negative_workers``."""
     import a5 as A5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     mine, stated, _sets = RA.verifier_window(written.dir, D.parse_design(SAMPLING_DESIGN), None)
     ingress = [{"reader": TID, "port": p, "at": 0, "units": 5, "step": 0} for p in ("x", "sx")]
@@ -1624,7 +1624,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
     that cache, and none without ``--compose-cache``. It hands a5 ``--archive-link`` too, and only where it is given."""
     import a5 as A5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     seen = {}
 

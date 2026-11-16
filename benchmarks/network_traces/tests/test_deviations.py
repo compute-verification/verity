@@ -19,13 +19,13 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier.id_form import ID_REQUEST_HEAD
-from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA
-from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
-from verity.protocols.accounting.certifier.verifier.certificate import Issuer
-from verity.protocols.accounting.certifier.verifier.network_certifier import END, FAIL, REFUSED, Shim, NetworkCertifier, NetworkCertifierParams, cells, read_cell
-from verity.protocols.accounting.certifier.verifier import relay_check as RC
+from verity.protocols.resource_accounting.network.verifier.id_form import ID_REQUEST_HEAD
+from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
+from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
+from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
+from verity.protocols.resource_accounting.network.verifier.certificate import Issuer
+from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, REFUSED, Shim, NetworkAttester, NetworkAttesterParams, cells, read_cell
+from verity.protocols.resource_accounting.network.verifier import relay_check as RC
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
@@ -43,7 +43,7 @@ dv = _load("network_traces_deviations", "benchmarks/network_traces/deviations.py
 ws, IT = dv.ws, dv.IT
 #: the connections of a try on the virtual clock: a lane and a place in the queue each, so that they arrive together
 N = 8
-PARAMS = NetworkCertifierParams(cell_bytes=256, slots=2, bucket_ms=100, delay=3, lanes=N, queue=N, window=60,
+PARAMS = NetworkAttesterParams(cell_bytes=256, slots=2, bucket_ms=100, delay=3, lanes=N, queue=N, window=60,
                       ingress_cells=40, ingress_buckets=30, egress_cells=64, egress="id")
 P = PARAMS.payload
 IDS = [1000, 1001, 2002, 2003, 3004, 3005, 4006]
@@ -54,8 +54,8 @@ class _Side:
     """One end of an in-memory connection as the relay holds it: a reader fed what the peer sends, and a transport
     that keeps each write with the tick it was made in."""
 
-    def __init__(self, network_certifier: NetworkCertifier | None = None) -> None:
-        self.network_certifier, self.writes, self.closed, self.transport = network_certifier, [], False, self
+    def __init__(self, network_attester: NetworkAttester | None = None) -> None:
+        self.network_attester, self.writes, self.closed, self.transport = network_attester, [], False, self
         self.reader, self.fed, self.eof = asyncio.StreamReader(), 0, False
 
     def feed(self, data: bytes, end: bool) -> None:
@@ -67,7 +67,7 @@ class _Side:
             self.eof = True
 
     def write(self, data: bytes) -> None:
-        self.writes.append((self.network_certifier.ticks if self.network_certifier else None, bytes(data)))
+        self.writes.append((self.network_attester.ticks if self.network_attester else None, bytes(data)))
 
     def is_closing(self) -> bool:
         return self.closed
@@ -98,12 +98,12 @@ def _watermark_log(relay) -> dict:
                           "error": relay.watermark_error}}
 
 
-def _relay_run(out: Path, key: Path, params: NetworkCertifierParams, requests: Sequence[bytes],
+def _relay_run(out: Path, key: Path, params: NetworkAttesterParams, requests: Sequence[bytes],
                served: Sequence[tuple[bytes, bool]], watermark: bool = False, refuse: Sequence[int] = (),
                cut: int | None = None) -> list[dict]:
     """`requests` through the relay for one window on a `VirtualClock`, the k-th server to be connected sending
     `served[k]`'s bytes and, when its flag says so, ending: a server that doesn't end withholds the rest. Published in
-    `out` as `network_certifier_serve`'s `serve` and `client` publish a run (`test_network_certifier_serve._run`, whose servers all end),
+    `out` as `network_attester_serve`'s `serve` and `client` publish a run (`test_network_attester_serve._run`, whose servers all end),
     with the relay's log (`warden.json`), each bucket ticked once the relay has read what its servers sent. Under
     `watermark` the relay also sends the watermark stream, whose bytes go to ``watermark.bin`` and whose end to the
     log as `serve` writes it; the servers of `refuse` take no connection, and the watermark's server closes the stream
@@ -129,38 +129,38 @@ def _relay_run(out: Path, key: Path, params: NetworkCertifierParams, requests: S
         streams.append(_Side() if cut is None else _Cut(cut))
         return streams[-1].reader, streams[-1]
 
-    def settled(w: NetworkCertifier) -> bool:
+    def settled(w: NetworkAttester) -> bool:
         return all(c.ingress_ended and (c.upstream is not None if c.server is None else
                                         c.bytes_out == c.server[1].fed and c.egress_ended == c.server[1].eof)
                    for c in w.active)
 
-    async def main() -> tuple[list[_Side], NetworkCertifier]:
+    async def main() -> tuple[list[_Side], NetworkAttester]:
         clock = VirtualClock(-tau / 2)
-        network_certifier = NetworkCertifier(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
+        network_attester = NetworkAttester(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
                         withhold=publisher.withhold, watermark=mark if watermark else None)
-        running = asyncio.create_task(network_certifier.run())
+        running = asyncio.create_task(network_attester.run())
         clients, tasks = [], []
         for request in requests:
-            side = _Side(network_certifier)
+            side = _Side(network_attester)
             side.feed(cells(request, B), True)
             clients.append(side)
-            tasks.append(asyncio.create_task(network_certifier.handle(side.reader, side)))
-        await network_certifier.until(lambda w: w.ordinals + w.refused == len(requests))
+            tasks.append(asyncio.create_task(network_attester.handle(side.reader, side)))
+        await network_attester.until(lambda w: w.ordinals + w.refused == len(requests))
         for t in range(params.window):
-            await network_certifier.until(settled)
+            await network_attester.until(settled)
             clock.advance(t * tau)
-            await network_certifier.until(lambda w, t=t: w.ticks > t)
+            await network_attester.until(lambda w, t=t: w.ticks > t)
         await running
         await asyncio.gather(*tasks)
-        return clients, network_certifier
+        return clients, network_attester
 
     try:
-        clients, network_certifier = asyncio.run(main())
+        clients, network_attester = asyncio.run(main())
     finally:
         publisher.close()
         signer.close()
-    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=1, slack=network_certifier.slack,
-                                      run_id=network_certifier.run_id, start=start, origin_raw=0.0)
+    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=1, slack=network_attester.slack,
+                                      run_id=network_attester.run_id, start=start, origin_raw=0.0)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):
@@ -176,11 +176,11 @@ def _relay_run(out: Path, key: Path, params: NetworkCertifierParams, requests: S
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0,
                                      params.payload if request.startswith(ID_REQUEST_HEAD) else None))
     (out / "client.json").write_text(json.dumps({"connections": log}))
-    marks = _watermark_log(network_certifier) if watermark else {}
-    (out / dv.RELAY_LOG).write_text(json.dumps({"connections": network_certifier.log} | marks))
+    marks = _watermark_log(network_attester) if watermark else {}
+    (out / dv.RELAY_LOG).write_text(json.dumps({"connections": network_attester.log} | marks))
     if watermark:
         (out / "watermark.bin").write_bytes(b"".join(data for side in streams for _, data in side.writes))
-    return network_certifier.log
+    return network_attester.log
 
 
 def _bits(bits: list[int]):
@@ -490,7 +490,7 @@ WATERMARK = ["--", "--watermark", "--window", "60", "--lanes", "64"]
 
 def test_a_server_connection_that_fails_loses_its_release_and_the_tries_stop_at_that_try(tmp_path, capsys, monkeypatch):
     """The relay's connect to connection 2's server fails, so its release is never written: the watermark names it
-    lost, on the line of its bucket, and the network certifier's log keeps it. No class is tried after that try, the
+    lost, on the line of its bucket, and the network attester's log keeps it. No class is tried after that try, the
     command says which try, and its exit is the lost release's, whatever the rows; the table made again from what
     the tries kept says and exits the same."""
     flags = ["try", "--stand-in", "--out", str(tmp_path / "out"), "--scratch", str(tmp_path / "scratch"), *WATERMARK]
@@ -538,8 +538,8 @@ def test_a_server_connection_that_fails_loses_its_release_and_the_tries_stop_at_
 
 
 def test_a_try_with_no_check_is_read_for_a_lost_release_too_and_a_missing_log_stops_the_tries(tmp_path, capsys):
-    """A try that wrote no check has no row, and its network certifier's log is still read. With no log the tries stop
-    only where a watermark line could have been sent: the network certifier ran, with the watermark."""
+    """A try that wrote no check has no row, and its network attester's log is still read. With no log the tries stop
+    only where a watermark line could have been sent: the network attester ran, with the watermark."""
     seen = []
 
     def args(name, *rehearse):
@@ -574,7 +574,7 @@ def test_a_try_with_no_check_is_read_for_a_lost_release_too_and_a_missing_log_st
     assert stopped == (f"tokens: STOPPED: its network certifier ran with the watermark and wrote no log "
                        f"({dv.RELAY_LOG}), so whether a line named a lost release isn't known; not tried: fail")
 
-    # the network certifier never ran: nothing was sent, and the classes after it are tried, as without the watermark
+    # the network attester never ran: nothing was sent, and the classes after it are tried, as without the watermark
     assert tries("never-ran", "never ran", *WATERMARK) == (["honest", "fail"], None, ["honest", "tokens", "fail"])
     assert tries("plain", "no log") == (["honest", "fail"], None, ["honest", "tokens", "fail"])
     assert dv.watermark_log(tmp_path / "none") is None and dv.watermark_stop("fail", tmp_path / "none", True) is None
@@ -615,7 +615,7 @@ def test_a_watermark_its_server_closed_stops_the_tries_at_that_try_with_the_erro
 
 
 def test_a_watermarks_error_is_kept_by_its_kind_and_named_beside_a_lost_release(tmp_path):
-    """The network certifier's log gives the error that stopped its watermark as text, which can hold the address it
+    """The network attester's log gives the error that stopped its watermark as text, which can hold the address it
     connected to: what is kept, and what the stop says, is the error's first word. A try with a lost release and an
     error is stopped for both."""
     run = tmp_path / "run"

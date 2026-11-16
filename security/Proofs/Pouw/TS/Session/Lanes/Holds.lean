@@ -50,9 +50,9 @@ field's bits hold the encoding of the leaf's word there, and the words are in ra
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open PouwWindow.Lanes Flock.SoundAtBridge Accounting.TS.Checked
+open PouwWindow.Lanes Flock.SoundAtBridge ResourceAccounting.TS.Checked
 
 /-- **An A or B row is in range**: s8 codes, and its scale's encoding a u32. -/
 structure RowInRange {K : ℕ} (r : Row K) : Prop where
@@ -152,4 +152,4 @@ theorem decComb_eq {nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} {
     exact ofNat_bitsN (h.receipt w)
   · simp [h.ok]
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

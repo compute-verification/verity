@@ -6,9 +6,11 @@ from typing import Any, Callable
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """`MtpEhNorm_v1` at GLM-5.3's draft layer (hidden 6144, its 8192 block on 4 warps, rms_norm_eps 1e-5), held to the block by
-    its cut (`mtp_draft.eh_cut`), and the cut's own units at those statics: the position select and each half's scale
-    (`dsa_norm.DsaRMSNormApply_v1{G=64}`, the apply, is `dsa_norm`'s binding). Then `eh_proj`, the replicated bf16 linear from
+    """The units of `MtpEhNorm_v1`'s cut (`mtp_draft.eh_cut`) at GLM-5.3's draft layer (hidden 6144, its 8192 block on 4 warps,
+    rms_norm_eps 1e-5): the position select and each half's scale (`dsa_norm.DsaRMSNormApply_v1{G=64}`, the apply, is
+    `dsa_norm`'s binding); and `MtpEhNorm_v1` whole at a row of 256 in a block of 512 on one warp.  Serving stages the row only
+    as its cut, and at 6144 its body's `TritonBlockRMSNorm_v1` is past Flock's proved block range, so no root reaches the whole
+    row at that size.  Then `eh_proj`, the replicated bf16 linear from
     12288 to 6144 that the H200 runs on cuBLAS: core's `Gemm_v2` where cuBLAS does not split K, and `cublas_bf16`'s
     `CublasSplitKGemm_v1` at the one split count its route table takes up to 8192 tokens, 2
     (`glm53_mtp_eh_proj_capture_gpu`). A whole row of either is past Flock's proved block range, and a served row is cut along
@@ -23,7 +25,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     eh = {"BLOCK": 8192, "WARPS": 4, "EPS": 1e-5}
     proj = {"K": 12288, "N": 6144, "DOT": word_of(BG.HopperBF16WgmmaDot16)}
     return [
-        ("MtpEhNorm_v1/glm53", lambda: bind(MD.MtpEhNorm, H=6144, **eh)),
+        ("MtpEhNorm_v1", lambda: bind(MD.MtpEhNorm, H=256, BLOCK=512, WARPS=1, EPS=1e-5)),
         ("MtpEhZero_v1/glm53", lambda: bind(MD.MtpEhZero, H=6144)),
         ("TritonBlockRMSNormSumSq_v1/glm53-mtp-eh", lambda: bind(MD.TritonBlockRMSNormSumSq, N=6144, **eh)),
         ("Gemm_v2/glm53-mtp-eh-proj", lambda: bind(G.Gemm, **proj)),

@@ -252,7 +252,7 @@ def test_an_async_edge_is_cut_once_the_seam_has_drained_the_step_in_flight(engin
 
 
 def test_the_edge_holds_each_open_request_at_its_released_count(engine) -> None:
-    """A request whose emitted outputs the network certifier hasn't released holds the cut: the seam's input loop asks
+    """A request whose emitted outputs the network attester hasn't released holds the cut: the seam's input loop asks
     `Cut.ready` once each poll_s it waits on its queue until they are, and nothing is scheduled meanwhile. Past hold_s
     the cut goes ahead and lists the request in ``over``."""
     t = [0.0]
