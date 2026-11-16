@@ -29,7 +29,14 @@ word body and its callees' Boolean versions fix it; circuit-check pins each one'
 from __future__ import annotations
 
 from verity.circuits.ops.boolean.versions import sigma_lift
-from verity_vllm.definitions.registry import b1, b1_tp2, cublas_bf16 as CB, cuda_rmsnorm as CR, inductor as I, marlin_moe as MM, mhc, moe, ref_prims as R, tp_allreduce as TA
+
+from verity_vllm.definitions.registry import b1, b1_tp2, mhc, moe
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import cuda_rmsnorm as CR
+from verity_vllm.definitions.registry import inductor as I
+from verity_vllm.definitions.registry import marlin_moe as MM
+from verity_vllm.definitions.registry import ref_prims as R
+from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.definitions.registry import tp_allreduce_split as TS
 
 __all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "ArgmaxStepF32", "DotBf16", "DotTf32", "EmbeddingShard",

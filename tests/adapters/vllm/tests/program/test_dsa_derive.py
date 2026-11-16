@@ -37,6 +37,9 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.evaluation import evaluate
 from verity.circuits.refs import Affine, Coll, concat, runs
 from verity.circuits.types import Array, Value
+from verity_torch import dsa_table
+
+from tests import fake_vllm
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity_vllm.definitions.registry import (
     b1,
@@ -54,11 +57,7 @@ from verity_vllm.definitions.registry import (
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.definitions.registry.boolean_rope import RoPEHeadGptJV2
 from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
-
-from tests import fake_vllm
-from verity_torch import dsa_table
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.dsa_leaves import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa, vllm_dsa_dense
@@ -70,6 +69,7 @@ from verity_vllm.program.frontend.rules.vocab import (
     Vocabulary,
 )
 from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity_vllm.program.frontend.vllm_derive import derive_report
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")
 NH, P, R, L, V, NQ = 2, 16, 16, 16, 16, 16   # heads, nope, rope, latent, value, q_lora

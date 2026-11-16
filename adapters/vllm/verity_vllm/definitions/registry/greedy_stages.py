@@ -51,13 +51,13 @@ from dataclasses import dataclass, field
 from functools import cache
 
 import numpy as np
-
 from verity.circuits.defs import SpecializedDefinition, bind, composite
 from verity.circuits.ops.argmax import U16, SelectU16, U16Add
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import BitNot
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import NEG_INF_BF16
 from verity_vllm.definitions.registry.prims import BF16

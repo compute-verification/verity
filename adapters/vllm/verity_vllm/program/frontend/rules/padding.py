@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import torch
 from verity.circuits.refs import Coll
-
 from verity_torch.frontend.derive import Alloc, refuse
 from verity_torch.frontend.rules.base import RuleInfo, StateRule
 from verity_torch.frontend.rules.common import shape
 from verity_torch.frontend.rules.padding import _PROFILE, PADDING_TORCH_RULES
+
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
 

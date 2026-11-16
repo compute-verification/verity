@@ -53,13 +53,13 @@ from typing import Any
 from verity.circuits import codec
 from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.ops.boolean.versions import gate_table
 from verity.circuits.parts import n_members
 from verity.circuits.population import mixed_population_program
 from verity.circuits.program import is_input
 from verity.commitments.periods import interface as IF
-from verity.circuits.ops.boolean.versions import gate_table
-import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
+import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 from verity_vllm.config import option
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.weights_registration import WeightsRegistration
@@ -83,7 +83,9 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
 def resolve(tid: str) -> Any:
     """`interface.resolve` over the whole registry (`catalog.load`), a refusal naming any registry module that failed to
     import."""
-    from verity_vllm.definitions.registry.catalog import load  # no registry load at import
+    from verity_vllm.definitions.registry.catalog import (
+        load,  # no registry load at import
+    )
 
     _, errors = load()
     try:

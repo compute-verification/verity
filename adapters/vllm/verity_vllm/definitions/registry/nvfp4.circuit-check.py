@@ -10,6 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.prims import BlackwellNvf4OmmaDot64
+
     from verity_vllm.definitions.registry import nvfp4
 
     return [

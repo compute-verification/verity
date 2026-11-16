@@ -20,13 +20,14 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.circuits.ops.boolean import versions as BB
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity_flock import class_statement as CS
+
 from verity_vllm.definitions.registry import boolean_fp8_moe as BFM
 from verity_vllm.definitions.registry import boolean_gather as BGA
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import ref_prims as RP
-from verity_flock import class_statement as CS
 
 SERVED_VOCAB = 49152
 #: the training step's vocabulary, over which it gathers an f32 word (`GatherF32x50304_v1`)

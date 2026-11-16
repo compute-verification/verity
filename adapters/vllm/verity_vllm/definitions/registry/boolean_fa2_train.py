@@ -10,6 +10,7 @@ comparisons', `Ex2Approx_v2`, `NvExpf_v2`, `MufuLg2Ftz_v2` and `NvLogf_v3`.
 from __future__ import annotations
 
 from verity.circuits.ops.boolean.versions import sigma_lift
+
 from verity_vllm.definitions.registry import fa2_train as W
 
 Fa2TrainFirst = sigma_lift(W.Fa2TrainFirst, 2)

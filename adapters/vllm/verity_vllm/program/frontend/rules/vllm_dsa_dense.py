@@ -22,13 +22,13 @@ from verity.circuits.refs import (
     concat,
 )
 from verity.circuits.types import Array, Value
-from verity_vllm.definitions.numerics import fa3_model
-from verity_vllm.definitions.registry import fa3_split
-
-from verity_vllm.program.frontend import targets as TG
 from verity_torch.frontend.derive import refuse
 from verity_torch.frontend.rules.base import RuleInfo, StateRule
 from verity_torch.frontend.rules.common import known, shape
+
+from verity_vllm.definitions.numerics import fa3_model
+from verity_vllm.definitions.registry import fa3_split
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
     active_launch_context,

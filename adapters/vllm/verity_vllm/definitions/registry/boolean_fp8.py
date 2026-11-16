@@ -24,11 +24,12 @@ from __future__ import annotations
 
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
-from verity.circuits.refs import Coll, concat, tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import scalar as SC
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import fp8 as F8
 from verity_vllm.definitions.registry.boolean_attention import _Bits
 from verity_vllm.definitions.registry.prims import bits_of

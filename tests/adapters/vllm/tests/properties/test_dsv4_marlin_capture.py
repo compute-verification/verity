@@ -18,10 +18,10 @@ import struct
 import numpy as np
 import pytest
 import torch
-from verity_vllm.definitions.numerics import marlin_moe_rows as MR
 
 from tests import fake_vllm
 from tests.properties import dsv4_marlin_capture_gpu as X
+from verity_vllm.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 E, K, N, SMS = 8, 256, 128, 3

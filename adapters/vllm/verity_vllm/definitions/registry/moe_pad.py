@@ -44,9 +44,9 @@ from __future__ import annotations
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity_vllm.definitions.registry import b1
+
+from verity_vllm.definitions.registry import b1, moe
 from verity_vllm.definitions.registry import lifted as L
-from verity_vllm.definitions.registry import moe
 from verity_vllm.definitions.registry import pad_prims as PP
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16, F32

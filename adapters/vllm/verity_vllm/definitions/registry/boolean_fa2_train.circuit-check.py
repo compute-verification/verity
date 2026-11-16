@@ -9,6 +9,7 @@ def _boolean_roots() -> list[Any]:
     """At `fa2_train`'s sidecar's statics: a diagonal block of 5 visible keys, a full block, a row over those two blocks, a split
     of 5 visible keys, the combine and a row over two of four splits, at D = 16 and BN = 16."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_fa2_train as BX
 
     return [bind(BX.Fa2TrainFirst, D=16, BN=16, NVIS=5), bind(BX.Fa2TrainBlock, D=16, BN=16),
@@ -19,6 +20,7 @@ def _boolean_roots() -> list[Any]:
 def _by_calls_roots() -> list[Any]:
     """The heads at `fa2_train`'s sidecar's statics, checked by their calls."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_fa2_train as BX
 
     return [bind(BX.Fa2TrainHead, T=16, D=16, BN=16), bind(BX.Fa2TrainSplitHead, T=64, D=16, BN=16)]

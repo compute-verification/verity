@@ -10,6 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     two blocks, a split of 5 visible keys, the combine of four splits and a row over two of four splits (two empty).  A row's
     body computes its end itself, so it is a target of its own, which the heads' calls rely on."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import fa2_train as W
 
     return [
@@ -25,6 +26,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 def _by_calls_roots() -> list[Any]:
     """At D = 16 and BN = 16, checked by their calls: a head of 16 rows (one block) and a split head of 64 rows."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import fa2_train as W
 
     return [bind(W.Fa2TrainHead, T=16, D=16, BN=16), bind(W.Fa2TrainSplitHead, T=64, D=16, BN=16)]

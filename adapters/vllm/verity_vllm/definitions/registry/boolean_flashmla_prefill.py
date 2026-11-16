@@ -20,6 +20,7 @@ from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import gemm as BG
+
 from verity_vllm.definitions.registry import boolean_flashmla as BF
 from verity_vllm.definitions.registry import flashmla_prefill as P
 from verity_vllm.definitions.registry.boolean_dsa import flat

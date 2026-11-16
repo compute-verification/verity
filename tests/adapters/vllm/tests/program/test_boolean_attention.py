@@ -17,10 +17,11 @@ from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits.ops.boolean import versions as SW
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.circuits.ops.boolean import versions as SW
+
 from verity_vllm.definitions.registry import boolean_attention as BAt
 
 #: id -> (And, Xor, Not gates, standalone program digest)

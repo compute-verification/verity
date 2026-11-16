@@ -14,11 +14,11 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
+from tests.properties import glm53_fused_rmsnorm_capture_gpu as X
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import dsa_norm_rows as NR
 from verity_vllm.definitions.registry import dsa_norm as DN
-
-from tests.properties import glm53_fused_rmsnorm_capture_gpu as X
 from verity_vllm.records.property_record import REGISTRY, digest_of
 
 WIDTHS = [N for _, N, _, _ in X.NORMS]

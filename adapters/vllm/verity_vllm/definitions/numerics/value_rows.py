@@ -59,8 +59,10 @@ def sample_value(rest: Callable[..., list[np.ndarray]], value: Callable[..., np.
 
 def check_targets() -> dict[str, list]:
     from verity.circuits.defs import bind
-    from verity_vllm.definitions.registry import fa2_check_inf, hopper, value_inputs as VI
+
+    from verity_vllm.definitions.registry import fa2_check_inf, hopper
     from verity_vllm.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import value_inputs as VI
 
     attn = {"T": 20, "NH": 2, "KVH": 1, "D": 16, "BN": 16}
     return {

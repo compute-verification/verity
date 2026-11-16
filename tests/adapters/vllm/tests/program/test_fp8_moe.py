@@ -32,18 +32,18 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import versions as SW
+from verity.circuits.ops.prims import F32ToE4m3Sat
+from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as DOT
+
+from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import fp8_moe_rows as MR
 from verity_vllm.definitions.numerics.moe_twins import nv_expf_bits
-from verity.circuits.ops.prims import F32ToE4m3Sat
-from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as DOT
 from verity_vllm.definitions.registry import act as A
 from verity_vllm.definitions.registry import boolean_fp8 as BF
 from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 from verity_vllm.definitions.registry import fp8 as F
 from verity_vllm.definitions.registry import fp8_moe as M
-
-from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 
 VECTORS = Path(__file__).resolve().parents[5] / "verity" / "circuits" / "silicon" / "captures" / "vectors"
 SIGN, ONE = 1 << 31, 0x3F800000

@@ -30,11 +30,21 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, compress_columns, or_reduce, sub
+from verity.circuits.boolean.forms import (
+    NOT,
+    ONE,
+    OR,
+    ZERO,
+    add,
+    compress_columns,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.gather import gather
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import boolean_dsv4_indexer as BI
 from verity_vllm.definitions.registry import boolean_dsv4_indices as BX
 from verity_vllm.definitions.registry import dsv4_decode_metadata as X

@@ -17,15 +17,15 @@ import pytest
 import torch
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
+from tests import fake_vllm
+from tests.properties import glm53_dsa_capture_gpu as X
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
 from verity_vllm.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity_vllm.definitions.registry import dsa
 from verity_vllm.definitions.registry import ref_prims as RP
 from verity_vllm.definitions.registry import sparse_mla as M
-
-from tests import fake_vllm
-from tests.properties import glm53_dsa_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 

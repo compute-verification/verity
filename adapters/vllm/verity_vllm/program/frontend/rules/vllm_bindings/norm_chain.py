@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import torch
 from verity.circuits.refs import Coll, runs
-
 from verity_torch.frontend.rules.base import OpRule, RuleInfo, ViewRule
+from verity_torch.frontend.rules.bindings.operands import BF16, aten
 from verity_torch.frontend.rules.common import (
     dtype_is,
     from_rows,
@@ -14,14 +14,14 @@ from verity_torch.frontend.rules.common import (
     scalar_kind,
     shape,
 )
+from verity_torch.frontend.strided_views import _tensor_type
+from verity_torch.frontend.value_types import shape_of
+
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
     active_target_profile,
 )
-from verity_torch.frontend.rules.bindings.operands import BF16, aten
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import MEAN_PINS
-from verity_torch.frontend.strided_views import _tensor_type
-from verity_torch.frontend.value_types import shape_of
 
 # -- the unfused norm chain (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as ATen on an f32 copy) -----------
 #

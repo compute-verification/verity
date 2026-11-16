@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-from tests.properties import glm53_ds_mla_write_capture_gpu as X
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
+from tests.properties import glm53_ds_mla_write_capture_gpu as X
 from verity_vllm.definitions.registry import dsa_ds_mla as M
 
 ROWS = 24

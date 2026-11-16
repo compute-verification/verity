@@ -15,10 +15,10 @@ sys.path.insert(0, str((Path(__file__).resolve().parents[5] / "adapters" / "vllm
 
 from verity.circuits import Program, bind
 from verity.circuits.evaluation import evaluate_call
-from verity_vllm.definitions.registry import spec
-from verity_vllm.definitions.registry.b1 import Serve
 
 from tests.program.crosscheck import _standalone
+from verity_vllm.definitions.registry import spec
+from verity_vllm.definitions.registry.b1 import Serve
 
 U32 = 0xFFFFFFFF
 TINY: dict = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,

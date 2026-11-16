@@ -16,6 +16,7 @@ from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import versions as SW
+
 from verity_vllm.definitions.registry import boolean_fp8 as BF
 
 #: id -> (And, Xor, Not gates, standalone program digest)

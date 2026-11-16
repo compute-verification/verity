@@ -32,9 +32,16 @@ from verity.circuits.ops.boolean import mufu as BM
 from verity.circuits.ops.boolean import scalar as SC
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import flashmla as F
 from verity_vllm.definitions.registry.boolean_attention import _Bits
-from verity_vllm.definitions.registry.boolean_dsa import I32SubV2, I32ToF32V2, U32AndV2, flat, replay
+from verity_vllm.definitions.registry.boolean_dsa import (
+    I32SubV2,
+    I32ToF32V2,
+    U32AndV2,
+    flat,
+    replay,
+)
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)

@@ -11,17 +11,12 @@ from verity.circuits.defs import Body, BodyNode, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
 from verity.circuits.ops import gemm as G
+from verity.circuits.ops.boolean.versions import boolean_version
 from verity.circuits.ops.prims import BF16
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided
 from verity.circuits.types import Array
-from verity.circuits.ops.boolean.versions import boolean_version
-from verity_vllm.definitions.registry import b1, gemm_bias
-from verity_vllm.definitions.registry import topp_words as TW
-
 from verity_torch import prune as PR
-from verity_vllm.program.predict import build as PB
-from verity_vllm.program.predict.phi import Phi
 from verity_torch.prune import (
     _read,
     _renumbered,
@@ -33,6 +28,11 @@ from verity_torch.prune import (
     swapped,
     without_dead_units,
 )
+
+from verity_vllm.definitions.registry import b1, gemm_bias
+from verity_vllm.definitions.registry import topp_words as TW
+from verity_vllm.program.predict import build as PB
+from verity_vllm.program.predict.phi import Phi
 
 TINY: dict = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
               "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,

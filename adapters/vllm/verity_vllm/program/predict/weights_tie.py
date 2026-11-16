@@ -59,9 +59,9 @@ from typing import Any
 import numpy as np
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.periods import interface as IF
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.checkpoint_index import read_safetensors_header

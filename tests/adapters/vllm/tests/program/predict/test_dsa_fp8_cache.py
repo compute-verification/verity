@@ -10,13 +10,14 @@ lowered to 64, one block of FlashMLA's, and vLLM's decode threshold at the rank'
 from __future__ import annotations
 
 import re
+
 import pytest
-from verity_vllm.definitions.numerics import flashmla_twin as FT
-from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
 
 from tests.program.predict.test_dsa_dense_prefill import _calls, _families, _topk
 from tests.program.predict.test_node import _first_layers
 from tests.program.predict.test_predict import GLM53, _row_phi
+from verity_vllm.definitions.numerics import flashmla_twin as FT
+from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.common import Unexpressible

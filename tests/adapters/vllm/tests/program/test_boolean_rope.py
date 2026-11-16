@@ -23,6 +23,7 @@ from verity.circuits.boolean.forms import Circuit
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
+
 from verity_vllm.definitions.numerics import (
     twins,  # registers RoPE_v1's kernel, which the served shapes' word side runs
 )

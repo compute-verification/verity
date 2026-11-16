@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
+
 from verity_vllm.definitions.registry import linear_cut as LC
 from verity_vllm.definitions.registry.prims import BF16
 

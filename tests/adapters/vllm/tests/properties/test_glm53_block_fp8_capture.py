@@ -13,13 +13,13 @@ import json
 import numpy as np
 import pytest
 import torch
+
+from tests import fake_vllm
+from tests.properties import glm53_block_fp8_capture_gpu as X
 from verity_vllm.definitions.numerics import deepgemm_twins as DGT
 from verity_vllm.definitions.numerics import fp8_moe_rows as MR
 from verity_vllm.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity_vllm.definitions.numerics.rows import moe_sum
-
-from tests import fake_vllm
-from tests.properties import glm53_block_fp8_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 

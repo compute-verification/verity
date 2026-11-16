@@ -40,17 +40,53 @@ from collections.abc import Sequence
 from types import SimpleNamespace
 
 import numpy as np
-
-from verity.circuits.defs import Coll, PrimitiveDefinition, SpecializedDefinition, bind, composite
+from verity.circuits.defs import (
+    Coll,
+    PrimitiveDefinition,
+    SpecializedDefinition,
+    bind,
+    composite,
+)
 from verity.circuits.intervals import full
 from verity.circuits.liveness import Liveness
 from verity.circuits.ops.fp32 import F32AddFtz
 from verity.circuits.ops.prims import ZERO32, const
-from verity.circuits.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq, SelectF32, SelectI32
-from verity.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, strided_view, tuple_of
+from verity.circuits.ops.scalar import (
+    BIT,
+    F32,
+    BitAnd,
+    BitNot,
+    F32Eq,
+    I32Eq,
+    SelectF32,
+    SelectI32,
+)
+from verity.circuits.refs import (
+    Affine,
+    Concat,
+    Explicit,
+    Refs,
+    Strided,
+    concat,
+    strided_view,
+    tuple_of,
+)
+from verity.circuits.refs import Coll as _Coll
 from verity.circuits.types import Array, Tuple
-from verity_vllm.definitions.registry import fa2_check_inf as F2, prims as P, ref_prims as RP, sampling as SA, topp_words as TW
-from verity_vllm.definitions.registry.b1 import NEG_INF_BF16, ZERO16, ArgmaxStep, TokenSelectChunkStep, chunks, f32c
+
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as RP
+from verity_vllm.definitions.registry import sampling as SA
+from verity_vllm.definitions.registry import topp_words as TW
+from verity_vllm.definitions.registry.b1 import (
+    NEG_INF_BF16,
+    ZERO16,
+    ArgmaxStep,
+    TokenSelectChunkStep,
+    chunks,
+    f32c,
+)
 from verity_vllm.definitions.registry.prims import BF16, I32
 
 I64 = SA.I64

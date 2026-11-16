@@ -15,6 +15,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.numerics import moe_twins
 from verity_vllm.definitions.registry import moe
 from verity_vllm.definitions.registry import prims as P

@@ -13,10 +13,10 @@ from verity.circuits.evaluation import evaluate, evaluate_batch
 from verity.circuits.kernels.tc import f2fp_bf16_batch, group_sum_total_batch
 from verity.circuits.ops.prims import AmpereBF16TcDot16, HopperBF16WgmmaDot16
 from verity.circuits.silicon.models import HOPPER_BF16_M16N8K16
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import moe as M
 from verity_vllm.definitions.registry import prims as P
-
 from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
@@ -96,7 +96,6 @@ def test_the_dot_forms_with_the_sm120_step_are_its_ascending_chain():
 
 def test_vocabulary_replay_rows_and_vu_export_read_the_dot_static():
     from verity_vllm.definitions.numerics import rows
-
     from verity_vllm.pipeline import vu_export as VX
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
 

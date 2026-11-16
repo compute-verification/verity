@@ -8,6 +8,7 @@ from typing import Any, Callable
 def call(**statics: Any) -> Any:
     """`SampledAccept_v1` bound at these statics, with `sampled_accept` registered as its reference (`accept_kernel`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import sampled_accept as A
 
     A.register_kernels()
@@ -21,6 +22,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     8,192, five draft tokens), where each is held to the Flock block; and the Call at its smallest layout, 17 tiles of 512
     logits with a last tile of 16, held to the block by its cut, whose reference is `sampled_accept` (`accept_kernel`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import sampled_accept as A
 
     return [
@@ -58,6 +60,7 @@ def _by_calls_roots() -> list[Any]:
     """`SampledAccept_v1` at GLM-5.3's statics, checked by its calls: its 5,410 units are past what circuit-check builds
     whole, and each is a target of `_model_roots`."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import sampled_accept as A
 
     return [bind(A.SampledAccept, K=5, V=154880, TILE=A.STATS_TILE)]

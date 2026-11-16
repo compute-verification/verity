@@ -41,13 +41,13 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, Explicit, concat
 from verity.circuits.types import Array, Value
 from verity.commitments.gates import sha512 as H
 from verity.commitments.gates.lms import Sha512Compress
-from verity.circuits.ops.prims import const
-from verity_vllm.definitions.registry.sampling import bit_at
 
+from verity_vllm.definitions.registry.sampling import bit_at
 from verity_vllm.engine import served_seed
 
 __all__ = ["COIN", "NAME", "PARAMS", "SeedBlocks", "SeedCheck", "SeedCheckWord", "SeedEqual", "SeedSelect", "SeedWord", "ServedSeed",

@@ -14,8 +14,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.evaluation import bits as BS
+
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 
@@ -165,6 +165,7 @@ def test_the_tf32_gemm_is_sm120s_on_the_capture_words() -> None:
 
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.reference import evaluate
+
     from verity_vllm.definitions.numerics import mhc_twin as MT
     from verity_vllm.definitions.numerics import torch_kernels as TK
     from verity_vllm.definitions.registry import boolean_sigma as SG

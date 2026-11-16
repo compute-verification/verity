@@ -12,14 +12,14 @@ from typing import Any
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.numerics import derived_rows as DR
-from verity_vllm.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
-from verity_vllm.definitions.registry import attention_vocab
 
 from tests.commit.hidden_stream import SRC_BITS, StreamLayout
 from tests.properties import fa_tap_exactness as X
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.acquire.sources.hidden_source import fa3_tile
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
+from verity_vllm.definitions.registry import attention_vocab
 from verity_vllm.records.property_record import digest_of
 
 TESTS_ROOT = Path(__file__).resolve().parents[2]  # tests/adapters/vllm, where `tests` imports from

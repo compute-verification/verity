@@ -21,11 +21,11 @@ import torch
 import torch.nn as nn
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
+from tests.program import test_dsa_derive as T
 from verity_vllm.definitions.registry import b1, cublas_bf16, dsa, dsa_ds_mla
 from verity_vllm.definitions.registry.boolean_rope import RoPEHeadGptJV2
 from verity_vllm.definitions.registry.flashmla_dsv32 import FlashMlaV32Decode
-
-from tests.program import test_dsa_derive as T
 from verity_vllm.program.frontend.dsa_leaves import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa, vllm_dsa_dense, vllm_dsa_fp8

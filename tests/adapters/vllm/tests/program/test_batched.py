@@ -8,11 +8,11 @@ from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import Affine, Coll, Concat, PartLog, Strided, concat
 from verity.circuits.types import Array, Value
+from verity_torch import prune as P
+from verity_torch.correspondence.runtime import SCHEMA, RuntimeCorrespondence
+
 from verity_vllm.definitions.registry import dense
 from verity_vllm.definitions.replay import replayer
-
-from verity_torch.correspondence.runtime import SCHEMA, RuntimeCorrespondence
-from verity_torch import prune as P
 from verity_vllm.program import tp_binding as TB
 
 F32 = Value(32)

@@ -17,16 +17,16 @@ from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import evaluate
-from verity.circuits.program import Program
 from verity.circuits.ops.boolean import versions as SW
+from verity.circuits.program import Program
+
+from tests.program.test_boolean_fp8 import _flat, _inputs
+from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head
 from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
 from verity_vllm.definitions.registry import boolean_attention as BA
 from verity_vllm.definitions.registry import boolean_sparse_mla as BM
 from verity_vllm.definitions.registry import dead_free as DF
 from verity_vllm.definitions.registry import sparse_mla as M
-
-from tests.program.test_boolean_fp8 import _flat, _inputs
-from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head
 
 GLM = M.SPARSE_MLA_GLM53
 U32 = np.uint32

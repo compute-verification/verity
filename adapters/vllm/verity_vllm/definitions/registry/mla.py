@@ -53,17 +53,18 @@ DOT is the k16 step: `HopperBF16WgmmaDot16_v2`, the sm_120 mma.sync.m16n8k16 bf1
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, and_reduce, const_bits, mux, or_reduce
+from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.refs import Coll, concat, strided_view, tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.boolean import elementwise as EW
-from verity.circuits.silicon import fp
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import mufu as BM
 from verity.circuits.ops.boolean import scalar as BS
-from verity.circuits.boolean.forms import NOT, and_reduce, mux, or_reduce, const_bits
 from verity.circuits.ops.boolean.softmax import f32_gt
-from verity.circuits.boolean.trace import definition
+from verity.circuits.refs import Coll, concat, strided_view, tuple_of
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry.boolean_attention import _Bits
 
 __all__ = ["F32MulConst", "MlaBmm", "MoeSharedCombine", "MoeSharedCombineElement", "TritonExpSub", "TritonMlaBlock",

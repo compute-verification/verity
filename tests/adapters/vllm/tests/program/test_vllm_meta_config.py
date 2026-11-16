@@ -3,10 +3,9 @@
 `EngineArgs` beside the config's own `enforce_eager=True`; the target's other engine args do."""
 from __future__ import annotations
 
+from tests import fake_vllm
 from verity_vllm.program.frontend import vllm_meta as vm
 from verity_vllm.program.frontend.target_profile import TargetProfile
-
-from tests import fake_vllm
 
 
 def _engine_args_seen(monkeypatch, **kw) -> dict:

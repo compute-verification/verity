@@ -12,8 +12,8 @@ its composites.
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.ops import mufu as MU
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import flashmla_twin as FT
 from verity_vllm.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat

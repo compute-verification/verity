@@ -15,10 +15,10 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions.numerics import dsv4_indices_twin as T
 
 from tests import fake_vllm
 from tests.properties import dsv4_indices_capture_gpu as X
+from verity_vllm.definitions.numerics import dsv4_indices_twin as T
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 #: the cases simulated here (ratio 128's widest rows are left to the H200)

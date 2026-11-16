@@ -9,8 +9,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`verity.circuits.tiny`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
-    from verity_vllm.definitions.registry import spec
     from verity.circuits.tiny import TINY, TINY_NOBIAS
+
+    from verity_vllm.definitions.registry import spec
 
     long = {**TINY, "MAX_POS": 16}
     return [

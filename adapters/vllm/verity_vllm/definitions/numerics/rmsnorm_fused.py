@@ -16,7 +16,6 @@ import numpy as np
 from verity_vllm.definitions.registry.b1 import FUSED_RMS_BLOCK
 
 
-
 def bf16_to_f32(w: np.ndarray) -> np.ndarray:
     return (np.asarray(w, dtype=np.uint16).astype(np.uint32) << 16).view(np.float32)
 

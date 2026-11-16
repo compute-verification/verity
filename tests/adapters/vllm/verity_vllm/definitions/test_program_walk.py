@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.boolean import elementwise as BE
 from verity.circuits.refs import Coll, Explicit, concat, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.numerics import program_walk as PW
 
 BF16 = Array(16, BL.BIT)

@@ -54,14 +54,14 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.boolean import versions as SW
-from verity_vllm.definitions.numerics import derived_rows as DR
-from verity_vllm.definitions.numerics import dsa_norm_rows as NR
-from verity_vllm.definitions.registry import dsa_norm as DN
-from verity_vllm.definitions.registry.prims import bits_of
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import dsa_norm_rows as NR
+from verity_vllm.definitions.registry import dsa_norm as DN
+from verity_vllm.definitions.registry.prims import bits_of
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-fused-rmsnorm-capture/v2"

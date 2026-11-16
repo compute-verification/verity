@@ -9,14 +9,14 @@ import json
 
 import numpy as np
 import pytest
+from verity.circuits import cross_call as X
+from verity.circuits import word as W
 from verity.circuits.cut import separable
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.circuits import cross_call as X
-from verity.circuits import word as W
-from verity_vllm.definitions.registry import prims as P
 
+from verity_vllm.definitions.registry import prims as P
 from verity_vllm.pipeline import manifest as M
 from verity_vllm.query import program_view as PV
 

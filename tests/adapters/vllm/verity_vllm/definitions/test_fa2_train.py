@@ -11,10 +11,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import evaluate
+
 from verity_vllm.definitions.registry import boolean_fa2_train as BX
 from verity_vllm.definitions.registry import fa2_train as W
 

@@ -44,6 +44,7 @@ from verity.circuits.ops.boolean.softmax import ftz
 from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.silicon import fp
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.definitions.registry import tp_allreduce_nodes as TN
 

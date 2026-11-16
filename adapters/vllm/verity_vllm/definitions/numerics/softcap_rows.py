@@ -99,7 +99,10 @@ def softcap_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST
 def softcap_head_states(q, k, v, BN: int, *, cap: float, masked_from: int, dot16, inv, tanh=mufu_tanh) -> dict[str, np.ndarray]:
     """`AttentionHeadSoftcap_v2{T, D, BN, CAP, DOT, INV, MASKED_FROM}` vectorised over rows: q (R, D), k / v (R, T, D) bf16 words.
     Returns ``out`` (R, D) bf16 words and ``nonfinite`` (R,)."""
-    from verity_vllm.definitions.registry.dense import softcap_mul_bits, softcap_scale_log2_bits
+    from verity_vllm.definitions.registry.dense import (
+        softcap_mul_bits,
+        softcap_scale_log2_bits,
+    )
 
     q, k, v = (np.ascontiguousarray(x, dtype=np.uint16) for x in (q, k, v))
     Rn, T, Dh = k.shape
@@ -149,6 +152,7 @@ def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray], dot_id
 
 def check_targets(rng=None) -> list:
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import fa2_softcap, hopper
     from verity_vllm.definitions.registry import prims as P
 

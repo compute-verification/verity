@@ -13,9 +13,12 @@ import numpy as np
 import pytest
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF
+from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    served as SV,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
-from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
@@ -34,7 +37,6 @@ from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import Tables, WindowClass
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 TABLES = Tables(64, 8, 6)
 #: H1's leaf at K = 64: 16 u32 of codes, then the f32 scale, in u16 words

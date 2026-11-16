@@ -8,6 +8,7 @@ from typing import Any, Callable
 def mask(**statics: Any) -> Any:
     """`TopPMaskChunk_v1` bound at these statics, with the twin registered as its reference (`topp_stage_twins.mask_chunk`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.numerics import topp_stage_twins as TW
     from verity_vllm.definitions.registry import topp_stages as T
 
@@ -22,6 +23,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     reference is the twin (`topp_stage_twins.mask_chunk`), compared on circuit-check's vectors and on chunks of real rows at
     every split count (its sampler)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import topp_stages as T
 
     return [

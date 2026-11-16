@@ -13,6 +13,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     (through the combine), and two heads' token over three blocks.  A token's 8 heads over its 32 blocks at a step's SPLITS is
     the same body over more blocks (past `targets.MAX_GATES`) and is checked by id."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import flashmla_dsv32 as V
 
     S = V.FLASHMLA_GLM53

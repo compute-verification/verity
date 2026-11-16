@@ -46,7 +46,15 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity_vllm.definitions.registry.topp_split import Cfg, fma32, tl_div, tl_exp, tl_log, tree_sum_1d, _bfly
+from verity_vllm.definitions.registry.topp_split import (
+    Cfg,
+    _bfly,
+    fma32,
+    tl_div,
+    tl_exp,
+    tl_log,
+    tree_sum_1d,
+)
 
 f32 = np.float32
 BLOCK = 8192              # BLOCK_SIZE on CUDA

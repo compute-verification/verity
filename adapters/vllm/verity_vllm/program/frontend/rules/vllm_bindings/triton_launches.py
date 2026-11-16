@@ -6,11 +6,12 @@ import sys
 
 import torch
 from verity.circuits.refs import Coll
-from verity_vllm.definitions.registry.dsa_norm import check_block
-
 from verity_torch.frontend.derive import Alloc
-from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
 from verity_torch.frontend.rules.base import InPlaceRule, RuleInfo
+from verity_torch.frontend.rules.bindings.operands import (
+    _strides,
+    _untransposed,
+)
 from verity_torch.frontend.rules.common import (
     dtype_is,
     from_rows,
@@ -21,6 +22,11 @@ from verity_torch.frontend.rules.common import (
     shape,
 )
 from verity_torch.frontend.rules.profile import BF16, _bias_shape
+from verity_torch.frontend.strided_views import _tensor_type
+from verity_torch.frontend.value_types import shape_of
+
+from verity_vllm.definitions.registry.dsa_norm import check_block
+from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
 from verity_vllm.program.frontend.rules.triton_iface import (
     launch_meta,
     launch_tensor,
@@ -28,10 +34,6 @@ from verity_vllm.program.frontend.rules.triton_iface import (
 )
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
-)
-from verity_torch.frontend.rules.bindings.operands import (
-    _strides,
-    _untransposed,
 )
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (
     GEMM_PINS,
@@ -44,8 +46,6 @@ from verity_vllm.program.frontend.rules.vllm_bindings.pins import (
     gemm_pins_for,
     lookup_key,
 )
-from verity_torch.frontend.strided_views import _tensor_type
-from verity_torch.frontend.value_types import shape_of
 
 __all__ = ["QKV_ARGS", "TRITON_DIVISIBILITY", "qkv_rms_launch"]
 

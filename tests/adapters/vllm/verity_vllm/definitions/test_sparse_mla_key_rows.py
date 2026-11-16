@@ -9,16 +9,24 @@ import re
 
 import numpy as np
 import pytest
-
+from tests.adapters.vllm.verity_vllm.definitions.test_sparse_mla_head_units import (
+    BF16_SPECIALS,
+    SERVED,
+    SMALL,
+    _bf16,
+    _fields,
+    _inputs,
+    _operands,
+    _planted,
+)
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.ops.boolean import versions as SW
+
 from verity_vllm.definitions.registry import boolean_sparse_mla as BM
 from verity_vllm.definitions.registry import sparse_mla as M
-from tests.adapters.vllm.verity_vllm.definitions.test_sparse_mla_head_units import (BF16_SPECIALS, SERVED, SMALL, _bf16, _fields, _inputs, _operands,
-                                                                   _planted)
 
 #: DR = 32, DV = 64: key rows of three column blocks of 32, or six of 16
 WIDE = dict(DR=32, DV=64, BN=16, DOT=SMALL["DOT"], SCALE=0.0625)

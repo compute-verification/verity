@@ -11,13 +11,13 @@ from __future__ import annotations
 import re
 
 import pytest
+
+from tests.program.predict.test_node_window import glm_request
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_dense as ND
 from verity_vllm.program.predict import node_window_embed as NE
 from verity_vllm.program.predict import node_window_multimem as NM
 from verity_vllm.program.predict import node_window_sparse as NS
-
-from tests.program.predict.test_node_window import glm_request
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NS.FAMILIES, **NM.FAMILIES, **NE.FAMILIES}
 IDS, BLOCKS, WORLD = 43, 6144 // NE.WIDTH, 8

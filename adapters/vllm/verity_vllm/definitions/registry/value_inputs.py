@@ -9,7 +9,12 @@ from __future__ import annotations
 
 from verity.circuits.defs import composite
 from verity.circuits.types import Array, Tuple
-from verity_vllm.definitions.registry import b1, dense as DN, fa2_softcap as F2S, fa3_check_inf as F3, ref_prims as RP
+
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import dense as DN
+from verity_vllm.definitions.registry import fa2_softcap as F2S
+from verity_vllm.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.registry import ref_prims as RP
 from verity_vllm.definitions.registry.prims import BF16, F32
 
 

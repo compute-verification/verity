@@ -138,8 +138,8 @@ from typing import Any
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.registry import io_shell as IO
 
+from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 
 from . import scan_state as SS

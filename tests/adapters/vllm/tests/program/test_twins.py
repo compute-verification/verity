@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
 from verity_vllm.definitions.numerics import kernel_registry as KR
 from verity_vllm.definitions.numerics import twins as TW
 

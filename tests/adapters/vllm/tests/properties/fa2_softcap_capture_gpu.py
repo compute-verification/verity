@@ -40,18 +40,18 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
-from verity_vllm.definitions.numerics import derived_rows as DR
-from verity_vllm.definitions.numerics import rows as RK
-from verity_vllm.definitions.numerics import softcap_rows as SR
 from verity.circuits.ops import mufu
-from verity_vllm.definitions.registry import b1, hopper
-from verity_vllm.definitions.registry import fa2_softcap as F2S
-from verity_vllm.definitions.registry import prims as P
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties.fa_tap_exactness import PAGE
 from tests.properties.fa_tap_exactness import cases as tap_cases
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import rows as RK
+from verity_vllm.definitions.numerics import softcap_rows as SR
+from verity_vllm.definitions.registry import b1, hopper
+from verity_vllm.definitions.registry import fa2_softcap as F2S
+from verity_vllm.definitions.registry import prims as P
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-softcap-capture/v1"

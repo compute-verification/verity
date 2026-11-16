@@ -23,15 +23,15 @@ import pytest
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import wiring as WI
-from verity_vllm.definitions.registry import io_shell as IO
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.resource_accounting.compute.pouw.verifier import audit as AU
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit as AU
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 
 from tests.check.test_weights_of_record import _bf16, write_safetensors
 from tests.program.predict import test_steps as S
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program import model as M
 from verity_vllm.program.predict import scan_state as SS

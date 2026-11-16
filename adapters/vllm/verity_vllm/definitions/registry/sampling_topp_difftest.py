@@ -7,10 +7,17 @@ from __future__ import annotations
 
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import tuple_of
-from verity_vllm.definitions.registry.prims import BF16, F32, I32
-from verity_vllm.definitions.registry.b1 import const
-from verity_vllm.definitions.registry.sampling import I64, GumbelSelectF32, GumbelTopPTokenSelect, TemperatureScale, TopPMask
 from verity.circuits.types import Array, Tuple
+
+from verity_vllm.definitions.registry.b1 import const
+from verity_vllm.definitions.registry.prims import BF16, F32, I32
+from verity_vllm.definitions.registry.sampling import (
+    I64,
+    GumbelSelectF32,
+    GumbelTopPTokenSelect,
+    TemperatureScale,
+    TopPMask,
+)
 
 
 def _difftest_body(B, S, logits, top_p, seed, pos, temp):

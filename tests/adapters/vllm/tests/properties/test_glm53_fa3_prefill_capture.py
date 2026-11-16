@@ -15,12 +15,12 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
+
+from tests.properties import glm53_fa3_prefill_capture_gpu as X
 from verity_vllm.definitions.numerics import fa2_relation
 from verity_vllm.definitions.numerics import fa3_model as FM
 from verity_vllm.definitions.registry import attention_vocab, hopper
 from verity_vllm.definitions.registry import fa3_check_inf as F3
-
-from tests.properties import glm53_fa3_prefill_capture_gpu as X
 from verity_vllm.program.frontend.rules import vllm_dsa_dense
 from verity_vllm.records.property_record import REGISTRY, digest_of
 

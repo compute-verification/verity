@@ -6,9 +6,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.registry import dense as D
-from verity_vllm.definitions.registry import tables as T
-
 from verity.circuits.boolean import table as BT
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.constants import REGISTRATION, inputs
@@ -16,6 +13,9 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import RegisteredTable, evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
+
+from verity_vllm.definitions.registry import dense as D
+from verity_vllm.definitions.registry import tables as T
 
 
 def test_the_read_takes_the_entry_at_the_index_low_bits_its_words_low_first():
@@ -103,10 +103,10 @@ def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
     """The strict lift's operand widths (`operand_widths.leaf_widths`) are one run per parameter for `TableRead27x2_v1`, not a list
     of 2^28, and a list for a narrow primitive; the lift of `TableRead16x1_v1` (past the layout's wide fan-in too) still maps an
     active, a ⊥ and an invalid table word as the flat widths do."""
+    from verity.circuits.ops import scalar as SC
+
     from verity_vllm.definitions.registry import lifted as L
     from verity_vllm.definitions.registry import operand_widths as OW
-
-    from verity.circuits.ops import scalar as SC
 
     assert OW.leaf_widths(T.table_read(27, 2).params).runs == ((1, 32), (1 << 28, 16))
     assert OW.leaf_widths(SC.SelectF32.params) == [1, 32, 32]
@@ -131,6 +131,7 @@ def test_a_registered_values_derivation_registers_no_gelu_table():
     parameter (its Boolean version, `boolean_tanh.GeluTanhMul_v4`, computes the activation), and the Program computes what the
     constants derivation computes."""
     import torch
+
     from verity_vllm.definitions.numerics.serve3_reference import materialize
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
     from verity_vllm.program.frontend.vllm_derive import derive_report

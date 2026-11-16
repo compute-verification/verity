@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
 from verity_vllm.definitions.numerics import fp8_twins
 from verity_vllm.definitions.registry import fp8
 from verity_vllm.definitions.registry import prims as P

@@ -11,12 +11,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import evaluate
+from verity.commitments.periods import interface as IF
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import rmsnorm_fused_split as NS
-from verity.commitments.periods import interface as IF
 
 #: (N, EPS, C): the norm after Llama-3.2-1B's down_proj in its 8 parts, and whole as one; 18 warps of one stride in 9 parts;
 #: N = 1536's half-filled second stride in 3; four strides (three FFMAs a thread) in 16; a lone partial warp in 4

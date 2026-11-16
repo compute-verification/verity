@@ -86,11 +86,11 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.silicon.models import GroupSum
-from verity_vllm.definitions.numerics import mhc_twin as W
-from verity_vllm.definitions.registry import mhc as R
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.definitions.numerics import mhc_twin as W
+from verity_vllm.definitions.registry import mhc as R
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-mhc-capture/v1"
@@ -477,8 +477,8 @@ def mufu_inputs() -> dict[str, np.ndarray]:
 def phase_mufu(work: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """The tables and sweeps on this GPU (module docstring); the expf sweep's words go to comparison jobs."""
     import torch
-
     from verity.circuits.ops import mufu as MU
+
     from verity_vllm.definitions.numerics import derived_rows as DR
 
     x = mufu_inputs()

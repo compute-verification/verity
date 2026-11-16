@@ -13,6 +13,7 @@ from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import sampling as SM
 from verity_vllm.definitions.registry import topp_keep_builder as TKB
 from verity_vllm.definitions.registry import topp_split as TS

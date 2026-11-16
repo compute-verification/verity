@@ -2,8 +2,8 @@
 fields, their order and their types, written out by hand.  A bf16 checkpoint stores each linear as one bf16 matrix (no
 e4m3 words, no block scales), its router gate in f32, and its routed experts as `w13 [E][2I][H]` and `w2 [E][H][I]`."""
 from verity.circuits.types import Array, RecordType
-from verity_vllm.definitions.registry.prims import BF16, F32
 
+from verity_vllm.definitions.registry.prims import BF16, F32
 from verity_vllm.program import model
 
 H, V, NL, FD, NH, QL, KV, DN, DR, DV, INTER, ID, E, S, MAX_POS = 4, 8, 3, 1, 2, 2, 2, 1, 2, 1, 2, 3, 2, 2, 4

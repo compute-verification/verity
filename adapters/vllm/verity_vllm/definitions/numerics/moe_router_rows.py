@@ -13,8 +13,8 @@ def moe_router_topk(logits: np.ndarray, *, E: int, TOPK: int, VPT: int, renormal
     (F32Div, IEEE); `p_i = ex_i * rcp` (F32Mul), non-finite -> +0; TOPK rounds: lowest-index strict argmax (F32GtStrict scan from p[0]),
     the winner masked to -10000.f.  `renormalize` (MoeRouterTopKNorm_v1): selected sum ascending from 0.f, denom = sum > 0 ? sum :
     1.f, scale = 1.f / denom (F32Div), w_k = w_k * scale (F32Mul).  Returns (router_w f32 words [TOPK] u32, router_ids i32 words [TOPK] u32)."""
-    from verity_vllm.definitions.registry import moe as RMOE
     from verity_vllm.definitions.numerics import moe_twins
+    from verity_vllm.definitions.registry import moe as RMOE
     from verity_vllm.definitions.registry import prims as P
     from verity_vllm.definitions.registry import ref_prims as R
 

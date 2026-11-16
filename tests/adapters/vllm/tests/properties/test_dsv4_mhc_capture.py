@@ -19,11 +19,11 @@ import pytest
 import torch
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions.numerics import mhc_twin as W
-from verity_vllm.definitions.registry import mhc as R
 
 from tests import fake_vllm
 from tests.properties import dsv4_mhc_capture_gpu as X
+from verity_vllm.definitions.numerics import mhc_twin as W
+from verity_vllm.definitions.registry import mhc as R
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 SMALL: dict[str, Any] = {"HC": 2, "H": 64, "TH": 2, "TH_HEAD": 2, "TN": 2, "REPEAT": 2, "EPS": 1e-6, "HC_EPS": 1e-6}

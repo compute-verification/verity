@@ -71,8 +71,8 @@ def with_checks(model: Any, out: Coll, B: Any = None, stop: dict | None = None, 
     `frontend.stop_rule.check` over `out`), and what `derive`'s provenance says of them: the Program returns the tuple (out,
     checks). Each is refused unless a declared relation computes it (`program.inputs.check`)."""
     from verity.circuits.types import Tuple
-
     from verity_torch import inputs
+
     from verity_vllm.program.frontend import seed_rule as SEED
     from verity_vllm.program.frontend import stop_rule as SR
     checks = [*(getattr(model, "checks", None) or ()), *([] if sampled is None else [SEED.check(B, sampled[0], sampled[1:])]),

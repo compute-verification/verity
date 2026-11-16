@@ -22,12 +22,15 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_words
+
 from verity_vllm.definitions.numerics import torch_blocks as TB
 from verity_vllm.definitions.numerics import torch_kernels as TK
-from verity_vllm.definitions.registry import boolean_dense as BDN, torch_clip as TC, torch_embedding as TE, torch_loss as TL
+from verity_vllm.definitions.registry import boolean_dense as BDN
+from verity_vllm.definitions.registry import torch_clip as TC
+from verity_vllm.definitions.registry import torch_embedding as TE
+from verity_vllm.definitions.registry import torch_loss as TL
 
 FIXTURES = Path(__file__).parent / "fixtures"
 V, D = 49152, 64

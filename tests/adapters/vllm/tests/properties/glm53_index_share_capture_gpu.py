@@ -50,13 +50,14 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import boolean_rope as BR
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
 from tests.properties import glm53_fused_rmsnorm_capture_gpu as FR
-from verity_vllm.records.property_record import REGISTRY, seal as seal_record
+from verity_vllm.definitions.registry import boolean_rope as BR
+from verity_vllm.records.property_record import REGISTRY
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = REGISTRY["glm53_index_share_capture"].schema
 RECORD = "glm53_index_share_capture.json"
@@ -90,7 +91,9 @@ def fused_q_call(o: dict[str, Any], cs):
 
 def selection() -> dict[str, Any]:
     import torch
-    from vllm.models.deepseek_v32.nvidia.ops.fused_q_cutedsl import is_fused_q_cutedsl_supported
+    from vllm.models.deepseek_v32.nvidia.ops.fused_q_cutedsl import (
+        is_fused_q_cutedsl_supported,
+    )
 
     rec = DS.selection()
     q_pe = torch.empty(1, DS.NH, DS.DR, dtype=torch.bfloat16, device="cuda")
