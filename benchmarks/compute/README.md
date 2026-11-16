@@ -186,24 +186,72 @@ The tests: `cd benchmarks/compute && uv run --project ../.. pytest tests`.
 ## Making a record on your own card
 
 A record is the directory a served run writes: the Pearl+ verifier's answer and the Lean verifier's verdict on it,
-the run's policy, and the rest listed below. Making one is not yet one command in this clone: serve.sh, which serves the
-load on one card under Pearl+ and verifies it into a record directory, is on the branch
-`cursor/pouw-serve-1b-from-main-1de3` of this repository, not yet merged. Until it is, records come from runs on our
-machines. Once it is, it runs as bash benchmarks/compute/serve.sh from the clone's root, and needs:
+the run's policy, and the rest listed below. One command makes one: `serve.sh` serves the load on one card under
+Pearl+, takes Pearl+'s verdict in Python and in Lean, writes the record directory and ends with `run.py --from` on it,
+which prints the number:
 
-- one H100 or H200 (the scheme follows the H100's FP8 tensor core);
+~~~text
+bash benchmarks/compute/serve.sh
+research run --on NODE --project verity --source . --cwd clone --timeout 2h -- bash benchmarks/compute/serve.sh
+~~~
+
+The first line is the one for your own machine. The second is how we run it on Verity's machines: `research run` is
+our job runner, which runs the command on one of our machines (a node; `NODE` is its name) and records the run under
+a run id such as `r20261115-200421-8c63`. You need neither.
+
+The record directory is `RUN_DIR`, else the run directory under `research run`, else `./compute-run`. The command
+exits 0 only where both verdicts accept and the number prints. Each step's log is `out/logs/STEP.log`, its status a
+line of `out/steps.txt`, and its seconds are in `out/compute-run.json`'s `steps`. A share it prints is always this
+run's: it refuses a record directory that already holds a record, and a failed step ends it with exit 1, a sentence
+naming the step, `out/compute-run.json` written and no number. `COINS=local`, the default, runs a local challenger:
+infra's gate code on a scratch auditor host with a test key, each session's challenger its own process on 127.0.0.1,
+so the Lean verdict is taken of record. Of record here means only that the Lean verifier took its of-record path
+(`--of-record`) against the local challenger's key, the test key this run made, not the auditor's: the `ran with`
+line says `Lean verdict of record against the local challenger's key`. `COINS=in-process` holds the challenger in the
+serving process. `out/compute-run.json` says which (`challenger`), and the salt coin as the piece states it
+(`salt_coin`). The serving machine's passes stay outside the record and are removed on exit, so the run leaves nothing
+in `/tmp`.
+
+It needs:
+
+- one idle H100 or H200 (the scheme follows the H100's FP8 tensor core): `GPU` is its index, default 0 (`nvidia-smi
+  -L` lists them), and serve.sh checks before any step that it is a compute capability 9.0 card with no process on it;
 - nvcc from CUDA 13.0 (12.8 or newer) at /usr/local/cuda-13.0, or wherever `CUDA_HOME` names: the kernel is built by
   `benchmarks/harness/setup/pearl_c_sm90.sh`, which hands `build.sh` that toolkit;
 - vLLM at commit d9105ea80 with torch 2.13.0+cu129 and the checkpoint `unsloth/Llama-3.2-1B` at the revision
-  `load.toml` pins (about 2.5 GB from Hugging Face), both installed by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`.
-  It puts them under the directory `WORK` names, `/workspace` unless set, so set `WORK` to a directory of yours for it
-  and for serve.sh, which looks there too. From the clone's root:
-  `cd adapters/vllm && WORK=$HOME/verity-work bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B --gpu`, then
-  back at the root, WORK=$HOME/verity-work bash benchmarks/compute/serve.sh;
-- Lean v4.34.0, through [elan](https://github.com/leanprover/elan), to build the Lean verifier;
-- about 2 GB of disk for the run's passes, besides the checkpoint and the vLLM environment.
+  `load.toml` pins (about 2.5 GB from Hugging Face), both installed by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`
+  It puts everything under the directory `WORK` names, `/workspace` unless set: the venv, the checkpoint,
+  flash-attention's taps (which serve.sh's serve doesn't load) and its install caches, of which it removes only those it
+  made. So set `WORK` to a directory of yours for it and for serve.sh, which finds the venv there too. From the
+  clone's root: `cd adapters/vllm && WORK=$HOME/verity-work bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B
+  --gpu`, then back at the root, `WORK=$HOME/verity-work bash benchmarks/compute/serve.sh`. Neither the time it takes
+  nor the disk the environment fills has been measured;
+- this tree's `adapters/torch` importable (`verity_torch`, which the served model's PoUW hooks import): `research run`
+  puts it on `PYTHONPATH`; a bare `bash benchmarks/compute/serve.sh` needs it there where `benchmarks/harness/env.sh`
+  doesn't put it (`export PYTHONPATH=$PWD/adapters/torch:$PYTHONPATH`); serve.sh checks it before any step;
+- Lean v4.34.0, through [elan](https://github.com/leanprover/elan), to build the Lean verifier: `lake` on `PATH` or
+  in `~/.elan/bin`, which serve.sh also checks first;
+- about 2 GB of disk for the run's passes, besides the checkpoint and the vLLM environment; the record itself is about
+  200 MB;
+- memory for the Python verdict's workers, one a core unless `JOBS` says otherwise: on a 96-core H200 machine the
+  run's processes peaked at 400 GB resident, summed over the workers.
 
-How long a run takes is not yet measured.
+A run takes about an hour. Our run `r20261115-200421-8c63`, on one H200 of a 96-core machine with `COINS=local`, took
+59 minutes. The steps took:
+
+| step | seconds |
+|---|---|
+| the kernel's cubin (`cubin`) | 136 |
+| the local challenger's gate, its Lean spot-verifier built (`gate`) | 293 |
+| serving the load (`serve`) | 60 |
+| the Python verdict (`python-verify`) | 868 |
+| the Lean verdict, `pouw-pearlplus` built (`lean`) | 1,917 |
+| the policy (`policy`) | 126 |
+| the class's circuit (`circuit`) | 118 |
+| the rest (`retain`, `publish`, `piece`, `verdicts`, `registered`, `share`) | 5 |
+
+The `gate` and `lean` times include building their Lean programs from a fresh clone. The run was alone on its card,
+but for the first few minutes of `python-verify` another run's Lean verdict was also running on the same machine.
 
 ## A record directory
 
