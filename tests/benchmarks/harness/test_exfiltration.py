@@ -251,7 +251,8 @@ PHASE = {
         "assumed": [
             {"input": "classes of gates a sampled proof block", "value": 4130, "unit": "class", "source": "no count gives it"},
             {"input": "symbols of a table's level-0 codewords", "value": 8388608, "unit": "symbol", "source": "the most"},
-            {"input": "one commitment, one sample; every committed window is presented", "value": None, "unit": "",
+            {"input": "both of SPOT's resampling holes closed, one commitment and one sample; every committed window "
+                      "is presented", "value": None, "unit": "",
              "source": "what a sum over verification phases takes of the prover"}],
         "design": {"sessions": 406360, "classes": 857865366050, "k": 49375943, "reruns": 10368948031,
                    "calls_a_run": "2^80.00", "rounds": 1788796724, "phases": 197078976,
@@ -288,7 +289,8 @@ def test_the_security_level_is_the_rows_binding_bound_named_by_what_it_is_over(t
     assert [(i["input"], i["value"], i["mark"]) for i in assumed] == [
         ("classes of gates a sampled proof block", 4130, "assumed"),
         ("symbols of a table's level-0 codewords", 8388608, "assumed"),
-        ("one commitment, one sample; every committed window is presented", None, "assumed")]
+        ("both of SPOT's resampling holes closed, one commitment and one sample; every committed window is presented",
+         None, "assumed")]
     assert all(i["source"].startswith(f"`{E.RECORD}` ({PLANNED}) `verification_phase.binding`: ") for i in assumed)
 
     lines = [line for line in E.render(doc).splitlines() if E.SECURITY in line and line.startswith("- ")]
@@ -303,7 +305,8 @@ def test_the_security_level_is_the_rows_binding_bound_named_by_what_it_is_over(t
         "207,715,585 of their proof blocks in 406,360 sessions, the largest of 4 tables.")
     assert lines[1] == (
         "- the security level assumes: 4,130 classes of gates a sampled proof block; 8,388,608 symbols of a table's "
-        "level-0 codewords; one commitment, one sample; every committed window is presented. It counts each session's "
+        "level-0 codewords; both of SPOT's resampling holes closed, one commitment and one sample; every committed "
+        "window is presented. It counts each session's "
         "knowledge error and the run's own opening checks as 0.")
     assert lines[2] == (
         "- what Lean proves of the security level: over one verification phase counted in calls, not proved at these "
