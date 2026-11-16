@@ -346,19 +346,24 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
         out = _no("reject", f"the bandwidth session's store is not PoUS's: {why}; {scope}")
     else:
         summary["same_store"] = pous_case is not None
-        kept = p2_case.trusting(kept, trusted_sha512)
-        summary |= key_record(kept, trusted_sha512, deployed, doc["party_host"])
-        t = time.perf_counter()
         try:
-            judged = (p2_case.judged(kept, answer, case_exe) if case_exe is not None
-                      else p2_case.unjudged(kept, answer))
-        except (OSError, IndexError, ValueError, subprocess.CalledProcessError) as e:
-            out = _no("undecided", f"{case_exe} doesn't answer the case: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
+            kept = p2_case.trusting(kept, trusted_sha512)
+        except (AttributeError, KeyError, TypeError, ValueError) as e:
+            out = _no("reject", f"the session's close doesn't decode: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
         else:
-            if case_exe is not None:
-                summary |= {"decided_by": period.decided_by(case_exe), "lean_s": round(time.perf_counter() - t, 3)}
-            p2_case.write(private, kept, judged)
-            out = public_answer(judged, bind, scope, r_bytes_per_s, private)
+            summary |= key_record(kept, trusted_sha512, deployed, doc["party_host"])
+            t = time.perf_counter()
+            try:
+                judged = (p2_case.judged(kept, answer, case_exe) if case_exe is not None
+                          else p2_case.unjudged(kept, answer))
+            except (OSError, IndexError, ValueError, subprocess.CalledProcessError) as e:
+                out = _no("undecided",
+                          f"{case_exe} doesn't answer the case: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
+            else:
+                if case_exe is not None:
+                    summary |= {"decided_by": period.decided_by(case_exe), "lean_s": round(time.perf_counter() - t, 3)}
+                p2_case.write(private, kept, judged)
+                out = public_answer(judged, bind, scope, r_bytes_per_s, private)
     _write(public / "answer.json", out)
     _write(public / "bandwidth.json", summary | {"verdict": out["verdict"], "reason": out["reason"]})
     return out

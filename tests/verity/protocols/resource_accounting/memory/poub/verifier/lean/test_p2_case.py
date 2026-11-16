@@ -355,3 +355,20 @@ def test_a_session_on_pous_setups_store_names_pous_store_and_is_accepted(exe, le
     assert p2_case.store_root(case) == reg.root
     assert p2_case.same_store(case, space.case) is None
     assert replayed(lean, case)["verdict"] == "accept"
+
+
+def test_the_trusted_keys_are_the_pins_and_never_the_cases_own() -> None:
+    """`trusting` sets the case's trusted keys to the close's key where its SHA-512 is the pin's, to none for any other
+    key or no close, whatever the case listed; a close that doesn't decode raises."""
+    key = b"the close's key"
+
+    def case(close) -> dict:
+        evidence = {} if close is None else {"close": close}
+        return {"evidence": json.dumps(evidence).encode().hex(), "params": {"trusted": [b"listed".hex()]}}
+    signed = case({"public_key": key.hex()})
+    assert p2_case.trusting(signed, hashlib.sha512(key).hexdigest())["params"]["trusted"] == [key.hex()]
+    assert p2_case.trusting(signed, hashlib.sha512(b"listed").hexdigest())["params"]["trusted"] == []
+    assert p2_case.trusting(case(None), hashlib.sha512(key).hexdigest())["params"]["trusted"] == []
+    assert signed["params"]["trusted"] == [b"listed".hex()]
+    with pytest.raises(ValueError):
+        p2_case.trusting(case({"public_key": "not hex"}), hashlib.sha512(key).hexdigest())
