@@ -93,11 +93,11 @@ research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-
   -- bash benchmarks/verifier_cost/inference_only_glm.sh --case registered-node --node-digest HEX --jobs 2
 ~~~
 
-`flock_read.sh K...` measures Flock's Lean verifier (`verity-verify-proof verify --zk`) on the H1 tile unit, step by step:
+`flock_read.sh K...` measures Flock's Lean verifier (`verity-verify-proof verify --zk`) on the H1 tile proof block, step by step:
 `flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
 file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
 `Sparse.ofRows` and row checks), the class digest, `HmOut.parse`, `Stmt.setupHiddenOf` and one lincheck fold. Per K,
-`$OUT` gets build-K.json (the unit's ANDs, matrix entries, text bytes and its Program descriptor's size) and
+`$OUT` gets build-K.json (the proof block's ANDs, matrix entries, text bytes and its Program descriptor's size) and
 phases-K.jsonl (one row per step: milliseconds, RSS and peak RSS in MB).
 
 ~~~sh
@@ -119,18 +119,18 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
 ~~~
 
 `population.sh N...` times the one-stage run's population-order check (`Slots.popOk`) against a template population's
-units: `population.py` writes, per N, a population of about N units over a layered call hierarchy (by default 234 root
+proof blocks: `population.py` writes, per N, a population of about N proof blocks over a layered call hierarchy (by default 234 root
 batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
 changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
 `Partition.unitGates` (a range at a time, `TemplateQuery.unitGates`), `Slots.popOk` (from the ranges,
 `popOk_eq_popOkRanges`: no replay block and no input gate is built), the one-stage check's call of it
 (`OneStageZk.popHeld`, compiled in `Spot/OneStageZkStatement.lean`, which imports `Spot.PopOrder` so that it runs from
 the ranges too; its row carries the root's input gates, counted) and the references: `TemplateQuery.gates` on every
-unit, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s
-population, at N and either side of it. It fails where a reference differs. The references run up to `REF_MAX` units
+proof block, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s
+population, at N and either side of it. It fails where a reference differs. The references run up to `REF_MAX` proof blocks
 (default 50). `POPULATION_ARGS='--input-members M'` widens the root's input nodes to M members each, which only the
 layout's input class reads: `popOk`'s row and `popHeld`'s must not grow with M.
-`$OUT` gets population.jsonl, one row per N and function (units, milliseconds, peak RSS).
+`$OUT` gets population.jsonl, one row per N and function (proof blocks, milliseconds, peak RSS).
 
 ~~~sh
 research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone --mem-gb 90 -- \
@@ -139,9 +139,9 @@ research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd
 
 `members_parse.sh N...` times the per-member form's parse of its members (`OneStageZk.membersOf`) against their count:
 `members_parse/Main.lean`, built in a scratch Lake package against the checkout's verifier, makes N members of one range
-of units each, no unit in two, and times the parse on them, then on the same members with one more whose range starts
-inside the last member's. It fails where the parse gives back other members than those made, name by name and unit by
-unit, or accepts the unit in two. The parse reads each member once and sorts the members' ranges, so its time must grow
+of proof blocks each, no proof block in two, and times the parse on them, then on the same members with one more whose range starts
+inside the last member's. It fails where the parse gives back other members than those made, name by name and proof block by
+proof block, or accepts the proof block in two. The parse reads each member once and sorts the members' ranges, so its time must grow
 no faster than N log N: a time that quadruples where N doubles is work in the members squared. `$OUT` gets
 members_parse.jsonl, one row per N and case (members, milliseconds, peak RSS).
 
@@ -152,16 +152,16 @@ research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd
 
 `whole_run.sh run|desc SHAPE N...` times `Run.run`, the stream's whole run of one registration, against the population.
 `whole_run.py` writes, per N, an accepted `run` input (`run`: a v1 audit on challenger coins with N/8 more ports) or the
-program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's three templates,
+program and query alone (`desc`), over a template population of about N proof blocks: `toy`, the difftest's three templates,
 or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition walks every gate,
 so `l5` takes `desc`). The audit's sampling design is the stratified rate of two in the population, `stratified-rate:2/P` over its
-P units, on `toy` the stratified sampling design at K = 3. Stated over P, it samples one unit of each template and two
-of `toy`'s largest at every N, so the sample stays four units while the population it is timed against grows.
+P proof blocks, on `toy` the stratified sampling design at K = 3. Stated over P, it samples one proof block of each template and two
+of `toy`'s largest at every N, so the sample stays four proof blocks while the population it is timed against grows.
 `whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,
 `Slots.popOk`'s layout split into `Partition.evaluate`, `Partition.unitGates`, `Slots.inputGates` and `Slots.layout`; on
 a program alone, `Program.parse`, one `Desc.gates` and one `TemplateQuery.gates` per range, the input gates' count and,
-with `-- --unit-gates`, `Partition.unitGates`; `-- --unit-gates --ref` adds `Partition.unitGatesRef`, the walk unit by
-unit `unitGates` replaced, and fails unless the two give the same gates; `--pop-ok` adds `Slots.popOk` last, whose
+with `-- --unit-gates`, `Partition.unitGates`; `-- --unit-gates --ref` adds `Partition.unitGatesRef`, the walk proof block by
+proof block `unitGates` replaced, and fails unless the two give the same gates; `--pop-ok` adds `Slots.popOk` last, whose
 layout holds a proof block per input gate. `PERF_N` adds a `perf` profile at that N. `$OUT` gets whole_run.jsonl, one row per N and step (milliseconds, peak RSS).
 
 ~~~sh
@@ -171,7 +171,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
 
 `members_files.sh N|all...` times the per-member form's pass over every member's files against the members of one
 circuit file. `members_files.py` writes one per-member case as the executable's `check` takes it: a driver's (`MF_CASE`,
-an audit's `window/case-v2-members.json`), or a stand-in window's of `MEMBERS` members (default 300) of one unit over
+an audit's `window/case-v2-members.json`), or a stand-in window's of `MEMBERS` members (default 300) of one proof block over
 two templates (`benchmarks/one_stage/members_standin.py`'s: one member of each template sampled, the rest sharing their
 template's circuit file unsampled), audited as a served window's audit step runs it, on Flock's prover, the Lean
 verifier and the ZK server; v2's `check` must accept the case, and its seconds and peak RSS go to inputs.jsonl.
@@ -199,10 +199,10 @@ research run --as proofs --project verity --on auto --source . --cwd clone --mem
   bash benchmarks/verifier_cost/members_files.sh 1 16 150
 ~~~
 
-`flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
-builds the circuit, `python -m verity_flock.tmpl` writes its unit's templated form (Definitions read off the flat unit's
+`flock_tmpl.sh K...` is the same proof block in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
+builds the circuit, `python -m verity_flock.tmpl` writes its proof block's templated form (Definitions read off the flat proof block's
 repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
-against the circuit's flat unit byte for byte. Per K, `$OUT` gets emit-K.json (the levels, Definitions, rows and bytes),
+against the circuit's flat proof block byte for byte. Per K, `$OUT` gets emit-K.json (the levels, Definitions, rows and bytes),
 unit-K.tmpl, read-K.jsonl and diff-K.jsonl (the PHASE lines) and each step's `/usr/bin/time -v`.
 
 ~~~sh
@@ -210,20 +210,20 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
   bash benchmarks/verifier_cost/flock_tmpl.sh 256 4096
 ~~~
 
-`flock_unroll.sh K...` times what the templated statement's read costs against the flat one's on the same unit: `Tmpl.unrollAt` at
+`flock_unroll.sh K...` times what the templated statement's read costs against the flat one's on the same proof block: `Tmpl.unrollAt` at
 `MODE` (default `iv/hybrid/4`) whole and a stage at a time (`rows`, `posMap`, `Net.ofRows`, `invOf`, `posOk`, `placed`,
-`Sparse.ofRows`), the logical `Tmpl.unroll`, and `Net.parse` on the circuit's flat unit. Per K, `$OUT` gets unit-K.tmpl,
+`Sparse.ofRows`), the logical `Tmpl.unroll`, and `Net.parse` on the circuit's flat proof block. Per K, `$OUT` gets unit-K.tmpl,
 unroll-K.jsonl (every PHASE line, with its step) and each step's `/usr/bin/time -v`.
 
 `flock_served.sh KIND [N]` measures the Lean verifier on a served statement: one kind of a saved served step
 (`one_stage/a11.py --save-values`, sent as a `.tar.gz`) staged as a11 stages it, flat, or with `--layout MODE` as a
-templated statement (with `--structural`, `struct_lower`'s template, the flat unit never built). With a recorded a11
+templated statement (with `--structural`, `struct_lower`'s template, the flat proof block never built). With a recorded a11
 session of that kind sent (a `.tar` of its session directory), it times `archive-put` and `verify --zk --partition
 --program` as `a0.lean_verify` runs them, under `perf record` where the node has it, so the verify's own phase lines
 (`inputs:`, `setup (drawn):`, the session) split the profile, a templated statement's as well as a flat one's. With
 `--phases`, and at every templated statement, `flock_served/Main.lean` times verify's work before the session a step
 at a time: the read, SHA-512, `Zk.maskLogOf`, `ProvedScope.circuitOf`, `ProvedScope.checkOf`, `PortRoots.checkOf`,
-`KsScope.checkOf` and `Stmt.setupTablesOf` with the sample, each with its RSS. `build.json` has the unit's ANDs and matrix
+`KsScope.checkOf` and `Stmt.setupTablesOf` with the sample, each with its RSS. `build.json` has the proof block's ANDs and matrix
 entries, k_log, the circuit file's bytes and lines, and its Program descriptor's bytes, the size a description-cost
 verifier would read.
 
@@ -236,7 +236,7 @@ research run --as proofs --project verity --on auto --mem-gb 128 --timeout 7200 
 `flock_served/Main.lean` parses the circuit as `verify` does (`circuitOfKnowing`: the file's SHA-512 already known). On a
 templated statement, `--stmt` times that parse instead with `flock-tmpl stmt` (`flock_tmpl/Main.lean`): whole, then a
 stage at a time (`tmplOf`, `Tmpl.parse`, each of `TmplUnit.read`'s checks, `HmRow.parseWith`'s decode, split, class
-digest and sections), with the template's size against the unrolled unit's (rows and entries, the copies multiplied
+digest and sections), with the template's size against the unrolled proof block's (rows and entries, the copies multiplied
 through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmpl` built against REV's verifier on the
 same staged statement (stmt-base.jsonl).
 
