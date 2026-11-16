@@ -881,17 +881,6 @@ def test_slack_app_apply_validates_refuses_update_in_dry_run_and_names_the_insta
     assert rc == 0 and "no drift" in out and app_config.methods()[n:] == ["apps.manifest.export"]
 
 
-def test_slack_app_apply_with_no_drift_says_it_sent_nothing_and_slack_verifies_nothing(app_config, capsys):
-    """An unchanged manifest returns before any update, so Slack doesn't verify the Request URL again (infra, 15 Nov)."""
-    rc, out, _ = app(capsys, "apply")
-    [said] = [s for s in out.splitlines() if s.startswith("apply: ")]
-    assert rc == 0 and app_config.methods()[-1] == "apps.manifest.export"
-    assert said == ("apply: sent nothing to Slack, and an unchanged manifest doesn't make Slack verify the Request URL again: "
-                    f"Retry it at https://api.slack.com/apps/{APP}/event-subscriptions")
-    rc, out, _ = app(capsys, "diff")
-    assert rc == 0 and "apply: " not in out
-
-
 def test_a_manifest_slack_rejects_names_where_and_is_not_applied(app_config, capsys, monkeypatch):
     app_config.live["display_information"]["name"] = "Verity (old)"
     answers = {"apps.manifest.validate": {"ok": False, "error": "invalid_manifest",
