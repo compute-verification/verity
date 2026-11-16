@@ -487,12 +487,18 @@ def people_names(reg: dict) -> set[str]:
     return {person_name(p) for p, _ in people(reg) if p.get("slack_user")}
 
 
+TESTS = "tests/"                                                 # the root every test is under, mirrored by path
+
+
 def owner(reg: dict, path: str) -> str | None:
-    """The handle that owns a checkout path: the one whose `owns` entry is its longest prefix (a directory ends in `/`)."""
+    """The handle that owns a checkout path: the one whose `owns` entry is its longest prefix (a directory ends in `/`).
+    A test, `tests/X`, that no entry under `tests/` names has the owner of `X`, the path it mirrors."""
     path = path.removeprefix("./")
     best = max(((p, h["handle"]) for h in reg["handles"] for p in h.get("owns", [])
                 if path == p.rstrip("/") or path.startswith(p if p.endswith("/") else p + "/")),
                key=lambda ph: len(ph[0]), default=None)
+    if path.startswith(TESTS) and (best is None or best[0] == TESTS):
+        return owner(reg, path[len(TESTS):]) or (best and best[1])
     return best and best[1]
 
 
