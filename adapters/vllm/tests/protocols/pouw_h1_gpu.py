@@ -306,7 +306,7 @@ def gate_command(argv: list[str]) -> GateCommand:
         if p.returncode or not isinstance(answer, dict) or "refused" in answer:
             raise ValueError(f"the gate refused the reserve (exit {p.returncode}): {(p.stdout + p.stderr)[-1000:]}")
         if steps is None and answer.get("withheld") is not True:
-            raise ValueError(f"the gate reserved draw challenge phase {answer.get('session')} plain: {PHW.WITHHELD_OPEN}")
+            raise ValueError(f"the gate reserved sampling challenge phase {answer.get('session')} plain: {PHW.WITHHELD_OPEN}")
         return answer
 
     return GateCommand(gate, argv, reserve, lambda session: await_end(lambda: verb("status", session)))
@@ -1561,8 +1561,8 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
                     help="no GPU: a served window's coins against the challenger run's out/ (with --window) or the "
                          "session's tree (needs --key-sha512 and --ledger)")
     ap.add_argument("--draw-dir", metavar="DRAW_DIR",
-                    help="with --check-challenger: the window's draw session as CHALLENGER_DIR is its session (its "
-                         "out/ with --window, else its tree), whose draw coin the window's draw is")
+                    help="with --check-challenger: the window's sampling session as CHALLENGER_DIR is its session (its "
+                         "out/ with --window, else its tree), whose sampling coin the window's sample is")
     ap.add_argument("--key-sha512", help="the SHA-512 of the auditor's challenger public key, in hex")
     ap.add_argument("--ledger", metavar="HEAD", action="append",
                     help="with --check-challenger: a published head of the auditor's signed ledger (infra's windows.jsonl), "
@@ -1695,7 +1695,7 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
         ap.error("--peer is the fill workload's, with --challenger and --gate, without --session or --handoff (each window "
                  "reserves its own session)")
     if (a.session is None) != (a.draw_session is None):
-        ap.error("--session and --draw-session go together: a window's draw coin is its own draw session's (CMP-177)")
+        ap.error("--session and --draw-session go together: a window's sampling coin is its own sampling session's (CMP-177)")
     if a.period and not a.check_challenger and not (a.commit and a.peer):
         ap.error("--period is --check-challenger's, or --commit's with --peer (the period its Commit window opens)")
     if a.period and a.commit and not a.circuits:

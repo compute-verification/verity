@@ -160,11 +160,11 @@ class GateOptions:
     h1_prover: str | None = option("--h1-prover", default=None, metavar="DIR",
                                    help="with --protocols: keep each H1 window's prover state (its salt key and each call's "
                                         "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
-                                        "owner-only, for proving its drawn units and rounds after the close; never a "
+                                        "owner-only, for proving its sampled proof blocks and rounds after the close; never a "
                                         "published path")
     h1_receipts: bool = option("--h1-receipts", default=False, action="store_true",
                                help="with --protocols: each H1 window registers each call's receipt@<c>, the receipts a "
-                                    "drawn J10-R call statement's o0 and a lanes-form K's combine read "
+                                    "sampled J10-R call statement's o0 and a lanes-form K's combine read "
                                     "(pouw_h1_receipts.Receipts.serving), computed inline")
     h1_model: str | None = option("--h1-model", default=None, metavar="ROLE",
                                   help="with --challenger-gate: the auditor's registration role of the served model (a role "
@@ -241,14 +241,14 @@ def refusal(opts: Any) -> str | None:
 
         return f"--challenger-lane is Pearl+'s (--protocols {PEARL}, serve_pearl): PoUW H1's windows take none"
     if gate and not opts.protocols:
-        return f"--challenger-gate draws PoUW H1's coins: it needs --protocols {ENTRY}"
+        return f"--challenger-gate flips PoUW H1's coins: it needs --protocols {ENTRY}"
     if (opts.gate.h1_prover or opts.gate.h1_receipts or opts.gate.h1_window_commit) and not opts.protocols:
         return f"--h1-prover, --h1-receipts and --h1-window-commit are PoUW H1's window's: they need --protocols {ENTRY}"
     if opts.gate.h1_window_commit and not (getattr(opts, "seal", False) and opts.gate.h1_prover):
         return "--h1-window-commit commits the sealed window from H1's prover state: it needs --seal and --h1-prover"
     if opts.gate.h1_window_commit and DRAWER in (p.strip() for p in after.split(",")):
         return (f"--h1-window-commit waits for the window's seal before its sample coin, and --release-after {DRAWER} holds "
-                "the seal until that coin's draw: give one of them")
+                "the seal until that coin's flip: give one of them")
     if opts.protocols_config and not opts.protocols:
         return "--protocols-config without --protocols"
     if not opts.protocols:
@@ -626,7 +626,7 @@ class H1Windows:
         period = held.get("period")
         if period is None:
             raise ValueError(f"session {held.get('session')} joined no period, so no period-open committed the K its "
-                             "window is drawn with")
+                             "window is sampled with")
         if period not in self._period_k:
             try:
                 k, why = committed_k(self.sessions.gate.ledger(), period)

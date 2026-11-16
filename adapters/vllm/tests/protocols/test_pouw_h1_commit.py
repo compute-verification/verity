@@ -1028,7 +1028,7 @@ class _Gate:
 
     def __call__(self, session, root, withhold=False):
         host = self.hosts[session]
-        assert isinstance(host, int) == withhold, "a draw session is opened withheld, a window's session never"
+        assert isinstance(host, int) == withhold, "a sampling session is opened withheld, a window's session never"
         if withhold:
             host = self.hosts[session] = CH.Host(self.dir / session, Wd.draw_challenger(0, CH.entropy(host)), 1, session,
                                                  self.leaves, self.ledger, gated=True, withhold=True)

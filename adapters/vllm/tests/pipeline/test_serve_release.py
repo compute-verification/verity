@@ -149,7 +149,7 @@ def test_a_draw_is_never_redrawn_names_only_its_protocols_and_reads_only_what_wa
     _host, _rc, dev = committed()
     draws = SL.Draws(PROTOCOLS)
     draws.put(0, "pouw_h1", [])
-    with pytest.raises(SL.Refused, match="drawn by pouw_h1 already"):
+    with pytest.raises(SL.Refused, match="sampled by pouw_h1 already"):
         draws.put(0, "pouw_h1", [])
     with pytest.raises(SL.Refused, match="not a protocol the release waits for"):
         draws.put(0, "pous", [])
