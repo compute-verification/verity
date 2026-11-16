@@ -1,5 +1,5 @@
 """The network attester's connection rows: what it signs of the connections it released in an execution phase of a
-link, as tables of rows committed as its cells' rows are (`network_certifier_rows`) and listed in one head for that execution
+link, as tables of rows committed as its cells' rows are (`network_attester_rows`) and listed in one head for that execution
 phase, which it signs once. A schedule has them only where its parameters say so (`NetworkCertifierParams.lengths`): a schedule
 without them has no such head, and its records, cells' heads and certificates are the ones it had. The head lists
 the lengths rows and the fails rows and, where the schedule has content rows (`NetworkCertifierParams.content`), three tables
@@ -8,7 +8,7 @@ connections is under the one signature, and no proof block opens a row of them u
 
 **The lengths and fails tables** (`tables`) of execution phase w (`window` w in the code and the records) are made from
 the releases the network attester hands at execution phase w + 1's close, or under the lengths rows' form 2 at the
-run's last close for its last execution phase (`network_certifier.Released`, by slot stride: `network_certifier`'s "The lengths rows").
+run's last close for its last execution phase (`network_attester.Released`, by slot stride: `network_attester`'s "The lengths rows").
 The certifier writes them from the cells it cut and released itself, never from the
 server's report, so they say what its records of the same execution phases say, in another order (`of_records` is
 that reading of the records in the clear): that the two agree rests on the network attester's own code
@@ -22,7 +22,7 @@ the rest zero, every field little-endian:
 - `fails`: a slot is u16 class ‖ u16 at, 4 bytes, the slot of the lengths row at the same place: class 1 and at = n
   where the connection ended in a `FAIL`, both 0 where it ended in its `END` and in an empty slot. Only a released
   request has a slot, and a released connection's `FAIL` is the server's (late, limit, upstream or format), so the
-  class says the server failed it or nobody did. These rows are not the `fails` record (`network_certifier`'s "The records"),
+  class says the server failed it or nobody did. These rows are not the `fails` record (`network_attester`'s "The records"),
   whose frames hold each `FAIL`'s reason in its bucket and stay witness.
 
 So each of the two tables' size is the schedule's whatever the load, and which slots hold a request, each one's bytes,
@@ -59,7 +59,7 @@ proof block's outputs fit one public size class, so a row has at most (`SIZE_CLA
 one statement of that bound: a schedule with lengths rows whose slot stride releases more is refused when its
 parameters are built (`NetworkCertifierParams`), and the proof block's shape refuses the same K.
 
-**The commitment** of a table is its cells' rows' (`network_certifier_rows`' "The commitment"), under the table's own domain:
+**The commitment** of a table is its cells' rows' (`network_attester_rows`' "The commitment"), under the table's own domain:
 
     x_k    = the sha512/row/v2 digest of row k's bits
     b‖c_k  = hm96.SHA512.commit_string(default_key, x_k, salt_k)
@@ -95,7 +95,7 @@ say.
 **The word that no head comes** (`no_head_digest`, `no_head`, `check_no_head`; the lengths rows' form 2 only,
 `NetworkCertifierParams.closes`). Under form 2 the network attester ends every execution phase of a run in exactly one of two
 certificates of the link's egress in that execution phase: its head's, or this word's, which it signs where it
-doesn't hand the execution phase (`network_certifier`'s "The lengths rows": it, the one before it or the one after it wasn't
+doesn't hand the execution phase (`network_attester`'s "The lengths rows": it, the one before it or the one after it wasn't
 published complete, or the run ended early):
 
     digest = tagged_sha512(NO_HEAD_TAG, u16be len(link) ‖ link ‖ u64be window ‖ parameters (64 bytes))
@@ -165,8 +165,8 @@ from verity.protocols.resource_accounting.network.verifier.certificate import (D
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid, row_count
 from verity.protocols.resource_accounting.network.verifier.io_tie import parse_cell
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
-from verity.protocols.resource_accounting.network.verifier.network_certifier import END, FAIL, Released, NetworkCertifierParams, read_cell
-from verity.protocols.resource_accounting.network.verifier.network_certifier_rows import OWNER, SALT_BYTES, WORD_BITS, bc
+from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, Released, NetworkCertifierParams, read_cell
+from verity.protocols.resource_accounting.network.verifier.network_attester_rows import OWNER, SALT_BYTES, WORD_BITS, bc
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
@@ -308,7 +308,7 @@ def releases(params: NetworkCertifierParams, lengths: Sequence[bytes], fails: Se
 
 def of_records(params: NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid],
                order: Mapping[int, int] | None = None) -> dict[int, tuple[tuple[Released, ...], ...]]:
-    """The releases a run's records hold, read in the clear (a rehearsal's reading, as `network_certifier.audit` is, and
+    """The releases a run's records hold, read in the clear (a rehearsal's reading, as `network_attester.audit` is, and
     nothing a verifier runs): each execution phase's by slot stride, as the network attester hands them and `tables`
     takes them. A release is an `END` in the ingress record, in its bucket's slot stride; N is its place among the
     run's, by bucket and then by connection; its request is its connection's ingress `DATA` and `END` payloads; its

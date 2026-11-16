@@ -2,7 +2,7 @@
 each proved as IoTieRequest (`tie_service.IngressTie`, its proof block `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`),
 registered on the link's own stream, proved by Flock `prove --zk` behind the Lean ZK server with each proof block's
 witness row read off the network attester's
-root (`network_certifier_rows.bucket_port`), delivered, decided by the tie's verifier on its own lanes from the advice
+root (`network_attester_rows.bucket_port`), delivered, decided by the tie's verifier on its own lanes from the advice
 and the network attester's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
 the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
 through `tie_service.Ties`, the verifier's tie source).
@@ -17,7 +17,7 @@ through `tie_service.Ties`, the verifier's tie source).
   public, and the cells and their salts are witness. ``--class served`` (`CLASSES`) is the served link's ingress
   instead: one window of T = 60 buckets of one lane of r = 1 4,096-byte cell, the unit
   `IoTieRequest_v1{B=4096,L=1,R=1}`, with the ``honest`` and ``forged`` members alone.
-* **A network attester's run** (``--class warden --warden-run RUN``, `network_certifier_link`): the gate's ``warden-rehearse``'s
+* **A network attester's run** (``--class warden --warden-run RUN``, `network_attester_link`): the gate's ``warden-rehearse``'s
   real ingress in place of the served link, its first K execution phases (``--windows``, 1 by default), every connection
   in them starting and ending there. The verifier reads ``deployment.json`` (the schedule, its digest, the network
   attester's key and session) and each window's registration in ``cells.jsonl``, its head's signature verified under
@@ -34,7 +34,7 @@ through `tie_service.Ties`, the verifier's tie source).
   its output word 0 fails the registered read of ``o0``; ``split``, prompts of 40 and 5 tokens in cells the advice
   swaps, proved on the cells' own lanes, which the verifier refuses in every window, the release not being the
   swapped advice's schedule, so it has no lanes to register (`EXPECT`).
-* **The statement and the rounds** follow `network_certifier_zk`'s: one circuit, `IngressTie.proof_block` lowered once (the gate
+* **The statement and the rounds** follow `network_attester_zk`'s: one circuit, `IngressTie.proof_block` lowered once (the gate
   the Definition its pinned digest names), and each execution phase a statement of T instances, unit t bucket t, on rows
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file every port
   of which is a registered read, ``wit`` the window's bucket rows under the network attester's salts and paths, and ``pub`` and
@@ -68,7 +68,7 @@ from verity.protocols.resource_accounting.network.verifier import relay_check as
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, n2_zk as Z
 from verity.protocols.resource_accounting.network.verifier import advice as ADV, head_check as HC
 from verity.protocols.resource_accounting.network.verifier import io_request as Q, service as SVC
-from verity.protocols.resource_accounting.network.verifier import tie_service as TS, network_certifier as W, network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier import tie_service as TS, network_attester as W, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, id_request
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
@@ -113,19 +113,19 @@ CLASSES = {
                "windows": 1, "expect": {"honest": (True,), "forged": (False,)}},
     "warden": None,
 }
-#: the network attester run ``--class warden`` reads (`network_certifier_link`), None at the other classes
+#: the network attester run ``--class warden`` reads (`network_attester_link`), None at the other classes
 REAL = None
 
 
 def use(name: str, run: Path | None = None, windows: int = 1) -> None:
     """Set the driver's size class to `CLASSES` [name]: its B, network attester parameters, windows, and members with
-    their verdicts; ``network_certifier`` reads them off the network attester run `run`'s first `windows` execution phases
-    (`network_certifier_link`), the forged member's window 0 refused and the rest tied."""
+    their verdicts; ``network_attester`` reads them off the network attester run `run`'s first `windows` execution phases
+    (`network_attester_link`), the forged member's window 0 refused and the rest tied."""
     global B, PARAMS, T, PROFILE, MEMBERS, EXPECT, RECEIVED, WINDOWS, LINK, SESSION, REAL
     if name == "warden":
         if run is None or windows < 1:
             raise SystemExit("--class warden reads a network certifier run's first execution phases: --warden-run RUN [--windows K]")
-        REAL = network_certifier_link(Path(run), windows)
+        REAL = network_attester_link(Path(run), windows)
         B, PARAMS, LINK, SESSION, WINDOWS = REAL.params.cell_bytes, REAL.params, REAL.link, REAL.session, windows
         EXPECT = {"honest": (True,) * windows, "forged": (False,) + (True,) * (windows - 1)}
     else:
@@ -166,7 +166,7 @@ def received(link: Q.ServedIngress) -> tuple[int, ...]:
 
 
 def _found(run: Path, name: str) -> Path:
-    """A network attester run's file: in the run's directory (`network_certifier_serve.py serve --out`), else its ``witness/``
+    """A network attester run's file: in the run's directory (`network_attester_serve.py serve --out`), else its ``witness/``
     (the gate's ``warden-rehearse``)."""
     for d in (run, run / "witness"):
         if (d / name).is_file():
@@ -174,7 +174,7 @@ def _found(run: Path, name: str) -> Path:
     raise SystemExit(f"--warden-run {run}: no {name} there or in its witness/")
 
 
-def network_certifier_link(run: Path, windows: int) -> SimpleNamespace:
+def network_attester_link(run: Path, windows: int) -> SimpleNamespace:
     """The network attester run's ingress execution phases 0 … windows − 1 (the module docstring, "A network
     attester's run"): each window's rows under the network attester's salts, held to the head the verifier read off
     its signed registration, the windows' release and their requests' prompt lengths, refused by name where any of it
@@ -212,7 +212,7 @@ def network_certifier_link(run: Path, windows: int) -> SimpleNamespace:
                              "whose root the network certifier signed")
         cells.append(c)
     releases, lens = _released(params, cells)
-    return SimpleNamespace(source=f"network certifier run {dep.get('run_id')} (network_certifier_serve.py, its deployment's key)",
+    return SimpleNamespace(source=f"network certifier run {dep.get('run_id')} (network_attester_serve.py, its deployment's key)",
                            run_id=dep.get("run_id"), params=params, session=session, link=RC.LINK, cells=cells,
                            records=tuple(records[w] for w in range(windows)), releases=releases, prompt_lens=lens)
 
@@ -314,12 +314,12 @@ def members() -> dict[str, tuple]:
 
 def phases(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=None) -> SimpleNamespace:
     """Every execution phase of the member as the network attester and the prover hold it before it registers: the network attester's cells
-    (`network_certifier_rows.Cells`: a network attester run's own, else fresh salts) and its head, the verifier's lanes of `adv`
+    (`network_attester_rows.Cells`: a network attester run's own, else fresh salts) and its head, the verifier's lanes of `adv`
     (``own``, None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a
     tuple, the lanes of those prompt lengths), the prover's rows (the network attester's, or a `Forge`'s), each proof
     block's arguments on the prover's lanes and rows and the verifier's public arguments on its own, each output word by
     the gate's reference, whether each proof block's public row is the verifier's (``opens``) and the host's read of the
-    registered rows (``held``, `network_certifier_rows.refusal`: None where every row opens the network attester's root)."""
+    registered rows (``held``, `network_attester_rows.refusal`: None where every row opens the network attester's root)."""
     out = []
     for w, rec in enumerate(link.records):
         cells = link.cells[w] if getattr(link, "cells", None) else \
@@ -398,7 +398,7 @@ def known(tie: TS.IngressTie, x: SimpleNamespace) -> dict:
 def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNamespace], out: Path) -> dict:
     """Every execution phase's statement on the one circuit, T instances each, unit t bucket t (`UnitStager.stage`: the
     outputs the lowering's, held to the IR reference): a shared-row file every port of which is a registered read, its
-    ``wit`` table the window's bucket rows under the network attester's salts and paths (`network_certifier_rows.Cells.statement`), and its
+    ``wit`` table the window's bucket rows under the network attester's salts and paths (`network_attester_rows.Cells.statement`), and its
     ``pub`` and ``o0`` rows under the prover's known values' public salts and paths (`known`). Each staged ``o0`` row
     must open to its output word, and each ``pub`` row to the verifier's own copy exactly where the prover's lanes are
     the verifier's. Beside it, the verifier's own registered reads (`IngressTie.registered`, null where it has no
@@ -659,7 +659,7 @@ def main(argv=None) -> int:
     p.add_argument("--out", required=True)
     p.add_argument("--class", dest="cls", choices=sorted(CLASSES), default="test", help="the size class (`CLASSES`)")
     p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
-                   help="--class warden: a network_certifier_serve run's directory (the gate's warden-rehearse's, its witness "
+                   help="--class warden: a network_attester_serve run's directory (the gate's warden-rehearse's, its witness "
                         "under witness/)")
     p.add_argument("--windows", type=int, default=1, help="--class warden: its first execution phases proved")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
