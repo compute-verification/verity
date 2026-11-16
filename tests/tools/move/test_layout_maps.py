@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-MOVE = Path(__file__).resolve().parents[1]
+MOVE = Path(__file__).resolve().parents[3] / "tools" / "move"
 sys.path.insert(0, str(MOVE))
 spec = importlib.util.spec_from_file_location("layout_maps_for_tests", MOVE / "layout_maps.py")
 G = importlib.util.module_from_spec(spec)

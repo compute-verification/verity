@@ -18,7 +18,7 @@ import pytest
 ROOT = Path(__file__).parents[7]
 LEAN = Path(__file__).parents[7] / "tools" / "pous_grader"
 #: the suite's `pyproject.toml`, whose directory and declared inputs the read guard allows
-PYPROJECT = ROOT / "verity/protocols/resource_accounting/memory/pous/verifier/pyproject.toml"
+PYPROJECT = ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier/pyproject.toml"
 #: how deep `lean/` is below the root, which a copy of it under another root keeps
 DEPTH = len(LEAN.relative_to(ROOT).parts)
 #: the trusted layer's directory as TRUSTED.sha256 names it, relative to `lean/` (the grader and its driver are here)
@@ -86,14 +86,14 @@ def undeclared(pkg: Path, inputs: list[str]) -> list[str]:
     root: those outside the suite's directory and ``inputs``.  The suite declares no `[project]`, so no dependency's
     directory is among what the guard allows."""
     root = pkg.parents[DEPTH - 1]
-    allowed = [PYPROJECT.parent.relative_to(ROOT).as_posix(), *inputs]
+    allowed = [(PYPROJECT.parents[7] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier").relative_to(ROOT).as_posix(), *inputs]
     files = [Path(os.path.normpath(pkg / f)).relative_to(root).as_posix() for f in trusted(pkg)]
     return [f for f in files if not any(f == p or f.startswith(p.rstrip("/") + "/") for p in allowed)]
 
 
 def test_every_trusted_file_is_a_suite_input():
     missing = undeclared(LEAN, declared_inputs())
-    assert not missing, ("verity/protocols/resource_accounting/memory/pous/verifier/pyproject.toml's [tool.verity.tests] inputs leave out these files "
+    assert not missing, ("tests/verity/protocols/resource_accounting/memory/pous/verifier/pyproject.toml's [tool.verity.tests] inputs leave out these files "
                          "lean/TRUSTED.sha256's command hashes, which this suite reads, so its read guard fails it; add "
                          "them:\n" + "\n".join(f'          "{f}",' for f in missing))
 

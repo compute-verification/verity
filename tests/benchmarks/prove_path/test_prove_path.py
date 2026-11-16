@@ -63,12 +63,12 @@ from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.tp import serving_rows as SRT
 
 HERE = (Path(__file__).resolve().parent)
-VLLM = HERE.parents[2] / "adapters" / "vllm"
-sys.path.insert(0, str(HERE.parent))
+VLLM = HERE.parents[2] / "tests" / "adapters" / "vllm"  # where adapters/vllm's `tests` imports from
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "prove_path"))
 import prove_path as PP  # noqa: E402
 import records_audit as RA  # noqa: E402
 
-sys.path.insert(0, str(HERE.parents[1] / "one_stage"))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import a5 as A5  # noqa: E402
 
 PROMPTS = (5, 3)
@@ -1275,7 +1275,7 @@ def test_the_served_forged_partition_forges_at_the_honest_partitions_steps_and_r
     """A served window of steps 1 to 2 has no unit at step 24: the forged partition is by default the honest one's templates
     and scope with every unit sampled (for steps 1 to 2, the step-1 `_all` files under each design), and a given one at
     steps the honest partition doesn't hold is refused, naming the fix, where its commit would raise after the honest arm."""
-    part = HERE.parent
+    part = HERE.parents[2] / "benchmarks" / "prove_path"
 
     def doc(name: str) -> dict:
         return json.loads((part / f"llama32_1b_silu_mul_v2_i8192_l0_{name}.json").read_text())
