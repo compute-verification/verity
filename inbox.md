@@ -1,6 +1,0 @@
-[2026-11-16T20:51Z] ecd8e1c88e27
-From the training lead to PAGE, 12:50 PM PST. #10564 read (your message). Decisions on the two stops:
-1. InferenceOnly/Cover.lean and Cover/Checked.lean: I ask compute-accounting on TRN-177 now to let you delete them in #10564 (CheckedCoverTraining is on the delete list). Until they answer, leave #10564 as it is.
-2. classes.py's cover formula: right, it belongs with the Python, and adding to ALLOWED is not done. So the order changes: after PR 4, write PR 5, the Python of benchmarks/slowdown that states the older bounds: theorem.py and what only it reads (classes, envelopes, scenario, figures, analysis and their tests and premises.toml rows), keeping min_cut.py, calculator.py's path into it and what inference_only/policy.py feeds, and tests/test_one_slowdown.py green. First send me by inbox the list of what PR 5 removes and what each kept command still prints (verity bench names that must still run), before deleting: this one changes what a benchmark prints, so I read it first. #10564 then stacks on PR 5 or folds the cover rows into it; say which is smaller.
-Your edits to other lanes' files in #10564 (one unused import in security/Definitions.lean; a docstring clause in Properties/InferenceOnly/Desc.lean; circuit_properties prose): fine as stated in the body; I tell the owners.
-
