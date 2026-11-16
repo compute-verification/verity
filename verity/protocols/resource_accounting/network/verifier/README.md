@@ -34,7 +34,7 @@ pooled count, with the incorrect proof blocks paid for once over the monitoring 
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` at `Fmax ≥ ln(1/δ)/q`
 (N the period's proof blocks, b each one's committed bits, q the per-execution-phase detection probability), failing
 with probability at most `δ + Σ_i e_i + Σ_i e'_i`. It is conditional on two per-execution-phase hypotheses not yet
-discharged (`hesc`, the conditional escape; `hleak`, the leak relation at the witness's incorrect set), so it is not
+discharged (`hesc`, the conditional miss probability; `hleak`, the leak relation at the witness's incorrect set), so it is not
 yet the deployed system's bound over a monitoring period.
 
 What `MonitoringPeriodLeakAccepted` takes, as its record in the lock (`security/lean-audit.json`, `guarantees`) lists it. Named
@@ -92,9 +92,9 @@ Open premises (`open`):
   no egress cell to the id egress form (the io tie's, `IoTieCell` on every cell) and no response to a `max_tokens_cap`
   (`network-rows` refuses such a schedule).
 - **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
-  runs the check and writes it as the certifier's piece, which `benchmarks/one_stage` reads. It also writes the
+  runs the check and writes it as network certification's piece (`certifier_piece.py`), which `benchmarks/one_stage` reads. It also writes the
   check's parameters, whose `"keys"` list the link's network attester's entries, each a key, its session and the
-  start of its stretch of execution phases (`scan_period.py`: the deployment's one key and session, from execution
+  start of its stretch of execution phases (`../prover/scan_period.py`: the deployment's one key and session, from execution
   phase 0), and its evidence, whose `"starts"` show each listed entry's session's signed start (the deployment's
   `start`).
 - **Files others load by path**: `tests/scan_traffic.py` (`benchmarks/network_traces`, `benchmarks/prove_path`, the
@@ -109,19 +109,20 @@ Open premises (`open`):
   modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier` and,
   `parties` alone, `verity.protocol` and `verity.channel`;
   never the prover side, which `../attester/program/lean/scripts/window_vectors.py` and the tests import.
-- **Not here**: the certifier's host programs (`benchmarks/network_traces`).
+- **Not here**: the network attester's host programs (`../attester`), and the programs that drive a run's proofs and
+  chains (`benchmarks/network_traces`).
 
 ## What this package holds
 
-A spec-level reference for network accounting's timing channel:
-- the constant-rate, left-packed certifier;
+A spec-level reference for network certification's timing channel:
+- the constant-rate, left-packed network attester;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
 - the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network
   certificates (`certificate`: the network attester's signature over the record's SHA-512 digest hidden under a
   fresh salt, with the execution phase's frames in a fixed-depth SHA-512 tree), and the ingress links' status check;
 - one execution phase's certificates through the proof system (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
-  its fields, and its record digest under the certifier's salt against the digest its certificate signs). A link is
+  its fields, and its record digest under the network attester's salt against the digest its certificate signs). A link is
   the network attester's (`service.NetworkCertifierProfile`), and its claim is the heads' only: on every execution phase both
   are the network attester's, on its grid under its parameters digest, so the link's timing is its schedule's.
   Nothing here holds the frames, the rest of the egress grid (the scan does). The network verdict of record is
@@ -195,7 +196,7 @@ A spec-level reference for network accounting's timing channel:
   the arrivals' ingress fields and their registered output lengths and tokens, it computes the served rows and the
   state, window and slot rows the window leaves, each hit, evictable count and return where `ReplayStep_v1` reads it,
   and holds them to the registered ``srv`` and ``cout`` it reads; its one output is the 16-bit verdict. Its pool calls,
-  in vLLM's order, are records on a bus to `CacheStep_v3`'s stream, which runs in the unit from the empty pool with
+  in vLLM's order, are records on a bus to `CacheStep_v3`'s stream, which runs in the proof block from the empty pool with
   request keys the arrivals' `BlockKey_v1` chains printed under a live coin, so eviction, preemption and a leaving
   request's returns are in the slice. The hits, evictable counts and returns the steps read, and the stream's slots and
   touched list, are checked witness, unique and bound by live coins. Until a Lean lemma shows that uniqueness, the
@@ -210,7 +211,7 @@ A spec-level reference for network accounting's timing channel:
   looked up at every call. Its free input is the advice and the checked witness, as v4's (`free_width`), and its verdict
   adds bit 6 ``keys``. `parts` prices it at any class;
 - the compile slice with the block pool carried between windows, in vLLM's compiler
-  (`verity_vllm.compiler.compile_slice_v6`): `CompileSlice_v5` cut in two units, both proved every window.
+  (`verity_vllm.compiler.compile_slice_v6`): `CompileSlice_v5` cut in two proof blocks, both proved every window.
   `CompileSlice_v6` is its load and steps from the registered results, their pool calls' bus records held to the
   registered calls row. `PoolWindow_v1` opens the pool row under the input root, the previous window's output root
   registered before the window's coins, as the memory check's initial values; runs `CacheStep_v3`'s stream from it over
@@ -222,7 +223,7 @@ A spec-level reference for network accounting's timing channel:
   its ``a_O``, and the next window takes its continuation, (id, P + e) with its prompt then its released outputs, as an
   ordinary arrival that hits its blocks in the carried pool. The close gives each keyed block's page its source, the
   window's own write or the previous window's carried port, and a `PageCopy_v1` copy block holds the window's carried
-  port to it. `PoolChain_v1` is two windows so chained, and `parts` prices both units at any class, which
+  port to it. `PoolChain_v1` is two windows so chained, and `parts` prices both proof blocks at any class, which
   `benchmarks/mempool/cost.py` does at a served load's;
 - the compile slice charging the length terms, in vLLM's compiler (`verity_vllm.compiler.compile_slice_v7`):
   `CompileSlice_v7`, `CompileSlice_v1` with `ChargeLink_v2{D, 0, 0, K}` in place of `ChargeLink_v1{D}`, a length slot
@@ -281,20 +282,20 @@ A spec-level reference for network accounting's timing channel:
   `fails`.
   `PROTOCOL.md`'s "The active network attester" has its leak bound, and `verity/protocols/resource_accounting/network/attester/network_attester_serve.py`
   runs it;
-- the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
+- the release order on the server's side (`release`): a network attester puts `x-verity-release: N` (N is the request's
   0-based place in its run's release order) and `x-verity-release-run: ID` on the server's copy of each request it
   releases, for `serve-openai --admit release-order`. The network attester adds `x-verity-release-bucket: a`, the
   bucket of the request's `END`. With `NetworkCertifier(watermark=…)` it also sends the server a watermark stream:
   one chunked `POST /verity/watermark` carrying one line `t n l…` a tick, meaning bucket t has closed, the releases of
   buckets ≤ t are exactly N < n, and each l is one of bucket t's that its server connection lost. Line t goes out once
-  each release of bucket t is written or lost. An engine that admits at a logical time in certifier buckets waits on
+  each release of bucket t is written or lost. An engine that admits at a logical time in network attester buckets waits on
   that line and on each N < n it doesn't name. A client's request that opens as one to that path is refused
   (`release.to_watermark`, read on its first cell and, whole, at its `END`), unreleased; so is one a server would
   read a second request in, or read without the headers (`release.one_request`, read whole at its `END`).
   The headers and the stream never appear in a cell or record, so nothing certified changes;
 - the network attester's cells as rows (`network_attester_rows`): each execution phase's cells committed one `hm96-sha512/row/v2`
-  row a bucket, padding and empty slots included, under a frame-v3-sha512 root the network attester signs with the
-  certifier's signer, beside a salted digest of the window's wiring. The registration is what a proof block's
+  row a bucket, padding and empty slots included, under a frame-v3-sha512 root the network attester signs with its
+  signer, beside a salted digest of the window's wiring. The registration is what a proof block's
   `--registered` port reads, and the verifier places each read, the (connection, cell) the Program's proof blocks'
   wiring pins (`Units`, whose digest the port's value names), with the network attester's wiring (`PROTOCOL.md`,
   "The network attester's cells as rows"; `verity/protocols/resource_accounting/network/prover/network_attester_zk.py`);
@@ -310,13 +311,13 @@ A spec-level reference for network accounting's timing channel:
   in that head, its four verdicts, each accepted, complete and on the head, all of one serve and registration,
   and the head's schedule handed, one that can be tied; else its whole schedule;
 - its deployment manifest (`parties`): no party of it runs under the runtime;
-- the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
+- the output value the network attester relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the
-  certifier's fresh salts, and signs the head for the egress execution phase; `check_out` reads the public record for
+  network attester's fresh salts, and signs the head for the egress execution phase; `check_out` reads the public record for
   the execution phase it expects at the verifier's own shape and returns the root to pin, or refuses by name
   (`REFUSALS`: another width is ``out-width``, another row count ``out-rows``), so the output proof blocks' rows are
-  registered reads of the certifier's root rather than a comparison in the clear;
+  registered reads of the network attester's root rather than a comparison in the clear;
 - the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary``, which names the template
   whose proof block ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it computes and returns,
   committed as a registered read of the network attester's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
@@ -328,22 +329,22 @@ A spec-level reference for network accounting's timing channel:
   stays structural: a served window fits in the step-indexed scan's form, and a window in any other form is refused;
 - the transfer rows (`transfer_rows`): a host's load, each value of the weights it loads once a session (the one kind,
   ``load``, ingress), committed as a registered value under the network attester's own salts at the reading port's
-  leaf width and row format, its root in a head the certifier signs for the session's first execution phase
+  leaf width and row format, its root in a head the network attester signs for the session's first execution phase
   (`TransferHead`, `registration`); every other row into the host is the scan's state, with no head of its own.
   `check_registration` is the verifier's read of it for the transfer it expects, and `port` the verifier's own
   `--registered` port of the value at the signed root (the load relayed and committed as it crosses,
   `verity/protocols/resource_accounting/network/attester/load_relay.py`);
 - the class circuit's check (`blocks`): a circuit record is one host's class window circuit, and which host runs which
-  units, and which request occupies which slot and step, are private, placed by the scan inside the zero-knowledge
+  proof blocks, and which request occupies which slot and step, are private, placed by the scan inside the zero-knowledge
   proof; the class circuit and its padded counts (proof blocks per host, bits per link) are public, and its ``blocks``
   state no placement (the window interface's `Blocks`). `check` refuses an ``ingress`` declaration, a registered read
   or table of no registered parameter, a load (every registered parameter but the scan's state) read
-  in other than whole rows of one width, by no unit, at an external port or by a table over part of it, and an external
+  in other than whole rows of one width, by no proof block, at an external port or by a table over part of it, and an external
   input port whose rows aren't each read exactly once from the scan's state (`blocks.SCAN_STATE`), the host's one
   ingress. `pins` gives the verifier's pinned roots of the loads from their certificates alone (`certified`: each
   load's registration on the host's uplink, ingress, in the session's first execution phase, kind ``load``), so the
   interface's ``input_count`` under them and the scan's state's root has no free input;
-- the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
+- the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one proof block a network attester bucket, reads the bucket's
   network attester's ingress row, the slot state the bucket before carries and the Programs' entries, one port `prog<j>` a slot,
   each `SlotEntry_v1`'s word-aligned row of its slot (registered reads), and computes the next state (each block to the
   slot holding its connection, a new connection to the lowest free slot, its prompt ids appended, a due, occupied
@@ -357,7 +358,7 @@ A spec-level reference for network accounting's timing channel:
   (`tiedInputWired`), one whose scan names a member's ok bits (`<member>/o0`) at another root than its ok rows' under
   public salts, a constant of T ≥ 2 (`scan_ok`), and one whose scan's state isn't that audit's `SCAN_STATE`, by root
   and domain (`stateTied`): the scan's state tree is the window state (`window_state`), each row but leaf 0's the one a
-  unit computes (its o1) and the next reads (its sin), both registered reads, so a Program reads the states the scan's
+  proof block computes (its o1) and the next reads (its sin), both registered reads, so a Program reads the states the scan's
   steps computed;
   `IngressScanStart`, the scan's start, commits leaf 0 by gates: the state its execution phase's record names (the
   empty state in the run's first execution phase, the previous one's last state row after it), so every bucket, the
@@ -376,12 +377,12 @@ A spec-level reference for network accounting's timing channel:
   ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes); an execution phase's
   bucket t reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of one slot-entries input, and an empty slot's entry is
   ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is refused at the scan's
-  unit, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a Program's n over `KO` at
+  proof block, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a Program's n over `KO` at
   its anchor. A window whose network attester refused a connection, traffic past its slots, has no certified record, and the
   period check refuses it. `Class.serves` names the network attester parameters it takes every run of.
-  `verity/protocols/resource_accounting/network/prover/scan_zk.py` proves both sides of a group of execution phases in one registration: ingress unit
-  t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress unit
-  t + 1 and egress unit t read, and egress unit t's row as a registered read of the network attester's egress row t, so the
+  `verity/protocols/resource_accounting/network/prover/scan_zk.py` proves both sides of a group of execution phases in one registration: ingress proof block
+  t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress proof block
+  t + 1 and egress proof block t read, and egress proof block t's row as a registered read of the network attester's egress row t, so the
   chains are wires through the registered roots;
 - the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress execution phase's `IoTieRequest`
   proof blocks, one a bucket row of the network attester's registered ingress cells, proved as
@@ -393,7 +394,7 @@ A spec-level reference for network accounting's timing channel:
   stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the verifier's own tie source,
   which gives the verdict only on its own link. A size class no sidecar pins has no accepted proof.
 
-The certificate's signature scheme is a parameter: the certifier's
+The certificate's signature scheme is a parameter: the network attester's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 The Boolean Definitions above that core doesn't import and that aren't vLLM's compiler's (`egress`, `ingress_scan`,
 `io_ids`, `lengths_row`, `response_tie`, `window_charge`) are in `verity.protocols.resource_accounting.network.prover`, stated
@@ -401,8 +402,8 @@ over the ones here. From `verity`, `charge_chain` and `window_charge` take the c
 from SPOT the produced rows. `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`,
 area `Certifier`).
 
-The coin link (`../attester/coin_link.py`, run by `verity/protocols/compose/verifier/live_challenger/coin_link.py`) carries a window's session
-between the prover and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
+The coin link (`../attester/coin_link.py`, run by `verity/protocols/compose/verifier/live_challenger/coin_link.py`) carries an execution phase's session
+between the developer and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
 grids, exempts only the verified, expected, once-only coin openings, and counts everything else
 (`protocol/coin-link.md`).
 
@@ -432,9 +433,9 @@ block (`NetworkTransferBlocks` v5) and public inputs alone: its own run of Flock
 verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
 output row's verdict and deadline bits are 1, and the certificates verify on their public fields (`TransferBlocks.certified`).
 It reads no head, salt or sibling. `verity/protocols/resource_accounting/network/prover/n2_zk.py` proves a
-certifier-serve run's execution phases this way through the link's own stream, and scans what the verifier received. The
+`../attester/network_attester_serve.py` run's execution phases this way through the link's own stream, and scans what the verifier received. The
 in-the-clear check, `TransferBlocks.clear`, is a debug comparison, off by default. What's open:
-- **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
+- **The certificates aren't a Spec item.** The verifier receives them in the clear from the network attester, the auditor's
   device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
   commitment. That is a provisional exception to the four public kinds, not a fifth kind.
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`TransferBlocks.unproved_outcome`,
@@ -448,7 +449,7 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
 - the gap list is empty for the Lean's plain and served forms, which no Python link takes now. Everything the Python checks, the Lean checks: the findings prove
   the registered Program and the sampled proof blocks with every gate pinned, the public row the verifier derives (root, served
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
-  openings and the word 0b11, both certificates under the LMS key in the certifier session, and the sync in Σ_sync. Both
+  openings and the word 0b11, both certificates under the LMS key in the network attester's session, and the sync in Σ_sync. Both
   take as inputs what the proof system and the lowering give: the findings of the verifier's own Flock Lean run, the
   sessions' SHA-512s, the registration, the sample, and the Program's and partition's digests and the gate ids. The Lean
   reads an LMS key only, and rejects any other.
@@ -471,9 +472,9 @@ A proof of the proof block is held to its circuit. Each gate names its Definitio
 pin to the Definition. So the proof block's Program, which the spec and each registration bind, binds its circuit, and `TransferBlocks.verify` refuses a proof that names any
 other Program, or a proof block of a size class no sidecar pins (`TransferBlocks.proved`).
 
-The certificate signs no hash of witness. The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
-salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier samples fresh for each record
-(`certificate.Issuer`'s `coins`) and hands to the prover with the head, as witness only (`CertifiedRecord.salt`). D is
+The certificate signs no hash of witness. The network attester signs `D = SHA-512("verity/net-cert/v1" ‖
+salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the network attester samples fresh for each record
+(`certificate.Issuer`'s `coins`) and hands to the developer with the head, as witness only (`CertifiedRecord.salt`). D is
 a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the certificate's public fields and D.
 Each end's head check holds R to the head it opens and D to R under `salt_c`, so the certificates' check reads nothing
 of the heads; the in-the-clear check also checks that link over the opening (`CertifiedRecord.verify`).
