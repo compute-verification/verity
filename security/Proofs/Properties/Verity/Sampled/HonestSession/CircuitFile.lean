@@ -20,8 +20,9 @@ namespace Verity.Sampled.Instance.HonestSession
 open Flock
 
 /-- **Facts about the concrete circuit file, not proved**: `HmOut.parse` and `parseCommit` at `verify --zk`'s tags read it
-to `cH`, `HmIn.parse` finds no public input port, `cH` has the one 64-word output row, its META is `norm metaJ`, and its
-unit net reads only its leaf group, returns the outputs, has at most `2^32` rows and reads only port bits. -/
+to `cH`, `HmIn.parse` finds no public input port, `cH` has the one 64-word output row, its META is `norm metaJ`, it has one
+unit per VU and pins the dummy row (`dummyBc`, output `0`), and its unit net reads only its leaf group, returns the outputs,
+has at most `2^32` rows and reads only port bits. -/
 structure CircuitFileFacts : Prop where
   /-- The zero-knowledge mask size the file's META states is `14`. -/
   maskLog : Zk.maskLogOf circuitFile = 14
@@ -45,6 +46,12 @@ structure CircuitFileFacts : Prop where
   cH_kLog : cH.kLog = 22
   /-- `cH`'s META is the parser's reading of `metaJ`. -/
   cH_metaJ : cH.metaJ = FlockSoundness.Discharge.Recursion.FirewallJson.norm metaJ
+  /-- `cH` has one unit per VU. -/
+  cH_upv : cH.upv = 1
+  /-- `cH` pins the dummy row's leaf string `dummyBc`. -/
+  cH_dummyDigests : cH.dummyDigests = #[dummyBc]
+  /-- `cH` pins the dummy output word `0`. -/
+  cH_dummyOutputs : cH.dummyOutputs = #[0]
   /-- `cH`'s unit reads one input group. -/
   unit_inGroups : cH.unit.inGroups.size = 1
   /-- `cH`'s output net is its unit net. -/
