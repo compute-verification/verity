@@ -71,8 +71,9 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   [ -n "$RUST_TOOLCHAIN" ] || { echo "no RUST_TOOLCHAIN pin in verity/protocols/proofs/flock/prover/check_build.sh" >&2; return 1; }
   command -v rustup >/dev/null \
     || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none >/dev/null || return 1
+  # --no-self-update: a rustup on PATH from outside $HOME installs the toolchain and then exits 1 looking for itself here
   rustup toolchain list | grep -q "^$RUST_TOOLCHAIN-" \
-    || rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal >/dev/null || return 1
+    || rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --no-self-update >/dev/null || return 1
   export RUSTUP_TOOLCHAIN=$RUST_TOOLCHAIN
   local D=$1 F=$W/flock
   rm -rf "$F" "$D.tmp"
