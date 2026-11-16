@@ -253,8 +253,8 @@
    "digest": "51a8fe6abc030463b04e7e518d95090f7f763ed3fcd7b43bb3d6a7a021ee89eb"
   },
   "Proofs.Flock.SessionLoop.Concrete.Fwd": {
-   "why": "fwd_walk and fwd_def, a tactic and a command that step through a computation of the verifier by its head (a let, a jump, a bind, an if or a match, and a for loop whose body always yields as a fold) to the value it returns, rewriting by the hypotheses and lemmas they are given, in the concrete statement's walks of its circuit file's parse, its public file's load, Raw.ins and Ins.setup (SessionLoop/Concrete/File.lean to Inputs.lean); fwd_def adds the value as a definition and the walk's equation as a theorem with addDecl. kernel_rfl' closes an equation under metadata with Eq.refl, and case_both cases one discriminant on both sides of an equation (Concrete/Delta.lean). They run only inside the elaborator and read or write nothing outside it, and the kernel checks every definition and proof they add.",
-   "digest": "e26b6b3ab8e52fcec443b72aa1820736fa41235402acc124ae30ab5fc7dacd1b"
+   "why": "fwd_walk and fwd_def, a tactic and a command that step through a computation of the verifier by its head (a let, a let applied to arguments, which takes them under it, a jump, a bind, an if or a match, and a for loop whose body always yields as a fold) to the value it returns, rewriting by the hypotheses and lemmas they are given, in the concrete statement's walks of its circuit file's parse, its public file's load, Raw.ins and Ins.setup (SessionLoop/Concrete/File.lean to Inputs.lean); fwd_def adds the value as a definition and the walk's equation as a theorem with addDecl. kernel_rfl' closes an equation under metadata with Eq.refl, and case_both cases one discriminant on both sides of an equation (Concrete/Delta.lean). They run only inside the elaborator and read or write nothing outside it, and the kernel checks every definition and proof they add.",
+   "digest": "b1608d78c37350a8938e1936e57d048ae76ea82a930c1b063992d492c561420c"
   },
   "Proofs.Flock.Soundness.Refine.OkLe": {
    "why": "ok_le_walk, the tactic (an elab, over okLeStep) that walks two runs of one executable at once by their heads, closing each step with the module's okLe_bind/ite/dite/let/jp/forIn/throw lemmas (Refine/Lookups.lean's proofs that more lookup tables change nothing). It reads no files and does no IO, and the kernel replays every proof it builds.",
@@ -267,6 +267,10 @@
   "Proofs.Properties.Verity.Sampled.HonestSession.CircuitFileMeta": {
    "why": "plainT, a macro that closes plainS j = true for a literal Json j (the honest circuit file's metadata objects, CircuitFileWalk.lean) by first over exact of the module's plainS_hex, plainS_hexArr and plainS_leafOs, refine of plainS_mkObj and plainS_arr with simp only, and/intros and itself, and simp. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
    "digest": "cc364d70f02ee1cb0b3462252626e5799eb35bb056fb7b5cff2277b444603ea6"
+  },
+  "Proofs.Properties.Verity.Sampled.HonestSession.SetupReads": {
+   "why": "lawMatch%, a term elaborator that names Stmt.setupHidden's auxiliary match on an (Except _ Draw.Law × _) for law_match: it reads Stmt.setupHidden's body's constants (getConstInfo, getMatcherInfo?), the matchers' discriminant types (forallTelescopeReducing, whnfR), and returns that matcher's constant or throws an error naming the matches it saw. It runs only inside the elaborator and does no IO, and the kernel replays every proof that uses it.",
+   "digest": "9a4b6c5ae69ecb6a40ef387b4047c01d4af35e5efa9708eb50fcdaef48c8d327"
   }
  },
  "layers": {
