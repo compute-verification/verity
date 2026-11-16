@@ -11,9 +11,10 @@ verifier there at the deployed one, `AcceptIsVerifiedFor` and `PublishedEpsFor` 
 `Verified` and `Record.summary`; `PublishedQBytes` is stated at the deployed check alone.
 
 * **AcceptIsVerified**: what the component's check accepts is a session the parameters and the log decode to, which
-  `Shared.run g` runs to an accepted state with a record `sm`, and the public outputs are `certify params g sm`'s.
-* **PublishedEps**: what the component publishes as `eps` on acceptance is `δ + Σ_c s/2^256`, the sample's term of
-  `LineHeldAtSubprotocol`'s bound, or nothing certified at all.
+  `Shared.run g` runs to an accepted state with a record `sm`, and the public outputs are
+  `certify params g reg appendCoins.size sm`'s.
+* **PublishedEps**: what the component publishes as `eps` on acceptance is the constant 2^-100, which bounds
+  `Properties.Poub.Subprotocol.constantTerms` at the session's counts, or nothing certified at all.
 * **LineHeldAtSubprotocol**: `Properties.Poub.Line.LineHeld` with the component's acceptance in the event in
   place of `Verified`, at `LineHeld`'s bound.
 * **PublishedQBytes**: what the check itself gives of a record it accepts, with no premise: `q_bytes` and `BLOCK_BYTES`
@@ -39,7 +40,7 @@ open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions R
 parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session
 (`sessionOf`: its parameters, its windows a sample g, coins, append coins, clock floor and events), `Shared.run g` from
 `State.init` at those and `reg` runs every event to a state that ended accepted with a record `sm`, and `pub` is what
-`certify` publishes of `sm` at the session's parameters and g. -/
+`certify` publishes of `sm` at the session's parameters, g, registration and append coins. -/
 def AcceptIsVerified : Prop :=
   ∀ (p : Poub.Protocol.Params) (reg : Poub.Registration) (e : Poub.Protocol.Evidence)
     (pub : Poub.Protocol.Public) (prof : Lean.Json),
@@ -50,16 +51,16 @@ def AcceptIsVerified : Prop :=
       Poub.Protocol.sessionOf p e = .ok (params, g, coins, appendCoins, notBeforeNs, events) ∧
       Poub.Shared.run g (Poub.Session.State.init params reg coins appendCoins notBeforeNs) events =
         .ok (rs, s) ∧
-      s.outcome = some "accepted" ∧ s.summary = some sm ∧ pub = (Poub.Protocol.certify params g sm).1
+      s.outcome = some "accepted" ∧ s.summary = some sm ∧
+      pub = (Poub.Protocol.certify params g reg appendCoins.size sm).1
 
-/-- **The component publishes the sample term of `LineHeldAtSubprotocol`'s bound.** Whenever
-`Poub.Protocol.check` accepts parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p`
-and `e` decode to a session (`sessionOf`: its parameters, its windows a sample g, coins, append coins, clock floor and
-events), and either the public outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows),
-or at every node of those parameters and g whose δ is the component's `Poub.Protocol.DELTA` the published `eps`
-is `δ + Σ_c s/2^256` over the node's `⌈W/g⌉` samples (`Node.samples`) at its `samples` s,
-`LineHeldAtSubprotocol`'s sample term. It is a constant of the session's parameters, not of the samples the session
-made. -/
+/-- **The component publishes the constant error.** Whenever `Poub.Protocol.check` accepts parameters `p`, a
+registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session (`sessionOf`: its
+parameters, its windows a sample g, coins, append coins, clock floor and events), and either the public outputs certify
+nothing (`eps` and `q_bytes` 0: the session is outside `Poub.Protocol.refusal`'s caps or the pooled bound refuses its
+windows), or the published `eps` is `Poub.Protocol.EPS`, 2^-100, and at least
+`Properties.Poub.Subprotocol.constantTerms` of the session at `Poub.Protocol.DELTA`: δ, the samples' rejection, the
+sketch, the receipts' binding and the slack. -/
 def PublishedEps : Prop :=
   ∀ (p : Poub.Protocol.Params) (reg : Poub.Registration) (e : Poub.Protocol.Evidence)
     (pub : Poub.Protocol.Public) (prof : Lean.Json),
@@ -68,10 +69,9 @@ def PublishedEps : Prop :=
       (events : Array Poub.Session.Event),
       Poub.Protocol.sessionOf p e = .ok (params, g, coins, appendCoins, notBeforeNs, events) ∧
       ((pub.eps = ⟨0, 1⟩ ∧ pub.qBytes = 0) ∨
-        ∀ node : Node, node.params = params → node.groupsPerCoin = g →
-          (node.delta : ℚ) = Poub.Protocol.DELTA →
-          (pub.eps.num : ℚ) / pub.eps.den =
-            (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 256)
+        (pub.eps = Poub.Protocol.ratio Poub.Protocol.EPS ∧
+          Properties.Poub.Subprotocol.constantTerms params g reg appendCoins.size (Poub.Protocol.DELTA : ℝ) ≤
+            (Poub.Protocol.EPS : ℝ)))
 
 /-- **What the subprotocol's check gives of the `q_bytes` it publishes.** Whenever bytes that play record `rec` on the
 node are accepted publishing `pub` (`Publishes`, spelled out: the bytes decode to parameters `p`, the registration and a
@@ -111,8 +111,8 @@ of record and bytes verbatim, and of its premises the samples' three alone (`Liv
 exceed the record's receipts (the event `∃ pub, Publishes … pub ∧ ¬ QBytesAt … pub`, written as the acceptance and then
 what fails) is at most `δ + Σ_c s / 2^256 + Σ_c adv_c + bind` over the run's samples at
 `δ = Poub.Protocol.DELTA`, the δ `certify` reads its pooled bound at: the samples' part of
-`LineHeldAtSubprotocol`'s bound. Its first two terms are the `eps` the subprotocol publishes
-(`PublishedEps`); the PRF advantages and the receipts' binding term are in no published figure.
+`LineHeldAtSubprotocol`'s bound. `PublishedEps`' `eps` bounds its first two terms and the binding term; the PRF
+advantages are in no published figure.
 
 **What it says.** On acceptance, except with the bound, `q_bytes ≤ BLOCK_BYTES × (U − the trace's wrong receipts)`
 (`BLOCK_BYTES` is 4096): `U` is the verifier's own count of the receipts in its record, and the wrong receipts are those

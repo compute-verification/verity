@@ -21,10 +21,8 @@ Every call to the session is an event of the verifier's log with the clock readi
 the registration are the core case (`case`) that `Poub.Protocol` replays. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s `q_bytes` is the
 receipts not shown wrong, the receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a
-`BLOCK_BYTES` block each, at `eps = 2^-101 + ⌈W/g⌉·s/2^256`, the session's openings coins at its `samples` s each, as
-the Lean's `certify` computes them: the sample term of the bound
-`Properties.Poub.Subprotocol.LineHeldAtSubprotocol` proves (`PublishedEps`), not the openings a session made,
-min(s, U) of a sample's U receipts, which can be fewer.
+`BLOCK_BYTES` block each, at the constant `eps` 2^-100 inside the caps `refusal` names, as the Lean's `certify`
+computes them (`Properties.Poub.Subprotocol.PublishedEps`), and 0 at `eps` 0 outside them.
 """
 
 from __future__ import annotations
@@ -47,9 +45,7 @@ from . import coins as C
 
 PROTOCOL = "verity/remote-bandwidth/v0"
 DELTA = Fraction(audit.DELTA)
-"""`audit.DELTA`'s exact value, the pooled bound's δ (`Poub.Protocol.DELTA`).  An accepted session's `eps` is this
-δ and its samples' rejected first words, and leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed): it
-reads δ + Σ_t adv_t (`ledger.DELTA_FORM`)."""
+"""`audit.DELTA`'s exact value, the pooled bound's δ (`Poub.Protocol.DELTA`)."""
 WORD_BYTES = 64
 DATA_BYTES = WORD_BYTES - 1
 """Each 64-byte little-endian piece of a block carries 63 bytes of the store under a zero top byte, so every word is below
@@ -65,10 +61,31 @@ def payloads(store: bytes) -> list[bytes]:
                      for u in range(codec.BLOCK_BYTES // WORD_BYTES)) for b in range(n)]
 
 
-def eps(windows: int, groups_per_coin: int, samples: int) -> Fraction:
-    """`Poub.Protocol.eps`: δ + ⌈W/g⌉·s/2^256 for a session of W `windows`, g `groups_per_coin` and s `samples`. It
-    leaves out the network attesters' term δnet (`IngressCounted`), which `LineHeld`'s bound carries beside it."""
-    return DELTA + Fraction(C.openings_coins(windows, groups_per_coin) * samples, 2 ** 256)
+EPS = Fraction(1, 2 ** 100)
+PASSES_MAX = 2 ** 30
+BINDING_SQ_MAX = 2 ** 92
+REJECTION_MAX = 2 ** 40
+
+
+def refusal(record: audit.Record) -> str | None:
+    """`Poub.Protocol.refusal`: why `EPS` doesn't bound the session's error, None when it does."""
+    if record.pace is None:
+        return "unpaced: a window's receipts have no bound the constant error covers"
+    k, w, g, s = record.pace.k, len(record.windows), record.groups_per_coin, record.samples
+    big = C.openings_coins(w, g)
+    n = record.blocks if not record.append_coins else record.codec.max_blocks
+    u = max(g, 1) * k * n
+    if not (record.receipt == "sketch-sha512" and record.rows == 64):
+        return f"{record.receipt} at {record.rows} rows: the constant error covers 64-row sketch-sha512 receipts only"
+    if n > 2 ** 64:
+        return f"a store of {n} blocks: over the 2^64 the constant error covers"
+    if w * k > PASSES_MAX:
+        return f"{w * k} passes: over the 2^30 the constant error covers"
+    if big * big * u * s > BINDING_SQ_MAX:
+        return f"G²·U·s = {big * big * u * s}: over the 2^92 the constant error covers"
+    if big * s > REJECTION_MAX:
+        return f"G·s = {big * s}: over the 2^40 the constant error covers"
+    return None
 
 
 def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -79,13 +96,14 @@ def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
     windows, _ = audit.pooled_windows(record)
     us = sum(u for u, _ in windows)
     base = {"delta": str(DELTA), "receipts": us, "windows": [[u, s] for u, s in windows]}
+    if (why := refusal(record)) is not None:
+        return {"eps": "0", "q_bytes": 0}, base | {"gaps": [why], "wrong": None}
     try:
         b = pooled.bound(windows, DELTA)
     except pooled.Refused as e:
         return {"eps": "0", "q_bytes": 0}, base | {"gaps": [str(e)], "wrong": None}
     wrong = -(-b.wrong.numerator // b.wrong.denominator)
-    return ({"eps": str(eps(len(record.windows), record.groups_per_coin, record.samples)),
-             "q_bytes": (us - wrong) * codec.BLOCK_BYTES},
+    return ({"eps": str(EPS), "q_bytes": (us - wrong) * codec.BLOCK_BYTES},
             base | {"gaps": [], "wrong": str(b.wrong)})
 
 

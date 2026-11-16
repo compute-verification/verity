@@ -1271,6 +1271,7 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "order-negative": (World(), {}, lambda r: order(r, -1, 0), "order"),
     "order-after-final": (World(), {}, order_after_final, "order"),
     "honest-paced": (World(), PACED, honest_paced, "accepted"),
+    "honest-paced-rows-64": (ROWS64, PACED, honest_paced, "accepted"),
     "honest-paced-drawn-at-k": (World(), PACED, honest_paced_sampled_at_k, "accepted"),
     "order-past-pace": (World(), PACED, lambda r: (r.start(), r.run(), r.run(), r.run()), "order"),
     "honest-paced-one-flight": (World(), PACED1, honest_paced, "accepted"),

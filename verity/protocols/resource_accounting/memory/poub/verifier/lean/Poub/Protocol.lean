@@ -33,17 +33,13 @@ No composite lists it: onsite's bandwidth component is `Poub.P2Protocol.protocol
   states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at the
   session's parameters and g.
 
-On acceptance it publishes the receipts not shown wrong and the error that holds at, `{"eps", "q_bytes"}` (`certify`):
+On acceptance it publishes the receipts not shown wrong and the error they hold at, `{"eps", "q_bytes"}` (`certify`):
 the session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each sample's receipts
-and openings at `DELTA`), one `BLOCK_BYTES` block each, at ε = δ + ⌈W/g⌉·s/2^256 (`eps`), the session's `⌈W/g⌉`
-openings coins at its `samples` s each (the per-sample term of `ResourceAccounting.Guarantees.Remote.PooledSample`,
-s/2^256; its PRF advantages and binding term are left out of ε, not numbers, and so is the network attesters' term
-δnet, which `LineHeldAtSubprotocol` carries beside it): the sample term of the bound `Properties.Poub.Subprotocol.LineHeldAtSubprotocol` proves at
-`Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the openings a session made
-(`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
-not taken off: `q_bytes` is the receipts the session's openings don't show wrong, in bytes, which
-`Properties.Poub.Subprotocol.QBytesAtSubprotocol` states is at most the right ones' except with its bound. When
-the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says why.
+and openings at `DELTA`), one `BLOCK_BYTES` block each, at the constant `EPS`, 2^-100. `EPS` bounds δ, the samples'
+rejection, the sketch, the receipts' binding and AuditRO's slack only inside the caps `refusal` holds a session to
+(`Properties.Poub.Subprotocol.PublishedEps`); it leaves out the openings' PRF advantages and the network attesters'
+term δnet, which `LineHeldAtSubprotocol` carries beside it. A session outside the caps, or one the pooled bound
+refuses, publishes `q_bytes` and `eps` 0 and its profile says why.
 -/
 
 @[expose] public section
@@ -103,11 +99,12 @@ def sessionOf (p : Params) (e : Evidence) :
   pure (params, g, coins, appendCoins, notBeforeNs, events)
 
 /-- The session after the log's events through the Lean verifier (`Shared.run g` from `State.init`, `Session.run` at
-g = 1), its parameters and its windows a sample. -/
-def replay (p : Params) (reg : Registration) (e : Evidence) : V (Session.State × Session.Params × Nat) := do
+g = 1), its parameters, its windows a sample and its append coins. -/
+def replay (p : Params) (reg : Registration) (e : Evidence) :
+    V (Session.State × Session.Params × Nat × Array ByteArray) := do
   let (params, g, coins, appendCoins, notBeforeNs, events) ← sessionOf p e
   let (_, s) ← Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events
-  pure (s, params, g)
+  pure (s, params, g, appendCoins)
 
 /-- Each sample's receipts and samples, a sample being `g` consecutive windows (`audit.pooled_windows`). -/
 def windowsOf (sm : Session.Summary) (g : Nat) : Array (Nat × Nat) :=
@@ -130,32 +127,67 @@ a window at g ≤ 1, as `Properties.Poub.Line.Node.samples`. -/
 def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
   if g ≤ 1 then params.windows else (params.windows + g - 1) / g
 
-/-- The error an accepted session's `q_bytes` holds at: `DELTA + ⌈W/g⌉·s/2^256`, the pooled bound's δ and the
-samples' rejection at the session's `samples` s a sample, the size `PooledSample` proves for the sampler's first
-blocks. It leaves out the network attesters' term δnet, the chance their count of what enters the node is wrong
-(`IngressCounted`), which `LineHeld`'s and `LineHeldAtSubprotocol`'s bounds carry as a term of their own beside it. -/
-def eps (params : Session.Params) (g : Nat) : Rat :=
-  DELTA + ((openingsCoins params g * params.samples : Nat) : Rat) / (2 ^ 256 : Nat)
+/-- The error every certifying session publishes, not counting the openings' PRF advantage. -/
+def EPS : Rat := 1 / (2 ^ 100 : Nat)
+
+def PASSES_MAX : Nat := 2 ^ 30
+def BINDING_SQ_MAX : Nat := 2 ^ 92
+def REJECTION_MAX : Nat := 2 ^ 40
+
+/-- The most blocks the store holds: the registered ones, or the codec's `max_blocks` once append coins let it grow. -/
+def mostBlocks (reg : Registration) (appendCoins : Nat) : Nat :=
+  if appendCoins = 0 then reg.blocks else reg.codec.maxBlocks
+
+/-- U, the most receipts a sample of `g` windows can open, each of its k passes a window receipting each of
+`mostBlocks` at most once. `none` unpaced. -/
+def sampleReceipts (params : Session.Params) (g : Nat) (reg : Registration) (appendCoins : Nat) : Option Nat :=
+  params.pace.map fun pace => max g 1 * pace.k * mostBlocks reg appendCoins
+
+/-- Why `EPS` doesn't bound a session's error, `none` when it does: only a paced 64-row sketch session with at most
+`PASSES_MAX` passes, at most 2^64 blocks, `G²·U·s ≤ BINDING_SQ_MAX` and `G·s ≤ REJECTION_MAX` is covered. -/
+def refusal (params : Session.Params) (g : Nat) (reg : Registration) (appendCoins : Nat) : Option String :=
+  let G := openingsCoins params g
+  let s := params.samples
+  match params.pace, sampleReceipts params g reg appendCoins with
+  | some pace, some u =>
+    if !(reg.receipt == .sketch && reg.rows == 64) then
+      some s!"{reg.receipt.name} at {reg.rows} rows: the constant error covers 64-row sketch-sha512 receipts only"
+    else if mostBlocks reg appendCoins > 2 ^ 64 then
+      some s!"a store of {mostBlocks reg appendCoins} blocks: over the 2^64 the constant error covers"
+    else if params.windows * pace.k > PASSES_MAX then
+      some s!"{params.windows * pace.k} passes: over the 2^30 the constant error covers"
+    else if G * G * u * s > BINDING_SQ_MAX then
+      some s!"G²·U·s = {G * G * u * s}: over the 2^92 the constant error covers"
+    else if G * s > REJECTION_MAX then
+      some s!"G·s = {G * s}: over the 2^40 the constant error covers"
+    else none
+  | _, _ => some "unpaced: a window's receipts have no bound the constant error covers"
 
 /-- What an accepted session certifies (module docstring), with its profile. -/
-def certify (params : Session.Params) (g : Nat) (sm : Session.Summary) : Public × Json :=
+def certify (params : Session.Params) (g : Nat) (reg : Registration) (appendCoins : Nat) (sm : Session.Summary) :
+    Public × Json :=
   let ws := windowsOf sm g
   let receipts := (ws.map (·.1)).toList.sum
   let base := [("delta", Json.str (ratio DELTA).toString), ("receipts", natJ receipts),
     ("windows", .arr (ws.map fun (u, s) => .arr #[natJ u, natJ s]))]
-  match Pooled.pooled ws DELTA with
-  | .ok b =>
-    let wrong := (b.wrong.num.toNat + b.wrong.den - 1) / b.wrong.den
-    (⟨ratio (eps params g), (receipts - wrong) * Codec.BLOCK_BYTES⟩,
-     Json.mkObj (base ++ [("gaps", .arr #[]), ("wrong", .str (ratio b.wrong).toString)]))
-  | .error why => (⟨⟨0, 1⟩, 0⟩, Json.mkObj (base ++ [("gaps", .arr #[.str why]), ("wrong", .null)]))
+  let none' (why : String) : Public × Json :=
+    (⟨⟨0, 1⟩, 0⟩, Json.mkObj (base ++ [("gaps", .arr #[.str why]), ("wrong", .null)]))
+  match refusal params g reg appendCoins with
+  | some why => none' why
+  | none =>
+    match Pooled.pooled ws DELTA with
+    | .ok b =>
+      let wrong := (b.wrong.num.toNat + b.wrong.den - 1) / b.wrong.den
+      (⟨ratio EPS, (receipts - wrong) * Codec.BLOCK_BYTES⟩,
+       Json.mkObj (base ++ [("gaps", .arr #[]), ("wrong", .str (ratio b.wrong).toString)]))
+    | .error why => none' why
 
 def check (p : Params) (reg : Registration) (e : Evidence) : Core.Outcome Public Json :=
   match replay p reg e with
   | .error why => .reject why
-  | .ok (s, params, g) =>
+  | .ok (s, params, g, appendCoins) =>
     match s.outcome, s.summary with
-    | some "accepted", some sm => let (pub, prof) := certify params g sm; .accept pub prof
+    | some "accepted", some sm => let (pub, prof) := certify params g reg appendCoins.size sm; .accept pub prof
     | some failure, _ => .reject s!"the session was rejected: {failure}"
     | none, _ => .undecided "the session has a window not yet verified"
 
@@ -175,8 +207,8 @@ def protocol : Core.Protocol where
   profileJson := id
 
 /-- **What a session accounts for** (`Core.Account`): the reads of the node's memory its openings certify (`q_bytes`),
-verified from below at `eps`, over the session. A session the pooled bound refuses publishes 0 reads at `eps` 0, a true
-lower bound, so nothing is flagged.
+verified from below at `eps`, over the session. A session `refusal` or the pooled bound refuses publishes 0 reads at
+`eps` 0, a true lower bound, so nothing is flagged.
 
 Its answers name no auditor's device's key, so they are of the whole site (`witness`), and no span: the session
 publishes none. Its part is the session ledger's two tiers, the node's GPUs' memory and its host's DRAM; the answer
@@ -191,9 +223,6 @@ def account : Core.Account :=
   some "params: params: the keys must be [not_before_ns, params], not []"
 #guard account.Formed ∧ account.protocol = protocol.id
 #guard (ratio DELTA).toString == "1/2535301200456458802993406410752"
-private def three : Session.Params :=
-  { deadlineNs := 0, windows := 3, samples := 5, minPasses := 1, windowNs := 0, lifetime := 1 }
-#guard (ratio (eps three 2)).toString ==
-  "22835963083295358096932575511191922182123945989/57896044618658097711785492504343953926634992332820282019728792003956564819968"
+#guard (ratio EPS).toString == "1/1267650600228229401496703205376"
 
 end Poub.Protocol

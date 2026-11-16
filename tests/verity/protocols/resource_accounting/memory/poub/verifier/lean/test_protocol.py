@@ -15,7 +15,6 @@ import copy
 import hashlib
 import json
 import shutil
-from fractions import Fraction
 
 import pytest
 import ra_cases as M
@@ -132,8 +131,7 @@ def _part(answer: dict) -> dict:
 def test_a_small_periods_answers_agree(server) -> None:
     """The hook's own answer (the live session's) is the Python verifier's of its case and the Lean's: accepted with the
     receipts its openings don't show wrong, rejected for the dropped chunks' paths, and undecided with a window
-    unverified. The accepted one's ε is its two openings coins' at `samples` each, `LineHeldAtSubprotocol`'s term, though
-    its windows of 3 receipts drew fewer."""
+    unverified. The accepted one is unpaced, so it certifies nothing."""
     got = {}
     for name, p in periods().items():
         assert _part(protocol(copy.deepcopy(p.case))) == _part(p.answer), name
@@ -141,9 +139,17 @@ def test_a_small_periods_answers_agree(server) -> None:
         got[name] = json.loads(text)
     assert {n: a["verdict"] for n, a in got.items()} == {"honest": "accept", "dropping": "reject", "unverified": "undecided"}
     honest = got["honest"]
-    assert honest["public"]["q_bytes"] == honest["profile"]["receipts"] * 4096 > 0 and honest["profile"]["gaps"] == []
-    assert sum(s for _, s in honest["profile"]["windows"]) < 2 * audit.SAMPLES, honest
-    assert Fraction(honest["public"]["eps"]) == Fraction(audit.DELTA) + Fraction(2 * audit.SAMPLES, 2 ** 256), honest
+    assert honest["public"] == {"eps": "0", "q_bytes": 0}, honest
+    assert honest["profile"]["gaps"] == ["unpaced: a window's receipts have no bound the constant error covers"], honest
+
+
+@pytest.mark.parametrize(("name", "eps"), [("honest-paced-rows-64", str(period.EPS)), ("honest-paced", "0")])
+def test_only_a_paced_64_row_session_publishes_the_constant(server, name, eps) -> None:
+    case = case_of(M.recorded(name)[0])
+    _, text = D.replay(PORT, case, server)
+    got = json.loads(text)
+    assert _part(protocol(copy.deepcopy(case))) == _part(got), name
+    assert got["public"]["eps"] == eps and (got["public"]["q_bytes"] > 0) == (eps != "0"), got
 
 
 def _covered(kw: dict) -> bool:

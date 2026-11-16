@@ -26,8 +26,7 @@ Each of `Properties.Poub.Subprotocol`'s three properties, and the memory line
   (`acceptIsVerified_nontrivial`).
 * **PublishedEps** (`PublishedEpsFor`), whose antecedent is the same acceptance, so its honest witnesses are
   `AcceptIsVerified`'s. Nontrivial: a check that accepts every log, certifying a byte read at eps 0, accepts the
-  deployed period's log, and 0 is below the sample term at every node of positive δ (`sampleTerm_pos`,
-  `publishedEps_nontrivial`).
+  deployed period's log, and eps 0 is not the constant (`publishedEps_nontrivial`).
 * **LineHeld** (`LineHeldBy`) and **LineHeldAtSubprotocol** (`LineHeldAtSubprotocolBy`), which take the same premises.
   Honest: every premise holds at a node that holds its whole store in memory throughout, every receipt correct, no
   outside device, nothing but the verifier's messages entering it as its certifiers count, and the sampler's fallbacks
@@ -816,8 +815,9 @@ theorem acceptIsVerified_complete {p : Poub.Protocol.Params} {reg : Poub.Registr
       .ok (rs, s))
     (ho : s.outcome = some "accepted") (hsm : s.summary = some sm) :
     Poub.Protocol.check p reg e =
-      .accept (Poub.Protocol.certify params g sm).1 (Poub.Protocol.certify params g sm).2 := by
-  have hrep : Poub.Protocol.replay p reg e = .ok (s, params, g) := by
+      .accept (Poub.Protocol.certify params g reg appendCoins.size sm).1
+        (Poub.Protocol.certify params g reg appendCoins.size sm).2 := by
+  have hrep : Poub.Protocol.replay p reg e = .ok (s, params, g, appendCoins) := by
     simp only [Poub.Protocol.replay, hs, hr, bind, Except.bind, pure, Except.pure]
   unfold Poub.Protocol.check
   rw [hrep]
@@ -825,47 +825,26 @@ theorem acceptIsVerified_complete {p : Poub.Protocol.Params} {reg : Poub.Registr
 
 /-! ## `PublishedEps` at a check that publishes reads at eps 0 -/
 
-/-- A node's sample term is positive at a positive δ. -/
-theorem sampleTerm_pos (node : Node) (hδ : 0 < (node.delta : ℚ)) :
-    0 < (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 256 :=
-  add_pos_of_pos_of_nonneg hδ (by positivity)
+theorem ratio_EPS_ne_zero : Poub.Protocol.ratio Poub.Protocol.EPS ≠ ⟨0, 1⟩ := by decide
 
 /-- **`PublishedEps` fails at a check that certifies reads at eps 0**: a check that accepts every log, publishing one
-byte read at eps 0, accepts the deployed period's log, and 0 is below the sample term at every node of positive δ. -/
+byte read at eps 0, accepts the deployed period's log, and 0 is neither the constant nor certifies nothing. -/
 theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun _ _ _ => .accept ⟨⟨0, 1⟩, 1⟩ Lean.Json.null) := by
   intro h
-  obtain ⟨params, g, _, _, _, _, -, hd⟩ := h honestParams Toy.reg honestEvidence ⟨⟨0, 1⟩, 1⟩ .null rfl
-  have hpos : (0 : ℚ) < Poub.Protocol.DELTA := by
-    unfold Poub.Protocol.DELTA
-    positivity
-  rcases hd with ⟨-, hq⟩ | hn
+  obtain ⟨_, _, _, _, _, _, -, hd⟩ := h honestParams Toy.reg honestEvidence ⟨⟨0, 1⟩, 1⟩ .null rfl
+  rcases hd with ⟨-, hq⟩ | ⟨he, -⟩
   · exact absurd hq (by decide)
-  · obtain ⟨node, hp, hg, hδ⟩ : ∃ node : Node, node.params = params ∧ node.groupsPerCoin = g ∧
-        (node.delta : ℚ) = Poub.Protocol.DELTA :=
-      ⟨{ Toy.node with params := params, groupsPerCoin := g, delta := ⟨Poub.Protocol.DELTA, hpos.le⟩ },
-        rfl, rfl, rfl⟩
-    have h0 := lt_of_lt_of_eq (sampleTerm_pos node (by rw [hδ]; exact hpos)) (hn node hp hg hδ).symm
-    norm_num at h0
+  · exact ratio_EPS_ne_zero he.symm
 
 theorem publishedEps_acceptAll :
-    ∀ (params : Poub.Session.Params) (g : ℕ) (_ _ : Array ByteArray) (_ : ℕ) (_ : Array Poub.Session.Event),
+    ∀ (params : Poub.Session.Params) (g : ℕ) (reg : Poub.Registration) (appendCoins : Array ByteArray),
       ¬ (((⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).eps = ⟨0, 1⟩ ∧ (⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).qBytes = 0) ∨
-        ∀ node : Node, node.params = params → node.groupsPerCoin = g →
-          (node.delta : ℚ) = Poub.Protocol.DELTA →
-          ((⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).eps.num : ℚ) / (⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).eps.den =
-            (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 256) := by
-  intro params g _ _ _ _ hd
-  have hpos : (0 : ℚ) < Poub.Protocol.DELTA := by
-    unfold Poub.Protocol.DELTA
-    positivity
-  rcases hd with ⟨-, hq⟩ | hn
+        ((⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).eps = Poub.Protocol.ratio Poub.Protocol.EPS ∧
+          constantTerms params g reg appendCoins.size (Poub.Protocol.DELTA : ℝ) ≤ (Poub.Protocol.EPS : ℝ))) := by
+  intro _ _ _ _ hd
+  rcases hd with ⟨-, hq⟩ | ⟨he, -⟩
   · exact absurd hq (by decide)
-  · obtain ⟨node, hp, hg, hδ⟩ : ∃ node : Node, node.params = params ∧ node.groupsPerCoin = g ∧
-        (node.delta : ℚ) = Poub.Protocol.DELTA :=
-      ⟨{ Toy.node with params := params, groupsPerCoin := g, delta := ⟨Poub.Protocol.DELTA, hpos.le⟩ },
-        rfl, rfl, rfl⟩
-    have h0 := lt_of_lt_of_eq (sampleTerm_pos node (by rw [hδ]; exact hpos)) (hn node hp hg hδ).symm
-    norm_num at h0
+  · exact ratio_EPS_ne_zero he.symm
 
 /-! ## The honest one-window log -/
 

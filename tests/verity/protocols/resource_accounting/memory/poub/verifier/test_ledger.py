@@ -183,9 +183,9 @@ def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
 
 
 def test_a_periods_table_reads_the_sessions_error_from_its_declared_outputs(store) -> None:
-    """`monitoring.table` takes a session's whole error from the ledger's declared outputs, the horizon's: what the
-    answer's `eps` holds (the pooled bound's δ and the rejection) with the passes' slack, the receipts' binding term
-    and the sketch's term, which `eps` leaves out."""
+    """`monitoring.table` takes a session's whole error from the ledger's declared outputs, the horizon's: the pooled
+    bound's δ and the rejection with the passes' slack, the receipts' binding term and the sketch's term. The session is
+    unpaced, so its answer certifies nothing."""
     s, prover, passes, clock = drive(store, params(delta=float(period.DELTA)), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
@@ -194,11 +194,11 @@ def test_a_periods_table_reads_the_sessions_error_from_its_declared_outputs(stor
     error = monitoring.ledger_error(out.to_json())
     assert error == out.spec.to_json()["error"] == monitoring.ledger_error({"declared": out.to_json()})
     table = monitoring.table({"verdict": "accept", "public": public, "profile": profile}, error, 1, 600)
-    eps, sk = Fraction(public["eps"]), ledger.sketch(r)
-    assert eps == period.DELTA + Fraction(len(r.windows) * r.samples, 2 ** ledger.REJECTION_LOG2) and sk > 0
-    assert table["observed"]["error"] == out.spec.error_horizon > float(eps)
+    held, sk = period.DELTA + Fraction(len(r.windows) * r.samples, 2 ** ledger.REJECTION_LOG2), ledger.sketch(r)
+    assert public == {"eps": "0", "q_bytes": 0} and sk > 0
+    assert table["observed"]["error"] == out.spec.error_horizon > float(held)
     assert out.spec.error_horizon == pytest.approx(
-        float(eps) + r.passes * 2.0 ** -audit.SLACK_LOG2 + ledger.binding(r) + sk, rel=1e-12)
+        float(held) + r.passes * 2.0 ** -audit.SLACK_LOG2 + ledger.binding(r) + sk, rel=1e-12)
     assert table["observed"]["error_terms"]["sketch"] == float(sk)
     week = table["periods"]["week"]
     assert week["error"] == float(1008 * Fraction(out.spec.error_horizon)) and week["q_bytes"] == 1008 * public["q_bytes"]
@@ -353,6 +353,25 @@ def test_a_64_row_session_is_held_at_its_profile_delta_not_the_samples_rejection
     assert ledger.sketch(r) == timing.sketch_failure(windows, 64, blocks=blocks)
     total = sum(parts.values(), Fraction(0))
     assert max(parts, key=parts.get) == "profile" and audit.DELTA < total < Fraction(1, 2 ** 100)
+    assert period.refusal(r) is None and period.certified(r)[0]["eps"] == str(period.EPS) == str(Fraction(1, 2 ** 100))
+
+
+@pytest.mark.parametrize(("windows", "change", "why"), [
+    (104, {"rows": 16}, "sketch-sha512 at 16 rows: the constant error covers 64-row sketch-sha512 receipts only"),
+    (104, {"pace": None}, "unpaced: a window's receipts have no bound the constant error covers"),
+    (104, {"pace": Pace(2 ** 24)}, f"{104 * 2 ** 24} passes: over the 2^30 the constant error covers"),
+    (104, {"samples": 2 ** 27, "append_coins": 1}, "G²·U·s = "),
+    (2 ** 14, {"samples": 2 ** 27}, f"G·s = {2 ** 41}: over the 2^40 the constant error covers"),
+])
+def test_a_session_outside_the_caps_certifies_nothing(windows, change, why) -> None:
+    blocks, samples = 2 ** 27, change.get("samples", 214)
+    profile = audit.window_profile((blocks,), samples, audit.DELTA)
+    r = dataclasses.replace(audit.Record(bytes(64), bytes(64), blocks, timing.BLOCK_BYTES, tuple(
+        audit.WindowRecord(t, (blocks,), t * 10 ** 8, (t + 1) * 10 ** 8, (t + 1) * 10 ** 8, profile)
+        for t in range(windows)), rows=64, pace=Pace(1), samples=samples, append_coins=0), **change)
+    assert period.refusal(r).startswith(why)
+    public, profile_json = period.certified(r)
+    assert public == {"eps": "0", "q_bytes": 0} and profile_json["gaps"] == [period.refusal(r)]
 
 
 def test_delta_charges_the_samples_a_window_requested_where_it_opens_all_its_receipts(store) -> None:
