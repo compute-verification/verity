@@ -1,10 +1,11 @@
 """wipe-egress: the network attester's count of what can leave a node on the link its network attester relays over a
 memory wipe's session [t0, t1), read off the gate's network attester run (`vy-challenger-gate warden-rehearse`,
-`wipe_gate.sh`), as a ``wipe-egress/v1`` record, ``covered`` or not ("What it reads"). The record is all this script
-writes: what the wipe's reader does with one is its own function, `wipe_monitoring.counted`
+`benchmarks/network_traces/wipe_gate.sh`), as a ``wipe-egress/v1`` record, ``covered`` or not ("What it reads"). The
+record is all this script writes: what the wipe's reader does with one is its own function, `wipe_monitoring.counted`
 (`verity/protocols/resource_accounting/memory/pous/verifier/wipe_monitoring.py`), and is stated there.
 
-    python wipe_egress.py RUN --t0-ns T0 --t1-ns T1 [--pad-ms 1000] [--out FILE]
+    python verity/protocols/resource_accounting/network/prover/wipe_egress.py RUN --t0-ns T0 --t1-ns T1 \
+        [--pad-ms 1000] [--out FILE]
 
 RUN is the gate's `fetch RUN` bundle (a gzipped tar) or the directory it unpacks to (``end.json`` and ``out/``). T0 and
 T1 are the wipe's session on its challenger host's real-time clock, in Unix ns. It prints the record (and writes it to
@@ -38,12 +39,10 @@ import tarfile
 from fractions import Fraction
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
-
 from verity.protocols.resource_accounting.network.verifier import record_files as RF
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.resource_accounting.memory.pous.verifier.streamed_wipe import EGRESS_UNIT_BITS
 
 FORMAT = "wipe-egress/v1"
 #: how far the wipe challenger host's clock and the network attester host's may disagree
@@ -143,7 +142,7 @@ def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict
             "t0_unix_ns": t0, "t1_unix_ns": t1, "pad_ns": pad, "windows": [windows.start, windows.stop],
             "certificates": verified, "covered": covered, "why": why, "capacity_bits": capacity_bits(params),
             "egress_bits": bits if covered else None,
-            "egress_mib": -(-bits // sw.EGRESS_UNIT_BITS) if covered else None,
+            "egress_mib": -(-bits // EGRESS_UNIT_BITS) if covered else None,
             "K": bits if covered else None, "delta": "0"}
 
 
