@@ -114,10 +114,12 @@ theorem wb_chalZ {B P NB : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} 
     Wb B (16 * NB + 351) (chalZ p cf zm st t).2.2.2 := by
   unfold chalZ
   dsimp only
-  have h₁ := ((h.sq hP _ _ _).ap (pKv_le zm.e0)).ap (pKv_le zm.e1)
-  have h₃ := (h₁.sq (by omega) _ _ _).sq (by omega) _ _ _
+  have h₁ : Wb B (0 + (16 + 16 * 2) + (16 + 16 * 2))
+      (ap (pKv zm.e1) (ap (pKv zm.e0) (afterSq t 2 2 (cf t.k)))) :=
+    ((h.sq hP 2 2 (cf t.k)).ap (pKv_le zm.e0)).ap (pKv_le zm.e1)
   refine Wb.mono (P := 0 + 191 + (16 + 16 * 2) + (16 + 16 * NB) + 96) ?_ (by omega)
-  exact (((h₃.ap (pLabel_le (by decide +kernel))).ap (pKv_le _)).ap (pSlice_le hy)).ap (pK_le _)
+  exact (((((h₁.sq (by omega) _ _ _).sq (by omega) _ _ _).ap (pLabel_le (by decide +kernel))).ap (pKv_le _)).ap
+    (pSlice_le hy)).ap (pK_le _)
 
 /-- The lane rounds: plain's challenge, the last one `chalZ`. -/
 theorem wb_laneRun {B NB k0 : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {zm : Zk.Level0Msgs} {st : LState}
@@ -125,7 +127,7 @@ theorem wb_laneRun {B NB k0 : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F12
     ∀ j, Wb B (16 * NB + 351) (laneRun p cf k0 zm st t j).2.2
   | 0 => h.mono (by omega)
   | j + 1 => by
-    have ih := wb_laneRun (k0 := k0) (cf := cf) (st := st) h hy hB j
+    have ih := wb_laneRun (p := p) (k0 := k0) (cf := cf) (st := st) h hy hB j
     show Wb B _ (laneStep p cf k0 zm j (laneRun p cf k0 zm st t j)).2.2
     unfold laneStep
     split

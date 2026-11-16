@@ -28,6 +28,7 @@ public import Proofs.Flock.Claims.Complete.ZkTables.Level0
 public import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
 public import Proofs.Flock.Claims.Complete.ZkTables.View
 public import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
+public import Proofs.Flock.Claims.Complete.ZkTables.RepBytes
 public import Proofs.Flock.Claims.Complete.ZkTables.Parts
 public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 public import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
@@ -96,7 +97,8 @@ case or run (`CaseZk.toCase`, `RunZk.toRun`) they give `complete_zk`'s `RepShape
 stated once (`Level0`: `ProverRuns`, `ProverShape`, `Lanes`, `Verifier`), and the rest (`Parts`); a returning rep runs
 stage by stage (`RepSplit`: `repPZk_split`), so given `Level0.Verifier` the verifier's view of it is the prover's
 (`View`: `view`), and `LigeritoT` and `InnerT` hold (`ligeritoRest`, `innerRest`; `complete_jsonT_of_parts`). A
-returning rep records `repRoundsT` rounds (`RepRuns`: `rep_rounds`), level 0's two lane rows vanish at the honest pads
+returning rep records `repRoundsT` rounds (`RepRuns`: `rep_rounds`) of at most `|d| + 2^16` bytes each (`RepBytes`:
+`rep_bytes`), level 0's two lane rows vanish at the honest pads
 where its lane phase is in closed form (`LaneRows`: `lanes_hold`), and the verifier's masked replay returns on rounds
 carrying the prover's zerocheck and lincheck (`ReplayGo`: `replayWith_ok`). So a rep returns at good coins where its
 rank check passes, the rounds it reads giving its claim points at the coins (`lcRounds_points`), its replay's and
