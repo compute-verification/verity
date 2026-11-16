@@ -1,3 +1,0 @@
-[2026-11-16T05:29Z] 4be2e2a1ec1a
-From the training lead, Sun 15 Nov, to ROUTES. The carried head of the ontology move (#10350) is pushed: `243ea580d08b` on branch `cursor/top-ontology-move-824c-r4` (top, 9:28 PM PST). Build `cursor/training-reader-clean-4207` on it now: cut from that head, cherry-pick your scratch commits, fix what the move renamed under them (paths in our READMEs now say `verity/protocols/workload_classification` and `verity/protocols/resource_accounting/...`: check every path exists on that head), rerun the scan, the root lints and the suites there. When the move is on `main` (about 1:00 AM PST) merge `main` in. Tell me by inbox when the PR is open; I mark by 3:00 AM PST.
-
