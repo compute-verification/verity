@@ -69,7 +69,9 @@ def _machine(tmp_path: Path, cards: str | None, *, nvcc: bool = True, uv: bool =
     b.mkdir(exist_ok=True)
     (cuda / "bin").mkdir(parents=True, exist_ok=True)
     for t in TOOLS:
-        (b / t).symlink_to(shutil.which(t))
+        found = shutil.which(t)
+        assert found, f"{t} is not on PATH"
+        (b / t).symlink_to(found)
     fakes = {"nvidia-smi": f"#!/bin/sh\nprintf '{cards}\\n'\n" if cards is not None else None, "uv": "#!/bin/sh\n" if uv else None}
     if nvcc:
         fakes[str(cuda / "bin" / "nvcc")] = "#!/bin/sh\n"
