@@ -25,9 +25,9 @@ every product, is a reference, not an answer.
   1. `Pouw.Guarantees.EndToEnd` (`Pouw/Guarantees/Game.lean`): the audit accepts while the work done is below the
      scheme's discounted share of (1 − ε_s)·W, and the run breaks no SHA-512 collision, with probability at most
      (1 − ε_s)^t plus TT's error. Assumes TT (`Pouw.Assumptions.TT`), the scheme's conjecture.
-  2. `Accounting.Guarantees.ComputeOfPouwPerRun` (`Accounting/Guarantees/PerRun.lean`): the same certificate and error
+  2. `ResourceAccounting.Guarantees.ComputeOfPouwPerRun` (`Accounting/Guarantees/PerRun.lean`): the same certificate and error
      as the compute audit's per-run guarantee, on any device whose compute audit realizes PoUW's game. Assumes TT and
-     `Accounting.BudgetAbort`.
+     `ResourceAccounting.BudgetAbort`.
   3. `Pouw.Guarantees.MonitoringPeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`): in each verification phase
      of a credit period the openings fail to bind with probability at most |L|·√(q/2^256 + κ), L every position of the
      credit period. That is one phase's bound, and the credit period's term is n times it, n its phases. Assumes `Claims.ExpectedCR`;
@@ -56,7 +56,7 @@ PoUW, the compute accounting protocol, has three parties (`parties.protocol(ask)
   sends the verifier the commitment, and opens each challenge once, only after the verifier has recorded what it
   follows: the salt after the prover's root, the sampling challenge after the registration. It trusts nothing it
   receives. It is the one auditor-trusted device PoUW relies on (`trusted-device`); the auditor-party assumptions
-  (`Accounting.Assumptions.Parties`) state no PoUW challenger yet.
+  (`ResourceAccounting.Assumptions.Parties`) state no PoUW challenger yet.
 - **The verifier** is the auditor's own check, the Lean `pouw-check` (`PouwCheck.check`, with the Python of the same
   names as its reference). It holds the phase's commitment, records the prover's root and registration, forwards each
   challenge to the prover once it opens against the commitment (`coins.coin_reason`), and decides the phase on the
@@ -227,9 +227,9 @@ reads. Proved:
   `security/Proofs/Pouw/Lemmas/PearlCRecords.lean`. The row seed's reduction and the barrier are lemmas, in `security/Proofs/Pouw/Lemmas/PearlC.lean` and `security/Proofs/Pouw/Lemmas/Barrier.lean`.
 - **The served credit's relative security:** `Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged` and
   `Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap`.
-- **Compute accounting reads PoUW** through `Accounting.SecurityProofs.ComputeOfPouw`,
-  `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
-  `Accounting.SecurityProofs.PouwLocalOff`.
+- **Compute accounting reads PoUW** through `ResourceAccounting.SecurityProofs.ComputeOfPouw`,
+  `ResourceAccounting.SecurityProofs.ComputeOfPouwPerRun`, `ResourceAccounting.SecurityProofs.PouwEndToEndPerRun` and
+  `ResourceAccounting.SecurityProofs.PouwLocalOff`.
 
 Stated, open: an execution phase's failure probability δ from its calls' (`Pouw.Guarantees.Window.ExecutionPhaseDelta`, and
 `Pouw.Guarantees.Window.ServiceMissProb` for the deployed sample, `security/Definitions/Pouw/Guarantees/Window.lean`);

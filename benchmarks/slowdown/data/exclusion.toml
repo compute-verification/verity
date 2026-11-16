@@ -22,7 +22,7 @@ reference_efficiency = { value = true, source = "a ruled task assumption (GLOSSA
 [structure.reference]
 s_times = { value = "reference", unit = "gate", source = "the reference's gates per counted product, 2G / kappa, standing in for the fewest gates in any counted operation's subcircuit, which the FLOP model doesn't measure", status = "assumed" }
 omega_max = { value = 1, source = "a counted product's weight (slowdown/theorem.py: every counted product weighs 1)", status = "declared" }
-mu = { value = 1, source = "counted operations' bodies are pairwise disjoint: each counted product's gates are its own (Accounting.ServingBlocks.Overlap at mu = 1)", status = "declared" }
+mu = { value = 1, source = "counted operations' bodies are pairwise disjoint: each counted product's gates are its own (ResourceAccounting.ServingBlocks.Overlap at mu = 1)", status = "declared" }
 basis = "flop-model"
 
 # The elementary yield: one counted operation per gate, at most (each charged to its output gate, so none straddles).

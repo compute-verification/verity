@@ -1,4 +1,4 @@
-"""The network attester with lengths rows (`NetworkCertifierParams.lengths`, `network_attester`'s "The lengths rows"), driven tick by tick
+"""The network attester with lengths rows (`NetworkAttesterParams.lengths`, `network_attester`'s "The lengths rows"), driven tick by tick
 on `test_network_attester`'s harness. Each test holds a schedule with lengths rows to one rule of that section
 and the same schedule without them to what it did before they were a parameter."""
 
@@ -16,12 +16,12 @@ from verity.protocols.resource_accounting.network.verifier import network_attest
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, ID_REQUEST_HEAD, id_request
 from verity.protocols.resource_accounting.network.verifier.tests.test_network_attester import EOF, reasons, records, request, run
-from verity.protocols.resource_accounting.network.verifier.network_attester import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, NetworkCertifierParams,
+from verity.protocols.resource_accounting.network.verifier.network_attester import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, NetworkAttesterParams,
                                                     audit, cells, read_reason, reason_frame)
 from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_END, watermark_chunk, watermark_head
 
 #: a schedule whose cells hold an id request's head, and the same with lengths rows
-PLAIN = NetworkCertifierParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
+PLAIN = NetworkAttesterParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                      ingress_buckets=3, egress_cells=9, every=2)
 LEN = dataclasses.replace(PLAIN, lengths=1)
 B, P, R, T, D, E = LEN.cell_bytes, LEN.payload, LEN.slots, LEN.window, LEN.delay, LEN.every
@@ -63,8 +63,8 @@ def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
     egress form, the kinds and the reasons), so its digest, and every head and certificate that binds it, is unchanged;
     the form enters the digest of a schedule that has it, and is no integer field of the schedule the period check
     reads."""
-    assert NetworkCertifierParams().lengths is None and PLAIN.lengths is None
-    assert NetworkCertifierParams().digest.hex() == DEFAULT_DIGEST and PLAIN.digest.hex() == PLAIN_DIGEST
+    assert NetworkAttesterParams().lengths is None and PLAIN.lengths is None
+    assert NetworkAttesterParams().digest.hex() == DEFAULT_DIGEST and PLAIN.digest.hex() == PLAIN_DIGEST
     assert LEN.digest != PLAIN.digest and dataclasses.replace(LEN, lengths=None) == PLAIN
     assert OPTIONAL_FIELDS == ("max_tokens_cap", "lengths", "content", "request_words", "head_offset", "head_wait")
     assert not set(OPTIONAL_FIELDS) & set(INTEGER_FIELDS)
@@ -482,7 +482,7 @@ def test_every_id_request_is_cut_and_released_as_without_lengths_rows():
 
 
 def test_the_ingress_cut_reads_of_the_device_only_what_a_stand_in_holds():
-    """The proof blocks' traffic (`io_request.serve`) calls `NetworkCertifier._ingress` on a stand-in that holds the schedule, the
+    """The proof blocks' traffic (`io_request.serve`) calls `NetworkAttester._ingress` on a stand-in that holds the schedule, the
     release count and the run id, nothing else of the device: with lengths rows or without, it cuts every id request
     into the same cells and releases, and with them it cuts a request that is no id request only as far as it reads."""
     reqs = [id_req(i, n) for i, n in enumerate((1, 13, 58, 147), 1)]

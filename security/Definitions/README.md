@@ -24,7 +24,7 @@ path: `research msg owners PATH`.
 
 | Area | What it states |
 |---|---|
-| `Accounting` | The device model every resource audit is about, and a joint audit's run on it |
+| `ResourceAccounting` | The device model every resource audit is about, and a joint audit's run on it |
 | `Assumptions` | The named assumptions: the few `Prop`s the guarantees take without proof |
 | `Certifier` | The network attester's protocol: grids, the interaction, the Program |
 | `Claims` | Flock's claim statements, over Core's interaction model |
@@ -41,9 +41,9 @@ path: `research msg owners PATH`.
 
 A generated file is its generator's: change the generator and run it, never the file.
 
-- `Accounting/Headline/` and `Accounting/HeadlineDc/`: `machine-model lean-headline` writes the instances there, which
+- `ResourceAccounting/Headline/` and `ResourceAccounting/HeadlineDc/`: `machine-model lean-headline` writes the instances there, which
   import the `Encoding.lean` beside them.
-- `Accounting/Sheets/`: `benchmarks/machine_model/`, the ACCEL model of each measured card, prints each file
+- `ResourceAccounting/Sheets/`: `benchmarks/machine_model/`, the ACCEL model of each measured card, prints each file
   from the card's data sheet (`machine-model --device DEVICE sheet --lean`).
 
 Each generator's tests hold the files to its output. `security/README.md` lists every program that writes Lean under

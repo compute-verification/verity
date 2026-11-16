@@ -213,7 +213,7 @@ def test_a_lower_bound_cites_its_server_block_bound_and_a_serving_cut_rests_on_m
         if cuts & {"inference", "serving"}:
             assert lean.status(s.regime.BOUND[0]) == "proved" and s.regime.BOUND[0] in f.combined.cites
         if "serving" in cuts:
-            assert s.regime.BOUND == ("Accounting.Guarantees.ServingBlocks.ServingBlockBound",)
+            assert s.regime.BOUND == ("ResourceAccounting.Guarantees.ServingBlocks.ServingBlockBound",)
             assert {f"structure.{s.structure.name}.{k}" for k in ("omega_max", "mu")} <= keys
 
 

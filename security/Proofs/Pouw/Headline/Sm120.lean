@@ -4,7 +4,7 @@ public import Proofs.Pouw.Headline.Encoding
 public import Proofs.Pouw.Headline.Luck
 public import Proofs.Pouw.Headline.Whole
 public import Definitions.Pouw.Guarantees.Headline
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # sm_120's headline at the data sheet
@@ -30,9 +30,9 @@ data's hypotheses discharged and the terms bounded:
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.Headline
+namespace ResourceAccounting.SecurityProofs.TS.Headline
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Accounting.SecurityProofs.TS
+open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity ResourceAccounting.SecurityProofs.TS
 
 /-- The floor program's counts, its four lists in `labelled`'s order. -/
 def flatAll : Sparse := Sm120.flatWords ++ Sm120.flatFold ++ [] ++ Sm120.flatSkip
@@ -304,12 +304,12 @@ theorem sm120_S : ((Sm120.checks : ℕ) : ℝ) = 48000 := by
   show ((48000 : ℕ) : ℝ) = 48000
   norm_num
 
-end Accounting.SecurityProofs.TS.Headline
+end ResourceAccounting.SecurityProofs.TS.Headline
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
-  Accounting.SecurityProofs.TS.Headline
+open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
+  ResourceAccounting.SecurityProofs.TS.Headline
 
 /-- sm_120's headline at the data sheet with binding at `δ_bind` (`ProofLayer.BindingAt`), the form (I8)'s pieces
 take: `Whole.sheetDIdealFloor_whole` at `π*` (`isCert_piStar`), `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`,
@@ -357,9 +357,9 @@ theorem sm120SheetHeadline_bind {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.che
 
 /-- sm_120's headline at the data sheet: `sm120SheetHeadline_bind` at binding `√δ_fork`, from the fork form by
 `Whole.moved_le_sqrt` (`BindingOfFork`). -/
-theorem Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline := by
+theorem Sm120SheetHeadline : ResourceAccounting.Guarantees.TS.Sm120SheetHeadline := by
   intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
   exact sm120SheetHeadline_bind Pl G Uf pf (Real.sqrt δfork) δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL
     hWL hOf (Whole.moved_le_sqrt pf δfork hB) hZK hPin hRF
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

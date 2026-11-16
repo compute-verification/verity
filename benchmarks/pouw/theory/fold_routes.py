@@ -11,7 +11,7 @@ asks the same question of the three served devices, each against its own fold an
 - **H200** folds with li (`segment._li_absorb`): half step `y ← (y ⊕ d0 ⊕ LK)·LA + d1`, one LOP3 and one IMAD a pair,
   1 lane instruction a word. Its sheet binds DS_issue (145 against DS_tensor's 128).
 - **B200** folds with li heavy: li plus extra keyed rounds `y ← (y ⊕ k)·a + c`, each a half step whose pair is `(0, c)`
-  (`Accounting.TS.LiUnits`), absorbing no word. Its sheet certificate is π* = DS_alu 0.975, DS_issue 0.025
+  (`ResourceAccounting.TS.LiUnits`), absorbing no word. Its sheet certificate is π* = DS_alu 0.975, DS_issue 0.025
   (measured: issue 1857 and the ALU pipe 1856 a MMA, a cycle apart).
 
 The decisive structural fact. A certificate that binds **issue** prices every instruction one slot, so a pipe move

@@ -2,21 +2,21 @@ module
 
 public import NetworkCheck.Period
 public import NetworkCheck.Records
-public import NetworkCertifier.Rows
+public import NetworkAttester.Rows
 
 /-!
-# The network certifier's run audited as rows over its certified records, a core protocol: `verity/network-rows/v1`
+# The network attester's run audited as rows over its certified records, a core protocol: `verity/network-rows/v1`
 
-The audit of a run of the active network certifier (`network_certifier_serve`, the serving module below) over the records it
+The audit of a run of the active network attester (`network_certifier_serve`, the serving module below) over the records it
 signed: each of the run's `W` windows' requests (the link's ingress), responses (its egress) and fails (`<link>-fails`,
-egress) records, each held to its certified record, then the certifier program's `NetworkCertifier.Rows.audit` over
+egress) records, each held to its certified record, then the certifier program's `NetworkAttester.Rows.audit` over
 their grids, the executable form of `security/Definitions/Certifier/RecordRows.lean`. That audit accepts only
-when the egress record is the schedule it shows rendered over the lanes, so a run whose cells the network certifier
+when the egress record is the schedule it shows rendered over the lanes, so a run whose cells the network attester
 cut, clocked or ordered otherwise than the schedule is refused here, not taken on trust.
 
 **What it does not hold: the id egress form.** The schedule's digest binds the id egress form (`Period.egressForm`),
 under which the reference's `audit` refuses an egress `DATA` or `END` cell that isn't an id-form cell
-(`io_tie.parse_cell`). `NetworkCertifier.Rows.audit` reads no payload against a form, so this check accepts a run whose
+(`io_tie.parse_cell`). `NetworkAttester.Rows.audit` reads no payload against a form, so this check accepts a run whose
 egress cells carry any bytes, which the reference refuses. The form of each egress cell is the io tie's to hold
 (`IoTieCell`, on every cell); a caller that runs no io tie holds it itself, by the reference's `audit` or by reading
 each egress cell with `io_tie.parse_cell`.
@@ -28,11 +28,11 @@ each egress cell with `io_tie.parse_cell`.
                   "lanes", "queue", "slots", "window"},
      "session": hex(session), "windows": W}
 
-`NetworkCheck.Period`'s rows-form terms, read by its decoders: the network certifier's LMS public key (16 + N bytes) and
-parameters, the link (the serving module's `LINK`, at most 65,535 UTF-8 bytes), the schedule (`NetworkCertifierParams`,
+`NetworkCheck.Period`'s rows-form terms, read by its decoders: the network attester's LMS public key (16 + N bytes) and
+parameters, the link (the serving module's `LINK`, at most 65,535 UTF-8 bytes), the schedule (`NetworkAttesterParams`,
 `Period.scheduleOf`), whose digest every record head binds (`Period.Schedule.digest`), the certifier session (32 bytes)
 every certificate binds, and the run's `W ≥ 1` windows, `0 … W − 1`. A schedule with a response limit
-(`max_tokens_cap`, which `Period.scheduleOf` reads) is refused: `NetworkCertifier.Rows.audit` holds no response to its
+(`max_tokens_cap`, which `Period.scheduleOf` reads) is refused: `NetworkAttester.Rows.audit` holds no response to its
 request's `max_tokens`, so it doesn't cover a run under one.
 
 **Commitment**: `verity/network-records/v3`'s encoding (`NetworkCheck.Records.commitmentOf`) of `6 · W` records: for each
@@ -47,7 +47,7 @@ names its record and window, and its certified record (`bound`) is the link's, i
 `record_head` of the raw record's grid and status under the schedule's grid (`gridOf`: `T` rows of `lanes · slots` cells
 of `cell_bytes`, the fails record's of `lanes`) and digest, settled by the deadline, and its certificate signs the head's
 digest under the record's salt (`certificateDigest`) and is the key's and verifies in the session
-(`Check.Certificate.signs`); then `NetworkCertifier.Rows.audit` over the grids (`auditOf`), with its refusal's reason.
+(`Check.Certificate.signs`); then `NetworkAttester.Rows.audit` over the grids (`auditOf`), with its refusal's reason.
 
 What it reads is witness, the traffic's records and the heads and salts the certifier signed, so it publishes nothing:
 **Public** `{}`, and the **profile** the link and `W`. Its work is linear in the records: each grid is hashed once into
@@ -119,7 +119,7 @@ def evidenceOf (b : ByteArray) : V Unit := do exactly (← Core.canonicalJson b)
 
 /-! ## The check -/
 
-/-- A record's grid parameters under the schedule (`NetworkCertifierParams.grid`, `fails_grid`): `T` rows of `lanes · slots` cells
+/-- A record's grid parameters under the schedule (`NetworkAttesterParams.grid`, `fails_grid`): `T` rows of `lanes · slots` cells
 of `B` bytes, the fails record's of `lanes`, at τ_b; the queue's capacity is `GridParams`' default, which no head reads. -/
 def gridOf (s : Period.Schedule) (fails : Bool) : Check.Grid :=
   { buckets := s.window, allocation := if fails then s.lanes else s.allocation, frameBytes := s.cellBytes,
@@ -130,7 +130,7 @@ under its name at `w`, and `cert` the record certified for the role's link, dire
 `record_head` of the raw record's grid and status under the schedule's grid and digest, settled by the deadline, and
 whose certificate names the same, signs the head's digest under the record's salt and is the key's in the session. -/
 def bound (p : Params) (w : Nat) (role : String × String × Direction) (raw cert : Option Published) :
-    Except String NetworkCertifier.Rows.BlockGrid := do
+    Except String NetworkAttester.Rows.BlockGrid := do
   let (name, link, d) := role
   let what := s!"{name} window {w}"
   let some (.raw l w' status grid) := raw | throw s!"{what}: not a raw record"
@@ -147,9 +147,9 @@ def bound (p : Params) (w : Nat) (role : String × String × Direction) (raw cer
   unless c.signs p.lms p.key p.session do throw s!"{what}: the certificate isn't the key's in the session"
   pure { status, grid }
 
-/-- The run's records as `NetworkCertifier.Rows.audit` reads them, each held to its certified record (`bound`): the
+/-- The run's records as `NetworkAttester.Rows.audit` reads them, each held to its certified record (`bound`): the
 requests', the responses' and the fails' records of windows `0 … W − 1`, in the commitment's order. -/
-def recordsOf (p : Params) (c : Commitment) : Except String (Array (Array NetworkCertifier.Rows.BlockGrid)) := do
+def recordsOf (p : Params) (c : Commitment) : Except String (Array (Array NetworkAttester.Rows.BlockGrid)) := do
   unless c.records.size == 6 * p.windows do
     throw s!"the commitment holds {c.records.size} records, not 6 · W = {6 * p.windows}: each window's requests', \
       responses' and fails' records, each raw and then certified"
@@ -157,15 +157,15 @@ def recordsOf (p : Params) (c : Commitment) : Except String (Array (Array Networ
     bound p w role c.records[6 * w + 2 * i]? c.records[6 * w + 2 * i + 1]?
 
 /-- The schedule's terms the rows audit reads. -/
-def rowsParams (s : Period.Schedule) : NetworkCertifier.Rows.Params :=
+def rowsParams (s : Period.Schedule) : NetworkAttester.Rows.Params :=
   { cellBytes := s.cellBytes, slots := s.slots, delay := s.delay, lanes := s.lanes, window := s.window,
     egressCells := s.egressCells }
 
 /-- **The audit of the run**: its records held to their certified records (`recordsOf`), then
-`NetworkCertifier.Rows.audit` over the requests', responses' and fails' grids. -/
-def auditOf (p : Params) (c : Commitment) : Except String NetworkCertifier.Rows.Summary := do
+`NetworkAttester.Rows.audit` over the requests', responses' and fails' grids. -/
+def auditOf (p : Params) (c : Commitment) : Except String NetworkAttester.Rows.Summary := do
   let rs ← recordsOf p c
-  NetworkCertifier.Rows.audit (rowsParams p.schedule) (rs.getD 0 #[]) (rs.getD 1 #[]) (rs.getD 2 #[])
+  NetworkAttester.Rows.audit (rowsParams p.schedule) (rs.getD 0 #[]) (rs.getD 1 #[]) (rs.getD 2 #[])
 
 def check (p : Params) (c : Commitment) (_ : Unit) : Core.Outcome Unit Profile :=
   match auditOf p c with

@@ -77,7 +77,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.protocols.resource_accounting.network.verifier import advice as ADV, head_check as HC, io_request as Q
 from verity.protocols.resource_accounting.network.verifier import service as SVC, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
@@ -304,18 +304,18 @@ def window_cells(releases: Sequence[Q.Release], T: int) -> dict[int, int]:
 @dataclass(frozen=True)
 class IngressTie:
     """The ingress tie on one link, every field public: the link, the network attester's schedule
-    (`network_attester.NetworkCertifierParams`: B, its lanes L, its r and its buckets a window T), the session that names the network
+    (`network_attester.NetworkAttesterParams`: B, its lanes L, its r and its buckets a window T), the session that names the network
     attester's domains, and the proof deadline in seconds."""
 
     link: str
-    params: NetworkCertifierParams
+    params: NetworkAttesterParams
     session: bytes
     proof_deadline: float | None = None
 
     def __post_init__(self) -> None:
-        if type(self.params) is not NetworkCertifierParams or not (isinstance(self.link, str) and self.link) or \
+        if type(self.params) is not NetworkAttesterParams or not (isinstance(self.link, str) and self.link) or \
                 type(self.session) is not bytes:
-            raise ValueError("an ingress tie is on a named link, of a network certifier.NetworkCertifierParams and a session")
+            raise ValueError("an ingress tie is on a named link, of a network certifier.NetworkAttesterParams and a session")
         Q.Shape(self.params.cell_bytes, self.params.lanes, self.params.slots)
 
     @property
