@@ -396,32 +396,27 @@ number. Recursion is no member, because its seconds are a whole recursive run's.
 
 ## On a machine of your own
 
-The install, from a clone of the tree: `uv sync --all-packages --extra torch-cpu` (the printer and `research`, the
-store's client, which only a run id needs). The runs below build M0's `flock-circuit` (Rust, `cargo`) and Lean's
-`verity-verify-proof` (the tree's Lean toolchain, through `elan`) from the tree themselves. Each writes its result under
-`$OUT`, default `$RESEARCH_RUN_DIR/out` (a5's `./out` outside a run, recursion's `/tmp/rec-bench-PID/out`); give that
-directory to the printer's flag. In order, each from the tree's root:
+The install, from a clone of the tree, with [uv](https://docs.astral.sh/uv/getting-started/installation/):
+`uv sync --all-packages --extra torch-cpu` (the printer and `research`, the store's client, which only a run id needs).
+The runs below build Flock's circuit prover, `flock-circuit` (Rust, `cargo`), and Lean's `verity-verify-proof` (the
+tree's Lean toolchain, through `elan`) from the tree themselves. Each writes its result under `$OUT`, default
+`$RESEARCH_RUN_DIR/out` (a5's `./out` outside a run, recursion's `/tmp/rec-bench-PID/out`); give that directory to the
+printer's flag. Each from the tree's root:
 
-1. **The sampling layer, and the workload directory the next two read**, on one H200 with 192 GB (the script's usage
-   line): `OUT=DIR bash benchmarks/one_stage/a5_llama1b_h200.sh`. It leaves the Commit's workload directory `D` under
-   `$A5_ROOT/RUN/` (default `/workspace/research/vllm-sha512-a5`). Give `DIR` to `--sampling`.
-2. **The Flock layer**, on CPU with 64 GB (`benchmarks/prove_path/run.sh`'s usage line), on the machine that holds `D`:
-   `PP_LLAMA=D LROW=ROW PP_PLAIN=1 PP_PARTITION=FILE PP_FORGED_PARTITION=FILE bash benchmarks/prove_path/run.sh`, where
-   `LROW` is the workload's name, `PP_PARTITION` the honest partition (`..._step1_all_stratified.json`, plain's sample
-   is stratified) and `PP_FORGED_PARTITION` the forged arm's. `benchmarks/prove_path/README.md` says what each variable
-   is, and `run.sh`'s usage line their current form. Give the honest arm's directory to `--flock`.
-3. **The zero-knowledge layer**, the same without `PP_PLAIN=1` and `PP_FORGED_PARTITION` (the forged arm then takes
-   `run.sh`'s default), with `PP_PARTITION` the unstratified `..._step1_all.json`. Give its honest arm to `--zk`.
-4. **The recursion layer**, on 32 CPU cores with 128 GB (`run.py`'s memory behind the ZK server), about an hour at
+1. **The Flock, zero-knowledge and sampling layers**, on one H200 with about 450 GB of memory: the commands of
+   `benchmarks/one_stage/README.md`'s section "The three benchmarks of the proof-layers table", as written there. They
+   are the vLLM adapter's one bootstrap (`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`, which makes the vLLM
+   environment, the int8 checkpoint and the sm_90 taps under `WORK`), three partition files, and three runs of
+   `benchmarks/one_stage/a5_llama1b_h200.sh`. Give their three `OUT` directories to `--flock`, `--zk` and `--sampling`.
+2. **The recursion layer**, on 32 CPU cores with 128 GB (`run.py`'s memory behind the ZK server), about an hour at
    K = 4096:
    `taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=DIR`. Give its `$OUT` to
    `--recursion`.
 
 Then `verity bench prove layers --flock A --zk B --sampling C --recursion E`, which reads only those directories.
 
-What needs a team node today: a5 reads, under the team's work directory, vLLM's venv (`/workspace/cp/venv312`), the
-int8 checkpoint (`/workspace/hf`), the sm_90 taps (`/workspace/research/vllm-composed-h200int8`) and `gpu-lease`, so
-step 1 doesn't run elsewhere as written, and steps 2 and 3 need its `D`. Recursion's launcher, `verity bench
+`benchmarks/prove_path/run.sh` is no step here: before any build it refuses, as `PP_LLAMA`, a workload directory
+`a5_llama1b_h200.sh` made, as its header says. What needs a team node today: recursion's launcher, `verity bench
 recursion_e2e run`, starts a `research run` on a team node; `job.sh` as above is the same job without it.
 
 ## What you may change

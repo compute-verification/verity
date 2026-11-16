@@ -981,12 +981,12 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   store only: a receipt of a block appended after the codec seed is sampled and opened like any other but not credited
   (`credit_post_seed` is None, so \(\mu_{\text{carrier}}\) is 0), and γ doesn't depend on what the workload appends.
   A paced session's coins leave as its roots arrive, so when they left is a value, and its γ per window is over the
-  fixed periods of the stated \(T\) (`Pace.window_ns`) from its first challenge, the last ending at its last deadline
-  (`ledger.windows`), protocol structure. A pass is in the fixed period that holds it whole, from its challenge's
+  fixed windows of the stated \(T\) (`Pace.window_ns`) from its first challenge, the last ending at its last deadline
+  (`ledger.windows`), protocol structure. A pass is in the fixed window that holds it whole, from its challenge's
   release to its root's arrival, and one that straddles a boundary is in neither (at \(k = 1\), whose coins leave a
   pass early, about two passes a boundary); the session's γ credits every pass. A window's post-seed reads
   \(\sum_i a_{t,i}\) follow from its γ: its timing term is \(1 - (U_t - \sum_i a_{t,i})\, b / (R \Sigma_t)\), and the
-  others are functions of public counts (a fixed period's, of the passes it holds). Live KV is
+  others are functions of public counts (a fixed window's, of the passes it holds). Live KV is
   uncredited and doesn't enter the store, so no append is credited and they carry no workload. Revisit this when
   appends are credited.
 - **The memory line**, a session total only, in three forms, each with its ε and δ: the registered bytes the session
@@ -1401,7 +1401,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
 
 A pass's receipts must not be computable before the pass, or one read could serve many passes. Either the clock or
 the hashes can order the passes. Live coins order them by the clock. Each pass's coin is released on a schedule, so
-consecutive passes' read periods overlap by the round trip the verifier can't rule out. That overlap is charged every
+consecutive passes' read windows overlap by the round trip the verifier can't rule out. That overlap is charged every
 pass and needs a trusted round-trip floor to be affordable (Appendix A). The chain orders them by the hashes, so the
 round trip is charged once a session. At 20 ms passes and 1 ms RTT, a live coin a pass costs 5.44% with no trusted
 floor and 3.15% with a floor of half the RTT. The chain costs 0.25% with no floor, and also saves the 50 coins a
