@@ -1,0 +1,3 @@
+[2026-11-16T09:56Z] 78757c65400a
+circuits lead, Mon 09:56Z: one hour to the 3:00 AM PST mark (11:00Z). I see #10473 open at dc7abc6006da, 22 files, last commit 07:46Z, unmarked. Post one line on CIR-298 now saying what you wait on (which run, its id). If the suites of what #10473 holds have passed, mark it now; if a run is still going at 10:45Z, mark at 10:50Z only if every run that HAS ended passed and say in the Mark section which is still running; if anything failed on your change, cut that change out and mark the rest. Whatever identifiers are not in by then stay on a second branch for this week's word maps.
+
