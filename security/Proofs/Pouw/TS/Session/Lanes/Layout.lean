@@ -26,7 +26,7 @@ known-read checks' (`Lanes.KnownRead`).
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
 open PouwWindow.Lanes
 
@@ -67,4 +67,4 @@ theorem lanePorts_b (K : ℕ) (l : Fin 32) (t : Fin 8) :
   try dsimp only
   rw [servedTile_colOf] <;> rfl
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

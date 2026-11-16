@@ -46,7 +46,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **SPOT's target at the parameters `P` picks**: at every `θ` with `P θ`, all committed files and commitments and
 every strategy, the probability that the sampled verdict accepts while its claim fails is at most its error. -/
@@ -158,7 +158,7 @@ transcript at a strategy, the coupling holds there at `terms` (`CouplingTwoAt`).
 def CouplingTargetTwo (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
     (F : Array ByteArray) (terms : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → ℝ≥0∞) : Prop :=
   ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
-    ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε →
+    ¬ ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε →
       CouplingTwoAt V k A θ F c σ (terms c σ)
 
 /-- **The deployment's sessions `S₂` cover the two-stage form at composite `k`**: where `S₂` holds no session and the
@@ -182,13 +182,13 @@ def TwoSubprotocol (V : Vocab d α) (k : Verity.Registration.Composite) (TwoAt :
 theorem twoSubprotocol (V : Vocab d α) (k : Verity.Registration.Composite) (TwoAt : ByteArray → Prop)
     (S₂ : ByteArray → Array ByteArray → Option Live₂) : TwoSubprotocol V k TwoAt S₂ := by
   intro hKS hCov hC θ F c σ hP
-  unfold Vocab.error Accounting.condError
+  unfold Vocab.error ResourceAccounting.condError
   beta_reduce
   split_ifs with hE
   swap
   · exact le_top
   obtain ⟨hfs, hpr, _, _⟩ := hE
-  by_cases hI : Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε
+  by_cases hI : ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε
   · calc Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ
           ≤ Verity.Game.prob (fun _ => False) (V.game θ F c) σ :=
             Verity.Game.prob_mono (fun o ho => ho.2 hI) _ σ

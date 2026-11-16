@@ -456,11 +456,11 @@ def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_l
     repo, gh, _tips, merge = _world(tmp_path)
     _checked_c(tmp_path, monkeypatch, gh, repo)
     before = _git(repo, "rev-parse", f"{merge}^1")
-    _git(repo, "push", "-q", "origin", f"{before}:{M.AFTER_LAND_REF}")       # the steps last ran before B's train landed
+    _git(repo, "push", "-q", "origin", f"{before}:{M.AFTER_LAND_REF}")       # the steps last ran before B's candidate landed
     ran = _steps(monkeypatch)
     assert M.main(["C", "--push"]) == 0, capsys.readouterr().err
     tip = _git(repo, "rev-parse", "origin/main")
-    assert ran == [("alert", before, merge), ("mirror", merge), ("after_land", merge), ("report", before, merge),  # B's train
+    assert ran == [("alert", before, merge), ("mirror", merge), ("after_land", merge), ("report", before, merge),  # B's candidate
                    ("landed", before, merge),
                    ("alert", merge, tip), ("mirror", tip), ("after_land", tip), ("report", merge, tip),          # the push's: C
                    ("landed", merge, tip)]
@@ -691,7 +691,7 @@ def test_nothing_goes_to_node_1_when_origin_refuses_main(tmp_path, monkeypatch, 
 # ---- every landing is reported in the merge thread
 
 def test_each_landing_is_one_line_naming_what_it_merged_and_its_checked_run(tmp_path):
-    """Every landing is reported, and a stacked member can read closed on GitHub, so the lines come from main's first-parent log: a train's merges (`Merge #N`, `Merge
+    """Every landing is reported, and a stacked member can read closed on GitHub, so the lines come from main's first-parent log: a candidate's merges (`Merge #N`, `Merge
     origin/BRANCH`, or a pinned commit) through ``prs``, and the runs its `Checked:` trailer names, the lander's `*` id too."""
     repo = tmp_path / "r"
     repo.mkdir()
@@ -779,8 +779,8 @@ def test_each_run_a_landing_names_gets_one_landed_label_on_the_remote_and_a_reru
 
 def test_checked_heads_are_the_train_heads_their_own_check_ran_on_less_a_train_a_later_revert_names(tmp_path, monkeypatch,
                                                                                                     capsys):
-    """`label_landed` labels every commit of a train on its one check run, but the run checked only its own source commit, so
-    `checked_heads` keeps the label whose value is that commit: each train's head. A head whose train holds a commit a later
+    """`label_landed` labels every commit of a candidate on its one check run, but the run checked only its own source commit, so
+    `checked_heads` keeps the label whose value is that commit: each candidate's head. A head whose candidate holds a commit a later
     `git revert` names is left out, and so are labels on commits off the line or on runs the index lacks."""
     from research.store import bucket_index as BI
     from research.store.local import LocalStore
@@ -890,7 +890,7 @@ def test_the_sweep_deletes_the_head_branch_of_a_pr_closed_unmerged_unless_someth
 
 def test_main_line_is_the_checked_heads_newest_first(tmp_path, monkeypatch):
     """`merge.main_line` is `checked_heads`' commits reversed, so position 0 is main's head: the verifier's `--main`
-    file lists the checked train heads newest first, and a pin's index is the checked trains it is behind."""
+    file lists the checked candidate heads newest first, and a pin's index is the checked candidates it is behind."""
     heads = [("c0", "run-0"), ("c1", "run-1"), ("c2", "run-2")]           # checked_heads is oldest first
     monkeypatch.setattr(M, "checked_heads", lambda repo, tip, idx: heads)
     assert M.main_line(tmp_path, "origin/main", object()) == ["c2", "c1", "c0"]
@@ -915,7 +915,7 @@ def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_wor
         _git(repo, "merge", "-q", "--no-ff", "-m", f"land {name}", name)
     _git(repo, "push", "-q", "origin", "main")
     del gh.open[1], gh.open[2]                                            # A and B landed; C, D and E stay open
-    for name in ("A", "B"):                                               # landed with the train, and fresh at ``now``
+    for name in ("A", "B"):                                               # landed with the candidate, and fresh at ``now``
         _git(repo, "push", "-q", "origin", f":refs/heads/{name}")
     log = []
     assert M.sweep_branches(repo, now=now, gh=gh, log=log.append, limit=0) == (0, 0), "at its limit, it pushes nothing more"

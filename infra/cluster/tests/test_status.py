@@ -156,10 +156,29 @@ def test_disk_is_dfs_capacity_and_bundles_are_release_pys_total_in_gb():
 
 def test_the_bundle_command_is_release_pys_rule_and_fails_rather_than_reading_zero_without_sudo():
     cmd = status.COMMANDS["bundles"]
-    assert cmd.startswith("sudo -n true && ")
+    assert "else sudo -n true && " in cmd
     assert "find /workspace/jobs/cov /workspace/jobs/probe-jit -xdev -name 'replay_bundle_p*' -prune -print0" in cmd
     assert "xargs -0r du -sb" in cmd
-    assert "if [ -x /usr/local/sbin/vy-sudo ]; then sudo -n /usr/local/sbin/vy-sudo du-bundles" in cmd
+    assert "if [ -x /usr/local/sbin/vy-sudo ]; then sudo -n -l /usr/local/sbin/vy-sudo du-bundles" in cmd
+
+
+def test_a_locked_node_whose_sudo_refuses_du_bundles_is_a_failed_read_not_zero_bundles(tmp_path, monkeypatch):
+    """A lock-out leaves `sudo -n true` passing whatever else it refuses: the read runs du-bundles only where sudo grants it."""
+    import os
+    import subprocess
+    vy, bin_dir = tmp_path / "vy-sudo", tmp_path / "bin"
+    bin_dir.mkdir()
+    vy.write_text(f"#!/bin/sh\nprintf '13000000000\\t{BUNDLE_A}\\n'\n")
+    vy.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
+    cmd = status.COMMANDS["bundles"].replace(status.VY_SUDO, str(vy))
+    for granted, want in ((True, (0, 1)), (False, (1, 0))):
+        grant = f'"-n -l {vy} du-bundles") exit 0 ;; "-n {vy} du-bundles") exec "{vy}" du-bundles ;;' if granted else ""
+        (bin_dir / "sudo").write_text(f'#!/bin/sh\ncase "$*" in "-n true") exit 0 ;; {grant} esac\n'
+                                      'echo "sudo: a password is required" >&2\nexit 1\n')
+        (bin_dir / "sudo").chmod(0o755)
+        r = subprocess.run(["sh", "-c", cmd], capture_output=True, text=True)
+        assert (r.returncode, status.bundles(r.stdout)["count"]) == want, (granted, r.stderr)
 
 
 def test_owner_filters_jobs_and_held_workloads_but_not_the_nodes_holds_disk_or_bundles():

@@ -29,12 +29,20 @@ import random
 import numpy as np
 import pytest
 import torch
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import anchors as CA
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import (
+    anchors as CA,
+)
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import plan as CPL
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import reference as CR
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import (
+    reference as CR,
+)
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import LayerRows
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    circuit as PC,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    native as PN,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
 
 from verity_vllm import protocols as PO
@@ -599,7 +607,9 @@ def test_the_start_forward_setting_is_a_non_negative_integer_for_the_circuit_exe
 def test_the_transcript_holds_every_calls_inputs_and_regenerates_each_call(which, request):
     """`transcript_dir`'s call data (`save_calls`) with the weight's rows from the weights of record re-commits every call to its
     live leaf: the data a verifier needs to open the calls off the serving host."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        native as PN,
+    )
     w = request.getfixturevalue(which)
     calls = PC.load_calls(w.tdir / PC.CALLS_DATA_FILE, lambda weight: LayerRows(w.w_up))
     assert [i for i, _s, _c in calls] == [r.index for r in w.records] and {s for _i, s, _c in calls} == {"ncp-v2"}
@@ -609,7 +619,9 @@ def test_the_transcript_holds_every_calls_inputs_and_regenerates_each_call(which
 @pytest.fixture(scope="module")
 def device_world(tmp_path_factory):
     """`world` with the setting ``device: cuda``, the serving kernel's CPU twin (`ncp2_fast.cuh`) standing in for the GPU."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as PD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        device as PD,
+    )
 
     if PD.compiler() is None and not os.environ.get("VERITY_SUITE_ROOT"):
         pytest.skip("needs a C++ compiler (required under check)")

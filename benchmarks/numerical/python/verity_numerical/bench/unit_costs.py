@@ -160,11 +160,17 @@ def build(template: str, params: Mapping[str, Any], statics: Mapping[str, int] |
     return out
 
 
+#: what building a template at some parameters raises when it can't be built there, reported and never guessed around: a
+#: missing piece (`ir_lower.NoPiece`, a NotImplementedError), an unsupported parameter (ValueError, KeyError, TypeError) or
+#: a word the lowering can't place (`ir_lower.AmbiguousWord`); anything else is a bug, and raises
+UNBUILT = (NotImplementedError, ValueError, KeyError, TypeError, ir_lower.AmbiguousWord)
+
+
 def _build_job(job: tuple) -> tuple[tuple, dict[str, Any]]:
     template, params, statics = job
     try:
         return job, build(template, dict(params), dict(statics))
-    except Exception as e:  # a missing piece (NoPiece) or an unsupported parameter: reported, never guessed around
+    except UNBUILT as e:
         return job, {"error": f"{type(e).__name__}: {e}"}
 
 
@@ -212,7 +218,7 @@ def _reg_job(job: tuple) -> tuple[tuple, dict[str, Any]]:
     template, params, statics = job
     try:
         return job, registered(template, dict(params), dict(statics).get("T"))
-    except Exception as e:
+    except UNBUILT as e:
         return job, {"none": f"{type(e).__name__}: {e}"}
 
 

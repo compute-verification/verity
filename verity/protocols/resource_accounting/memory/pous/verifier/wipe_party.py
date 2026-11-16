@@ -21,7 +21,7 @@ interval a network attester counts the session's egress over.
 `command(device, extra)` is the argv that starts the challenger's side (`python -m
 verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger`, `MODULE`) on this machine; the prover's end of the session,
 which answers it, is `pous/prover/wipe_run.py`'s (`session`, `answer`). The wipe's two parties as the deployment layer
-runs them speak `wipe_parties`'s messages: `pous/device/wipe_challenger.py` and `pous/prover/wipe_prover.py`.
+runs them speak `wipe_parties`'s messages: `pous/attester/wipe_challenger.py` and `pous/prover/wipe_prover.py`.
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ def command(device: str | Path, extra: Sequence[str] = ()) -> tuple[str, ...]:
 
 def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
          counted_by: str | None = None) -> dict[str, Any]:
-    """A link leaving the developer's node, as `Accounting.Placed.Links` declares one: its `ends` (the node, and `to` past
+    """A link leaving the developer's node, as `ResourceAccounting.Placed.Links` declares one: its `ends` (the node, and `to` past
     its boundary), what carries it (`via`), its capacity in Mb/s when known, and the network attester that counts what
     leaves on it (`counted_by`), `None` when none does, so its egress is outside the session's count."""
     return {"name": name, "ends": [node, to], "via": via, "mbps": mbps, "counted_by": counted_by}

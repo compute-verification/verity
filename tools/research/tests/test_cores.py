@@ -151,13 +151,8 @@ def test_cpu_hold_puts_the_claimed_cores_in_the_wrapper_alone_and_leaves_the_cla
 
 
 def open_files() -> list[tuple[int, str]]:
-    out = []
-    for f in os.listdir("/proc/self/fd"):
-        try:
-            out.append((int(f), os.readlink(f"/proc/self/fd/{f}")))
-        except OSError:
-            continue
-    return out
+    fds = [f"/proc/self/fd/{f}" for f in os.listdir("/proc/self/fd")]
+    return [(int(os.path.basename(p)), os.readlink(p)) for p in fds if os.path.lexists(p)]
 
 
 def _queued(tmp_path, run_id, record, rank=0):

@@ -124,7 +124,7 @@ GPU_HBM_BYTES = 96 * 2 ** 30
 """One RTX PRO 6000's memory, 96 GiB (the card's `store.dram`)."""
 DISK_BYTES_PER_S = 4.311e9
 """The node's disks' measured read rate, the host card's `disk.read`: each disk's highest second under reads made to
-exhaust it, summed.  It is β of the premise `Accounting.Remote.Held.Assumptions.Disks`, not a ceiling: the disks'
+exhaust it, summed.  It is β of the premise `ResourceAccounting.Remote.Held.Assumptions.Disks`, not a ceiling: the disks'
 ceiling, the server's PCIe lanes, would charge more than any store.  How much of a paced line's ingress charge is its
 disks (`session.verifier.ingress_bursts`)."""
 
@@ -359,7 +359,7 @@ def sketch_failure(passes: int, rows: int = SKETCH_ROWS, r: int | None = None, b
     third term a key's 512-bit receipt of a block right without its hash, and the last the keys' distance from uniform
     (`SketchHashRandom`'s ε): two of the `Q + P` seeds whose b-bit sign keys collide share their signs, b =
     `receipts.sign_key_bits(rows)`, 256 at 16 rows and 512 at 64.  At 64 rows and r = 27 it is the δ at which
-    `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`; at 16 rows and r = 12 it is
+    `ResourceAccounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`; at 16 rows and r = 12 it is
     `SketchBoundRun`'s at those parameters."""
     if type(queries) is not int or queries < 1:
         raise ValueError("the prover's budget Q is a positive integer of SHA-512 compressions")

@@ -24,7 +24,7 @@ from verity.protocols.resource_accounting.network.verifier import network_attest
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
 from verity.protocols.resource_accounting.network.verifier.certificate import Issuer
-from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, REFUSED, Shim, NetworkCertifier, NetworkCertifierParams, cells, read_cell
+from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, REFUSED, Shim, NetworkAttester, NetworkAttesterParams, cells, read_cell
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC
 
 HERE = Path(__file__).resolve().parents[1]
@@ -43,7 +43,7 @@ dv = _load("network_traces_deviations", "benchmarks/network_traces/deviations.py
 ws, IT = dv.ws, dv.IT
 #: the connections of a try on the virtual clock: a lane and a place in the queue each, so that they arrive together
 N = 8
-PARAMS = NetworkCertifierParams(cell_bytes=256, slots=2, bucket_ms=100, delay=3, lanes=N, queue=N, window=60,
+PARAMS = NetworkAttesterParams(cell_bytes=256, slots=2, bucket_ms=100, delay=3, lanes=N, queue=N, window=60,
                       ingress_cells=40, ingress_buckets=30, egress_cells=64, egress="id")
 P = PARAMS.payload
 IDS = [1000, 1001, 2002, 2003, 3004, 3005, 4006]
@@ -54,7 +54,7 @@ class _Side:
     """One end of an in-memory connection as the relay holds it: a reader fed what the peer sends, and a transport
     that keeps each write with the tick it was made in."""
 
-    def __init__(self, network_attester: NetworkCertifier | None = None) -> None:
+    def __init__(self, network_attester: NetworkAttester | None = None) -> None:
         self.network_attester, self.writes, self.closed, self.transport = network_attester, [], False, self
         self.reader, self.fed, self.eof = asyncio.StreamReader(), 0, False
 
@@ -98,7 +98,7 @@ def _watermark_log(relay) -> dict:
                           "error": relay.watermark_error}}
 
 
-def _relay_run(out: Path, key: Path, params: NetworkCertifierParams, requests: Sequence[bytes],
+def _relay_run(out: Path, key: Path, params: NetworkAttesterParams, requests: Sequence[bytes],
                served: Sequence[tuple[bytes, bool]], watermark: bool = False, refuse: Sequence[int] = (),
                cut: int | None = None) -> list[dict]:
     """`requests` through the relay for one window on a `VirtualClock`, the k-th server to be connected sending
@@ -129,14 +129,14 @@ def _relay_run(out: Path, key: Path, params: NetworkCertifierParams, requests: S
         streams.append(_Side() if cut is None else _Cut(cut))
         return streams[-1].reader, streams[-1]
 
-    def settled(w: NetworkCertifier) -> bool:
+    def settled(w: NetworkAttester) -> bool:
         return all(c.ingress_ended and (c.upstream is not None if c.server is None else
                                         c.bytes_out == c.server[1].fed and c.egress_ended == c.server[1].eof)
                    for c in w.active)
 
-    async def main() -> tuple[list[_Side], NetworkCertifier]:
+    async def main() -> tuple[list[_Side], NetworkAttester]:
         clock = VirtualClock(-tau / 2)
-        network_attester = NetworkCertifier(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
+        network_attester = NetworkAttester(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
                         withhold=publisher.withhold, watermark=mark if watermark else None)
         running = asyncio.create_task(network_attester.run())
         clients, tasks = [], []

@@ -39,7 +39,7 @@ inputs = ["tools/config/verity_config",
           "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py", "benchmarks/torch_gpu/sha512_rows",
           "benchmarks/torch_gpu/settings.py", "benchmarks/torch_gpu/pyproject.toml",
           "benchmarks/kernels/s8_linear/int_mm.py",
-          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
           "verity/circuits/ops", "verity/circuits/silicon",
           "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py"]
 

@@ -38,11 +38,11 @@ deployment configuration's table declares the policy's party from, with its test
   check's trusted input. A case and its answer under `verity/inference-only/v0` are one subprotocol's in a
   composite's case, as `benchmarks/one_stage/composite.py` reads them.
 - **Loads from**: the packages at `verity/protocols/proofs/flock/verifier` and `verity/protocols/interface`, and nothing of
-  the certifier.
+  network certification.
 - **Not here**: its tests, `test_inference_only_*.py`, `test_inference_only_protocol.py` and
   `test_inference_only_rows_protocol.py`, which loads `lean/scripts/inference_only_record_reference.py` by path. They are in
   `../../../../resource_accounting/network/verifier/network/tests`, in the suite `verity/protocols/resource_accounting/network/verifier/network`, with the
-  tests of the certifier's Lean check. The tests of `verity/protocols/compose/verifier/lean` load the second by
+  tests of network certification's Lean check. The tests of `verity/protocols/compose/verifier/lean` load the second by
   path.
 
 ## Overview

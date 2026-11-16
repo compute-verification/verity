@@ -15,7 +15,9 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.commitments.periods import interface as IF
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    registered_commit,
+)
 
 from verity_vllm.pipeline import node_window_rows as NWR
 from verity_vllm.pipeline import window_replay as WRP

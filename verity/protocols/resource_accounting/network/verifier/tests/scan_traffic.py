@@ -22,7 +22,7 @@ class Served:
     execution phase), each connection's admission bucket and response ids (ordinal q = k + 1), and the network
     attester's `fails` frames and the `fails` records its grid closed."""
 
-    params: W.NetworkCertifierParams
+    params: W.NetworkAttesterParams
     ingress: tuple[BlockGrid, ...]
     egress: tuple[BlockGrid, ...]
     admitted: tuple[int, ...]
@@ -40,13 +40,13 @@ class Served:
                      for recs in (self.ingress, self.egress))
 
 
-def serve(params: W.NetworkCertifierParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
+def serve(params: W.NetworkAttesterParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
           responses: Sequence[Sequence[int]], windows: int, late: Sequence[int] = ()) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], its client's bytes arriving
     rate[k] a bucket from its admission, and response responses[k] (its ids, each one id event, then `TRAILER`, all
     there by its egress; a connection of `late` gets no byte from its server, so the network attester fails it late at
     its first egress cell), and the network attester ticks both links and `fails` for `windows` execution phases as
-    `NetworkCertifier._tick` does: admitted in arrival order at the first bucket with a free lane, `_ingress` until its `END`,
+    `NetworkAttester._tick` does: admitted in arrival order at the first bucket with a free lane, `_ingress` until its `END`,
     `_egress` until its own `END` or `FAIL`, its lane free the bucket after."""
     B, P = params.cell_bytes, params.payload
     fails: list[bytes] = []
@@ -78,9 +78,9 @@ def serve(params: W.NetworkCertifierParams, requests: Sequence[bytes], arrivals:
             c.ingress += requests[k][c.bytes_in:sent]
             c.bytes_in, c.ingress_ended = sent, sent == len(requests[k])
             if c.ingress_end is None and c.failed is None:
-                for frame in W.NetworkCertifier._ingress(network_attester, c, t):
+                for frame in W.NetworkAttester._ingress(network_attester, c, t):
                     grids[0].enqueue(frame)
-            for frame in W.NetworkCertifier._egress(network_attester, c, t):
+            for frame in W.NetworkAttester._egress(network_attester, c, t):
                 grids[1].enqueue(frame)
         active = [c for c in active if c.ended is None]
         for grid in grids:

@@ -21,18 +21,18 @@ IB = (V - 1).bit_length()
 
 @dataclass(frozen=True)
 class Served:
-    """A link served through the network attester's own egress (`network_attester.NetworkCertifier._egress`): its schedule, the egress
+    """A link served through the network attester's own egress (`network_attester.NetworkAttester._egress`): its schedule, the egress
     records its grid closed (one an execution phase), each connection's request (ordinal q = k + 1, its admission
     bucket, its n outputs) and response ids, and the network attester's `fails` frames."""
 
-    params: W.NetworkCertifierParams
+    params: W.NetworkAttesterParams
     records: tuple[BlockGrid, ...]
     requests: tuple[EG.Request, ...]
     responses: tuple[tuple[int, ...], ...]
     fails: tuple[bytes, ...]
 
 
-def serve(params: W.NetworkCertifierParams, arrivals: Sequence[int], responses: Sequence[Sequence[int]], windows: int) -> Served:
+def serve(params: W.NetworkAttesterParams, arrivals: Sequence[int], responses: Sequence[Sequence[int]], windows: int) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with response responses[k] (its ids, each one id
     event of P bytes, then `TRAILER`, all there by their deadlines), and the network attester serves the link for
     `windows` execution phases: admitted at the first bucket with a free lane in arrival order."""
@@ -52,7 +52,7 @@ def serve(params: W.NetworkCertifierParams, arrivals: Sequence[int], responses: 
             c.admitted = t
             active.append(c)
         for c in active:
-            for frame in W.NetworkCertifier._egress(network_attester, c, t):
+            for frame in W.NetworkAttester._egress(network_attester, c, t):
                 grid.enqueue(frame)
         active = [c for c in active if c.ended is None]
         grid.tick()
@@ -64,7 +64,7 @@ def serve(params: W.NetworkCertifierParams, arrivals: Sequence[int], responses: 
     return Served(params, tuple(records), requests, tuple(tuple(xs) for xs in responses), tuple(fails))
 
 
-def busy(seed: int, params: W.NetworkCertifierParams, count: int, longest: int, windows: int) -> Served:
+def busy(seed: int, params: W.NetworkAttesterParams, count: int, longest: int, windows: int) -> Served:
     """`count` connections arriving over the link's first half, responses of 0 … `longest` ids."""
     rng = random.Random(seed)
     arrivals = sorted(rng.randrange(max(1, windows * params.window // 2)) for _ in range(count))
@@ -72,7 +72,7 @@ def busy(seed: int, params: W.NetworkCertifierParams, count: int, longest: int, 
     return serve(params, arrivals, responses, windows)
 
 
-def shape(params: W.NetworkCertifierParams, NR: int, K: int) -> EG.Shape:
+def shape(params: W.NetworkAttesterParams, NR: int, K: int) -> EG.Shape:
     return EG.Shape(params.cell_bytes, params.grid.allocation, params.slots, NR, K, IB, params.delay)
 
 

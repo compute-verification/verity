@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pous.Accounting.Guarantees.Responder
-public import Proofs.Accounting.Actual.Confidence
+public import Proofs.ResourceAccounting.Actual.Confidence
 public import Proofs.Pous.Accounting.Memory
 import Proofs.Pous.Prob
 
@@ -32,7 +32,7 @@ check that the fixed-schedule statements are the case `t x = t`, `τ = 0`.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
 open Finset
 open scoped ENNReal
@@ -650,4 +650,4 @@ theorem B2AddsP2Ring_fixed :
   have := B2Adds_fixed _ _ _ _ _ hsec q k W S X t ans help ζ M H hc ht hset hin hcount hm hζ
   rwa [Nat.cast_ofNat] at this
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

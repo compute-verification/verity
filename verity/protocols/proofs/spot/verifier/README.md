@@ -1,4 +1,4 @@
-# SPOT (`verity-sampled-proofs`)
+# SPOT
 
 SPOT spot-checks a committed computation. While serving, the developer commits every value that crosses a
 proof-block boundary of a partition of the program and registers the commitment roots. The verifier then samples proof blocks
@@ -132,8 +132,8 @@ holds of that code under the premises `SamplingDeploy.ksTwo_code` states.
 A bound of S served bits charges a replay block at most F S, F the grain's fan-out (`partition.fanout`; the capped form at N = F),
 1 when every replay block is closed. S is at least the bits one replay block returns, which the verifier counts from its
 Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
-unit on 16-bit words of its own) and a two-stage docket carries (`ExecutionPhaseCommitmentRecord.returned`);
-`plancheck.two` refuses a cap below them.
+proof block on 16-bit words of its own) and a two-stage docket carries (`ExecutionPhaseCommitmentRecord.returned`);
+`plancheck.two` refuses a served cap below them.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
 refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
@@ -208,7 +208,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`). The parameters may name the members' wiring beside them
   (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and the check then holds
-  every wired row of every unit of the sample to its writer's output row in the members' public files
+  every wired row of every proof block of the sample to its writer's output row in the members' public files
   (`OneStageZk.wiresHeld`, the `members_wires` piece); `one_stage.members` leaves a wiring `Outside`.
 - **A monitoring period's sessions in the auditor's ledger** (`Spot/MonitoringPeriod.lean`, Lean only; the Python it is held
   to is a reference in `lean/tests/test_period_difftest.py`): from the ledger's signed lines, under the auditor's
@@ -306,7 +306,7 @@ not give.
 | `parties`' `_held` | returns a reject answer unchanged, and turns an accept into a reject when its commitment or interior is not the docket sent; otherwise returns the answer it was given |
 | `one_stage.proofs.ks_form_why` | a reason or None for a circuit outside the form `verify --zk` covers (`Flock.KsScope.filesWhy`); a reason refuses a session, None leaves the binary's verdict |
 | `one_stage.proofs.template_why` | a reason or None for a circuit the template refuses, read only before `members.files_why`'s other refusals; None decides nothing |
-| `one_stage.proofs.population_why` | a reason or None for a public file whose units are not the docket's population in order (`Spot.FilePart.why`); None leaves `verify`'s verdict |
+| `one_stage.proofs.population_why` | a reason or None for a public file whose proof blocks are not the docket's population in order (`Spot.FilePart.why`); None leaves `verify`'s verdict |
 
 ## Core API
 
@@ -559,7 +559,7 @@ sampling design).
 delta, through its weighted bound `harm_bound`; each application counts delta once.
 
 - `infiltration_bound(profile, output_bits)` is `harm_bound(output_bits)`, in bits: the committed values the prover wrote
-  in place of what the circuit computes, served or not, so no served output's size caps it. A two-stage design's profile
+  in place of what the circuit computes, served or not, so no served output's size bounds it. A two-stage design's profile
   is read at the footprint, so there it counts only what the boundary commitment pins down.
 - `exfiltration_bound(profile, output_bits)` is `infiltration_bound(profile, output_bits) + location_bits(profile)`, in bits.
   `location_bits` is the location term: with `K = ⌊bound()⌋` of `n` proof blocks, 0 when `K ≤ 0` or `n = 0`, `n` when

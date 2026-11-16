@@ -45,10 +45,10 @@ from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
-from verity.protocols.resource_accounting.network.verifier.network_attester import DATA, END, PAD, NetworkCertifierParams, cells
+from verity.protocols.resource_accounting.network.verifier.network_attester import DATA, END, PAD, NetworkAttesterParams, cells
 
 B = 512
-PARAMS = NetworkCertifierParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
+PARAMS = NetworkAttesterParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                       ingress_buckets=3, egress_cells=9, every=2)
 CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 UNIT = bind(IS.IngressScanBucket, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
@@ -234,7 +234,7 @@ def test_the_state_is_the_layout_neg_sized():
         IS.Class(B=512, r=4, lanes=4, C=47, KI=2083)
     with pytest.raises(ValueError, match=re.escape("KI <= 147")):
         IS.Class(B=512, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8)
-    served = NetworkCertifierParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
+    served = NetworkAttesterParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
                           egress_cells=65, window=32, every=16)
     w63.serves(served)
     assert (served.program_slots, served.window_programs) == (w63.SLOTS, 8)
