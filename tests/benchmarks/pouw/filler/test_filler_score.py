@@ -7,11 +7,13 @@ fold reading, modelled served part and the TP score."""
 from __future__ import annotations
 
 import arms as A
+import pfill_arm as P
 import pytest
 import score
 import scoring as S
 
 share = S.share
+PFILL = "benchmarks/pouw/filler/pfill_arm.py:PFillRam"  # an arm with a split filler at every decode point
 
 
 def row(kind, b, l, place, *, alone_ms, arm_ms, rounds=4, mhz=2000.0, watt=300.0, chunks=10, window_ms=None,
@@ -65,9 +67,9 @@ def test_rate_over_completion_spans_and_the_peak_bound():
     st = spanned(chunk_macs=1e9)
     assert st["fill_rate"] == pytest.approx(18 * 1e9 / 18.0e-3)
     assert st["of_peak"] == pytest.approx(st["fill_rate"] / (S.PER_SM * 100 * 2000.0e6))
-    v1 = A.load("fill-v1")
-    assert S.honesty(v1, {("decode", 1, 2048): st}, [])["ok"]
-    hot = S.honesty(v1, {("decode", 1, 2048): spanned(chunk_macs=3e11, alone_rate=1e15)}, [])
+    arm = A.load(PFILL)
+    assert S.honesty(arm, {("decode", 1, 2048): st}, [])["ok"]
+    hot = S.honesty(arm, {("decode", 1, 2048): spanned(chunk_macs=3e11, alone_rate=1e15)}, [])
     assert not hot["ok"] and hot["over_peak"] and not hot["too_good"]
 
 
@@ -89,7 +91,7 @@ def test_fixed_work_is_bounded_on_its_own_sms():
     st = phased(0.8 * peak_sm * 96, fixed_sms=96)
     assert st["fill_rate"] == pytest.approx(split + 0.8 * peak_sm * 96)
     assert st["of_peak"] == pytest.approx(0.8)
-    assert S.honesty(A.load("fill-v1"), {("decode", 192, 2048): st}, [])["over_peak"] == []
+    assert S.honesty(A.load(PFILL), {("decode", 192, 2048): st}, [])["over_peak"] == []
     assert phased(1.1 * peak_sm * 96, fixed_sms=96)["of_peak"] == pytest.approx(1.1)
     assert phased(0.8 * peak_sm * 96)["of_peak"] == pytest.approx(0.8 * 96 / 92)
 
@@ -108,7 +110,7 @@ def test_too_good_compares_the_split_alone_with_its_standalone_blocks():
     assert st["fill_rate_alone"] == pytest.approx(alone)
     assert st["beside_over_alone"] == pytest.approx(split / alone) and st["beside_over_alone"] > 1.25
     assert (split + 70e12) / (alone + 180e12) < 1.0
-    assert S.honesty(A.load("fill-v1"), {("decode", 256, 1024): st}, [])["too_good"]
+    assert S.honesty(A.load(PFILL), {("decode", 256, 1024): st}, [])["too_good"]
 
 
 def test_decode_entry_coverage_uses_proved_and_provisional_fractions():
@@ -153,7 +155,7 @@ def test_mix_entry_per_request():
 
 
 def test_too_good_against_the_interleaved_reference_and_its_control():
-    v1 = A.load("fill-v1")
+    arm = A.load(PFILL)
 
     def st(chunks=200, solo=(200, 201, 199, 200, 202, 200)):
         return S.point_stats(row("step", 32, 8192, "split", alone_ms=20.0, arm_ms=20.8, chunks=chunks, rounds=len(solo),
@@ -167,27 +169,27 @@ def test_too_good_against_the_interleaved_reference_and_its_control():
     # the one calibration (alone_rate 1e12) would call this 3.2x too good; the interleaved reference doesn't
     assert honest["beside_over_calibration"] > 3 and honest["beside_over_alone"] == pytest.approx(1.0)
     pt = ("decode", 32, 8192)
-    assert S.honesty(v1, {pt: honest}, [])["ok"]
-    fast = S.honesty(v1, {pt: st(chunks=213)}, [])
+    assert S.honesty(arm, {pt: honest}, [])["ok"]
+    fast = S.honesty(arm, {pt: st(chunks=213)}, [])
     assert not fast["ok"] and fast["too_good"]
     # a noisy reference raises the limit to its spread: 1.065 against a 10% trimmed spread passes
     noisy = st(chunks=213, solo=(185, 190, 200, 200, 210, 215))
-    assert noisy["too_good_limit"] == pytest.approx(1.1) and S.honesty(v1, {pt: noisy}, [])["ok"]
+    assert noisy["too_good_limit"] == pytest.approx(1.1) and S.honesty(arm, {pt: noisy}, [])["ok"]
     bare = row("step", 32, 8192, "split", alone_ms=20.0, arm_ms=20.8, chunks=200, window_ms=62.4, fill_sms=124)
     for b in bare["blocks"]:
         del b["solo"]
     old = S.point_stats(bare)
     assert old["too_good_limit"] == S.TOO_GOOD and old["solo_rates"] == []
-    assert S.honesty(v1, {pt: old}, [])["no_reference"] == ["decode 32/8192"]
+    assert S.honesty(arm, {pt: old}, [])["no_reference"] == ["decode 32/8192"]
 
     def ctl(v):
         return {**v, "at": "decode 32/8192", "cheat_S": S.cheat_s(2048), "S": 2048}
-    caught = S.honesty(v1, {pt: honest}, [], control=ctl(st(chunks=213)), has_filler=True)
+    caught = S.honesty(arm, {pt: honest}, [], control=ctl(st(chunks=213)), has_filler=True)
     assert caught["ok"] and caught["control"]["caught"] and caught["control"]["cheat_S"] == 1920
-    blind = S.honesty(v1, {pt: honest}, [], control=ctl(noisy), has_filler=True)
+    blind = S.honesty(arm, {pt: honest}, [], control=ctl(noisy), has_filler=True)
     assert not blind["ok"] and not blind["control"]["caught"]
-    assert not S.honesty(v1, {pt: honest}, [], control=None, has_filler=True)["ok"]
-    assert S.honesty(v1, {}, [], control=None, has_filler=False)["control"] is None
+    assert not S.honesty(arm, {pt: honest}, [], control=None, has_filler=True)["ok"]
+    assert S.honesty(arm, {}, [], control=None, has_filler=False)["control"] is None
     assert [S.cheat_s(x) for x in (2048, 256, 64, 16)] == [1920, 240, 56, 8]
 
 
@@ -650,11 +652,11 @@ def test_fixed_work_is_credited_from_checked_public_tiles_of_a_read_binary():
     assert S.whole_of_peak(row("step", 1, 2048, "split", alone_ms=6.0, arm_ms=6.2)) is None
     over = fixed_row(fixed_macs=0.9 * peak, b=32)  # the filler warps alone under the peak, with serving's MACs past it
     assert 1 < S.whole_of_peak(over) and S.point_stats(over)["of_peak"] == pytest.approx(0.9)
-    v1 = A.load("fill-v1")
+    arm = A.load(PFILL)
     st = {("decode", 32, 2048): S.point_stats(over)}
-    h = S.honesty(v1, st, [], whole={"decode 32/2048": S.whole_of_peak(over)})
+    h = S.honesty(arm, st, [], whole={"decode 32/2048": S.whole_of_peak(over)})
     assert not h["ok"] and h["over_peak_whole"] and not h["over_peak"]
-    assert "over_peak_whole" not in S.honesty(v1, st, [])  # v3's honest gate is unchanged
+    assert "over_peak_whole" not in S.honesty(arm, st, [])  # v3's honest gate is unchanged
 
 
 def test_record_limits_are_checked_when_the_arm_loads():
@@ -662,22 +664,22 @@ def test_record_limits_are_checked_when_the_arm_loads():
     after the run (a 249-character hypothesis reached `score.record` only after a scored run)."""
     import dataclasses
 
-    v1 = A.FillV1()
-    assert A.check_arm(v1, record=True) == [] and A.check_arm(A.Idle(), record=True) == []
-    assert A.load("fill-v1", record=True).name == "fill-v1"
+    arm = P.PFillRam()
+    assert A.check_arm(arm, record=True) == [] and A.check_arm(A.Idle(), record=True) == []
+    assert A.load(PFILL, record=True).name == "pfill-ram"
 
     def problems(**kw):
-        lin = {k: v for k, v in kw.items() if k in v1.lineage}
-        return A.check_arm(dataclasses.replace(v1, lineage={**v1.lineage, **lin},
+        lin = {k: v for k, v in kw.items() if k in arm.lineage}
+        return A.check_arm(dataclasses.replace(arm, lineage={**arm.lineage, **lin},
                                                **{k: v for k, v in kw.items() if k not in lin}), record=True)
 
-    long = dataclasses.replace(v1, lineage={**v1.lineage, "hypothesis": "x " * 124 + "y"})
+    long = dataclasses.replace(arm, lineage={**arm.lineage, "hypothesis": "x " * 124 + "y"})
     assert A.check_arm(long) == []  # v2's load check lets it through to the lease
     assert any("at most 240 characters, not 249" in p for p in A.check_arm(long, record=True))
     assert problems(hypothesis="x" * 240) == []
     assert any("choice" in p and "not 300" in p for p in problems(choice="c" * 300))
     assert any("whole art: id" in p for p in problems(parent="art:cc59294a"))
-    assert problems(parent="art:" + "0" * 64) == [] and problems(parent="fill-v1") == []
+    assert problems(parent="art:" + "0" * 64) == [] and problems(parent="idle") == []
     assert any("lineage.parent 5" in p for p in problems(parent=5))
     assert any("list of tags" in p for p in problems(mechanism="place:split"))
     for tags in (["place:split", 5], ["place:split", " "]):  # one entry among the tags that is not a tag
@@ -685,25 +687,25 @@ def test_record_limits_are_checked_when_the_arm_loads():
     assert problems(mechanism=("place:split", "prefill:none")) == []
     assert any("canonical JSON" in p for p in problems(approach={1, 2}))
     assert any("past the store's meta limit" in p for p in problems(approach="a" * 300 * 1024))
-    assert any("don't make a variant" in p for p in problems(sources=v1.sources + v1.sources[:1]))
+    assert any("don't make a variant" in p for p in problems(sources=arm.sources + arm.sources[:1]))
     assert any("don't make a variant" in p for p in problems(sources=("/etc/hostname",)))
-    assert any("filler.noise" in p for p in A.check_arm(dataclasses.replace(v1, filler=A.Filler(noise="gauss"))))
-    assert A.check_arm(dataclasses.replace(v1, filler=A.Filler(noise="bitsU"))) == [] and v1.filler.noise == "chained"
+    assert any("filler.noise" in p for p in A.check_arm(dataclasses.replace(arm, filler=A.Filler(noise="gauss"))))
+    assert A.check_arm(dataclasses.replace(arm, filler=A.Filler(noise="bitsU"))) == [] and arm.filler.noise == "pm1"
     # the declared noise isn't run-time config: variant ids don't move
     assert A.config(A.Filler(noise="bits01")) == A.config(A.Filler()) == {"W": "8", "NC": "4", "S": "2048",
                                                                           "chunk_log2": "19"}
 
 
 def test_arms():
-    v1, idle = A.load("fill-v1"), A.load("idle")
+    arm, idle = A.load(PFILL), A.load("idle")
     assert A.placed(idle, "decode", 32, 2048) == A.NONE
-    assert A.placed(v1, "prefill", 8192, 0) == A.NONE
-    assert A.placed(v1, "decode", 1, 2048) == A.Colocation("split", 108)
-    assert A.placed(v1, "decode", 32, 2048).fill_sms == 92  # FILL's rule: (32, 1K), the longest L ≤ 2K at B 32
-    assert A.placed(v1, "decode", 144, 5120).fill_sms == 60
-    assert A.placed(v1, "decode", 8, 16384).fill_sms == 124  # B 32's longest L ≤ 16K: (32, 8K)
-    assert S.honesty(v1, all_points(), S.points())["ok"]
-    assert not S.honesty(v1, all_points(), S.points(), has_filler=True)["ok"]  # no positive control
+    assert A.placed(arm, "prefill", 8192, 0) == A.NONE
+    assert A.placed(arm, "decode", 1, 2048) == A.Colocation("split", 108)
+    assert A.placed(arm, "decode", 32, 2048).fill_sms == 92  # FILL's rule: (32, 1K), the longest L ≤ 2K at B 32
+    assert A.placed(arm, "decode", 144, 5120).fill_sms == 60
+    assert A.placed(arm, "decode", 8, 16384).fill_sms == 124  # B 32's longest L ≤ 16K: (32, 8K)
+    assert S.honesty(arm, all_points(), S.points())["ok"]
+    assert not S.honesty(arm, all_points(), S.points(), has_filler=True)["ok"]  # no positive control
     assert A.point_lookup({(1, 10): "a", (2, 10): "b", (4, 10): "c"}, 8, 10) == "c"  # past the largest B, the largest B's
     assert A.Colocation("split", 1).fill_sms == 1 and A.Colocation("split", A.SMS - 1).fill_sms == A.SMS - 1
     for sms in (0, A.SMS):  # a split's filler SMs are in (0, SMS)
@@ -720,18 +722,18 @@ def test_an_arm_outside_its_contract_is_refused(monkeypatch):
     problem in its message; an arm's module outside the filler's directory is refused before it is run."""
     import dataclasses
 
-    v1 = A.FillV1()
+    arm = P.PFillRam()
 
     def wrong(**kw):
-        return A.check_arm(dataclasses.replace(v1, **kw))
+        return A.check_arm(dataclasses.replace(arm, **kw))
 
     for name in ("Fill_V1", "-v1", "", 5):
         assert wrong(name=name) == [f"name {name!r} is not [a-z0-9-]+"]
-    for lin in (None, {**v1.lineage, "hypothesis": ""}, {**v1.lineage, "mechanism": []}):
+    for lin in (None, {**arm.lineage, "hypothesis": ""}, {**arm.lineage, "mechanism": []}):
         assert wrong(lineage=lin) == ["lineage names a hypothesis and mechanism tags"]
-    for srcs in ((), v1.sources + ("benchmarks/pouw/filler/no_such.cu",)):
+    for srcs in ((), arm.sources + ("benchmarks/pouw/filler/no_such.cu",)):
         assert wrong(sources=srcs) == [f"sources {srcs!r} are repository files"]
-    monkeypatch.setitem(A.ARMS, "two-wrong", lambda: dataclasses.replace(v1, name="Fill_V1", choice=None))
+    monkeypatch.setitem(A.ARMS, "two-wrong", lambda: dataclasses.replace(arm, name="Fill_V1", choice=None))
     with pytest.raises(A.ArmError) as ex:
         A.load("two-wrong")
     assert str(ex.value) == "arm two-wrong: name 'Fill_V1' is not [a-z0-9-]+; choice is one line"
@@ -824,9 +826,9 @@ def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
     assert S.declared_fold({}, {"mechanism": ["receipt:ram-k32", "receipt:duo-k32"]})[0] is None
     assert tuple(S.FOLDS) == A.FOLDS
     import dataclasses
-    v1 = A.FillV1()
-    assert any("filler.fold" in p for p in A.check_arm(dataclasses.replace(v1, filler=A.Filler(fold="xor"))))
-    assert A.check_arm(dataclasses.replace(v1, filler=A.Filler(fold="duo"))) == []
+    arm = P.PFillRam()
+    assert any("filler.fold" in p for p in A.check_arm(dataclasses.replace(arm, filler=A.Filler(fold="xor"))))
+    assert A.check_arm(dataclasses.replace(arm, filler=A.Filler(fold="duo"))) == []
     assert A.config(A.Filler(fold="duo")) == A.config(A.Filler())
     # the entry: Theorem K at 0.45 under ram, 0.9 under duo; Theorem E at 0.1125 under ram; no fold, no theorem
     split = S.program_facts({"dscore": nvd((DFILL, True, K_TILE))})
@@ -878,7 +880,7 @@ def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_pro
     assert S.declared_fold({}, {"mechanism": ["receipt:xin13-k32"]})[0] == "xor-in-13"
     assert S.declared_fold({}, {"mechanism": ["receipt:li-k32"]})[0] == "lop3-imad"
     import dataclasses
-    assert A.check_arm(dataclasses.replace(A.FillV1(), filler=A.Filler(fold="lop3-imad"))) == []
+    assert A.check_arm(dataclasses.replace(P.PFillRam(), filler=A.Filler(fold="lop3-imad"))) == []
     split = S.program_facts({"dscore": nvd((DFILL, True, K_TILE))})
     for fold, flag, body in (("lop3-imad", "-DPFILL_LI", LI), ("xor-in-13", "-DPFILL_XIN13", XIN13),
                              ("xor-in", "-DPFILL_XIN", XIN)):
