@@ -2,7 +2,7 @@
 # what may stay red (`research.policy` reads it). The loop reads its allowances at a candidate's base, so no candidate's own
 # allowance covers its own failure; `research merge` reads `off_gate` at the commit it merges; the quick tier's judge reads it
 # at the tier's base on `main`. Its owner is the handle
-# whose `owns` in .agents/skills/using-slack/registry.json covers it; tools/research/tests/test_policy.py holds it to the parse and
+# whose `owns` in .agents/skills/using-slack/registry.json covers it; tests/tools/research/test_policy.py holds it to the parse and
 # to ci.toml's jobs.
 schema = "policy/v0"
 

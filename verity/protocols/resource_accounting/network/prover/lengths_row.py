@@ -17,7 +17,7 @@ to the output count its request row states, the count a tied audit already count
 least significant bit first, then zero bits to a whole 16-bit word (unread): `valid` K×1, `id` K×IW, `P` K×LW and
 `O` K×LW: the layout vLLM's compiler commits for K arrival slots, without a cap bit
 (`verity_vllm.compiler.replay_chain.arrival_fields`), to which
-`benchmarks/network_traces/tests/test_lengths_row_arrivals.py` holds this row. A slot's `id` is the request's place N
+`tests/benchmarks/network_traces/test_lengths_row_arrivals.py` holds this row. A slot's `id` is the request's place N
 in the network attester's release order, `P` its prompt's ids and `O` its outputs. A slot whose `valid` is 0 reads as
 empty whatever its other fields hold.
 

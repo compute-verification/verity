@@ -35,20 +35,20 @@ ALLOWED = {
         (("bound_charged", "best_w", "capped"), "the tied policy's period bound and its limit beside the share no "
                                                 "PoUW check credits, which no work's chooser gives"),
     "benchmarks/inference_only/report.py": ((), "prints the bound's statement names and premises"),
-    "benchmarks/inference_only/tests/test_inference_only.py":
+    "tests/benchmarks/inference_only/test_inference_only.py":
         (("bound", "bound_charged", "best_w", "capped"), "references: the policy's number and the tied rows are "
                                                          "`bound`'s and the period bound's"),
-    "benchmarks/training_slowdown/tests/conftest.py":
+    "tests/benchmarks/training_slowdown/conftest.py":
         (("bound",), "reference: the count the fixtures' bound of record is held to"),
-    "benchmarks/training_slowdown/tests/test_formalism.py":
+    "tests/benchmarks/training_slowdown/test_formalism.py":
         (("slowdown_at_least",), "reference: the record's figure is the statement's arithmetic"),
-    "benchmarks/training_slowdown/tests/test_grade.py":
+    "tests/benchmarks/training_slowdown/test_grade.py":
         (("blocks_at_least",), "reference: ρ's products term is the theorem's count solved for the fewest blocks"),
-    "benchmarks/training_slowdown/tests/test_one_calculator.py":
+    "tests/benchmarks/training_slowdown/test_one_calculator.py":
         (("bound",), "reference: the entry point's slowdown is `bound`'s at three policies"),
-    "benchmarks/training_slowdown/tests/test_program_reading.py":
+    "tests/benchmarks/training_slowdown/test_program_reading.py":
         ((), "compares a Program's reading with its trace's at one `F`"),
-    "benchmarks/circuit_properties/tests/test_work.py":
+    "tests/benchmarks/circuit_properties/test_work.py":
         (("bound",), "reference: the reading's bound is `bound` at its products' sums"),
 }
 FIX = ("every slowdown the calculator's callers compute comes from its `min_cut.slowdown_of`: read your work into its `Product`s and call "
