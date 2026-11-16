@@ -1367,12 +1367,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "NetTiming.Regenerates": {
-   "owner": "@network-accounting",
-   "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "NetTiming.ScopeAcc": {
    "owner": "@network-accounting",
    "digest": "4ae13150ab93f5db023464d876b21de5711afc9c810d85edcdb87b9b7a6c2059",
@@ -4614,10 +4608,6 @@
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledAuditAccepted_nontrivial"
   },
-  "NetTiming.SecurityProofs.SampledLeakAccepted": {
-   "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
-   "nontrivial": "NetTiming.Witness.SampledLeakAccepted_nontrivial"
-  },
   "NetTiming.SecurityProofs.SampledLeakRegistered": {
    "honest": ["NetTiming.Witness.MonitoringPeriodLeakAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakRegistered_nontrivial"
@@ -4798,38 +4788,9 @@
    "honest": ["Flock.SecurityProofs.MaskedKSTable_honest"],
    "nontrivial": "Flock.SecurityProofs.MaskedKSTable_nontrivial"
   },
-  "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
-   "honest": ["NetTiming.Witness.EncardAccSeqsSampledLe_honest"],
-   "nontrivial": "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial"
-  },
-  "NetTiming.SecurityProofs.EncardIngressDecodableLe": {
-   "honest": ["NetTiming.Witness.Ingress_honest"],
-   "nontrivial": "NetTiming.Witness.EncardIngressDecodableLe_nontrivial",
-   "kind": "acceptance"
-  },
-  "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": {
-   "honest": ["NetTiming.Witness.Ingress_honest"],
-   "nontrivial": "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial",
-   "kind": "acceptance"
-  },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": {
-   "honest": ["NetTiming.Witness.Ingress_honest"],
-   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial",
-   "kind": "acceptance"
-  },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": {
    "honest": ["NetTiming.Witness.Ingress_honest"],
    "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial",
-   "kind": "acceptance"
-  },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase": {
-   "honest": ["NetTiming.Witness.Ingress_honest"],
-   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerExecutionPhase_nontrivial",
-   "kind": "acceptance"
-  },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase": {
-   "honest": ["NetTiming.Witness.Ingress_honest"],
-   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLePerExecutionPhase_nontrivial",
    "kind": "acceptance"
   },
   "Flock.SecurityProofs.SpotOneWaitTwo": {
@@ -4933,10 +4894,6 @@
   "NetTiming.SecurityProofs.PooledLeakRegistered": {
    "honest": ["NetTiming.Witness.PooledLeakRegistered_honest"],
    "nontrivial": "NetTiming.Witness.PooledLeakRegistered_nontrivial"
-  },
-  "NetTiming.SecurityProofs.MonitoringPeriodLeakFails": {
-   "honest": ["NetTiming.Witness.MonitoringPeriodLeakChecked_honest"],
-   "nontrivial": "NetTiming.Witness.MonitoringPeriodLeakChecked_nontrivial"
   },
   "NetTiming.SecurityProofs.MonitoringPeriodLeakFailsAtMost": {
    "honest": ["NetTiming.Witness.MonitoringPeriodLeakChecked_honest"],
@@ -13526,74 +13483,6 @@
    "type_hash": "13c91de0d54a4ae64acda04816087d6fb71cdf51978a4bb0a7d42911c4c8b51b",
    "unfolded_hash": "760f5bc81274da3f9967128685763dc37e22c277862794586886dd104b3931d0"
   },
-  "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["NetTiming.BoundaryGates.Fits"],
-    "reads": []
-   },
-   "type_hash": "43967fd407da24e706715b2b9d480f1e32e3241ad802b706264dbc8fb5365ce0",
-   "unfolded_hash": "3c2ae0fe13a1c7e10f136947616e649417a82214cb763994e7a7794456df8e48"
-  },
-  "NetTiming.SecurityProofs.EncardIngressDecodableLe": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.EncardIngressDecodableLe : NetTiming.Guarantees.EncardIngressDecodableLe"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "NetTiming.Allocated",
-     "NetTiming.JitterBounded",
-     "NetTiming.Packed",
-     "NetTiming.Regenerates",
-     "NetTiming.StatusComplete"
-    ],
-    "reads": []
-   },
-   "type_hash": "573fa5899e9bf7dc405fe54301de29c9298da91c72c35eb4269c04b82284b1b0",
-   "unfolded_hash": "b4e773769a42a7775e9ed36c4c5e6ce8f403b52aaf41f74d72f2e4cef3b62cf3"
-  },
-  "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardIngressDecodableLeContents : NetTiming.Guarantees.EncardIngressDecodableLeContents"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "NetTiming.Allocated",
-     "NetTiming.JitterBounded",
-     "NetTiming.Packed",
-     "NetTiming.Regenerates",
-     "NetTiming.StatusComplete"
-    ],
-    "reads": []
-   },
-   "type_hash": "3440d51f33b630457f4da31510ecf35700d053c06e69fa93448f649c9b85e861",
-   "unfolded_hash": "864bb1d90aed9477d686313e10570ec3ed6062d0e1bf20ff2836a091dbe36a39"
-  },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLe : NetTiming.Guarantees.EncardIngressObsDecodableLe"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["NetTiming.Allocated", "NetTiming.JitterBounded", "NetTiming.Packed", "NetTiming.StatusComplete"],
-    "reads": []
-   },
-   "type_hash": "2ca793f68266f5d8b633599df98d5a44b14180caa908bc4ed29f780257ee184a",
-   "unfolded_hash": "bcd22359a27a42f0fa83e51ec77e81804207771c82a3f783187d3134052954c9"
-  },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": {
    "owner": "@network-accounting",
    "signature": [
@@ -13608,38 +13497,6 @@
    },
    "type_hash": "bdbc1f954c6569542c9d89590e8f6797c070343487e075e38dd8a2e9a24d5f44",
    "unfolded_hash": "788c608f427e0d1178622df46f79422fac33d0510a59bb632c11b71b63edfd0c"
-  },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase :",
-    "  NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerExecutionPhase"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["NetTiming.Allocated", "NetTiming.JitterBounded", "NetTiming.Packed", "NetTiming.StatusComplete"],
-    "reads": []
-   },
-   "type_hash": "86ad855d5ef178a60453acb69b4e4780b9cfae6a66529339a418898ca5616cdf",
-   "unfolded_hash": "c2672a78e30e5cc8d00e7df5644099ed9a04f917858b3e91f3e285794c280e7e"
-  },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase :",
-    "  NetTiming.Guarantees.EncardIngressObsDecodableLePerExecutionPhase"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["NetTiming.Allocated", "NetTiming.JitterBounded", "NetTiming.Packed", "NetTiming.StatusComplete"],
-    "reads": []
-   },
-   "type_hash": "efe0b2b2d0ca57ef28bb67e4088c966f572e128ea00c33743f343d551ca16f89",
-   "unfolded_hash": "e5093edbc65b0920bf70c9ecc4178e858c845dad83735ddbce94696116ef46d0"
   },
   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": {
    "owner": "@network-accounting",
@@ -13714,31 +13571,6 @@
    },
    "type_hash": "fa3270274579278ff66d020a5b50e9b329ae1d85bc2a6fb7c5d23395099b7455",
    "unfolded_hash": "d73a29de7b341f7f109e56f5c141174738557a52370694230ad1a88b4ae149d7"
-  },
-  "NetTiming.SecurityProofs.MonitoringPeriodLeakFails": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.MonitoringPeriodLeakFails : NetTiming.Guarantees.MonitoringPeriodLeakFails"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [
-     "Claims.Sampling.CommitmentScheme.Binds",
-     "NetTiming.ExecutionPhasesPlaced",
-     "NetTiming.MonitoringPeriodChannelReg",
-     "NetTiming.RecordFormat.ReadsBy"
-    ],
-    "open": [
-     "Claims.SamplingGeneric.Compiled.KS",
-     "NetTiming.CertifierRegisters",
-     "NetTiming.CheckedUnique",
-     "NetTiming.CheckedWitness",
-     "NetTiming.ScopeAcc",
-     "Verity.Assumptions.TrustedDevice"
-    ],
-    "reads": ["NetTiming.RegisteredInputsHeld"]
-   },
-   "type_hash": "dc4794f5603639f5286ff3954d6d7767359723ca9465282f68b30561973f579a",
-   "unfolded_hash": "23ee8826970c123bd6cd4da5dad03e08be2db09a831353d723af6f8361cddc87"
   },
   "NetTiming.SecurityProofs.MonitoringPeriodLeakFailsAtMost": {
    "owner": "@network-accounting",
@@ -13866,19 +13698,6 @@
    "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
    "unfolded_hash": "d190eaf443f1ef5de7d94edc277a21c05cea0e7c99ba1aba20360d4ad721dee9"
   },
-  "NetTiming.SecurityProofs.SampledLeakAccepted": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.ScopeAcc"],
-    "reads": []
-   },
-   "type_hash": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d",
-   "unfolded_hash": "3eefff6dd7010be291b90622b8e5272e03a0ddd0818118934c446821d84f5cc8"
-  },
   "NetTiming.SecurityProofs.SampledLeakCarried": {
    "owner": "@proofs",
    "signature": ["NetTiming.SecurityProofs.SampledLeakCarried : NetTiming.Guarantees.SampledLeakCarried"],
@@ -13928,132 +13747,6 @@
    "type_hash": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3",
    "unfolded_hash": "6a0796e9bf06ecbef9e66af2b2c4f822e7805cc12eb1832fbc52f5939284365e"
   },
-  "NetTiming.Witness.EncardAccSeqsSampledLe_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardAccSeqsSampledLe_honest :",
-    "  And (NetTiming.Witness.notLay.Fits NetTiming.Witness.sampProg 1)",
-    "    (And",
-    "      (instLEENat.le",
-    "        (NetTiming.AsReg NetTiming.Witness.sampProg NetTiming.Witness.notLay 1",
-    "            Finset.instEmptyCollection.emptyCollection fun x => Bool.false).encard",
-    "        (instHPow.hPow 2 1).cast)",
-    "      (And",
-    "        (∀ (F : Finset Nat),",
-    "          SetLike.instMembership.mem",
-    "              (NetTiming.incorrectSets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4)) F →",
-    "            instLENat.le (NetTiming.faultyBits NetTiming.Witness.sampProg NetTiming.Witness.sampPart F) 3)",
-    "        (And",
-    "          (SetLike.instMembership.mem",
-    "            (NetTiming.incorrectSets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4))",
-    "            (Finset.instSingleton.singleton 0))",
-    "          (Set.instMembership.mem",
-    "            (NetTiming.AccSeqsSampled NetTiming.Witness.sampProg NetTiming.Witness.sampPart NetTiming.Witness.sampDesign",
-    "              NetTiming.Witness.notLay 1",
-    "              (NetTiming.AsReg NetTiming.Witness.sampProg NetTiming.Witness.notLay 1",
-    "                Finset.instEmptyCollection.emptyCollection fun x => Bool.false)",
-    "              (1 / 4) (fun x x_1 => List.cons Bool.false List.nil) 1)",
-    "            (List.cons NetTiming.Witness.obs1 List.nil)))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "3e228bc9705ca064aa796bae12cad25b0a627cfb8cd8f408ed4a5b40a949345a"
-  },
-  "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial :",
-    "  Not",
-    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 1 1).encard",
-    "      (instHMul.hMul",
-    "          (instHMul.hMul",
-    "            (instHMul.hMul (instHPow.hPow 2 1)",
-    "              (NetTiming.incorrectSets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4)).card)",
-    "            (instHPow.hPow 2 3))",
-    "          (instHPow.hPow 1 1)).cast)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "b752b5b456f6760859bc4dcd702ae6f5c10f36884aada95b0d7a2f32cc6c0589"
-  },
-  "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 4)) z)).encard",
-    "      (instHMul.hMul",
-    "        (Set.instInsert.insert (fun x => List.cons (List.cons Bool.true List.nil) List.nil)",
-    "            (Set.instSingletonSet.singleton fun x => List.cons (List.cons Bool.false List.nil) List.nil)).encard",
-    "        (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "30e109ae8259ca7d82a73dcd193752728ce1878ae671d355dda7f9589ea5ae14"
-  },
-  "NetTiming.Witness.EncardIngressDecodableLe_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardIngressDecodableLe_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 4)) z)).encard",
-    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "b95457a291b12d33f669614bccaf6dfe6214db96dd065740ee82410d83871691"
-  },
-  "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerExecutionPhase_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerExecutionPhase_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2)))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2))) z)).encard",
-    "      (instHMul.hMul",
-    "        (Set.instInsert.insert (fun x => List.cons (List.cons Bool.true List.nil) List.nil)",
-    "            (Set.instSingletonSet.singleton fun x => List.cons (List.cons Bool.false List.nil) List.nil)).encard",
-    "        (instHPow.hPow",
-    "            (instHMul.hMul (Finset.univ.prod fun _ℓ => instHPow.hPow (instHAdd.hAdd 1 1) 2) (instHPow.hPow 1 2))",
-    "            2).cast))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "e8473720806791eb3c1b3d6e5b74613ffd871cc6942e9d2f1c7c0350f5852e61"
-  },
   "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial": {
    "owner": "@network-accounting",
    "signature": [
@@ -14076,47 +13769,6 @@
     "reads": []
    },
    "type_hash": "e9804570257e38245ab7abda1ff623ed8c62dc48cdae3a17112633c3b5b6c2b7"
-  },
-  "NetTiming.Witness.EncardIngressObsDecodableLePerExecutionPhase_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardIngressObsDecodableLePerExecutionPhase_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2)))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2))) z)).encard",
-    "      (instHPow.hPow",
-    "          (instHMul.hMul (Finset.univ.prod fun _ℓ => instHPow.hPow (instHAdd.hAdd 1 1) 2) (instHPow.hPow 1 2)) 2).cast)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "6d89ee450eb36c97668699bef9f3405a3da163844d9b219f6c372da9b68c56bf"
-  },
-  "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z 4)) z)).encard",
-    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "3eafe73f21390c2e120cb879038944495ab8c62d872d7928f2404a1207bbf828"
   },
   "NetTiming.Witness.Ingress_honest": {
    "owner": "@network-accounting",
@@ -14791,31 +14443,6 @@
     "reads": []
    },
    "type_hash": "208e8af7df24eca28fb9a82a7b316b452c653ec1bd3cec0617f38f9fbd4216db"
-  },
-  "NetTiming.Witness.SampledLeakAccepted_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.SampledLeakAccepted_nontrivial :",
-    "  Not",
-    "    (Claims.Sampling.KSLinOn FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.leakL Bool).V",
-    "      (NetTiming.ScopeAcc (Claims.Witness.SamplingGeneric.leakL Bool) (fun x => NetTiming.Witness.notLay) fun x => 1)",
-    "      (NetTiming.RLeak FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.leakL Bool).commit",
-    "        (Claims.Witness.SamplingGeneric.leakL Bool).parse (Claims.Witness.SamplingGeneric.leakL Bool).partition 1 1 1",
-    "        (fun x => NetTiming.Witness.notLay) (fun x => 1) 0",
-    "        (fun s => NetTiming.AsReg s.prog NetTiming.Witness.notLay 1 Finset.instEmptyCollection.emptyCollection) 1)",
-    "      (Claims.Witness.SamplingGeneric.leakL Bool).E ((Claims.Witness.SamplingGeneric.leakL Bool).κ 0)",
-    "      (Claims.Witness.SamplingGeneric.leakL Bool).γ (fun x => 1)",
-    "      (Claims.Sampling.Bext FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.leakL Bool).V",
-    "        (Claims.Witness.SamplingGeneric.leakL Bool).E))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["NetTiming.ScopeAcc"],
-    "reads": []
-   },
-   "type_hash": "65febd6c51800e154ad016b8bd55af25b9d235e2236e77ee60d9fecc7c08272a"
   },
   "NetTiming.Witness.SampledLeakCarried_honest": {
    "owner": "@proofs",
@@ -27925,8 +27552,6 @@
    "FlockSoundness.Audit.audit_work_floor": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "FlockSoundness.Audit.audit_work_whole_stratum": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "FlockSoundness.Discharge.FailClosed.flock_verify_sound": "frozen (hash): Scope now follows from acceptance, but it still takes the table finders' bounds as hypotheses, listed (TableCRZAt under --zk; TableCRAt, and LinkCRAt for the link, without it), and bounds the --zk link by if LinkCRZC then the bound else top; it also takes A3 (UniformRandomBytes) and live-verifier custody, both listed: RecordCustodyExec (RecordCustodyExecH at hidden outputs) without --zk, RecordCustodyZKLaw (RecordCustodyZKHLaw, and RecordCustodyZKJLaw, RecordCustodyZKHJLaw at J tables) under --zk.",
-   "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
-   "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
    "Pous.SecurityProofs.BandMultiMeetsFamily": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and security/Definitions/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.BandMultiMeetsFamilyD0": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and security/Definitions/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.BandMultiMeetsFamilyD1": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and security/Definitions/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
@@ -27942,10 +27567,7 @@
    "Pouw.SecurityProofs.EndToEnd": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": "frozen (no-function): Its function is tileCheck8 or tileCheck4, a model in security/Definitions/Pouw/PearlC rather than executable code, so it fits only if top rules that a Definitions-level check is a named function; it would then be restated with ComputesWords opened and the step's w >= 24 as a definition.",
    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore": "frozen (no-function): Its function is tileCheck8 or tileCheck4, a model in security/Definitions/Pouw/PearlC rather than executable code, so it fits only if top rules that a Definitions-level check is a named function; it would then be restated with ComputesWords opened and the step's w >= 24 as a definition.",
-   "NetTiming.SecurityProofs.EncardIngressDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
-   "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
-   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
    "Flock.SecurityProofs.PublicAudit": "restatable: (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, and the obligations _hob (VStarParses) and _hF (TagsFound), none a premise; it fits once the recursive model's inputs and count curve, and those two obligations, are restated as premises (constants of Proofs.Flock.Recursive.Premises).",
    "Flock.SecurityProofs.RanRegisteredRun": "frozen (obligation,no-function): It is about an abstract session (a game G and its acceptance acc) rather than a Lean function, and takes that session's soundness bound (prob (acc ∧ Q) ≤ B) as an open obligation, beside the commitment's binding (com.Binding, an extractor's pair, no hash assumed) and the registrant's opening. It stays here until RecursiveAudit is pinned.",
    "Flock.SecurityProofs.RecursiveCircuitIndist": "frozen (obligation,no-function): RecursiveCircuitPrivate's two-circuit form: it takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter, OuterSessionsZK) as open obligations; as an indistinguishability statement at two honest witnesses it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned.",
@@ -28241,7 +27863,6 @@
    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.SpareCapacityAtDeadline": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.PearlCSampledByDeadline": "frozen (no-function,hash): It carries GγSampled, Pearl-C's γ-gap property under the sampled audit (a premise its instances derive from the named open conjecture TTOutTilePearlCDevRev1W1, at W1), to the deadline under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
-   "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": "frozen (no-function): It bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts with some incorrect set that RAcc allows at delta, not runs of the network check's code, and takes the layout's fit (BoundaryGates.Fits) and the counts of the other inputs and of the faulty units' committed bits as premises; SampledAuditAccepted carries an accepted sampled audit to RAcc delta, so the two composed are the restatement path.",
    "Flock.SecurityProofs.RecursiveRanRegisteredExec": "frozen (obligation,world-unlisted,scope): RecursiveRanRegistered at the compiled inner protocol the verifier of record runs (innerAt) and the executable's row registration (rowCommit, whose binding is proved), with InnerSound proved and no A3; it takes what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the developer's openings (_hreg); beside VBridge and the outer sessions' custody (ZkOuter's fields hRec, Zk.RecordsCustodyZKJ, and hDraw, Zk.DrawCustodyZKHJ), all listed, it takes their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided per prover, the overlapped floor of record at each adversary's own error: the same floor and the same parity luck 0.854 per draw, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (ORunMap), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOverlapOneSided and ChargeVF3j16Overlap, as OverlapFloorKOneSided does. c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorK per prover: the same floor and the same luck 3/4 per draw, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (ORunMap), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOverlapAffine and ChargeVF3j16Overlap, as OverlapFloorK does. It is a sibling of OverlapFloorKOneSidedPerProver, proved on its own scope; K1 is not claimed outside the two proved scopes.",
@@ -28250,7 +27871,6 @@
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSidedJ10R per prover (J10-R's call design): the same floor and the same parity luck 0.854, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (JRunMap), not the service's code, and takes three premises: ServiceSoundStagedJ10RPerProver (ServiceSoundStagedJ10R's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOneSidedJ10R and ChargeVF3j16J10R, as StagedFloorKOneSidedJ10R does. c = 1 on the call's one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSidedJ10R per prover (J10-R's call design): the same floor and the same parity luck 0.854 per call, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (JORunMap), not the service's code, and takes three premises: ServiceSoundOverlapJ10RPerProver (ServiceSoundOverlapJ10R's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOverlapOneSidedJ10R and ChargeVF3j16OverlapJ10R, as OverlapFloorKOneSidedJ10R does. c = 1 on the calls' one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
    "ResourceAccounting.SecurityProofs.Remote.SketchBoundLine": "frozen (no-function,hash): It carries the receipts' sketch bound to the memory line's coins (ResourceAccounting.Remote.Sample.Coins n κ X at X a sketch outcome, the space LineHeld is stated over), not the verifier's code: SketchBound at δ on the line's trace read on the sketch outcomes (ResourceAccounting.Remote.Held.Trace.sketch, a block computed on outside the node counted with the chips') is SketchBoundAt at δ on the line's trace, so ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed on that trace, its prover's coins carrying the openings coins, gives LineHeld's SketchBoundAt premise at its δs, timing.sketch_failure (red team RD-25, note:20261025T0040Z-report-sketch-lift).",
-   "NetTiming.SecurityProofs.SampledLeakAccepted": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.Certifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.SamplingGeneric.Compiled.KS at each compiled verifier), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_reg's statement, which charges the free inputs outside each statement's registered inputs (freeInputs \\ reg, at AsReg), since RAcc pins the inputs to the trace's committed values.",
    "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a compiled sampled verifier's knowledge soundness (Claims.SamplingGeneric.Compiled.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the incorrect set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts.",
    "Flock.SecurityProofs.IntegrityBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityPooled on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "ResourceAccounting.SecurityProofs.BandwidthOfAuditPerRun": "frozen (no-function,hash): It is BandwidthOfAudit at the coins drawn: it carries ResourceAccounting.SecurityProofs.Remote.AuditRO, a bound in the random-oracle model over an abstract chip program, to the per-run bandwidth guarantee (BandwidthSoundPerRun) of an abstract run of the device model whose verdicts are a field of the run (security/Definitions/Poub/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
@@ -28475,7 +28095,6 @@
    "Flock.SecurityProofs.JointPooledV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (monitoringPeriodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointMonitoringPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointPooledV5 (security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Pouw.Guarantees.Window.ExecutionPhaseDelta": "unstated: M2 with C1, a window's failure probability δ from its calls' in the compiled tables' shape (max of the calls' knowledge constants, plus one window-level collision term of the prover's state, plus the sum of their link terms at the window's state, at a draw that depends on the registration); stated first, in the order statement, red team, card, proof, and its theorem Pouw.SecurityProofs.Window.ExecutionPhaseDelta is not proved yet.",
    "NetTiming.SecurityProofs.PooledLeakRegistered": "frozen (no-function): It is PooledLeakAccepted's first conclusion with both of its inputs at each execution phase proved, at the incorrect sets of one trace (WregR: the trace read at the statement with the registered openings, regValR, which the phase's statement, its prover's strategy and its registered openings fix before the phase's sample). It is stated over an abstract monitoring period of execution phases on a product of live coins (Fin m → Tp × (Fin kV → Coin)), each statement judged by a compiled sampled verifier (D y, with Claims.SamplingGeneric.Arg.KS, and CommitmentScheme.Binds and Compiled.Sessions at every statement's verifier), each phase reading only the earlier phases' coins (PhasesAdaptive), and bounds Pr[every phase accepted, registered as the period's (PhaseRegistered) and with a complete record (RecordComplete), ∧ ¬PooledGood at WregR] by (1 − q)^Fmax + Σ e_i: q is the rate every phase's sample met (RateAt, a hypothesis), and e_i is at least Compiled.εregX plus the registered openings' binding term (PhaseErrors), where the registered openings pass and open every registered input (RegOpens), the layouts fit (BoundaryGates.Fits) and the network certifier registers each accepted phase's record among them (CertifierRegisters). It counts no secrets, and it is not a run of the sampled verifier, the challenger's sample or the network check's code: it is not the deployed system's bound over a monitoring period until a compiled instance of the deployed verifier meets its premises and the rate and the phases' order are derived from what that verifier accepts.",
-   "NetTiming.SecurityProofs.MonitoringPeriodLeakFails": "frozen (no-function,world-unlisted): It is MonitoringPeriodLeakChecked with each failure charged as it happens, at exactly j failed connections: it takes MonitoringPeriodLeakChecked's premises and no other, keeps its first clause word for word, and lets each window's operator and registered values, bound before the secrets, read the run's fail pattern (failCell at every connection of the monitoring period) and nothing else of the run; where the network certifier registers its observations at every window at the pattern's operator (CertifierRegisters, an antecedent), the secrets whose run fails exactly j connections, each below its cap (failCount, FailsBelow), and whose every window meets its good event at the pattern's registered values (ExecutionPhaseGoodChecked, a condition on the secrets counted and no hypothesis of this statement) number at most the fail patterns of j connections (failPatterns) times MonitoringPeriodLeakChecked's count, the registered parameters' number times the windows' count; a failure is paid for in that factor alone, the count has no factor for a connection's cells, and like MonitoringPeriodLeakChecked it bounds the cells of the network certifier's code (recordingCode) under trusted-device (TrustedDevice), not runs of the network check's code or of a compiled certifier program.",
    "NetTiming.SecurityProofs.MonitoringPeriodLeakFailsAtMost": "frozen (no-function,world-unlisted): It is MonitoringPeriodLeakChecked with each failure charged as it happens, at no more than j failed connections: MonitoringPeriodLeakFails's premises and first clause, and, where the network certifier registers at the pattern's operator (CertifierRegisters, an antecedent), for the secrets whose every window meets its good event at the pattern's registered values (ExecutionPhaseGoodChecked, an antecedent) it holds MonitoringPeriodLeakChecked's read-back on every run, with failed connections as with none (the client's cells read from the windows' records under a registered parameter, each record in AccSeqsChecked at the pattern's operator and registered values), and counts those whose run fails at most j connections, each below its cap, by the fail patterns of 0 to j connections (failPatterns, summed) times the registered parameters' number times the windows' count. The factor is one at j = 0 and is met at one connection of cap 1 (NetTiming.Witness.MonitoringPeriodLeakFailsAtMost_factor_met: both secrets counted against MonitoringPeriodLeakChecked's count of 1, the factor 2); and RecordFormat.ReadsBy holds at a format that writes each lane's length, released data and fail cell, under the link's parameters (NetTiming.LengthsRows.readsBy, at an abstract layout: no device's layout is modelled).",
    "NetTiming.SecurityProofs.MonitoringPeriodLeakCharged": "frozen (no-function,world-unlisted): It is MonitoringPeriodLeakFails's count as a charge that adds over monitoring periods: MonitoringPeriodLeakFails's premises, weights on the number of failed connections that sum to at most one (KraftWeights) and finitely many registered parameters, and that the network certifier registers at the pattern's operator (CertifierRegisters, here a premise of the whole statement, which has one clause), and for every T the secrets whose every window meets its good event at the pattern's registered values (ExecutionPhaseGoodChecked, a condition on the secrets counted and no hypothesis of this statement), whose fail cells are below their caps (FailsBelow) and whose run's charge (the fail patterns of its number of failures times the registered parameters' number times the windows' count, over that number's weight) is at most T number at most T. It states no bound on a window's audit: that is MonitoringPeriodLeakFails's first clause. Without the weights' sum the count fails (NetTiming.Witness.MonitoringPeriodLeakCharged_kraft_exclusion, at weights that sum to 2).",
    "Flock.SecurityProofs.IntegrityMonitoringPeriod": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -28836,33 +28455,9 @@
     "∀ (g : Fin d.D.N), Eq (d.D.isInput g) Bool.false → instLENat.le 1 (d.D.w g)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Fin d.D.N), instLENat.le (d.D.w g) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
-    "instLEENat.le As.encard (instHPow.hPow 2 c).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.incorrectSets d P δ) F → instLENat.le (NetTiming.faultyBits C P F) β": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "NetTiming.SecurityProofs.EncardIngressDecodableLe": {
-    "∀ (m : Msg), Set.instMembership.mem Ms m → ∀ (ℓ : Fin L), (NetTiming.linkFrames (I.obsRun m n) ℓ).IsPrefix (c ℓ)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (m : Msg), Set.instMembership.mem Ms m → Eq (dec (I.wireRun m n)) m": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": {
-    "∀ (m : Msg), Set.instMembership.mem Ms m → Exists fun c => And (Set.instMembership.mem Cs c) (∀ (ℓ : Fin L), (NetTiming.linkFrames (I.obsRun m n) ℓ).IsPrefix (c ℓ))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (m : Msg), Set.instMembership.mem Ms m → Eq (dec (I.wireRun m n)) m": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": {
-    "∀ (m : Msg), Set.instMembership.mem Ms m → ∀ (ℓ : Fin L), (NetTiming.linkFrames (I.obsRun m n) ℓ).IsPrefix (c ℓ)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (m : Msg), Set.instMembership.mem Ms m → Eq (dec (I.obsRun m n)) m": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": {
     "∀ (m : Msg), Set.instMembership.mem Ms m → Exists fun c => And (Set.instMembership.mem Cs c) (∀ (ℓ : Fin L), (NetTiming.linkFrames (I.obsRun m n) ℓ).IsPrefix (c ℓ))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (m : Msg), Set.instMembership.mem Ms m → Eq (dec (I.obsRun m n)) m": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase": {
-    "∀ (msg : Msg), Set.instMembership.mem Ms msg → Exists fun c => And (Set.instMembership.mem Cs c) (∀ (ℓ : Fin L), (NetTiming.linkFrames (I.obsRun msg (instHMul.hMul m T)) ℓ).IsPrefix (c ℓ))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (msg : Msg), Set.instMembership.mem Ms msg → Eq (dec (I.obsRun msg (instHMul.hMul m T))) msg": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase": {
-    "∀ (msg : Msg), Set.instMembership.mem Ms msg → ∀ (ℓ : Fin L), (NetTiming.linkFrames (I.obsRun msg (instHMul.hMul m T)) ℓ).IsPrefix (c ℓ)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (msg : Msg), Set.instMembership.mem Ms msg → Eq (dec (I.obsRun msg (instHMul.hMul m T))) msg": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": {
     "∀ (i : Fin n), Eq (D.partition (sw i)) (Option.some (Pw i))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28891,9 +28486,6 @@
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m) (ω : Fin m → Ω), Real.instLE.le (Claims.Pr (acc z i ω)) (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 q) (W z ω i).card) (e i))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "NetTiming.SecurityProofs.SampledLeakAccepted": {
-    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.incorrectSets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakRegistered": {
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.incorrectSets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -31052,12 +30644,7 @@
   "Definitions.Certifier.Guarantees": {
    "digest": "46a0f8a94dc6cc39f4d750c5a7feeece5bfa503aadd9919281e5471d2cc61410",
    "definitions": {
-    "NetTiming.Guarantees.EncardIngressDecodableLe": "701afa39b7723199d26d1dba9f53c680563db7d7d1b678f0c721fa8cd7a3ceb2",
-    "NetTiming.Guarantees.EncardIngressDecodableLeContents": "2a968e876707f2bc0aee9c57e8afb4eaecbc7f6bcbb8744abb28a7d1689b2619",
-    "NetTiming.Guarantees.EncardIngressObsDecodableLe": "1e662478183ed129f72b09125137820af5694fb59ac9ee9b93c618b2b61fc027",
-    "NetTiming.Guarantees.EncardIngressObsDecodableLeContents": "8610085580040505e3d7f8408af73b916138fdb3ff34b6f8ef0ea9b365db7f85",
-    "NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerExecutionPhase": "f23e16df303eee20fc08ff91de3e52f1158d381baafee6cd6a45e99d9366139e",
-    "NetTiming.Guarantees.EncardIngressObsDecodableLePerExecutionPhase": "b3498c8c71a69a436a35c0eaf9965702dd7dfe1ff43240885ff14c5d3962f7f6"
+    "NetTiming.Guarantees.EncardIngressObsDecodableLeContents": "8610085580040505e3d7f8408af73b916138fdb3ff34b6f8ef0ea9b365db7f85"
    }
   },
   "Definitions.Certifier.Guarantees.Carried": {
@@ -31149,8 +30736,6 @@
   "Definitions.Certifier.Guarantees.SampledCharge": {
    "digest": "0c393b111f7ec5fbdacb6a70bd5fbeac13475526a26627d2379f3792be4b355f",
    "definitions": {
-    "NetTiming.Guarantees.EncardAccSeqsSampledLe": "120c70ef78667ba5ed97bd4e0a1e77803c709288202630c55914080c04d17f6c",
-    "NetTiming.Guarantees.SampledLeakAccepted": "3793a795c42d4b2da8626e4d835aec926084e79f4fed830510120e771fd93aba",
     "NetTiming.Guarantees.SampledLeakRegistered": "c5eabac6fcd5b876957bd18f768dfe252e2d6f90a64210ecbc8df6a46f489ecf"
    }
   },
