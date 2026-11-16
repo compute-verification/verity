@@ -17,8 +17,8 @@ parallel = true
 inputs = ["verity", "adapters/torch/verity_torch/__init__.py", "adapters/torch/verity_torch/pouw/__init__.py",
           "adapters/torch/verity_torch/pouw/pearl_c", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/lakefile.toml",
           "tools/config/verity_config", "verity/protocols/resource_accounting/compute/pouw/prover/clear", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c", "benchmarks/pouw/pearl_c_sm120",
-          "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm", "benchmarks/pouw/tests/test_pearl_c_vllm.py",
-          "benchmarks/pouw/tests/test_pearl_c_hash_decode.py", "benchmarks/pouw/tests/test_pearl_c_sm90_prefill.py",
+          "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm", "tests/benchmarks/pouw/test_pearl_c_vllm.py",
+          "tests/benchmarks/pouw/test_pearl_c_hash_decode.py", "tests/benchmarks/pouw/test_pearl_c_sm90_prefill.py",
           "benchmarks/pouw/run_result.py", "benchmarks/pouw/settings.py",
           # verity_difftest, which test_pearlplus_lean imports: under `verity` until the difftest map moved it
           "tools/difftest"]

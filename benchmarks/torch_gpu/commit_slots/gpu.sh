@@ -30,7 +30,7 @@ echo "build rc $?" > "$O/rc.txt"
 # the fetched fixture the tests read, which a fresh clone lacks (commitments' layouts): fetched here, outside the lease,
 # where this Python runs the store's command and reaches the store or its public export; where it doesn't, the test that
 # reads it skips with its reason and the rest run
-FIXTURES=verity/commitments/tests/fixtures/layouts
+FIXTURES=tests/verity/commitments/fixtures/layouts
 case " $STEPS_ASKED " in *" tests "*)
   PYTHONPATH=$ROOT/tools/research/src:$PYTHONPATH $PY -m research data fetch-fixtures --repo "$ROOT" "$ROOT/$FIXTURES" \
     > "$O/fixtures.txt" 2>&1 && echo "fixtures fetched" >> "$O/rc.txt" \

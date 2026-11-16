@@ -92,7 +92,7 @@ two nodes that compute rows from one array's words into two arrays give each
 distinct rows.
 `work.bound(work, c)` hands the charged products (`work.products`: MACs at `keep`, outputs at most 16 bits) to the
 calculator's `min_cut.slowdown_of`, which chooses the sub-work, none from `HEAD_K` on. The module docstring
-has the rules and which way each moves the bound; `benchmarks/training_slowdown/tests/test_program_reading.py` holds a
+has the rules and which way each moves the bound; `tests/benchmarks/training_slowdown/test_program_reading.py` holds a
 training loop's reading beside its trace's, never above it.
 
 ## Interface
