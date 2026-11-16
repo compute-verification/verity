@@ -267,8 +267,8 @@ def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise(
 
 
 def test_no_protocol_gives_1_and_the_overhead_is_against_the_reference_at_its_mfu():
-    """The slowdown is a hardware multiple over the reference training algorithm at `MFU₀` (0.4), at least 1, so the
-    adversary no protocol encumbers is at 1, and remote under PoUW as deployed on the H200 about 1.05 (1.04 with the
+    """The slowdown is the GPU-hours over the reference training algorithm's at `MFU₀` (0.4), at least 1, so the
+    malicious developer no protocol encumbers is at 1, and remote under PoUW as deployed on the H200 about 1.05 (1.04 with the
     H200's tensor at 1,980 MHz); remote with the floor credit at the card table's clock is above it, and onsite is
     remote's, the wipe's serving cut adding nothing under the bounds a lock states. Under reference efficiency free
     compute counts at `MFU₀`, so each is its padded size ratio (3.04); without it the monitored terms shrink by 2.5
