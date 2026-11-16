@@ -1,6 +1,6 @@
 // ../row_commit.cuh's leaf, pad, node and hm96 leaf, one case at a time, for test_row_commit.py: built by a host compiler
 // (`-x c++`) it runs them on the host, and built by nvcc also on the device, a thread a case.
-#include "../row_commit.cuh"
+#include "../../../../verity/commitments/cuda/row_commit.cuh"
 
 // Named: the extern "C" entry points take its Case and Out, and nvcc gives a function whose parameter types have internal
 // linkage internal linkage too, which would hide rc_cases and rc_cases_cuda from ctypes.

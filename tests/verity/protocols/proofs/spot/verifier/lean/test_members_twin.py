@@ -63,7 +63,7 @@ A, B = f"{PAIR.id}/c0", f"{TRIPLE.id}/c0"
 UNITS = {A: [[0, 2]], B: [[2, 5]]}
 DESIGN = {"k": 2, "law": "subset"}
 #: the honest case of the form refusals' fetched fixture: a circuit a prover staged and its public file
-STAGED = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "form-refusals" / "honest"
+STAGED = Path(__file__).resolve().parents[1] / "fixtures" / "form-refusals" / "honest"
 #: `Flock.ProvedScope.refusal`'s tail, and `Flock.PortRoots.INPUTS_WHY` and `HEADER_WHY`
 FORM = ": a statement form the soundness proof does not cover"
 INPUTS_WHY = "a public file whose header names public_inputs at a circuit whose META names none"
