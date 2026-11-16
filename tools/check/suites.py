@@ -231,7 +231,7 @@ _spec = importlib.util.spec_from_file_location("suites_settings", HERE / "settin
 #: every environment variable the runner reads, declared once (`settings.py`)
 SETTINGS = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(SETTINGS)
-CACHE = Path(SETTINGS.VERITY_TEST_CACHE or Path(SETTINGS.XDG_CACHE_HOME or Path.home() / ".cache") / "tests" / "verity")
+CACHE = Path(SETTINGS.VERITY_TEST_CACHE or Path(SETTINGS.XDG_CACHE_HOME or Path.home() / ".cache") / "verity" / "tests")
 #: Files every key includes: the code that decides a suite's verdict, the runner, its settings, its guard and tracer, and the
 #: layout rule it names and keys suites by (`LAYOUT`). Not
 #: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
