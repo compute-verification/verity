@@ -41,7 +41,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The projection's bound the join gives**: the coin map's hiding term, the messages' miss, the cut's terms at the
 deployed two-session history and the blob finder's collision probability at the registered files. -/

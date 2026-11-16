@@ -112,7 +112,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The join's `Good`**: the check read a log of both sessions and the log it read is the device's
 (`ReadIsDevice`), and every fresh coin the play's log holds carries its 512 bits (`CoinMap.FreshWide`). -/

@@ -21,7 +21,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The sampled verdict never accepts at a commitment that does not decode**, from the composite's wiring at `θ`
 and the instance's cases carrying the play's commitment. -/

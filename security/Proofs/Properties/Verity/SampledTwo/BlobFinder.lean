@@ -25,7 +25,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 open Classical in
 /-- **The first colliding pair between the blobs `F` and the files `F₀`**: the first blob of `F` with some file of
