@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import served_overhead as O  # noqa: E402  (a script beside the suite, importable only once its dir is on the path)
 
 HEADER = {"kind": "header", "schema": "verity-vllm/step-trace/v1", "config": {"max_num_batched_tokens": 512, "num_gpu_blocks": 7}}
@@ -284,7 +284,7 @@ def test_a_fixed_load_lifetime_is_read_as_a_varied_one(tmp_path, capsys):
 
 
 def test_served_stock_sh_parses():
-    assert subprocess.run(["bash", "-n", str(HERE.parent / "served_stock.sh")]).returncode == 0
+    assert subprocess.run(["bash", "-n", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_stock.sh")]).returncode == 0
 
 
 STUB_PY = """#!/usr/bin/env bash
@@ -309,7 +309,7 @@ def _stock(tmp_path: Path, *args: str, **env: str) -> tuple[subprocess.Completed
     base = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "VENV": str(tmp_path / "venv"), "ARGV_LOG": str(log),
             "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "RESEARCH_RUN_ID": "t", "WARM": "0", "REPS": "1",
             "LOADS": "1", "SLOTS": "4", "PROMPTS": "32:32"}
-    p = subprocess.run(["bash", str(HERE.parent / "served_stock.sh"), *args], cwd=HERE.parents[2], env=base | env,
+    p = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_stock.sh"), *args], cwd=HERE.parents[2], env=base | env,
                        capture_output=True, text=True)
     return p, log.read_text().splitlines() if log.exists() else []
 
