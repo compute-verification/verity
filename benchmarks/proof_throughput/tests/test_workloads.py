@@ -6,7 +6,7 @@ from verity_proof_throughput import workloads as W
 def test_cap_is_the_largest_power_of_two_a_statement_holds():
     w = W.workload("bf16-k6144")
     assert w.cap == 1024 == W.MAX_STATEMENT_BITS >> 25
-    assert W.WORKLOADS["fp8-coord-k256"].cap == 4096   # no k_log yet: the instance set's size bounds it
+    assert W.WORKLOADS["fp8-coord-k256"].cap == 4096   # no k_log yet: the input set's size bounds it
 
 
 def test_ladder_runs_over_powers_of_two():
