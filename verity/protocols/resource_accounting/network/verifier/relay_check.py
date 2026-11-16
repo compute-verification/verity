@@ -6,13 +6,13 @@ import json
 
 from pathlib import Path
 from verity.protocols.resource_accounting.network.verifier import (blob_files as bf, connection_rows_check as CRC,
-    load_check as LK, record_files as RF, network_certifier_rows as WR)
+    load_check as LK, record_files as RF, network_attester_rows as WR)
 from verity.protocols.resource_accounting.network.verifier.certificate import (CertifiedRecord, CertifiedStart, Direction, LmsKey,
     record_head)
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.record_files import certified_from_json, unpack_record
-from verity.protocols.resource_accounting.network.verifier.network_certifier import END, FAIL, REFUSED, NetworkCertifierParams, audit
+from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, REFUSED, NetworkCertifierParams, audit
 
 PROOF_DEADLINE_S = 600.0
 
@@ -65,7 +65,7 @@ def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], Certifi
 
 def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
     """`cells.jsonl` and `cells.salts`, line by line: each execution phase's registration (or refusal) and cost, its
-    rows' salts and its wiring's (`network_certifier_rows.read_witness`)."""
+    rows' salts and its wiring's (`network_attester_rows.read_witness`)."""
     path = run / "cells.jsonl"
     lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
     salts = bf.read_blobs(run / "cells.salts")
@@ -75,7 +75,7 @@ def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
 
 
 def check_cells(run: Path, dep: dict, params: NetworkCertifierParams, records: dict[str, list[BlockGrid]]) -> tuple[dict, list]:
-    """Every execution phase of the wire's two records has a registration that `network_certifier_rows.check_registration` accepts
+    """Every execution phase of the wire's two records has a registration that `network_attester_rows.check_registration` accepts
     under the network attester's key and session, whose head is the record's rows and wiring under their salts; the
     per-window cost."""
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
@@ -252,7 +252,7 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
             problems.append(f"connection {o}: { {k: row[k] for k in keys} }")
         if conn["outcome"] != "end" or not row["complete"] or (row["status"] != 200 and row.get("ids") is None):
             problems.append(f"connection {o}: {conn['outcome']}, HTTP {row['status']}, complete {row['complete']}")
-    network_certifier_log = json.loads((run / "warden.json").read_text()) if (run / "warden.json").exists() else {}
+    network_attester_log = json.loads((run / "warden.json").read_text()) if (run / "warden.json").exists() else {}
     served = [r for r in rows if "ordinal" in r]
     B = params.cell_bytes
     summary = {
@@ -261,17 +261,17 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
         "failed": failed_words(r["outcome"] for r in rows if r["outcome"] not in ("end", "refused")),
         "start": start, "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
         "certificates": len(certified), "signer_refused": refused,
-        "withheld_windows": network_certifier_log.get("refused_windows", []),
-        "turned_away": network_certifier_log.get("turned_away", 0), "cell_rows": cells_summary,
+        "withheld_windows": network_attester_log.get("refused_windows", []),
+        "turned_away": network_attester_log.get("turned_away", 0), "cell_rows": cells_summary,
         "cell_timing": cell_timing(run),
         "cells": verdict["cells"], "wire_bits": {k: n * B * 8 for k, n in verdict["cells"].items()},
         "data_bytes": {"ingress": sum(c["ingress_bytes"] for c in verdict["connections"]),
                        "egress": sum(c["egress_bytes"] for c in verdict["connections"])},
         "cells_in_their_bucket": [sum(r["in_bucket"] for r in served), sum(r["cells"] for r in served)],
-        "arrival_lag_ms": _quantiles(lags), "tick_lateness_ms": network_certifier_log.get("lateness_ms"),
-        "clocks": network_certifier_log.get("clocks"),
-        "ticker_stalls": None if not network_certifier_log.get("stalls") else
-        network_certifier_log["stalls"]["by_label"].get("ticker", {"episodes": 0, "max_ms": 0.0, "wchan": {}}),
+        "arrival_lag_ms": _quantiles(lags), "tick_lateness_ms": network_attester_log.get("lateness_ms"),
+        "clocks": network_attester_log.get("clocks"),
+        "ticker_stalls": None if not network_attester_log.get("stalls") else
+        network_attester_log["stalls"]["by_label"].get("ticker", {"episodes": 0, "max_ms": 0.0, "wchan": {}}),
         "completion_tokens": sum(r.get("completion_tokens") or 0 for r in served),
         "prompt_tokens": [min((r.get("prompt_tokens") or 0 for r in served), default=None),
                           max((r.get("prompt_tokens") or 0 for r in served), default=None)],

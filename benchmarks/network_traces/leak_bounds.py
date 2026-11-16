@@ -134,7 +134,7 @@ from typing import Any, NamedTuple
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 from verity.protocols.resource_accounting.network.prover import stop_verdicts as SV
 from verity.protocols.resource_accounting.network.verifier import class_charge as CC
-from verity.protocols.resource_accounting.network.verifier import network_certifier as W
+from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity import protocol
 from verity.protocols.resource_accounting.network.verifier.scan_answer import JITTER_BOUND
 
