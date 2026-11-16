@@ -1,9 +1,21 @@
-# served_zk
+# Served Pearl-C under zero knowledge
 
-A served Pearl-C window's rows in the ZK statement's format, and that window through the proof system: what committing a
-served call's rows as hm96-sha512 leaves costs on the GPU beside the scheme's own rows, and whether a retained served
-pass, committed as one audit window, is registered, sampled once, proved hidden tile by tile and judged as PoUW's
-verifier says, with every control refused.
+This directory takes a served Pearl-C execution phase through the proof system: a retained served pass, committed as one
+audit execution phase in the ZK statement's format, is registered, sampled once, proved hidden tile by tile under Flock
+`--zk` and judged as PoUW's verifier says, with every control refused. It also measures what committing a served call's
+rows as hm96-sha512 leaves costs on the GPU beside the scheme's own rows.
+
+## Try it
+
+Without a GPU, check the host side the row commitments' gates rest on:
+
+~~~sh
+uv run pytest tests/benchmarks/pouw/test_served_zk_rows_bench.py -q
+~~~
+
+It prints `3 passed`.
+
+## Runner
 
 **Hardware:** `bench`, `serve` and `zk_window` run on an RTX PRO 6000 node (sm_120), building on its CPUs and holding
 one GPU through `gpu-lease`; `job` runs on a node's CPUs alone.
@@ -28,22 +40,4 @@ research run --on MACHINE --project verity --source . --cwd source --declared-ou
 `job` is started through `hidden_zk/scope.sh` with `HZ_JOB=verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/job.sh`, which gives it a systemd
 scope of its own on the node's CPUs; its header has the full command. `job` reads `hidden_zk/job.sh` for its builds.
 
-## Other commands
-
-`benchmarks/pouw/served_zk/`'s `replay_core.py OUT --runs DIR...` and `replay_window.py OUT --runs DIR...` replay
-recorded windows through PoUW's check and the window's Lean port with their Python references, each case against the
-verdict the run recorded.
-
-## The Python modules
-
-`served_commit.py` is `job`'s commitment, challenger and check, which `job` runs as
-`benchmarks/pouw/served_zk/served_commit_run.py`; `stage_tile.py` stages one sampled tile as a Flock `--zk` unit, run as
-`benchmarks/pouw/hidden_zk/served_stage.py` with its Flock staging; `statement.py` commits a served pass's rows in the
-statement's format: `pearl_c_vllm/e2e.py` loads it with its device tensors and gate
-(`benchmarks/pouw/served_zk/statement_torch.py`), and the device adapter's
-Pearl-C graphs take its `Statement`; `rows_bench.py` is the GPU
-row commitments `statement.py` loads; `of_record.py` runs each of PoUW's checks on the challenger's path in Lean and in
-its Python reference on one input, its Lean side from `benchmarks/pouw/served_zk/of_record_lean.py`. What verity does
-not import (`verity_difftest`, the device library, `fast_tile`, the evidence store) the benchmark-side files pass in or supply.
-`rows_bench.py` and `statement.py` list in `__all__` the names other files read, the tests' included. Their tests are
-the `test_served_zk*.py` files under `tests/benchmarks/pouw/`.
+[`DESIGN.md`](DESIGN.md) has the replay commands and what each Python module is.
