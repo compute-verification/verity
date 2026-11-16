@@ -21,5 +21,3 @@ uv run verity-vllm --help
 ~~~
 
 This lists every command with a line on what it does, and needs no GPU. Serving and committing need one.
-
-[`DESIGN.md`](DESIGN.md) says which module holds each part of a stage and which names other code imports from it.

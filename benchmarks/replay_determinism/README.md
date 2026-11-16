@@ -28,6 +28,3 @@ Its tests check the fingerprint and the comparison on a synthetic batch, on a CP
 ~~~sh
 uv run tools/check/suites.py benchmarks/replay_determinism
 ~~~
-
-[`DESIGN.md`](DESIGN.md) says what each phase runs, how the engine is held to its schedule, how a row is
-fingerprinted, which settings the run takes, and everything `compare.md` answers.

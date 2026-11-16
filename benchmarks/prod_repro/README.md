@@ -37,8 +37,7 @@ verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [
 verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
 ~~~
 
-`run.sh`'s header says what each option does. [`DESIGN.md`](DESIGN.md) says what each arm and form serves, when
-the job fails, and what each line of the report means.
+`run.sh`'s header says what each option does.
 
 ## What is not yet true
 

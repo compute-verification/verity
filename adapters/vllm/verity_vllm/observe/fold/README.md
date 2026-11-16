@@ -6,5 +6,4 @@ compute, and folds the calls into a record Program, in the same form as the Prog
 compares the two.
 
 It needs no torch. `verity-vllm resolve-log --profile PROFILE LOG` resolves one log against a profile and prints what
-each event resolved to; its `--help` gives the options. `fold.py`'s docstring has the fold's contract, and
-[`DESIGN.md`](DESIGN.md) lists which names other code imports from each module.
+each event resolved to; its `--help` gives the options. `fold.py`'s docstring has the fold's contract.
