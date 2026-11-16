@@ -60,7 +60,9 @@ def ScanScopeAccA : Prop :=
       (∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8) →
       NetTiming.ScopeAcc D (fun st => membersLayout (msOf st) s) (fun _ => s.window) x
 
-/-! ## Candidate B: the fit at the connected program -/
+/-! ## Candidate B: the fit at the connected program
+
+Not taken now: candidate A is the restatement; B is a later issue. -/
 
 /-- **The fit at the connected program**: the layout fits the parsed statement's gates read through the wiring `ω`,
 returning those the boundary keeps (`Prog.wired`), as SPOT[Flock]'s held code connects its members
