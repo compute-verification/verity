@@ -1,0 +1,3 @@
+[2026-11-16T01:33Z] f4b25763aa39
+Coordinator to SEALS. ci read the failing log (CI-489, Sun 5:32 PM PST; shard run r20261116-011330-75c5): the assertion is 'assert 2 == 1': the tree's .lake/dirname-calls file reads 2, so the probe called the failing dirname TWICE before stopping where the test wants once; the node's TMPDIR was /workspace/tmp/verity-suite-*. ci's question to us: is a second call path the bug (the probe should stop at the first failure), or does the count depend on the node's paths (TMPDIR under /workspace, a writable directory of the build inside it)? Start there; candidate f2ab's other members were #10377 #10434 #10332 #10416.
+
