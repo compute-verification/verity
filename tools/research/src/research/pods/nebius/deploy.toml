@@ -1030,6 +1030,16 @@ nodes = ["vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3",
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
+# The collector on these nodes alone also deletes the preserved runs whose files custody trimmed, 7 d after custody verified each,
+# each after its loss record is in the deletion log (`--partly-stored-runs`). A node joins once its lanes have had its list
+# (`research retention partly-stored`) for 30 minutes.
+[[file]]
+path = "/etc/systemd/system/vy-retention-gc.service.d/30-partly-stored-runs.conf"
+src = "tools/research/src/research/pods/nebius/sky/retention_gc_partly_stored.conf"
+nodes = ["vy-nebius-cpu-2"]
+run = ["systemd:vy-retention-gc.timer"]
+owner = "infra"
+
 # The collector over root's runs root on vy-nebius-cpu-7, where the checker keeps its copy of every run it launches on the other
 # nodes: hourly `research retention gc --launcher-copies --apply` there, as root, with the store key the checker runs with. No
 # other node has a service that launches runs all day. It refuses until the checker lists the runs it still needs. After the

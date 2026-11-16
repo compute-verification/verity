@@ -484,7 +484,7 @@ gc takes them only with `--unpreserved-runs`; it and the report list them apart.
 
 A launcher's copy of a run on another machine (a directory named as the run's id that holds the launcher's `remote.json`) has no
 record, except under gc's `--launcher-copies`: there it expires 48 hours after its last write, and goes only once the remote holds
-the run's attempt, ended, and a run record with the copy's files (the rule is in `retention.py`'s docstring). A pass under
+the run's attempt, ended, and a run record with the copy's files. A pass under
 `--launcher-copies` deletes launchers' copies and nothing else: any other path it would take is listed as left. `research keep
 COPY ...` keeps one longer. The unit `vy-launcher-copies-gc` runs it hourly over root's runs root on vy-nebius-cpu-7.
 
@@ -492,7 +492,8 @@ COPY ...` keeps one longer. The unit `vy-launcher-copies-gc` runs it hourly over
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
 research keep show PATH    # the record covering PATH, explicit or implicit, as JSON
 research retention report [--root /workspace] [--depth 2] [--json]
-research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--unpreserved-runs] [--launcher-copies] [--json] [--apply]
+research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--unpreserved-runs] [--partly-stored-runs] [--launcher-copies] [--json] [--apply]
+research retention partly-stored|lost [--root /workspace] [--store S] [--json]
 research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
@@ -504,18 +505,17 @@ Policy `default` (`default/v0`) acts only over `--high-pct` of blocks or inodes,
 the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct`, at most `--max-paths` paths a pass. A
 path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable (or an
 unpreserved run's, or a launcher's copy's), it holds no nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a
-`--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every regular file
+`--jobs-dir` names it. A preserved path also needs its artifact to hold every regular file
 now under it at its size (but for the uncovered run below), and its stored copy `verified`, `expired` or `withdrawn` on the remote; one that can't be asked about
 fails the pass (`retention.STORED`). A preserved run's marker must still vouch for the run dir (the store README's §10.1). Without
 `--apply` gc deletes nothing and reads no remote; it prints every deletion and skip with its reason.
 
 A symlink or other entry that isn't a regular file holds no bytes, so the artifact need not hold it (custody never stores one).
-A preserved run whose run record lacks files custody did not store (it trimmed them past its limit: `uncovered`) holds their only
-copy, as a never-stored run does: gc deletes it, under `--unpreserved-runs`, 7 days after custody verified the run (the marker's
-`verified_utc`; never the last write, which the store eviction moves), once the remote holds the rest, and lists it with that date
-until then, with how to keep it: `research keep RUNDIR --owner @LANE --expires DATE --priority P`, or a custody that declares the
-files (`--declared-output`); a run with a keep record never goes this way. Each deleted run's line says how much of it was
-stored nowhere else, and the pass's summary counts these runs apart from the never-stored and the covered ones.
+A preserved run whose record lacks files custody trimmed (`uncovered`) holds their only copy. gc deletes it only with
+`--partly-stored-runs` (a per-machine drop-in, `deploy.toml`), 7 days after custody verified it, once the remote holds the rest,
+first logging below the run, when it was preserved and each lost path with its size (`retention lost` lists them); until then
+it lists the run with that date. One lacking a file custody always uploads (`out/`, `--declared-output`) is custody's failure:
+never deleted, printed as `CUSTODY FAILED`, exit 1. `retention partly-stored` lists by owner what a pass would take (dry run).
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the

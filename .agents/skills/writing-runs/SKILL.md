@@ -20,7 +20,9 @@ there when the workload exits and publishes to the store:
 - each `--declared-output GLOB` (quote it; `fnmatch` on paths relative to the run dir, so `*` crosses `/`);
 - other files in path order up to 256 MiB in all (`custody.UNDECLARED_LIMIT_BYTES`, kept for older launches; it drops to 0
   once lanes declare their outputs). The rest are listed in `meta.trimmed` by path, size and sha256, and custody prints
-  `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`.
+  `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`. Where a
+  machine's collector takes them (`research retention gc --partly-stored-runs`), a run with trimmed files goes 7 days after
+  custody preserved it, its trimmed files with it.
 
 A run that ended without custody preserving it (the upload failed, custody was off, its runner died) is only its directory
 on the machine: the retention collector lists such runs apart, and where a machine's collector takes them
