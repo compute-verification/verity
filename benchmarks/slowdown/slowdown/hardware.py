@@ -15,10 +15,10 @@ own NICs, certifier and side channels) carry host memory, disks, host CPUs and t
 `links` (`β_X`, `Accounting.linkCapacity`). `server_memory` is `M_s`, one server's memory over every tier (HBM, host
 RAM, disks): the capacity the wipe's per-server bound is stated against.
 
-A **fleet** is the inventory: the monitored locations, and the unregistered leaves `L_unreg` with `Φ(L_unreg) = ε_unreg Φ_total`,
-one connected pool outside every monitored location (ruled). The physical model bounds every gate at capacity,
+A **fleet** is the inventory: the registered locations, and the unregistered leaves `L_unreg` with `Φ(L_unreg) = ε_unreg Φ_total`,
+one connected pool outside every registered location (ruled). The physical model bounds every gate at capacity,
 so the bound counts the unregistered leaves at `Φ`; `mfu_train` and `mfu_unreg` are what a construction (an attack) gets of the
-monitored and the unregistered gates. A **monitoring period** is the stretch of time a result is over, one of core's
+registered and the unregistered gates. A **monitoring period** is the stretch of time a result is over, one of core's
 (`params.PERIODS`).
 
 A location table may leave out its hosts: it is then one host with no host memory or CPUs counted and no known line
@@ -81,15 +81,15 @@ class Location:
 class Fleet:
     name: str
     location: str
-    #: monitored locations
+    #: registered locations
     count: float
     #: `ε_unreg`: the unregistered leaves' share of the inventory's capacity, `Φ(L_unreg) / Φ_total`
     eps_unreg: float
-    #: the share of a monitored location's gates a construction trains with, and the one its served work runs at
+    #: the share of a registered location's gates a construction trains with, and the one its served work runs at
     mfu_train: float
     mfu_serve: float
     #: the share of the unregistered leaves' gates a construction trains with (one connected pool: its interconnect may beat
-    #: the monitored fleet's); None: `mfu_train`
+    #: the registered fleet's); None: `mfu_train`
     mfu_unreg: float | None = None
 
     @property

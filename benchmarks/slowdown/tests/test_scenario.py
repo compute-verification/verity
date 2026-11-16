@@ -271,7 +271,7 @@ def test_no_protocol_gives_1_and_the_overhead_is_against_the_reference_at_its_mf
     malicious developer no protocol encumbers is at 1, and remote under PoUW as deployed on the H200 about 1.05 (1.04 with the
     H200's tensor at 1,980 MHz); remote with the floor credit at the card table's clock is above it, and onsite is
     remote's, the wipe's serving cut adding nothing under the bounds a lock states. Under reference efficiency free
-    compute counts at `MFU₀`, so each is its padded size ratio (3.04); without it the monitored terms shrink by 2.5
+    compute counts at `MFU₀`, so each is its padded size ratio (3.04); without it the registered terms shrink by 2.5
     and the unregistered leaves don't (1.22). With the draft bounds admitted onsite is far above, and still above 10
     without reference efficiency."""
     u = evaluate_named(REG, "unregistered-h200-kimi")
