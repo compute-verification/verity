@@ -70,7 +70,7 @@ of the state's `2n` bits, so two words can reach one receipt.
 
 
 So a receipt a thread a window is not a full-state commitment, and a chain that absorbed a wrong word can match the honest
-receipt; the checkpoint a segment of the chains' full states (`Accounting.Guarantees.TS.DuoSegmentsBind`) can't.
+receipt; the checkpoint a segment of the chains' full states (`ResourceAccounting.Guarantees.TS.DuoSegmentsBind`) can't.
 
 Three words' receipts can have one: with `r₁ + r₃ ≡ 0 (mod n)`, `a₂ ≡ −1 (mod 2^r₁)` and `a₃ ≡ ±1 (mod 2^(n−r₁))`,
 flipping the top bit of all three words moves the receipt by one constant (`benchmarks/pouw/theory/duo_proj.c`).
@@ -81,7 +81,7 @@ The whole state binds one word at a state (`DuoRunWordInjective`), and no more t
   state, has two different word sequences with one final state: `2^(nL)` runs reach `2^(2n)` states.
 
 So a full-state checkpoint binds a segment's words for every choice of them only while each segment holds at most one
-deficient word a chain (`Accounting.Guarantees.TS.DuoSegmentsBind`); two or more are bound only with a probability over
+deficient word a chain (`ResourceAccounting.Guarantees.TS.DuoSegmentsBind`); two or more are bound only with a probability over
 the wrong words, which no all-state statement (`DuoQuadNoKernel` and the like) supplies.
 
 A warp's checkpoint XORs its chains' full states, so wrong runs in two chains cancel on every start state when each

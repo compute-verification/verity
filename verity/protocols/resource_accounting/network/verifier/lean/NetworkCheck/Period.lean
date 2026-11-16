@@ -28,17 +28,17 @@ public import NetworkCheck.Period.Decode
 meta import NetworkCheck.Period.Decode
 
 /-!
-# The network certifier over a period, a core protocol: `verity/certifier/v0`
+# The network attester over a period, a core protocol: `verity/certifier/v0`
 
-The network certifier, one of onsite's subprotocols (`Core.Onsite.components`). A period is one node's link over `m`
+The network attester, one of onsite's subprotocols (`Core.Onsite.components`). A period is one node's link over `m`
 execution phases beside the period's compute audits (SPOT's one-stage, one answer per registered window of the
-workload). Its execution phases are the rows form's: the network certifier's own run, where it functions as an active warden
+workload). Its execution phases are the rows form's: the network attester's own run, where it functions as an active warden
 (`network_certifier_serve`): each execution phase's cells committed as rows (`network_certifier_rows`), one registration a direction under one
 fixed schedule, its three records certified, and the scan's one-stage answer for the window (`scan_zk --warden-run`).
 Parameters that name a sync set, the clock form's, are refused: the clock form is not one this check reads.
 
 It accepts when every execution phase passes the check and every compute audit accepted; it then publishes `K`, the
-bits a covert sender in the server can move through the network certifier in the period, as
+bits a covert sender in the server can move through the network attester in the period, as
 `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` counts them. Each execution phase's scan's Programs' row must be a
 compute audit's slot entries (`wired`, below), and the state that audit's Programs read (its `SCAN_STATE`) the scan's
 state, by root and domain, which the scan's units read and register as its transitions chain it from the state its
@@ -59,10 +59,10 @@ each compute audit's layout terms (`free`, the free inputs it doesn't register, 
 monitoring period `k`) and its Program, the descriptor (`verity-ir/descriptor/v1`) of the window's population program,
 which must decode (`Flock.Program.decode`) with a template in its root: the audit's proof blocks are the root's template
 instances, and each commits its template's return, the outputs it computes that other proof blocks or the client read, which
-can be wider than a proof block's 16-bit public output; each network certifier connection's cell cap over the period
+can be wider than a proof block's 16-bit public output; each network attester connection's cell cap over the period
 (`cap_c`), the execution phase the period starts at (`w₀`, in the listed entries' numbers: its execution phases are
 `w₀ … w₀ + m − 1`, so one list spans many periods),
-the observations' jitter bound `Dj ≥ 1`, the keys of the link's network certifier as its registered record lists them
+the observations' jitter bound `Dj ≥ 1`, the keys of the link's network attester as its registered record lists them
 (`"keys"`, an entry for each certifier session: its LMS public key; its session, 32 bytes, which every certificate of
 the entry binds; and the start `a` of its stretch of execution phases, in the numbers `w₀` is in. Entry `i`'s stretch
 runs from its start up to the next entry's start, and the last entry's from its start on, so execution phase `w` of the
@@ -75,7 +75,7 @@ that still name `"key"`, `"session"` or `"sessions"`, naming the entry to write)
 most 65,535 UTF-8 bytes), the period's `m ≥ 1` execution phases, the class circuit, the SHA-512 of the Program of the one
 window circuit the workload's class registers, which every tied compute audit runs (`held`); the scan's Program, its
 descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
-certifier's one fixed schedule (`network_certifier.NetworkCertifierParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
+attester's one fixed schedule (`network_certifier.NetworkAttesterParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
 execution phase is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and
 `Schedule.executionPhasePrograms`; its `max_tokens_cap` when it has one, a u32 below `egress_cells`, under which a
@@ -86,15 +86,15 @@ them, 1 or 2, under which ingress ends by the delay, a connection ends within a 
 `mostSlots`); and its content rows' classes `content` when it has them, which only a schedule with lengths rows has,
 each (P, O, rows) under form 1 and (P, O) under form 2, `classesRefusal`; and `request_words`, true, when it has request
 words, which only a schedule with content rows under form 2 and `max_tokens_cap` has, and which lists at most
-`mostClassesWords` classes), whose digest `NetworkCertifierParams.digest` every registration binds. A schedule with lengths rows
-registers its connection rows, which this check does not read: it is parsed as the network certifier builds it, its
-digest is the network certifier's, and it is refused by name, in the parameters and in the check
+`mostClassesWords` classes), whose digest `NetworkAttesterParams.digest` every registration binds. A schedule with lengths rows
+registers its connection rows, which this check does not read: it is parsed as the network attester builds it, its
+digest is the network attester's, and it is refused by name, in the parameters and in the check
 (`connectionRowsRefusal`,
 `connectionRowsCheck`), so no period is accepted under one. The rows form's `program` is the scan's registered
 Program, the descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's
 (`network_certifier_serve.LINK`), whose fails record is certified under the link `<link>-fails`. Its
 `cells` must be the schedule's cells over the period (`Schedule.rowsCells`): `egress_cells` for each of the `lanes · m ·
-window` connections the network certifier can carry in `m` of a link's execution phases, since it admits a connection at
+window` connections the network attester can carry in `m` of a link's execution phases, since it admits a connection at
 a bucket's start only while fewer than `lanes` are live and serves it in that bucket. Any other list, an empty one
 included, is refused, so `K`'s schedules and cells terms are never read off cells that miss a connection. Before
 that, those `lanes · m · window` connections, the k-th at ordinal k + 1, must have distinct u32 ordinals, and a cell's
@@ -138,8 +138,8 @@ entries' order:
 
     "starts": [{"base_ms": b, "certificate": certificate, "ordinal": n, "schedule": hex}, …]
 
-each as the network certifier's run publishes it (`certificate.CertifiedStart`, `deployment.json`'s `"start"`): where
-the session starts on its key's life, in milliseconds on the network certifier's clock, the parameters digest of the
+each as the network attester's run publishes it (`certificate.CertifiedStart`, `deployment.json`'s `"start"`): where
+the session starts on its key's life, in milliseconds on the network attester's clock, the parameters digest of the
 schedule it runs under, and the certificate the key signed for both once, before the session's first tick.
 
 **The check**, in order; any rejection rejects, then any undecided answer leaves the period undecided:
@@ -167,7 +167,7 @@ schedule it runs under, and the certificate the key signed for both once, before
 * execution phase `w` (the `i`-th, `w = w₀ + i`): its registration (the scan's, per window) names the scan's Program; its three
   certificates are the requests' record's (the link's ingress), the responses' (its egress) and the fails'
   (`<link>-fails`, egress) at `w − a`, each the key's of the entry `w` picks and verifying in its session, so an
-  execution phase missing any record's certificate is refused, and the network certifier certifies no record of an
+  execution phase missing any record's certificate is refused, and the network attester certifies no record of an
   execution phase in which it refused a
   connection (traffic past the window's Program slots, `network_certifier`'s "Admission"), so such an execution phase is refused; its two registrations, ingress then egress, are what `network_certifier_rows.check_registration` reads:
   the execution phase's value, link, end and window, in its session's numbers (`w − a`, as the certifier wrote them),
@@ -267,7 +267,7 @@ schedule it runs under, and the certificate the key signed for both once, before
   execution phase under one is refused.
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `MonitoringPeriodLeakAccepted`'s factor, over
-its windows, the execution phases' scans, whose statements read the network certifier's rows:
+its windows, the execution phases' scans, whose statements read the network attester's rows:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c,
      "charged": [{"delta": δ_i, …}, …], "eps": m · δ + Σ δ_i,
@@ -307,7 +307,7 @@ phase's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · 
   stays its own, at its own δ, so each reading is its own term of the composite's error: `δ_i` in this protocol's
   `eps`, the answer's δ in its audit's.
 * `max_tokens_cap`, present when the schedule has a response cap and absent when it has none, is that cap: each
-  response the network certifier released in the period has at most its request's `max_tokens` tokens, and every
+  response the network attester released in the period has at most its request's `max_tokens` tokens, and every
   request it released has `max_tokens` at most the cap (`network_certifier`'s "The response cap",
   `NetTiming.Guarantees.ResponseCapped`). The schedule's digest, which every registration binds, binds it
   (`Schedule.digest`), and the check publishes the schedule's (`Properties.NetworkPeriod.RowsCapPublished`).
@@ -317,7 +317,7 @@ phase's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · 
   input, and an adversary-chosen start carries no more than the bits it counts.
 * `schedules` is `cells`, c = Σ_c ⌈log2 (cap_c + 1)⌉, as the statement multiplies `#Ss` and `∏_c (cap_c + 1)`. A
   schedule (`CertifierSchedule`) is r and D, fixed, and each connection's admission bucket and lane length. The server
-  sets a lane's length, when its stream ends, at most `cap_c` cells, and nothing else of it: the network certifier
+  sets a lane's length, when its stream ends, at most `cap_c` cells, and nothing else of it: the network attester
   admits a queued connection at the first lane that frees, in the clients' arrival order, so the admissions are a
   function of the lengths, and `#Ss ≤ ∏_c (cap_c + 1)`. The second factor is the fail cell's position (`failCell`). A
   failed lane ends at its fail cell, so in a run the two coincide; `K` charges the product as the statement states it.
@@ -344,7 +344,7 @@ What it doesn't check: the records' certificates' digests against the
 rows (each signs its salted record, witness) and the scan's statements against its registration (lane `j`'s slot
 entries' input node the value it registers as `scan/prog<j>`, and a member's public word its `<member>/o0` entry's
 root, which `okChecks` holds to the constant), which one-stage's verifier checks inside the
-answer, each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
+answer, each connection's cap against its lane (the parameters' `cells`; the network attester holds a lane to
 `egress_cells`), and that the scan's answer carries every Input its registration check let through (`tiedInputWired`
 reads the names the answer's public outputs hold, and takes one with no `rests_on_period_check` to name none); that a
 tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
@@ -355,7 +355,7 @@ no start says (a session that ends early still moves its key's life on by its wh
 next session's start hold no certificate, and no period runs across them); the period's number of a key's first
 listed entry, which is the auditor's pin, the signed message naming the key's life and not the period's numbers; a
 session of the key the list leaves out; and a device state restored from an earlier copy, which rests on the
-network certifier's host (`trusted-device`).
+network attester's host (`trusted-device`).
 
 The decoders the period's check reads (`exactly`, `keysOf`, `hexAt`, `certificateOf`) are in `NetworkCheck.Clocks`,
 in this namespace.
@@ -450,12 +450,12 @@ def rowsDomain (s : Schedule) (sd session : ByteArray) (link : String) (d : Dire
     ("slots", toJson s.allocation), ("rows", toJson s.window), ("row_schema", .str rowSchema)])
   pure (Flock.FV3.Sha512.Domain.make binding (-1) 0 s.window).id
 
-/-- `NetworkCertifierParams()`'s schedule, the defaults. -/
+/-- `NetworkAttesterParams()`'s schedule, the defaults. -/
 def defaultSchedule : Schedule :=
   { bucketMs := 100, cellBytes := 256, delay := 10, egressCells := 4096, every := 1, ingressBuckets := 50,
     ingressCells := 64, lanes := 16, queue := 64, slots := 4, window := 600 }
 
--- `NetworkCertifierParams().digest` and `NetworkCertifierParams(max_tokens_cap=4).digest`: the cap and its reason are in the digest only
+-- `NetworkAttesterParams().digest` and `NetworkAttesterParams(max_tokens_cap=4).digest`: the cap and its reason are in the digest only
 -- under a cap
 #guard (defaultSchedule.digest.map Flock.hexOf).toOption == some
   "9a727d16f6c1f351d316465c101269c2a4666cbcdf1dbaaef01579fd7e72315a\
@@ -464,7 +464,7 @@ def defaultSchedule : Schedule :=
   "8832fdae0616446e90e1b4178ab99c0e3d67bf790d5bb81512f13c651767adc3\
     0a29f9401b9eb0a2cdf2a8d1c02c50304353250f06af526a970074a207bf3d12"
 
-/-- `CellsHead.digest`: `tagged_sha512(CELLS_TAG, H)` of the head the network certifier signs for the rows. -/
+/-- `CellsHead.digest`: `tagged_sha512(CELLS_TAG, H)` of the head the network attester signs for the rows. -/
 def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : Schedule) (wiring dom root : ByteArray) :
     V ByteArray := do
   unless wiring.size == 64 && root.size == 64 do throw "the wiring digest and the root are 64 bytes"

@@ -22,7 +22,7 @@ restates the check. An execution phase is a direction, a link of the unit in tha
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check
-open NetworkCertifier (ClockSync LogicalFrame expectedRow)
+open NetworkAttester (ClockSync LogicalFrame expectedRow)
 
 namespace Properties.Certifier
 

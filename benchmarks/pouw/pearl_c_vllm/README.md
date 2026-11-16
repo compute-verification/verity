@@ -44,7 +44,7 @@ it is not a job.
 | `forming_headroom.py` | whether the forming term the replayed inert work leaves out could change a measured tile's verdict |
 | `h3_screen.py` | the device path's calls against the reference: `capture` on one GPU, `check` on CPUs after |
 | `profile_decode.py` | an untimed profile of the arm, which `window` runs under `MODE=profile` |
-| `panel_rows.py` | a window's result and its verify verdicts as the kernel panel's rows |
+| `panel_rows.py` | a window's result and its verify verdicts as the kernel panel's benchmark results |
 | `volunteer_pass.py` | the honest remedy on a retained pass before its sampling coin: every tile's inert work replayed, the rows that leave a tile or a credited row over its inert-work bound given up, and the manifest's records rewritten |
 | `bench_arm.py` | Pearl-C as an arm of the `verity-bench` harness (`--arm-module pearl_c_vllm.bench_arm:PEARL_C`) |
 

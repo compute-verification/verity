@@ -55,9 +55,9 @@ the model's reals:
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.Headline
+namespace ResourceAccounting.SecurityProofs.TS.Headline
 
-open Accounting.TS Accounting.TS.Headline
+open ResourceAccounting.TS ResourceAccounting.TS.Headline
 
 /-- `Σ_{i<n} c_i · v_i` over a sparse list's entries: each entry below `n` once, at its rational. -/
 def dot (c : ℕ → ℚ) (n : ℕ) (v : Sparse) : ℚ := (v.map fun e => if e.1 < n then c e.1 * Sparse.ratio e else 0).sum
@@ -151,4 +151,4 @@ theorem isCert_onFacet {R : Type} [Fintype R] [DecidableEq R] (r0 : R) : IsCert 
     split_ifs <;> norm_num
   · simp [onFacet]
 
-end Accounting.SecurityProofs.TS.Headline
+end ResourceAccounting.SecurityProofs.TS.Headline

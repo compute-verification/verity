@@ -16,7 +16,7 @@ then the existing causal pooled-sample argument over windows, gives `RemoteRunCo
 
 @[expose] public section
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (pr)
 open scoped ENNReal
@@ -32,7 +32,7 @@ theorem pr_unpaid_rank_le
     (A : Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (r X : ℕ)
     (hr32 : r ≤ 32)
-    (hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
+    (hr : ∀ u, r ≤ ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
     (hX : ∀ O D, (A.prog σ D).rebuilds O D * 256 ≤ X) :
     pr (fun x : Data N m ρ Sector × Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
       A.footprint σ x.2 x.1 + (S + (L - ρ * 256) + X) <
@@ -41,7 +41,7 @@ theorem pr_unpaid_rank_le
   classical
   let g := 256 ^ (32 - r)
   have hfib : fib (sketch (k := ks) (m := m)) σ ≤ g :=
-    Accounting.SecurityProofs.SketchRankFiber ks m r σ hr
+    ResourceAccounting.SecurityProofs.SketchRankFiber ks m r σ hr
   have hsplit : ∀ x : Data N m ρ Sector × Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)),
       A.footprint σ x.2 x.1 + (S + (L - ρ * 256) + X) <
           (A.correct sketch σ x.2 x.1).card * (m * 256) →
@@ -246,7 +246,7 @@ theorem pr_unpaidAt_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : Sk
 candidate passes. -/
 theorem pr_unpaid_good_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : SketchSigns ks m)
     (r X : ℕ) (hr32 : r ≤ 32)
-    (hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
+    (hr : ∀ u, r ≤ ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
     (hX : ∀ j η c O D, ((A.device j η c).prog σ D).rebuilds O D * 256 ≤ X) :
     pr (fun x : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) =>
       A.reads x.1 σ x.2 + P * (S + (L - ρ * 256) + X) <
@@ -269,7 +269,7 @@ theorem pr_unpaid_good_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ :
 
 /-- One window's unpaid receipts: one rank-tail event, plus the candidate-pass query terms. -/
 theorem pr_unpaid_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r X : ℕ) (εrank : ℝ≥0∞)
-    (hr32 : r ≤ 32) (hRank : Accounting.Assumptions.SketchRank ks m r εrank)
+    (hr32 : r ≤ 32) (hRank : ResourceAccounting.Assumptions.SketchRank ks m r εrank)
     (hX : ∀ j η c σ O D, ((A.device j η c).prog σ D).rebuilds O D * 256 ≤ X) :
     pr (fun x : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>
       A.reads x.1 x.2.1 x.2.2.1 + P * (S + (L - ρ * 256) + X) <
@@ -285,7 +285,7 @@ theorem pr_unpaid_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) 
   rw [Rate.pr_equiv eSample]
   refine Rate.pr_le_of_fiber _ _ (fun _draw => ?_)
   let badRank : SketchSigns ks m → Prop := fun σ =>
-    ∃ u, ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r
+    ∃ u, ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r
   let unpaid : SketchStore N m × (SketchSigns ks m × Passes) → Prop := fun x =>
     A.reads x.1 x.2.1 x.2.2 + P * (S + (L - ρ * 256) + X) <
       (A.correctAll x.1 x.2.1 x.2.2).card * (m * 256)
@@ -305,7 +305,7 @@ theorem pr_unpaid_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) 
       ((Equiv.refl _).prodCongr (Equiv.prodComm _ _)).trans (Equiv.prodAssoc _ _ _).symm
     rw [Rate.pr_equiv eGood]
     refine Rate.pr_le_of_fiber _ _ fun σ => ?_
-    by_cases hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank
+    by_cases hr : ∀ u, r ≤ ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank
     · exact (pr_mono fun _ hx => hx.2).trans
         (pr_unpaid_good_le A σ r X hr32 hr (hX := fun j η c O D => hX j η c σ O D))
     · push Not at hr
@@ -584,18 +584,18 @@ theorem gammaSketch_mul (N m ρ S L X : ℕ) (hN : 0 < N) (hm : 0 < m) :
   unfold gammaSketch
   rw [div_mul_cancel₀ _ hNm]
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate Accounting.RateSketch
+open ResourceAccounting.Rate ResourceAccounting.RateSketch
 open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
 /-- **PoUB with deployed tensor-sketch receipts, for the verbatim class**
-(`Accounting.Guarantees.RemoteRunConservationSketch`). -/
-theorem RemoteRunConservationSketch : Accounting.Guarantees.RemoteRunConservationSketch := by
+(`ResourceAccounting.Guarantees.RemoteRunConservationSketch`). -/
+theorem RemoteRunConservationSketch : ResourceAccounting.Guarantees.RemoteRunConservationSketch := by
   intro n P N m ρ h S L q ks G d r X ε A dbar dw hn hP hN hm hr32 hdw hRank hX
   let slack := S + (L - ρ * 256) + X
   let term := (N : ℝ≥0∞) / 2 ^ h + (q : ℝ≥0∞) / 2 ^ (8 * r)
@@ -667,13 +667,13 @@ theorem sketchQueryTermCaps :
 `2·2^-40 + n·ε + n·P·G·(N/2^512 + q/2^96)`: each grinding candidate at its own query cap `q`, which is the special
 case `qtot = G·q` of the deployed guarantee's shared budget (`Prover.budget_of_bounded`). At the conservative caps
 `q = G = 2^55` its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`), which is why the deployed
-guarantee (`Accounting.Guarantees.RemoteRunConservationSketchDeployed`, proved in `DeployedSketchSum.lean`)
+guarantee (`ResourceAccounting.Guarantees.RemoteRunConservationSketchDeployed`, proved in `DeployedSketchSum.lean`)
 states the sum form instead. -/
 theorem RemoteRunConservationSketchDeployedProduct :
     ∀ (n P N ρ S L q G X : ℕ) (ε : ℝ≥0∞)
       (A : RateSketch.SketchDeployedRun n P N 128 ρ 512 S L q 16 G 2773),
       7 ≤ n → 0 < P → 0 < N →
-      Accounting.Assumptions.SketchRank 16 128 12 ε →
+      ResourceAccounting.Assumptions.SketchRank 16 128 12 ε →
       (∀ w η j ι c E σ R O,
         let B := (A.window w η).device j ι c
         let D := RateSketch.Data.ofParts E R
@@ -711,4 +711,4 @@ theorem RemoteRunConservationSketchDeployedProduct :
   · exact Deployed.pooled_deployed n hn
   · exact Deployed.window_deployed n (by omega)
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

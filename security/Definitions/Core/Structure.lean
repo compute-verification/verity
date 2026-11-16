@@ -39,7 +39,7 @@ named below are proved in `Proofs.Core.Structure`.
   a vector `r` (`within`) is the methods attaining a vector at most `r` on every input and coin, and a method's profile
   (`Method.profile`) is the vectors whose cell it lies in.
 
-**Where it meets Accounting.** Core cannot import Accounting, so Accounting reads these. An `Actual.Run` is an
+**Where it meets ResourceAccounting.** Core cannot import ResourceAccounting, so ResourceAccounting reads these. An `Actual.Run` is an
 `Execution` (`A.toCircuit`, `val`, `faithful`) once its protocol's baseline is given. `Slowdown.Task`'s coin samples the
 task's input, a method's external input here; a method's `coins` are its own randomness, neither the task's nor the
 verifier's (`Verity.Coins`). A class of methods `𝔐` gives the `Slowdown.Class` of pairs `(C, x)` whose runs on every
@@ -103,7 +103,7 @@ structure Evaluation where
 def Evaluation.trace (e : Evaluation) : e.M.d.D.Trace := e.M.d.D.eval (e.M.assign e.x e.ω)
 
 /-- **An execution**: a declaration and the values its gates held, each computed gate's value its operation on them.
-`Actual.Run` is one once its baseline is given; `Accounting.Requirement.Execution` is a schedule, not this. -/
+`Actual.Run` is one once its baseline is given; `ResourceAccounting.Requirement.Execution` is a schedule, not this. -/
 structure Execution where
   /-- the circuit that ran and its registered gates -/
   d : RegisteredCircuit

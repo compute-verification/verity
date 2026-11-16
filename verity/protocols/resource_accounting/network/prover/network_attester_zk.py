@@ -68,7 +68,7 @@ from verity.circuits.types import Array
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate
-from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkCertifierParams, cell
+from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams, cell
 from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G
 
 #: the unit's ports: its input row and its output row
@@ -108,7 +108,7 @@ def attestation(run: Path, n: int) -> SimpleNamespace:
     (connection, cell) each, the row and slot the network attester's wiring places each at (`positions`, `slots`), and
     how many of them hold the server's bytes (`data_rows`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
-    params = NetworkCertifierParams(**dep["params"])
+    params = NetworkAttesterParams(**dep["params"])
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
     link, direction = RC.CERTIFIED[RC.EGRESS]
     records = {r.window: r for r in RC.read_records(run, params)[RC.EGRESS]}

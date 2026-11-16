@@ -36,7 +36,7 @@ namespace Verity.Sampled.MemberForm
 
 open Flock.Guarantees (MemberV5)
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **An opening the commitment accepts opens the gate at the files' place**: at a commitment whose circuit names no
 public input port and whose files `I` load to its data and are ready for its openings, where the committed files

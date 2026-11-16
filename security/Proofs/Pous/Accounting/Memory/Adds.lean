@@ -19,9 +19,9 @@ isolation forms are the general ones at `H = 0`.
 
 @[expose] public section
 
-namespace Accounting.MemoryProofs
+namespace ResourceAccounting.MemoryProofs
 
-open Pous Accounting.Memory
+open Pous ResourceAccounting.Memory
 open scoped ENNReal
 
 /-! ## A program with its output mapped -/
@@ -266,7 +266,7 @@ theorem pr_and_not_le {α : Type} [Fintype α] (A : α → Prop) {q S M k : ℕ}
 
 /-! ## The statements -/
 
-theorem adds : Accounting.Guarantees.Memory.Adds := by
+theorem adds : ResourceAccounting.Guarantees.Memory.Adds := by
   intro I sch S D Q c δ ε hsec M H q k W π A₁ A₂ hdet
   simp only [AuditSecure] at hsec
   refine pr_and_not_le (fun x : Bits q × Outcome sch c => seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2) _ fun hNS => ?_
@@ -274,7 +274,7 @@ theorem adds : Accounting.Guarantees.Memory.Adds := by
     hsec W (codedPre (A₁ z) e)
       ⟨codedStep (A₂ z).step e d, fun W pp j s i => bounded_progMap _ ((A₂ z).bounded W pp j (d j s) i)⟩
 
-theorem addsOn : Accounting.Guarantees.Memory.AddsOn := by
+theorem addsOn : ResourceAccounting.Guarantees.Memory.AddsOn := by
   intro B w p _ sch S D Q L c δ ε hsec M H q k W π A₁ A₂ hdet
   simp only [AuditSecureOn] at hsec
   refine pr_and_not_le (fun x : Bits q × Outcome sch c => seqAcceptsOn sch c W (A₁ x.1) (A₂ x.1) x.2) _
@@ -283,24 +283,24 @@ theorem addsOn : Accounting.Guarantees.Memory.AddsOn := by
     hsec W (codedPre (A₁ z) e)
       ⟨codedStep (A₂ z).step e d, fun W pp j s i => ringBounded_progMap _ ((A₂ z).bounded W pp j (d j s) i)⟩
 
-theorem addsP2Ring : Accounting.Guarantees.Memory.AddsP2Ring := by
+theorem addsP2Ring : ResourceAccounting.Guarantees.Memory.AddsP2Ring := by
   intro D Q L h M H q k W π A₁ A₂ hdet
   have := addsOn _ _ D Q L 105 _ _ h M H q k W π A₁ A₂ hdet
   rwa [Nat.cast_ofNat] at this
 
-theorem addsIsolated : Accounting.Guarantees.Memory.AddsIsolated := by
+theorem addsIsolated : ResourceAccounting.Guarantees.Memory.AddsIsolated := by
   intro I sch S D Q c δ ε hsec M q k W π A₁ A₂ hdet
   exact adds sch S D Q c δ ε hsec M 0 q k W π A₁ A₂ hdet
 
-theorem addsOnIsolated : Accounting.Guarantees.Memory.AddsOnIsolated := by
+theorem addsOnIsolated : ResourceAccounting.Guarantees.Memory.AddsOnIsolated := by
   intro B w p _ sch S D Q L c δ ε hsec M q k W π A₁ A₂ hdet
   exact addsOn sch S D Q L c δ ε hsec M 0 q k W π A₁ A₂ hdet
 
-theorem addsP2RingIsolated : Accounting.Guarantees.Memory.AddsP2RingIsolated := by
+theorem addsP2RingIsolated : ResourceAccounting.Guarantees.Memory.AddsP2RingIsolated := by
   intro D Q L h M q k W π A₁ A₂ hdet
   exact addsP2Ring D Q L h M 0 q k W π A₁ A₂ hdet
 
-theorem addsAdvice : Accounting.Guarantees.Memory.AddsAdvice := by
+theorem addsAdvice : ResourceAccounting.Guarantees.Memory.AddsAdvice := by
   intro I sch S D Q c δ ε hsec M H a q k W π A₁ A₂ hdet
   simp only [AuditSecure] at hsec
   refine pr_and_not_le (fun x : Bits q × Outcome sch c => seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2) _ fun hNS => ?_
@@ -308,7 +308,7 @@ theorem addsAdvice : Accounting.Guarantees.Memory.AddsAdvice := by
     hsec W (codedPre (A₁ z) e)
       ⟨codedStep (A₂ z).step e d, fun W pp j s i => bounded_progMap _ ((A₂ z).bounded W pp j (d j s) i)⟩
 
-theorem addsAdviceOn : Accounting.Guarantees.Memory.AddsAdviceOn := by
+theorem addsAdviceOn : ResourceAccounting.Guarantees.Memory.AddsAdviceOn := by
   intro B w p _ sch S D Q L c δ ε hsec M H a q k W π A₁ A₂ hdet
   simp only [AuditSecureOn] at hsec
   refine pr_and_not_le (fun x : Bits q × Outcome sch c => seqAcceptsOn sch c W (A₁ x.1) (A₂ x.1) x.2) _
@@ -317,9 +317,9 @@ theorem addsAdviceOn : Accounting.Guarantees.Memory.AddsAdviceOn := by
     hsec W (codedPre (A₁ z) e)
       ⟨codedStep (A₂ z).step e d, fun W pp j s i => ringBounded_progMap _ ((A₂ z).bounded W pp j (d j s) i)⟩
 
-theorem addsAdviceP2Ring : Accounting.Guarantees.Memory.AddsAdviceP2Ring := by
+theorem addsAdviceP2Ring : ResourceAccounting.Guarantees.Memory.AddsAdviceP2Ring := by
   intro D Q L h M H a q k W π A₁ A₂ hdet
   have := addsAdviceOn _ _ D Q L 105 _ _ h M H a q k W π A₁ A₂ hdet
   rwa [Nat.cast_ofNat] at this
 
-end Accounting.MemoryProofs
+end ResourceAccounting.MemoryProofs
