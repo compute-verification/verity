@@ -801,6 +801,8 @@ local instance instLawfulBEqByteArray_accepts : LawfulBEq ByteArray where
 
 /-! ## The commitment's state before `W` -/
 
+theorem commitTag_size : 0 < Commit.COMMIT_TAG.toUTF8.size ∧ Commit.COMMIT_TAG.toUTF8.size < 2 ^ 32 := by
+  decide +kernel
 
 theorem wBytes_deployed : P2.Params.deployed.wBytes = 8 * (65536 * 2054) := rfl
 

@@ -496,6 +496,9 @@ theorem sum_range_list (F : ℕ → ℝ) (n : ℕ) : ∑ g ∈ Finset.range n, F
 
 theorem order_len : (m + 1) * per + 1 - m * per = per + 1 := by rw [Nat.succ_mul]; omega
 
+theorem order_perm : (orderOf gs per m).Perm (List.range' (m * per) (per + 1)) := by
+  simp only [orderOf, order_len]
+  exact List.mergeSort_perm _ _
 
 theorem mem_order {j : ℕ} : j ∈ orderOf gs per m ↔ m * per ≤ j ∧ j < m * per + (per + 1) := by
   rw [order_perm.mem_iff, List.mem_range'_1]
