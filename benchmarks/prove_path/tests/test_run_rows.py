@@ -4,7 +4,9 @@ the served run's for the bf16 row, the integration's for the int8 H200 row `a5_l
 lists is refused before anything is written, as an art: row dir is."""
 from __future__ import annotations
 
+import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -88,3 +90,50 @@ def test_outside_a_research_run_the_outputs_go_under_the_clone_and_say_so(tmp_pa
     assert got.stdout.splitlines() == [f"OUT unset outside a research run: the outputs go to {tmp_path}/out/prove_path",
                                        f"O={tmp_path}/out/prove_path"]
     assert (tmp_path / "out" / "prove_path").is_dir()
+
+
+def _lines(first: str, last: str) -> list[str]:
+    lines = RUN_SH.read_text().splitlines()
+    i = next(k for k, line in enumerate(lines) if line.startswith(first))
+    return lines[i:next(k for k in range(i, len(lines)) if lines[k].startswith(last)) + 1]
+
+
+def test_the_served_arms_forged_partition_is_settled_before_any_build(tmp_path):
+    """A served window of steps 1 to 2 has no unit at step 24: the served arm's forged partition is derived from the honest
+    one, or a given one outside its steps is refused (exit 8, the fix named), after the install and before the builds,
+    where its commit would raise only after the honest arm ran. The single-GPU arm's defaults are unchanged."""
+    text = RUN_SH.read_text()
+    assert text.index("forged-partition --honest") < min(text.index("lake build"), text.index("60-circuit.sh"))
+    assert text.index("PY=$REPO/.venv/bin/python") < text.index("forged-partition --honest")
+    assert 'run $1-forged "$src" - $O/forged-partition.json' in text
+    assert 'run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24}' in text
+    snippet = "\n".join(_lines("PLAIN=(); SAMPLING_DESIGN=", "fi"))
+    part = REPO / "benchmarks/prove_path"
+
+    def served(**env: str) -> subprocess.CompletedProcess:
+        unset = [a for v in ("PP_TP", "PP_PLAIN", "PP_PARTITION", "PP_FORGED_PARTITION", "PP_ONLY") for a in ("-u", v)]
+        return subprocess.run(["env", *unset, f"PY={sys.executable}", f"O={tmp_path}", f"PP_SERVE_RUN={tmp_path}",
+                               *(f"{k}={v}" for k, v in env.items()), "bash", "-c", snippet + "\necho settled"],
+                              cwd=REPO, capture_output=True, text=True)
+
+    got = served(PP_PLAIN="1", PP_PARTITION=str(part / "llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json"))
+    assert got.stdout.strip() == "settled", got.stderr
+    assert json.loads((tmp_path / "forged-partition.json").read_text()) == json.loads(
+        (part / "llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json").read_text())
+    got = served(PP_FORGED_PARTITION=str(part / "llama32_1b_silu_mul_v2_i8192_l0_step24.json"))
+    assert got.returncode == 8 and "settled" not in got.stdout
+    assert "outside the honest partition's [1, 2]" in got.stderr and "Unset PP_FORGED_PARTITION" in got.stderr
+    assert served(PP_ONLY="honest", PP_FORGED_PARTITION=str(part / "llama32_1b_silu_mul_v2_i8192_l0_step24.json")).returncode == 0
+
+
+def test_an_arm_pp_only_leaves_out_says_so_in_a_line_the_printer_reads(tmp_path):
+    body = _lines("run() {", "  local adv=")[:-1]
+    for only, name, args, word in (("honest", "served-forged", ' --forge 0:0', "forged"), ("forged", "served", "", "honest")):
+        got = subprocess.run(["bash", "-c", "\n".join(body) + f'\n  echo ran\n}}\nPP_ONLY={only}\nrun {name} src - p ""{args}'],
+                             capture_output=True, text=True)
+        assert got.returncode == 0, got.stderr
+        tag, _, doc = got.stdout.strip().partition(" ")
+        assert tag == "PROVE-PATH" and json.loads(doc) == {"name": name, "ran": False, "why": f"PP_ONLY={only}: no {word} run"}
+    got = subprocess.run(["bash", "-c", "\n".join(body) + '\n  echo ran\n}\nPP_ONLY=honest\nrun served src - p ""'],
+                         capture_output=True, text=True)
+    assert got.stdout.strip() == "ran"
