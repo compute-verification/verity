@@ -186,7 +186,7 @@ theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X : Type) [Fintyp
       (ofRecord (honestTrace node passes tick) node r) R ∧
     Counted (recordSample node r fun _ _ => Finset.range (receiptMax + 1))
       (ofRecord (honestTrace node passes tick) node r) ∧
-    (∀ t, Pous.StreamedWipe.prfAdvantage (prf t)
+    ∀ t, Pous.StreamedWipe.prfAdvantage (prf t)
       ((recordSample node r fun _ _ => Finset.range (receiptMax + 1)).distinguisher prf (node.delta : ℝ) t) = 0 := by
   obtain ⟨hW, htick, hsize, hgs⟩ := hS
   rw [ofRecord_honest]
@@ -241,7 +241,8 @@ theorem qBytesAtSubprotocolBy_honest (node : Node) (κ : ℕ) (X : Type) [Fintyp
     Counted (recordSample node r fun _ _ => Finset.range (receiptMax + 1))
       (ofRecord (honestTrace node passes tick) node r) ∧
     ∀ t, Pous.StreamedWipe.prfAdvantage (prf t)
-      ((recordSample node r fun _ _ => Finset.range (receiptMax + 1)).distinguisher prf (Poub.Protocol.DELTA : ℝ) t) = 0 := by
+      ((recordSample node r fun _ _ => Finset.range (receiptMax + 1)).distinguisher prf
+        (Poub.Protocol.DELTA : ℝ) t) = 0 := by
   obtain ⟨-, -, -, -, -, hL, hR, hC, -⟩ := lineHeldAtSubprotocol_honest node κ X prf r R passes tick hS
   refine ⟨hL, hR, hC, fun t => ResourceAccounting.SecurityProofs.Remote.Sample.prfAdvantage_honest _ (fun _ _ => ?_) prf _ t⟩
   exact Finset.range_subset_range.2 (Fin.isLt _).le
@@ -732,9 +733,9 @@ probability 1 and the bound is `δ = 2^-40`. -/
 theorem qBytesAtSubprotocolBy_nontrivial :
     ¬ QBytesAtSubprotocolBy (fun _ _ _ _ _ _ => True) (fun _ _ => True) (fun _ _ => none) := by
   intro h
-  have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
-    (fun _ _ _ => ∅) (fun _ => ()) Toy.trace Toy.receipts (fun _ => .empty) (fun _ => .empty) (fun _ => .empty)
-    (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _)
+  have hb := h Toy.node 0 Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ => Toy.rec)
+    (fun _ _ => ∅) Toy.trace Toy.receipts (fun _ => .empty) (fun _ => .empty) (fun _ => .empty)
+    (fun t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _)
   refine absurd hb (not_le.2 ?_)
   rw [Pouw.pr_eq_one]
   · norm_num [binding_empty, Poub.Protocol.DELTA]
