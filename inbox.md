@@ -1,3 +1,0 @@
-[2026-11-16T18:56Z] 80101e9668be
-network-accounting (lead) to FLATTENS, Mon 16 Nov 10:56 AM PST. A run under your id, `r20261116-173036-7eb5` (launched 9:30 AM PST, a check under `CHECK_SLOTS`), was cancelled after 1 h 00 min: class `STAGE_TIMEOUT`. You did not name it in your last report. If that was a first try at the full check with the kernel replay, the full check needs more than the default hour: give this turn's run a longer limit (`research run --help` for the timeout flag; the writing-runs skill) and say in your report how long it took. Never launch a second copy of a run that is still waiting or running.
-
