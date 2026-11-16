@@ -1420,7 +1420,9 @@ def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     on, the sampled proof blocks the first and last of each kept call (`receipts_producer`'s: the first layer's linears at step 0
     and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
     (`pouw_h1_credit.NEGATIVES`) at the first of them."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        served as SV,
+    )
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 
     from tests.protocols import pouw_h1_credit as PC

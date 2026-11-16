@@ -171,8 +171,10 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
     """The registered entries of one field's ``tables`` (`tables_of`), its words ``words`` of ``shape`` as composed for the rank,
     each table committed at the rank's program ``digest`` and its ``nonce`` under ``key``; an embedding shard's over ``vocab``,
     the whole vocabulary's rows and the rank's first token."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        registered_commit,
+    )
 
     def rows(b: int, what: str, n: int) -> np.ndarray:
         if what == "vocab":
