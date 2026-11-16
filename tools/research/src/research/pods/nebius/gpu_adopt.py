@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
-"""A GPU VM's out-of-lease probe: a process on a GPU that no lease gave it holds that GPU's lease until it exits.
-
-    gpu_adopt.py loop [--every 30]   as the research user, unit vy-gpu-adopt (vm_setup.sh installs it on a VM with GPUs)
-    gpu_adopt.py check               one pass, printed as JSON (it adopts nothing that outlives the pass)
-
-gpu-lease hands out this VM's GPUs (one flock'd lock per GPU in $GPU_LEASE_DIR, default /run/gpu-lease). A compute process
-(`nvidia-smi --query-compute-apps`) on GPU i is allowed when a lease on i has an owner pid that is the process or one of its
-ancestors, or an owner line naming the process's run (a run whose lease holder hands its locks over a socket, as circuits'
-sweeps do, so its workers are not the holder's descendants). Any other is out of lease: a job that opened CUDA without gpu-lease (a `research run --on` from a tree before the
-runner hid the GPUs, or a shell). If i's lock is free, this probe takes it with gpu-lease's owner line naming the process's run (its
-runner's `--id`) and `who=adopted:<lane>`, so gpu-lease hands i to nobody else, and drops it when the process exits. If a lease
-holds i already, two jobs share the GPU (`collision`). Each finding is a line in $GPU_ADOPT_LOG (default
-/workspace/research/gpu-adopt.jsonl), which the duty loop reads; adopting is announced once per process and GPU.
-Only a process listed both before and after the leases are read is judged, as gpu_stray.py does on node 1. No process's environment
-is read. On a cluster node ($GPU_ADOPT_SPLIT_FILE, default /etc/vy/direct-gpus, present) Kueue's pods hold GPUs without gpu-lease and
-gpu_stray.py judges them, so this probe judges nothing there.
-"""
+"""A GPU VM's out-of-lease probe: a process on a GPU that no lease gave it holds that GPU's lease until it exits."""
 from __future__ import annotations
 
 import argparse
@@ -41,7 +25,6 @@ def iso(t: float) -> str:
 
 
 def compute_apps() -> list[tuple[int, str]]:
-    """(pid, GPU UUID) of every compute process."""
     out = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,gpu_uuid", "--format=csv,noheader"], capture_output=True,
                          text=True, check=True).stdout
     apps = []
@@ -53,7 +36,6 @@ def compute_apps() -> list[tuple[int, str]]:
 
 
 def gpu_index() -> dict[str, int]:
-    """UUID -> nvidia-smi index (gpu-lease's lock name; it runs with CUDA_DEVICE_ORDER=PCI_BUS_ID)."""
     out = subprocess.run(["nvidia-smi", "--query-gpu=index,uuid", "--format=csv,noheader"], capture_output=True, text=True,
                          check=True).stdout
     return {u.strip(): int(i) for i, _, u in (ln.partition(",") for ln in out.splitlines()) if i.strip().isdigit()}
@@ -69,7 +51,6 @@ def parent(pid: int) -> int | None:
 
 
 def ancestors(pid: int) -> list[int]:
-    """The process and its ancestors, nearest first."""
     out: list[int] = []
     while pid and pid > 1 and pid not in out:
         out.append(pid)
@@ -92,7 +73,6 @@ def comm(pid: int) -> str:
 
 
 def run_of(chain: list[int]) -> str | None:
-    """The run id of the nearest `research run ... --id RUN` runner among the process's ancestors."""
     for p in chain:
         if "research" in (c := cmdline(p)) and (m := RUN_ID.search(c)):
             return m.group(1)
@@ -110,7 +90,6 @@ def lane_of(run: str | None) -> str | None:
 
 
 def lease_run(i: int) -> str | None:
-    """The run id GPU i's owner line names, else None."""
     if not (LEASE_DIR / f"{i}.owner").exists():
         return None
     try:
@@ -122,7 +101,6 @@ def lease_run(i: int) -> str | None:
 
 
 def lease_owner(i: int) -> int | None:
-    """The owner pid of a lease held on GPU i, else None (the lock is free)."""
     lock = LEASE_DIR / f"{i}.lock"
     if not lock.exists():
         return None

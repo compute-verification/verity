@@ -1,50 +1,5 @@
-"""failure.json classifier v1 -- a reproducible interpretation of preserved evidence (brief §6).  Observations first; rc=137 alone is
-UNKNOWN_SIGNAL(9) with the incident list, never OOM; incidents are recorded separately from the job's final outcome.
-
-    tele classify --attempt-dir D [--rc N] [--signal S] [--log PATH ...] [--check-record PATH] [--stages-txt PATH]
-
-Rules (first match by priority; every rule's evidence refs recorded; ambiguity lowers certainty, never raises it):
-  1 structured checker record with verdict != PASS                -> WORKLOAD_CHECK_FAILED   (BEFORE the rc==0 rule: a checker that writes
-                                                                     FAIL and exits 0 is a failed workload -- rev d1)
-  2 rc==0 and checker record absent or PASS                       -> SUCCESS (+ incidents; an open root span is a limitation, not a failure)
-  3 CUDA allocation failure string in the job's own log           -> CUDA_ALLOC_FAIL
-  4 ENOSPC/EDQUOT in the log, or a declared mount sampled at 0    -> STORAGE_EXHAUSTED
-  5 cancel_intent matching the job's pid/pgid before the exit, delivered or exit signal == requested
-                                                                  -> STAGE_TIMEOUT (actor=timeout) | CANCELLED_DEADMAN | CANCELLED_GUARDIAN | CANCELLED_MANUAL
-  6 exit by SIGKILL + cgroup oom_kill delta >= 1 in the job's interval:
-        job_cgroup scope                                          -> CGROUP_OOM_ATTRIBUTED (established)
-        shared scope, PRIMARY evidence (rev S-r17-51 c2): a job-tree process vanished in the oom_kill window AND no outsider vanished
-                                                                  -> CGROUP_OOM_ATTRIBUTED, certainty inferred, never established
-        corroboration, recorded in oom.attribution and NEVER a veto: the vanished process had the highest sampled /proc/<pid>/oom_score
-        (the kernel's own victim rule) / the largest anon+shmem at the preceding sample; disagreement is a limitation line
-        otherwise                                                 -> OOM_UNRESOLVED_ORIGIN
-     The run's own queue scope (`cluster-<run id>.scope`, which `research run --queue` starts) counts as the job's own cgroup here and in 7b.
-  6b exit by SIGTERM + an oom_kill increment in the run's own queue scope
-                                                                  -> CGROUP_OOM_ATTRIBUTED (0.1.4), established: systemd stopped the scope after the kernel
-                                                                     OOM-killed a process in it.  Every OOM class in the job's own cgroup names its limit
-                                                                     (`MemoryMax=NG`, job.json's environment.cgroup.memory_max_bytes) in `why`.
-  COEXISTENCE (rev S-r17-51 c1, brief s6 'retain both'): whenever the job exited by SIGKILL with an oom_kill delta in its interval and rules 3-5
-  chose another class (CUDA string, low mount, marker), the class is that first match but certainty = ambiguous, both evidence sets are
-  recorded (`competing` = [chosen, other]; the OOM side is also an incident).  Exempt: a DELIVERED and identity-VERIFIED marker stays
-  established (the kill is observed, not inferred).  The sampled-mount branch of rule 4 applies only to the attempt's own mount or a
-  declared-output mount; other low mounts are incidents.
-  7 exit by signal                                                -> UNKNOWN_SIGNAL (timeout inferred from the runner's timeout_s + SIGTERM/SIGKILL -> STAGE_TIMEOUT,
-                                                                     certainty inferred; evaluated AFTER rule 6; with no resource samples at all: ambiguous)
-  7b rc != 0 (no signal), an oom_kill increment in the job's interval AND a `Killed` line in the job's log
-                                                                  -> CGROUP_OOM (0.1.3, r20 issue 3): the shell/wrapper reported a SIGKILLed descendant
-                                                                     (`bash: line N: PID Killed cmd`, `Out of memory: Killed process`) and the cgroup counted a
-                                                                     kill in the same interval.  certainty established in job_cgroup scope, inferred in the
-                                                                     shared pod scope (the victim is named by the log line and the disappearance window, not by
-                                                                     the kernel).  cgroup v1 counts through memory.oom_control's oom_kill (sampler maps it to
-                                                                     memory_events.oom_kill); memory.failcnt growth is recorded as corroboration only.
-                                                                     A v1 cgroup with NO oom_kill counter (kernel < 4.13, sampled None) substitutes memory.failcnt
-                                                                     growth or under_oom=1 for the increment: inferred in job_cgroup, ambiguous shared (failcnt
-                                                                     also counts reclaim at the limit).  A counter that exists and did not move vetoes the rule.
-  8 rc != 0                                                       -> UNKNOWN_EXIT (a traceback is evidence, not a class; a child OOM-killed while the parent exits rc!=0
-                                                                     WITHOUT a Killed line stays UNKNOWN_EXIT with the incident carrying the vanished child's pid,
-                                                                     delta and last oom_score -- rev d4; the coexisting incident is named in limitations)
-Every cgroup_oom incident carries, per window: who vanished (tree / outsiders), the highest-oom_score process at the preceding sample, and
-attribution_sample_age_s = window end - preceding process sample (rev d8).
+"""failure.json classifier: a reproducible interpretation of preserved evidence.  Observations first; rc=137 alone is
+UNKNOWN_SIGNAL(9) with the incident list, never OOM; incidents are recorded apart from the job's final outcome.
 """
 from __future__ import annotations
 
@@ -238,7 +193,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     proc_samples = [s for s in samples if s.get("kind") == "process"]
 
     def vanish_in(w: dict[str, Any]) -> dict[str, Any]:
-        """who vanished in (window_start, window_end]: tree pids (gone) and outsiders; largest anon+shmem at the last sample before the window end."""
         a, b = float(w["window_start_mono"]), float(w["window_end_mono"])
         half = 0.5 * max(b - a, 1e-3)
         tree_gone: list[int] = []
@@ -373,7 +327,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
             limitations.append(f"check record {check_record} is not JSON")
 
     def oom_attribution() -> dict[str, Any]:
-        """-> {class, why, certainty, limitations, detail}; class is CGROUP_OOM_ATTRIBUTED or OOM_UNRESOLVED_ORIGIN."""
         if own_scope:
             return {"class": "CGROUP_OOM_ATTRIBUTED", "why": "SIGKILL exit and an oom_kill increment in the job's own cgroup during the job",
                     "certainty": "established", "limitations": [], "detail": {"scope": cg_scope}}

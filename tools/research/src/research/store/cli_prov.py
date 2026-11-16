@@ -4,9 +4,6 @@
     research data pull --from MACHINE RUN --project P            copy an attempt + its outputs' manifests and blobs from a machine's store (ssh)
     research data attempt publish RUN_DIR|RUN_ID [--tool SPEC] [--force] | --all [--runs-dir D]
     research data custody RUN_DIR|RUN_ID [--publish [--force [--runner-gone]]] | --triage [--verify] [--older-min N] [--runs-dir D ...]   run custody on the remote (store.custody)
-
-`research.store.cli` owns the `research data` dispatcher and merges COMMANDS into its table; `main` here is the
-same dispatch for tests and for `python -m research.store.cli_prov`.
 """
 from __future__ import annotations
 
@@ -46,7 +43,6 @@ def _kv(items: list[str], what: str) -> dict[str, Any]:
 
 
 def _lockfiles_at(source_root: Path, tree: str) -> dict[str, str]:
-    """sha256 of each lockfile AS IT IS IN `tree` (git object), so --source-tree names exactly what a run at that tree recorded."""
     out = {}
     for name in E.LOCKFILES:
         try:
@@ -81,8 +77,6 @@ def _rows(rows: Any) -> list[dict[str, Any]]:
 
 
 def lookup(tool: Any, root: Path, *, argv=None, params=None, inputs=None, conditions=None, source_tree=None, any_source=False, store=None) -> dict[str, Any]:
-    """`research data lookup --json` as a call on a loaded `tool`: its attempts oldest first, `params` overriding what `argv` parses to and
-    missing key conditions from this machine.  ValueError when `root`'s tree is dirty and neither `source_tree` nor `any_source` is given."""
     parsed, key = tool.resolve_params(argv or [], root) if (argv or tool.parse) else ({}, {})
     if params:
         key = tool.resolve_key_params({**parsed, **params}, root)
@@ -181,9 +175,6 @@ def _batches(hexes: list[str], sizes: dict[str, int] | None) -> list[list[str]]:
 
 def _fetch_blobs(ssh: list[str], store_root: str, hexes: list[str], into: Path, *, sizes: dict[str, int] | None = None,
                  have: Callable[[str], Path | None] | None = None) -> dict[str, int]:
-    """Blobs from the machine's store into `into/<hex>`, each verified by sha256 on arrival.  The paths travel on tar's stdin (`-T -`),
-    never in the ssh argv, and in batches of `PULL_BATCH_FILES` / `PULL_BATCH_BYTES` (`_batches`).  `have(hex)` -> a local path for a blob
-    this store already holds: those are linked/copied locally and not fetched.  Returns {"fetched", "reused", "batches"}."""
     stats = {"fetched": 0, "reused": 0, "batches": 0}
     todo = []
     for h in hexes:
@@ -223,7 +214,6 @@ def _fetch_blobs(ssh: list[str], store_root: str, hexes: list[str], into: Path, 
 
 
 def pull_artifact(ssh: list[str], store_root: str, art_id: str, st: Any) -> dict[str, Any]:
-    """manifests/<hex>.json + every blob it references -> the local store through put_artifact; the recomputed id must equal art_id."""
     hexid = art_id.removeprefix("art:")
     mbytes = _cat(ssh, f"{store_root}/manifests/{hexid}.json")
     if hashlib.sha256(mbytes).hexdigest() != hexid:
@@ -272,10 +262,6 @@ def pull_artifact(ssh: list[str], store_root: str, art_id: str, st: Any) -> dict
 
 
 def pull_labels(ssh: list[str], store_root: str, targets: list[str], st: Any) -> dict[str, Any]:
-    """The machine's `labels/<target>/` directories for `targets`, in one tar (the same `tar -cf - -C ROOT -T -` form as the blobs, paths on
-    stdin), unioned into this store (`labels_sync.import_dir`: content names, nothing overwritten).  A target the machine never labelled
-    is a directory tar cannot stat -- a warning and a non-zero rc with a complete archive on stdout, so the archive's parse, not the rc,
-    decides: an unparseable tar is a transport failure.  A store without a labels layout (a test double) is skipped."""
     from . import ids
     from . import labels_sync as LS
 
@@ -407,7 +393,6 @@ def cmd_attempt(argv: list[str]) -> int:
 
 
 def publish_counts(results: list[dict[str, Any]]) -> dict[str, Any]:
-    """published / already present / refused (run not terminal) / errors, with the error text per class (run ids elided)."""
     c: dict[str, Any] = {"published": 0, "already": 0, "refused": 0, "errors": 0, "error_classes": {}}
     for r in results:
         if r.get("published"):
@@ -425,7 +410,6 @@ def publish_counts(results: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def cmd_custody(argv: list[str]) -> int:
-    """`research data custody RUN [--publish]` | `--triage` (store.custody)."""
     from . import custody as CU
 
     ap = argparse.ArgumentParser(prog="research data custody", description="a run's custody on the store's remote: the attempt and every run file "

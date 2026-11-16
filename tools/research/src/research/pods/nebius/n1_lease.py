@@ -1,57 +1,5 @@
 #!/usr/bin/env python3
-"""vy-nebius-1's process-level GPU leases: node 2's `gpu-lease` (the same lock files and rules) on GPUs that Kubernetes lends it.
-
-    n1_lease.py loop [--every 5]     as research on node 1 (unit vy-n1-lease@POOL, one per pool)
-    n1_lease.py tick | status
-
-A job leases a GPU for its GPU phase only: its pod requests no `nvidia.com/gpu`, runs with `hostPID`, runtime class nvidia and
-`NVIDIA_VISIBLE_DEVICES=all`, mounts `$GPU_LEASE_DIR`, and runs `gpu-lease N --wait ... -- CMD`, which sets CUDA_VISIBLE_DEVICES
-(the dispatcher's `lease` items, dispatch.py). It may release the GPU for a CPU phase and lease one again later.
-
-**The pool.** A GPU is gpu-lease's only while a holder pod (`gpu-pool-*`, 1 GPU, a Kueue Job in `$VY_POOL_QUEUE`) holds it from
-the device plugin, so Kubernetes never hands it to another pod. Every other GPU is *fenced*: a `flock -x` on its lock file, held by
-a detached process whose owner line says who=kubernetes, so no lease can take it, whatever list a waiting gpu-lease read at its
-start. A fence outlives this controller, so a crash fails closed. `pool.gpus` (the allowed file) lists every index.
-A holder requests its GPU and nothing else: waiting pods hold their queue's CPU and memory quota, so a holder that needed any could
-wait on the very pods it serves. It is BestEffort, so evicted first under memory pressure, and an evicted holder's lease is outside
-the pool (below).
-Each tick, with the brain absent (local rules):
-  - grow: when the waiters want more than the free pool GPUs and pending holders cover, submit holders (at most `$VY_POOL_MAX`,
-    and never past the queue's nominal GPU quota less what its other admitted Workloads reserve: a holder on borrowed quota is
-    Kueue's to reclaim mid-lease; with the quota unread, no growth). While every waiter is `--preemptible`, holders may borrow
-    `$VY_POOL_BORROW` GPUs more (default 0), until `$VY_POOL_BORROW_UNTIL` (UTC) if set: a Commit that reclaims one evicts its
-    holder, and the lease on it is then outside the pool and stopped. A holder's GPU is unfenced once its pod runs and names its UUID;
-  - shrink: fence a pool GPU that has been free for `$VY_POOL_IDLE_S` with nobody waiting for it, then delete its holder;
-    delete pending holders nobody waits for.
-With `$VY_POOL_POLICY` set (a command printing this pool's keys of the cluster policy in force, `cluster/policy/v1` JSON:
-`python3 -m cluster policy show --key vy-nebius-1.lease-pool.provers --json` from infra/cluster), the pool's `max`, `borrow` and
-`borrow-until` come from it instead, read again every `POLICY_EVERY_S`, so an override (`cluster policy override`) takes effect
-without a restart (a read that takes longer than `POLICY_TIMEOUT_S` fails, and everything it started is killed). A key it lacks keeps the environment's value; while it fails or answers a `max` or `borrow` that isn't a
-whole number of the node's GPUs, the three it last answered stay (the environment's, before it ever has). Each change is logged
-(`policy`), and the three in force are written to `$GPU_LEASE_DIR/n1-lease.limits` at each read with where they came from,
-`from=policy`, `last-policy` or `environment` (`cluster policy diff` reads them there).
-**Heartbeat and expiry.** Each tick reads every lease (lock holders from /proc/locks, the owner line, the pod from the holder's
-cgroup) into `n1-lease.json`; that record is the lease's heartbeat. A GPU whose memory gpu-lease last found held by a live process
-under no lease (`$GPU_LEASE_DIR/<i>.foreign`, which kept it from being granted) carries that finding as `foreign`. A lease held `$VY_LEASE_EXPIRY_GRACE_S` past its `until=` (a
-hung job gpu-lease's own timeout didn't end) has its pod deleted. A lease on a GPU outside the pool (its holder was deleted by
-hand, or Kueue reclaimed it) has its pod deleted at once: Kubernetes may already have given that GPU to someone else. A lease
-held by a host process (a `research run --queue` job, in no pod) is signalled instead, its gpu-lease scope else its owner pid:
-SIGTERM, then SIGKILL once `KILL_AFTER_S` have passed, as gpu-lease's own preemption does.
-**Pools.** One controller serves one queue's pool, named `$VY_POOL_NAME` (its holders' `verity.dev/gpu-pool` label; default
-node1, the `provers` pool in /run/gpu-lease). A second pool runs as a second controller with its own `$GPU_LEASE_DIR`,
-`$VY_POOL_QUEUE`, `$VY_POOL_PRIORITY` and `$VY_POOL_NAME` (circuits': /run/gpu-lease-circuits, `deployments-gpu`, `circuits-gpu`,
-circuits): each fences, in its own lock files, every GPU its own holders don't hold, so a waiter gets only its own pool's GPUs.
-`$VY_POOL_QUEUE` is the ClusterQueue whose quota the holders take; `$VY_POOL_LOCAL_QUEUE` (default the same name) is the
-LocalQueue they are submitted to. Circuits' holders use `deployments-gpu-pool`, so the Commit pacer's hold on the
-`deployments-gpu` LocalQueue never holds them back (sky/release.py).
-**Blocked.** While `$GPU_LEASE_DIR/blocked` exists (gpu_stray.py writes it when a process of the pool's pods runs on a GPU it
-holds no lease for; a person removes it once that's cleared), the pool grants nothing new: leases already held go on, every
-other pool GPU is fenced and its holder deleted, and pending holders are cancelled.
-**The brain.** With `$VY_LEASE_BRAIN` set (a command, e.g. `ssh vy-cluster cluster grant --on vy-nebius-1`), each tick sends
-it the state as JSON on stdin and reads `{"grants": {"<pid>": [index, ...]}, "pool_target": N}`. While it answers, this controller
-holds `agent.lock`, so every request queues for a grant (gpu-lease agent mode); after `BRAIN_MISSES` failures in a row it drops the
-lock and the requests fall back to gpu-lease's local rules in place.
-"""
+"""vy-nebius-1's process-level GPU leases: node 2's `gpu-lease` (the same lock files and rules) on GPUs that Kubernetes lends it."""
 from __future__ import annotations
 
 import argparse
@@ -105,8 +53,6 @@ def epoch(s: str | None) -> float | None:
 
 
 def gpu_count(field: str, v, most: int) -> int:
-    """A policy's `max` or `borrow`: a whole number of GPUs from 0 to `most`, as an int or a string of digits; ValueError for
-    anything else (-1, 1.5, Infinity, "8x")."""
     if isinstance(v, str) and v.isascii() and v.isdigit():
         v = int(v)
     if type(v) is not int or not 0 <= v <= most:
@@ -119,8 +65,6 @@ def communicate(p: subprocess.Popen, timeout: float) -> tuple[str, str]:
 
 
 def policy_output(cmd: str) -> str:
-    """`cmd`'s stdout, run by a shell in a session of its own whose whole process group is killed after `POLICY_TIMEOUT_S`, so
-    nothing it started (an ssh, a python3 under `cd ... &&`) outlives it; CalledProcessError on a nonzero exit."""
     with subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                           start_new_session=True) as p:
         try:
@@ -138,7 +82,6 @@ def kubectl(*args: str, stdin: str | None = None) -> str:
 
 
 def gpu_table() -> dict[str, int]:
-    """UUID -> nvidia-smi index."""
     out = subprocess.run(["nvidia-smi", "--query-gpu=index,uuid", "--format=csv,noheader"], capture_output=True, text=True,
                          check=True).stdout
     return {u.strip(): int(i) for i, u in (line.split(",") for line in out.splitlines() if line.strip())}
@@ -153,7 +96,6 @@ def owner_fields(line: str) -> dict[str, str]:
 
 
 def foreign_on(i: int) -> list[dict[str, str]]:
-    """What gpu-lease last found holding GPU i's memory under no lease (`$GPU_LEASE_DIR/<i>.foreign`), its processes still alive."""
     if not (DIR / f"{i}.foreign").exists():
         return []
     try:
@@ -166,7 +108,6 @@ def foreign_on(i: int) -> list[dict[str, str]]:
 
 
 def write(path: Path, text: str) -> None:
-    """Atomically, mode 666: the pods' gpu-lease (uid 1000) and this controller (research) both rewrite these files."""
     tmp = path.with_name(f".{path.name}.{os.getpid()}")
     tmp.write_text(text)
     os.chmod(tmp, 0o666)
@@ -183,11 +124,6 @@ def lock_path(i: int) -> Path:
 
 
 def lock_holders(path: Path = Path("/proc/locks")) -> dict[int, list[int]]:
-    """inode -> the pids `path`, /proc/locks or a text in its form, names for its flocks: the process that took each lock,
-    which for gpu-lease is a `flock` helper long gone (the lock lives on in the lease's descriptors), so a lease is
-    attributed by its owner line's pid instead.
-    The kernel hands /proc/locks out a page per read, so with locks coming and going one read can miss a lock held throughout
-    (node 1: 182 lines, 3 pages): use it only where missing a lock costs a tick, and `locked` where it must not."""
     out: dict[int, list[int]] = {}
     for line in path.read_text().splitlines():
         f = line.split()
@@ -197,8 +133,6 @@ def lock_holders(path: Path = Path("/proc/locks")) -> dict[int, list[int]]:
 
 
 def locked(path: Path) -> bool:
-    """Whether a process holds a flock on `path`: a non-blocking exclusive flock fails exactly then.  The file is opened without
-    following a link or waiting on a FIFO (the lease dir is 0777); one this can't open counts as not locked."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
@@ -210,7 +144,6 @@ def locked(path: Path) -> bool:
 
 
 def granted(fd: int) -> bool:
-    """Whether an exclusive flock on `fd` is granted at once: False exactly while another descriptor holds the file."""
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return True
@@ -219,7 +152,6 @@ def granted(fd: int) -> bool:
 
 
 def signalled(pgid: int, sig: int) -> bool:
-    """Whether `sig` reached process group `pgid`: False once the group is gone, or when it isn't this user's to signal."""
     try:
         os.killpg(pgid, sig)
         return True
@@ -231,7 +163,6 @@ def signalled(pgid: int, sig: int) -> bool:
 
 
 def reaped(pid: int) -> bool:
-    """Whether `pid` was this process's child, now reaped: False for another process's (an earlier n1_lease's fence)."""
     try:
         os.waitpid(pid, 0)
         return True
@@ -260,7 +191,6 @@ def pod_uid_of(pid: int) -> str | None:
 
 
 def fence(i: int, t: float) -> int | None:
-    """Hold GPU i's lock from a detached process, its pid; None (holding nothing) when a lease has it."""
     lock = lock_path(i)
     p = subprocess.Popen(["flock", "-n", "-x", str(lock), "sh", "-c", "echo locked; exec sleep 2147483647", FENCE_CMD],
                          stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
@@ -275,7 +205,6 @@ def fence(i: int, t: float) -> int | None:
 
 
 def unfence(pids: list[int]) -> None:
-    """Stop each fence and wait (up to 2 s) until its whole process group is gone, so its GPU's lock is free on return."""
     for pid in pids:
         signalled(pid, signal.SIGTERM)
     for pid in pids:
@@ -309,8 +238,6 @@ def _true(w: dict, kind: str) -> bool:
 
 
 def unborrowed(obs: dict, holders: set[str]) -> int | None:
-    """GPUs the pool queue can give holders without borrowing: its nominal quota less the GPUs its other admitted Workloads
-    reserve. None when the ClusterQueue or the Workloads weren't read."""
     cq, workloads = obs.get("cq"), obs.get("workloads")
     if cq is None or workloads is None:
         return None
@@ -330,7 +257,6 @@ def unborrowed(obs: dict, holders: set[str]) -> int | None:
 
 
 def waiters() -> list[dict]:
-    """gpu-lease's live wait files (a waiter locks its file before naming it `wait.*`, and holds it while it waits), oldest first."""
     out = []
     for f in sorted(DIR.glob("wait.*")):
         try:
@@ -360,9 +286,6 @@ class Controller:
         self.policy_last: dict | None = None
 
     def pool_limits(self, t: float, dry: bool = False) -> dict:
-        """The pool's max, borrow and borrow-until: `$VY_POOL_POLICY`'s while it answers with whole numbers of the node's GPUs
-        and a UTC borrow-until, else those it last answered, else the environment's. Nothing the command prints raises out of
-        here."""
         if not POLICY or (self.policy_at is not None and t - self.policy_at < POLICY_EVERY_S):
             return self.limits
         self.policy_at = t
@@ -416,7 +339,6 @@ class Controller:
         return {"jobs": jobs, "pods": pods, "cq": cq, "workloads": workloads}
 
     def stop(self, t: float, lease: dict, why: str) -> None:
-        """End a lease: delete its pod, or signal a host process's scope (else its owner pid), SIGKILL after `KILL_AFTER_S`."""
         if lease.get("pod") or not (lease.get("pid") and lease.get("owner_alive")):
             self.log(t, why, lease=lease)
             if lease.get("pod"):

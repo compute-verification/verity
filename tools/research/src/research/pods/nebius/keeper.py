@@ -1,51 +1,6 @@
 #!/usr/bin/env python3
 """Standing campaign targets on a Nebius node: keep N chunks of a lane's template leased here until a deadline, so no agent VM has
-to stay awake to top them up (stdlib only; /usr/local/bin/vy-keeper, pods/nebius/deploy.toml; `research keeper` from any VM).
-
-    vy-keeper tick                         vy-keeper.timer's oneshot, every minute, as research
-    vy-keeper set NAME < TARGET.json       write a target, or re-arm it (`research keeper set` sends it over ssh)
-    vy-keeper stop NAME --by WHO [--reason TEXT] [--cancel]
-    vy-keeper status [NAME] [--json]
-    vy-keeper hold REQUEST.json            a chunk's own transient unit: start its runner, then wait for it to exit
-
-A target is KEEPER_DIR/targets/<name>.json (research/keeper-target/v0): its owner (a lane), this node (KEEPER_NODE), `n`, `until`
-(UTC, at most KEEPER_MAX_AHEAD_H, 48, after it was set), `gpus` (default 1, at most KEEPER_MAX_GPUS: 7 on node 2, where one holder
-of all 8 is a timed window to node_ops), `max_min` per chunk, `command` (an argv in which `{seed}` stands for the chunk's seed)
-and `request`: the launch request `research run --on` stages (the shipped tool snapshot and source tree, the runner's cwd, the env
-and the `research run` flags), which `research keeper set` builds, and no other key. Its env is set inside the lease, so neither the
-runner nor gpu-lease sees it (but PYTHONPATH: see chunk_request), and may not set GPU_LEASE_*, CUDA_VISIBLE_DEVICES,
-CUDA_DEVICE_ORDER or RESEARCH_KEEPER_*: the lease, its GPUs and the seed are the keeper's. Its flags may not hold `--`, nor give
-those the runner and the keeper decide (RUNNERS_FLAGS: --attempt-dir, --job, --id, --on, --env, ...), nor one that `set` writes
-twice: argparse keeps the last, and --attempt-dir would move the run out of the keeper's reach. Its state,
-KEEPER_DIR/state/<name>.json, holds the seed counter, the live chunks, the failures in a row and why it starts nothing; every
-change is a line of KEEPER_DIR/events.jsonl. `set` keeps the counter (it only rises, to `seed_from` if that is higher) and clears
-a stop, a pause and the failure count; a target another owner set is refused.
-
-Each tick, under KEEPER_DIR/.lock (which set and stop take too), for each target:
-  - reaps the chunks whose unit has ended, reading the run dir: `done` (exit 0) clears the failure count, 143 frees the place
-    when the run's events.jsonl has a manual cancel (`cancelled`) or KEEPER_LEASE_DIR's preempted.log names the run
-    (`preempted`), and anything else (`failed`, `max_min` (124), `refused`, `not-started`, `lost`: no final status) is a
-    failure; KEEPER_MAX_FAILURES (3) in a row pause the target until it is set again;
-  - cancels, as `stop --cancel` does, each live chunk still waiting for its lease at its until or granted after it, and each
-    whose lease (granted then, or now if it still waits) meets a hold within its max_min: max_min counts from the grant (the
-    `since` of gpu-lease's owner lines in KEEPER_LEASE_DIR), so a chunk that cleared every hold when it started can be granted
-    into one. The holds are a timed window booked in KEEPER_WINDOWS (node 2's fill windows file) and the daily
-    KEEPER_DAILY_HOLD (node 1's quiet hold, HH:MM-HH:MM UTC), read each tick; holds that can't be read (a windows file missing
-    or unreadable, or a line in it that isn't a booking) cancel nothing and start nothing;
-  - starts nothing for a target that is malformed (skipped and logged, never guessed at), stopped, paused or past its `until`,
-    nor while a hold is on or would be reached by a chunk granted now within its max_min;
-  - otherwise tops the live chunks (running, or waiting for their lease) up to `n`. Each takes the next seed, written to the
-    state before the chunk starts, so a seed is never handed out twice, even across a crash. It runs as a recorded `research
-    run` on this machine with the claim and runner `research run --on` gets (`research launch-request`), in a transient user
-    unit keeper-<run id> so that it outlives the tick; its workload is `gpu-lease G --wait --preemptible --max-min M --
-    /usr/bin/env K=V ... COMMAND`, so it waits for its GPUs like any request and a waiter can always take them back, and
-    KEEPER_GPU_LEASE names its programs by absolute path. job.json's run.remote.keeper
-    names the target, owner and seed; the workload sees RESEARCH_KEEPER_TARGET and RESEARCH_KEEPER_SEED, and its lease
-    who=keeper:<owner>.
-A unit systemd can't report on counts as live (never more than n). The keeper signals only its own chunks' workloads: a cancel
-sends SIGTERM to the process group in the run's status.json once a member's environment has the run's RESEARCH_RUN_DIR, recorded
-in its run dir as a manual cancel, as `research cancel` does. Stop chunks with `research keeper stop --cancel`, never by stopping
-their unit: systemd then SIGKILLs the runner, which records no final status and publishes nothing.
+to stay awake to top them up.
 """
 from __future__ import annotations
 
@@ -99,7 +54,7 @@ def iso(t: float) -> str:
 
 
 def utc(s: Any, what: str) -> float:
-    """A UTC time (`2026-10-05T12:00Z`) in epoch seconds; ValueError for anything else, a time without its zone included."""
+    """Epoch seconds; ValueError for anything else, a time without its zone included."""
     try:
         t = datetime.fromisoformat(s)
     except (TypeError, ValueError):
@@ -124,7 +79,6 @@ def check_name(name: str) -> None:
 
 
 def parse_target(doc: Any, name: str) -> dict[str, Any]:
-    """The target, normalized, with `until_t`; ValueError naming the first thing wrong with it."""
     if not isinstance(doc, dict) or doc.get("schema") != SCHEMA:
         raise ValueError(f"schema is not {SCHEMA}")
     check_name(name)
@@ -202,7 +156,6 @@ def state_path(name: str) -> Path:
 
 
 def load_state(name: str) -> dict[str, Any]:
-    """The target's state, a fresh one when it has none; OSError or ValueError when it exists but can't be trusted."""
     try:
         st = json.loads(state_path(name).read_text())
     except FileNotFoundError:
@@ -225,7 +178,6 @@ def log(target: str, event: str, **kv: Any) -> None:
 
 
 def note(st: dict[str, Any], name: str, event: str | None, why: str | None = None) -> None:
-    """Why the target starts nothing, logged when it changes (a tick a minute would otherwise repeat it)."""
     text = f"{event}: {why}" if event else None
     if st.get("note") != text:
         st["note"] = text
@@ -242,10 +194,6 @@ def locked() -> Iterator[None]:
 
 
 def booked() -> list[tuple[float, float]]:
-    """The timed windows in KEEPER_WINDOWS (fill_runner's file: `2026-10-01T10:00Z 30 # who`, start and minutes; blank and comment
-    lines aside); OSError when the file is missing or can't be read, ValueError for a line that isn't a booking. Unlike
-    fill_runner, which reads a missing file as no windows, a node that names a windows file holds without it: a missing file is
-    a broken path more often than a night with nothing booked, and an idle target costs less than a voided window."""
     if not WINDOWS:
         return []
     out = []
@@ -262,7 +210,6 @@ def booked() -> list[tuple[float, float]]:
 
 
 def daily(spec: str, t: float) -> list[tuple[float, float]]:
-    """KEEPER_DAILY_HOLD (`12:10-13:30`, UTC) from the day before `t` to three days after it."""
     if not spec:
         return []
     m = re.fullmatch(r"(\d\d):(\d\d)-(\d\d):(\d\d)", spec.strip())
@@ -278,13 +225,11 @@ def daily(spec: str, t: float) -> list[tuple[float, float]]:
 
 
 def holds(now: float) -> list[tuple[str, float, float]]:
-    """The booked windows and the daily hold around now, (kind, start, end) by start; OSError or ValueError when they can't be read."""
     return sorted([("window", s, e) for s, e in booked()] + [("daily hold", s, e) for s, e in daily(DAILY_HOLD, now)],
                   key=lambda x: x[1])
 
 
 def held(spans: list[tuple[str, float, float]], now: float, end: float) -> str | None:
-    """Why a lease may not run from now to `end`, else None: a hold is on now, or starts before `end`."""
     for kind, s, e in spans:
         if s <= now < e:
             return f"in the {kind} {iso(s)}-{iso(e)}"
@@ -294,8 +239,6 @@ def held(spans: list[tuple[str, float, float]], now: float, end: float) -> str |
 
 
 def grants() -> dict[str, float]:
-    """When each run's lease was granted: the earliest `since` among the gpu-lease owner lines in KEEPER_LEASE_DIR that name it
-    (`run=`, which the runner's RESEARCH_RUN_ID gives). A line stays after its lease ends, until the GPU's next lease replaces it."""
     out: dict[str, float] = {}
     for p in LEASE_DIR.glob("*.owner"):
         try:
@@ -322,16 +265,12 @@ def unit_live(unit: str) -> bool | None:
 
 
 def launch(unit: str, request: Path, description: str) -> str | None:
-    """Start the chunk's transient user unit, which runs `hold` (the user manager forks it, so it outlives the tick's service);
-    None once started, else why not."""
     r = subprocess.run(["systemd-run", "--user", "--quiet", "--collect", "--unit", unit, "--description", description, "--",
                         sys.executable, str(Path(__file__).resolve()), "hold", str(request)], capture_output=True, text=True)
     return None if r.returncode == 0 else (r.stderr.strip() or f"systemd-run exited {r.returncode}")[-300:]
 
 
 def workload_in(pgid: int, run_dir: Path) -> bool:
-    """Whether a process of group `pgid` has the run's RESEARCH_RUN_DIR (the runner gives its workload the resolved run dir), so
-    a status.json left `running` by a runner that died can't aim a cancel at whichever group holds that number now."""
     want = f"RESEARCH_RUN_DIR={run_dir.resolve()}".encode()
     for pid in filter(str.isdigit, os.listdir("/proc")):
         try:
@@ -345,8 +284,6 @@ def workload_in(pgid: int, run_dir: Path) -> bool:
 
 
 def cancel_chunk(chunk: dict[str, Any], reason: str) -> str | None:
-    """SIGTERM to a live chunk's workload process group, recorded in its run dir as a manual cancel (`research cancel`'s
-    cancel-intent, from the chunk's own tool snapshot); None once delivered, else why not."""
     rd = Path(chunk["run_dir"])
     st = read_json(rd / "status.json") or {}
     pgid = st.get("pgid")
@@ -364,9 +301,6 @@ def cancel_chunk(chunk: dict[str, Any], reason: str) -> str | None:
 
 
 def hold(request: Path) -> int:
-    """A chunk's unit: `research launch-request` claims the run dir and starts the detached runner, then the unit waits for the
-    runner to exit (`tail --pid`, so no process holds this file open for the chunk's life and `research deploy drift` asks for
-    no restart), so it is live exactly as long as the chunk."""
     req = json.loads(request.read_text())
     ident = (req.get("remote") or {}).get("tool_identity")
     r = subprocess.run([req["python"], "-m", "research", "launch-request", *(["--expect-tool", ident] if ident else []), str(request)],
@@ -383,7 +317,6 @@ def hold(request: Path) -> int:
 
 
 def outcome(run_dir: Path) -> tuple[str, int | None, str | None]:
-    """How an ended chunk ended, from its run dir: (outcome, rc, why)."""
     refused = read_json(run_dir / "refused.json")
     if isinstance(refused, dict):
         return "refused", None, str(refused.get("reason"))[:300]
@@ -451,7 +384,6 @@ def reap(name: str, st: dict[str, Any]) -> None:
 
 
 def overrun(c: dict[str, Any], granted: float | None, spans: list[tuple[str, float, float]] | None, now: float) -> str | None:
-    """Why a live chunk must stop now, else None (`spans` None: the holds can't be read, so only its until binds)."""
     at = now if granted is None else granted
     waiting = "still waiting for its lease" if granted is None else f"granted at {iso(granted)}"
     if at >= c["until_t"]:
@@ -462,7 +394,6 @@ def overrun(c: dict[str, Any], granted: float | None, spans: list[tuple[str, flo
 
 
 def stop_overruns(name: str, st: dict[str, Any], spans: list[tuple[str, float, float]] | None, now: float) -> None:
-    """Cancel each live chunk that `overrun` names, once delivered; a refusal is tried again each tick, logged when it changes."""
     granted = grants()
     for rid, c in sorted(st["chunks"].items()):
         why = overrun(c, granted.get(rid), spans, now) if c.get("cancel") != DELIVERED else None
@@ -474,7 +405,6 @@ def stop_overruns(name: str, st: dict[str, Any], spans: list[tuple[str, float, f
 
 
 def new_run_id(now: float) -> str:
-    """`research run`'s id format (runs.new_run_id), unused under the runs root and the requests."""
     while True:
         rid = f"r{datetime.fromtimestamp(now, UTC):%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
         if not (ROOT / "runs" / rid).exists() and not (ROOT / "requests" / rid).exists():
@@ -482,8 +412,6 @@ def new_run_id(now: float) -> str:
 
 
 def chunk_request(name: str, t: dict[str, Any], rid: str, seed: int, unit: str) -> dict[str, Any]:
-    """The target's request as this chunk's: its env set inside the lease, so that neither the runner nor gpu-lease sees it, but
-    PYTHONPATH, which the runner appends behind the tool snapshot and the tree's import roots (inside, it would replace them)."""
     req = json.loads(json.dumps(t["request"]))
     env = {k: str(v) for k, v in (req.get("env") or {}).items()}
     inner = [f"{k}={v}" for k, v in env.items() if k != "PYTHONPATH"]
@@ -497,7 +425,6 @@ def chunk_request(name: str, t: dict[str, Any], rid: str, seed: int, unit: str) 
 
 
 def start(name: str, t: dict[str, Any], st: dict[str, Any], now: float) -> bool:
-    """Start one chunk with the next seed; False when it didn't start (a failure)."""
     seed = st["next_seed"]
     rid = new_run_id(now)
     unit = f"keeper-{rid}"

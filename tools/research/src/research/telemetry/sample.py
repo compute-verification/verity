@@ -1,11 +1,4 @@
-"""Level-0 sidecar: `tele sample --attempt-dir D --cadence 1.0 [--root-pid P | --pgid G] ...` (brief §4).
-
-Writes scoped samples to `resources.jsonl` (schema telemetry/resources/v0.1) and a heartbeat `sampler.json`.  Every record has
-`kind`, `scope`, `t_utc`, `t_mono`, `seq`, `stream`.  Bounded: fixed reads, --max-pids, --max-bytes (cadence doubles, never stops the
-workload), errors rate-limited and counted; smaps_rollup, which holds a process's mmap lock while it is read, never for a process over
---pss-max-rss-gb and at most 1/PSS_HOLD_FACTOR of any process's time.  Survivable: SIGHUP ignored, SIGTERM/SIGINT -> final readings + `sampler_end`, workload death
--> final readings + linger.  It never signals the workload.
-"""
+"""Level-0 sidecar: `tele sample --attempt-dir D --cadence 1.0 [--root-pid P | --pgid G] ...`."""
 from __future__ import annotations
 
 import argparse
@@ -93,7 +86,6 @@ class Sampler:
             self.error_samples.append(f"{kind}: {msg}")
 
     def round(self, final: bool = False) -> bool:
-        """Take one round of readings.  Returns False when the workload root has gone."""
         now = clock()
         alive = True
         try:
@@ -165,9 +157,6 @@ class Sampler:
         return alive
 
     def _pss(self, row: dict[str, Any]) -> dict[str, Any]:
-        """The process's smaps_rollup, unless its RSS is over --pss-max-rss-gb or its last read was less than PSS_HOLD_FACTOR times
-        that read's length ago: the read walks the whole address space under the process's mmap lock, which stalls a large process
-        for seconds."""
         rss = row.get("rss_bytes", row.get("rss_bytes_stat"))
         skipped = {"pid": row["pid"], "pss_bytes": None, "skipped": True, **{k: row.get(k) for k in STATUS_RSS},
                    **({} if "rss_bytes" in row else {"rss_bytes_stat": row.get("rss_bytes_stat")})}

@@ -44,7 +44,6 @@ def worktrees(repo: Path) -> list[dict]:
 
 
 def cwds() -> dict[int, tuple[str, str]]:
-    """pid -> (cwd, comm) of every process this user may read."""
     out = {}
     for name in os.listdir("/proc"):
         if name.isdigit():

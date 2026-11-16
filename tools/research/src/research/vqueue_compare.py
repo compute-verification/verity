@@ -1,49 +1,6 @@
 r"""`python3 -m research.vqueue_compare`: where the verified queue's shadow and drive's old path agree and disagree, over a
 window (`--since`, `--until`, UTC ISO; by default from the log's first decision to now).
-
-It reads the shadow's decision log (`--log`: one JSON object a line, `research.vqueue`'s actions as its loop applied them;
-unknown keys ignored, a line that isn't one reported), and the old path from git in a clone (`--repo`): drive's `Queue: #N`
-merges on `origin/checked`'s first-parent line (`queue.queue_commit`: each one's `PR` and `Head` trailers; its commit time is
-its landing's, since drive merges a member again as it lifts it and lands it in that tick), the `git revert`s there that undo
-one (an odd chain of `This reverts commit C`; a `Revert "Queue: #N` subject naming no commit undoes #N's newest landing), and
-`origin/main`'s first-parent line.  When `main` reached each commit isn't in git: `--main-moves` gives it, `<UTC ISO> <commit>`
-lines (a hex prefix of `PREFIX` digits or more names the one commit of `main`'s line it starts, and a commit off that line
-counts as the newest commit of the line it holds); the earliest line is where `main` was then, and each later one reaches the
-commits above every line before it.  GitHub's push activity on `main` is such a file:
-
-    gh api 'repos/OWNER/REPO/activity?ref=refs/heads/main&activity_type=push&per_page=100' --paginate \
-        --jq '.[] | "\(.timestamp) \(.after)"'
-
-Without it `main`'s arrival is unknown, and the old path's `main` is `main` now.  Each PR's ready mark is the newest `ready =
-true` label at a head at or before the event measured from it (`research queue stats` reads the same labels; a head with no
-label of its own has no mark here), and an old-path ejection is a head whose newest `ready` label is `false` (`research queue
-eject`'s, its reason in `ref`).  `--old-reds` names the old path's after-landing reds, JSON `{tip: [step, ...]}`.
-
-The report (`--json` for the whole of it):
-
-  per PR         each PR either path acted on in the window: its mark; the shadow's first build with it, then its `advance`
-                 (when it would have reached `main`), its last `eject` (why, the failed tasks) or `skip`; the old path's
-                 landing on `checked`, its revert or ejection, and when `main` reached it.  The shadow is every decision up
-                 to `--until`, so a PR's row can show what it did before the window
-  aggregates     the count, p50 and p90 of mark -> shadow advance and of mark -> old-path `main`, over the advances and
-                 arrivals in the window; the PRs the shadow put on `main` in the window that the old path hadn't by
-                 `--until`, and the reverse
-  disagreements  (a) the shadow ejected a PR at a head the old path landed and didn't revert;
-                 (b) the shadow advanced a candidate holding a PR at a head the old path reverted or ejected;
-                 (c) a ready PR the shadow never batched, with the last reason it logged: the PR's `skip`, else a `build`
-                     with no sha (no member merged, so nothing was built) after its mark;
-                 (d) a candidate the shadow passed whose PRs above `main` (its members and those of the candidates below it),
-                     each at its head, are exactly what `checked` landed above that `main` up to a tip `--old-reds` names red
-  liveness       the longest a candidate pending during the window waited from its build to its advance or drop (or
-                 `--until`), the builds dropped stale (a `drop` with no outcome, but `on main`'s), the retries that enqueued
-                 again, the rings, and the actions that failed (a decision with an `error`, which nothing else counts)
-  soundness      whether every `advance` was to a candidate the log built, whose base was the logged `main` (or the candidate
-                 advanced before it in the same tick), and no outcome logged for it failed: `main` moves only to a passed tree
-                 on itself
-
-Exit 0 when the paths agree and every advance was sound, 1 when not, 2 when the inputs can't be read.  `parse_log`,
-`parse_chain`, `parse_moves`, `parse_reds`, `compare` and `render` are pure; `main` reads git, the files and the labels
-(`store_labels`, which tests replace)."""
+"""
 from __future__ import annotations
 
 import argparse
@@ -75,7 +32,7 @@ def clock() -> datetime:
 
 
 def when(s: str) -> datetime:
-    """A UTC ISO-8601 time: with `Z`, an offset, or neither (UTC)."""
+    """UTC when it carries no offset."""
     t = ts(s)
     return t.replace(tzinfo=UTC) if t.tzinfo is None else t.astimezone(UTC)
 
@@ -105,13 +62,11 @@ class Entry:
 
     @property
     def prs(self) -> tuple[int, ...]:
-        """The PRs it names: an eject's or a skip's `number`, else its members."""
         if self.number is not None and (self.action in (EJECT, SKIP) or not self.members):
             return (self.number,)
         return self.members
 
     def head(self, pr: int) -> str | None:
-        """``pr``'s head here: at its place in `members`, or the one head of a decision naming one PR."""
         if len(self.heads) == len(self.members) and pr in self.members:
             return self.heads[self.members.index(pr)]
         return self.heads[0] if len(self.heads) == 1 and self.prs == (pr,) else None
@@ -132,7 +87,6 @@ def _entry(d: object, line: int) -> Entry:
 
 
 def parse_log(text: str) -> tuple[list[Entry], list[tuple[int, str]]]:
-    """The log's decisions, oldest first, and (line, why) of each other non-blank line: one the loop is still writing, or junk."""
     out, bad = [], []
     for i, line in enumerate(text.splitlines(), 1):
         if not line.strip():
@@ -158,8 +112,6 @@ class Candidate:
 
 @dataclass
 class Shadow:
-    """The decisions up to the window's end: each candidate by its sha, and the first or every decision naming each PR, with
-    its head."""
     cands: dict[str, Candidate] = field(default_factory=dict)
     built: dict[int, tuple[Entry, str | None]] = field(default_factory=dict)
     advanced: dict[int, tuple[Entry, str | None]] = field(default_factory=dict)
@@ -221,8 +173,6 @@ def shadow(entries: list[Entry]) -> Shadow:
 
 
 def holds(s: Shadow, sha: str) -> tuple[dict[int, str | None], str | None]:
-    """What candidate ``sha`` holds above `main`, its members and those of each candidate below it ({PR: head}), and the base
-    the bottom one was built on."""
     out: dict[int, str | None] = {}
     c, base, seen = s.cands.get(sha), None, set()
     while c is not None and c.sha not in seen:
@@ -235,7 +185,6 @@ def holds(s: Shadow, sha: str) -> tuple[dict[int, str | None], str | None]:
 
 @dataclass(frozen=True)
 class Landing:
-    """A `Queue: #N` merge on `checked`'s first-parent line: #``pr`` at ``head``, and the revert that undid it, if one did."""
     pr: int
     head: str
     commit: str
@@ -246,8 +195,6 @@ class Landing:
 
 @dataclass
 class Chain:
-    """`checked`'s first-parent line, oldest first: each commit's time, its landings by merge commit, and the commits each
-    revert on it names."""
     commits: list[str]
     times: dict[str, datetime]
     landings: dict[str, Landing]
@@ -259,7 +206,6 @@ class Chain:
 
 
 def _undone(c: str, by: dict[str, str]) -> str | None:
-    """The revert that undoes ``c``: the first of an odd chain of reverts from it (a revert of that revert relands it)."""
     n, x = 0, c
     while x in by:
         x, n = by[x], n + 1
@@ -267,7 +213,6 @@ def _undone(c: str, by: dict[str, str]) -> str | None:
 
 
 def parse_chain(log: str) -> Chain:
-    """`checked`'s line from `git log --first-parent --format=CHAIN_FORMAT` (newest first)."""
     recs = []
     for rec in log.split("\x1e"):
         if rec.strip():
@@ -297,7 +242,6 @@ def parse_chain(log: str) -> Chain:
 
 
 def resolve(c: str, commits: list[str], index: dict[str, int]) -> str | None:
-    """The one commit of ``commits`` that ``c`` is, or starts with when it is a hex prefix of `PREFIX` digits or more."""
     c = c.strip().lower()
     if c in index:
         return c
@@ -309,9 +253,6 @@ def resolve(c: str, commits: list[str], index: dict[str, int]) -> str | None:
 
 def parse_moves(text: str, line: list[str], onto: Callable[[str], str | None] | None = None,
                 ) -> tuple[list[tuple[datetime, str]], list[str]]:
-    """``text``'s `<UTC ISO> <commit>` lines (blank and `#` lines skipped), each commit resolved on `main`'s first-parent
-    ``line``, and why each other line was left out.  A commit `main` reached off that line (one `checked` merged later as a
-    second parent) is read as ``onto``'s answer, the newest commit of the line it holds."""
     index = {c: i for i, c in enumerate(line)}
     moves, warn = [], []
     for i, raw in enumerate(text.splitlines(), 1):
@@ -334,8 +275,6 @@ def parse_moves(text: str, line: list[str], onto: Callable[[str], str | None] | 
 
 
 def arrivals(line: list[str], moves: list[tuple[datetime, str]]) -> dict[str, datetime]:
-    """When `main` reached each commit of its first-parent ``line`` (oldest first), from ``moves`` ((time, commit of ``line``)):
-    the earliest is where `main` was then, and each later one reaches the commits above every move before it, up to its own."""
     index = {c: i for i, c in enumerate(line)}
     out: dict[str, datetime] = {}
     top = None
@@ -348,7 +287,6 @@ def arrivals(line: list[str], moves: list[tuple[datetime, str]]) -> dict[str, da
 
 
 def parse_reds(doc: object, chain: Chain) -> tuple[dict[str, list[str]], list[str]]:
-    """``doc``'s {tip: [step, ...]}, each tip resolved on `checked`'s line, and why each other tip was left out."""
     if not isinstance(doc, dict):
         return {}, ["--old-reds isn't a JSON object {tip: [step, ...]}: no red is compared"]
     reds, warn = {}, []
@@ -362,8 +300,6 @@ def parse_reds(doc: object, chain: Chain) -> tuple[dict[str, list[str]], list[st
 
 
 def same_prs(chain: Chain, base: str, held: dict[int, str | None], reds: dict[str, list[str]]) -> str | None:
-    """The first tip of ``reds`` above ``base`` on `checked`'s line whose landings above ``base``, net of the reverts between,
-    are exactly ``held`` ({PR: head, None where unknown}); a revert there of a commit not above ``base`` makes it another tree."""
     lo = chain.index[base]
     tips = sorted((chain.index[t], t) for t in reds if chain.index.get(t, -1) > lo)
     up: dict[str, Landing] = {}
@@ -389,20 +325,16 @@ def _true(lab) -> bool:
 
 
 def marked(labs: Iterable, at: datetime | None = None) -> datetime | None:
-    """The newest `ready = true` label's time among ``labs``, at or before ``at`` when given."""
     times = [when(lab.ts) for lab in labs if _true(lab)]
     return max((t for t in times if at is None or t <= at), default=None)
 
 
 def ejection(labs: Iterable):
-    """The newest of ``labs`` when it is `research queue eject`'s `ready = false`, its reason in `ref` (`queue.ejection`)."""
     last = max(labs, key=lambda lab: lab.ts, default=None)
     return last if last is not None and str(last.value).lower() == "false" and last.ref else None
 
 
 def store_labels(root: str | None) -> Labels:
-    """The batch reader `main` uses: the `ready` labels on each `pr:{n}@{head}` in the evidence store at ``root``, pulled from
-    its remote first as drive reads them (`queue.StoreLabels`); a head whose labels can't be pulled is left out, and said."""
     from .queue import QueueError, StoreLabels
     from .store import vocab
     from .store.local import LocalStore
@@ -434,10 +366,6 @@ def _failed(e: Entry) -> list[dict]:
 
 def compare(entries: list[Entry], chain: Chain, line: list[str], arrived: dict[str, datetime] | None,
             reds: dict[str, list[str]], labels: Labels, since: datetime, until: datetime) -> dict:
-    """The report over [``since``, ``until``]: ``line`` is `main`'s first-parent line, oldest first, and ``arrived`` is
-    `arrivals`' (None without `--main-moves`).  The shadow is every decision up to ``until`` (a candidate built before the
-    window is still what an advance in it moved `main` to), and the window picks what is reported: the PRs either path acted
-    on in it, the advances, ejects, drops, retries and rings in it, and the candidates pending during it."""
     def inside(t: datetime | None) -> bool:
         return t is not None and since <= t <= until
 
@@ -722,8 +650,6 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def _onto(repo: Path, line: list[str]) -> Callable[[str], str | None]:
-    """The newest commit of `main`'s first-parent ``line`` that a commit holds, down that commit's own first-parent line;
-    None for one git doesn't have (the move is then left out, and said)."""
     index = set(line)
 
     def onto(c: str) -> str | None:

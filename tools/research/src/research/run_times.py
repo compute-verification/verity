@@ -1,34 +1,4 @@
-"""`research run-times`: how long each run waited to start, set up and ran, from the runs' own records.
-
-Each run launched in the window (its id carries its launch time) is one row, read from its run directory on the machine that
-holds it (`run_records.py`, sent there over ssh; `--runs DIR` reads a runs directory here instead):
-
-  wait    launch -> its check slot taken (`slot.json`'s `took`); for a run that goes through no slot, launch -> its command
-          starting (`status.json`'s `started_utc`). A run that got no slot counts with the time it waited: until it was
-          cancelled or ended in the line, until slot.py gave up (`left`), or until now while it still waits.
-  setup   slot taken -> the job's own command starting, where a record says when: `check-live.json`'s `started_utc`, which
-          only check.py writes. slot.py starts the job's command line the moment it takes the slot, so a `uv sync` in that
-          line is in the run's time, and a run without that record has no setup.
-  run     the job's start (the slot's taking, or the command's start, where setup isn't recorded) -> the run's end.
-
-The 50th, 90th and 95th percentiles (nearest rank) are given by kind of task (`run_records.kind`, from the command `job.json`
-holds), by machine and by pool (the check slots the command asks for: a pool's by name, the machine's own as `check`, none as
-`-`). A
-refused launch (`refused.json`, which records no command: its kind and pool read `(not recorded)`), a run whose twin took the
-slot and one that never joined a line are counted, not timed. Each run that waited over `--over` minutes is named with what it
-waited behind, where a record says so: slot.json's `why` (for a record written before slot.py kept it past the slot's taking,
-its headline in stderr.log) and, for a run cancelled in line, the cancel's reason.
-
-graph2's tasks come from its events in the store's bucket (`events/v1/`): a task's wait is from its `queued` event, when it
-could first run, to its `started`; never the event's own `wait_s`, which counts from the submission and so includes the tasks
-it reads. A task queued and never started leaves no later event whether it still waits or its submission was dropped, so those
-are counted and not timed.
-
-A machine that doesn't answer, or whose answer was cut short, is named as unread: its runs are in no number here. Nothing
-that is there and unreadable is read as absent: a record file that can't be read is named beside its run, whose row is made
-without it; a run with a time in its records that is no time is left out and named; an events part with a line that is not
-JSON leaves graph2's tasks unread, with the part's name.
-"""
+"""`research run-times`: how long each run waited to start, set up and ran, from the runs' own records."""
 from __future__ import annotations
 
 import argparse
@@ -69,14 +39,12 @@ def clock() -> datetime:
 
 
 def slot_wait(slot: dict) -> float:
-    """A check slot's wait in seconds (`slot.json`: took less since), 0 without one."""
     if not (isinstance(slot, dict) and slot.get("took") and slot.get("since")):
         return 0.0
     return max((ts(slot["took"]) - ts(slot["since"])).total_seconds(), 0.0)
 
 
 def _t(s) -> datetime | None:
-    """A record's time, None where it has none. One that is no ISO time raises ValueError."""
     return ts(s) if isinstance(s, str) else None
 
 
@@ -85,7 +53,6 @@ def _s(a: datetime | None, b: datetime | None) -> float | None:
 
 
 def cause(why: str | None) -> str:
-    """What a wait's reason (slot.json's `why`) comes down to, for counting."""
     if not why:
         return "no record says"
     if "twin" in why:
@@ -96,10 +63,6 @@ def cause(why: str | None) -> str:
 
 
 def times(rec: dict, now: datetime) -> dict:
-    """The run of record ``rec`` (`run_records.record`) as a row: what it is, when each thing happened, how it came out, its
-    three times in seconds, what it waited behind and, cancelled in line, by what and why; and the record files that were
-    there and couldn't be read (`unread`), which the row is made without. A run still in line has waited until ``now``.
-    A time in the record that is no ISO time raises ValueError."""
     st, sl, rf = rec.get("status") or {}, rec.get("slot") or {}, rec.get("refused") or {}
     launched, started, ended = rid_time(rec["run"]), _t(st.get("started_utc")), _t(st.get("ended_utc"))
     since, took, job = _t(sl.get("since")), _t(sl.get("took")), _t(rec.get("job_started"))
@@ -145,7 +108,6 @@ def _group(rows: list[dict], over_s: float) -> dict:
 
 
 def _order(by: str, keys: Iterable[str]) -> list[str]:
-    """``keys`` in the order a table lists them: the runs' kinds as `KINDS` has them, anything else by name, cpu-2 before cpu-10."""
     if by == "kind" and set(keys) <= set(KINDS):
         return [k for k in KINDS if k in keys]
     num = lambda k: (re.sub(r"\d+$", "", k), int(m[0]) if (m := re.search(r"\d+$", k)) else 0)  # noqa: E731
@@ -153,11 +115,6 @@ def _order(by: str, keys: Iterable[str]) -> list[str]:
 
 
 def summary(rows: list[dict], over: float = OVER_MIN) -> dict:
-    """{all, kind: {..}, machine: {..}, pool: {..}}: each group's count by outcome, its wait over the runs that asked to start
-    (how many waited over ``over`` minutes among them), its setup where recorded and its run time, as percentiles in minutes;
-    with the started runs' wait split in two (`ship`: launch to the machine's claim; `line`: joining the line to the slot), the
-    refusals by fault and how long each took to be told, what the runs over ``over`` waited behind, and the runs with a record
-    file that couldn't be read (`unread`: each one's files and why)."""
     over_s = over * 60
     out: dict = {"all": _group(rows, over_s)}
     for by in ("kind", "machine", "pool"):
@@ -177,7 +134,6 @@ def summary(rows: list[dict], over: float = OVER_MIN) -> dict:
 
 
 def rows_of(recs: Iterable[dict], now: datetime) -> tuple[list[dict], dict[str, str]]:
-    """Each record's row (`times`), by run id; and the runs left out of them, each with why: a time in its records is no time."""
     rows, out = [], {}
     for rec in recs:
         try:
@@ -188,14 +144,10 @@ def rows_of(recs: Iterable[dict], now: datetime) -> tuple[list[dict], dict[str, 
 
 
 def slow(rows: list[dict], over: float = OVER_MIN) -> list[dict]:
-    """The runs that asked to start and waited over ``over`` minutes, the longest first."""
     return sorted((r for r in rows if r["outcome"] in ASKED and (r["wait_s"] or 0) > over * 60), key=lambda r: (-r["wait_s"], r["run"]))
 
 
 def graph_tasks(events: Iterable[dict], start: datetime, end: datetime) -> dict:
-    """graph2's tasks as its ``events`` give them: {tasks: one row per `started` event in [start, end], with its wait when the
-    task's event before it is its `queued` (a start after an error or a lost worker is a retry, and has none) and, once it
-    ended, its seconds and status; silent: the tasks whose `queued` event in the window is their last by ``end``}."""
     last: dict[tuple, tuple[str, datetime]] = {}
     running: dict[tuple, dict] = {}
     tasks = []
@@ -214,9 +166,6 @@ def graph_tasks(events: Iterable[dict], start: datetime, end: datetime) -> dict:
 
 
 def graph_summary(g: dict, over: float = OVER_MIN) -> dict:
-    """{all, kind: {..}, machine: {..}}: the tasks started, how many are first starts (`timed`: with a wait), their wait and how
-    many waited over ``over`` minutes, and their run time; the submissions with such a task; and the tasks queued and silent
-    since, which the events don't tell apart: still waiting, or their submission dropped."""
     over_s = over * 60
 
     def row(ts_: list[dict]) -> dict:
@@ -240,9 +189,6 @@ def graph_summary(g: dict, over: float = OVER_MIN) -> dict:
 
 
 def graph_events(remote, start: datetime) -> list[dict]:
-    """Every event of the submissions that wrote one at or after ``start``: all the parts under `EVENTS` of each submission with
-    a part last written since, so a task that started in the window has its `queued` event however long before it was. A part
-    with a line that is not JSON raises ValueError naming it: its tasks' waits can't be told without it."""
     listed = remote.list_times(EVENTS)
     live = {k.split("/")[2] for k, at in listed if (t := _t(at)) is None or t >= start}
     keys = [k for k, _ in listed if k.split("/")[2] in live]
@@ -266,7 +212,6 @@ def nodes() -> list[str]:
 
 
 def _reach(name: str) -> tuple[list[str], str]:
-    """The ssh argv that reaches machine ``name`` and its runs directory there."""
     from . import remote
 
     m = remote.resolve_machine(name, PROJECT)
@@ -279,7 +224,6 @@ def _ssh(argv: list[str], data: bytes) -> subprocess.CompletedProcess:
 
 
 def parse(text: str) -> list[dict] | str:
-    """`run_records.py`'s answer as its records, or why it isn't one: a line that isn't JSON, or no closing count that matches."""
     recs, read = [], None
     for line in text.splitlines():
         try:
@@ -294,7 +238,6 @@ def parse(text: str) -> list[dict] | str:
 
 
 def read_nodes(names: list[str], first: str, last: str, *, reach: Callable | None = None, run: Callable | None = None) -> dict[str, list[dict] | str]:
-    """Each machine's records of the runs with ids in [first, last], read at once, or why they couldn't be."""
     reach, run = reach or _reach, run or _ssh
     script = Path(run_records.__file__).read_bytes()
 

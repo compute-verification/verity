@@ -1,20 +1,4 @@
-"""Kueue's queue state and pod-to-queue map as Prometheus metrics, for Grafana's per-queue panels and the idle-GPU alerts.
-
-    python3 vy_exporter.py [--listen ADDR:PORT] [--kubectl CMD] [--ready DIR]
-
-A host service on vy-nebius-1 (host_up.sh installs it), read by the host's own kubectl. SkyPilot's Prometheus finds it through the
-selectorless Service in exporter.yaml, so no in-cluster credentials are needed. Kueue's own metrics endpoint wants RBAC for a scrape
-token, and kube-state-metrics doesn't carry the queue label. Every scrape reads fresh state (at most every 20 s).
-
-    vy_queue_nominal{queue,resource}   vy_queue_borrowing_limit{queue,resource}   vy_queue_usage{queue,resource}
-    vy_queue_borrowed{queue,resource}  vy_queue_pending{queue}   vy_queue_admitted{queue}   vy_queue_stopped{queue}
-    vy_pod_queue{holder_namespace,holder_pod,queue} 1      each running pod Kueue admitted, and its queue
-    vy_ready_jobs{lane}                                     job files in <ready>/<lane>/ (the dispatcher's ready files)
-    vy_exporter_ok                                          1 when the last read of Kueue succeeded
-
-Labels on pods are `holder_*`, not `pod`/`namespace`, which Prometheus's service discovery sets to the exporter's own target.
-CPU quantities are in cores, memory in bytes, GPUs as counts. Stdlib only.
-"""
+"""Kueue's queue state and pod-to-queue map as Prometheus metrics, for Grafana's per-queue panels and the idle-GPU alerts."""
 from __future__ import annotations
 
 import argparse
@@ -44,7 +28,6 @@ def _esc(v: Any) -> str:
 
 
 def render(clusterqueues: dict, pods: dict, ready: dict[str, int], ok: bool = True) -> str:
-    """The exposition text for ClusterQueue and Pod lists (kubectl -o json) and ready-file counts per lane."""
     rows: dict[str, list[str]] = {}
 
     def add(name: str, labels: dict[str, Any], value: float) -> None:

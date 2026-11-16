@@ -1,36 +1,7 @@
 """Verdict carry (drive.toml's `verdict_carry`, `drive.Driver._carry_verdicts`): whether a PR's new head changes nothing a
 reviewer saw at an older head with a land verdict, beyond merges of commits the queue trusts, so that verdict holds at the new
 head with no reviewer.
-
-The PR's own line is its first-parent line from ``new`` back to ``old`` (``git rev-list --first-parent old..new``); what its
-merges bring in from off that line is other work.  ``new`` carries the verdict of ``old`` when ``old`` is an ancestor of ``new``
-and each commit of that line is one of:
-
-- landed (`trusted` with no merge: on `checked` or `main`);
-- a merge of two parents whose other parent is trusted (`trusted(parent, merge)`: landed, or another PR's current marked head
-  with a land verdict and no hold, which drive's containment lands first, `Queue.entries`), and whose tree is what the queue's
-  merge of its parents gives (`queue.merged_tree`: its first parent's merge drivers, each conflicted pin rebuilt) but in
-  generated content;
-- a commit that changes only generated content;
-- given a landed `tools/move/restack.py` (``restack``), a restack's commit across a move, whose `Restack-move:` trailer names
-  a landed move, and whose tree is that move's script rerun on its parent (`moved_tree`) but in generated content; the merge
-  above it is the queue's merge of its parents with the move for their merge base, as the restack's own merge is.  A move's
-  script runs a tree's own code, so it reruns only once every other commit of the line passed, on trees they vouch for.
-
-Generated content is each pin of the pins tool (`queue.pins_at` at ``new``), which `pins.py --stale` holds to the tree, and
-each lock's records (`queue.LEAN_LOCK`: `lock_policy`), which a Lean check regenerates and drive commits as it lands.  The rest
-of a lock is policy a person writes and the Lean check keeps as written, so a lock that differs in it, or that the queue's
-merge leaves conflicted (the lock's merge driver refuses only over policy), is the PR's own change.  A merge's textual result
-can still be wrong where two changes interact; that is the risk `next` takes for every pair of members it merges, and the same
-Lean check and full check catch it.
-
-No other PR's verdict vouches for a commit of the PR's own line (a PR stacked on this one was reviewed over it, not for it),
-nor for an older head of that PR.
-
-``python -m research.carry OLD NEW [--repo DIR] [--landed REF ...] [--head REF ...]`` prints the verdict as JSON and exits 0
-when it carries: each ``--landed`` ref and its ancestors landed (`origin/checked` and `origin/main` when none is given), each
-``--head`` another PR's marked head with a land verdict and no hold, and the first landed ref holding `tools/move/restack.py`
-reruns the moves."""
+"""
 
 from __future__ import annotations
 
@@ -76,10 +47,6 @@ class Delta:
 
 
 def lock_policy(text: bytes | None) -> dict | None:
-    """What of a lock a person writes, which a Lean check keeps as written: all of it but its records, which `check.py
-    --regenerate` rewrites from the build (`check.py`'s `regenerated`): `reads`, each guarantee's entry but its `owner`, and
-    each assumption's `digest`.  The names of the guarantees and assumptions stay: they decide what is locked and which
-    hypotheses count as named.  None for no lock, or one whose JSON isn't an object; a lock that isn't JSON raises ValueError."""
     doc = json.loads(text) if text is not None else None
     if not isinstance(doc, dict):
         return None
@@ -112,8 +79,6 @@ def _some(files: Iterable[str]) -> str:
 
 
 def _judged(repo: Path, want: str, got: str, files: list[str], pins: set[str]) -> tuple[list[str], list[str]]:
-    """(the PR's own changes, the generated ones) among ``files``, those commit ``got`` changes against ``want`` (a commit or
-    a tree): a pin is generated, and so is a lock with the same policy (`lock_policy`) on both sides, each JSON."""
     locks = [f for f in files if PurePosixPath(f).name == Q.LEAN_LOCK and f not in pins]
     blobs = Q._blobs(repo, [f"{t}:{f}" for t in (want, got) for f in locks]) if locks else {}
 
@@ -133,12 +98,6 @@ def _judged(repo: Path, want: str, got: str, files: list[str], pins: set[str]) -
 
 
 def moved_tree(repo: Path, commit: str, move: str, restack: Path, timeout: float = MOVED_TIMEOUT_S) -> tuple[str | None, str]:
-    """(the tree ``commit`` becomes once the move ``move`` runs on it as `tools/move/restack.py`, from the directory ``restack``,
-    runs it on a branch (`_MOVED`), ''), or (None, why it couldn't).  It runs in a process group of its own, killed whole once
-    ``timeout`` seconds pass (`queue.run_group`), with its scratch worktree in a temporary directory, which goes once it has
-    run, and with it the clone's record of a worktree a killed run left, forgotten under restack.py's lock
-    (`queue.WORKTREES_LOCK`).  The tree's own code runs there but needs neither the queue's credentials nor the store's keys,
-    which drive and the loop hold (`queue.tree_env`), so the run gets none, and `gh` a config that isn't there."""
     with tempfile.TemporaryDirectory(prefix="research-carry-", ignore_cleanup_errors=True) as d:
         env = Q.tree_env(Q._script_env())
         rc, out = Q.run_group([sys.executable, "-c", _MOVED, str(restack), commit, move], repo, timeout,
@@ -155,8 +114,6 @@ def moved_tree(repo: Path, commit: str, move: str, restack: Path, timeout: float
 
 
 def _reruns(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], bool]) -> dict[str, str]:
-    """{commit: the move it reran} of each restack's commit on the PR's own line: one parent, and one `Restack-move:` trailer,
-    naming a landed move."""
     log = Q._out(repo, "log", "--first-parent", "--no-merges", "--format=%H%x00%B%x1e", f"{old}..{new}")
     found = {}
     for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
@@ -167,10 +124,6 @@ def _reruns(repo: Path, old: str, new: str, trusted: Callable[[str, str | None],
 
 
 def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], bool], restack: str | None = None) -> Delta:
-    """`Delta` of ``new`` over ``old`` (the module's docstring).  ``trusted(commit, merge)``: whether ``commit`` may come in
-    unreviewed, as a parent ``merge`` brings in, or with ``merge`` None as a commit of the PR's own line (landed only).
-    ``restack``: a landed commit whose `tools/move/restack.py` reruns the move a restack's commit names; without it, such a
-    commit is the PR's own."""
     repo = Path(repo)
     for c in (old, new):
         if not _ok(repo, "cat-file", "-e", f"{c}^{{commit}}"):
@@ -245,8 +198,6 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
 
 
 def trust(repo: Path, landed: Iterable[str], heads: Iterable[str] = ()) -> Callable[[str, str | None], bool]:
-    """``trusted`` for `delta`: a commit that is one of ``landed`` (the tips of `checked` and `main`) or an ancestor of one, and,
-    as a parent a merge brings in, also one of ``heads`` (other PRs' current marked heads with a land verdict and no hold)."""
     landed, heads = [t for t in landed if t], {h for h in heads if h}
 
     def trusted(c: str, merge: str | None = None) -> bool:

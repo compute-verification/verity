@@ -1,8 +1,6 @@
 """`research notes mcp`: the notes index and the evidence catalog it joins (notes_index.py) as a Model Context Protocol server on
 stdin/stdout, for an agent's MCP client (README, "Notes and evidence over MCP").  JSON-RPC 2.0, one message per line; it hosts
 nothing and reads no credential.  Before each tool call the index catches up with the clone (only changed notes are re-read).
-
-    research notes mcp [--root DIR] [--index PATH] [--catalog PATH]
 """
 from __future__ import annotations
 
@@ -62,7 +60,6 @@ class Server:
         self.index = index
 
     def handle(self, msg: Any) -> dict | None:
-        """The response to one JSON-RPC message; None for a notification or a response (this server sends no requests)."""
         if not isinstance(msg, dict) or not isinstance(msg.get("method"), str):
             if isinstance(msg, dict) and ("result" in msg or "error" in msg):
                 return None
@@ -106,7 +103,6 @@ class Server:
 
 
 def serve(server: Server, stdin: BinaryIO, stdout: BinaryIO) -> int:
-    """Answer each line of `stdin` on `stdout` until end of input."""
     for raw in iter(stdin.readline, b""):
         if not raw.strip():
             continue

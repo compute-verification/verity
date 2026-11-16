@@ -1,41 +1,5 @@
 #!/usr/bin/env python3
-"""The fleet's usage record, daily compute report and quota watch: every Nebius VM recorded, the H200s included.
-
-    fleet.py sample              one pass: each RUNNING VM's state from the API, and over ssh its GPUs' utilization, its load
-                                 and memory; one JSON line per VM in $FLEET_DIR/samples-YYYYMMDD.jsonl, and the pass's time
-                                 and rows (none when no VM runs) in $FLEET_DIR/last-sample.json, replaced whole
-    fleet.py report [--hours 24] [--now ISO]   per VM over the window: $ (rate x hours seen RUNNING), GPU busy %, CPU load, peak
-                                 memory, idle hours (no GPU at >= 5%, load under a tenth of its cores and memory in use
-                                 under 15%)
-    fleet.py instances           every VM in the tenant's projects as JSON (the control pod's cloud watch reads it)
-    fleet.py quota               each tenant quota at >= 80% of its limit, and the card's day so far against $FLEET_CARD_DAILY_USD
-    fleet.py panels [--dry-run]  the usage record as the console's compute tabs read it: compute/online (the last pass's VMs),
-                                 compute/hourly (each VM's $ and busy $ per UTC hour, 7 days) and compute/daily (per Pacific day,
-                                 30 days), PUT to the site with $FLEET_PANELS_KEY; the loop sends them after each sample, and
-                                 puts each UTC day's samples file in the store once the day is over (archive)
-    fleet.py report --lanes      what the daily post rings each owning lane with: its own machines' idle hours and idle $
-    fleet.py loop                sample every 5 min, quota every 30 (an alert in #agent-alerts once per quota and UTC day, kept in
-                                 $FLEET_DIR/quota-told-YYYY-MM-DD.json across restarts), and at 15:00Z (08:00 PDT) the last
-                                 24 h's report to infra's status thread and the admin lane, and to each lane that owns an idle
-                                 machine a doorbell with only its own machines
-
-Vy-nebius-1 sat ~0% GPU-busy for a week and the H200s had no usage record at all, and the card's daily limit and the tenant's
-quotas stopped launches with no warning. A VM's rate and address come from the machines registry (`research
-pods register`, <notes>/machines.d); one not registered is recorded from the API with rate None. A VM that can't be read is
-recorded as RUNNING and unread, never idle. Runs on infra's VM, which holds the Slack credential (the control pod holds none).
-Nebius calls go through pods/nebius/common.sh's `nebius_auth`, the way launch.sh makes them. The tenant's id is the
-environment's ($NEBIUS_TENANT_ID, or the loop's own $FLEET_TENANT), as is the jump host of a machine at a private address
-($FLEET_JUMP, USER@HOST): no file holds either, and a pass without the tenant's id fails naming the variable.
-
-A RUNNING VM that no sample has read for `UNREACH_S` (a soft lockup, a full disk, sshd refusing) is alerted on once in
-#agent-alerts with its serial console's tail, any kernel trouble in it named, and is marked `unreachable_since` in its registry
-entry until a sample reads it again.
-
-The lane whose budget line pays for a node stops it when its work there ends; infra's idle stop is only a backstop
-(the lane contract, §3c). So the daily post rings each machine's owning lane (its registry entry's `lane`, infra when
-unset or unregistered) with its own idle hours. A sample also copies each VM's /etc/research/deadline into its registry entry's
-`deadline` when it changed (one notes sync per pass), which the control pod's wake (wake.py) reads while the VM is stopped.
-"""
+"""The fleet's usage record, daily compute report and quota watch: every Nebius VM recorded, the H200s included."""
 from __future__ import annotations
 
 import argparse
@@ -95,7 +59,6 @@ def utc(t: float) -> str:
 
 
 def nb(*args: str, timeout: float = 120) -> dict:
-    """One Nebius CLI call's JSON, authenticated as launch.sh's are."""
     cmd = f'. "{HERE}/common.sh" && nebius_auth && nb ' + " ".join(f"'{a}'" for a in args)
     p = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=timeout)
     if p.returncode != 0:
@@ -115,7 +78,6 @@ def registry() -> dict[str, dict]:
 
 
 def instances() -> list[dict]:
-    """Every VM in the tenant's projects: name, id, state, platform, preset, region."""
     out = []
     for proj in nb("iam", "project", "list", "--parent-id", settings.tenant(), "--page-size", "100").get("items", []):
         pid, region = proj["metadata"]["id"], (proj.get("status") or {}).get("region") or proj["metadata"].get("labels", {}).get("region")
@@ -181,14 +143,12 @@ def sample(now: float | None = None) -> list[dict]:
 
 
 def set_key(name: str, key: str, value: str | None) -> None:
-    """Set (or, with None, remove) one key of machine `name`'s registry file, keeping its other lines as they are."""
     f = MACHINES_D / f"{name}.toml"
     kept = [ln for ln in f.read_text().splitlines() if not ln.startswith(f"{key} =")]
     f.write_text("\n".join([*kept, *([f'{key} = "{value}"'] if value is not None else [])]) + "\n")
 
 
 def serial_tail(instance_id: str, lines: int = SERIAL_LINES) -> list[str]:
-    """The last `lines` lines of a VM's serial console (`nebius compute instance logs`), oldest first, colors stripped."""
     cmd = f'. "{HERE}/common.sh" && nebius_auth && nb compute instance logs --id \'{instance_id}\' --limit {int(lines)}'
     p = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=120)
     if p.returncode != 0:
@@ -199,9 +159,6 @@ def serial_tail(instance_id: str, lines: int = SERIAL_LINES) -> list[str]:
 
 def watch_unreachable(rows: list[dict], now: float, send: Callable[[list[str], str], None],
                       tail: Callable[[str], list[str]] = serial_tail) -> list[str]:
-    """Alert once on each RUNNING VM no sample has read for `UNREACH_S` (with its serial log's tail and any kernel trouble in it),
-    and mark it `unreachable_since` in the registry; clear the mark once it is read again. Only a VM some sample has read counts,
-    so a machine whose ssh is closed to this key (an auditor) never alerts. The machines alerted on this pass."""
     path, reg = FLEET_DIR / "unreachable.json", registry()
     try:
         state = json.loads(path.read_text()) if path.exists() else {}
@@ -253,7 +210,6 @@ def watch_unreachable(rows: list[dict], now: float, send: Callable[[list[str], s
 
 
 def record_deadlines(rows: list[dict], reg: dict[str, dict]) -> list[str]:
-    """Copy each read VM's /etc/research/deadline into its registry file's `deadline` where it differs; one notes sync for all."""
     changed = []
     for r in rows:
         if r.get("deadline") is None or r["name"] not in reg or reg[r["name"]].get("deadline") == utc(r["deadline"]):
@@ -285,8 +241,6 @@ def load_samples(start: float, end: float) -> list[dict]:
 
 
 def report(rows: list[dict], hours: float) -> list[dict]:
-    """Per VM: hours seen RUNNING (samples x INTERVAL_S), $ at its rate, GPU busy share, mean load per core, peak memory, idle
-    hours; most expensive first."""
     by: dict[str, list[dict]] = {}
     for r in rows:
         by.setdefault(r["name"], []).append(r)
@@ -310,7 +264,6 @@ def report(rows: list[dict], hours: float) -> list[dict]:
 
 
 def totals(rep: list[dict]) -> tuple[float, float]:
-    """A report's dollars, and the part of them spent on idle hours; a VM with no rate registered counts for nothing."""
     return sum(r["usd"] or 0 for r in rep), sum((r["rate_usd_per_hour"] or 0) * r["idle_hours"] for r in rep)
 
 
@@ -327,7 +280,6 @@ def render(rep: list[dict], hours: float, end: float) -> str:
 
 
 def idle_by_lane(rep: list[dict], reg: dict[str, dict]) -> dict[str, list[dict]]:
-    """Each owning lane's machines that sat idle in the report: the registry entry's `lane`, else infra's."""
     out: dict[str, list[dict]] = {}
     for r in rep:
         if r["idle_hours"] > 0:
@@ -353,8 +305,6 @@ def _idle_entry(r: dict) -> str:
 
 
 def brief(rep: list[dict], hours: float, end: float) -> str:
-    """The daily post: the window's spend, its idle part and the idlest machines, short enough for `research msg` (the whole report
-    is `fleet.py report`, and each machine by hour the console's Usage tab)."""
     total, idle_usd = totals(rep)
     idlest = sorted((r for r in rep if r["idle_hours"] > 0), key=lambda r: -(r["rate_usd_per_hour"] or 0) * r["idle_hours"])
     return (f"Compute, the {hours:g} h to {utc(end)}: ${total:,.0f} across {len(rep)} VMs, ${idle_usd:,.0f} of it idle."
@@ -363,7 +313,6 @@ def brief(rep: list[dict], hours: float, end: float) -> str:
 
 
 def render_lane(rows: list[dict], hours: float, end: float) -> str:
-    """A lane's doorbell: its own machines' idle hours and idle $, short enough for `research msg`."""
     known = [r for r in rows if r["rate_usd_per_hour"] is not None]
     usd = sum(r["rate_usd_per_hour"] * r["idle_hours"] for r in known)
     return (f"Your machines sat idle {sum(r['idle_hours'] for r in rows):.1f} h (${usd:,.0f}"
@@ -374,8 +323,6 @@ def render_lane(rows: list[dict], hours: float, end: float) -> str:
 
 
 def daily(now: float, send: Callable[[list[str], str], str | None] | None = None) -> list[str]:
-    """The 24 h brief to infra's status thread and the admin lane, and each owning lane's idle machines to its inbox; a post that fails is
-    alerted on in #agent-alerts (once, naming every failure) and logged. What failed."""
     send = send or post
     rep = report(load_samples(now - 86400, now), 24)
     text = brief(rep, 24, now)
@@ -404,7 +351,6 @@ def quota_findings() -> list[dict]:
 
 
 def card_finding(rows_today: list[dict]) -> dict | None:
-    """The card's UTC day so far (rate x hours seen) against $FLEET_CARD_DAILY_USD, when set, at >= 80%."""
     limit = settings.card_daily_usd()
     spent = sum((r.get("rate_usd_per_hour") or 0) * INTERVAL_S / 3600 for r in rows_today)
     return {"spent": round(spent, 2), "limit": limit} if limit and spent >= QUOTA_ALERT * limit else None
@@ -418,7 +364,6 @@ def machine_class(platform: str | None) -> str:
 
 
 def hardware(row: dict) -> str:
-    """What a VM is, from its preset: "8× H200", or "192 CPUs" for a machine with no GPU."""
     preset = row.get("preset") or ""
     if m := re.match(r"(\d+)gpu", preset):
         return f"{m.group(1)}× {machine_class(row.get('platform'))}"
@@ -427,8 +372,6 @@ def hardware(row: dict) -> str:
 
 
 def busy(row: dict) -> tuple[float | None, str]:
-    """A sample's busy share and what it is a share of: its GPUs' mean utilization, or for a machine with no GPU its load over its
-    cores (at most 1). None when the sample wasn't read."""
     gpu = machine_class(row.get("platform")) != "CPU"
     if not row.get("read"):
         return None, "gpu" if gpu else "cores"
@@ -448,7 +391,6 @@ def _panel(pid: str, title: str, columns: list[str], rows: list[list], now: floa
 
 
 def online_panel(rows: list[dict], reg: dict[str, dict], now: float) -> dict:
-    """One row per RUNNING VM in the last sample pass; one with no rate registered is left out and named in the note."""
     out, unpriced = [], []
     for r in rows:
         m = reg.get(r["name"], {})
@@ -465,9 +407,6 @@ def online_panel(rows: list[dict], reg: dict[str, dict], now: float) -> dict:
 
 
 def bucket_panels(samples: list[dict], reg: dict[str, dict], now: float) -> tuple[dict, dict]:
-    """Each VM's cost per UTC hour over `HOURLY_DAYS` and per Pacific day over `DAILY_DAYS`: `usd` (each sample's interval at its
-    rate), `busy_usd` (each sample's cost times its busy share; an unread sample takes its slot's mean share of read ones, else
-    none) and `minutes` sampled, so a gap in sampling shows as fewer minutes rather than as a cheaper slot."""
     hour_from = now - HOURLY_DAYS * 86400
     slots: dict[tuple[str, str, str], dict] = {}
     for r in samples:
@@ -500,7 +439,6 @@ def bucket_panels(samples: list[dict], reg: dict[str, dict], now: float) -> tupl
 
 
 def fitted(panel: dict) -> dict:
-    """``panel`` within `PANEL_MAX_BYTES`: its oldest slots (the first column) dropped until it fits, its note saying from when."""
     rows, size = panel["rows"], lambda p: len(json.dumps(p).encode())
     if size(panel) <= PANEL_MAX_BYTES:
         return panel
@@ -514,15 +452,13 @@ def fitted(panel: dict) -> dict:
 
 
 def put_panel(panel: dict, key: str) -> str | None:
-    """PUT one panel; None when the site took it, else why not. Only an https site is sent the key."""
+    """None when the site took it, else why not; only an https site is sent the key."""
     if not (PANELS_URL or "").startswith("https://"):
         return f"{panel['id']}: $FLEET_PANELS_URL is {PANELS_URL!r}, not an https URL: nothing sent"
     return metrics.send_json("PUT", f"{PANELS_URL}/api/panels/{panel['id']}", panel, key, panel["id"])
 
 
 def publish(rows: list[dict], now: float, put: Callable[[dict, str], str | None] = put_panel) -> list[str]:
-    """The three usage panels from this pass's ``rows`` and the stored samples, PUT to the site; what failed. Nothing is sent
-    without a panels key."""
     if not PANELS_KEY.exists():
         return [f"no panels key at {PANELS_KEY}"]
     key, reg = PANELS_KEY.read_text().strip(), registry()
@@ -531,9 +467,6 @@ def publish(rows: list[dict], now: float, put: Callable[[dict, str], str | None]
 
 
 def store_put(path: Path) -> tuple[str | None, str]:
-    """``path`` into the store (`research data put --kind fleet-samples/v1 --preserve`): its art id, or None and why. The store is
-    $RESEARCH_STORE, else ~/fleet-store, and its remote's credentials are $FLEET_STORE_ENV's KEY=VALUE lines (the pod's r2.env),
-    which the loop's own environment doesn't hold."""
     research = settings.research_bin()
     env = {**os.environ, "RESEARCH_STORE": settings.store_root()}
     creds = settings.store_env()
@@ -555,8 +488,6 @@ def store_put(path: Path) -> tuple[str | None, str]:
 
 
 def archive(now: float, put: Callable[[Path], tuple[str | None, str]] = store_put) -> str | None:
-    """The second copy of the usage record: the last UTC day's samples file put into the store once, its art id kept in
-    $FLEET_DIR/archived.json so a restarted loop doesn't put it again. None when it is stored (or there is no file), else why not."""
     day = utc(now - 86400)[:10].replace("-", "")
     f, state_path = FLEET_DIR / f"samples-{day}.jsonl", FLEET_DIR / "archived.json"
     try:
@@ -576,7 +507,7 @@ def archive(now: float, put: Callable[[Path], tuple[str | None, str]] = store_pu
 
 
 def post(args: list[str], text: str) -> str | None:
-    """Send one post with `research msg send`; None when it went out, else why not (its exit and the end of its stderr)."""
+    """None when it went out, else why not."""
     research = settings.research_bin()
     try:
         p = subprocess.run([str(research), "msg", "send", "--as", "infra", *args, "--text", text], cwd="/workspace", timeout=120,
@@ -590,8 +521,6 @@ TOLD_KEEP_DAYS = 2
 
 
 def load_told(now: float) -> set[tuple[str, str]]:
-    """The (UTC day, quota key) alerts already posted, from $FLEET_DIR/quota-told-YYYY-MM-DD.json, so a restarted loop doesn't post
-    them again; a day's file older than TOLD_KEEP_DAYS is removed."""
     told, oldest = set(), utc(now - TOLD_KEEP_DAYS * 86400)[:10]
     for f in sorted(FLEET_DIR.glob("quota-told-*.json")):
         day = f.name[len("quota-told-"):-len(".json")]

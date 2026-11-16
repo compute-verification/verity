@@ -1,31 +1,6 @@
 #!/usr/bin/env python3
-"""vy-nebius-1's half of `infra-pool/v1` (stdlib only): `/workspace/usage/infra-pool-n1.json`, which node 2's publisher merges in
-as `nodes.n1` (node2-ops 21:40Z). Report-only: it flags, it never stops anything.
-
-    pool_n1.py [--out PATH] [--loop [--every 300]]     as research on node 1
-
-From Prometheus (DCGM's `nvidia-dcgm-exporter` series, whose `pod` label names the pod holding each GPU, and node-exporter) and
-Kueue's Workloads it writes the n2 fields it can compute here: GPU busy (share of 15 s samples with util >= 1%) over 5 min and 1 h,
-`useful_share_1h` (the busy samples a pod holds), `cpu_busy_5m`, per GPU {index, busy_5m, holder, class}, and `waiting` split into
-GPU and CPU Workloads. `ready_gpu_h`, `lease_waiters` and `kinds` are left out: node 1's queue has no durations yet. `monitors`:
-  - `gpu-idle-in-lease`: a pod has held a GPU for 5 min at a mean util under 10%;
-  - `gpu-unleased`: a GPU with memory in use (over 1 GiB for all of the last 5 min) or busy that no admitted Workload's
-    running pod holds (a GPU whose DCGM pod has just finished is a handover, not flagged);
-  - `template-drift`: the dispatcher's templates (`$DISPATCH_SKY`) differ from `infra/nebius` as last pushed into node 1's bare repo
-    (`refs/kueue-fold/infra-nebius`; neither node can read GitHub, so an agent pushes it and writes `ref.json` with the time).
-
-`delivered_by_hour` is the delivered-output metric, one entry per UTC hour for the last 4, oldest first:
-{hour, leased_gpu_s, delivered_gpu_s, delivered_share, provisional}. Leased is each GPU Workload's admitted-to-finished time (or to
-now) × its GPUs, split across the hours it spans. It is delivered when its Job is not labelled `verity.dev/filler` and one of the
-Attempts its pods launched (the store's `attempts.host` is the pod) is `done` with validation `passed`, or with no validation and
-rc 0 and declared outputs. A verdict lands up to ~30 min after the lease ends, so an hour is provisional until an hour after it
-ends. `gpu-pool-*` holder Jobs count as leased; the leases inside them are not yet attributed, so they deliver nothing.
-
-Node 2's publisher neither computes nor pushes the merged `/workspace/usage/infra-pool.json` while a timed window is on. From
-10 minutes to 3 hours after its last push, each pass here rewrites that file with this pass's `nodes.n1` and an empty
-`nodes.n2` that names the pause (`paused_since`, also kept as `n2_generated_at`), so the console shows node 1 now and no node-2
-numbers rather than both going stale. After 3 hours it leaves the file alone, and the console's staleness error shows the outage.
-Node 2's next push replaces the file whole.
+"""vy-nebius-1's half of `infra-pool/v1`: `/workspace/usage/infra-pool-n1.json`, which node 2's publisher merges in as
+`nodes.n1`. Report-only: it flags, it never stops anything.
 """
 from __future__ import annotations
 
@@ -110,7 +85,6 @@ def observe() -> dict:
 
 
 def attempts_by_job(since: str) -> dict[str, list[tuple]]:
-    """Job name -> (state, rc, validation, outputs) of each Attempt its pods launched since `since`, from node 1's store."""
     try:
         with sqlite3.connect(f"file:{STORE_DB}?mode=ro", uri=True) as c:
             rows = c.execute("select a.host, a.state, a.rc, a.validation, (select count(*) from attempt_outputs o where o.attempt = a.id)"
@@ -138,7 +112,6 @@ def _at(w: dict, kind: str) -> float | None:
 
 
 def delivery(obs: dict) -> list[dict]:
-    """`delivered_by_hour` (see the module docstring) from the Workloads, the Jobs' labels and the store's Attempts."""
     t = obs["t"]
     now_h = int(t // 3600) * 3600
     hours = {now_h - 3600 * k: [0.0, 0.0] for k in range(HOURS)}
@@ -161,7 +134,6 @@ def delivery(obs: dict) -> list[dict]:
 
 
 def lease_pool() -> dict[int, dict]:
-    """n1_lease.py's GPUs in the lease pool (index -> its record), when its state is fresh; else none."""
     if not LEASE_STATE.exists():
         return {}
     try:
@@ -187,8 +159,6 @@ def _gpu_request(w: dict) -> int:
 
 
 def build(obs: dict, drift: dict | None = None) -> dict:
-    """The `nodes.n1` entry from one observation (see observe()); `drift` is template_drift()'s monitor, if any.  A GPU in
-    n1_lease.py's pool is attributed to its lease (the lease files), not to the holder pod DCGM names."""
     t = obs["t"]
     admitted: dict[str, dict] = {}
     waiting_gpu = waiting_cpu = 0
@@ -268,7 +238,6 @@ def git(*args: str) -> str:
 
 
 def template_drift() -> dict:
-    """Compare the dispatcher's sky/ with infra/nebius's (as pushed into node 1's bare repo): a `template-drift` monitor, or {}."""
     try:
         ref = json.loads(REF_JSON.read_text())
         want = {}
@@ -301,7 +270,6 @@ def write(out: Path, n1: dict) -> None:
 
 
 def cover_pause(merged: Path, n1: dict, now: float) -> bool:
-    """Rewrite the merged file while node 2's publisher is paused (the module docstring); True when it did."""
     try:
         doc = json.loads(merged.read_text())
         last = doc.get("n2_generated_at") or doc["generated_at"]

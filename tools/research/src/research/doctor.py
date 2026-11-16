@@ -1,35 +1,4 @@
-"""`research doctor`: whether this agent's VM can do its job, checked at session start, without printing a value.
-
-  research doctor [--role lane|coordinator|infra] [--json]
-
-Each check is `ok`, `skip` (it does not apply here) or a `finding`, which says what failed and how to fix it:
-
-  secrets     every name the role needs (`SECRETS`) and every name this VM injects ($CLOUD_AGENT_INJECTED_SECRET_NAMES) is set;
-              a name `research` took back from the tmux server (`secret_hint.recover`) counts, and is named. On a VM that
-              injects secrets, an ok notes when no tmux server holds them, or the one that does has no kept session
-              (`secret_hint.server`), with the one command that starts that session: a note, never a finding of its own
-  github      `gh auth status` exits 0
-  git-push    `git push --dry-run --no-verify` of HEAD to a branch nobody has (`PROBE_REF`) on the checkout's origin: GitHub
-              accepts the credential git pushes with
-  notes-push  the same for the notes clone, through `notes_sync.remote_target`; it names the credential (`notes_sync.token_source`:
-              the GitHub broker's token on a Cursor agent, RESEARCH_NOTES_TOKEN where the broker gives none), and says when a
-              RESEARCH_NOTES_TOKEN set on an agent is no longer needed
-  store       the evidence store's remote answers a HEAD of an absent key with "absent"; a 400, 401 or 403 is a refused credential
-  slack       `auth.test` is ok, with the bot token or through the broker (coordinator and infra: a lane asks its coordinator)
-  ssh:NAME    `ssh -o BatchMode=yes ... true`, as `research run --on` reaches NAME, for each machine whose entry names an ssh host
-              (machines.toml, and the registry where the notes clone already is: the doctor never clones it); a changed host
-              key reads as ok, since `research`'s ssh does not check host keys (runpod.ssh_command). The auditor devices
-              (`remote.restricted`) refuse lanes' keys by design: they are not probed, and `ssh:auditor-hosts` names them
-  venv        `uv sync --locked --check --offline` of the checkout's lock against the venv this runs in (else the checkout's
-              .venv), workspace members aside: a worktree's come from PYTHONPATH
-  disk        free space on the filesystems of the runs root, the store, the checkout and $TMPDIR, against the floor `research
-              run` refuses under ($RESEARCH_DISK_FLOOR_GB)
-  clock       this clock against the Date header of CLOCK_URL (Cloudflare's, as R2 is), within CLOCK_SKEW_MAX_S
-
-The probes run at once under DEADLINE_S, and what they print is discarded: a finding names an exit code, an HTTP
-status or a class of error, and its fix says how to see the tool's own message. Exit 0 when nothing is a finding, 1 when
-something is, 2 on a usage error; `--json` prints `research/doctor/v1`.
-"""
+"""`research doctor`: whether this agent's VM can do its job, checked at session start, without printing a value."""
 from __future__ import annotations
 
 import argparse
@@ -95,14 +64,11 @@ class Check:
 
 
 def _left(timeout: float) -> float:
-    """`timeout`, cut to what is left of this probe thread's time."""
     return max(0.0, min(timeout, getattr(_probe, "end", math.inf) - time.monotonic()))
 
 
 def run(argv: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> tuple[int | None, str]:
-    """(exit code, output) of `argv`, stdin closed, in a session of its own: None when it gave no answer within PROBE_TIMEOUT_S
-    (or what is left of its probe's time), its whole process group killed, git's remote helpers and ssh's with it; 127 when it
-    could not start. The output is for telling one failure from another, never for printing."""
+    """(exit code, output); None when it gave no answer within PROBE_TIMEOUT_S."""
     try:
         p = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                              text=True, errors="replace", start_new_session=True)
@@ -191,8 +157,6 @@ PUSH_FAILURES = (
 
 
 def push_probe(name: str, root: Path, opts: list[str], where: str, credential_fix: str) -> Check:
-    """`git push --dry-run` of HEAD to PROBE_REF: GitHub asks for the push credential before it answers, nothing is sent, and no
-    pre-push hook runs."""
     argv = ["git", "-C", str(root), *opts, "push", "--dry-run", "--no-verify", "--quiet", where, f"HEAD:{PROBE_REF}"]
     rc, out = run(argv, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     if rc == 0:
@@ -216,7 +180,6 @@ def _git_root(where: Path) -> Path | None:
 
 
 def checkout() -> Path | None:
-    """The git checkout the caller works in (the working directory's), else the one this package runs from."""
     return _git_root(Path.cwd()) or _git_root(REPO)
 
 
@@ -308,19 +271,14 @@ SSH_FAILURES = (
 
 
 def registry_unread() -> bool:
-    """Whether reading the registry would clone the notes repo first (`registry.merged`): synchronously, for up to 15 minutes,
-    before any deadline. The doctor reads machines.toml alone then; notes-push names the missing clone."""
     return not settings.has(registry.REGISTRY_ENV) and not registry.notes_root().exists()
 
 
 def ssh_machines() -> dict[str, dict]:
-    """The machines `research run --on` knows (machines.toml, and the registry unless `registry_unread`) whose entries name an
-    ssh host, the auditor devices (`remote.restricted`) aside."""
     return _ssh_machines()[0]
 
 
 def _ssh_machines() -> tuple[dict[str, dict], list[str]]:
-    """(the machines to probe, the auditor devices left out)."""
     ms = remote.load_machines(remote.machines_path()) if registry_unread() else remote.load_machines()
     ssh = {n: m for n, m in sorted(ms.items()) if isinstance(m, dict) and m.get("provider") == "ssh"}
     skipped = remote.restricted(ssh)
@@ -401,7 +359,7 @@ def check_disk(root: Path | None) -> Check:
 
 
 def server_date(url: str = CLOCK_URL) -> float:
-    """The time `url`'s Date header gives a HEAD, in seconds since the epoch; its one-second resolution is the caller's."""
+    """Seconds since the epoch, at the Date header's one-second resolution."""
     req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "research-doctor"})  # noqa: S310 (CLOCK_URL, a literal https URL)
     try:
         with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT_S) as r:  # noqa: S310 (CLOCK_URL, a literal https URL)
@@ -462,8 +420,6 @@ def checks(role: str, root: Path | None) -> list[Probe]:
 
 
 def gather(probes: list[Probe], deadline_s: float = DEADLINE_S) -> list[Check]:
-    """Every probe at once, in daemon threads: what a probe runs (`run`) is killed KILL_MARGIN_S before the deadline, so the
-    command leaves no git or ssh behind, and a probe still running at the deadline is a finding, and is left behind."""
     done: dict[str, Check] = {}
     end = time.monotonic() + deadline_s
 

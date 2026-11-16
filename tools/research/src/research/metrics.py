@@ -12,18 +12,6 @@ loop's readings sent to it with POST /api/metrics.
                                                             panels key ($FLEET_PANELS_KEY), only to the site's own
                                                             host; --dry-run prints the request without the key and
                                                             sends nothing
-
-The page and this command read one door. It answers a site key with events:read (`$JOBS_TOKEN`, else
-~/.research/jobs/token, as `research jobs` reads it, when it starts with vsk_) or else this agent's Cursor identity
-minted for the route. A site key goes only to the console's own route: --url anywhere else carries the identity.
-
-A reading is `metric`, `value` (or null with `why`), `mark` and `time` (when the number was read, not when it is sent),
-and names the `run` that recorded it or the `command` (a loop's script) that computed it, with `commit` beside either; it
-may carry `unit`, `ci95`, `target`, `verdict`, `period`, `over` and `member`. The door refuses a request whose reading
-holds any other key, and `send` refuses it first. The control pod's loops send theirs with infra/control/loop_metrics.py.
-
-`REGISTRY_ROOTS` are the directories the site's registry reader walks for metrics.toml files (`REGISTRY_ROOTS` in the
-site's lib/console/metrics/registry.ts), in its order.
 """
 from __future__ import annotations
 
@@ -52,7 +40,7 @@ COMMIT = re.compile(r"[0-9a-f]{7,40}")
 
 
 def off_site(url: str) -> str | None:
-    """Why ``url`` may not be sent the panels key: anything but https to the site's own host. None when it may."""
+    """None when ``url`` may be sent the panels key: https to the site's own host only."""
     u = urlsplit(url)
     if u.scheme == "https" and u.netloc == SITE_HOST:
         return None
@@ -60,9 +48,6 @@ def off_site(url: str) -> str | None:
 
 
 def send_json(method: str, url: str, body: object, key: str, what: str) -> str | None:
-    """One JSON request to the site with ``key`` as its bearer, through `slack.http_open`, the client `http_json` reads with (no
-    redirect followed, 30 s): None when the site took it, else why not, in one line; it never raises. Its answer isn't read.
-    The key goes only to the site's own host."""
     if why := off_site(url):
         return f"{what}: {why}"
     try:
@@ -78,7 +63,6 @@ def send_json(method: str, url: str, body: object, key: str, what: str) -> str |
 
 def reading(metric: str, value: float | None, *, time: str, why: str | None = None, mark: str = "measured",
             **optional: object) -> dict:
-    """One reading of the door's shape; an optional field that is None is left out."""
     r = {"metric": metric, "value": value, **({"why": why} if why else {}), "mark": mark, "time": time}
     return {**r, **{k: v for k, v in optional.items() if v is not None}}
 
@@ -107,10 +91,6 @@ def _refused(r: object) -> str | None:
 
 def send(readings: list[dict], *, command: str | None, commit: str | None, url: str | None = None, key: Path | None = None,
          dry_run: bool = False, post=None, out=print) -> str | None:
-    """POST ``readings`` to the door, each naming ``command`` and ``commit`` where given, with the panels key: None when the
-    site took them (or, with ``dry_run``, when the request is printed with the key left out and nothing sent), else why not,
-    in one line. Never raises on the network or a missing key, so a loop goes on. ``url`` may only be on the site's own
-    host."""
     url, key = url or METRICS, key or PANELS_KEY
     body = {"readings": [{**r, **({"command": command} if command else {}), **({"commit": commit} if commit else {})}
                          for r in readings]}
@@ -170,7 +150,6 @@ class Route:
 
 
 def _key() -> str | None:
-    """`research jobs`' token when it is a site key; an older token, without KEY_PREFIX, isn't sent."""
     key = kept_token()
     return key if key and key.startswith(KEY_PREFIX) else None
 

@@ -1,14 +1,4 @@
-"""Per-queue usage on the Nebius cluster, for the weekly retune of kueue.yaml's nominal quotas.
-
-    usage_report.py sample [--kubectl CMD]          one JSON line: each ClusterQueue's nominal quota, usage, borrowing, admitted and
-                                                    pending workloads, and its pods' mean GPU utilization (DCGM)
-    usage_report.py summarize FILE [--days 7]       per queue over the window: mean and p90 usage against nominal, how often work
-                                                    waited, how much was borrowed; and the p90 as a suggested nominal
-
-cluster_up.sh installs `sample` on the server as a 5-minute systemd timer appending to /workspace/usage/queues.jsonl, so the record
-doesn't depend on any agent VM. GPU utilization comes from the GPU operator's dcgm-exporter (DCGM_FI_DEV_GPU_UTIL, labelled with
-the pod that holds the GPU), read through the API server's service proxy. Stdlib only.
-"""
+"""Per-queue usage on the Nebius cluster, for the weekly retune of kueue.yaml's nominal quotas."""
 from __future__ import annotations
 
 import argparse
@@ -26,7 +16,6 @@ _SUFFIX = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40, "k": 1e3, "M": 1e
 
 
 def quantity(q: str | int | float) -> float:
-    """A Kubernetes quantity as a number: cpu in cores, memory in bytes."""
     s = str(q)
     for suf in sorted(_SUFFIX, key=len, reverse=True):
         if s.endswith(suf):
@@ -80,7 +69,6 @@ def queues(cqs: dict, workloads: dict, pods: dict, gpu_util: dict[tuple[str, str
 
 
 def parse_dcgm(text: str) -> dict[tuple[str, str], float]:
-    """{(namespace, pod): mean DCGM_FI_DEV_GPU_UTIL over that pod's GPUs} from the exporter's Prometheus text."""
     per: dict[tuple[str, str], list[float]] = {}
     for line in text.splitlines():
         if not line.startswith("DCGM_FI_DEV_GPU_UTIL{"):

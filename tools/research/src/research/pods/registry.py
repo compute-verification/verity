@@ -1,38 +1,4 @@
-"""The pod registry every machine can update: one file per machine under `machines.d/` (cloud migration step g).
-
-    research pods register NAME --pod-id ID --project P [--lane L] [--root DIR] [--python PY] [--guard N|true] [--replace] [--any-name]
-    research pods register NAME --host ADDR --project P [--lane L] [--port N] [--user U] [--rate USD_PER_HOUR] [--root DIR] [--nebius-instance-id ID] [--replace]
-    research pods unregister NAME
-    research pods registry [--json]                          # every machine `research run --on` accepts, and where it comes from
-    research pods registry import [--apply] [--all]          # seed machines.d from machines.toml (running pods only unless --all)
-    research pods create <runpod flags> --register --project P [--guard N]   # create, wait for sshd, register under --name
-    research pods env NAME [NAME ...]                        # `export <NAME>_HOST=<host>` per machine, for `eval` only (`host_env`)
-
-`~/.research/machines.toml` is one hand-edited file on the laptop; every lane that creates a pod had to merge an entry into it.
-The registry is a directory with one TOML file per machine, `<dir>/<name>.toml`, holding that machine's table (`provider`,
-`pod_id`, `project` or `projects`, and optionally `root`, `python`, `guard`, `ramlock`; a Nebius VM's `nebius_instance_id`, and the
-`deadline` fleet.py's sampler copies from its /etc/research/deadline, and its `unreachable_since` while no sample reads it; `lane`, the lane whose budget line pays for it, infra when
-unset) plus who registered it and when.  Two
-agents registering two pods write two files, so nothing is ever hand-merged; in the notes repo, `research notes sync` carries
-them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
-
-Where it is read and written (`registry_dir`, the one directory `register`, `unregister`, `registry import` and `research run --on`
-use): `$RESEARCH_MACHINES_D` when set, else `<notes>/machines.d`, whether or not machines.toml exists (with a notes
-token, `notes_sync.notes_token`, a missing notes clone is cloned first: `notes_sync.ensure_clone`).  `RESEARCH_MACHINES_D=none`
-turns the registry off: run reads machines.toml alone, and the commands that write refuse, since nothing would read what they
-wrote.  With `$RESEARCH_MACHINES_D` pointing elsewhere, `research run --on` still takes a machine only the notes clone's
-machines.d lists: a hand-copied override never hides a machine registered since it was copied.
-Both sources merge (`merged`); a name both define with different pod ids is dropped from the result, so it is refused
-as unlisted and the refusal says why, never silently resolved to either pod.  A file that does not parse, names an invalid
-machine, or lacks provider / pod_id (host for an ssh machine) / project is dropped the same way.
-
-`register` refuses before writing anything when: the name is not a plain name; the pod id is unknown to the RunPod account (a
-404, or any API failure: G2); the pod's name (campaign suffix stripped) is not NAME (`--any-name` allows it: a pod created before
-the convention); machines.toml or the registry already binds NAME to another pod (`--replace` for the registry file only).  The
-`register --host` (an ssh machine, such as a cloud VM with a static address) refuses unless `hostname` answers over ssh with the
-research key.  The file is written atomically and synced to the notes remote at once, so other agents' `research run --on` sees the machine
-without waiting for a later sync; `RESEARCH_NOTES_SYNC=0` leaves the commit to the next `notes sync`.
-"""
+"""The pod registry every machine can update: one file per machine under `machines.d/`."""
 from __future__ import annotations
 
 import datetime as dt
@@ -70,7 +36,6 @@ def notes_root(environ: dict | None = None) -> Path:
 
 
 def registry_dir(machines_toml: Path, environ: dict | None = None) -> Path | None:
-    """The registry directory, or None when it is off (module docstring)."""
     env = os.environ if environ is None else environ
     if REGISTRY_ENV in env:
         v = env[REGISTRY_ENV].strip()
@@ -79,8 +44,6 @@ def registry_dir(machines_toml: Path, environ: dict | None = None) -> Path | Non
 
 
 def write_dir(machines_toml: Path, environ: dict | None = None) -> Path:
-    """Where `register`, `unregister` and `import` write: the directory `research run --on` reads.  Refused when the registry is
-    off, since nothing would read the file."""
     from .. import remote
 
     d = registry_dir(machines_toml, environ)
@@ -91,7 +54,6 @@ def write_dir(machines_toml: Path, environ: dict | None = None) -> Path:
 
 
 def validate(name: str, entry: Any) -> str | None:
-    """Why `entry` cannot be machine `name`, or None."""
     if not NAME_RE.fullmatch(name) or name.startswith("_"):
         return f"{name!r} is not a machine name ({NAME_RE.pattern}, not starting with _)"
     if not isinstance(entry, dict):
@@ -116,7 +78,6 @@ def validate(name: str, entry: Any) -> str | None:
 
 
 def binding(entry: dict) -> str | None:
-    """What a name is bound to: a runpod pod id, or an ssh machine's host."""
     return entry.get("pod_id") or entry.get("host")
 
 
@@ -125,15 +86,10 @@ def _bound(entry: dict) -> str:
 
 
 def host_var(name: str) -> str:
-    """The variable a script reads machine `name`'s host from: the name in capitals, `-` as `_`, then `_HOST`
-    (vy-challenger-1 -> VY_CHALLENGER_1_HOST)."""
     return re.sub(r"[^A-Z0-9]", "_", name.upper()) + "_HOST"
 
 
 def host_env(names: list[str], machines: dict[str, dict] | None = None) -> dict[str, str]:
-    """{host_var(name): host} for each named ssh machine, read as `research pods ssh NAME` reads it (`remote.load_machines`,
-    `remote.ssh_host_target`).  Refused, naming the file it looked for, when a name is not a registered ssh machine; nothing is
-    returned for the others then.  The refusal never holds an address."""
     from .. import remote
 
     ms = remote.load_machines() if machines is None else machines
@@ -151,7 +107,6 @@ def host_env(names: list[str], machines: dict[str, dict] | None = None) -> dict[
 
 
 def load_dir(d: Path) -> tuple[dict[str, dict], dict[str, str]]:
-    """(name -> entry, name -> why dropped) for every `<name>.toml` in the directory."""
     entries: dict[str, dict] = {}
     bad: dict[str, str] = {}
     if not d.is_dir():
@@ -172,9 +127,6 @@ def load_dir(d: Path) -> tuple[dict[str, dict], dict[str, str]]:
 
 
 def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | None = None) -> dict[str, dict]:
-    """machines.toml's machines plus the registry's; a name the two bind to different pods, or a broken registry file, is dropped
-    (reason in `problems`).  Unchanged (and `problems` empty) when no registry directory is read.  Under a `$RESEARCH_MACHINES_D`
-    override, a name neither it nor machines.toml defines comes from the notes clone's machines.d, if there is one."""
     problems.clear()
     d = registry_dir(machines_toml, environ)
     if d is None:
@@ -205,7 +157,6 @@ def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | 
 
 
 def families(machines_toml: Path, environ: dict | None = None) -> dict[str, dict]:
-    """`[families.*]` from machines.toml, then the registry's `_families.toml` for families machines.toml does not define."""
     out: dict[str, dict] = {}
     if machines_toml.exists():
         out.update(tomllib.loads(machines_toml.read_text()).get("families", {}))
@@ -268,8 +219,7 @@ def _guard(v: str | None) -> bool | float | None:
 def register(name: str, pod_id: str, project: str, *, root: str | None = None, python: str | None = None, guard: str | None = None,
              replace: bool = False, any_name: bool = False, machines_toml: Path | None = None, environ: dict | None = None,
              get_pod: Callable[[str], dict] = _pod, now: dt.datetime | None = None, lane: str | None = None) -> tuple[Path, str]:
-    """Check, then write `<dir>/<name>.toml` (module docstring).  -> (path, 'registered' | 'updated' | 'unchanged').
-    Raises remote.Refused with the reason; nothing is written then."""
+    """Raises remote.Refused with the reason; nothing is written then."""
     from .. import remote
     from . import runpod
 
@@ -317,7 +267,6 @@ def _write_checked(name: str, entry: dict[str, Any], mt: Path, *, replace: bool,
 
 
 def _probe_ssh(entry: dict[str, Any]) -> str | None:
-    """Why `entry`'s host cannot be reached over the research key (`hostname` over ssh), or None."""
     from .. import remote
 
     tgt = remote.ssh_host_target(entry)
@@ -332,9 +281,6 @@ def register_ssh(name: str, host: str, project: str, *, port: int | None = None,
                  root: str | None = None, python: str | None = None, replace: bool = False, machines_toml: Path | None = None,
                  environ: dict | None = None, probe: Callable[[dict], str | None] = _probe_ssh,
                  now: dt.datetime | None = None, nebius_instance_id: str | None = None, lane: str | None = None) -> tuple[Path, str]:
-    """`register` for a `provider = "ssh"` machine: refused unless `hostname` answers over ssh with the research key. A Nebius VM's
-    `nebius_instance_id` lets `research run --on` start it when it is stopped (remote.wake). `lane` is the lane whose budget line
-    pays for the machine, which stops it when its work there ends (fleet.py's daily report rings it with the machine's idle hours)."""
     from .. import remote
 
     mt = machines_toml or remote.machines_path()
@@ -361,8 +307,6 @@ def unregister(name: str, machines_toml: Path | None = None, environ: dict | Non
 
 
 def plan_import(machines_toml: Path, d: Path, running: set[str] | None) -> list[dict]:
-    """machines.toml entries to copy into the registry: every valid one not there yet whose pod is running (`running` = pod ids;
-    None = all).  Each row: name, action (`write` | `skip`), why."""
     rows = []
     toml_machines = tomllib.loads(machines_toml.read_text()).get("machines", {}) if machines_toml.exists() else {}
     have = load_dir(d)[0]

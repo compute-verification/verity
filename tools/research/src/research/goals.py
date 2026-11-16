@@ -21,16 +21,6 @@
                                              # all open goals waiting on each; --since DUMP (a file or an art: id, as
                                              # `research velocity` reads) says which are standing, new, changed or
                                              # cleared since (goals_blockers.py)
-
-The plan is one graph of goals. A goal is an outcome with one owner: a headline for a title (three to six plain words,
-no number; the writing-goals skill has the rule), a due date, a day meaning its end or a time with its offset such as
-2026-11-05T10:00-08:00, a status (will it be true by then?), tags from the site's fixed list of areas, and a Markdown
-description of what will be true and what is true today, which never restates the fields. A goal under another is
-its subgoal. The page derives how deep a goal sits from what waits on what: 1 when nothing waits on it, down to 3;
---tier, which keeps its old name, overrides that. What a goal waits on is links only: the narrowest goal that blocks
-it, due before it, or an open ask (--wait goal:ID, --wait ask:CARD). An off-track goal says why: what it waits on, or
---blockers. The site checks every write and answers which field is wrong. --url points the command at another server;
-the token's audience stays the route's.
 """
 from __future__ import annotations
 
@@ -51,9 +41,6 @@ STORED_ONLY = ("updatedAt", "updatedBy", "wasDue", "priority", "prioritySet", "p
 
 
 class Route:
-    """The page's route. ``key`` is a site key with `events:read`, for a machine that holds no Cursor identity: it only
-    reads. Without one every call carries this agent's identity."""
-
     def __init__(self, url: str = GOALS, key: str | None = None) -> None:
         self.base, self.key = url, key
         self._oidc = _Identity(GOALS)
@@ -96,7 +83,6 @@ def _when(due: str) -> str:
 
 
 def _text(value: str) -> str:
-    """TEXT, or a file's contents for @FILE (@- reads stdin)."""
     if not value.startswith("@"):
         return value
     return sys.stdin.read() if value == "@-" else Path(value[1:]).read_text()
@@ -123,7 +109,6 @@ def show(goals: list[dict]) -> str:
 
 
 def _link(value: str) -> dict:
-    """goal:ID or ask:CARD, as a waitingOn link."""
     kind, _, target = value.partition(":")
     if kind not in ("goal", "ask") or not target:
         raise SlackError(f"--wait {value!r}: expected goal:ID or ask:CARD")
@@ -131,7 +116,6 @@ def _link(value: str) -> dict:
 
 
 def edited(current: dict | None, ns: argparse.Namespace) -> dict:
-    """The goal `set` writes: the current one with the given fields changed, or a new one from them."""
     goal = _clean(current or {"id": ns.id})
     for field in ("title", "status", "due"):
         if getattr(ns, field) is not None:

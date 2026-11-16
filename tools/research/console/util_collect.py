@@ -91,7 +91,7 @@ def summarize_n1(prom: dict, start: float, end: float) -> dict:
 
 
 def kueue_allocated(queue_lines: list[dict], start: float) -> dict[str, float]:
-    """GPU-hours Kueue had admitted per UTC hour, from vy-usage's 5-minute samples (each sample stands for the 5 min before it)."""
+    """GPU-hours a UTC hour; each 5-minute sample stands for the 5 minutes before it."""
     per: dict[str, float] = defaultdict(float)
     for d in queue_lines:
         if d.get("t", 0) < start:

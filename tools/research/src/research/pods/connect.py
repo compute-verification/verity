@@ -46,8 +46,6 @@ STAMP_SCHEMA = "research/source-stamp/v1"
 
 
 def resolve_pod(target: str, *, machines: dict[str, dict[str, Any]] | None = None, pods: Callable[[], list[dict]] | None = None) -> tuple[str, str]:
-    """(pod id, label) for a machines.toml name, a pod id, or a pod name.  Refused (by name, with the candidates) when nothing or
-    more than one pod matches."""
     ms = remote.load_machines() if machines is None else machines
     if target in ms:
         return ms[target]["pod_id"], target
@@ -77,7 +75,6 @@ def _list_pods() -> list[dict]:
 
 
 def ssh_base(target: str) -> list[str]:
-    """`ssh ... user@host` for TARGET, ready for a remote command to be appended."""
     m = remote.load_machines().get(target)
     if m is not None and m.get("provider") == "ssh":
         tgt = remote.ssh_host_target({**m, "name": target})
@@ -106,7 +103,6 @@ class _Transport:
 
 @dataclass
 class SshTransport(_Transport):
-    """The pod side of a sync: shell commands over ssh, and the rsync `-e` / destination spelling."""
     ssh: list[str]
 
     def argv(self, script: str) -> list[str]:
@@ -118,8 +114,6 @@ class SshTransport(_Transport):
 
 @dataclass
 class LocalTransport(_Transport):
-    """The same protocol against a local directory (tests; a pod-side worktree refresh).  `rsync=False` plays a machine without
-    rsync, so the tar stream is what ships."""
     rsync: bool = True
 
     def __post_init__(self) -> None:
@@ -141,8 +135,6 @@ def git_toplevel(path: Path) -> Path:
 
 
 def git_visible_files(src: Path, excludes: list[str] | None = None) -> list[str]:
-    """Tracked files that exist + untracked files that are not ignored, sorted; minus `excludes` (fnmatch on the path, or a
-    directory prefix).  Gitlinks (submodules) and tracked-but-deleted paths drop out on the existence check."""
     r = subprocess.run(["git", "-C", str(src), "ls-files", "-z", "--cached", "--others", "--exclude-standard"], capture_output=True)
     if r.returncode != 0:
         raise remote.Refused(f"git ls-files failed in {src}: {r.stderr.decode(errors='replace').strip()}")
@@ -194,8 +186,6 @@ def _ship_rsync(src: Path, files: list[str], dest: str, transport: SshTransport 
 
 
 def _ship_tar(src: Path, files: list[str], dest: str, transport: SshTransport | LocalTransport, timeout: float = 1800) -> None:
-    """A machine without rsync (a fresh image): every file, streamed as one tar written by Python (no platform tar quirks: no
-    AppleDouble `._*` members, no xattr headers), unpacked by the machine's `tar`."""
     q = shlex.quote(dest)
     p = subprocess.Popen(transport.argv(f"mkdir -p {q} && tar -xf - -C {q}"), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                          stderr=subprocess.PIPE)
@@ -215,8 +205,6 @@ def _ship_tar(src: Path, files: list[str], dest: str, transport: SshTransport | 
 
 def sync(src: Path, dest: str, transport: SshTransport | LocalTransport, *, excludes: list[str] | None = None, dry_run: bool = False,
          dest_label: str | None = None) -> dict[str, Any]:
-    """Ship git-visible files of `src` to `dest` through `transport` (rsync when the machine has it, else a tar stream); prune what
-    the previous sync shipped and SRC no longer has; write the source stamp and the shipped list.  Returns the report."""
     if not dest.startswith("/"):
         raise remote.Refused(f"--dest must be an absolute path on the machine, got {dest!r}")
     t0 = time.monotonic()

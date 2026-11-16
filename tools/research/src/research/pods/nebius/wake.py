@@ -1,21 +1,4 @@
-"""The control pod's side of `research run --on`'s wake (remote.wake): start a stopped Nebius VM for an agent that holds no Nebius key.
-
-    PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start INSTANCE_ID [--dry-run]
-
-A lane's VM holds no Nebius key, so its `research run --on NODE` asks the control pod (vy-control-verity) over the one ssh path
-agents already have to it, the one `research pods create` reads the budgets guard through (connect.ssh_base). The pod starts
-only an instance that:
-- exactly one machines.d entry (the steward's notes clone, $WAKE_MACHINES_D) names as its `nebius_instance_id`: an allowlist,
-  never an arbitrary id;
-- has a recorded `deadline` (its /etc/research/deadline, which fleet.py's sampler copies into the entry while the VM runs) more
-  than 5 min away, since the VM stops itself 5 min before it;
-- a live budget line covers in the budgets guard's own state ($WAKE_GUARD_STATE), judged as `research pods create` judges a new
-  pod (budgets.gate).
-It prints one JSON line (name, instance, was, started); a refusal exits 2 with its reason on stderr. The Nebius key it starts VMs
-with is read from $WAKE_ENV (KEY=VALUE lines: NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID, NEBIUS_SA_PRIVATE_KEY_B64, NEBIUS_BIN), a
-key whose account may start instances (the cloud watch's monitor.env is the tenant viewers group's and can't), and handed to the
-Nebius CLI by common.sh's nebius_auth, as fleet.py does; it is never printed.
-"""
+"""The control pod's side of `research run --on`'s wake (remote.wake): start a stopped Nebius VM for an agent that holds no Nebius key."""
 from __future__ import annotations
 
 import argparse
@@ -42,7 +25,6 @@ class Refused(Exception):
 
 
 def allowed(iid: str, machines_d: Path, guard_state: dict, now: float) -> str:
-    """The machine `iid` belongs to, when the pod may start it (module docstring); Refused naming why not."""
     if not INSTANCE_RE.fullmatch(iid):
         raise Refused(f"{iid!r} is not a Nebius instance id")
     entries, _ = registry.load_dir(machines_d)
@@ -73,7 +55,6 @@ def load_key(path: Path) -> None:
 
 
 def start(iid: str, nebius: Callable[..., dict]) -> tuple[str | None, bool]:
-    """(the instance's state, whether this started it): only a STOPPED or STOPPING one is started."""
     state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
     if state in ("STOPPED", "STOPPING"):
         nebius("compute", "instance", "start", "--id", iid, "--async")

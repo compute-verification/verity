@@ -28,7 +28,6 @@ CHECK_DIRS = ("tools/check/", "tools/verity/check/")
 
 
 def _check_file(name: str) -> re.Pattern[str]:
-    """``name`` under either of CHECK_DIRS as a whole path (slot_only.check_file)."""
     return re.compile(rf"(?<![\w.-])(?:{'|'.join(map(re.escape, CHECK_DIRS))}){re.escape(name)}(?![\w.-])")
 
 
@@ -40,8 +39,6 @@ CANCEL = ("t_utc", "actor", "reason")
 
 
 def kind(command: list[str]) -> str:
-    """The kind of task ``command`` runs, one of `KINDS`. A job that is a script of its own counts as other, whatever the
-    script runs."""
     text = " ".join(command)
     if "gpu-lease" in text:
         return "GPU jobs"
@@ -55,7 +52,6 @@ def kind(command: list[str]) -> str:
 
 
 def pool(command: list[str]) -> str:
-    """The check slots ``command`` asks for: a pool's by its name, the machine's own as `OWN_POOL`, none as `NO_POOL`."""
     text = " ".join(command)
     if m := POOL.search(text):
         return m[1]
@@ -63,14 +59,11 @@ def pool(command: list[str]) -> str:
 
 
 def asked_by(command: list[str]) -> str | None:
-    """Whom slot.py was told the run is for (its `--by`)."""
     at = command.index("--by") if "--by" in command else -1
     return command[at + 1] if 0 <= at < len(command) - 1 else None
 
 
 def _text(p: Path, unread: dict[str, str], head: int = -1) -> str | None:
-    """File ``p``'s text (its first ``head`` bytes), None where there is no such file. One that is there and can't be read is
-    named in ``unread`` with why, and reads as None too."""
     if not p.exists():
         return None
     try:
@@ -82,8 +75,6 @@ def _text(p: Path, unread: dict[str, str], head: int = -1) -> str | None:
 
 
 def _doc(p: Path, unread: dict[str, str]) -> dict:
-    """``p``'s JSON object, {} where there is no such file. One that is no JSON object (a record cut short) is named in
-    ``unread`` with why, and reads as {} too."""
     text = _text(p, unread)
     if text is None:
         return {}
@@ -99,7 +90,6 @@ def _doc(p: Path, unread: dict[str, str]) -> dict:
 
 
 def _cancel(d: Path, unread: dict[str, str]) -> dict:
-    """The run's first cancel as `events.jsonl` has it: when, by what (`manual`, `timeout`) and the reason given."""
     for line in (_text(d / "events.jsonl", unread) or "").splitlines():
         if '"cancel_intent"' not in line:
             continue
@@ -114,16 +104,11 @@ def _cancel(d: Path, unread: dict[str, str]) -> dict:
 
 
 def _behind(d: Path, unread: dict[str, str]) -> str | None:
-    """What slot.py last said the run waits behind, from the head of its stderr.log."""
     said = WAITS.findall(_text(d / "stderr.log", unread, STDERR_HEAD) or "")
     return said[-1] if said else None
 
 
 def record(d: Path) -> dict:
-    """Run directory ``d`` as {run, machine, kind, pool, by, claimed, status, slot, refused, cancel, job_started, unread}, each
-    key only where its record has it: a run with no `job.json` (a refused launch) has no kind, pool or machine. `slot.why` is
-    slot.json's, else (a record written before slot.py kept it once the slot is taken) what stderr.log says. `unread` names
-    each record file that is there and couldn't be read, with why: the rest of the record is from the files that could."""
     unread: dict[str, str] = {}
     job, status, slot, launch, refused, live = (_doc(d / n, unread) for n in (
         "job.json", "status.json", "slot.json", "launch.json", "refused.json", "check-live.json"))
@@ -140,7 +125,6 @@ def record(d: Path) -> dict:
 
 
 def window(root: Path, first: str, last: str) -> list[Path]:
-    """The run directories of ``root`` whose ids sort in [``first``, ``last``], oldest first."""
     try:
         names = sorted(p.name for p in root.iterdir() if RUN_ID.match(p.name) and first <= p.name <= last)
     except OSError as e:
