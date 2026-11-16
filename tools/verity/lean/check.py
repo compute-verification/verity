@@ -6743,7 +6743,7 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
     violation is added (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs
     elan and the toolchain with `setup.sh`, so a machine without elan works.
 
-    Among the violations (`tests/fixtures/violations.json`, by key):
+    Among the violations (`violations.json` in `FIXTURES`, by key):
     - `kernel`: a false theorem added through `debug.skipKernelTC`, spelled so that no scan finds it, which must pass
       every check but the replay and fail the replay;
     - `initializer`: an initializer that tries to forge the facts, which must never run where the audit reads the

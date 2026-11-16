@@ -56,3 +56,40 @@ better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
 every = "7d"
 goal = "benchmarks/proof-system-performance"
+
+# `run.py layers`'s three: under each, the Flock layer (member "flock"), the zero-knowledge layer (member "zero
+# knowledge") and last the sampling layer with no member, the row's own reading (benchmarks/prove/README.md's "The proof
+# system by layer"). FLOCK_RUN, ZK_RUN and SAMPLING_RUN are the run ids of each layer's run of record.
+[[metric]]
+id = "benchmarks/proof-layer-prover-seconds"
+title = "Prover time a sampled block"
+owner = "benchmarks"
+unit = "s a proof block"
+axis = "Seconds Flock's prover spends on each drawn proof block of Llama 3.2 1B's served blocks, with zero knowledge at the sampling plan as served, with the Flock and zero-knowledge layers listed beside it as members."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock FLOCK_RUN --zk ZK_RUN --sampling SAMPLING_RUN"
+every = "7d"
+goal = "proofs/layers-in-one-table"
+
+[[metric]]
+id = "benchmarks/proof-layer-lean-seconds"
+title = "Verifier time a sampled block"
+owner = "benchmarks"
+unit = "s a proof block"
+axis = "Seconds the Lean verifier spends on each drawn proof block of Llama 3.2 1B's served blocks, with zero knowledge at the sampling plan as served, with the Flock and zero-knowledge layers listed beside it as members."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock FLOCK_RUN --zk ZK_RUN --sampling SAMPLING_RUN"
+every = "7d"
+goal = "proofs/layers-in-one-table"
+
+[[metric]]
+id = "benchmarks/proof-layer-proof-bytes"
+title = "Proof size a sampled block"
+owner = "benchmarks"
+unit = "bytes a proof block"
+axis = "Bytes of proof for each drawn proof block of Llama 3.2 1B's served blocks, with zero knowledge at the sampling plan as served, with the Flock and zero-knowledge layers listed beside it as members."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock FLOCK_RUN --zk ZK_RUN --sampling SAMPLING_RUN"
+every = "7d"
+goal = "proofs/layers-in-one-table"
+

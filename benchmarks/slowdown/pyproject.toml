@@ -21,7 +21,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # servers' memory and links are their cards' (slowdown/params.py CARDED, through the Site's reader, `verity.device`).
 # `periods.py` writes its metric into the run's result with the harness kit's writer (`benchmarks/harness/verity_bench`:
 # `kit` and its `settings`, which read `verity_config.settings`).
-inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
           "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
           "security/lean-audit.json", "security/Properties/lean-audit.json", "benchmarks/nci/tiers.py",
           "security/Definitions/Slowdown/Remote.lean", "security/Definitions/Slowdown/Guarantees/Remote.lean",

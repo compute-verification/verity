@@ -177,7 +177,12 @@ class TransparentTritonMetadata:
     the public step metadata (input ids from the previous step's sampled ids = the StepLink, positions, seq lens,
     block tables, slot mappings) that the fold takes from `StepStart` / `StepLink` / `SampleEnd`.  Same rule as the
     integer aten ops → `Transparent(noop)`.  A launch with any floating-point pointer is not covered (a compute pattern
-    must explain it)."""
+    must explain it).
+
+    In a step that verifies draft tokens (`step_verifies_drafts`) no integer-only launch is taken as metadata: each is
+    refused by name, since there one may carry draft ids (`_combine_sampled_and_draft_tokens_kernel` writes them into the
+    input ids) or accepted counts (`_get_num_sampled_and_rejected_kernel` reads the accept test's), values that no pattern
+    folds yet."""
 
     name = "transparent.triton_metadata"
 
@@ -187,8 +192,18 @@ class TransparentTritonMetadata:
         views = node.input_views()
         if not views or not all(is_int(v) for v in views):
             return None
-        return Transparent("noop", (node.id,), hint=f"{triton_name(node)}: integer metadata kernel", kernels=(triton_name(node),),
-                           pattern=self.name)
+        name = triton_name(node)
+        if step_verifies_drafts(ctx):
+            return unsupported(node, f"{name}: an integer-only launch in a step that verifies draft tokens, where it may carry "
+                               "draft ids or accepted counts, which are values, and no pattern folds them yet", kernel=name,
+                               logits_rows=len(ctx.start.logits_rows), requests=ctx.start.num_reqs)
+        return Transparent("noop", (node.id,), hint=f"{name}: integer metadata kernel", kernels=(name,), pattern=self.name)
+
+
+def step_verifies_drafts(ctx: StepContext) -> bool:
+    """Whether the step verifies draft tokens: its `StepStart` has more logits rows than requests (a request's 1 + its drafts),
+    a count of the step's public rows, never a token or a value."""
+    return len(ctx.start.logits_rows) > ctx.start.num_reqs
 
 
 def _walk_skipping(node: TreeNode, keep: set[int]) -> Iterator[TreeNode]:

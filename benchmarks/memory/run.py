@@ -10,6 +10,7 @@ document's `value` is null with the reason under `no_bound`.
     verity bench memory PERIOD [--dry-run]        the node run: a gate run under the challenger's period PERIOD
     verity bench memory --from RUN [--session K]  a recorded run
     verity bench memory --loopback                both processes on this machine: a test of this command
+    verity bench memory --local                   vLLM serving Llama 3.2 1B on this machine's GPU, audited beside it
 
 The node run is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session: the prover on the whole GPU
 node serving ROLE (default Llama 3.2 1B as upstream holds it, the role core's pin names `LLAMA32_1B_BF16`), each
@@ -33,15 +34,25 @@ run this command's `--loopback` left, that it was one.
 `--loopback` runs `remote_session/run.sh` with ROLE=both and the prover the driver's CPU reference over a small test
 store. No node is audited, so it certifies nothing, and its output says so.
 
+`--local` is the served session on one machine of your own: `remote_session/run.sh` with ROLE=both and SERVE=row, vLLM
+serving the Llama 3.2 1B row for this machine's card (`LOCAL_ROWS`, or LOCAL_ROW) on one GPU under the audit, the Lean
+verifier and its coins in processes beside it. Unless VLLM_PY names a vLLM interpreter, the tree's bootstrap
+(`pod_bootstrap.sh`) first makes one in LOCAL_WORK, with the row's checkpoint made from its public pin on Hugging Face.
+With no `gpu-lease` installed, the lease is the tree's own program, its locks in LOCAL_WORK. The run's records stay in
+LOCAL_WORK/runs/ (the research run's own directory under one). The verifier and the coins ran on the machine being
+measured, so the number is a measurement to improve on and not an audit: the text says so first, and the JSON says it
+under `local`. It reads no evidence store, so the two references beside it are left out with that reason.
+
 Beside the number it prints two references, each from its run in the store with the run's date and card and the error
 its record states: PoUS's state bound over a card's memory, and the share a wipe left foreign at most.
 `references.json` names their runs; a reference that can't be read prints its reason in place of a number, and so
 does one whose error is 1 or more. Under `research run` the printed document is
-also `$RESEARCH_RUN_DIR/out/memory.json`; a run that ran `--loopback` keeps a loopback's document there whatever it
-prints afterwards, since that document is how `--from` knows the run's session for a loopback.
+also `$RESEARCH_RUN_DIR/out/memory.json`, and outside one `$OUT/memory.json` where `OUT` is set (`kit.report`); a
+run that ran `--loopback` keeps a loopback's document there whatever it prints afterwards, since that document is how
+`--from` knows the run's session for a loopback.
 
-Under `research run` an accepted session of a node run or of `--from` also writes the run's result,
-`$RESEARCH_RUN_DIR/result.json`, the file `research` reads a run's result from, through the harness kit's writer
+There an accepted session of a node run or of `--from` also writes the run's result,
+`$RESEARCH_RUN_DIR/result.json` (where `research` reads it) or `$OUT/result.json`, through the harness kit's writer
 (`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`), each from the verifier's record
 alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), the same number under
 `METRIC`, the id this directory's `metrics.toml` holds it to on the console's Metrics tab, with its `TARGET` (and, unbound,
@@ -52,7 +63,8 @@ ledger holds (`READINGS`: the node's read rate times the span, and γ of it), an
 amount doesn't hold). A session whose error is 1 or more writes `metric`, `verified` and each `free` with no value and
 the reason as their `why`; its capacities and its error are written. A reading's rate is the verifier's own
 figure for the node (`timing.py`), not the registered hardware's, and the capacity's unit says so. The references are
-other runs' numbers and are not in the result; a loopback writes none, since it certifies nothing, and a session that
+other runs' numbers and are not in the result; a loopback writes none, since it certifies nothing, nor does a
+`--local` session, which is no audit, and a session that
 wasn't accepted writes none, as it prints no number.
 """
 from __future__ import annotations
@@ -61,6 +73,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -93,9 +106,20 @@ REFERENCES = HERE / "references.json"
 #: a block of PoUB's store, in bytes
 BLOCK_BYTES = 4096
 #: the files of a run this command reads
-RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json", "out/memory.json"]
+RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json", "out/memory.json", "node.json"]
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
+LOCAL = ("local: the verifier and its coins ran on the machine being measured, so this is a measurement to improve on, "
+         "not an audit")
+#: the served row `--local` runs for a card's compute capability (nvidia-smi's `compute_cap`): Llama 3.2 1B in int8 on
+#: one GPU, one request at a time; a card of another capability needs a row of its own (LOCAL_ROW)
+LOCAL_ROWS = {"9.0": "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager",
+              "12.0": "llama32-1b__int8__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"}
+#: the checkpoint those rows serve, which the bootstrap makes from its ungated BF16 pin (`unsloth/Llama-3.2-1B`)
+LOCAL_CASE = "LLAMA32_1B_INT8"
+BOOTSTRAP = ROOT / "adapters" / "vllm" / "verity_vllm" / "ops" / "pod_bootstrap.sh"
+#: why `--local` prints no reference beside its number
+NO_STORE = "a --local run reads no evidence store, and the references are other runs' numbers in ours"
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
 #: what an unbound session's number rests on, in its Metrics row's verdict
 HELD_NONE = "the verifier held no checkpoint"
@@ -240,16 +264,19 @@ def session(record: Path, k: int | None) -> dict:
             "bound": binding.get("bound") is True, "ledger": ledger}
 
 
-def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None) -> dict:
+def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None,
+             local: bool = False) -> dict:
     """The printed document of session `s` (`session`), before its references: the number, its unit, the commit the
     session ran from and its run, then what it was measured on, its error among it. Where the error is 1 or more the
     number is None and `no_bound` says why (`protocol.no_bound`); else `no_bound` is None. `host_run` is the auditor's
-    verifier host's run that held the verifier, None for a verifier that ran anywhere else. It carries the session's
+    verifier host's run that held the verifier, None for a verifier that ran anywhere else. `local` is `LOCAL`'s words
+    for a `--local` session, whose verifier ran on the machine it measured, else None. It carries the session's
     ledger as its verifier recorded it under `ledger`, which the command takes out before it prints (`amounts` reads
     it)."""
     why = None if s.get("error") is None else no_bound(s["error"])
     return {"value": None if why else s["value"], "unit": UNIT, "commit": commit, "run": run, "loopback": loopback,
-            "host_run": host_run, "no_bound": why, **{k: v for k, v in s.items() if k != "value"}}
+            "local": LOCAL if local else None, "host_run": host_run, "no_bound": why,
+            **{k: v for k, v in s.items() if k != "value"}}
 
 
 def left(tree: Path) -> dict:
@@ -266,15 +293,29 @@ def left(tree: Path) -> dict:
     return doc
 
 
-def looped(tree: Path, run: str) -> bool:
-    """Whether `run`, whose records are under `tree`, is this command's own loopback, as the document it left says. A
-    document about another run says nothing of this run's session, and a session that may be a loopback's isn't
-    printed as a node's."""
+def kind(doc: dict) -> str | None:
+    """What document `doc` is of: "loopback", "local" (`--local`'s), or None, a node session's."""
+    return "loopback" if doc.get("loopback") is True else "local" if doc.get("local") else None
+
+
+def kind_of(tree: Path, run: str) -> str | None:
+    """What `run`, whose records are under `tree`, was (`kind`), as the document this command left in it says. A
+    document about another run, or one that doesn't say, says nothing of this run's session, and a `--local` run
+    (its node.json) that left no document isn't printed as a node's either."""
     doc = left(tree)
-    if doc and doc.get("run") != run:
-        raise Unreadable(f"{run}'s out/memory.json is the document of {doc.get('run')}, so whether {run}'s own session "
-                         "was a loopback isn't recorded")
-    return doc.get("loopback") is True
+    if not doc:
+        if (tree / "node.json").is_file():
+            raise Unreadable(f"{run} holds --local's node.json but no out/memory.json saying what it was, so it isn't "
+                             "printed as a node session")
+        return None
+    if doc.get("run") != run:
+        raise Unreadable(f"{run}'s out/memory.json is the document of {doc.get('run')}, so what {run}'s own session "
+                         "was isn't recorded")
+    looped, local = doc.get("loopback"), doc.get("local")
+    if not isinstance(looped, bool) or not (local is None or (isinstance(local, str) and local)) or (looped and local):
+        raise Unreadable(f"{run}'s out/memory.json doesn't say what its session was (loopback {looped!r}, local "
+                         f"{local!r}), so it isn't printed as a node session")
+    return kind(doc)
 
 
 def from_run(store, run: str, k: int | None) -> dict:
@@ -289,7 +330,9 @@ def from_run(store, run: str, k: int | None) -> dict:
         verifier = tree / "out" / "host" / host / "out" / "verifier.json"
     if verifier is None or not verifier.is_file():
         raise NoNumber(f"{run} left no verifier's record (it ended rc {(attempt.get('status') or {}).get('rc')})")
-    return document(session(verifier, k), commit_of(attempt), run, loopback=looped(tree, run), host_run=host)
+    was = kind_of(tree, run)
+    return document(session(verifier, k), commit_of(attempt), run, loopback=was == "loopback", host_run=host,
+                    local=was == "local")
 
 
 def cores() -> tuple[str, str]:
@@ -321,13 +364,67 @@ def loopback(run: Callable = subprocess.run) -> dict:
         verifier_cpus, prover_cpus = cores()
         env = {"CPU": "64", "WINDOWS": "3", "WINDOW_MS": "1000", "SAMPLES": "16", "JITTER_MS": "5000",
                "VERIFIER_CPUS": verifier_cpus, "PROVER_CPUS": prover_cpus, "PY": sys.executable,
-               **SETTINGS.environ(), "RESEARCH_RUN_DIR": held or tmp, "ROLE": "both", "PLAN": "honest"}
+               **SETTINGS.environ(), "RESEARCH_RUN_DIR": held or tmp, "ROLE": "both",
+               "PLAN": SETTINGS.PLAN or "honest"}
         env.pop("SERVE", None)
         done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
         if done.returncode:
             raise NoNumber(f"the loopback's processes failed (run.sh exited {done.returncode}); their logs are above")
         s = session(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json", None)
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=True)
+
+
+def card_row(run: Callable = subprocess.run) -> str:
+    """The served row for this machine's card: LOCAL_ROW where it is set, else `LOCAL_ROWS`' row for the compute
+    capability nvidia-smi gives for GPU (the first card where it is unset)."""
+    if row := SETTINGS.LOCAL_ROW:
+        return row
+    asked = run(["nvidia-smi", "--query-gpu=name,compute_cap", "--format=csv,noheader",
+                 *(["-i", SETTINGS.GPU] if SETTINGS.GPU else [])], capture_output=True, text=True)
+    if asked.returncode or not asked.stdout.strip():
+        raise NoNumber(f"--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc {asked.returncode}: "
+                       f"{(asked.stderr or asked.stdout).strip()[-200:]})")
+    name, _, cc = asked.stdout.strip().splitlines()[0].rpartition(",")
+    if (row := LOCAL_ROWS.get(cc.strip())) is None:
+        raise NoNumber(f"{name.strip()} is compute capability {cc.strip()}, and the tree has a Llama 3.2 1B row only "
+                       f"for {' and '.join(LOCAL_ROWS)} ({', '.join(LOCAL_ROWS.values())}): make one for this card "
+                       "(`verity-vllm workload --row-id ROW ...`, its target with \"async_scheduling\": false) and "
+                       "name it with LOCAL_ROW")
+    return row
+
+
+def local(run: Callable = subprocess.run) -> dict:
+    """One served session on this machine: `run.sh` with ROLE=both and SERVE=row, the Llama 3.2 1B row for this
+    machine's card under the audit on one GPU and the verifier beside it, read from its records. Unless VLLM_PY is
+    set, the tree's bootstrap makes the vLLM environment and the row's checkpoint in LOCAL_WORK first (it skips what
+    is already there); with no `gpu-lease` installed the tree's own lease keeps its locks there too. The run's records
+    are kept, in the research run's directory under one and else in a directory of LOCAL_WORK/runs/."""
+    row, work = card_row(run), Path(SETTINGS.LOCAL_WORK).expanduser()
+    env = {**SETTINGS.environ(), "ROLE": "both", "SERVE": "row", "ROW": row, "PLAN": SETTINGS.PLAN or "serve"}
+    if not SETTINGS.VLLM_PY:
+        work.mkdir(parents=True, exist_ok=True)
+        boot = {**SETTINGS.environ(), "WORK": str(work), "VENV": str(work / "venv312"), "HF_HOME": str(work / "hf")}
+        done = run(["bash", str(BOOTSTRAP), "--cases", LOCAL_CASE, "--out", str(work / "bootstrap")],
+                   cwd=BOOTSTRAP.parents[2], env=boot, stdout=sys.stderr)
+        if done.returncode:
+            raise NoNumber(f"the bootstrap failed (pod_bootstrap.sh exited {done.returncode}; its logs are in "
+                           f"{work / 'bootstrap'}): a checkpoint that won't download means Hugging Face can't be reached "
+                           "from here")
+        env.update(VLLM_PY=str(work / "venv312" / "bin" / "python"), NODE_WORKSPACE=str(work), HF_HOME=str(work / "hf"))
+    if shutil.which("gpu-lease") is None:
+        env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
+    held = SETTINGS.RESEARCH_RUN_DIR
+    if not held:
+        (work / "runs").mkdir(parents=True, exist_ok=True)
+        held = tempfile.mkdtemp(prefix="run-", dir=work / "runs")
+    env["RESEARCH_RUN_DIR"] = held
+    print(f"memory: --local serves {row}; its records go to {held}/out", file=sys.stderr)
+    done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
+    if done.returncode:
+        raise NoNumber(f"the served session failed (run.sh exited {done.returncode}); its logs are above and in "
+                       f"{held}/out")
+    s = session(Path(held) / "out" / "verifier.json", None)
+    return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True)
 
 
 def session_form() -> dict[str, str]:
@@ -503,20 +600,6 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     return out
 
 
-def result(held: Path, measured: list[dict]) -> None:
-    """Appends `measured` to the result of the run whose directory is `held`, `held/result.json`, through the harness
-    kit's writer, which stamps each with this run, its commit and this host. The writer is given the run's directory
-    itself, not its `out/`: a run has one result, and that file is where `research` reads it. A result holds one
-    measurement a name, so a run that prints a second session keeps its first one's result, and says so."""
-    names = ", ".join(m["name"] for m in measured)
-    try:
-        writer = kit.writer(held)
-        for m in measured:
-            writer.measurement(**m, mark="measured")
-    except ValueError as e:
-        print(f"memory: the result ({names}) is not written: {e}", file=sys.stderr)
-
-
 def text(doc: dict) -> str:
     """The printed lines of a document: the number and how its error reads, what it was measured on, and the
     references."""
@@ -532,10 +615,12 @@ def text(doc: dict) -> str:
                  f"; {reads}"]
     if doc["loopback"]:
         lines.append(f"  {LOOPBACK}")
-    elif doc["value"] is not None and doc["value"] >= 1:
+    elif doc.get("local"):
+        lines.append(f"  {doc['local']}")
+    if not doc["loopback"] and doc["value"] is not None and doc["value"] >= 1:
         lines.append(f"  {NOTHING}")
-    where = ("" if doc["loopback"] else f", on the auditor's verifier host (its run {doc['host_run']})" if doc.get("host_run")
-             else ", its verifier not on the auditor's verifier host")
+    where = ("" if doc["loopback"] or doc.get("local") else f", on the auditor's verifier host (its run {doc['host_run']})"
+             if doc.get("host_run") else ", its verifier not on the auditor's verifier host")
     lines.append(f"  session {doc['session']} of {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: "
                  f"accepted by the Lean verifier{where}")
     whole = None if doc["loopback"] else doc.get("node_gpu_bytes")
@@ -554,6 +639,10 @@ def text(doc: dict) -> str:
     return "\n".join(lines)
 
 
+def _no_store():
+    raise Unreadable(NO_STORE)
+
+
 def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = EvidenceStore, run: Callable = subprocess.run,
          wait: Callable[[float], None] = time.sleep) -> int:
     """The command: 0 with the number printed, 1 with none (the session wasn't accepted, or its run left no record),
@@ -565,12 +654,18 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     ap.add_argument("--from", dest="run", metavar="RUN", help="print from a recorded run")
     ap.add_argument("--session", type=int, metavar="K", help="the session, in a run that holds several")
     ap.add_argument("--loopback", action="store_true", help="both processes on this machine; certifies nothing")
+    ap.add_argument("--local", action="store_true",
+                    help="vLLM serving Llama 3.2 1B on this machine's GPU with the verifier beside it: a measurement, "
+                         "not an audit")
     a = ap.parse_args(argv)
-    if sum((a.period is not None, a.run is not None, a.loopback)) != 1:
-        ap.error("one of PERIOD (the node run), --from RUN or --loopback")
+    if sum((a.period is not None, a.run is not None, a.loopback, a.local)) != 1:
+        ap.error("one of PERIOD (the node run), --from RUN, --loopback or --local")
     try:
         if a.loopback:
             doc = loopback(run)
+        elif a.local:
+            doc = local(run)
+            store_of = _no_store
         elif a.run:
             doc = from_run(store_of(), a.run, a.session)
         else:
@@ -578,8 +673,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
             if isinstance(doc, int):
                 return doc
         held = SETTINGS.RESEARCH_RUN_DIR
-        # a run that ran the loopback keeps a loopback's document, the mark `--from` that run reads
-        kept = bool(held) and not doc["loopback"] and left(Path(held)).get("loopback") is True
+        # a run that ran the loopback or --local keeps that document, the mark `--from` that run reads
+        kept = bool(held) and (was := kind(left(Path(held)))) is not None and was != kind(doc)
         ledger = doc.pop("ledger")
     except NoNumber as e:
         print(f"memory: no number: {e}", file=sys.stderr)
@@ -588,16 +683,16 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
         print(f"memory: {e}", file=sys.stderr)
         return 2
     doc["beside"] = beside(store_of)
-    print(text(doc))
-    line = json.dumps(doc)
-    print(line)
+    # a loopback certifies nothing and a --local session is no audit, so neither writes a result; a result holds one
+    # measurement a name, so a run that prints a second session keeps its first one's result
+    printed, measured = text(doc), [] if doc["loopback"] or doc["local"] else amounts(doc, ledger)
+    try:
+        kit.report("memory", printed, doc, measured, document=not kept)
+    except ValueError as e:
+        print(f"memory: the result ({', '.join(m['name'] for m in measured)}) is not written: {e}", file=sys.stderr)
     if kept:
-        print("memory: this run ran the loopback, and its out/memory.json stays the loopback's document", file=sys.stderr)
-    elif held:
-        (Path(held) / "out").mkdir(parents=True, exist_ok=True)
-        (Path(held) / "out" / "memory.json").write_text(line + "\n")
-    if held and not doc["loopback"]:
-        result(Path(held), amounts(doc, ledger))
+        which = "the loopback" if was == "loopback" else "--local"
+        print(f"memory: this run ran {which}, and its out/memory.json stays {which}'s document", file=sys.stderr)
     return 0
 
 

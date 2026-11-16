@@ -1,0 +1,18 @@
+{
+ "schema": "verity-pouw/pearl-plus-lean-check/v1",
+ "argv": [
+  "pouw-pearlplus",
+  "--coins",
+  "coins.json",
+  "--draws",
+  "459",
+  "--record",
+  "coin.json",
+  "--over-cap",
+  "uncredited",
+  "pass-00000/manifest.json"
+ ],
+ "rc": 0,
+ "differ": [],
+ "reason": null
+}

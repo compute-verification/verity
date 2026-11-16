@@ -797,7 +797,11 @@ if [ -n "$on" ]; then
 fi
 if [ "$n" -gt "$total" ]; then echo "gpu-lease: $n GPUs asked, $total are gpu-lease's here${on:+ in --on $on}" >&2; exit 2; fi
 mkdir -p "$dir" 2>/dev/null
-[ -w "$dir" ] || { echo "gpu-lease: $dir is not writable" >&2; exit 2; }
+[ -w "$dir" ] || {
+  echo "gpu-lease: $dir is not writable: make it once for every user of this machine's GPUs (sudo mkdir -m 1777 $dir)," \
+    "or name one with GPU_LEASE_DIR; every run sharing these GPUs must use the same one" >&2
+  exit 2
+}
 if [ -n "$cores" ]; then
   for tool in python3 taskset; do
     command -v "$tool" > /dev/null 2>&1 || { echo "gpu-lease: --cores needs $tool, which isn't on PATH here" >&2; exit 2; }

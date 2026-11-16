@@ -379,7 +379,8 @@ def test_the_rule_the_gate_reads(monkeypatch):
     assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/protocols/proofs/flock/prover/", "verity/protocols/proofs/flock/prover/pod/", "verity/protocols/proofs/flock/prover/agreement/",
                                                            "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/proofs/flock/verifier/",
                                                            "verity/circuits/base/", "verity/circuits/lean/",
-                                                           "verity/commitments/lean/", "!README.md", "!PROTOCOL.md"]
+                                                           "verity/commitments/lean/", "!README.md", "!PROTOCOL.md",
+                                                           "!verity/protocols/proofs/flock/verifier/sigma/*"]
     assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
     assert {"verity/protocols/proofs/flock/verifier/VStar/In.lean", "verity/protocols/proofs/recursion/verifier/vstar_cli/"} <= set(tool.CHECK.merge_requires["lean-suites"])
     pin = __import__("json").loads((ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "upstream.json").read_text())
@@ -1175,7 +1176,8 @@ def test_the_agreement_scripts_import_only_the_standard_library_and_each_other()
 
 def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_in_it(tmp_path, monkeypatch):
     """`verity-verify-proof` is built from the Lean package alone: its proofs (`security/Proofs/Flock/`) and any Lake package
-    nested in it are no input, unless the package's lakefile requires something, which keeps everything in.  Nor is the
+    nested in it (`sigma/`) are no input, unless the package requires that one by path, and a change to `sigma/` alone
+    needs no agreement to merge.  Nor is the
     package's `lean-audit.json`, which only the audit reads: that one path, not every file of the name."""
     files = CHECK.tracked_files()
     closure = CHECK.agreement_closure(files)
@@ -1187,12 +1189,19 @@ def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_
     assert [f for f in files if f.startswith("security/Proofs/Flock/")]
     nested = ["verity/protocols/proofs/flock/verifier/lakefile.toml", "verity/protocols/proofs/flock/verifier/nested/lakefile.toml",
               "verity/protocols/proofs/flock/verifier/nested/N.lean"]
+    sigma = [f for f in files if f.startswith("verity/protocols/proofs/flock/verifier/sigma/")]
+    assert "verity/protocols/proofs/flock/verifier/sigma/SigmaDifftest.lean" in sigma and not set(sigma) & set(closure)
+    from research.merge import rule_touches
+    spec2 = importlib.util.spec_from_file_location("check_tool_nested", ROOT / "tools" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(tool)
+    assert rule_touches(list(tool.CHECK.merge_requires["lean-agreement"]), sigma) == []
     (tmp_path / "verity/protocols/proofs/flock/verifier/nested").mkdir(parents=True)
-    (tmp_path / nested[0]).write_text("")
+    (tmp_path / nested[0]).write_text('[[require]]\nname = "x"\npath = "../../../../circuits/base"\n')
     (tmp_path / nested[1]).write_text("")
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     assert CHECK.agreement_closure(nested) == nested[:1]
-    (tmp_path / nested[0]).write_text('[[require]]\nname = "x"\n')
+    (tmp_path / nested[0]).write_text('[[require]]\nname = "nested"\npath = "nested"\n')
     assert CHECK.agreement_closure(nested) == nested
 
 

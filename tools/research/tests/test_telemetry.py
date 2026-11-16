@@ -20,7 +20,7 @@ PKG_ROOT = HERE.parent / "src"          # tools/research/src (research is instal
 from research import settings  # noqa: E402
 from research.telemetry import CLASSIFIER_VERSION, events, job, policy  # noqa: E402
 from research.telemetry.classify import classify  # noqa: E402
-from waits import Gate  # noqa: E402
+from waits import Gate, wait_exit  # noqa: E402
 
 # The r17 campaign's RULES.md seed lives in veritor and keeps moving; compare against it only when asked to.
 SEED = Path(settings.need("RESEARCH_SEED_RULES")) if settings.get("RESEARCH_SEED_RULES") else None
@@ -644,8 +644,6 @@ sys.exit(1)
 
 
 def test_tele_run_kills_what_is_left_of_the_workloads_group_once_its_leader_exits_and_marks_it(tmp_path):
-    import select
-
     from research.telemetry import run as trun
     d = tmp_path / "a"
     d.mkdir()
@@ -653,13 +651,7 @@ def test_tele_run_kills_what_is_left_of_the_workloads_group_once_its_leader_exit
                     sys.executable, "-c", LEAVES_A_WORKER, str(tmp_path / "worker.pid")])
     assert rc == 1
     pid = int((tmp_path / "worker.pid").read_text())
-    try:
-        fd = os.pidfd_open(pid)
-    except ProcessLookupError:
-        fd = None
-    if fd is not None:
-        select.select([fd], [], [])                     # readable once the worker has exited
-        os.close(fd)
+    wait_exit(pid)
     recs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines() if l.strip()]
     (m,) = [x for x in recs if x.get("kind") == "mark" and x.get("name") == "group_outlived_leader"]
     assert m["n"] == 1 and m["pids"][0].startswith(f"{pid} ")
@@ -1337,16 +1329,6 @@ w.wait()
 """
 
 
-def _gone(pid: int) -> None:
-    import select
-    try:
-        fd = os.pidfd_open(pid)
-    except ProcessLookupError:
-        return
-    select.select([fd], [], [])
-    os.close(fd)
-
-
 def test_a_stage_timeout_ends_the_runs_workers_outside_its_group_and_records_them(tmp_path, monkeypatch):
     """The stage clock reads past the timeout once the worker is up, then past the grace: the group's SIGTERM ends the workload, the
     worker that left its group ignores it and is SIGKILLed, and status.json `scope_end` and a `scope_ended` mark say so."""
@@ -1358,7 +1340,7 @@ def test_a_stage_timeout_ends_the_runs_workers_outside_its_group_and_records_the
     rc = trun.main(["--attempt-dir", str(d), "--stage", "t", "--timeout", "50", "--grace", "5", "--no-sampler", "--no-classify", "--",
                     sys.executable, "-c", SETSID_WORKER, str(pidf)])
     pid = int(pidf.read_text())
-    _gone(pid)
+    wait_exit(pid)
     assert rc != 0
     st = json.loads((d / "status.json").read_text())
     assert st["state"] == "cancelled" and st["timed_out"] is True
@@ -1380,7 +1362,7 @@ def test_the_runner_ends_what_a_cancel_left_once_its_grace_is_over_and_records_i
     rc = trun.main(["--attempt-dir", str(d), "--stage", "t", "--no-sampler", "--no-classify", "--",
                     sys.executable, "-c", SETSID_WORKER, str(pidf), req])
     pid = int(pidf.read_text())
-    _gone(pid)
+    wait_exit(pid)
     assert rc == 128 + 9
     recs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines() if l.strip()]
     (seen,) = [x for x in recs if x.get("kind") == "mark" and x.get("name") == "cancel_seen"]
@@ -1410,10 +1392,10 @@ def _cancel_argv(d: Path, pgid: int) -> list[str]:
 def test_a_cancel_whose_runner_is_gone_sigkills_the_runs_setsid_child_itself_and_records_it(tmp_path, monkeypatch, fake_time):
     """No live runner to end the run: the cancel sends the SIGTERM, waits the grace on scope's clock, SIGKILLs the setsid child that
     ignored it and records that in its cancel_result and in status.json `scope_end` (`"by": "cancel"`)."""
+    import select
     import signal
 
     from research.telemetry import cancel
-    from waits import wait_exit
     d = tmp_path / "a"
     d.mkdir()
     gate = Gate(tmp_path / "child.pid")
@@ -1436,10 +1418,8 @@ def test_a_cancel_whose_runner_is_gone_sigkills_the_runs_setsid_child_itself_and
         assert killed == [child], "the cancel SIGKILLs the child that ignored its SIGTERM"
         wait_exit(child)
     finally:
-        try:
+        if select.select([child_fd], [], [], 0)[0] == []:              # still running: a pidfd is readable once it has exited
             signal.pidfd_send_signal(child_fd, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
         os.close(child_fd)
         gate.close()
     result = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines()][-1]
