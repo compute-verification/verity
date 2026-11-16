@@ -86,12 +86,14 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import io
 import json
 import os
 import re
 import shlex
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 from collections import Counter
@@ -365,13 +367,23 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     return out + [part[p] for p in every], None
 
 
-def declaration(repo: Path, tool: str):
-    """The target's own declaration of ``tool``, read from the checkout (not from the commit being merged), or None when the
-    checkout has none."""
+def declaration(repo: Path, tool: str, at: str | None = None):
+    """The target's own declaration of ``tool``, read from the checkout (not from the commit being merged), or with ``at`` from
+    that commit of ``repo``: a checkout left behind `main` declares an earlier layout's paths.  None when it has none."""
     from .store import tools_registry
 
     try:
-        return tools_registry.from_tree(tool, repo)
+        if at is None:
+            return tools_registry.from_tree(tool, repo)
+        module = tools_registry.REGISTRY.get(tool, tool).rpartition(":")[0]
+        with tempfile.TemporaryDirectory(prefix="declaration-") as d:
+            for m in (module, *tools_registry.former_modules(module)):
+                rel = Path(*m.split("."))
+                got = subprocess.run(["git", "archive", "--format=tar", at, "--", str(rel.parent if len(rel.parts) > 1 else rel)],
+                                     cwd=repo, capture_output=True, env=git_env())
+                if got.returncode == 0:
+                    tarfile.open(fileobj=io.BytesIO(got.stdout)).extractall(d, filter="data")
+            return tools_registry.from_tree(tool, Path(d))
     except Exception:  # noqa: BLE001  (a declaration that can't be read is none)
         return None
 
@@ -990,10 +1002,11 @@ def install_push_guard(repo: Path, into: str = "main", tool: str = "check") -> P
     return hook
 
 
-def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, list[str]]:
-    """The steps the target's own declaration of ``tool`` (`Tool.merge_requires`, read from the checkout, not from the commit being
-    merged) requires for the change ``base``..``commit``: {step: the prefixes it touches}."""
-    rules = getattr(declaration(repo, tool), "merge_requires", None)
+def required_steps(repo: Path, base: str, commit: str, tool: str, at: str | None = None) -> dict[str, list[str]]:
+    """The steps the target's own declaration of ``tool`` (`Tool.merge_requires`, read from the checkout, or from commit ``at``
+    when given; never from the commit being merged) requires for the change ``base``..``commit``: {step: the prefixes it
+    touches}."""
+    rules = getattr(declaration(repo, tool, at), "merge_requires", None)
     if not rules:
         return {}
     changed = [p for p in _git(repo, "diff", "--no-renames", "--name-only", "-z", base, commit).stdout.split("\0") if p]   # a rename's source too

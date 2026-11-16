@@ -20,7 +20,8 @@ off_gate = ["circuit-check", "ratchet-gate"]
 # step or task counts as passed (`vqueue_slim.judge`, `World._allowed`), so it holds no candidate and makes no suspect.
 # Expired, it is as if absent. `id`: `suite NAME` (every failure of that suite), `suite NAME::TEST` (one test:
 # its suite then fails for nothing but allowed tests), or `circuit-check CHECK/CODE FAMILY` (one circuit-check failure, the
-# Definition without its statics). Drop an entry once its failure is fixed.
+# Definition without its statics). Drop an entry once its failure is fixed. A recorded check runs each test a `suite NAME::TEST`
+# entry at its base names as a non-strict expected failure (`suites.py --allowances`), so that suite passes and is reused.
 
 [[allow]]
 id = "suite verity-vllm::tests/protocols/test_credit_gate.py::test_a_period_open_without_draw_k_is_refused"

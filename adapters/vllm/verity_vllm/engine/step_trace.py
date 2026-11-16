@@ -40,7 +40,7 @@ from typing import IO, Any
 from verity_vllm.engine import handle, scheduler_step
 from verity_vllm.engine.runner_step import Rank
 
-__all__ = ["SCHEMA", "SERVED", "StepTrace", "load", "scheduler_config", "step_geometry", "steps"]
+__all__ = ["SCHEMA", "SERVED", "StepTrace", "load", "parse", "scheduler_config", "step_geometry", "steps"]
 
 #: `records.schema_ids.STEP_TRACE_SCHEMA`'s string, written here: suites outside the adapter list the files this module
 #: imports one by one (`benchmarks/network_traces` and `benchmarks/serve_tax`, their `[tool.verity.tests] inputs`)
@@ -314,7 +314,13 @@ class _Observes(scheduler_step.Part):
 
 def load(path: str | Path) -> list[dict[str, Any]]:
     """A step trace's records, refused unless it opens with a `SCHEMA` header."""
-    recs = [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
+    return parse(Path(path).read_text().splitlines(), path)
+
+
+def parse(lines: Iterable[str | bytes], path: str | Path) -> list[dict[str, Any]]:
+    """The records of the step trace ``path`` whose lines are ``lines``, refused unless it opens with a `SCHEMA`
+    header."""
+    recs = [json.loads(line) for line in lines if line.strip()]
     if not recs or recs[0].get("kind") != "header" or recs[0].get("schema") != SCHEMA:
         raise ValueError(f"{path}: not a {SCHEMA} step trace (its first record is {recs[0] if recs else None!r})")
     return recs
