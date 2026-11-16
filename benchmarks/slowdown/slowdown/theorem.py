@@ -1,12 +1,4 @@
-"""The slowdown a bound gives: the malicious developer's GPU-hours over the reference training algorithm's at its MFU,
-`MFU₀`, at least 1 (Lean's `hardwareMultiple`).
-
-`multiple_bound(MFU₀, s, x)` is `max(1, 1/(s + a x))`, with the unregistered leaves `s` training like the reference and
-the registered share `x` converted into the reference's work at `a`: 1 under reference efficiency (`GLOSSARY.md`'s task
-assumption: no run uses the hardware more efficiently than the reference, so free compute counts at `MFU₀`), and
-`1/MFU₀` without it, free compute at peak, which is Lean's `remoteSlowdown` (`Slowdown.Guarantees.SlowdownRemote` states it
-for the remote composition).
-"""
+"""The slowdown a bound gives, Lean's `hardwareMultiple`."""
 
 from __future__ import annotations
 

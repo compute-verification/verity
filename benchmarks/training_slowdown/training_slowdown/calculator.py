@@ -60,8 +60,7 @@ NO_GATES = "unmeasured: neither the run nor the step's record states the circuit
 
 @cache
 def _calculator():
-    """The calculator's package's `hardware` and `params`, and its registry, with its directory leading the import
-    path."""
+    """`(hardware, params, registry)` of the calculator, with its directory leading the import path."""
     if sys.path[0] != str(CALCULATOR):
         sys.path.insert(0, str(CALCULATOR))
     from slowdown import hardware, params
