@@ -292,7 +292,9 @@ hashes with `String.hash`, which the walk blocks. -/
 
 theorem dup_params_nil (ps : Array (String × Ty)) (n : Nat) (h : ps = #[]) (hn : n = 0) :
     ((Array.foldl (fun s p => s.insert p.1) (∅ : Std.HashSet String) ps 0 n).size != n) = false := by
-  subst h hn; rfl
+  subst h hn
+  show ((∅ : Std.HashSet String).size != 0) = false
+  simp
 
 theorem dup_params_one (ps : Array (String × Ty)) (n : Nat) (h : ps.size = 1) (hn : n = 1) :
     ((Array.foldl (fun s p => s.insert p.1) (∅ : Std.HashSet String) ps 0 n).size != n) = false := by
