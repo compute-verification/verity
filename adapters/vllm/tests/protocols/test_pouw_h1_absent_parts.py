@@ -245,7 +245,7 @@ def _sampled(record: dict[str, Any]) -> tuple[Any, Any]:
 
 def _refusal(why: str) -> tuple[None, tuple[str, str]]:
     """The refusal of a record whose sampling coin cannot be read, for the reason `why`."""
-    return None, ("draw", f"the window's draw coin is malformed ({why})")
+    return None, ("draw", f"the window's sampling coin is malformed ({why})")
 
 
 @pytest.mark.parametrize("record", [{}, {"commitment": None}, {"commitment": []}, {"commitment": 0}],

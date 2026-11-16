@@ -1396,7 +1396,7 @@ def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path,
                                      pins=[ledger.pins_path], main=CH.MAIN, sample_directory=second.draw.directory) is None
     assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], later, first.key, pins=[ledger.pins_path],
                                      main=CH.MAIN, sample_directory=first.draw.directory).startswith(
-        "the window's draw session is not trusted: ")
+        "the window's sample session is not trusted: ")
     assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], w, first.key, pins=[ledger.pins_path],
                                      main=CH.MAIN) == (
         "the challenger's session is not trusted: the challenger's record.json is not the one the auditor's ledger sealed "

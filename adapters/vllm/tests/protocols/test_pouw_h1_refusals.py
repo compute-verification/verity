@@ -608,7 +608,7 @@ def test_the_samples_k_is_the_one_given_or_the_serve_dirs_periods(tmp_path):
             period.write_text(text)
         with pytest.raises(Refused) as refused:
             DN.sample_k(tmp_path, None)
-        assert str(refused.value) == (f"no draw K: give --k, or a serve dir whose {DN.PERIOD} has the open's draw_k "
+        assert str(refused.value) == (f"no sample K: give --k, or a serve dir whose {DN.PERIOD} has the open's draw_k "
                                       f"({what})")
     period.write_text('{"draw_k": 9}')
     assert DN.sample_k(tmp_path, None) == 9 and DN.sample_k(tmp_path, 7) == 7
@@ -649,15 +649,15 @@ def test_a_windows_sample_is_held_to_its_root_its_parts_and_its_coin(served):
     host, honest, _record = served
     sample = honest["draw"]
     for root in ("zz", sample["root"].upper(), None):
-        assert _trusted(host, {**honest, "draw": {**sample, "root": root}}) == "the window's draw root is not 128 lowercase hex"
-    assert _trusted(host, {**honest, "draw": None}) == "the window's draw root is not 128 lowercase hex"
+        assert _trusted(host, {**honest, "draw": {**sample, "root": root}}) == "the window's sample root is not 128 lowercase hex"
+    assert _trusted(host, {**honest, "draw": None}) == "the window's sample root is not 128 lowercase hex"
     for edit, what in (({"draw": {k: v for k, v in sample.items() if k != "receipts"}}, "'receipts'"),
                        ({"calls_root": "zz"}, "non-hexadecimal number found in fromhex() arg at position 0"),
                        ({"calls_root": None}, "fromhex() argument must be str, not None")):
-        assert _trusted(host, {**honest, **edit}) == f"the window's draw root is malformed ({what})"
+        assert _trusted(host, {**honest, **edit}) == f"the window's sample root is malformed ({what})"
     for coin in ({"bad": 1}, None):
         assert _trusted(host, {**honest, "draw": {**sample, "coin": coin}}) == (
-            f"the window's draw coin is malformed ({NO_OPENING})")
+            f"the window's sampling coin is malformed ({NO_OPENING})")
     signed, root = host.draw.challenger.commitment, bytes.fromhex(sample["root"])
     assert PHD.sample_reason(honest, signed, (root,)) is None
     for received in ((bytes(64),), (root, root), (bytes(64), root)):
@@ -677,14 +677,14 @@ def test_a_sample_session_of_another_layout_is_refused(tmp_path, monkeypatch, fa
                                 CH.session_id(seed))
     commits, host = _salted(tmp_path, monkeypatch, "own", seed, honest, opens, opens)
     assert _trusted(host, commits) is None
-    monkeypatch.setattr(Wd, "draw_challenger", lambda epoch, entropy: LC.LiveChallenger(Wd.LIVE_SCHEME, epoch, families,
+    monkeypatch.setattr(Wd, "sample_challenger", lambda epoch, entropy: LC.LiveChallenger(Wd.LIVE_SCHEME, epoch, families,
                                                                                          entropy))
     seed = 3
     opens = PS.window_open_root(bytes.fromhex(honest["weights_root"]), bytes.fromhex(honest["requests_root"]),
                                 CH.session_id(seed))
     commits, host = _salted(tmp_path, monkeypatch, "wide", seed, honest, opens, opens)
     assert host.draw.challenger.commitment.families == families
-    assert _trusted(host, commits) == ("the window's draw session's signed coins: the coin commitment's coins are not a "
+    assert _trusted(host, commits) == ("the window's sample session's signed coins: the coin commitment's coins are not a "
                                        "live window's draw session's: its draw coin alone")
 
 
@@ -710,7 +710,7 @@ def test_the_sample_sessions_files_are_the_ledgers_refusal_where_it_pins_no_sess
     refused = PHD.sample_files(honest, unpinned, fetch, PHC.lms_verify)
     assert isinstance(refused, CoinError) and asked == [host.draw.session_id]
     assert PHD.sample_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), refused,
-                                   PHC.lms_verify) == ("the window's draw session is not one the ledger opens on its draw "
+                                   PHC.lms_verify) == ("the window's sample session is not one the ledger opens on its sample "
                                                        f"root: {refused}")
     assert PHD.sample_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), None,
                                    PHC.lms_verify) == PHD.NO_SAMPLE_SESSION
@@ -1265,7 +1265,7 @@ def test_a_sample_session_the_gate_reserved_plain_is_refused_and_a_withheld_ones
                    {"session": sid, "seq": 3, "withheld": 1}):
         with pytest.raises(CoinError) as refused:
             PHW.reserve_sample(gate(answer), "vy-nebius-1")
-        assert str(refused.value) == f"the gate reserved draw session {sid} plain, not withheld"
+        assert str(refused.value) == f"the gate reserved sample session {sid} plain, not withheld"
     reserved = {"session": sid, "seq": 3, "peer": "vy-nebius-1", "withheld": True, "scheme": PHC.SCHEME}
     assert PHW.reserve_sample(gate(reserved), "vy-nebius-1") == {"session": sid, "seq": 3, "peer": "vy-nebius-1"}
     assert asked == [("reserve", "--peer", "vy-nebius-1", "--scheme", PHC.SCHEME, "--families",
@@ -1298,9 +1298,9 @@ def test_a_sample_session_is_opened_once_on_the_windows_sample_root_and_a_retry_
     sample = PHW.SampleSession("pouw:test", AUDITOR, {"session": sid}, gate)
     with pytest.raises(CoinError) as refused:
         sample.record(root)
-    assert str(refused.value) == (f"pouw:test: the window's draw session {sid}: the gate's answer is not draw session "
-                                  f"{sid} opened on the draw root {root.hex()[:16]}...")
-    with pytest.raises(CoinError, match="^the window's draw session is opened once: a retry never "):
+    assert str(refused.value) == (f"pouw:test: the window's sample session {sid}: the gate's answer is not sample session "
+                                  f"{sid} opened on the sample root {root.hex()[:16]}...")
+    with pytest.raises(CoinError, match="^the window's sample session is opened once: a retry never "):
         sample.record(root)
     assert asked == [(sid, root.hex(), True)] and tries == []
     assert sample.session is None and sample.commitment is None
@@ -1308,7 +1308,7 @@ def test_a_sample_session_is_opened_once_on_the_windows_sample_root_and_a_retry_
 
 SHOWN = ("draw session {sid}'s challenger answered its hello with a coin commitment: a draw session is withheld, its "
          "commitment released only at its close")
-ANOTHER_LAYOUT = "draw session {sid}'s layout is not a draw session's, its draw coin alone"
+ANOTHER_LAYOUT = "sample session {sid}'s layout is not a sample session's, its sampling coin alone"
 
 
 @pytest.mark.parametrize("client,said", [
@@ -1494,7 +1494,7 @@ def test_a_windows_record_is_read_under_its_declared_programs_layout_and_only_wi
     without: list[dict[str, Any]] = [{}, {"served": None}, {"served": [{"value": "v"}]}, {"served": {"refused": []}},
                                      {"served": {"entries": {"value": "v"}}}]
     for trees in without:
-        assert refusal(trees) == "the window's record names no served trees: drawn rebuilds the values they registered"
+        assert refusal(trees) == "the window's record names no served trees: sampled rebuilds the values they registered"
     refused = ["call 0: its weight is not its 32 × 64 int8 codes and 32 scales"]
     assert refusal({"served": {"entries": [], "refused": refused}}) == f"the window's served trees were refused: {refused}"
 
@@ -1747,11 +1747,11 @@ def test_a_saved_window_keeps_a_sampling_coin_held_in_process_or_none_and_an_ask
         run.sample, session.gate = session, shut
         with pytest.raises(CoinError) as refused:
             session.record(bytes(64))
-        assert str(refused.value) == (f"{session.entry}: the window's draw session {session.reserved['session']}: the "
+        assert str(refused.value) == (f"{session.entry}: the window's sample session {session.reserved['session']}: the "
                                       "gate is shut")
         with pytest.raises(ValueError) as unsaved:
             HO.suspend(run, tmp_path / "asked")
-        assert str(unsaved.value) == f"{session.entry}: a window hands off before its draw session opens"
+        assert str(unsaved.value) == f"{session.entry}: a window hands off before its sample session opens"
         assert not (tmp_path / "asked").exists()
     finally:
         for client in clients:
@@ -2123,12 +2123,12 @@ def test_a_windows_sampled_leaves_are_staged_only_in_a_lanes_shape_and_under_its
         return str(refused.value)
     off = {"tile": (16, 32)}
     why = CR.lanes_shape(off, shape, k)
-    assert why is not None and refusal({"layout": off}) == f"K = {k}'s drawn leaves: {why}"
+    assert why is not None and refusal({"layout": off}) == f"K = {k}'s sampled leaves: {why}"
     assert CR.lanes_shape({"tile": PH.TILE}, shape, k) is None
     named: list[Any] = [None, "a root", {}, {"root": 7}]
     records: list[dict[str, Any]] = [{}, *({"draw": sample} for sample in named)]
     for record in records:
-        assert refusal({"layout": {"tile": PH.TILE}, **record}) == ("the window's record names no draw root, under "
+        assert refusal({"layout": {"tile": PH.TILE}, **record}) == ("the window's record names no sample root, under "
                                                                      "which a leaf's partials are committed")
     assert list(tmp_path.iterdir()) == []
 
@@ -2584,7 +2584,7 @@ def test_a_windows_calls_are_staged_only_on_cores_sample_and_its_programs_circui
     assert DN.run("stage", a) == 1
     said = capsys.readouterr().err
     assert said.startswith("REFUSED: core ") and said.endswith(
-        f" nothing from the window: draw: the window's draw coin is malformed ({NO_OPENING})\n"), said
+        f" nothing from the window: draw: the window's sampling coin is malformed ({NO_OPENING})\n"), said
     win["record"] = {"commitment": {"draw": {"coin": opening, "root": registered, "receipts": receipts}}}
     assert DN.run("stage", a) == 1
     assert capsys.readouterr().err == (f"REFUSED: --circuits' manifest is for Program {'00' * 8}..., not the window's "

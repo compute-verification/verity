@@ -14,7 +14,7 @@ statement's proof files and what credit builds from the window's entries, root, 
 input is another key. The memo is the verifier's own: in memory, or a directory in the verifier's scratch (0700, each
 answer a 0600 file), never the serve dir or anywhere the prover writes. ``--lean-answers DIR`` hands a memo directory
 to credit's window check (``pouw_h1_gpu --check-challenger``) and to the period's (``pouw_piece.py period``), so the
-period takes the window check's answers by key; ``sampled.py check`` (benchmarks/pouw/h1_prove) keeps its memo in memory.
+period takes the window check's answers by key; ``drawn.py check`` (benchmarks/pouw/h1_prove) keeps its memo in memory.
 """
 from __future__ import annotations
 

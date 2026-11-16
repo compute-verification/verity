@@ -1,6 +1,6 @@
 """A served H1 window's sampled proof blocks staged as Flock statements (a J10-R K's a statement a call, a lanes-form K's each
 unit's lanes and combine), and the statements file core's credit verifies
-(``--statements``, `credit.STATEMENT_KEYS`), from the serve dir and the prover's own state. ``benchmarks/pouw/h1_prove/sampled.py``
+(``--statements``, `credit.STATEMENT_KEYS`), from the serve dir and the prover's own state. ``benchmarks/pouw/h1_prove/drawn.py``
 is its CLI, which reads ``--checkpoint`` with the live challenger's model registry (``checkpoint_weights``), binds
 ``check`` to credit's own verification (``verified``) and ``stage`` to the stagers on Flock's Python (``recomposed``,
 ``file_stager``: ``lowering/stagers.py``), running `run` on its arguments.
@@ -58,7 +58,7 @@ under ``leaves`` beside the record (``produced``) and each leaf Program's descri
 ``<file>.program.json``).
 
 ``statements``: after each W/c<call>/ and W/u<unit>-<statement>/ is proved (`hidden_zk/job.sh`'s ``session``: exactly
-one session, all its instances sampled, its prover under the ZK server on those two files, ``h1_prove/sampled.sh``), the
+one session, all its instances sampled, its prover under the ZK server on those two files, ``h1_prove/drawn.sh``), the
 statements file: each call's `challenger.statement` (circuit, pub.bin, its
 session), and with leaves the lanes evidence (`credit.LANES_KEYS`: ``leaf_programs``, ``produced`` and those statements
 with each leaf statement's ``unit`` and ``statement``).
@@ -332,7 +332,7 @@ def linear_weights(linears: list[tuple[str, int, int]], k: int, checkpoint: Path
     if checkpoint is None:
         raise Refused("b/<K>'s rows are the served model's weights: give --checkpoint (its safetensors) or --weights")
     if read is None:
-        raise Refused("--checkpoint is read by benchmarks/pouw/h1_prove/sampled.py's reader: run that CLI, or give --weights")
+        raise Refused("--checkpoint is read by benchmarks/pouw/h1_prove/drawn.py's reader: run that CLI, or give --weights")
     return read(checkpoint, linears, k)
 
 
@@ -463,11 +463,11 @@ def receipt_table(win: dict, key: bytes, k: int, call: int, reg: dict, values: d
 
 def given(a: Any, name: str) -> Any:
     """`a`'s stager constructor `name` (``recomposed``, `Recomposed`, or ``file_stager``, `FileStagerOf`), which
-    ``benchmarks/pouw/h1_prove/sampled.py`` binds: refused when the caller gave none."""
+    ``benchmarks/pouw/h1_prove/drawn.py`` binds: refused when the caller gave none."""
     made = getattr(a, name, None)
     if made is None:
         raise Refused(f"stage's {name} is built on Flock's Python, which verity does not import: "
-                      "benchmarks/pouw/h1_prove/sampled.py binds it; run that CLI")
+                      "benchmarks/pouw/h1_prove/drawn.py binds it; run that CLI")
     return made
 
 
@@ -712,7 +712,7 @@ def statements(a: Any) -> int:
 
 def check(a: Any) -> int:
     if a.verified is None:
-        raise Refused("check is credit's own verification, which benchmarks/pouw/h1_prove/sampled.py binds: run that CLI")
+        raise Refused("check is credit's own verification, which benchmarks/pouw/h1_prove/drawn.py binds: run that CLI")
     serve_dir = Path(a.serve_dir)
     win = window_of(serve_dir, a.window)
     sampled = sampled_calls(win, sample_k(serve_dir, a.k))

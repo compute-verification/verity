@@ -227,7 +227,7 @@ def test_a_window_whose_prover_state_isnt_written_fails_visibly_and_refuses_its_
             raise OSError(28, "No space left on device")
         return savez(path, *arrays)
     monkeypatch.setattr(PV, "_savez", full)
-    monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
+    monkeypatch.setattr(PHC, "sample_k", lambda layout: 1)
     srv, draws = _Server(monkeypatch), SL.Draws((SH.DRAWER,))
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
                        prover=tmp_path / "prover")
@@ -708,7 +708,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_sampled_r
         sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
         k = _PeriodAuditor.K
     else:
-        monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
+        monkeypatch.setattr(PHC, "sample_k", lambda layout: 1)
         k = 1
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
                        closer=closer)

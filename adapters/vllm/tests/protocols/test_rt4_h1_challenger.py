@@ -762,8 +762,8 @@ def test_a_windows_own_session_holds_no_sampling_coin_and_its_sampling_session_i
     assert sample is not None
     assert host.ended() is None and sample.ended() is None and host.trusted(honest) is None
     assert sample.window == {"root": honest["draw"]["root"]} and honest["draw_session"]["session"] == DRAW_NAME
-    assert (host.trusted(honest, draw_root=probe.hex()) or "").startswith("the window's draw session is not trusted: ")
-    assert host.trusted(honest, withheld=False) == f"the window's draw session: {LC.WITHHELD}"
+    assert (host.trusted(honest, draw_root=probe.hex()) or "").startswith("the window's sample session is not trusted: ")
+    assert host.trusted(honest, withheld=False) == f"the window's sample session: {LC.WITHHELD}"
 
 
 def _draw_of(host, root: bytes) -> LC.LiveOpening:
@@ -790,7 +790,7 @@ def test_a_sample_from_another_family_off_its_root_or_never_opened_is_refused(tm
         f"the window's draw coin: coin is the epoch's {Wd.ROUND} coin 0, not its {Wd.SAMPLE} coin 0")
     bent = {**honest, "draw": {**honest["draw"], "receipts": "ee" * 64}}
     assert host.trusted(bent) == (
-        "the window's draw root is not over its manifest, its last round's receipts and every round's root and coin")
+        "the window's sample root is not over its manifest, its last round's receipts and every round's root and coin")
     quiet = _Session(tmp_path, monkeypatch, SB, leaf=2, seed=15, reserved=True)
     opened = PS.window_open_root(bytes.fromhex(honest["weights_root"]), bytes.fromhex(honest["requests_root"]), SB)
     quiet.open(SB, opened.hex())
@@ -808,7 +808,7 @@ def test_a_sample_from_another_family_off_its_root_or_never_opened_is_refused(tm
               "session": {**honest["session"], "session": SB, "root": opened.hex()},
               "rounds": [{**r, "coin": o.to_json()} for r, o in zip(honest["rounds"], rounds)]}
     assert quiet.trusted(closed) == (
-        "the draw session closed with no draw coin opened, so the window has no draw of the challenger's")
+        "the sample session closed with no sampling coin opened, so the window has no sample of the challenger's")
 
 
 def test_round_roots_commit_the_windows_a_and_z_and_the_receipts_before_them(monkeypatch):
