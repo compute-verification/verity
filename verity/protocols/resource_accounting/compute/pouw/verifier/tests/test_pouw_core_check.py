@@ -743,7 +743,7 @@ ROUNDS_EXPECT = {
     "rewritten": ("rounds", "the round roots are not the roots the challenger's log shows it received, in order"),
     "roots-form": ("rounds", "the round roots are not"),
     "openings-list": ("rounds", "the round coins are not a list"), "openings-form": ("coin", ": a live coin opening is"),
-    "twice": ("coin", "is opened twice: a retry never resamples"), "early": ("coin", "was opened before its root was recorded"),
+    "twice": ("coin", "is opened twice: a retry never redraws"), "early": ("coin", "was opened before its root was recorded"),
     "early-root": ("coin", "was opened before its root was recorded"), "never": ("coin", "was never opened"),
     "swapped": ("coin", ": coin is the epoch's pouw/round coin 1, not its pouw/round coin 0"),
     "after": ("coin", ": coin was not opened after what the verifier recorded"),

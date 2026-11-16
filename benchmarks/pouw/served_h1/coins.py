@@ -376,7 +376,7 @@ class RoundPipe:
         root = bytes(root)
         with self._cv:
             if self._error is not None:
-                raise Ch.CoinError(f"the challenger's session ended ({self._error}): a retry never resamples")
+                raise Ch.CoinError(f"the challenger's session ended ({self._error}): a retry never redraws")
             if self._closed:
                 raise Ch.CoinError("the round coins are closed")
             if len(self.roots) == self.commitment.family(self.label):
@@ -410,7 +410,7 @@ class RoundPipe:
             if i in self._got:
                 return self._got[i]
             if self._error is not None:
-                raise Ch.CoinError(f"the challenger's session ended ({self._error}): a retry never resamples")
+                raise Ch.CoinError(f"the challenger's session ended ({self._error}): a retry never redraws")
             return None
 
     def sample(self, after: bytes) -> tuple[Ch.LiveOpening, float]:
@@ -422,7 +422,7 @@ class RoundPipe:
             while self._pending and self._error is None:
                 self._cv.wait()
             if self._error is not None:
-                raise Ch.CoinError(f"the challenger's session ended ({self._error}): a retry never resamples")
+                raise Ch.CoinError(f"the challenger's session ended ({self._error}): a retry never redraws")
             if self._closed:
                 raise Ch.CoinError("the round coins are closed")
             at = self._clock()

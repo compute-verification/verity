@@ -151,7 +151,7 @@ class Challenger:
         if label not in LABELS:
             raise DomainError(f"an epoch's coins are {LABELS}")
         if label in self._opened:
-            raise DomainError(f"epoch {self.epoch}'s {label!r} coin is already open: a retry never resamples")
+            raise DomainError(f"epoch {self.epoch}'s {label!r} coin is already open: a retry never redraws")
         self._opened.add(label)
         coin, salt = self._coins[label]
         return CoinOpening(self.epoch, label, bytes(after), coin, salt, self._tree.open(LABELS.index(label)).path)

@@ -337,9 +337,9 @@ def test_the_tile_layout_proves_each_sampled_tile_with_its_rows():
     assert [(s.role, s.work) for s in lay.strata] == [("row_a", 0), ("tile", 4 * 1000)] and lay.tile_work() == 1000
     for design in (plan.CountSamplingDesign(3), plan.WorkSamplingDesign(2)):
         p = plan.sample(derive(bytes(32), plan.SAMPLE_DOMAIN, {"test": "pc4"}), lay, design)
-        sampled = [u for u in p.drawn if us[u].role == "tile"]
+        sampled = [u for u in p.sampled if us[u].role == "tile"]
         assert sampled and p.openings == () and p.proved_y == ()
-        assert set(p.proved) == set(p.drawn) | {i for t in sampled for i in lay.closure[t]}
+        assert set(p.proved) == set(p.sampled) | {i for t in sampled for i in lay.closure[t]}
         assert p.proved_b == tuple(sorted({j for t in sampled for j in lay.b_rows[t]}))
     assert plan.tile_layout(replace(HIDDEN, hidden=False), 1000).closure == lay.closure
 

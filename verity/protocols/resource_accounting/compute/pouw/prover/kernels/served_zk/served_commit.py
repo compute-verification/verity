@@ -817,7 +817,7 @@ class Recorded:
 
     def open(self, label: str, after: bytes) -> CoinOpening:
         if label in self._opened:
-            raise DomainError(f"epoch {self.commitment.epoch}'s {label!r} coin is already open: a retry never resamples")
+            raise DomainError(f"epoch {self.commitment.epoch}'s {label!r} coin is already open: a retry never redraws")
         self._opened.add(label)
         o = self._openings.get(label)
         if o is None or o.after != after:

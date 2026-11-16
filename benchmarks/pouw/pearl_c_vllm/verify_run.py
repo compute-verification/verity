@@ -524,10 +524,10 @@ NODE_CLAIM = "uniform/io-getrandombytes"
 ASKED = ".asked"
 #: why `verify_passes` refuses passes other than those its recorded coin was flipped on
 AFTER_COIN = ("after-coin", "the retained passes or their records are not those the verifier's coin was drawn on: a "
-              "retention change or a give-up after the coin is refused, and a retry never resamples")
+              "retention change or a give-up after the coin is refused, and a retry never redraws")
 #: why `verify_passes` refuses a run whose sample was asked for and never recorded
 ASKED_ONCE = ("asked-once", "the verifier's sample was asked for and never recorded (a sample that failed or was cut short), "
-              "and a retry never resamples")
+              "and a retry never redraws")
 
 
 def node_sample(root: bytes, asking: Any) -> tuple[bytes, dict]:
@@ -936,7 +936,7 @@ def verify_passes(paths: list[Path], samples: int, jobs: int, commit: str, coins
         else:
             try:
                 source, drew = sample(root, asking)
-            except Exception as ex:  # noqa: BLE001 - a sample that fails is a visible rejection, never resampled
+            except Exception as ex:  # noqa: BLE001 - a sample that fails is a visible rejection, never redrawn
                 return reject(f"the verifier's sample: {type(ex).__name__}: {ex}")
         if record is not None:
             record.parent.mkdir(parents=True, exist_ok=True)

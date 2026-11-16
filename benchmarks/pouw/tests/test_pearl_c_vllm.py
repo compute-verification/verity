@@ -2223,7 +2223,7 @@ def test_the_run_verdict_takes_its_source_from_its_sample_once_and_never_asks_a_
     """``verify_passes``' ``sample(C, asking)``: its source is the sample's coin on the run's commitment C, recorded (v2) with
     the sample before any replay and reused by a later verdict without sampling; a sample that fails before it asks rejects
     and may be asked again, while one that fails after ``asking`` marked the record is refused (``asked-once``) and
-    never resampled."""
+    never redrawn."""
     VP = load("pearl_c_vllm_volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins = published(path)

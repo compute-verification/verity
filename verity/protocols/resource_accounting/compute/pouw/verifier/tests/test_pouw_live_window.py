@@ -50,10 +50,10 @@ def test_an_honest_window_is_accepted_round_by_round():
 
 def test_a_round_coin_opened_twice_is_refused():
     ch, roots, ops = window()
-    with pytest.raises(Ch.CoinError, match="pouw/round coin 1 is already open: a retry never resamples"):
+    with pytest.raises(Ch.CoinError, match="pouw/round coin 1 is already open: a retry never redraws"):
         ch.open(Wd.ROUND, 1, roots[1])
     assert Wd.rounds_reason(ch.commitment, roots, [ops[0], ops[1], ops[1], ops[2]]) == \
-        "the epoch's pouw/round coin 1 is opened twice: a retry never resamples"
+        "the epoch's pouw/round coin 1 is opened twice: a retry never redraws"
 
 
 def test_a_round_coin_opened_before_its_rounds_root_was_recorded_is_refused():

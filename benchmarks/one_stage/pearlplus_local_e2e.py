@@ -387,7 +387,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
           and report["draw"]["from"] == "challenger" and dsid is not None
           and "one session a root" in str(control["gate_refused"]) and control["row"] == report["row"])
     print(f"E2E {'ok' if ok else 'FAILED'}: row {report['row']['verdict']} ({report['row'].get('protocol')}: "
-          f"{report['row'].get('why')}), its draw "
+          f"{report['row'].get('why')}), its sample "
           f"session {dsid}; a second draw on the run's commitment: {control['gate_refused']}; the row then "
           f"{control['row']['verdict']}", flush=True)
     return 0 if ok else 1

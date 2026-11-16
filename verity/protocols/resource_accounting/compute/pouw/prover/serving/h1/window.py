@@ -378,7 +378,7 @@ class SampleSession:
         if self.reserved is None or self.gate is None:
             raise CoinError(NO_SAMPLE_SESSION)
         if self._asked:
-            raise CoinError("the window's sample session is opened once: a retry never resamples")
+            raise CoinError("the window's sample session is opened once: a retry never redraws")
         self._asked = True
         sid = self.reserved["session"]
         try:

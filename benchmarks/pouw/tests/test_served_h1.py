@@ -772,7 +772,7 @@ def test_round_coins_pipelined_refuse_every_later_round_after_a_refusal_or_a_bad
     assert pipe.opening(0).after == roots[0]
     with pytest.raises(CO.Ch.CoinError, match=why):
         pipe.opening(1)
-    with pytest.raises(CO.Ch.CoinError, match="a retry never resamples"):
+    with pytest.raises(CO.Ch.CoinError, match="a retry never redraws"):
         pipe.send(roots[2])
     assert pipe.roots == roots[:2] and len(pipe.openings) == 1
     pipe.close()
