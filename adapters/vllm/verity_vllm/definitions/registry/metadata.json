@@ -1,0 +1,100 @@
+{
+  "format": "verity/metadata/v0",
+  "entries": [
+    {
+      "key": "def:AllGather2_v1",
+      "name": "All-gather",
+      "description": "Joins this rank’s slice with the other rank’s."
+    },
+    {
+      "key": "def:AllReduce2_v1",
+      "name": "All-reduce",
+      "description": "Sums this rank’s partial result with the other rank’s."
+    },
+    {
+      "key": "def:BiasAdd_v1",
+      "name": "Bias add"
+    },
+    {
+      "key": "def:Fp8GroupQuant_v1",
+      "name": "Quantize to FP8",
+      "description": "Quantizes the activations in groups, each with its own scale, for the FP8 GEMM that reads them."
+    },
+    {
+      "key": "def:GeluTanhMul_v1",
+      "name": "GELU · mul"
+    },
+    {
+      "key": "def:Gemm_v1",
+      "name": "GEMM"
+    },
+    {
+      "key": "def:GumbelTopPTokenSelect_v1",
+      "name": "Top-p sampling"
+    },
+    {
+      "key": "def:MeanTriton_v1",
+      "name": "Mean"
+    },
+    {
+      "key": "def:MoeExpertGemmW_v1",
+      "name": "Expert down, weighted"
+    },
+    {
+      "key": "def:MoeExpertGemm_v1",
+      "name": "Expert gate and up"
+    },
+    {
+      "key": "def:MoeRouterTopKNorm_v1",
+      "name": "Route to experts, normalized"
+    },
+    {
+      "key": "def:MoeRouterTopK_v1",
+      "name": "Route to experts"
+    },
+    {
+      "key": "def:MoeSum_v1",
+      "name": "Sum experts"
+    },
+    {
+      "key": "def:NarrowF32ToBf16_v1",
+      "name": "Round to BF16"
+    },
+    {
+      "key": "def:RsqrtF32_v1",
+      "name": "Reciprocal square root"
+    },
+    {
+      "key": "def:ScaleRowBf16_v1",
+      "name": "Scale"
+    },
+    {
+      "key": "def:ScaleRowF32_v1",
+      "name": "Scale"
+    },
+    {
+      "key": "def:ScaledMmFp8Block_v1",
+      "name": "FP8 GEMM"
+    },
+    {
+      "key": "def:SiluMul_v1",
+      "name": "SiLU · mul"
+    },
+    {
+      "key": "def:SiluMul_v2",
+      "name": "SiLU · mul"
+    },
+    {
+      "key": "def:SquareBf16_v1",
+      "name": "Square"
+    },
+    {
+      "key": "def:SquareF32_v1",
+      "name": "Square"
+    },
+    {
+      "key": "def:TokenSelect_v1",
+      "name": "Greedy token select"
+    }
+  ]
+}

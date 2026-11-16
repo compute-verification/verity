@@ -1,0 +1,1 @@
+{"schema":"vllm-vu-set/v1/index","set":"attention-head-fa2-d64-bn128","columns":["id","vu","request","engine_step","op_path","row","phase","source","sub"],"rows":[[0,48,"r0",0,"model.layers.0.self_attn.attn",128,"prefill","committed",{"head":0,"kv_head":0,"T":129,"NH":32,"KVH":8}]]}

@@ -1,0 +1,47 @@
+# The challenger's stream's docket as a parameter or local: `registration` becomes `docket` in `service.Stream`'s
+# `select`, `_placed` and the entry table's methods, the test challenger's (`fake_challenger`) and the parties' tests'
+# helper. The attributes `Draw.registration` and `_Entry.registration`, the op's key `"registration"` and the wire's
+# message `Registration` keep their word.
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/service.py"]
+[words_in.words]
+"(order, registration" = "(order, docket"
+"(registration" = "(docket"
+"= registration" = "= docket"
+"[registration" = "[docket"
+"law, registration" = "law, docket"
+"obj, registration" = "obj, docket"
+"registration =" = "docket ="
+"registration, \"" = "docket, \""
+"registration, _" = "docket, _"
+"registration, draw in" = "docket, draw in"
+"registration: str" = "docket: str"
+"self, registration" = "self, docket"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/tests/fake_challenger.py"]
+[words_in.words]
+"(registration" = "(docket"
+"registration," = "docket,"
+"registration:" = "docket:"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/tests/test_parties.py"]
+[words_in.words]
+"registration(" = "docket("
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/tests/test_spot_parties.py"]
+[words_in.words]
+"registration(" = "docket("
+
+[keep]
+patterns = []
+strings = []
+
+[rewrite]
+exclude = ["**/*.json", "**/*.jsonl", "**/*.toml", "**/*.lean", "**/fixtures/**", "tools/move/**",
+           "tools/research/src/research/store/moves.json"]

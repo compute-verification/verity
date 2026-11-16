@@ -1,0 +1,1124 @@
+{
+ "schema": "verity-gen/quarantine/v1",
+ "definitions": {
+  "ln/LayerNormAten@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.ln.layer_norm_aten_difftest",
+   "semantic_id": "ln/LayerNormAten@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 768,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=768,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 768,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.777
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 768,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "zeros",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=768,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 768,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.189
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 768,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "max",
+      "max",
+      "max"
+     ],
+     "spec": "LayerNormAten_v1{N=768,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 768,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.173
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 768,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "subnormal",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=768,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 768,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.255
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 768,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "alternating",
+      "alternating",
+      "alternating"
+     ],
+     "spec": "LayerNormAten_v1{N=768,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 768,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.262
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=64,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.037
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "zeros",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=64,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "max",
+      "max",
+      "max"
+     ],
+     "spec": "LayerNormAten_v1{N=64,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "subnormal",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=64,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.027
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "alternating",
+      "alternating",
+      "alternating"
+     ],
+     "spec": "LayerNormAten_v1{N=64,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.033
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=1024,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.447
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "zeros",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=1024,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.241
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "max",
+      "max",
+      "max"
+     ],
+     "spec": "LayerNormAten_v1{N=1024,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.22
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "subnormal",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=1024,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.328
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "alternating",
+      "alternating",
+      "alternating"
+     ],
+     "spec": "LayerNormAten_v1{N=1024,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.332
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2304,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=2304,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.785
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2304,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "zeros",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=2304,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.423
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2304,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "max",
+      "max",
+      "max"
+     ],
+     "spec": "LayerNormAten_v1{N=2304,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.354
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2304,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "subnormal",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=2304,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.586
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2304,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "alternating",
+      "alternating",
+      "alternating"
+     ],
+     "spec": "LayerNormAten_v1{N=2304,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.595
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 256,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=256,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 256,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.182
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 256,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "zeros",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=256,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 256,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.067
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 256,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "max",
+      "max",
+      "max"
+     ],
+     "spec": "LayerNormAten_v1{N=256,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 256,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.066
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 256,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "subnormal",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=256,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 256,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.091
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 256,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "alternating",
+      "alternating",
+      "alternating"
+     ],
+     "spec": "LayerNormAten_v1{N=256,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 256,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.094
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 768,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=768,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 768,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.252
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 768,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "zeros",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=768,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 768,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.168
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 768,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "max",
+      "max",
+      "max"
+     ],
+     "spec": "LayerNormAten_v1{N=768,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 768,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.159
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 768,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "subnormal",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=768,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 768,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.234
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 768,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "alternating",
+      "alternating",
+      "alternating"
+     ],
+     "spec": "LayerNormAten_v1{N=768,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 768,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.24
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 64,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=64,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.027
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 64,
+      "EPS": 1e-05
+     },
+     "kinds": [
+      "zeros",
+      "random",
+      "random"
+     ],
+     "spec": "LayerNormAten_v1{N=64,EPS=1e-05}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "ln/GeluErf@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.ln.gelu_erf_difftest",
+   "semantic_id": "ln/GeluErf@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.042
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluErf_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluErf_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluErf_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluErf_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluErf_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluErf_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluErf_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluErf_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluErf_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluErf_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluErf_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluErf_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluErf_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluErf_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluErf_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluErf_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluErf_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluErf_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluErf_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluErf_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 3072
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluErf_v1{N=3072}",
+     "status": "pass",
+     "n_words": 3072,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  }
+ },
+ "differential": {
+  "passed": 64,
+  "total": 64
+ },
+ "status": "pass",
+ "negative_matcher_tests": "pass",
+ "negative_matcher_tests_detail": {
+  "pytest": "pass",
+  "test_gen_files": true,
+  "stamped_by": "lane cov-ln (verify_lane.sh rule 2a; the lane suite test_gen_ln.py + quarantine/ln tests on the pod py312 venv)",
+  "tests": {
+   "tests": 12,
+   "failures": 0,
+   "errors": 0,
+   "skipped": 1,
+   "status": "pass"
+  }
+ },
+ "admitted_by": {
+  "run": "PYTHIA160M-cov_pythia160m_b1_c256",
+  "lane": "cov-ln",
+  "source_record": "out/gen/lanes/cov-ln/PYTHIA160M-cov_pythia160m_b1_c256/quarantine.json",
+  "source_sha256": "52c9f74b9dec61145248780a7ca1790bbcc191687bb2b6589aa118403302245a",
+  "note": "per-Definition admission record (difftest check + verify_lane rule 2a) of the Pythia-160M quarantine Definitions; cov_pod.sh copies it into a PYTHIA160M run dir that has no quarantine.json of its own (replicates / other workers) and stamps `inherited`.  G4 then still re-runs tier-a replay on that run's own instances."
+ }
+}

@@ -1,0 +1,495 @@
+{
+ "items": [
+  {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "creationTimestamp": "2026-09-30T04:45:36Z",
+    "finalizers": [
+     "kueue.x-k8s.io/managed"
+    ],
+    "labels": {
+     "kueue.x-k8s.io/cluster-queue-name": "provers",
+     "kueue.x-k8s.io/local-queue-name": "provers",
+     "kueue.x-k8s.io/managed": "true",
+     "kueue.x-k8s.io/podset": "main",
+     "kueue.x-k8s.io/priority-class": "prover-bench",
+     "kueue.x-k8s.io/queue-name": "provers",
+     "verity.dev/quiet": "true"
+    },
+    "name": "bench-q",
+    "namespace": "default"
+   },
+   "spec": {
+    "affinity": {
+     "podAntiAffinity": {
+      "requiredDuringSchedulingIgnoredDuringExecution": [
+       {
+        "labelSelector": {
+         "matchLabels": {
+          "verity.dev/build": "true"
+         }
+        },
+        "namespaceSelector": {},
+        "topologyKey": "kubernetes.io/hostname"
+       }
+      ]
+     }
+    },
+    "containers": [
+     {
+      "image": "registry.k8s.io/pause:3.10",
+      "imagePullPolicy": "IfNotPresent",
+      "name": "c",
+      "resources": {
+       "limits": {
+        "nvidia.com/gpu": "1"
+       },
+       "requests": {
+        "cpu": "10m",
+        "memory": "16Mi",
+        "nvidia.com/gpu": "1"
+       }
+      },
+      "terminationMessagePath": "/dev/termination-log",
+      "terminationMessagePolicy": "File",
+      "volumeMounts": [
+       {
+        "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+        "name": "kube-api-access-pzpzz",
+        "readOnly": true
+       }
+      ]
+     }
+    ],
+    "dnsPolicy": "ClusterFirst",
+    "enableServiceLinks": true,
+    "nodeName": "cursor",
+    "nodeSelector": {
+     "verity.dev/server": "vy-nebius-1"
+    },
+    "preemptionPolicy": "PreemptLowerPriority",
+    "priority": 0,
+    "restartPolicy": "Always",
+    "schedulerName": "default-scheduler",
+    "securityContext": {},
+    "serviceAccount": "default",
+    "serviceAccountName": "default",
+    "terminationGracePeriodSeconds": 1,
+    "tolerations": [
+     {
+      "effect": "NoExecute",
+      "key": "node.kubernetes.io/not-ready",
+      "operator": "Exists",
+      "tolerationSeconds": 300
+     },
+     {
+      "effect": "NoExecute",
+      "key": "node.kubernetes.io/unreachable",
+      "operator": "Exists",
+      "tolerationSeconds": 300
+     }
+    ],
+    "volumes": [
+     {
+      "name": "kube-api-access-pzpzz",
+      "projected": {
+       "defaultMode": 420,
+       "sources": [
+        {
+         "serviceAccountToken": {
+          "expirationSeconds": 3607,
+          "path": "token"
+         }
+        },
+        {
+         "configMap": {
+          "items": [
+           {
+            "key": "ca.crt",
+            "path": "ca.crt"
+           }
+          ],
+          "name": "kube-root-ca.crt"
+         }
+        },
+        {
+         "downwardAPI": {
+          "items": [
+           {
+            "fieldRef": {
+             "apiVersion": "v1",
+             "fieldPath": "metadata.namespace"
+            },
+            "path": "namespace"
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "status": {
+    "conditions": [
+     {
+      "lastProbeTime": null,
+      "lastTransitionTime": "2026-09-30T04:45:47Z",
+      "status": "True",
+      "type": "PodReadyToStartContainers"
+     },
+     {
+      "lastProbeTime": null,
+      "lastTransitionTime": "2026-09-30T04:45:46Z",
+      "status": "True",
+      "type": "Initialized"
+     },
+     {
+      "lastProbeTime": null,
+      "lastTransitionTime": "2026-09-30T04:45:47Z",
+      "status": "True",
+      "type": "Ready"
+     },
+     {
+      "lastProbeTime": null,
+      "lastTransitionTime": "2026-09-30T04:45:47Z",
+      "status": "True",
+      "type": "ContainersReady"
+     },
+     {
+      "lastProbeTime": null,
+      "lastTransitionTime": "2026-09-30T04:45:46Z",
+      "status": "True",
+      "type": "PodScheduled"
+     }
+    ],
+    "containerStatuses": [
+     {
+      "allocatedResources": {
+       "cpu": "10m",
+       "memory": "16Mi",
+       "nvidia.com/gpu": "1"
+      },
+      "containerID": "containerd://75244ab3a8665e650d405650f88734d6505c2e736f9b11db32263a9dbfc3fe2f",
+      "image": "registry.k8s.io/pause:3.10",
+      "imageID": "registry.k8s.io/pause@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a",
+      "lastState": {},
+      "name": "c",
+      "ready": true,
+      "resources": {
+       "limits": {
+        "nvidia.com/gpu": "1"
+       },
+       "requests": {
+        "cpu": "10m",
+        "memory": "16Mi",
+        "nvidia.com/gpu": "1"
+       }
+      },
+      "restartCount": 0,
+      "started": true,
+      "state": {
+       "running": {
+        "startedAt": "2026-09-30T04:45:46Z"
+       }
+      },
+      "user": {
+       "linux": {
+        "gid": 0,
+        "supplementalGroups": [
+         0
+        ],
+        "uid": 65535
+       }
+      },
+      "volumeMounts": [
+       {
+        "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+        "name": "kube-api-access-pzpzz",
+        "readOnly": true,
+        "recursiveReadOnly": "Disabled"
+       }
+      ]
+     }
+    ],
+    "hostIP": "172.30.0.2",
+    "hostIPs": [
+     {
+      "ip": "172.30.0.2"
+     }
+    ],
+    "phase": "Running",
+    "podIP": "10.42.0.12",
+    "podIPs": [
+     {
+      "ip": "10.42.0.12"
+     }
+    ],
+    "qosClass": "Burstable",
+    "startTime": "2026-09-30T04:45:46Z"
+   }
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "creationTimestamp": "2026-09-30T04:45:55Z",
+    "finalizers": [
+     "kueue.x-k8s.io/managed"
+    ],
+    "labels": {
+     "kueue.x-k8s.io/cluster-queue-name": "circuits",
+     "kueue.x-k8s.io/local-queue-name": "circuits",
+     "kueue.x-k8s.io/managed": "true",
+     "kueue.x-k8s.io/podset": "main",
+     "kueue.x-k8s.io/priority-class": "circuits",
+     "kueue.x-k8s.io/queue-name": "circuits",
+     "verity.dev/build": "true"
+    },
+    "name": "build-2",
+    "namespace": "default"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.k8s.io/pause:3.10",
+      "imagePullPolicy": "IfNotPresent",
+      "name": "c",
+      "resources": {
+       "limits": {
+        "nvidia.com/gpu": "1"
+       },
+       "requests": {
+        "cpu": "10m",
+        "memory": "16Mi",
+        "nvidia.com/gpu": "1"
+       }
+      },
+      "terminationMessagePath": "/dev/termination-log",
+      "terminationMessagePolicy": "File",
+      "volumeMounts": [
+       {
+        "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+        "name": "kube-api-access-nwbbh",
+        "readOnly": true
+       }
+      ]
+     }
+    ],
+    "dnsPolicy": "ClusterFirst",
+    "enableServiceLinks": true,
+    "nodeSelector": {
+     "verity.dev/server": "vy-nebius-1"
+    },
+    "preemptionPolicy": "PreemptLowerPriority",
+    "priority": 0,
+    "restartPolicy": "Always",
+    "schedulerName": "default-scheduler",
+    "securityContext": {},
+    "serviceAccount": "default",
+    "serviceAccountName": "default",
+    "terminationGracePeriodSeconds": 1,
+    "tolerations": [
+     {
+      "effect": "NoExecute",
+      "key": "node.kubernetes.io/not-ready",
+      "operator": "Exists",
+      "tolerationSeconds": 300
+     },
+     {
+      "effect": "NoExecute",
+      "key": "node.kubernetes.io/unreachable",
+      "operator": "Exists",
+      "tolerationSeconds": 300
+     }
+    ],
+    "volumes": [
+     {
+      "name": "kube-api-access-nwbbh",
+      "projected": {
+       "defaultMode": 420,
+       "sources": [
+        {
+         "serviceAccountToken": {
+          "expirationSeconds": 3607,
+          "path": "token"
+         }
+        },
+        {
+         "configMap": {
+          "items": [
+           {
+            "key": "ca.crt",
+            "path": "ca.crt"
+           }
+          ],
+          "name": "kube-root-ca.crt"
+         }
+        },
+        {
+         "downwardAPI": {
+          "items": [
+           {
+            "fieldRef": {
+             "apiVersion": "v1",
+             "fieldPath": "metadata.namespace"
+            },
+            "path": "namespace"
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "status": {
+    "conditions": [
+     {
+      "lastProbeTime": null,
+      "lastTransitionTime": "2026-09-30T04:45:55Z",
+      "message": "0/1 nodes are available: 1 node(s) didn't satisfy existing pods anti-affinity rules. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.",
+      "reason": "Unschedulable",
+      "status": "False",
+      "type": "PodScheduled"
+     }
+    ],
+    "phase": "Pending",
+    "qosClass": "Burstable"
+   }
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "creationTimestamp": "2026-09-30T04:49:30Z",
+    "finalizers": [
+     "kueue.x-k8s.io/managed"
+    ],
+    "labels": {
+     "kueue.x-k8s.io/managed": "true",
+     "kueue.x-k8s.io/priority-class": "dev",
+     "kueue.x-k8s.io/queue-name": "provers"
+    },
+    "name": "dev-wait",
+    "namespace": "default"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.k8s.io/pause:3.10",
+      "imagePullPolicy": "IfNotPresent",
+      "name": "c",
+      "resources": {
+       "limits": {
+        "nvidia.com/gpu": "8"
+       },
+       "requests": {
+        "cpu": "10m",
+        "memory": "16Mi",
+        "nvidia.com/gpu": "8"
+       }
+      },
+      "terminationMessagePath": "/dev/termination-log",
+      "terminationMessagePolicy": "File",
+      "volumeMounts": [
+       {
+        "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+        "name": "kube-api-access-c2k54",
+        "readOnly": true
+       }
+      ]
+     }
+    ],
+    "dnsPolicy": "ClusterFirst",
+    "enableServiceLinks": true,
+    "preemptionPolicy": "PreemptLowerPriority",
+    "priority": 0,
+    "restartPolicy": "Always",
+    "schedulerName": "default-scheduler",
+    "schedulingGates": [
+     {
+      "name": "kueue.x-k8s.io/admission"
+     },
+     {
+      "name": "kueue.x-k8s.io/topology"
+     }
+    ],
+    "securityContext": {},
+    "serviceAccount": "default",
+    "serviceAccountName": "default",
+    "terminationGracePeriodSeconds": 1,
+    "tolerations": [
+     {
+      "effect": "NoExecute",
+      "key": "node.kubernetes.io/not-ready",
+      "operator": "Exists",
+      "tolerationSeconds": 300
+     },
+     {
+      "effect": "NoExecute",
+      "key": "node.kubernetes.io/unreachable",
+      "operator": "Exists",
+      "tolerationSeconds": 300
+     }
+    ],
+    "volumes": [
+     {
+      "name": "kube-api-access-c2k54",
+      "projected": {
+       "defaultMode": 420,
+       "sources": [
+        {
+         "serviceAccountToken": {
+          "expirationSeconds": 3607,
+          "path": "token"
+         }
+        },
+        {
+         "configMap": {
+          "items": [
+           {
+            "key": "ca.crt",
+            "path": "ca.crt"
+           }
+          ],
+          "name": "kube-root-ca.crt"
+         }
+        },
+        {
+         "downwardAPI": {
+          "items": [
+           {
+            "fieldRef": {
+             "apiVersion": "v1",
+             "fieldPath": "metadata.namespace"
+            },
+            "path": "namespace"
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "status": {
+    "conditions": [
+     {
+      "lastProbeTime": null,
+      "lastTransitionTime": "2026-09-30T04:49:30Z",
+      "message": "Scheduling is blocked due to non-empty scheduling gates",
+      "reason": "SchedulingGated",
+      "status": "False",
+      "type": "PodScheduled"
+     }
+    ],
+    "phase": "Pending",
+    "qosClass": "Burstable"
+   }
+  }
+ ]
+}

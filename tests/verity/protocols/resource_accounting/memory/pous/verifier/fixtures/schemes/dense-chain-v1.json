@@ -1,0 +1,41 @@
+{
+ "certificate": {
+  "call_ns": 241500,
+  "claims": [
+   "ideal-permutation",
+   "random-oracle",
+   "feistel-indifferentiability",
+   "sequential-step-floor",
+   "perfect-isolation",
+   "cr/sha-256",
+   "live-verifier",
+   "designated-verifier"
+  ],
+  "cliff": null,
+  "delta": "1/100",
+  "eps_log2": -128,
+  "hypotheses": [],
+  "k": 111,
+  "rho": "18/19",
+  "rounds": 5,
+  "segments": 1,
+  "theorem": "Pous.SecurityProofs.ChainDenseMeets64",
+  "work": 1048576
+ },
+ "name": "dense-chain/v1",
+ "point_vector": null,
+ "small": {
+  "params": {
+   "blocks_per_segment": 8,
+   "m": 64,
+   "scheme": "dense-chain",
+   "segments": 2
+  },
+  "root": "094ae65be7555c40f27d65efb652342c9474a029f5eb8190fd6bf2e50206440d7f9a527eeaf43709f1e7119fb962b16e7386ab5ee2a249cd553ce128930f0be9",
+  "salt": "0d4b26463f1fdc16699f242060a8457a52ef357ba199f982",
+  "segments": [
+   "62eb8356da7f4fff2c2820802eba1af989824ae4d5631bb5e24b67ab3ecb3614",
+   "860ee4463861f7ab376d4a4c2da8ceb1f1575ac7fc79ca033fe03ba8ab7ced2f"
+  ]
+ }
+}

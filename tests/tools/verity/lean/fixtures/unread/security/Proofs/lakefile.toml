@@ -1,0 +1,22 @@
+name = "security_proofs"
+srcDir = ".."
+defaultTargets = ["Proofs"]
+
+[leanOptions]
+autoImplicit = false
+
+[[require]]
+name = "security"
+path = ".."
+
+[[require]]
+name = "code"
+path = "../../code"
+
+[[require]]
+name = "security_properties"
+path = "../Properties"
+
+[[lean_lib]]
+name = "Proofs"
+roots = ["Proofs.Flock", "Proofs.Properties.Code"]
