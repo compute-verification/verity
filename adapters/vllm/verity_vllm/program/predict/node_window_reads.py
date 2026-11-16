@@ -31,7 +31,7 @@ from verity.commitments.periods import interface as IF
 
 from . import node_window_join as NJ
 from .build import Unexpressible
-from .node_window import _GRAIN, STAND_IN, Free, Lowering, NodeWindow, _Free, node_window
+from .node_window import _GRAIN, STAND_IN, Lowering, NodeWindow, _Free, node_window
 from .node_window import PROMPT as PROGRAM_PROMPT
 from .window_builder import Grain
 
@@ -78,19 +78,14 @@ def boundary_reads(w: NodeWindow, rank: int) -> list[IF.Read]:
     return [*prompt_reads(w), *served_reads(w, rank)]
 
 
-def _fills(r: IF.Read, f: Free) -> bool:
-    return (r.reader == f.tid and r.port == f.port and r.cut == (0, 1) and f.rows == (0, 1, 1) and r.at <= f.at
-            and f.at + f.count <= r.at + r.reader_units)
-
-
 def rank_window(rank: int, fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN) -> NJ.Rank:
     """Rank ``rank``'s Program ``fn`` lowered into its window (`node_window.node_window`, with stand-ins), the frame
-    dropped: its circuit declares the rank's `boundary_reads`, and the free inputs they fill are no longer free."""
+    dropped: its circuit declares the rank's `boundary_reads`, and the free inputs they fill are no longer free
+    (`node_window_join.unfilled`)."""
     c, w = node_window(fn, families, grain, stand_ins=True)
     reads = tuple(boundary_reads(w, rank))
     c = replace(c, boundary_reads=reads)
-    free = tuple(f for f in w.free if not any(_fills(r, f) for r in reads))
-    return NJ.Rank(rank, c, free, {t: tuple(s) for t, s in w.b.spans.items()}, w.steps, w.census(c))
+    return NJ.Rank(rank, c, NJ.unfilled(w.free, reads), {t: tuple(s) for t, s in w.b.spans.items()}, w.steps, w.census(c))
 
 
 def written_once(windows: Sequence[tuple[IF.Circuit, Sequence[IF.Read]]], leaves: int, param: str = EGRESS) -> None:

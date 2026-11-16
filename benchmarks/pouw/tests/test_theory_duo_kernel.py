@@ -9,7 +9,7 @@ import re
 import duo_kernel_sweep as dk
 import pytest
 
-from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as rf
+from verity.protocols.resource_accounting.compute.pouw.verifier.receipts import receipt_folds as rf
 
 
 @pytest.fixture(scope="module")

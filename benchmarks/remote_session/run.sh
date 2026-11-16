@@ -30,7 +30,7 @@
 # connections to its own 127.0.0.1:PORT cross the network; then ROLE=prover on PEER, which connects there, and which
 # takes its lease only once that tunnel listens (up to TUNNEL_WAIT_S, default 7200).
 #
-# Against the auditor's verifier host (`verity/protocols/accounting/poub/device/live_verifier/host.py`), the lane starts the run there with its
+# Against the auditor's verifier host (`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`), the lane starts the run there with its
 # gate key (its gate's `run --port PORT ...`) and ROLE=prover gets VERIFIER_SSH, ssh's `-i KEY prover@HOST`: the
 # prover opens `ssh -L PORT` to the host's tunnel account, which forwards only to the run ports, and takes its lease once
 # that account says the run's verifier listens.
@@ -47,7 +47,7 @@
 # the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as shell
 # words (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs), under ROLE=both too: with `--challenger serve
 # --challenger-key DIR` each session's coins come from the challenger's own process,
-# `verity/protocols/compose/device/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+# `verity/protocols/compose/verifier/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
 # --challenger-period P --challenger-main FILE` (FILE: `git rev-list --first-parent origin/main`, the auditor's own),
 # from the auditor device's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
@@ -131,7 +131,8 @@
 # VERIFIER_CPUS, which the lease counts with every other lease's against the node's CPU quota (75 where they pass
 # it under NOWAIT=1); to a program that names none it declares none, and says so. A served line's CUDA_HOME defaults
 # to CUDA_ROOT/cuda-V (CUDA_ROOT default /usr/local) for the CUDA version V the prover's torch is built for, else
-# cuda-13.0, else cuda; any other line's to /usr/local/cuda-13.0. ROLE=prover takes PORT; ROLE=both and
+# cuda-MAJOR, else cuda-13.0, else cuda, and is refused (exit 3) where its nvcc is not V's major version; any other
+# line's to /usr/local/cuda-13.0. ROLE=prover takes PORT; ROLE=both and
 # ROLE=verifier pick one nothing listens on when it is not stated. Scratch is under TMPDIR (default /tmp), removed
 # at exit.
 #
@@ -140,10 +141,10 @@
 #   3 refused before anything ran: a parameter, a path, a row, windows that cannot fit, no verifier on PORT (and
 #     ROLE=verifier's own code for a registration it refused);
 #   4 a build failed (nvcc, the Lean verifier);
-#   5 SERVE=tiny, SERVE=row: the prover ended 0 beside a verifier that ended red or with no accepted session on
-#     record;
-#   6 SERVE=tiny, SERVE=row: the session was not accepted: the verifier rejected it, or it failed where the prover's
-#     record says (the verdict line has both);
+#   5 SERVE=tiny, SERVE=row and ROLE=both SERVE=node: the prover ended 0 beside a verifier that ended red or with no
+#     accepted session on record;
+#   6 SERVE=tiny, SERVE=row and ROLE=both SERVE=node: a session was not accepted: the verifier rejected it, or it
+#     failed where the prover's record says (the verdict line has both);
 #   10 to 21 SERVE=row: the row's own (`verity-vllm row`): 10 its Build failed, 12 its Commit failed beside a session
 #     that was accepted or never began, 13 no manifest, 15 its plan, 20 the word check, 21 a call boundary;
 #   75 no lease: gpu-lease's, or NOWAIT=1's for a card with a process on it (124, gpu-lease's too: the lease's MAXMIN
@@ -153,7 +154,14 @@
 # SERVE=node serves the whole node: a vLLM engine a leased GPU (`engine.py`), and the prover (`node.py`) registers
 # their weights arenas as the store, where they are served, the engines decoding each weight as they use it
 # (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
-# node's host DRAM (its MemTotal) in the memory line. The north-star run, the verifier on a second node's CPUs:
+# node's host DRAM (its MemTotal) in the memory line. Its cores default to this process's: the first quarter the
+# engines' (ENGINE_CPUS), under ROLE=both the last quarter the verifier's, the rest the prover's, all declared to a lease
+# program that takes --cores. PACED (K:T_MS:DRAWS:WINDOWS a session of PLAN, `verifier.py --paced`) and PACE_PASS_MS
+# make the sessions paced; ROLE=both SERVE=node, the node's session on this machine with its verifier and a local
+# challenger beside it, defaults them to 1:1000:2773:7 (seven stretches of a second, a live coin a pass) and 0 (the
+# pass its calibration measured), builds the Lean verifier before the lease, as a served line does, and ends by the
+# verdict line. VERIFIER_ARGS='--node FILE --hbm-bytes N' states the node the share is of (default: timing's eight-card
+# RTX PRO 6000 node). The north-star run, the verifier on a second node's CPUs:
 #
 #   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 QUANTILE=max \
 #     JITTER_MS=50 VERIFIER_ARGS='--host-bytes 1843153879040' bash benchmarks/remote_session/run.sh   # 16 CPUs
@@ -200,21 +208,34 @@ if [ -z "${CUDA_HOME:-}" ] && [ -n "$SERVED" ]; then
   # the toolkit of the CUDA version the prover's torch is built for, where the node has it
   CUDA_ROOT=${CUDA_ROOT:-/usr/local}
   TV=$("$VPY" -c 'import torch; print(torch.version.cuda or "")' 2> /dev/null)
+  TM=${TV%%.*}
   [ "$TV" = 13.0 ] && TV=
-  TOOLKITS=(${TV:+"$CUDA_ROOT/cuda-$TV"} "$CUDA_ROOT/cuda-13.0" "$CUDA_ROOT/cuda")
+  TOOLKITS=(${TV:+"$CUDA_ROOT/cuda-$TV"} ${TM:+"$CUDA_ROOT/cuda-$TM"} "$CUDA_ROOT/cuda-13.0" "$CUDA_ROOT/cuda")
   CUDA_HOME=$(first_of -d "${TOOLKITS[@]}") ||
     refuse "no CUDA toolkit: CUDA_HOME is not set, and none of ${TOOLKITS[*]} is a directory"
+  # the Commit's collector is built by torch's JIT, which checks no nvcc against the CUDA torch is built for
+  NV=$("$CUDA_HOME/bin/nvcc" --version 2> /dev/null | sed -n 's/.*release \([0-9]*\)\..*/\1/p')
+  [ -z "$TM" ] || [ "$NV" = "$TM" ] || refuse "the vLLM venv's torch is built for CUDA $TM, and $CUDA_HOME's nvcc is" \
+    "CUDA ${NV:-unknown}: install a CUDA $TM toolkit and state CUDA_HOME"
 fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PATH=$CUDA_HOME/bin:$(dirname "$PY"):$PATH
+[ -n "$SERVED" ] && . adapters/vllm/verity_vllm/ops/cuda_headers.sh && cuda_headers "$VPY"
 [ -x "$HOME/.elan/bin/lake" ] && export PATH="$HOME/.elan/bin:$PATH"
 B=$(mktemp -d "${TMPDIR:-/tmp}/remote-session.XXXXXX") || exit 3
 SV= # ROLE=both's verifier of a served session, a process group of its own
 trap '[ -n "$SV" ] && kill -- "-$SV" 2> /dev/null; rm -rf "$B"' EXIT
 export B RS GIB=${GIB:-16}
+[ "$ROLE" != both ] || [ -z "${LEAN_EXE:-}" ] || [ -x "$LEAN_EXE" ] || refuse "LEAN_EXE=$LEAN_EXE is not an executable"
+lean_exe() { # LEAN_EXE, else the Lean verifier built in its package
+  [ -n "${LEAN_EXE:-}" ] && return 0
+  LEAN_EXE=$("$PY" -c 'from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
+    2> "$O/lean-build.log") ||
+    { tail -20 "$O/lean-build.log"; echo "run.sh: the Lean verifier's build failed (LEAN_EXE names a built one)"; exit 4; }
+}
 if [ -n "${SERVE:-}" ]; then
   export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=${HF_HOME:-$WS/hf} PATH=$(dirname "$VPY"):$PATH
-  export PYTHONPATH=$PWD/adapters/vllm:$PWD/tools/config:$PWD/verity/protocols/proofs/flock/prover/python:$PWD${PYTHONPATH:+:$PYTHONPATH}
+  export PYTHONPATH=$PWD/adapters/vllm:$PWD/adapters/torch:$PWD/tools/config:$PWD/verity/protocols/proofs/flock/prover/python:$PWD${PYTHONPATH:+:$PYTHONPATH}
 fi
 if [ -n "$SERVED" ]; then
   PLAN=${PLAN:-serve}
@@ -225,7 +246,6 @@ if [ -n "$SERVED" ]; then
     *) refuse "PLAN=$PLAN is not a plan of a served session: SERVE=row takes serve" ;;
   esac
   [ "${SESSIONS:-1}" = 1 ] || refuse "SESSIONS=$SESSIONS: a served store serves one session"
-  [ "$ROLE" != both ] || [ -z "${LEAN_EXE:-}" ] || [ -x "$LEAN_EXE" ] || refuse "LEAN_EXE=$LEAN_EXE is not an executable"
   FIT=()
   if [ "$SERVED" = row ]; then
     [ -n "${ROW:-}" ] || refuse "SERVE=row takes ROW, a row id"
@@ -256,6 +276,20 @@ print(",".join(map(str, c[-v:] if v else c)), ",".join(map(str, c[:len(c) - v] o
     refuse "PROVER_CPUS=$PROVER_CPUS are not cores this process may run on"
   export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$THREADS} MKL_NUM_THREADS=${MKL_NUM_THREADS:-$THREADS}
 fi
+if [ "${SERVE:-}" = node ]; then
+  # cores: this process's, the first quarter to the engines, under ROLE=both the last quarter to the verifier, the rest
+  # to the prover; with one core, all on it
+  read -r EC VC PC < <("$PY" -c '
+import os, sys
+c = sorted(os.sched_getaffinity(0))
+q = max(1, len(c) // 4)
+v = q if sys.argv[1] == "both" else 0
+p = c[q:len(c) - v] or c
+print(*(",".join(map(str, x)) for x in (c[:q], c[-v:] if v else p, p)))' "$ROLE")
+  export ENGINE_CPUS=${ENGINE_CPUS:-$EC}
+  VERIFIER_CPUS=${VERIFIER_CPUS:-$VC} PROVER_CPUS=${PROVER_CPUS:-$PC}
+  if [ "$ROLE" = both ]; then PACED=${PACED-1:1000:2773:7} PACE_PASS_MS=${PACE_PASS_MS-0}; fi
+fi
 export PLAN=${PLAN:-honest} WINDOWS=${WINDOWS:-7}
 export WINDOW_MS=${WINDOW_MS:-1000} SAMPLES=${SAMPLES:-2773} JITTER_MS=${JITTER_MS:-2}
 export VERIFIER_CPUS=${VERIFIER_CPUS:-88-95} PROVER_CPUS=${PROVER_CPUS:-48-87}
@@ -272,14 +306,23 @@ if [ -z "${PORT:-}" ]; then
 fi
 export PORT
 export SESSIONS=${SESSIONS:-$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))}
-VERIFY=(--port "$PORT" --out "$O" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES"
-  --jitter-ms "$JITTER_MS" --sessions "$SESSIONS" ${QUANTILE:+--quantile "$QUANTILE"}
+FORM=(--windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES" --jitter-ms "$JITTER_MS" --sessions "$SESSIONS")
+if [ -n "${PACED:-}" ]; then
+  read -ra PACE <<< "$PACED"
+  [ ${#PACE[@]} = "$SESSIONS" ] || refuse "PACED=$PACED paces ${#PACE[@]} session(s), and PLAN=$PLAN has $SESSIONS"
+  FORM=(--paced "${PACE[@]}" ${PACE_PASS_MS:+--pace-pass-ms "$PACE_PASS_MS"} --jitter-ms "$JITTER_MS")
+fi
+VERIFY=(--port "$PORT" --out "$O" "${FORM[@]}" ${QUANTILE:+--quantile "$QUANTILE"}
   ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"})
+if [ "${SERVE:-}" = node ] && [ "$ROLE" = both ]; then
+  lean_exe
+  VERIFY+=(--lean-exe "$LEAN_EXE")
+fi
 if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
   if [ -n "${CLOSE:-}" ]; then
-    "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --registry "$REGISTRY" --close "$CLOSE" \
+    "$PY" verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py --registry "$REGISTRY" --close "$CLOSE" \
       > "$O/verifier.log" 2>&1; W=$?
     cat "$O/verifier.log"
     cp "$REGISTRY" "$O/registry.json"
@@ -296,7 +339,7 @@ if [ "$ROLE" = verifier ]; then
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
   eval "VA=(${VERIFIER_ARGS:-})"
   # shellcheck disable=SC2086
-  "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
+  "$PY" verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
     > "$O/verifier.log" 2>&1 & V=$!
   while kill -0 $V 2> /dev/null; do
     kill -0 $T 2> /dev/null || { echo "the tunnel to $PEER ended"; cat "$O/tunnel.log"; kill $V; break; }
@@ -349,10 +392,12 @@ WAIT=(--wait)
 [ -n "${NOWAIT:-}" ] && WAIT=()
 LEASE=("${LP[@]}" "${GPUS:-1}" "${WAIT[@]}" ${GPU:+--on "$GPU"} ${TIMED:+--timed} --max-min "${MAXMIN:-30}")
 [ -n "${GPU_LEASE_UUID:-}" ] || [ -n "${CPU:-}" ] && LEASE=()
-if [ -n "$SERVED" ] && [ ${#LEASE[@]} -gt 0 ]; then
-  # the cores at work while the lease is held: the prover's and, under ROLE=both, its verifier's, which holds no lease
+if [ -n "${SERVE:-}" ] && [ ${#LEASE[@]} -gt 0 ]; then
+  # the cores at work while the lease is held: the prover's, SERVE=node's engines' and, under ROLE=both, its verifier's,
+  # which holds no lease
   LEASE_CPUS=$PROVER_CPUS
   [ "$ROLE" = both ] && [ "$VERIFIER_CPUS" != "$PROVER_CPUS" ] && LEASE_CPUS+=,$VERIFIER_CPUS
+  [ "$SERVE" = node ] && LEASE_CPUS+=,$ENGINE_CPUS
   if grep -q -e '--cores' "$LF" 2> /dev/null; then LEASE+=(--cores "$LEASE_CPUS")
   else echo "run.sh: the lease program $LF names no --cores: cores $LEASE_CPUS are pinned under it, not declared to it"; fi
 fi
@@ -393,7 +438,7 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
         [[ $KV_ARCH =~ ^sm_[0-9]+a?$ ]] || refuse "KV_ARCH=$KV_ARCH is no card's architecture (sm_90), and the row's target" \
           "declares no compute_capability to build kv.cu for: state KV_ARCH, or KV_LIB=cpu"
         nvcc -O3 -arch="$KV_ARCH" -std=c++17 -Xcompiler -fPIC -shared -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" \
-          verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.build.log" 2>&1 ||
+          verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.build.log" 2>&1 ||
           { tail -40 "$O/kv.build.log"; echo "run.sh: kv.cu's build for $KV_ARCH failed (KV_LIB=cpu encodes on the CPU)"; exit 4; }
         sha256sum "$B/kv.so" > "$O/libs.sha256"
         KV=(--remote-kv-lib "$B/kv.so") ;;
@@ -423,14 +468,10 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
     REC=$O/serve.json
   fi
   if [ "$ROLE" = both ]; then
-    if [ -z "${LEAN_EXE:-}" ]; then
-      LEAN_EXE=$("$PY" -c 'from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
-        2> "$O/lean-build.log") ||
-        { tail -20 "$O/lean-build.log"; echo "run.sh: the Lean verifier's build failed (LEAN_EXE names a built one)"; exit 4; }
-    fi
+    lean_exe
     eval "VA=(${VERIFIER_ARGS:-})"
     set -m # a process group of its own: stopping it stops its Lean verifier and its check workers with it
-    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 \
+    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 \
       "${VERIFY[@]}" --lean-exe "$LEAN_EXE" "${VA[@]}" < /dev/null > "$O/verifier.log" 2>&1 &
     SV=$!
     set +m
@@ -477,7 +518,11 @@ if [ -n "${SERVE:-}" ]; then
   export VPY
   "${LEASE[@]}" bash $RS/node.sh > "$O/prover.log" 2>&1; P=$?
   tail -20 "$O/prover.log"
-  exit $P
+  [ "$ROLE" = both ] || exit $P
+  W=$(cat "$B/verifier.rc" 2> /dev/null)
+  "$PY" $RS/serve.py --verdict --out "$O" --prover-rc "$P" --verifier-rc "${W:-0}" --record "$O/prover.json" |
+    tee "$O/verdict.txt"
+  exit "${PIPESTATUS[0]}"
 fi
 # shellcheck disable=SC2016
 "${LEASE[@]}" bash -c '
@@ -486,9 +531,13 @@ fi
   else
     nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
       --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
-    FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
-    nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-    nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+    CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "${GPU_LEASE_UUID%%,*}" | head -1)
+    SM=${CC/./}
+    [[ $SM =~ ^[0-9]+$ ]] || { echo "run.sh: the leased card names no compute capability ($CC)"; exit 4; }
+    [ "${CC%%.*}" -ge 9 ] && SM+=a
+    FLAGS=(-O3 -gencode "arch=compute_$SM,code=sm_$SM" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+    nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/resource_accounting/memory/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
+    nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
     wait $K || { tail -40 "$O/kv.ptxas"; exit 4; }
     sha256sum "$B"/*.so > "$O/libs.sha256"
@@ -498,7 +547,7 @@ fi
   if [ "$ROLE" = both ]; then
     eval "VA=(${VERIFIER_ARGS:-})"
     # shellcheck disable=SC2086
-    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
+    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
   fi
   PIN=(taskset -c "$PROVER_CPUS")
   if [ -n "${PROVER_SLICE:-}" ]; then
@@ -508,7 +557,7 @@ fi
       --nice=0 -p AllowedCPUs="$PROVER_CPUS" -p MemoryMax="${PROVER_MEM_GB:-300}G" -p MemorySwapMax=0 --
       setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- "${PIN[@]}")
   fi
-  "${PIN[@]}" "$PY" verity/protocols/accounting/poub/prover/remote_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
+  "${PIN[@]}" "$PY" verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
     "${DEV[@]}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
   P=$?
   W=0

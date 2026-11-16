@@ -163,8 +163,8 @@ Protocols and claims:
 - Network accounting is two things for each execution block. First, its consistency with the network certificates: its
   committed inputs and outputs are what they say crossed the wire, pass or fail, with no sampling requirement. Second,
   from SPOT, its transfers' covert capacity, in three terms reported apart: side channels, the timing channel (which the
-  network certifier mostly fixes) and what SPOT fails to check; at full sampling only the first two remain.
-- The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-device` gives
+  network attester mostly fixes) and what SPOT fails to check; at full sampling only the first two remain.
+- The network attester is one device on each AI server's uplink, whose one code run under one `trusted-device` gives
   both the cells and the records (`security/Definitions/Certifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
 - `WitnessPathPrivate c` is the per-channel premise, beside the per-party and site premises. The imprint key is a key
