@@ -116,7 +116,7 @@ def _run(root: Path, templates: dict, binding: dict, kept: Path | None) -> Simpl
     bytes and file)."""
     window = json.dumps({**binding, "templates": templates})
     rc, lines, order, _limits = SV._v3c(root, records_audit=KEPT_AUDIT, V3C_WARM_JOBS="2", TOY_WINDOW=window,
-                                       ONE_STAGE=str(HERE.parent), V3C_COMPOSE_CACHE=str(kept) if kept else None)
+                                       ONE_STAGE=str(HERE.parents[2] / "benchmarks" / "one_stage"), V3C_COMPOSE_CACHE=str(kept) if kept else None)
     assert rc == 0 and order.index("warm") < order.index("audit"), (lines, order)
     vw = root / "serve" / f"v3c-w7-{SV.VTAG}"
     composed = root / "order.composed"

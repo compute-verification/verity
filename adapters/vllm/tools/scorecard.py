@@ -6,8 +6,8 @@
   ``**/*allowlist*.json``, any JSON with an ``entries`` list) and its number of entries.
 * **size**: library modules (``verity_vllm/**/*.py`` less ``tests/`` and ``test_*.py``, as the lints scan) over 800,
   600 and 400 lines, functions over 150 and 100 lines, and the largest modules.
-* **outside imports**: the distinct modules of ``verity_vllm`` that code outside ``adapters/vllm/`` imports, counted
-  as ``tests/test_vllm_public_api.py`` counts them (an import statement, an ``import_module``/``__import__``/
+* **outside imports**: the distinct modules of ``verity_vllm`` that code outside ``adapters/vllm/`` and its tests imports,
+  counted as ``tests/test_vllm_public_api.py`` counts them (an import statement, an ``import_module``/``__import__``/
   ``importorskip`` string, or a ``"module:attr"`` string; ``from P import n`` is the module ``P.n`` when that is a module),
   and the private (``_name``) names it takes.
 * **docs and types**: public top-level functions and classes without a docstring, modules without one, and public
@@ -100,7 +100,7 @@ def _parse(p: Path) -> ast.Module | None:
 # --- ratchets -----------------------------------------------------------------------------------------------------------
 
 def ratchets(tree: Tree) -> dict[str, dict]:
-    tests = tree.integration / "tests"
+    tests = tree.root / "tests" / INTEGRATION / "tests"
     paths = sorted({*tests.rglob("allowlists/*.json"), *tests.rglob("*allowlist*.json")})
     out = {}
     for p in paths:
@@ -109,7 +109,7 @@ def ratchets(tree: Tree) -> dict[str, dict]:
         except ValueError:
             continue
         if isinstance(data, dict) and isinstance(data.get("entries"), list):
-            out[p.stem] = {"file": tree.rel(p), "entries": len(data["entries"])}
+            out[p.stem] = {"file": p.relative_to(tests.parent).as_posix(), "entries": len(data["entries"])}
     return out
 
 
@@ -143,7 +143,7 @@ def size(tree: Tree, parsed: dict[Path, ast.Module | None], top: int) -> dict:
 
 def _outside_files(tree: Tree) -> list[str]:
     try:
-        res = subprocess.run(["git", "grep", "-l", "-F", "--untracked", PACKAGE, "--", "*.py", f":!{INTEGRATION}/"],
+        res = subprocess.run(["git", "grep", "-l", "-F", "--untracked", PACKAGE, "--", "*.py", f":!{INTEGRATION}/", f":!tests/{INTEGRATION}/"],
                              cwd=tree.root, capture_output=True, text=True)
     except FileNotFoundError:
         res = None
@@ -152,7 +152,7 @@ def _outside_files(tree: Tree) -> list[str]:
     else:
         files = [p.relative_to(tree.root).as_posix() for p in tree.root.rglob("*.py")
                  if not any(part.startswith(".") for part in p.relative_to(tree.root).parts)
-                 and not p.relative_to(tree.root).as_posix().startswith(f"{INTEGRATION}/")]
+                 and not p.relative_to(tree.root).as_posix().removeprefix("tests/").startswith(f"{INTEGRATION}/")]
     return sorted(f for f in files if f not in NOT_SCANNED)
 
 
