@@ -165,8 +165,8 @@ def test_the_cache_rows_feed_the_decode(phi):
     assert words == ["Const32[0x00000000]_v1"] * 4 + ["Const32[0xffffffff]_v1"] * (TOPK - 4)
 
 
-def test_the_counting_mirrors_refuse_it(phi):
-    """`step_needs` and `template_counts` count the default cache's Calls, so over an fp8_ds_mla cache they refuse."""
-    from verity_vllm.program.predict.template_counts import TemplateCounts
+def test_the_counting_mirror_refuses_it(phi):
+    """`step_needs` counts the default cache's Calls, so over an fp8_ds_mla cache it refuses."""
+    from verity_vllm.program.predict.step_needs import StepNeeds
     with pytest.raises(Unexpressible, match=re.escape("the needs of a step over an fp8_ds_mla cache")):
-        TemplateCounts(phi)
+        StepNeeds(phi)

@@ -312,7 +312,6 @@
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "override", "symbol": "SeedRuleWithPeers.forward", "detail": ""},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "override", "symbol": "SeededWithPeers.forward", "detail": ""},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "union-attr", "symbol": "attention_impls", "detail": ""},
-    {"file": "verity_vllm/program/predict/template_counts.py", "kind": "override", "symbol": "TemplateCounts._attention", "detail": "", "count": 3},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py", "kind": "index", "symbol": "Writer.keep", "detail": ""},
     {"file": "tests/engine/test_int8_wgmma.py", "kind": "func-returns-value", "symbol": "test_product_takes_the_row_and_keeps_the_values", "detail": ""},
     {"file": "tests/engine/test_int8_wgmma.py", "kind": "func-returns-value", "symbol": "test_product_zy_takes_the_row_and_keeps_the_values", "detail": ""},
