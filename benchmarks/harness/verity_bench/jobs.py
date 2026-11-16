@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -306,6 +307,13 @@ def check_point_environment(spec: ResolvedSpec | SteadySpec, environ: Mapping[st
 DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-dc-h200", "vy-dc-h200-2", "vy-dc-h200-3", "vy-dc-b200",
                 "vy-spot-glm53")
 GPU_SLOTS = "/workspace/research/locks/gpu/slots"
+#: how long a direct point waits for one of those slots where its launch states no end: as long as a pool's run waits for
+#: a slot (`research run --pool`'s --pool-wait, `slot_only.POOL_WAIT_S`)
+DIRECT_WAIT_S = 14400
+#: how far short of a stated end a direct point's wait stops: slot.py tries for a slot every 20 s (its POLL_S), and one
+#: that counts --run-max from taking the slot may take it a try past --wait-max, so the run ends before the end
+#: whichever slot.py the node runs
+SLOT_GRACE_S = 60
 
 
 def _env_flags(spec: ResolvedSpec) -> list[str]:
@@ -370,15 +378,25 @@ def direct_minutes(spec: ResolvedSpec | SteadySpec, node: str) -> float:
 
 
 def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign: str, tool: str,
-             env: Sequence[str], job: Sequence[str], store_read: bool = False, cores: str | None = None) -> list[str]:
+             env: Sequence[str], job: Sequence[str], store_read: bool = False, cores: str | None = None,
+             end: float | None = None, now: Callable[[], float] = time.time) -> list[str]:
     """`job` as a recorded `research run --on NODE` through one of the node's GPU slots, for a node whose launcher takes
-    only slot runs: the one form of a direct point's launch, whatever the point's spec. The spec's admission
-    `max_minutes` bounds the run and its slot; `tool` records it; `env` is its `--env` flags; `store_read` gives the
-    job a read-only key to the store for the run's length (`research run --store-read`), for a job that fetches from it.
+    only slot runs: the one form of a direct point's launch, whatever the point's spec. The run waits for its slot at
+    most until `end` (seconds since the epoch, a booked period's end) less the spec's admission `max_minutes`, or
+    `DIRECT_WAIT_S` where the launch states no end, and then has `max_minutes` from taking it (slot.py's `--wait-max`
+    and `--run-max`); its timeout is the two together. With an `end`, the wait stops `SLOT_GRACE_S` short of it, so
+    the run ends before `end` whichever slot.py the node runs. One whose `max_minutes` don't fit before `end` at its
+    launch is refused here. `tool` records the run; `env` is its `--env` flags; `store_read` gives the job
+    a read-only key to the store for the run's length (`research run --store-read`), for a job that fetches from it.
     `cores` (`34-43`), a booked slot's: the slot taker runs under `taskset -c CORES`, and takes only a slot within its
     own CPUs, so it takes that slot or waits for it; without it, the first free slot."""
 
-    minutes = direct_minutes(spec, node)
+    run_s = direct_minutes(spec, node) * 60
+    wait_s = DIRECT_WAIT_S if end is None else math.floor(end - now()) - run_s - SLOT_GRACE_S
+    if wait_s <= 0:
+        raise ValueError(f"a point of spec {spec.id!r} runs for up to {run_s / 60:g} min (its admission max_minutes), "
+                         f"which don't fit before its end, {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(end))}: it "
+                         "would not finish, so it isn't launched. State a later end, or a smaller max_minutes")
     return [
         "research", "run",
         "--on", node,
@@ -386,7 +404,7 @@ def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign
         "--campaign", campaign,
         "--source", str(root),
         "--cwd", "source",
-        "--timeout", f"{minutes:g}m",
+        "--timeout", f"{wait_s + run_s:g}",
         "--require-result",
         "--tool", tool,
         *(["--store-read"] if store_read else []),
@@ -394,15 +412,16 @@ def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign
         "--",
         *(["taskset", "-c", cores] if cores else []),
         "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/check/slot.py", "--by", "benchmarks",
-        "--run-max", f"{minutes * 60:g}",
+        "--wait-max", f"{wait_s:g}", "--run-max", f"{run_s:g}",
         "--",
         *job,
     ]
 
 
-def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, node: str) -> list[str]:
-    """The point as a `research run --on NODE` through one of the node's GPU slots (`slot_run`), its GPUs from the node's
-    gpu-lease: the queued point's tool, identity and environment."""
+def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, node: str, *,
+                   end: float | None = None, now: Callable[[], float] = time.time) -> list[str]:
+    """The point as a `research run --on NODE` through one of the node's GPU slots (`slot_run`, by `end` where given),
+    its GPUs from the node's gpu-lease: the queued point's tool, identity and environment."""
 
     spec = vllm_spec(plan)
     minutes = direct_minutes(spec, node)
@@ -410,7 +429,7 @@ def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Pat
     # preemptible, as the queued point's is.
     lease = ["gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible", "--"]
     return slot_run(spec, root, node, campaign="vllm-bench", tool="verity_bench.tool:VLLM_BENCH_POINT",
-                    env=_env_flags(spec), job=[*lease, *_point_command(source, item, root)])
+                    env=_env_flags(spec), job=[*lease, *_point_command(source, item, root)], end=end, now=now)
 
 
 def _execute(command: Sequence[str], root: Path) -> int:

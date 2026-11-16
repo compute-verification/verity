@@ -46,7 +46,7 @@ launcher() {  # the `verity-vllm` launcher pod_bootstrap.sh writes beside $PY; b
   local vv=${PY%/*}/verity-vllm
   [ -x "$vv" ] && { echo "$vv"; return; }
   vv=$(dirname "$SWEEP_DIR")/bin/verity-vllm; mkdir -p "${vv%/*}"
-  printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nsys.exit(main())\n' "$(command -v python3)" > "$vv" && chmod +x "$vv"
+  printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nif __name__ == "__main__":\n    sys.exit(main())\n' "$(command -v python3)" > "$vv" && chmod +x "$vv"
   echo "$vv"
 }
 export VV; VV=$(launcher)

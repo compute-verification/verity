@@ -28,7 +28,7 @@ lemma, `TheftTight` (`security/Proofs/WeightSecurity/Lemmas.lean`), shows the fa
 `TheftServed` is `Theft` at an audited deployment (`Definitions.WeightSecurity.Served`). The channel is the served one:
 advice, timing buckets, the overwrites the audit lets through and the halt. The leakage term is the probability `δ` that
 the audit leaves `M` incorrect proof blocks undetected, plus the probability that a release isn't local, which the
-network certifier and the dataflow discharge. Its witnesses
+network attester and the dataflow discharge. Its witnesses
 `TheftServedHonest` and `TheftServedNontrivial` are at the toy deployment (`Definitions.WeightSecurity.ToyServed`).
 
 `TheftFaulted` is the same deployment under SPOT's fault model (`Definitions.WeightSecurity.Faulted`): a fault is an
@@ -94,7 +94,7 @@ def TheftNontrivial : Prop :=
       Fintype.card Toy.silent.S * 2⁻¹ + 0
 
 open scoped ENNReal in
-/-- **Model weight security at an audited deployment that serves through the network certifier.** The weights are
+/-- **Model weight security at an audited deployment that serves through the network attester.** The weights are
 `gen ω` on uniform coins `ω`, and every other coin is one uniform `r` or the audit's own. The deployment serves the
 outsider `Ou`'s `T` queries one per window, and `run θ r` is its run at the weights `θ`, a game of the audit's coins
 (`Served`): each window's release, then its verdict. The deployment halts `L` windows after the first rejection. Suppose:
@@ -109,7 +109,7 @@ outsider `Ou`'s `T` queries one per window, and `run θ r` is its run at the wei
 Then `Ou` outputs a stolen model with probability at most
 $$|S| \cdot p + \delta + \Pr[\neg \mathrm{Local}],$$
 `S` the served channel's covert strings. `Served.Local` says each window's release changes at most `E` slots per
-incorrect proof block. The layers below the composition give it: the network certifier, that what leaves is the
+incorrect proof block. The layers below the composition give it: the network attester, that what leaves is the
 trace's outputs at its bucket, and the dataflow, that the trace is honest outside the incorrect proof blocks' egress
 cones. Neither layer reads the other. -/
 def TheftServed : Prop :=

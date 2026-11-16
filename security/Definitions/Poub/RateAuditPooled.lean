@@ -26,7 +26,7 @@ guarantees over these games conserve the words read, rebuilt or held, whoever re
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 /-- Rounds `0, …, n − 1`, round `j` with its own coins in `X j` and a sample of `s j` of `M` items, and round `i`'s
 good set `G i`, a function of all the rounds' coins: causal when `G i` reads only the rounds before `i` and round
@@ -82,4 +82,4 @@ def chain (A : Run n P N b h ρ S L q r s d) (w : Fin n) (ω : Fin n → WindowC
 
 end Run
 
-end Accounting.Rate
+end ResourceAccounting.Rate

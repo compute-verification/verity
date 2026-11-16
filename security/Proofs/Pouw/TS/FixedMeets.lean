@@ -1,12 +1,12 @@
 module
 
 public import Proofs.Pouw.TS.Sampled
-public import Proofs.Accounting.Lemmas.TS.Fixed
+public import Proofs.ResourceAccounting.Lemmas.TS.Fixed
 
 /-!
 # An honest run meets option A's hypotheses (non-vacuity)
 
-The witness Rule I asks of `Accounting.Guarantees.TS.UnitFixedOfWords` and `Accounting.Guarantees.TS.AdditiveFixed`:
+The witness Rule I asks of `ResourceAccounting.Guarantees.TS.UnitFixedOfWords` and `ResourceAccounting.Guarantees.TS.AdditiveFixed`:
 an honest word layer, with a K-chunk running sum and a glue, that meets every hypothesis of both statements.
 
 One round (`S = 1`) with one coin bit (`m = 1`, `C = Bool`), a sample bit (`B = Bool`) and four units, four samples a round
@@ -38,9 +38,9 @@ isn't (`SampledLayer.Covers`), and `Priced` holds of `glue` without a run in whi
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.FixedMeets
+namespace ResourceAccounting.SecurityProofs.TS.FixedMeets
 
-open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- The window's coins: one round, one coin bit, a sample bit. -/
 abbrev FCoins := Paths (Paths Bool 1 × Bool) 1
@@ -422,4 +422,4 @@ theorem additiveFixed_meets :
       fpf.committed xt (fpf.pos 0 1 2) ≠ fpf.committed (spliceAt (0 : Fin 1) (fpf.coin 0 1) xt xf) (fpf.pos 0 1 2) :=
   ⟨bound_chunk1, fun x => computed_all x (0, 1), rfl, late01, additive_moves⟩
 
-end Accounting.SecurityProofs.TS.FixedMeets
+end ResourceAccounting.SecurityProofs.TS.FixedMeets

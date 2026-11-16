@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,7 @@ from verity_vllm.config import (
     row_path,
     row_target,
     row_world,
+    stored_workloads,
     workload_files,
 )
 from verity_vllm.engine.arrivals import realized_arrive_steps
@@ -502,8 +504,7 @@ def test_the_generator_logs_what_it_did_each_message_at_its_level_and_keeps_its_
     self-check without `--check` at WARNING (the file is still written), and a refusal at ERROR beside its exit code."""
     row = "x__bf16__h100__tp1__b1__i256__o32__mixed__greedy__bi-eager"
     opts = dict(row_id=row, hf_repo="org/x", revision="0" * 40, batch=1, max_input=256, max_output=32, case="X", out=str(tmp_path / "w.json"))
-    a = W.Options(**opts)
-    plan = W.plan(row, 1, 256, 32, sampling=a.sampling, arrivals=a.arrivals, shared_prefix=0)
+    plan = W.plan(row, 1, 256, 32, sampling="greedy", arrivals="none", shared_prefix=0)
     bad = ["a request never arrives", "a request has no output"]
 
     def said() -> list[tuple[str, str]]:
@@ -613,3 +614,86 @@ def test_the_generator_writes_each_prompt_in_the_ids_of_the_models_tokenizer_and
         assert W.main(W.Options(**{**vars(opts), "tokenizer": str(named)})) == 0 and json.loads(out.read_text()) == doc
     with pytest.raises(FileNotFoundError, match=f"^tokenizer.json not found at {tmp_path / 'tokenizer.json'}$"):
         W.Tok(tmp_path)
+
+
+GENERATED = sorted(tomllib.loads(W.GENERATION.read_text())["row"])
+INT8 = "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+
+
+def test_generation_toml_lists_only_stored_rows_each_with_its_checkpoint():
+    assert len(GENERATED) >= 43 and set(f"{r}.json" for r in GENERATED) <= set(stored_workloads())
+    assert all(W.generation(r)["tokenizer_sha256"] for r in GENERATED)
+
+
+def test_every_row_generation_toml_lists_regenerates_from_its_id_alone_but_for_its_prompts_tokens(tmp_path, monkeypatch):
+    """`verity-vllm workload ROW` with nothing but the row id: each row the table lists comes out as its stored file, its note,
+    engine, target, reasons and sweep block included, all but the ids its tokenizer gives (an id a character here, under the
+    tokenizer's recorded digest; the byte-for-byte test below reads the real one)."""
+    for row in GENERATED:
+        sha = W.generation(row)["tokenizer_sha256"]
+        monkeypatch.setattr(W, "Tok", lambda p, sha=sha: type("Stamped", (_CharTok,), {"path": Path(p), "sha256": sha})())
+        out = tmp_path / f"{row}.json"
+        assert W.main(W.Options(row=row, tokenizer="tokenizer.json", out=str(out))) == 0
+        made, stored = json.loads(out.read_text()), json.loads((WORKLOADS / f"{row}.json").read_text())
+        for doc in (made, stored):
+            for r in doc["requests"]:
+                for k in TOKENIZED:
+                    r.pop(k, None)
+        assert made == stored, row
+
+
+@pytest.mark.parametrize("flag", [{"batch": 4}, {"hf_repo": "unsloth/Llama-3.2-1B"}, {"revision": "15b0976"}, {"sampling": "stoch-t0.8-p1"},
+                                  {"arrivals": "staggered"}, {"shared_prefix": 64}, {"case": "LLAMA32_1B"},
+                                  {"target": '{"int8_exact": "linears"}'}, {"reason": ["moe_backend=why"]}])
+def test_a_flag_that_disagrees_with_generation_toml_is_refused_by_name(tmp_path, flag):
+    (k, v), = flag.items()
+    with pytest.raises(UsageError, match=f"^{W.FLAGS[k]} .* disagrees with .*generation.toml and the row id state for {INT8}$"):
+        W.main(W.Options(row=INT8, lengths_only=True, out=str(tmp_path / "w.json"), **flag))
+
+
+def test_flags_that_agree_with_generation_toml_and_a_tokenizer_of_another_digest(tmp_path, monkeypatch):
+    out = tmp_path / "w.json"
+    agree = dict(row_id=INT8, hf_repo="verity-int8/Llama-3.2-1B-INT8", revision="15b0976d400d796ee589e7737d03a919526bf800", batch=1,
+                 max_input=256, max_output=32, sampling="greedy", arrivals="none", case="LLAMA32_1B_INT8", shared_prefix=0,
+                 target='{"num_sms": 132, "int8_exact": "linears", "compute_capability": [9, 0], "async_scheduling": false}')
+    assert W.main(W.Options(lengths_only=True, out=str(out), **agree)) == 0
+    assert json.loads(out.read_text())["note"].startswith(f"R12 sweep {INT8}: ")
+    with pytest.raises(UsageError, match=f"^ROW {GLM} and --row-id {INT8} name different rows$"):
+        W.main(W.Options(row=GLM, row_id=INT8, lengths_only=True, out=str(out)))
+    monkeypatch.setattr(W, "Tok", lambda p: type("Other", (_CharTok,), {"path": Path(p)})())
+    with pytest.raises(UsageError, match=f"^--tokenizer tokenizer.json: sha256 0{{64}}, not the {W.generation(INT8)['tokenizer_sha256']} "):
+        W.main(W.Options(row=INT8, tokenizer="tokenizer.json", out=str(out)))
+
+
+def test_a_row_generation_toml_does_not_list_needs_its_flags_and_a_row_entry_only_its_keys(tmp_path):
+    row = "x__bf16__h200__tp1__b1__i256__o32__mixed__greedy__eager"
+    with pytest.raises(UsageError, match="^--hf-repo, --revision, --batch, --max-input, --max-output required: generation.toml doesn't list"):
+        W.main(W.Options(row=row, lengths_only=True, out=str(tmp_path / "w.json")))
+    table = tmp_path / "generation.toml"
+    table.write_text(f'[checkpoint."x__bf16"]\nrepo = "org/x"\nrevision = "{REV}"\ncase = "X"\ntokenizer = "{"0" * 64}"\n'
+                     f'[row."{row}"]\nnote = "R12 "\n')
+    with pytest.raises(UsageError, match=r"^generation.toml: row .* states \['note'\], none of "):
+        W.generation(row, table)
+    table.write_text(table.read_text().replace('note = "R12 "', 'note_prefix = "R12 "\narrival_rule = "round"'))
+    g = W.generation(row, table)
+    assert (g["hf_repo"], g["batch"], g["arrivals"], g["note_prefix"], g["arrival_rule"]) == ("org/x", 1, "none", "R12 ", "round")
+    assert W.plan(row, 1, 256, 32, sampling="greedy", arrivals="none", arrival_rule="round")["arrival_rule"]["arrive_step"] == (
+        "round(offset_s / nominal_step_s)")
+
+
+def test_every_row_generation_toml_lists_regenerates_byte_for_byte_where_its_tokenizer_is_present(tmp_path):
+    """The rows' bytes, prompts included: each row whose checkpoint's tokenizer.json is in the Hugging Face cache (its revision's
+    snapshot under `$HF_HOME`, or its `tokenizer_of` checkpoint's), with the `tokenizers` library, regenerated from its id alone is the file `SHA256SUMS` names.  The
+    stand-in of the test above gives other ids, so only this test reads the prompts; it runs where the cache holds them."""
+    pytest.importorskip("tokenizers")
+    sums, checked = stored_workloads(), []
+    for row in GENERATED:
+        g = W.generation(row)
+        if W.row_tokenizer(g["hf_repo"], g["revision"], g["tokenizer_at"]) is None:
+            continue
+        out = tmp_path / f"{row}.json"
+        assert W.main(W.Options(row=row, out=str(out))) == 0
+        assert hashlib.sha256(out.read_bytes()).hexdigest() == sums[f"{row}.json"], row
+        checked.append(row)
+    if not checked:
+        pytest.skip(f"no listed row's checkpoint tokenizer.json under {W.hf_home()}")

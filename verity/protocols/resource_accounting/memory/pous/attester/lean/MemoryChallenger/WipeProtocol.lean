@@ -26,14 +26,14 @@ The streamed-label wipe's verdict (`StreamedWipe.verdict`, the wipe judge of rec
   memory challenger has signed it, and `null` while it hasn't (its reads incomplete, or not yet verified).
   `egress_mib` is the one egress count the check reads (`Evidence.egress`), in whole MiB
   (`StreamedWipe.egressUnits`' unit); with `null` it is `EGRESS_MAX_UNITS`, which bounds nothing. The session signs
-  no egress, and this check holds the count to nothing: that it is the network certifier's count over the span
-  between the session's two marks is for the check that composes the wipe with the network certifier;
+  no egress, and this check holds the count to nothing: that it is the network attester's count over the span
+  between the session's two marks is for the check that composes the wipe with the network attester;
 * the check: a commitment of another server or session rejects; an egress outside 0 to `EGRESS_MAX_UNITS` rejects;
   an unsigned session is undecided; else `verdict`, whose reasons, joined by `"; "`, are a rejection's.
 
 On acceptance it publishes `uncounted`, `certify` at `EGRESS_MAX_UNITS`: `certified` false, whatever count the
-evidence names. No network certifier signs that count, so until the check that composes the wipe with the network
-certifier holds it to the certifier's, the bound is taken on no count, and the profile names the evidence's count as
+evidence names. No network attester signs that count, so until the check that composes the wipe with the network
+attester holds it to the certifier's, the bound is taken on no count, and the profile names the evidence's count as
 a gap (`writerGap`).
 
 `certify` is what that check is to publish: the foreign content an accepted wipe may leave and the error that holds at,
@@ -186,10 +186,10 @@ def certify (p : StreamedWipe.Params) (egressMib : Int) : Public :=
   else ⟨false, egressMib, ⟨0, 1⟩, m, p.k, m, r⟩
 
 /-- What an accepted wipe publishes: `certify` at `EGRESS_MAX_UNITS`, which certifies nothing, whatever count the
-evidence names, since no network certifier signs that count. -/
+evidence names, since no network attester signs that count. -/
 def uncounted (p : StreamedWipe.Params) : Public := certify p StreamedWipe.EGRESS_MAX_UNITS
 
-/-- The evidence's count, when it names one `gaps` doesn't: the evidence writer's, which no network certifier signs. -/
+/-- The evidence's count, when it names one `gaps` doesn't: the evidence writer's, which no network attester signs. -/
 def writerGap (egressMib : Int) : List String :=
   if egressMib < 0 || egressMib ≥ StreamedWipe.EGRESS_MAX_UNITS then []
   else [s!"the egress count is {egressMib} MiB, the evidence writer's, which no network certifier signed: no wipe " ++
@@ -246,7 +246,7 @@ def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 
 /-- **What a wipe accounts for** (`Core.Account`): the foreign bits the server may still hold after an accepted wipe
 (`foreign_bits`), free from above, against the memory the wipe declared (`memory_bits`, its capacity), at the error its
-bound states (`eps`), at a moment. Until the network certifier's count reaches the check, every accepted wipe publishes
+bound states (`eps`), at a moment. Until the network attester's count reaches the check, every accepted wipe publishes
 `certified` false, and its rows say so. The wipe is computed at `memory_bits`, which must be at least the memory
 registered for the server (`params`): foreign bits outside what it declared are outside its bound.
 

@@ -314,7 +314,7 @@ def test_serve_openai_refuses_what_the_pearl_arm_cant_serve_before_the_model_loa
     assert "not Pearl+'s to give" in refused(*arm[:4], "--protocols-config", json.dumps({"pouw": {"transcript_dir": "/t"}}))
     assert "are not Pearl+'s (pouw)" in refused(*arm[:4], "--protocols-config", json.dumps({"pous": {}}))
     after = cli.parse("serve-openai", [*base, *arm, "--release-after", SPL.DRAWER], environ={})
-    assert SPL.refusal(after).startswith(f"--release-after {SPL.DRAWER} waits for PoUW H1's draw")
+    assert SPL.refusal(after).startswith(f"--release-after {SPL.DRAWER} waits for PoUW H1's sample")
     assert SPL.refusal(cli.parse("serve-openai", base, environ={})) is None
 
 

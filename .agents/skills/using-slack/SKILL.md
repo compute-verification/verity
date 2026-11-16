@@ -72,9 +72,10 @@ msg owners PATH...` names each path's owner (longest prefix).
   instead, on that one's project and milestone; `--title TEXT` names it. A lane with no team of its own (`linear_label` in
   the registry) files in its parent's team with its `lane:` label. `send` files nothing, whatever its `--kind`: a ping,
   an fyi or a status line is a post only.
-- **Answered is the ask's record**: its Linear issue out of Backlog or commented on by someone other than the asker, a
-  Daniel card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists
-  the unanswered; take a linked ask on its issue. A mirrored machine alert (kind `alert`, with its `(alert: <link>)`)
+- **Answered is the ask's record**: its Linear issue out of Backlog or commented on by a handle the ask names (or that
+  handle's worker, `LANE/NAME`; with no handle named, by anyone but the asker), a Daniel card's page no longer Waiting on
+  Daniel, else a reply or reaction in the thread. `research msg traffic` lists the unanswered; take a linked ask on its
+  issue. A mirrored machine alert (kind `alert`, with its `(alert: <link>)`)
   is no ask: `traffic` lists it once, however often it repeats, as an alert to the names it addresses.
 - **Work items are Linear issues**: filing, titling, placing, commenting on and closing them, and how long each message
   is, are the coordinating skill's (`.agents/skills/coordinating/SKILL.md`). In #agent-coordination, `send`, `reply`,

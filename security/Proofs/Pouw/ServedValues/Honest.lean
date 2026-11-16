@@ -28,8 +28,8 @@ namespace Properties.Pouw.ServedValues.SecurityProofs.HonestValues
 
 open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
 open Properties.Pouw.ServedValues.SecurityProofs Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposeMonitoringPeriod
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The declared Boolean circuit and its blocks -/
 

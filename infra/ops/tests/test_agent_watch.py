@@ -1,8 +1,11 @@
 """The agent watch frees a held run: RUNNING, its last event a finished tool call, then nothing but heartbeats for
 15 minutes. It cancels the run, starts a 'continue' run on the agent, and records it; it never cancels a long tool call."""
+import ast
 import io
 import json
 import re
+import subprocess
+import sys
 import uuid
 
 import pytest
@@ -3016,7 +3019,7 @@ def test_read_heads_remembers_each_pushed_sha_s_branch_for_two_days(tmp_path):
 
 
 def test_a_quiet_handles_runs_are_not_rung(tmp_path):
-    """Drive's train checks end every few minutes under `--by ci`, and drive reads them itself: ringing ci for each is noise."""
+    """Drive's candidates' checks end every few minutes under `--by ci`, and drive reads them itself: ringing ci for each is noise."""
     api, clock, w, sh, roots = nodes_setup(tmp_path)
     cfg = json.loads((tmp_path / "nodes.json").read_text())
     (tmp_path / "nodes.json").write_text(json.dumps({**cfg, "quiet_handles": ["vllm"]}))
@@ -5380,6 +5383,30 @@ def test_the_pods_wrapper_hands_the_watch_the_read_token_s_command_and_the_file_
     assert " --gh-env /root/.config/verity/relay.env " in sh
     assert not re.search(r"(^|[\s;(])(\.|source)\s+\S*relay\.env", sh), "never sourced"
     assert "GH_TOKEN" not in sh and "GH_TOKEN" not in open(W.__file__).read()
+
+
+def test_the_pods_wrapper_starts_the_watch_with_every_module_it_imports_on_its_path(tmp_path):
+    """The wrapper starts the watch with the pod's bare Python and only the environment it sets itself. Whatever the watch
+    imports beyond the standard library must be under a `PYTHONPATH` the wrapper exports before its `exec`, in the watchers
+    tree (a commit's tree at /data/watchers/src): without it the watch exits at its first import, each time it is started."""
+    root = W.Path(__file__).resolve().parents[3]
+    sh = (root / "infra/control/agent_watch.sh").read_text()
+    before, started, _ = sh.partition(" exec python3.12 /data/infra/agent_watch.py loop ")
+    assert started, "the wrapper starts the watch from its copy on the pod"
+    outside = {a.name.split(".")[0] for n in ast.parse(open(W.__file__).read()).body if isinstance(n, ast.Import) for a in n.names}
+    outside |= {n.module.split(".")[0] for n in ast.parse(open(W.__file__).read()).body if isinstance(n, ast.ImportFrom)}
+    outside -= sys.stdlib_module_names
+    paths = [p for line in re.findall(r"^\s*export PYTHONPATH=(\S+)$", before, re.M) for p in line.split(":")]
+    assert all(p.startswith("/data/watchers/src/") for p in paths), "the one tree of ours the pod holds whole"
+    here = [str(root / p.removeprefix("/data/watchers/src/")) for p in paths]
+    missing = sorted(m for m in outside if not any((W.Path(h) / m).is_dir() or (W.Path(h) / f"{m}.py").is_file() for h in here))
+    assert not missing, (
+        f"agent_watch.py imports {missing} beyond the standard library, and agent_watch.sh exports PYTHONPATH={paths}: "
+        "export the watchers tree's directory of each before the exec line, or the watch can't start on the pod")
+    # as the pod starts it: no site-packages (-S), no environment but the wrapper's path, from another directory
+    r = subprocess.run([sys.executable, "-S", W.__file__, "loop", "--help"], env={"PYTHONPATH": ":".join(here)}, cwd=tmp_path,
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and "usage:" in r.stdout, r.stderr[-500:]
 
 
 def test_a_file_that_does_not_parse_reads_as_empty_and_says_so_while_a_missing_one_says_nothing(tmp_path, capsys):

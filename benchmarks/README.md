@@ -30,16 +30,15 @@ says. These are the directories that have one:
 | `verity bench landing` | mark to `main` over the last 7 days, plain and Lean: each class's p90, median, count and share within 2 h, as a local research run (its README) |
 | `verity bench lean_unread_gate` | the unread landing gate on one change, timed by stage with its git calls counted, and with `--against REV` its guard: the same verdict as the gate at REV |
 | `verity bench memory` | the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, from a gate run on the whole node, a recorded run or a loopback |
-| `verity bench moe_align` | the canonical `moe_align_block_size` on one GPU: its outputs run to run, the plugin as vLLM loads it, and its cost |
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network attester's calibration |
-| `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a measured cell, the reference checker |
+| `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a benchmark result, the reference checker |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
 | `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.py` or else its `run.sh`; given no NAME, the names |
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
 | `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
 | `verity bench property_redteam` | a stacking-property check graded against the red team's cases |
-| `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`), a row a block type, and the Lean verifier timed on one kept proof (`lean-verify`) |
+| `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`) for each block type, and the Lean verifier timed on one kept proof (`lean-verify`); and the proof benchmark by layer, Flock, with zero knowledge, with sampling and with recursion, the benchmark result for each layer read from its own run's output (`layers`) |
 | `verity bench prove_path` | a served run's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
 | `verity bench rate_squaring` | squarings a second modulo the store codec's primes, each form gated before it is timed: `sq` on one GPU, `ifma` on the host's CPUs |
 | `verity bench recursion_e2e` | recursive witness zero knowledge, timed step by step: `plan`, `run`, `result`, `table` and `store` |
@@ -60,8 +59,9 @@ says. These are the directories that have one:
 | `verity bench word_codec` | the KV cache's Sloth codec on one GPU: its tests and its benchmark at each width |
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
-README. `verity-bench` is the harness's own command. `verity bench numerical judge` compares two results under the
-proof campaign's contract.
+README. `benchmarks/kernels/`'s directories have no `verity bench` name: each runs as its script's header says, the
+canonical `moe_align_block_size` on one GPU as `bash benchmarks/kernels/moe_align/run.sh`. `verity-bench` is the
+harness's own command. `verity bench numerical judge` compares two results under the proof campaign's contract.
 
 ## The harness
 
@@ -72,7 +72,12 @@ points, each with an identity. `verity-bench run SPEC` records one run per point
 only when every point has one, `compare` and `table` accept results only when their identities agree, and
 `served-table` and `breakdown` render from the evidence store. It also holds the code behind `verity bench overhead`.
 The harness's kit (`harness/verity_bench/kit.py`) holds what runners share, each written once: the GPU lease, the host
-stamp, the paired ratio and the result's writer, which records measurements and refuses a verdict of record.
+stamp, the paired ratio, the result's writer, which records measurements and refuses a verdict of record, and the
+report, the one way `verity bench compute`, `verity bench memory` and `verity bench inference_only` print and write
+their number. The report prints the text, then one line of JSON whose first keys are `value`, `unit`, `commit` and
+`run`. Under a research run it writes that line to `$RESEARCH_RUN_DIR/out/NAME.json` and the measurements to
+`$RESEARCH_RUN_DIR/result.json`; outside one, with `OUT` set, to `$OUT/NAME.json` and `$OUT/result.json`; with
+neither set, or set empty, it writes nothing. A command's `--out DIR` names the place in place of those.
 `benchmarks/harness/README.md` is its contract: how a point is timed and what a result says.
 
 ## What a benchmark may import and write
@@ -95,14 +100,76 @@ Some files here still break these rules: a kernel or a store the integration loa
 holds, the exporter of Lean data a guarantee reads. Each moves out to the package that uses it, and none is a pattern
 for a new benchmark.
 
+## The core benchmarks' interface
+
+The core benchmarks take and print the same things in the same form. Each rule is a call of the harness's kit
+(`harness/verity_bench/kit_report.py`, re-exported by `kit`), so a command follows it by calling it.
+
+1. **What a command takes:** `--from DIR`, a run's record as a directory (the run's directory as `research run` leaves
+   it: its `job.json` and `out/`). It is read with nothing of ours: no store, no host, no key and no import of
+   `research`. A run id is taken only where `research` is installed, and is fetched to such a directory first, past
+   the store's withdrawals: a run withdrawn whole, or in a part that holds a file the command reads, is refused with its
+   reason before anything is fetched, and a withdrawal of only other files of it is printed beside the number and is
+   the document's `withdrawn` (`kit.report(..., withdrawn=...)`). `kit.record_dir(arg, paths=...)` gives the directory,
+   and `kit.record(arg, paths=...)` the directory and the withdrawals (`kit.Record`); each refuses anything else in one
+   line naming the fix (`kit.NoRecord`).
+2. **One line of coins and parameters,** right after the command's first line: `ran with: coins COINS; parameters
+   PARAMETERS (DETAIL)`, and in the document `ran_with: {coins, parameters, detail}`. COINS is `deployed challenger`,
+   `local challenger` (its own process on this machine) or `in-process` (the serve holds the challenger); PARAMETERS
+   is `deployed` or `development`; DETAIL is the command's own words (its sample, δ, scheme, key). `kit.ran_with(coins,
+   parameters, detail, verified=...)` refuses other words. `verified=True` is passed only where the command itself
+   checked the challenger's signature on the coins against a pinned key. `deployed challenger` without it is the
+   record's own word: the object holds `verified: false`, and the line `coins by the record's own word, not checked` is
+   printed under the audit line. A record that predates the field prints `ran with: not stated` (`ran_with=None`), and
+   `ran_with` null.
+3. **A number only from a run the Lean verifier accepted:** a command's headline, its number, is its text's first line,
+   opening with `NAME:` (`compute: 0.75 …`). `kit.report(..., accepted=False, why=WHY)` prints `NAME: no number: WHY`
+   in its place: a first line that opens with `NAME:` is dropped, and the rest of the text follows as the command's
+   detail, which states no number of the run. It writes `value` null beside `no_number`, writes each measurement with no
+   value and its why, and returns exit code 1, which `main()` returns; an accepted run returns 0.
+4. **Not an audit:** the document holds `audit: true` only for coins the deployed challenger flipped, verified by the
+   command against a pinned key, at `deployed` parameters. Anywhere else the line `a measurement, not an audit` is
+   printed under the `ran with` line, and the document holds `audit: false`. A record's own word about its coins is
+   stated as such and is never an audit. The kit derives it from `ran_with`; the command does not choose it.
+5. **Its README's three parts,** under these headings: `## What you may change`, `## What is fixed` and
+   `## How a cheating change is refused`.
+6. **Its numbers on the dashboard:** every number the command prints is also a measurement, written by the kit's writer
+   (`kit.report`'s `measured`), under the `id` of a metric of its directory's `metrics.toml` (a variant of one
+   number, such as a clock reading, is that metric's `member`), and the metric's `goal` is the benchmark's goal. Only
+   a run of ours through `research run` reaches the Metrics tab ("Metrics" below); a person outside gets the print and
+   `result.json`.
+
+**A made-up record** (a fixture, a test's record, anything no run left) is reported with `kit.report(...,
+made_up=True)`: the line `a made-up record, not a run's` is printed under the audit line, the document holds
+`made_up: true` and is no audit, and every measurement written from it is marked `modeled` (figures no run measured)
+and carries `made_up: true`, so its `result.json` passed on alone never reads as a run's measurement. A fixture record
+passes `made_up=True` wherever it is reported, whatever its own files say of its coins, parameters or commit.
+
+`kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=...)` is the command's
+last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit").
+
+A command declares that it follows the interface in its own directory's `pyproject.toml`, in the change that makes it
+follow:
+
+```toml
+[tool.verity.interface]
+core = "verity bench NAME"
+```
+
+`harness/tests/test_interface.py` reads that key from every `benchmarks/*/pyproject.toml` and holds each directory that
+declares it to its README's three headings, its call of `kit.report` with `ran_with` and `accepted`, and each
+measurement name its source gives as a metric of its `metrics.toml` with a `goal` (rule 6, for a directory the test's
+`DASHBOARD_NOT_YET` doesn't name, each entry saying what it writes that is no metric). The harness's suite lists the
+directory and its README among its inputs, which the test checks too.
+
 ## Metrics
 
 Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
-(the first `.py` or `.sh` under `benchmarks/`, `infra/` or `tools/` the command names:
+(the first `.py` or `.sh` under `benchmarks/`, `demos/`, `infra/` or `tools/` the command names:
 `benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
-`infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each row's `owner` owns its file:
-the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a lead's
-numbers in another lead's directory take a file entry of their own there. The console's Metrics tab reads every
+`infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each metric's `owner` owns its
+file: the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a
+lead's numbers in another lead's directory take a file entry of their own there. The console's Metrics tab reads every
 `metrics.toml` on `main` under `benchmarks/`, `demos/`, `infra/` or `tools/`, and `research metrics show` reads the
 tab's report.
 
@@ -112,13 +179,15 @@ it reaches the tab only from that preserved `result.json`, through the store's i
 preserved. A loop that samples a number (the control pod's, `infra/control/loop_metrics.py`) sends it as a reading to
 the site's `POST /api/metrics` (`research.metrics.send`) under a site key with `panels:write`; an agent's identity
 can't send one. A reading names the `command` that computed it and never a run, and the site refuses a reading that
-names a run. So every value on the tab is a preserved run's or a sent reading's. Of the readings sent for a row, the
-tab shows those that name no `period`, `over` or `member`, from the last 62 days: each of the last day, and the last
-of each three hours before it.
+names a run. So every value on the tab is a preserved run's or a sent reading's. Of the readings sent for a metric, the
+tab's values are those that name no `period`, `over` or `member`, from the last 62 days: each of the last day, and the
+last of each three hours before it. Beside them it lists the newest reading of each line that names a `member`, which
+stays listed while it is within that window, whether or not the loop still sends it.
 
-Its owner keeps a row within its `every`: the control pod's rerun loop (`infra/control/metrics_rerun.py`) launches the
-`command` of a row whose newest value is older than its `every` as a `research run`, within the bounds its docstring
-lists, and a row whose command's script is under `infra/` is a loop's, which the loop sends. A row's keys:
+Its owner keeps a metric within its `every`: the control pod's rerun loop (`infra/control/metrics_rerun.py`) launches
+the `command` of a metric whose newest value is older than its `every` as a `research run`, within the bounds its
+docstring lists, and a metric whose command's script is under `infra/control/` is a loop's, which the loop sends. A
+metric's keys:
 
 - `id`: `OWNER/NAME`, under its owner's prefix.
 - `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
@@ -134,35 +203,36 @@ lists, and a row whose command's script is under `infra/` is a loop's, which the
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
   list of words.
 
-The site refuses a row with any other key: it lists the row with why and shows none of it, so a new key reaches the
-site's reader before a row uses it.
+The site refuses a metric with any other key: it lists the metric with why and shows none of it, so a new key reaches
+the site's reader before a metric uses it.
 
 Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
 writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
 and also writes as the first of its `inputs`, where the tab reads it until it reads `mark`. A sent reading carries
 `mark` itself, which the site requires.
 
-A value over a span of time or of compute says which, each as its own field of the measurement, held only where
-given: `period`, one of `phase`, `week`, `month` or `year` (`kit.PERIODS`), and `over`, `world` or `datacenter`
-(`kit.OVER`). A run's result holds one measurement a name, period and `over`, and the writer refuses a second, so one
-id may give a value for each period and scope it is computed at, each in its own unit (`verity bench exfiltration`'s
-three, over a week, a month and a year of a datacenter's and of the world's compute). A value for one member of a set
-(a deployed guarantee, a lead) names it as `member`, a non-empty string held only where given, and the writer keys on
-it too, so one id gives a value for each member (`lean/trust-gap`'s, one a deployed guarantee). Of a run's
-measurements under one id, the tab shows the one written last, one point a run. So a benchmark that writes one id for
-several periods, scopes or members writes the row's own last: the one its `title`, `unit` and `axis` are for
-(`exfiltration-gb-world-year`'s, the `year` over the `world`).
+A value over a span of time or of compute says which, each as its own field of the measurement, held only where given:
+`period`, one of `phase`, `week`, `month` or `year` (`kit.PERIODS`), and `over`, `world` or `datacenter` (`kit.OVER`). A
+run's result holds one measurement a name, period and `over`, and the writer refuses a second, so one id may give a
+value for each period and scope it is computed at, each in its own unit (`verity bench exfiltration`'s three, over a
+week, a month and a year of a datacenter's and of the world's compute). A value for one member of a set (a deployed
+guarantee, a lead) names it as `member`, a non-empty string held only where given, and the writer keys on it too, so one
+id gives a value for each member (`lean/trust-gap`'s, one a deployed guarantee). Of a run's measurements under one id,
+the tab's value is the one written last that names no member, or, where the run wrote none without a member, the one
+written last: one point a run. Beside it the tab lists the measurements that name a member from the newest run that
+wrote any. So a benchmark that writes one id for several periods, scopes or members writes the metric's own last: the
+one its `title`, `unit` and `axis` are for (`exfiltration-gb-world-year`'s, the `year` over the `world`).
 
 The tab lists each number under every top goal its `goal` is or sits under, a top goal being a goal on the Goals page
 that nothing waits on, other than `top/parked`. A number whose goal sits under `top/parked` and under no top goal reads
 "parked".
 
-`tests/test_metrics_registry.py` refuses a row that lacks a key the list above doesn't mark optional or holds one it
-doesn't list, an id declared twice across all the files, an unknown owner, an owner who
-doesn't own the row's file, an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a
-`better` other than `lower` or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script
-is missing or whose directory never names the id, a row whose command's first script is outside the directory of the
-file declaring it, and a shared `metrics.toml` directly under `benchmarks/`.
+`tests/test_metrics_registry.py` refuses a metric that lacks a key the list above doesn't mark optional or holds one it
+doesn't list, an id declared twice across all the files, an unknown owner, an owner who doesn't own the metric's file,
+an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a `better` other than `lower`
+or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing or whose
+directory never names the id, a metric whose command's first script is outside the directory of the file declaring it,
+and a shared `metrics.toml` directly under `benchmarks/`.
 
 ## Index
 
@@ -182,7 +252,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `harness/` | `verity-bench`: its specs and sweeps (`specs/`, one TOML file each), recorded runs and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
-| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`); and the share of a served run's drawn units whose proofs the Lean verifier accepted on the auditor's machine (`sampled_accepted.py`) | maintained |
+| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`); and the share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the auditor's machine (`sampled_accepted.py`) | maintained |
 | `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
@@ -330,4 +400,4 @@ How fast the team's leads answer each other: measured on Linear's comments, not 
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `security_findings/` | the security review's serious findings still open (`findings.toml`): each closed only by the check `open_findings.py` holds for it, run on the checkout | maintained |
+| `security_findings/` | the security review's serious findings still open (`findings.toml`): each closed only by the check `open_findings.py` holds for it, run on the checkout, the machine it runs on and the readings of what it can't reach (`readings.toml`) | maintained |

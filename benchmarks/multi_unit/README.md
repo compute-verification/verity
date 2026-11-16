@@ -3,9 +3,9 @@
 Three ways to state `ScaledMmFp8Block_v2{K,N,128}` for Flock (`verity_flock.multi_unit`), measured side by side on CPUs at
 each shape `K:N:n` (n instances, one x row each):
 
-- `c`: one statement, N * K/128 k-step units and a scale stage of N slots per VU, the stage returning the outputs;
-- `b`: two statements joined by a row, the writer's units returning temp and s and the reader's units the scale stage;
-- `a`: two tables with glue, `c`'s unit and stage circuits as tables and every stage port a glue relation (no rows, no `--zk`).
+- `c`: one statement, N * K/128 k-step proof blocks and a scale stage of N slots per VU, the stage returning the outputs;
+- `b`: two statements joined by a row, the writer's proof blocks returning temp and s and the reader's proof blocks the scale stage;
+- `a`: two tables with glue, `c`'s proof block and stage circuits as tables and every stage port a glue relation (no rows, no `--zk`).
 
 For each shape, `stage.py` stages `c` and `b` from synthetic values (checked against the served kernel's numpy twin and, when
 small enough, the Definition's evaluation); `prove.py` runs one loopback session of each without `--zk` and one with it,

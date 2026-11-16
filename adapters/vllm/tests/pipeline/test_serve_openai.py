@@ -527,7 +527,7 @@ def dechunked(raw: bytes) -> tuple[bytes, bytes]:
     return head, body
 
 
-def test_ids_answers_in_id_form_exactly_the_network_certifiers_id_requests():
+def test_ids_answers_in_id_form_exactly_the_network_attesters_id_requests():
     """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network attester's release
     headers (`release.with_release`: the release, the run and, as the certifier sends it, the release's bucket); its base
     for anything else, the shim's rebuilt POST, an id request in other cells, or bytes that aren't a request."""
@@ -539,7 +539,7 @@ def test_ids_answers_in_id_form_exactly_the_network_certifiers_id_requests():
     assert proto.PlainProtocol().of(id_request()).name == "plain"
 
 
-def test_under_ids_the_network_certifiers_id_request_streams_raw_id_events_then_done(tmp_path):
+def test_under_ids_the_network_attesters_id_request_streams_raw_id_events_then_done(tmp_path):
     """``--protocol ids`` on the network attester's own id request (`id_form.id_request` in its P + 9-byte cells, offset 0, with the
     release headers the certifier adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
     each sampled id one event of P bytes, then ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the
@@ -627,7 +627,7 @@ def test_under_ids_a_failed_stream_stops_unterminated():
     assert server.stream_errors["n"] == 1 and server.stream_errors["first"][0]["protocol"] == "plain"
 
 
-def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_path):
+def test_under_ids_the_network_attesters_clients_get_vllms_http_and_json(tmp_path):
     """The same endpoint under ``--protocol ids`` for the network attester (a shim straight to the
     endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
     ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's

@@ -33,7 +33,7 @@ bits; the sample's shortfall is `d̄` over the monitoring period and `d_w` in a 
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits)
 
@@ -233,7 +233,7 @@ end DeployedRun
 namespace Deployed
 
 /-- The bits a pass can complete with compute `F`, when `x` bits cost at least `x/b` of a word's price
-`rounds · c_root` (`Accounting.Assumptions.WorkHardness`): `b·F/(rounds·c_root)`. -/
+`rounds · c_root` (`ResourceAccounting.Assumptions.WorkHardness`): `b·F/(rounds·c_root)`. -/
 def rebuildBits (b rounds cRoot F : ℕ) : ℕ := b * F / (rounds * cRoot)
 
 /-- `μ_chip`: the on-chip state, `S` bits a pass, as a fraction of the pass's `N·b`. -/
@@ -254,4 +254,4 @@ noncomputable def gammaPass (N b ρ S L lam rounds cRoot F : ℕ) : ℝ :=
 
 end Deployed
 
-end Accounting.Rate
+end ResourceAccounting.Rate

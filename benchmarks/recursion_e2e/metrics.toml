@@ -3,7 +3,9 @@
 
 # `record.py run` launches `run.py run`'s job as one recorded run on a CPU node (the default behind the ZK server: 85's CPU prover,
 # no GPU), a few hours at K = 4096, with record.py around job.sh, which writes both numbers from job.sh's result. Recursion
-# is parked (top/parked), so it is rerun monthly.
+# is rerun monthly. Its two numbers are the proof table's recursion row on the Metrics tab (top/proof-table-recursion-row):
+# `verity bench prove layers` prints that row and writes neither, since its seconds are a whole recursive run's, not a
+# proof block's.
 [[metric]]
 id = "benchmarks/recursion-run-seconds"
 title = "Recursive audit run time"
@@ -13,7 +15,7 @@ axis = "Seconds an auditor waits for one recursive run behind the ZK server: the
 better = "lower"
 command = "uv run python benchmarks/recursion_e2e/record.py run"
 every = "30d"
-goal = "top/parked"
+goal = "top/proof-table-recursion-row"
 
 [[metric]]
 id = "benchmarks/recursion-lean-verifier-seconds"
@@ -24,4 +26,4 @@ axis = "Seconds the auditor's Lean verifier takes on one recursive run: every V*
 better = "lower"
 command = "uv run python benchmarks/recursion_e2e/record.py run"
 every = "30d"
-goal = "top/parked"
+goal = "top/proof-table-recursion-row"

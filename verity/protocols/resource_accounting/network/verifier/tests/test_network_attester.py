@@ -25,11 +25,11 @@ from verity.protocols.resource_accounting.network.verifier.release import (WATER
                                                      with_release)
 from verity.protocols.resource_accounting.network.verifier.tests.test_network_attester_release import NOT_ONE_REQUEST, ONE_REQUEST
 from verity.protocols.resource_accounting.network.verifier.network_attester import (END, FAIL, INTEGER_FIELDS, KIND_NAMES, PARAMETERS_TAG, REASONS,
-                                                    REFUSED, WRITE_BACKLOG, Shim, NetworkCertifier, NetworkCertifierParams, audit, cell,
+                                                    REFUSED, WRITE_BACKLOG, Shim, NetworkAttester, NetworkAttesterParams, audit, cell,
                                                     cells, read_cell, read_reason, reason_frame)
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 
-PARAMS = NetworkCertifierParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=2, window=24, ingress_cells=8,
+PARAMS = NetworkAttesterParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=2, window=24, ingress_cells=8,
                       ingress_buckets=6, egress_cells=12, egress="bytes")
 B, P, R, D = PARAMS.cell_bytes, PARAMS.payload, PARAMS.slots, PARAMS.delay
 #: the id egress form at cells that hold an id event: PARAMS' schedule otherwise
@@ -120,7 +120,7 @@ class Client:
     """One client connection: its cells in its reader, every write with the bucket it was made in, and the bucket its
     stream was ended in while the connection stayed open (`ended`), if it was."""
 
-    def __init__(self, network_attester: NetworkCertifier, data: bytes | tuple[bytes, bool]) -> None:
+    def __init__(self, network_attester: NetworkAttester, data: bytes | tuple[bytes, bool]) -> None:
         self.network_attester, self.writes, self.closed = network_attester, [], False
         self.ended: int | None = None
         self.transport = self
@@ -174,7 +174,7 @@ class SocketClient(Client):
     """A client whose connection's network attester end is a socket, the one a paced network attester's pacer writes
     to, and whose other end the test reads (`received`) once the run is over."""
 
-    def __init__(self, network_attester: NetworkCertifier, data: bytes | tuple[bytes, bool]) -> None:
+    def __init__(self, network_attester: NetworkAttester, data: bytes | tuple[bytes, bool]) -> None:
         self.ours, self.peer = socket.socketpair()
         self.ours.setblocking(False)
         super().__init__(network_attester, data)
@@ -194,7 +194,7 @@ class SocketClient(Client):
         return bytes(out)
 
 
-def settled(network_attester: NetworkCertifier, server: Server) -> bool:
+def settled(network_attester: NetworkAttester, server: Server) -> bool:
     cap = network_attester.params.egress_cells * network_attester.params.payload
     if sum(c.server is None and c.upstream is None for c in network_attester.active) != len(server.held):
         return False
@@ -209,13 +209,13 @@ def settled(network_attester: NetworkCertifier, server: Server) -> bool:
 
 
 async def drive(server: Server, arrivals: dict[int, list[bytes]], *, windows: int = 1, late: dict | None = None,
-                params: NetworkCertifierParams = PARAMS, client: type[Client] = Client, **hooks):
+                params: NetworkAttesterParams = PARAMS, client: type[Client] = Client, **hooks):
     """Connect `arrivals[t]` (each a client's raw cell bytes) just before bucket t's tick, let the server answer what is
     due and the network attester read it, then tick, and with `paced` wait for the pacer to report the bucket's
     release, for `windows` windows; `late[t]` puts tick t that many seconds late. `hooks` are the network attester's
     `publish`, `release` and `paced`."""
     clock = VirtualClock(-TAU / 2)
-    network_attester = NetworkCertifier(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
+    network_attester = NetworkAttester(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
     running = asyncio.create_task(network_attester.run())
     clients: list[Client] = []
     for t in range(windows * params.window):
@@ -239,11 +239,11 @@ def run(answers, arrivals, **kw):
     return network_attester, clients, server
 
 
-def records(network_attester: NetworkCertifier):
+def records(network_attester: NetworkAttester):
     return tuple([r for r in network_attester.records if r.link == link] for link in ("requests", "responses", "fails"))
 
 
-def reasons(network_attester: NetworkCertifier) -> list[tuple[int, int, str]]:
+def reasons(network_attester: NetworkAttester) -> list[tuple[int, int, str]]:
     """(bucket, ordinal, reason) of every frame of the `fails` record."""
     p = network_attester.params
     return [(r.window * p.window + b, *read_reason(f, p.cell_bytes)) for r in records(network_attester)[2]
@@ -443,7 +443,7 @@ def test_a_tick_whose_wait_ends_early_waits_again_and_never_runs_before_its_boun
 
     async def go():
         clock = EarlyClock(-TAU / 2)
-        device = NetworkCertifier(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+        device = NetworkAttester(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
         running = asyncio.create_task(device.run())
         before, after = [], []
 
@@ -502,7 +502,7 @@ def test_the_network_certifiers_clock_is_the_hosts_raw_one_and_its_wait_is_again
     monkeypatch.setattr(pacer.time, "clock_gettime", read)
     monkeypatch.setattr(device_module, "precise_sleep", short)
     monkeypatch.setattr(device_module, "Pacer", Paced)
-    device = NetworkCertifier(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=0.05)
+    device = NetworkAttester(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=0.05)
     assert device.clock is pacer.raw_clock
     asyncio.run(device.run())
     assert started == ["raw"]
@@ -526,7 +526,7 @@ def test_a_host_without_a_raw_clock_starts_no_network_attester(monkeypatch):
         waits.append(delay)
 
     monkeypatch.setattr(pacer.time, "clock_gettime", refuse)
-    device = NetworkCertifier(PARAMS, Server([]).connect, origin=0.0, windows=1, sleep=sleep, paced=0.05)
+    device = NetworkAttester(PARAMS, Server([]).connect, origin=0.0, windows=1, sleep=sleep, paced=0.05)
     with pytest.raises(pacer.ClockRefused, match="no raw monotonic clock"):
         asyncio.run(device.run())
     assert (device.ticks, device.lateness, waits, device._pacer, device.records) == (0, [], [], None, [])
@@ -558,7 +558,7 @@ def test_a_paced_network_certifiers_pacer_writes_each_client_its_cells_and_a_buc
         [(r.link, r.window, faulted(r)) for r in plain.records]
     assert [r.t for r in paced.releases] == live and all(r.written for r in paced.releases)
     with pytest.raises(ValueError, match="past the slack"):
-        NetworkCertifier(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
+        NetworkAttester(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
 
 
 def test_an_unpaced_network_attester_on_a_clock_of_the_hosts_is_refused():
@@ -567,10 +567,10 @@ def test_an_unpaced_network_attester_on_a_clock_of_the_hosts_is_refused():
     injected clock runs unpaced."""
     for host in ({}, *({"clock": clock} for clock in pacer.CLOCKS.values())):
         with pytest.raises(ValueError, match="host's clock is paced"):
-            NetworkCertifier(PARAMS, Server([]).connect, origin=0.0, windows=1, **host)
+            NetworkAttester(PARAMS, Server([]).connect, origin=0.0, windows=1, **host)
     assert pacer.raw_clock in pacer.CLOCKS.values() and len(pacer.CLOCKS) == 2
     clock = VirtualClock(0.0)
-    assert NetworkCertifier(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep).paced is None
+    assert NetworkAttester(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep).paced is None
 
 
 def test_a_network_attester_on_the_hosts_clock_is_paced_and_a_release_unwritten_faults_every_grid():
@@ -579,9 +579,9 @@ def test_a_network_attester_on_the_hosts_clock_is_paced_and_a_release_unwritten_
     not yet the pacer's so that its cells are on no wire, faults the three grids' window `monitor-unavailable`, as a
     bucket it got late does."""
     with pytest.raises(ValueError, match="host's clock is paced"):
-        NetworkCertifier(PARAMS, Server([]).connect, origin=0.0, windows=1)
+        NetworkAttester(PARAMS, Server([]).connect, origin=0.0, windows=1)
     clock = VirtualClock(0.0)
-    network_attester = NetworkCertifier(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+    network_attester = NetworkAttester(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
     grids = (network_attester.ingress, network_attester.egress, network_attester.fails)
     network_attester._unreleased[0] = 2
     network_attester._report(Report(0, -0.04, 0.001, None, True))
@@ -729,7 +729,7 @@ def id_req(max_tokens: int) -> bytes:
     return IDF.id_request(model="m", user="u", prompt=[1, 2, 3], max_tokens=max_tokens, frame_bytes=GB, offset=0)
 
 
-def capped(request_bytes: bytes, response: bytes, params: NetworkCertifierParams = CAPPED):
+def capped(request_bytes: bytes, response: bytes, params: NetworkAttesterParams = CAPPED):
     network_attester, (client,), server = run([[(0, response), (0, EOF)]], {1: [cells(request_bytes, GB)]}, params=params)
     (e,) = network_attester.log
     return network_attester, client, server, e
@@ -948,7 +948,7 @@ def http(body: bytes, extra: bytes = b"") -> bytes:
     return b"POST /v1/completions HTTP/1.1\r\nhost: s\r\n%scontent-length: %d\r\n\r\n%s" % (extra, len(body), body)
 
 
-def signed_ends(network_attester: NetworkCertifier) -> list[tuple[int, int]]:
+def signed_ends(network_attester: NetworkAttester) -> list[tuple[int, int]]:
     """(bucket, ordinal) of every `END` cell of the signed ingress records, in record order."""
     return [(r.window * PARAMS.window + b, read_cell(f, B)[1]) for r in records(network_attester)[0]
             for b, row in enumerate(r.grid) for f in row if f is not None and read_cell(f, B)[0] == END]
@@ -1454,14 +1454,14 @@ def test_the_parameters_digest_binds_every_parameter():
     digests = {PARAMS.digest, GATED.digest} | {p.digest for p in moved}
     assert len(digests) == len(moved) + 2 and all(len(d) == 64 for d in digests)
     assert {*INTEGER_FIELDS, "egress", "max_tokens_cap", "lengths", "content", "request_words", "head_offset",
-            "head_wait"} == {f.name for f in dataclasses.fields(NetworkCertifierParams)}
+            "head_wait"} == {f.name for f in dataclasses.fields(NetworkAttesterParams)}
     assert set(KIND_NAMES) == {PAD, DATA, END, FAIL, REFUSED} and len(set(REASONS)) == len(REASONS)
-    assert NetworkCertifierParams().egress == "id" and NetworkCertifierParams().max_tokens_cap is None and REASONS[-2:] == ("format", "cap")
+    assert NetworkAttesterParams().egress == "id" and NetworkAttesterParams().max_tokens_cap is None and REASONS[-2:] == ("format", "cap")
     assert GATED.reasons == REASONS[:-1] and CAPPED.reasons == REASONS
-    for p in (PARAMS, GATED, NetworkCertifierParams()):
+    for p in (PARAMS, GATED, NetworkAttesterParams()):
         values = {f: getattr(p, f) for f in (*INTEGER_FIELDS, "egress")}
         assert p.digest == tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(
             values | {"kinds": sorted(KIND_NAMES), "reasons": list(REASONS[:-1])}))
     for bad in ("", "text", "ID", 1, None):
         with pytest.raises(ValueError, match="egress is one of id, bytes"):
-            NetworkCertifierParams(egress=bad)
+            NetworkAttesterParams(egress=bad)

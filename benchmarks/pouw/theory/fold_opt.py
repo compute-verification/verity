@@ -25,9 +25,9 @@ The result (checks below):
 - Positive controls: the honest 3-instruction program reproduces (y', z'); the honest 2-instruction prefix (u, y')
   reproduces y'; the LOP3 for u is found in one instruction (the search finds short programs when they exist).
 - Across words, this script checks nothing. What is proved for a run of N words is only the fan-in floor: any program
-  whose instructions each read f operands needs (N − 2)/(f − 1) of them (`Accounting.Guarantees.TS.DuoFoldFanIn`), ½
+  whose instructions each read f operands needs (N − 2)/(f − 1) of them (`ResourceAccounting.Guarantees.TS.DuoFoldFanIn`), ½
   a word at f = 3. That batching can't beat 3 a word is FOLD-OPT's across-words part,
-  the named assumption `Accounting.Assumptions.TS.FoldOpt`. The reasons to expect it are arguments, not checks:
+  the named assumption `ResourceAccounting.Assumptions.TS.FoldOpt`. The reasons to expect it are arguments, not checks:
   - the 32-bit states admit no SWAR packing of the multiply;
   - the round mixes ^ over F2 with *+ over Z/2^32 with no homomorphism, so composing rounds has no known shorter closed
     form (g3-chains' trivial all-state kernel).
