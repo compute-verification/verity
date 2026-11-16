@@ -190,6 +190,14 @@ def test_interleaved_imma_ffma_beats_r1_and_kffma0(tmp_path, census, capsys):
     assert "2 rows beaten" in out and "R1 " in out and "[ε]" in out and "KFFMA0" in out
 
 
+def test_no_timed_program_beats_no_facet_and_fails(tmp_path, capsys):
+    path = _records(tmp_path)
+    for flags in ([], ["--json"]):
+        assert loads.main(["summary", str(path), "--epoch", EPOCH, *flags]) == 2
+        out, err = capsys.readouterr()
+        assert "no facet beaten" not in out and "no program was timed" in err
+
+
 def test_refit_is_the_hull_at_the_margin(tmp_path, capsys):
     path = _records(tmp_path, MIXU_R32, ALONE, FFMA)
     assert loads.main(["refit", str(path), "--row", "R1", "--epoch", EPOCH]) == 0

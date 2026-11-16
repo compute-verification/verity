@@ -427,12 +427,17 @@ def cmd_table(a: argparse.Namespace) -> int:
 
 
 def cmd_summary(a: argparse.Namespace) -> int:
+    """Exits 2 when the rows hold no timed program, 1 when a facet is beaten."""
+    rows = load_rows(a.rows, a.full)
+    if not rows:
+        print(f"no program was timed: {', '.join(map(str, a.rows))} hold no row", file=sys.stderr)
+        return 2
     m = model()
     epoch = a.epoch or m.current
     c = census(m, epoch)
     vrows = in_vector(epoch)
     viol = []
-    for row in load_rows(a.rows, a.full):
+    for row in rows:
         p = program(row, c, m.cycle_u, a.generic, a.l2)
         for r, v in p["load"].items():
             if v > 1 + a.margin:
@@ -443,7 +448,6 @@ def cmd_summary(a: argparse.Namespace) -> int:
     if a.json:
         print(json.dumps(viol, indent=1))
         return 1 if viol else 0
-    rows = load_rows(a.rows, a.full)
     print(f"epoch {epoch}: {len(rows)} programs, margin {a.margin}")
     free: dict[str, tuple[float, str]] = {}
     for row in rows:

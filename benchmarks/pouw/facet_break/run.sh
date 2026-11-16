@@ -67,4 +67,5 @@ rc=$?
 cat "$OUT"/chunks/*/rows.jsonl >"$OUT/rows.jsonl" 2>/dev/null
 python3 "$HERE/loads.py" table "$OUT/rows.jsonl" >"$OUT/loads.jsonl"
 python3 "$HERE/loads.py" summary "$OUT/rows.jsonl" | tee "$OUT/summary.txt"
+[ "${PIPESTATUS[0]}" = 2 ] && [ $rc = 0 ] && rc=2
 exit $rc
