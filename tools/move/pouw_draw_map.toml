@@ -56,6 +56,22 @@ patterns = [
   "\\bdraw/v\\d",
   "\\bFlock\\.Draw\\b",
   "\\bDraw\\.\\w+",
+  "(?<=ws\"\\]\\[w1\\]\\.update\\(registration=reg\\.hex\\(\\),\\ )draw_opening(?==)",
+  "(?<=,\\ draw,\\ salt\\ =\\ fresh\\\n\\ \\ \\ \\ \\ \\ \\ \\ out\\.update\\()draw(?==)",
+  "(?<=\\ t,\\ \\*_\\ in\\ verdicts\\],\\\n\\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ )draw_wref(?==)",
+  "(?<=t\\ if\\ at\\ else\\ \"wref\",\\\n\\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ )drawn(?==)",
+  "(?<=n\\ dict\\(\\\n\\ \\ \\ \\ \\ \\ \\ \\ name=c\\.name,\\ windows=n,\\ )draws(?==)",
+  "(?<=e_levers\\(\\),\\ route_end=end\\.name,\\\n\\ \\ \\ \\ \\ \\ \\ \\ )draws_scan(?==)",
+  "(?<=K_d/\\(r·M\\)\\ is\\ not\\ small\",\\\n\\ \\ \\ \\ \\ \\ \\ \\ \\ \\ dict\\()draws(?==)",
+  "(?<=ies\\),\\ root=root\\.hex\\(\\),\\ rounds=len\\(got\\),\\ )draws(?==)",
+  "(?<=ve_salt\\.to_json\\(\\),\\\n\\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ )draw_coin(?==)",
+  "(?<=\\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ draw_coin=sample\\.to_json\\(\\),\\ )draw_after(?==)",
+  "(?<=ample_after\\.hex\\(\\),\\\n\\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ )draw_session(?==)",
+  "(?<=cs\\.draw_session\\ and\\ cs\\.draw_session\\.id,\\ )draw_commitment(?==)",
+  "(?<=mitment\\.to_json\\(\\),\\\n\\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ )draw_reason(?==)",
+  "(?<=nge\",\\ \\[dict\\(\\),\\ dict\\(u=1\\.0\\),\\ dict\\(r=1\\.0,\\ )draws(?==)",
+  "(?<=\\ \\(dict\\(r=1\\.0\\),\\ 17544\\),\\\n\\ \\ \\ \\ \\(dict\\(u=1\\.0,\\ )draws(?==)",
+  "(?<=ct\\(u=1\\.0,\\ draws=64\\),\\ 842\\),\\ \\(dict\\(u=1\\.0,\\ )draws(?==)",
 ]
 strings = [
   "(its coin was drawn on run",
@@ -117,13 +133,25 @@ strings = [
 
 [words]
 
+# benchmarks/pouw/served_h1/coins.py: a new name it already holds (its local `sample_reason`)
+[[words_in]]
+files = ["benchmarks/pouw/served_h1/coins.py"]
+[words_in.words]
+"draw_reason" = "sampling_reason"
+
+# verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py: a new name it already holds (its local `sample_reason`)
+[[words_in]]
+files = ["verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py"]
+[words_in.words]
+"drawn: int" = "sample_size: int"
+"self.drawn" = "self.sample_size"
+
 # PoUW's Python: coin phrases and proof blocks first, then every name
 [[words_in]]
 files = ["verity/protocols/resource_accounting/compute/pouw/*.py", "benchmarks/pouw/*.py", "benchmarks/compute/*.py"]
 [words_in.words]
 "coin was drawn" = "coin was flipped"
 "coin is drawn" = "coin is flipped"
-"coin, drawn" = "coin, flipped"
 "drawn units" = "sampled proof blocks"
 "drawn unit" = "sampled proof block"
 "draw coin" = "sampling coin"

@@ -13,7 +13,6 @@ files = ["benchmarks/compute/serve.sh", "benchmarks/pouw/dc/emp.sh", "benchmarks
 [words_in.words]
 "coin was drawn" = "coin was flipped"
 "coin is drawn" = "coin is flipped"
-"coin, drawn" = "coin, flipped"
 "drawn units" = "sampled proof blocks"
 "drawn unit" = "sampled proof block"
 "draw coin" = "sampling coin"
