@@ -8,7 +8,7 @@ written in the shared notation.
 
 This document credits at pub(μ°) against W_reg. The Glossary's credit is an execution phase's size in AND gates
 (tentative), a statement about values, with 𝓜's resources only inside the slowdown lower bound, and Dither is not yet
-restated in it (`GLOSSARY.md`, "Size, credit and the slowdown lower bound").
+restated in it (`GLOSSARY.md`, "Credit").
 
 The protocol is experimental. Its Lean headlines are `Pouw.Guarantees.Dither.WorkSound` and its card instances
 `Pouw.Guarantees.DitherInstance.WorkSoundAt`, over the ACCEL model `Accel`, with the clocks of `Timed`. The only round

@@ -50,7 +50,7 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
 #: The one Glossary: every current term and the notation.
-GLOSSARY_SIZE_CAP = 112 * 1024
+GLOSSARY_SIZE_CAP = 35_184
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
 #: (`.agents/skills/authoring-skills/`).
 SKILL_SIZE_CAP = 16 * 1024
@@ -183,7 +183,7 @@ def markdown_over_cap(path: str, size: int) -> str | None:
 def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -> None:
     soundness = "security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
-    assert markdown_over_cap("GLOSSARY.md", MD_SIZE_CAP + 1) is None
+    assert markdown_over_cap("GLOSSARY.md", GLOSSARY_SIZE_CAP) is None
     assert markdown_over_cap("GLOSSARY.md", GLOSSARY_SIZE_CAP + 3).endswith(", 3 bytes over; move detail to the notes store (cite it by note:<id>)")
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")
