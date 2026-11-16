@@ -122,9 +122,9 @@ says the deployed challenger from a record's own word. `tests/benchmarks/inferen
    `work_is`; with a record read, the kit's `ran_with` and `audit` follow, and `no_number` where there is no number.
    `check` is the Lean count's verdict on the policy the value is
    of, `refused` or `accepted` by its executable. For a stated policy it is `not run`, which is no verdict: this tree
-   has no instance of the stated class to give the count. The count's instance names no θ and carries no wire, so it
-   counts every weight and wired row a block reads as fresh input: on the built class it counts `c` exactly and
-   refuses on `k`, and an instance of any other class has the same form.
+   has no instance of the stated class to give the count. The count's instance names the held weights in θ and
+   carries no wire, so the Lean verifier counts every wired row and table opening a block reads as fresh input: on the
+   built class it counts `c` exactly and refuses on `k`, and an instance of any other class has the same form.
 6. **The metric**: where the JSON is written, its `value` is also a measurement named
    `training/inference-only-slowdown` in the run's `result.json` (the harness kit's writer: `$RESEARCH_RUN_DIR` under
    a research run, else the place the JSON went), the number `benchmarks/inference_only/metrics.toml` declares. With a
@@ -262,9 +262,10 @@ The number is a block's ratio under two assumptions, on a check that Lean does n
 - **Two assumptions.** The bound holds under (H), the cut's hardness, and (E), its exports, conjectures
   (`min_cut.HARDNESS` and `min_cut.EXPORTS` are their Lean names). The values of (H)'s β by `k` are the slowdown calculator's
   (`benchmarks/slowdown/data/premises.toml`).
-- **No class passes the check.** The Lean count is given the session Program with no θ and no dataflow, so it counts
-  every row a block reads as fresh and refuses the policy on `k`. A built policy's `c` and `k` are the Python count of
-  the record's description, which the Lean check does not establish; a stated policy's are not checked here at all.
+- **The Lean verifier accepts no class.** It is given the session Program with the held weights in θ and no wires, so
+  it counts the rows the record's wires fill and the pinned tables' openings as fresh and refuses the policy on `k`. A
+  built policy's `c` and `k` are the record's count of its description, which the Lean verifier does not confirm; a
+  stated policy's are not checked here at all.
 - **A block, not a deployment.** The periods table multiplies one block's ratio through the blocks a fleet holds at its
   data sheet's rate. What a deployment registers, what it leaves free and what its proofs miss are the slowdown
   calculator's (`uv run python benchmarks/slowdown/periods.py`).
