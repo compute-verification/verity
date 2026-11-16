@@ -30,7 +30,6 @@ says. These are the directories that have one:
 | `verity bench landing` | mark to `main` over the last 7 days, plain and Lean: each class's p90, median, count and share within 2 h, as a local research run (its README) |
 | `verity bench lean_unread_gate` | the unread landing gate on one change, timed by stage with its git calls counted, and with `--against REV` its guard: the same verdict as the gate at REV |
 | `verity bench memory` | the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, from a gate run on the whole node, a recorded run or a loopback |
-| `verity bench moe_align` | the canonical `moe_align_block_size` on one GPU: its outputs run to run, the plugin as vLLM loads it, and its cost |
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network attester's calibration |
 | `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a measured cell, the reference checker |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
@@ -60,8 +59,9 @@ says. These are the directories that have one:
 | `verity bench word_codec` | the KV cache's Sloth codec on one GPU: its tests and its benchmark at each width |
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
-README. `verity-bench` is the harness's own command. `verity bench numerical judge` compares two results under the
-proof campaign's contract.
+README. `benchmarks/kernels/`'s directories have no `verity bench` name: each runs as its script's header says, the
+canonical `moe_align_block_size` on one GPU as `bash benchmarks/kernels/moe_align/run.sh`. `verity-bench` is the
+harness's own command. `verity bench numerical judge` compares two results under the proof campaign's contract.
 
 ## The harness
 
