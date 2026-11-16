@@ -1,7 +1,7 @@
 """Repo replicas (README §7) and `research data refresh-fixtures`: keeping `artifacts.json` honest when a fixture's bytes change.
 
 A repo-registered fixture has *content-only identity*: kind `fixture/v1`, `meta {}`, `refs {}`, payload = the file (bare name) or
-the directory as a tree, so its id is a function of the bytes alone and `tools/research/tests/test_repo_replicas.py` recomputes it
+the directory as a tree, so its id is a function of the bytes alone and `tests/tools/research/test_repo_replicas.py` recomputes it
 with no store state.  Edit the bytes and the id changes; until today that meant a `research data put --kind fixture/v1 --file …` by
 hand and an edit of the map.  `refresh` does exactly that for every entry whose path no longer hashes to its id: `put` under the new
 id (`push --preserve` on request), rewrite the entry, and record the superseded id under the map's `previous` block:

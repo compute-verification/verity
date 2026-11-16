@@ -35,7 +35,7 @@ How the work is done, and nothing the verifier reads:
 - **The sample size, locally.** On your machine you are the verifier too, so you choose t, the number of tiles sampled
   (`served_passes.py verify --draws`, 459 by default). The verifier takes a share ε_s off the credit for what the
   sample could miss. Where no sampled tile is over its inert-work bound, ε_s is about ln(1/δ_s)/t: 1/100 at t = 459
-  and δ_s = 1/100. Each sampled tile over its bound enlarges ε_s (`overInertBoundDraws`, below), so the number moves
+  and δ_s = 1/100. Each sampled tile over its bound enlarges ε_s (its rule is below), so the number moves
   with the sample from one run to the next, on the same kernel and load. Doubling t halves ε_s, which raises the
   number by about half of ε_s's deduction (in the fixture below, from 95.66% to about 96.15%), and doubles the replay.
   In an audit t is the auditor's.
@@ -151,7 +151,7 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/), clone thi
 below from the clone's root. The first `uv run` installs the workspace's Python environment (`uv sync` does it alone).
 
 ~~~text
-uv run verity bench compute --from benchmarks/compute/tests/fixtures/record
+uv run verity bench compute --from tests/benchmarks/compute/fixtures/record
 uv run verity bench compute --from DIR --per-call --top 5
 ~~~
 
@@ -182,7 +182,7 @@ on your own card it is not an accept, so PoUW credits nothing of the run, and th
 alone.
 
 To keep what it prints as files too (`compute.json` and `result.json`, below), set `OUT` to a
-directory: `OUT=/tmp/compute uv run verity bench compute --from benchmarks/compute/tests/fixtures/record`.
+directory: `OUT=/tmp/compute uv run verity bench compute --from tests/benchmarks/compute/fixtures/record`.
 
 The tests: `cd benchmarks/compute && uv run --project ../.. pytest tests`.
 
