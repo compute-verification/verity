@@ -1,8 +1,8 @@
 """chain_record's steps that read no prover: custody holds each gate run's files to its end.json; the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled sample within the sample's bound but never one whose incorrect
 window was sampled; the sample's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
-Lean's does; leak counts the scan's widths and terms on a network certifier run's files, and refuses a sample and a
-network certifier the scan's class doesn't serve; the job's copy of the
+Lean's does; leak counts the scan's widths and terms on a network attester run's files, and refuses a sample and a
+network attester the scan's class doesn't serve; the job's copy of the
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
 let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' samples and free
@@ -31,7 +31,7 @@ import pytest
 
 
 HERE = Path(__file__).resolve().parents[1]
-PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
+PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "network" / "tests" / "period_case.py"
 BLOCK_SCHEMA = Path(__file__).resolve().parents[3] / "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json"
 
 
@@ -97,7 +97,7 @@ def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
             "honest": {"windows": [window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}], "network": {"accepted": False}, "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 1, "rounds": {"honest-0": {"audit": {"window_accepted": True}}}}),
-        job=put("job.json", job), network_certifier_run="g1/network_certifier")
+        job=put("job.json", job), network_certifier_run="g1/network_attester")
 
 
 def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(tmp_path):
@@ -293,19 +293,19 @@ def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negat
         return {"ok": True, "T": 1, "rounds": {"block-0": rnd(block), "honest-0": rnd(True), "chain-0": rnd(False),
                                                "block-1": rnd(True), "honest-1": rnd(True), "stale-2": rnd(False)}}
 
-    got = cr.scan_step(scan(True), "g1/network_certifier")
+    got = cr.scan_step(scan(True), "g1/network_attester")
     assert got["verdict"] == "accepted" and got["negatives"] == {"chain-0": True, "stale-2": True}, got
-    got = cr.scan_step(scan(False), "g1/network_certifier")
+    got = cr.scan_step(scan(False), "g1/network_attester")
     assert (got["verdict"], got["why"]) == ("failed", "block-0: window refused")
     second = scan(True)
     second["rounds"]["honest-1"] = rnd(False)
-    assert cr.scan_step(second, "g1/network_certifier")["verdict"] == "refused"
+    assert cr.scan_step(second, "g1/network_attester")["verdict"] == "refused"
 
 
 def test_leak_counts_the_scans_terms_on_the_network_certifier_run(tmp_path):
     import math
     from dataclasses import asdict
-    from verity.protocols.accounting.certifier.prover import scan_zk as sz
+    from verity.protocols.resource_accounting.network.prover import scan_zk as sz
     run = tmp_path / "c1"
     (run / "out").mkdir(parents=True)
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))

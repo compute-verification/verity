@@ -4,7 +4,7 @@ an honest session is accepted and its γ terms computed, a prover that dropped b
 second session waits out the first's deadline, and KV pages appended and released mid-session (a memory map's steps)
 are audited, accepted when held and rejected when dropped. The Lean verifier decides, `audit.AuditRun` keeps the books
 beside it, and the two must agree at every event, window verdict and record field. The sessions run on PoUB's harness
-(`verity/protocols/accounting/poub/tests/session_harness.py`)."""
+(`verity/protocols/resource_accounting/memory/poub/tests/session_harness.py`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -21,18 +21,17 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/accounting/poub/prover/remote_session/prover.py").parent))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.protocols.accounting.poub.verifier import audit, coins, ledger, receipts as rb, timing  # noqa: E402
-from verity.protocols.accounting.poub.verifier import codec as rcodec  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, receipts as rb, timing  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
-from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
-from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
-import lean_stands_in  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 
-from verity.protocols.accounting.poub.tests.session_harness import (  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.tests.session_harness import (  # noqa: E402
     FIGURES,
     P512,
     PassClock,
@@ -55,17 +54,28 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
     assert all(w["slack_ns"] >= 0 for w in r["windows_seen"])
 
 
-def test_without_its_lean_an_accepted_sessions_gamma_is_undecided(monkeypatch):
-    """With the real interface (`lean_stands_in.unwritten`), an accepted session's γ terms have no Lean answer, so each
-    reading is undecided, with the goal's id, as a refused one is refused: no γ, no certified bytes, the session
-    declares that alone, and its memory line carries no error."""
-    lean_stands_in.unwritten(monkeypatch)
+def test_an_accepted_sessions_gamma_is_the_leans(monkeypatch):
+    """An accepted session's γ terms at both readings are the Lean verifier's (`verifier.gamma_answer`, the process's
+    `gamma` on the session it ran), held to the ledger's, so the session declares its γ; and a Lean whose terms are not
+    the ledger's refuses each reading, naming both values, and the session declares that alone."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (r,), _ = run("honest")
-    lg, why = r["ledger"], coins.undecided("γ terms")
-    assert r["accepted"] and all(lg[n] == {"capacity_bytes_per_s": lg["inputs"][f], "undecided": why}
-                                 for n, f in (("spec", "spec_bytes_per_s"), ("measured", "measured_read_bytes_per_s")))
-    assert lg["declared"] == {"undecided": why} and verifier.memory_error(lg) is None
+    lg = r["ledger"]
+    assert r["accepted"] and all(lg[n]["gamma"] > 0 and "refused" not in lg[n] for n in ("spec", "measured"))
+    assert "gamma" in lg["declared"]
+    call = verifier.lv.Lean.call
+
+    def off(self, request, body=b""):
+        got = call(self, request, body)
+        return {**got, "gamma": "1"} if request.get("op") == "gamma" else got
+
+    monkeypatch.setattr(verifier.lv.Lean, "call", off)
+    (r,), _ = run("honest")
+    lg = r["ledger"]
+    assert r["accepted"] and all(lg[n]["refused"].startswith(
+        "the Lean verifier's γ terms and the Python ledger's disagree at .gamma: the Lean's \"1\", the Python's ")
+        for n in ("spec", "measured"))
+    assert lg["declared"] == {"refused": lg["spec"]["refused"]}
 
 
 @pytest.mark.parametrize("outcome", ["rejected", None, "error"])
@@ -396,7 +406,7 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
     which takes only the append coins released, otherwise, so the session is refused there as `disagreement`, the
     honest one accepted."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    from verity.protocols.accounting.poub.verifier.session import challengers
+    from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers
 
     layouts, local = [], challengers.Local.open
 
@@ -427,7 +437,7 @@ def test_a_window_with_no_samples_settles_malformed_whatever_its_batches():
     `AuditRun.verify` and the Lean's settle give it."""
     from types import SimpleNamespace
 
-    from verity.protocols.accounting.poub.verifier.session.checks import Checks
+    from verity.protocols.resource_accounting.memory.poub.verifier.session.checks import Checks
 
     class Books:
         _fail = audit.AuditRun._fail
@@ -444,7 +454,7 @@ def test_a_window_with_no_samples_settles_malformed_whatever_its_batches():
 
 
 def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does():
-    from verity.protocols.accounting.poub.verifier.session.checks import Checks
+    from verity.protocols.resource_accounting.memory.poub.verifier.session.checks import Checks
 
     from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset
 
@@ -835,7 +845,7 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
     replays to its verdict through both verifiers. The clock ticks as each pass starts as well as when it ends, so
     time passes between a coin leaving and the root after it, as on the verifier's own clock: at one tick a pass, a
     paced window's 1 ns is a whole pass and each boundary waits for the tick its next root comes at."""
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/verifier/lean"))
     ticking = TickingBackend.run_pass
 
     def run_pass(self, seed: bytes, plan=None):
@@ -845,9 +855,9 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
     monkeypatch.setattr(TickingBackend, "run_pass", run_pass)
     import json
 
-    from verity.protocols.accounting.poub.verifier.session import challengers
+    from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers
     import replay
-    from verity.protocols.proofs.spot.device import challenger as C
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 
     asked = []
 
@@ -1275,7 +1285,7 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
     the prover that dropped half its blocks rejected at the window and sample it was rejected at live, at a receipt,
     which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/verifier/lean"))
     import hashlib
     import json
 
@@ -1303,7 +1313,7 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
 def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, monkeypatch):
     """A paced session's transcript names its pace (`audit.Pace`'s k and T), which both verifiers hold each window's
     roots to, so its replay is the paced session's: accepted, with its record's pace."""
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/verifier/lean"))
     import json
 
     import replay
@@ -1326,7 +1336,7 @@ def test_a_session_sampled_four_windows_a_coin_is_accepted_through_both_verifier
     transcript replays to the same verdict through both verifiers. A prover that dropped half its blocks is rejected
     at a receipt."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/verifier/lean"))
     import json
 
     import replay
@@ -1373,7 +1383,7 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
     import copy
     import json
 
-    from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv
+    from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
 
     got = {}
     (r,), _ = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=tmp_path,
@@ -1423,7 +1433,7 @@ def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_sa
     import copy
     import json
 
-    from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv
+    from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
 
     got = {}
     (r,), (pr,) = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], groups_per_coin=4, transcript=tmp_path,

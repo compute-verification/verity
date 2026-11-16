@@ -4,14 +4,14 @@ from __future__ import annotations
 from collections import Counter
 
 import pytest
-from verity.protocols.accounting.poub.verifier import ledger, timing
+from verity.protocols.resource_accounting.memory.poub.verifier import ledger, timing
 
 from datacenter import Cadence, Port, route
 from datacenter.examples import GB, leaf_spine, rack, rtx_node, two_sites, with_dpu
 
 
 def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie_tree():
-    """Its devices add up to PoUB's node, `ledger.Node`: `Accounting.Device`'s one Python mirror."""
+    """Its devices add up to PoUB's node, `ledger.Node`: `ResourceAccounting.Device`'s one Python mirror."""
     dc, node = rtx_node("n"), ledger.Node.stated(timing.RTX_PRO_6000_NODE)
     ds = dc.devices.values()
     assert sum(float(d.on_chip) for d in ds if d.on_chip) == node.chip_bytes * 8

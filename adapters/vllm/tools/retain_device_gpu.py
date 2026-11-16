@@ -136,7 +136,7 @@ def window(dev: Path, host: Path, k: int, pk: dict[str, Any]) -> dict[str, Any]:
         if a is None or a != b:
             bad.append(f"read {list(r)}: device {None if a is None else len(a)} bytes, host {None if b is None else len(b)}: not equal")
     if dr.stats["failed"]:
-        bad.append(f"{dr.stats['failed']} drawn read(s) did not verify against the device bundle's run root")
+        bad.append(f"{dr.stats['failed']} sampled read(s) did not verify against the device bundle's run root")
     refusal = None
     if pk.get("undrawn"):
         u = tuple(pk["undrawn"])
@@ -186,7 +186,7 @@ def compare(a: argparse.Namespace) -> int:
     print(json.dumps(rec, indent=1))
     first = next((f"w{w['window']}: {(w.get('bad') or ['its pre-coin root is not its windows.jsonl line'])[0]}" for w in out
                   if not w["ok"]), None) or (f"discarded {rel.get('discarded')}, failure {rel.get('failure')}" if out else "no window sealed")
-    what = ("each holding exactly its draw's leaves, byte-equal to --retain host's, the undrawn read refused" if ok
+    what = ("each holding exactly its sample's leaves, byte-equal to --retain host's, the unsampled read refused" if ok
             else f"first problem: {first}"[:600])
     print(f"RETAIN-DEVICE {'PASS' if ok else 'FAIL'}: {len(out)} window(s) sealed from the device pool "
           f"({sum(w.get('drawn_leaves', 0) for w in out)} drawn leaves), {what}; pool peak {pool.get('peak_bytes')} of "

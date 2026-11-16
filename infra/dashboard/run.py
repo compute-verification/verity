@@ -1,6 +1,6 @@
 """The Metrics dashboard's goal, as a number: of the top goals the dashboard lists, how many have a number that runs,
 measured as `console/top-goals-running` against the count of top goals as its target. A goal's number is the first metric
-the dashboard lists under it whose row names that goal, or with no such row the first it lists (the dashboard also lists
+the dashboard lists under it whose `goal` names that goal, or with no such metric the first it lists (the dashboard also lists
 under a goal the numbers of the goals beneath it), and it runs when its newest value has a target, is younger than its
 `every` and carries a mark. Higher is better; the dashboard holds to its goal when every top goal's number runs.
 

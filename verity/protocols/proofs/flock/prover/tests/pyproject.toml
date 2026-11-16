@@ -1,0 +1,285 @@
+# The suite of the distribution `verity-flock`: a virtual member that depends on it, so the suite keys on what the
+# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.
+[project]
+name = "verity-flock-tests"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["verity-flock[bench]"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "test_arena_layout.py",
+    "test_challenger_audit.py",
+    "test_circuit.py",
+    "test_class_statement.py",
+    "test_class_statement_redteam_1178.py",
+    "test_flock_rows.py",
+    "test_flock_rows_vectors.py",
+    "test_hm96_leaves.py",
+    "test_inner_registered.py",
+    "test_ir_lowering.py",
+    "test_ir_sampling.py",
+    "test_lean_coin_tree.py",
+    "test_lean_forged_proofs.py",
+    "test_lean_hidden_outputs.py",
+    "test_lean_out_group_slot.py",
+    "test_lean_plain_hidden_tables.py",
+    "test_lean_public_inputs.py",
+    "test_lean_record_checks.py",
+    "test_lean_region_words.py",
+    "test_lean_registered_bit_rows.py",
+    "test_lean_registered_reads.py",
+    "test_lean_session_tables.py",
+    "test_lean_shared_reads.py",
+    "test_lean_typed_reads.py",
+    "test_lean_typed_statement.py",
+    "test_lean_typed_template.py",
+    "test_lean_verifier.py",
+    "test_lean_verify_members.py",
+    "test_lean_width_refusals.py",
+    "test_lean_zk.py",
+    "test_lean_zk_mask.py",
+    "test_ligerito_folds.py",
+    "test_pod_lean_verdicts.py",
+    "test_pouw_rows.py",
+    "test_read_tmpl.py", "test_read_tmpl_stager.py",
+    "test_rec_algebra.py",
+    "test_rec_inner_stage.py",
+    "test_ring_switch.py",
+    "test_sha512_leaves.py",
+    "test_stage_typed.py",
+    "test_stream_zk_server.py",
+    "test_typed_statement.py",
+    "test_witness_host.py", "test_zc_round1.py", "test_zerocheck_fused.py",
+]
+# Test-only. Of Security, only what the tests and their Lean read: Lake and `lean` run outside the read guard, so
+# tests/test_security_inputs.py holds this list to the import closure under Security of every module they build or import.
+inputs = [
+    # test_lean_verifier.py's `lake build Proofs.Flock.Verifier` and the scratch files importing it: the module's closure
+    "security/Proofs/Flock/Verifier.lean", "security/Proofs/Flock/Verifier",
+    # what Lake reads to load security_proofs, and security and security_properties, which it requires by path
+    "security/Proofs/lakefile.toml", "security/Proofs/lake-manifest.json", "security/Proofs/lean-toolchain",
+    "verity/channel.py",
+    "security/lakefile.toml", "security/lake-manifest.json", "security/lean-toolchain",
+    "security/Properties/lakefile.toml", "security/Properties/lake-manifest.json", "security/Properties/lean-toolchain",
+    # test_lean_verifier.py and test_audit_profile.py read the audit layer's files and its lifted statements
+    "security/Proofs/Flock/Soundness/Audit", "security/Proofs/Flock/Lemmas/Audit.lean",
+    # test_randomness_spec.py hashes the spec fixtures/randomness_lean.json was generated from
+    "security/Proofs/Flock/Soundness/PlanDraw.lean",
+    # tests import circuit-check's targets and read the census
+    "tools/verity/circuit_check", "benchmarks/census",
+    # the Lean verifier's stratified sample against the one-stage protocol's, and the Lean spec of verity.commitments.randomness against
+    # its pinned vectors
+    "verity/protocols/proofs/spot", "verity/commitments/randomness", "verity/commitments/randomness/tests",
+    # the Lean decoder's width refusals against the codec, on the inference-only difftest's mistyped descriptors
+    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts",
+    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
+    # tree to RecVStar's
+    "verity/protocols/proofs/flock/verifier/Flock/Zk.lean", "verity/protocols/proofs/flock/verifier/Flock/Tags.lean", "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
+    # `flock-zk-server live` starts from this directory, where the guard reads its argument `live` as the crate's directory
+    "verity/protocols/proofs/flock/prover/live/PROTOCOL.md",
+    # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
+    # lock, the release side's (its Flock.ZkServer.Honest is Flock's, which the flock-zk-server artifact keys)
+    "tools/difftest/python/verity_difftest", "verity/circuits/difftest", "verity/protocols/proofs/recursion/verifier/zk_server",
+          "verity/__init__.py", "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/workload_classification/__init__.py",
+          # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
+          "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
+parallel = true
+# an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
+worker_gb = 16
+# 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
+timeout_s = 14400
+# check runs it as six parts by test id (`lean-suites:verity-flock:K/6`, `suites.py`'s `id_part_of`), each collecting every
+# file and running the tests whose node id hashes to K, so that ci.toml's plans put two parts beside the security analysis's
+# audit and four beside the Lean build, the four as one run: whole, on the workers a shard's memory gives it, it ran longest
+# of any step after the Lean build
+parts = 6
+# Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
+artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
+             "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-zk-server",
+             "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-frame-tape",
+             "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-rec-sparse",
+             "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-witness",
+             "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-rec-opening",
+             "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-rec-links",
+             "security/.lake/packages/mathlib/.lake/build"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["test_recorded_texts.py"]
+# the source of each file that writes a pinned text
+paths = ["verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs", "verity/protocols/proofs/flock/verifier/Flock/Tags.lean"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_backend.py"]
+paths = ["verity/protocols/proofs/flock/prover/python/verity_flock"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_backend_bench.py"]
+paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/protocols/proofs/flock/prover/python/verity_flock"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_challenger_audit.py"]
+# `lake build spot-difftest`: its package and those it requires by path
+paths = [
+    "verity/circuits/base",
+    "verity/circuits/lean",
+    "verity/commitments/lean",
+    "verity/commitments/lms/lean",
+    "verity/protocols/interface",
+    "verity/protocols/proofs/flock/verifier",
+    "verity/protocols/proofs/spot/verifier/lean",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["test_stream_zk_server.py"]
+# the challenger each verifier is on (`pod/challenger.sh` starts it), and `lake build` of its Lean and its audit's and
+# of the Lean verifier's two executables: their packages and those they require by path
+paths = [
+    "verity/circuits/base",
+    "verity/circuits/lean",
+    "verity/commitments/lean",
+    "verity/commitments/lms/lean",
+    "verity/protocols/compose/verifier/live_challenger",
+    "verity/protocols/interface",
+    "verity/protocols/proofs/flock/verifier",
+    "verity/protocols/proofs/spot/verifier/lean",
+]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "test_circuit.py",
+    "test_inner_registered.py",
+    "test_ir_lowering.py",
+    "test_ir_sampling.py",
+    "test_lean_registered_bit_rows.py",
+    "test_stage_typed.py",
+    "test_typed_statement.py",
+]
+paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_class_statement.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "adapters/vllm/verity_vllm",
+    "tools/verity/circuit_check/src/circuit_check",
+    "verity",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["test_class_statement_redteam_1178.py"]
+paths = ["adapters/vllm/verity_vllm", "tools/verity/circuit_check/src/circuit_check", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "test_class_statement_unit_stager.py",
+    "test_lean_hello.py",
+    "test_tmpl_statement.py",
+    "test_unit_range.py",
+]
+paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/tests", "verity/protocols/experimental/pearl_c4/tests"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_derive.py"]
+paths = ["adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_flock_rows.py"]
+paths = ["verity/circuits/ops", "adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_keyed.py"]
+paths = [
+    "*/pyproject.toml",
+    "benchmarks/numerical/python/verity_numerical",
+    "adapters/vllm/verity_vllm",
+    "tools/config/verity_config",
+    "tools/research/src/research",
+    "tools/verity/circuit_check/src/circuit_check",
+    "verity",
+]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "test_lean_sample_designs.py",
+    "test_lean_ks_form.py",
+    "test_lean_plain_hidden_tables.py",
+    "test_lean_record_checks.py",
+    "test_lean_region_words.py",
+    "test_lean_registered_reads.py",
+    "test_lean_served_registered.py",
+    "test_lean_session_tables.py",
+    "test_lean_typed_reads.py",
+    "test_lean_typed_statement.py",
+    "test_lean_typed_template.py",
+    "test_lean_verify_members.py",
+]
+paths = ["tools/research/src/research"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_ir_lowering_bench.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "tools/research/src/research",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/templates",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["test_lean_verifier.py", "test_lean_width_refusals.py"]
+paths = ["verity/circuits/tests", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "test_lean_rec_coins.py",
+    "test_lean_witness.py",
+    "test_rec_opening_unit.py",
+    "test_rec_outer.py",
+    "test_rec_vstar_checks.py",
+]
+paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_partition_units.py", "test_rec_shape.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "verity/protocols/resource_accounting/network",
+    "verity/protocols/resource_accounting/memory/pous",
+    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/resource_accounting/compute/pouw/prover", "verity/protocols/resource_accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["test_randomness_spec.py"]
+paths = ["verity/commitments/lean/Commitments/Draw.lean", "verity/circuits/base/Base/Hash.lean"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_rec_circuits.py"]
+paths = ["verity/circuits", "verity/protocols/proofs/flock/prover/python/verity_flock"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_rec_inner_stage.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/templates",
+    "verity/commitments/periods",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["test_sha512_leaves.py"]
+# nvcc's build of sha512_leaves.cu includes cuda/sha512.cuh, which includes the GPU's one SHA-512
+paths = ["verity/commitments/cuda/sha512.cuh"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_security_inputs.py"]
+paths = ["verity/*/lakefile.toml", "verity/protocols/proofs/flock/prover/tests"]

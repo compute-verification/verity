@@ -27,7 +27,7 @@ def work_table_of(sampling_design: Mapping[str, Any], counts: Mapping[str, int],
     tg = list(dict.fromkeys(transfer_gates))
     if sampling_design.get("law") != "work":
         if tg:
-            raise ValueError(f"the compiler lists transfer-gate templates {tg}: every unit of theirs is proved beside the drawn rest, "
+            raise ValueError(f"the compiler lists transfer-gate templates {tg}: every unit of theirs is proved beside the sampled rest, "
                              f"which is the work law's draw (law work:K), not {dict(sampling_design)}")
         return None
     if missing := [t for t in tg if t not in counts]:

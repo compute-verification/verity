@@ -69,7 +69,7 @@ then carries two more events on its coins:
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Pouw.RelativeSecurity Pouw.Receipt
 
@@ -336,4 +336,4 @@ def IncorrectWords : {n : ℕ} → ReceiptGame Ω n → Prop
 
 end ReceiptGame
 
-end Accounting.TS
+end ResourceAccounting.TS
