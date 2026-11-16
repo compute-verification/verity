@@ -130,11 +130,12 @@ BUILT = ("from records: 0 of 1 bindings reused, 1 built and stored in 1.5s by on
 
 def _session(tmp_path: Path, tests_py: str, env: dict | None = None, args: tuple[str, ...] = (),
              files: dict[str, str] | None = None) -> subprocess.CompletedProcess:
-    (tmp_path / "pyproject.toml").write_text(PYPROJECT)
-    # the copy reads its variables through circuit-check's registry, which it finds beside the pyproject.toml above it
-    (tmp_path / "settings.py").write_text((Path(__file__).parents[4] / "tools" / "verity" / "circuit_check" / "settings.py").read_text())
     tests = tmp_path / "tests"
     tests.mkdir()
+    # the copy reads `worker_gb` from the pyproject.toml beside it, as the suite's conftest does, and its variables through
+    # circuit-check's registry, which it finds beside that pyproject.toml
+    (tests / "pyproject.toml").write_text(PYPROJECT)
+    (tests / "settings.py").write_text((Path(__file__).parents[4] / "tools" / "verity" / "circuit_check" / "settings.py").read_text())
     (tests / "conftest.py").write_text((Path(__file__).parent / "conftest.py").read_text())
     (tests / "test_it.py").write_text(tests_py)
     for name, text in (files or {}).items():
