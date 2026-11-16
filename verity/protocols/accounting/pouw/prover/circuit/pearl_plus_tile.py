@@ -356,7 +356,7 @@ def reference(dev: str, k: int, n: int, a: Sequence[Sequence[int]], b: Sequence[
     """The core on the scheme (`pearl_c`): (the tile's digest, ok) for A's rows ``a`` (tile rows ``rows`` of unit
     ``unit``) and B's ``b`` (columns ``cols``, which give E_B's lines), the rows of y, the certificates, the salt and B's
     root.  ok: the tile encodes (`PearlC.encode`), every row is admissible (`PearlC.admissible`'s per-row rule), the
-    certificates are the prover's (`inert_bound.certificates`), the tile's and each row's debit within ρ = 1/rho and ρr = 1/rhor of
+    certificates are the prover's (`inert_bound.certificates`), the tile's and each row's inert work within ρ = 1/rho and ρr = 1/rhor of
     their cells' credit (rev1's inertBoundOK on `pearl_c_inert_work`'s replay), and each row's committed y at column tile ``col`` is
     the served y (`pearl_c_u.y`).  The digest is None where the tile doesn't encode."""
     d = DEVICES[dev]

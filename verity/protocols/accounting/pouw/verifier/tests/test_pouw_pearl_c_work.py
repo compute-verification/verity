@@ -1,6 +1,6 @@
 """Pearl-C's work sampling design (`pearl_c_work`): splits bounded by 1% of k, credit
 on real, kept, unexcluded cells at Lean's accounting, the tile rule (zero filler and padding, credited rows pass and
-excluded rows fail, the debit under the cap, and under -h3 each credited row's too), samples keyed by the execution phase's sampling coin
+excluded rows fail, the inert work under the cap, and under -h3 each credited row's too), samples keyed by the execution phase's sampling coin
 after the commitment, and the audit."""
 
 from __future__ import annotations
@@ -406,7 +406,7 @@ def test_split_check_gates_an_honest_split():
 
 
 def test_aligned_spike_unit_is_rejected_by_the_inert_bound():
-    """F1's negative control through the audit: every row passes the domain, and the sampled tile's replayed debit (74%+
+    """F1's negative control through the audit: every row passes the domain, and the sampled tile's replayed inert work (74%+
     of its atom-words) exceeds ρ·creditOf; the same unit without spikes is accepted."""
     k, t = 1024, 4
     s = C.PearlC(k_min=128, tile=(t, t), forming="v1", hashing="h0")
@@ -427,7 +427,7 @@ def test_aligned_spike_unit_is_rejected_by_the_inert_bound():
 
 def test_h3_bounds_each_credited_row_as_well_as_the_tile():
     """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with aligned spikes of
-    72 among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under 3/4 of the
+    72 among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's inert work is under 3/4 of the
     tile's (at 300 its forming elements alone put the tile over).
     h0's tile rule accepts the tile and -h3's audit refuses it for that row; V-EX gives the row up, and by the band rule
     that row takes its band of 64 rows, here the whole tile, so the audit then accepts with no credit."""
@@ -478,7 +478,7 @@ def _census_tile(scheme, spikes: list[float | None], k: int, n: int = 4):
 
 
 def test_census_k_bounds_each_row_at_four_rho_and_the_tile_at_rho():
-    """At the H100 record's census k = 256, -h3 caps each credited row's debit at 4ρ of its
+    """At the H100 record's census k = 256, -h3 caps each credited row's inert work at 4ρ of its
     cells' credit (`pearlCTilesDevRev1RowInertBoundAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.23ρ is
     accepted (the ρ row cap refused it), a row at 7.3ρ in a tile at 0.46ρ is refused by the 4ρ row cap, and 16 rows each
     under 4ρ that put the tile over ρ are refused by the tile cap."""

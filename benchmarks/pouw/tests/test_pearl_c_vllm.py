@@ -1064,7 +1064,7 @@ def reference_y(s, ctx: Context, a_rows: list[bytes], b_rows: list[bytes]) -> by
     return y.tobytes()
 
 
-#: the reference verifier's Skip debit has no rule without promotion, so v2 (sm120-unpromoted) isn't provable here
+#: the reference verifier's Skip inert work has no rule without promotion, so v2 (sm120-unpromoted) isn't provable here
 PROMOTED = sorted(s for s in PPD.SCHEMES if "unpromoted" not in s)
 
 
@@ -1079,7 +1079,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
                 load: tuple[int, int] | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
-    salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
+    salts under the prover's key, which the manifest retains; the unpromoted record's inert work isn't stated, so clear_work can't
     audit it).  The key is fixed per scheme unless `key` names one: -h3's row seeds follow A's salted roots, and under some
     keys (about 2 in 15) a credited row of a sampled tile is over its own cap, which the sampling design and verify_run both reject.  On the
     h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
@@ -1821,7 +1821,7 @@ def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile
 
 
 def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_inert_bound(tmp_path, capsys):
-    """The pipelines give the rows over a debit cap up before the coin exactly where ``served_passes.py volunteer-needed``
+    """The pipelines give the rows over inert work cap up before the coin exactly where ``served_passes.py volunteer-needed``
     says yes, so it says yes exactly where the verdict they call rejects a run on a sampled tile with a credited row over its
     cap: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin that samples them, ``verify``
     (the run's verdict, `served_pearlplus.sh`'s) and `verify_run.verify` (a pass at a time, `glm53_passes.py`'s) reject iff
@@ -2125,7 +2125,7 @@ def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_an_inert
 
 def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_its_cubin_and_cross_check(tmp_path):
     """``served_passes.py volunteer --device`` (a stand-in for the card, `_StandInInertWork`) gives up the rows the CPU replay
-    gives up, to the same records root, and its document names the debit cubin, the cross-check rate (``--device-check``,
+    gives up, to the same records root, and its document names the inert work cubin, the cross-check rate (``--device-check``,
     else `volunteer_pass.CROSS_CHECK`) and the tiles it replayed on the CPU too; the CPU's document has no ``device``."""
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     VP = load("volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
@@ -3537,7 +3537,7 @@ def test_the_batch_tile_inert_work_is_the_scalar_tile_inert_work():
 
 def test_the_batch_inert_work_word_by_word_is_each_words_scalar_inert_work():
     """`fast_tile.words_inert_work` is `pearl_c_inert_work.word_inert_work` on every word, and its sums `chain_inert_work`'s on any rows and
-    columns, so the remedy's row and column debits are the verifier's."""
+    columns, so the remedy's row and column inert work are the verifier's."""
     FT, s = SD.FT, PPD.scheme_of(SCHEME)
     rng = np.random.default_rng(3)
     for trial in range(4):
@@ -3552,8 +3552,8 @@ def test_the_batch_inert_work_word_by_word_is_each_words_scalar_inert_work():
 
 
 def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
-    """`fast_tile.install`'s forms (forming, the peel factors, G, C̃ and U, the debit, native BLAKE3) give a tile's encoding,
-    check and debit field for field as the scalar reference, and its undo puts every scalar function back."""
+    """`fast_tile.install`'s forms (forming, the peel factors, G, C̃ and U, the inert work, native BLAKE3) give a tile's encoding,
+    check and inert work field for field as the scalar reference, and its undo puts every scalar function back."""
     FT, s = SD.FT, PPD.scheme_of(SCHEME)
     rng = np.random.default_rng(5)
     shape = Shape(8, 256, 64)

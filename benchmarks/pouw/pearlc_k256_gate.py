@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """TT_OUT's gate at k = 256 on the H100 record: the two families the ticket-chain census does not cover, on the served
-scheme ``pearl-c-h100-v1-h3`` itself (its forming, chain, peel and debit, bit for bit).
+scheme ``pearl-c-h100-v1-h3`` itself (its forming, chain, peel and inert work, bit for bit).
 
 At k = 256 a word is 8 atoms in two promotion groups of 4, so both searches are exhaustive:
 
 * **Cross-group cancellation.** For every word, every one of the 2^8 sets of skipped atoms (each group from +0 under its
-  mask, promoted into the total) that leaves the ticket word unchanged.  The served debit (`pearl_c_inert_work.word_inert_work`, P1's
+  mask, promoted into the total) that leaves the ticket word unchanged.  The served inert work (`pearl_c_inert_work.word_inert_work`, P1's
   `jointFlags`) flags only sets inside one group; an atom of a kept set it doesn't flag is the residual.
 * **Peel shortcuts.**  U is C̃ through four BF16 k16 steps (`pearl_c.peel`); for every word, every one of the 2^4 sets of
-  skipped steps that leaves U unchanged (U = C̃ is the whole peel skipped).  The debit charges none of them.  Also counted:
+  skipped steps that leaves U unchanged (U = C̃ is the whole peel skipped).  The inert work charges none of them.  Also counted:
   products with a zero factor, and k16 slices of a fragment whose BF16 factors all fit E4M3 (an FP8 route's precondition).
 
 TT_OUT's cost model charges a tensor-core instruction its whole fragment, never per output word, so a skip saves work only
@@ -16,7 +16,7 @@ when it holds for every word of a fragment: the smallest, mma.sync m16n8 (16 row
 saving per word (an existence count, P1's convention) and per fragment (what the cost model prices), as shares of the
 cells' credit (`PearlC.credit_of` at n = 6,144, GLM-5.3's down projections); an undebited atom costs `atom_units` (40), a
 peel step 16 BF16 MACs (32).  A cell is the tile's credited words (rows passing the noise floor and liveness).  Each cell
-also reports whether the verifier accepts it: its replayed debit within ρ of its credit (`tile_inert_bound_ok`), and every
+also reports whether the verifier accepts it: its replayed inert work within ρ of its credit (`tile_inert_bound_ok`), and every
 credited row's within its row cap of its own (-h3's, `clear_work.check_opened`): 4ρ at k = 256 (`PearlC.row_inert_share_at`),
 under seven flagged atom-words over a 64-column tile, where ρ would allow under two.
 
@@ -28,7 +28,7 @@ weight slices) adds a family ``glm-w2-NAME`` per slice: those rows as B, with t(
     uv run python benchmarks/pouw/pearlc_k256_gate.py --verdict DIR
 
 ``--verdict DIR`` is the run's status (`pearlc_k256_gate.sh`): it passes only when every ``census_*.json`` under DIR (the
-census with the replayed debit) passes its own criterion, every ``gate*.json`` passes, and ``slices.json``
+census with the replayed inert work) passes its own criterion, every ``gate*.json`` passes, and ``slices.json``
 (`pearl_c_sm90/glm53_slices.py`) covers every down projection.  A weight row failing the per-row rules is excluded (bound,
 no credit), so the slices' failing share is reported, not gated.  ``verdict.json`` also reports the honest tiles' acceptance
 (Gaussian and the w2 samples): how many of them -h3's row cap rejects before any row is given up.
@@ -154,7 +154,7 @@ def cell(fam: str, run: int, rows: int = 64, cols: int = 64) -> dict:
     A, B = A8[ii.ravel()], B8[jj.ravel()]
     credit = Fraction(s.credit_of(Shape(1, k, N_CREDIT)), N_CREDIT)
 
-    # ---- the ticket chain: every skip set, the served debit, the cap
+    # ---- the ticket chain: every skip set, the served inert work, the cap
     final = chain_masks(A, B)
     c_words = np.array(checked.c, dtype=np.uint32).ravel()
     assert (final[0] == c_words.view(np.float32)).all(), "the census's atom disagrees with the served chain"

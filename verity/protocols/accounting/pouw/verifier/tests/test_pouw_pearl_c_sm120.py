@@ -1,6 +1,6 @@
 """``pearl-c-sm120-v1``: Pearl-C's device seam.  The H100's record is every other file's default, so their pinned vectors are
 its outputs; here the sm_120 record carries the card's captured atom and names its stand-ins, `pearl_c_u` restates its steps
-(and a multi-group atom group by group), the scheme and its debit run on the record's atom, the accounting reads the
+(and a multi-group atom group by group), the scheme and its inert work run on the record's atom, the accounting reads the
 record's G and prices, and the unpromoted record chains one accumulator over all of k."""
 
 from __future__ import annotations
@@ -147,7 +147,7 @@ def test_sm120_lifecycle_and_work_audit():
 def test_the_inert_bound_is_the_records(monkeypatch):
     """ρ is the device record's: 1/1,000 on sm120 (Lean `…Rev1InertShare1000`), 1/400 on the H100,
     at either record's prices.  The certificate names it, and the credit, the tile rule and V-EX's
-    remedy all read it: a tile whose debit lies between the two caps fails on sm120, passes on the same record at 1/400,
+    remedy all read it: a tile whose inert work lies between the two caps fails on sm120, passes on the same record at 1/400,
     and `volunteer` gives rows up for it on sm120 alone."""
     from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
     from clear_audit import Prover
@@ -189,7 +189,7 @@ def test_the_inert_bound_is_the_records(monkeypatch):
 
 
 def test_inert_work_replays_the_devices_atom():
-    """sm120's flags are joint skips of its own atom replayed from scratch, and the debit prices a flagged atom-word at
+    """sm120's flags are joint skips of its own atom replayed from scratch, and the inert work prices a flagged atom-word at
     atom.k + fadd/G and a later +0 promotion at fadd."""
     def replay(a, b, skip):
         total = 0
@@ -255,7 +255,7 @@ def test_unpromoted_chain_is_one_accumulator():
 
 def test_unpromoted_instance_and_accounting():
     """The unpromoted record forms, chains and peels a k = 96 instance (32 | k), counts no promotion adds, registers no
-    scheme and has no debit rule."""
+    scheme and has no inert work rule."""
     s, ctx, noise, ops, checked, a, b = sm120_instance("unpromoted", (16, 96, 16), SM120_UNPROMOTED)
     for i, j in ((0, 0), (5, 11), (15, 15)):
         assert checked.c[i][j] == U.chain(ops.a.codes[i], ops.b.codes[j], device=SM120_UNPROMOTED)

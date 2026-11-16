@@ -279,7 +279,7 @@ def test_the_tile_is_pc8s_and_its_verdict_rev1s_inert_bound(k, tile, n, rho):
 
 
 def test_the_verdict_turns_at_the_inert_bound():
-    """With no flagged atom, the forming term alone moves the debit: the largest salt-dead count under the cap passes and
+    """With no flagged atom, the forming term alone moves the inert work: the largest salt-dead count under the cap passes and
     one more element fails, on the floors the circuit's integer form takes."""
     k, tile, n, rho = 256, (2, 2), 4, 7
     rng = random.Random("cap-boundary")
@@ -300,7 +300,7 @@ def test_the_verdict_turns_at_the_inert_bound():
 def test_a_refused_row_is_left_out():
     """A row whose ok word is 0 is no row of the cap: a zero row there (every atom of its words flagged, a +0 total after
     the first group, all its elements inert), with or without its certificates, leaves the verdict as it is without the
-    row; admitted, the zero row's debit is over the cap."""
+    row; admitted, the zero row's inert work is over the cap."""
     k, tile, n, rho = 256, (2, 2), 2, 1000
     rng = random.Random("cap-refused")
     ac, bc = _random_tile(rng, k, *tile)
@@ -415,7 +415,7 @@ def test_the_split_tally_leaves_a_refused_row_out_and_fails_a_wrong_certificate(
 # ---- the per-row cap (v2) -------------------------------------------------------------------------------------------------
 
 def _row_reference(dev: str, k: int, n: int, rho: int, row_rho: int, ac, bc, ok, sd) -> bool:
-    """`_reference`, and every admitted row's own debit over the tile's columns at most ρr = 1/row_rho times its cells'
+    """`_reference`, and every admitted row's own inert work over the tile's columns at most ρr = 1/row_rho times its cells'
     share of the credit (`pearlCTilesDevRev1RowInertBoundAt`): rev1's cap on that row alone."""
     return _reference(dev, k, n, rho, ac, bc, ok, sd) and all(
         _reference(dev, k, n, row_rho, [ac[i]], bc, [True], [sd[i]]) for i, o in enumerate(ok) if o)
@@ -423,7 +423,7 @@ def _row_reference(dev: str, k: int, n: int, rho: int, row_rho: int, ac, bc, ok,
 
 def flag_words(ac, bc, at) -> None:
     """For each (i, j, t) of ``at``, zero A row i's elements 16..31 of atom block t and B row j's 0..15, so word (i, j)'s
-    atom t is a zero product, which the debit flags; distinct t keep the words apart."""
+    atom t is a zero product, which the inert work flags; distinct t keep the words apart."""
     for i, j, t in at:
         for e in range(32):
             if e < 16:
@@ -448,7 +448,7 @@ def _unflagged_tile(dev: str, seed: str, k: int, tm: int, tn: int):
                                                       (256, (2, 2), 6, 3, 2)])
 def test_the_row_capped_tile_is_v1_and_each_admitted_rows_inert_bound(k, tile, n, rho, row_rho):
     """`test_the_tile_is_pc8s_and_its_verdict_rev1s_inert_bound`'s tiles under `Pc8TileCap` v2 and its split (`Pc8CapTally` v2):
-    C̃ and U are `Pc8Tile`'s, and the verdict is rev1's inertBoundOK on the replay and every admitted row's own debit within ρr
+    C̃ and U are `Pc8Tile`'s, and the verdict is rev1's inertBoundOK on the replay and every admitted row's own inert work within ρr
     = 1/row_rho of its cells' credit; both verdicts occur."""
     rng = random.Random(f"cap-row-tile-{k}-{tile}-{n}-{rho}-{row_rho}")
     tm, tn = tile

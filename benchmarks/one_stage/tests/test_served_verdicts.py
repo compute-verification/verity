@@ -1658,7 +1658,7 @@ def test_a_pearlplus_piece_sets_the_provers_replay_beside_its_shares(tmp_path, c
 
 def test_a_pearlplus_piece_names_its_provers_give_up_on_the_card_its_cross_check_and_the_rows_given_up(tmp_path, live):
     """With the card's counts (``served_passes.py volunteer --device``) the piece and its line name the give-up: the
-    debit cubin, the rate at which tiles were replayed on the CPU too and how many were, the A and B rows given up and
+    inert work cubin, the rate at which tiles were replayed on the CPU too and how many were, the A and B rows given up and
     the tiles over a cap before and left after. Its replay term is its CPU seconds alone, the card's beside them."""
     _calls, args = live
     served, verified = _pearlplus_run()

@@ -544,7 +544,7 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
     """sm_90's prices are the H100's (`Prices.h100`); sm_120's are the device statement's `Prices.sm120`, each step at its
     cheapest bit-exact form on the card, and none above what the card measures in the loop.  Crediting sm_120 at the
     H100's FADD of 32 (and forming of 64 + 4) overstates the credit; at sm_120's prices the scheme is `wrefDevRev1`, and
-    the debit per flagged atom-word, element and later +0 promotion follows the same record."""
+    the inert work per flagged atom-word, element and later +0 promotion follows the same record."""
     h, s, m = C.PRICES["sm_90"], C.PRICES["sm_120"], SM120_MEASURED
     assert (h, s) == (C.H100_PRICES, C.SM120_PRICES)
     assert (h.fadd, h.bf16_mac, h.forming_credited, h.forming_a_only) == (32, 2, 64, 4)

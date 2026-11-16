@@ -1460,7 +1460,7 @@ def pearlplus_coin(path: Path, answer: Mapping[str, Any]) -> dict[str, Any]:
 
 def give_up(volunteered: Mapping[str, Any]) -> dict[str, Any]:
     """The prover's give-up before the coin (``served_passes.py volunteer``'s document): whose words' counts it took
-    (``counts``: ``device``, the card's from the debit cubin ``cubin_sha256``, every ``cross_check``-th tile and each with
+    (``counts``: ``device``, the card's from the inert work cubin ``cubin_sha256``, every ``cross_check``-th tile and each with
     a word the card marks non-finite (``bad_tiles``) replayed on the CPU too, ``replayed`` in all; ``cpu``, every tile
     replayed), the A and B rows it gave up, the tiles over a cap before it and left over after, the passes it finished of
     ``of``, and whether it left none over a cap. The piece's document and its line carry it on the node; `publish` holds

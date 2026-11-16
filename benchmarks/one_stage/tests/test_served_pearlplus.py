@@ -6,7 +6,7 @@ in the serve dir's ``pearl/w<k>/``: the epoch taken as the piece's passes, the g
 
 The give-up before the verifier's coin, with stand-ins for served_passes.py, debit.py, served_verdicts.py,
 pearl_c_sm90.sh's setup and gpu-lease: it asks ``served_passes.py volunteer-needed`` before anything is built or served,
-gives the rows over a debit cap up (on the card by default) exactly when the answer is yes, refuses to serve with the
+gives the rows over inert work cap up (on the card by default) exactly when the answer is yes, refuses to serve with the
 give-up turned off then, leaves it off when the answer is no unless PEARLPLUS_VOLUNTEER asks for it, stops on any other
 answer, and hands PEARLPLUS_OVER_CAP to both the question and the verdict."""
 

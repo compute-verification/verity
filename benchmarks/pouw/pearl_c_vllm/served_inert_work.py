@@ -1,6 +1,6 @@
-"""The honest debit of a served pass at its scheme's inert-work share ρ: a seeded, stratified sample of a retained pass's tiles (the
+"""The honest inert work of a served pass at its scheme's inert-work share ρ: a seeded, stratified sample of a retained pass's tiles (the
 transcript `verify_run.py` reads), each opened from the pass's files and held to `Verifier.check_tile` and the tile rule
-(`clear_work.check_opened`) as `verify_run.check` holds it, with the replayed debit and the cap that rule compares it to
+(`clear_work.check_opened`) as `verify_run.check` holds it, with the replayed inert work and the cap that rule compares it to
 (`clear_work._inert_work_and_bound`: ρ times the credited cells' credit) recorded.  CPU only.
 
   python benchmarks/pouw/pearl_c_vllm/served_inert_work.py RUN_DIR/prefill/manifest.json RUN_DIR/decode/manifest.json \\
@@ -9,14 +9,14 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
 - **Strata** are a pass's matmul shapes (m, k, n).  Each gets its `--tiles` N: its matmuls in a seeded random order,
   cycled, and a uniform tile of each, so a stratum of 32 matmuls at N = 128 gives each matmul 4 tiles and one of 2,048 gives
   64 of its matmuls 1 each.
-- **Per tile:** the verdict at the scheme's cap; the debit and the cap of its credited cells and their ratio (over 1 is a
-  rejection); the debit's share of the cells' credit, the cap over ρ (`tile_numbers`), which is already rev1's
-  (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
+- **Per tile:** the verdict at the scheme's cap; the inert work and the cap of its credited cells and their ratio (over 1 is a
+  rejection); the inert work's share of the cells' credit, the cap over ρ (`tile_numbers`), which is already rev1's
+  (`creditDevRev1`, the first promotion add of every word out); and the inert work's two counts, its flagged atoms and its
   later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_inert_work.tile_inert_work`, rev1's
-  `laterZeroPromos`), whose adds the debit already holds, P3's forming elements (``inert_elements``, each
+  `laterZeroPromos`), whose adds the inert work already holds, P3's forming elements (``inert_elements``, each
   fs·|cols|/n of inert work), and the words' products that no salt makes count (``mends``, one MAC each:
   `pearl_c_inert_work.word_mend`).  Under a format with the row cap (-h3) the rule also caps each
-  credited A row (`clear_work.row_inert_bound`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's debit over
+  credited A row (`clear_work.row_inert_bound`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's inert work over
   its cap (the tile rule checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
   columns × kept k, from the records), with the share over each cap within the stratum taken from its sample.
@@ -123,7 +123,7 @@ def _recorded(*args, **kwargs):
 
 _CHAINS: list = []
 _TILE_INERT_WORK = CW.D.tile_inert_work
-#: the debit's implementation `_tile_inert_work_recorded` calls: the scalar reference, or `fast_tile`'s batch form
+#: the inert work's implementation `_tile_inert_work_recorded` calls: the scalar reference, or `fast_tile`'s batch form
 _IMPL = {"tile_inert_work": _TILE_INERT_WORK}
 
 
@@ -303,7 +303,7 @@ def _measure(item) -> dict:
     rows, cols = rec.credited(ref.tile)
     out.update(ok=reason is None, reason=reason, credited_rows=len(rows), credited_cols=len(cols), macs=len(rows) * len(cols) * rec.k_kept)
     if rows and cols:
-        # the tile rule's first (debit, cap) is the tile's; under the row cap (-h3) one per credited A row follows it
+        # the tile rule's first (inert work, cap) is the tile's; under the row cap (-h3) one per credited A row follows it
         tile, chains = _SEEN[0] if _SEEN else (_INERT_WORK_AND_BOUND(scheme, rec, ref.tile, ops, rows, cols), len(_CHAINS))
         out.update(tile_numbers(scheme, *tile))
         if chains:
@@ -316,7 +316,7 @@ def _measure(item) -> dict:
 
 
 def tile_numbers(scheme, debit: Fraction, cap: Fraction) -> dict:
-    """The tile rule's (debit, cap) as a tile's line records them: their ratio, and the debit's share of the credited cells'
+    """The tile rule's (inert work, cap) as a tile's line records them: their ratio, and the inert work's share of the credited cells'
     credit, the cap over ρ.  That credit is `clear_work.tile_inert_bound`'s `creditDevRev1` share, so the first promotion add is
     out of it once; taking it out again would overstate every share."""
     credit = cap / scheme.cap

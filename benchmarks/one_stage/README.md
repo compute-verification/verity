@@ -316,9 +316,9 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
   After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
   (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, and while Pearl+'s
-  verdict rejects a run on a sampled row over its debit cap (over-cap rule `reject`, which `served_passes.py
-  volunteer-needed` reports before anything is served) gives up the passes' rows over a debit cap before the verifier's
-  coin (`served_passes.py volunteer --device`: every word's counts from the card's debit cubin, every
+  verdict rejects a run on a sampled row over its inert work cap (over-cap rule `reject`, which `served_passes.py
+  volunteer-needed` reports before anything is served) gives up the passes' rows over inert work cap before the verifier's
+  coin (`served_passes.py volunteer --device`: every word's counts from the card's inert work cubin, every
   `volunteer_pass.CROSS_CHECK`-th tile replayed on the CPU too; `PEARLPLUS_VOLUNTEER=cpu` replays every tile on the CPU,
   far too slow for the default load), refusing to serve with the give-up turned off then; under `uncredited`, where the
   verdict credits such a row nothing, the give-up is off unless `PEARLPLUS_VOLUNTEER` is set. It takes Pearl+'s verdict

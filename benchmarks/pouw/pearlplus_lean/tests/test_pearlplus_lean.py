@@ -19,7 +19,7 @@ run's commitment, its coin the record's source; ``--of-record`` takes no other s
 same on an H200 run's retained passes at the sample count and source of the verdicts the Python recorded on them, where
 `POUW_PEARLPLUS_RECORDED` names a directory holding them (`passes/` and `verdicts/{run,control}.json`).
 
-Where the Python raises past its own verdict the Lean refuses instead, and no case here reaches it: a debit replay or a
+Where the Python raises past its own verdict the Lean refuses instead, and no case here reaches it: inert work replay or a
 checked U that rejects (the Lean names it), and an opening whose leaf doesn't parse (an opening that fails). The Lean also
 holds a y opening to the tile's real rows' positions, which the Python's own opener supplies.
 """
@@ -222,9 +222,9 @@ def test_a_salt_dead_element_over_the_row_inert_bound(exe, tmp_path, monkeypatch
 def test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_some_flag(exe, tmp_path, monkeypatch):
     """E's ∀ over the credited columns both ways (`inert_elements`, `Rule.rowElements`): under the zero key, credited row
     11 of the first call has atom-words flagging its blocks 0 … 3, all in one column.  On 16 x 16 tiles some of the row's
-    16 credited words flag each block and the rest don't, so no block is inert and its debit is the chain's, 160, over
+    16 credited words flag each block and the rest don't, so no block is inert and its inert work is the chain's, 160, over
     its row cap, with or without the term.  On 16 x 1 tiles that column's tile has one credited word, which flags all
-    four blocks, so every element of the row is inert and the tile's debit is 672, 160 without the term.  The Lean's
+    four blocks, so every element of the row is inert and the tile's inert work is 672, 160 without the term.  The Lean's
     verdicts are the Python's on both, under each ``over_cap`` rule."""
     cases = [((16, 16), 16, "A row 11's replayed debit 160 exceeds", "A row 11's replayed debit 160 exceeds"),
              ((16, 1), 64, "the replayed debit 672 exceeds", "the replayed debit 160 exceeds")]
@@ -245,7 +245,7 @@ def test_the_forming_term_reads_a_row_some_of_whose_blocks_are_inert(exe, tmp_pa
     """E's per-block read on one row (`inert_elements`, `Rule.rowElements`) where neither its all-inert shortcut nor a
     salt-dead element decides: under key 4, on 16 x 1 tiles, tile 14's one flagged row has its one credited word flag one
     of its four atom blocks and not the other three, and no element of the tile is salt-dead.  So 32 of the row's 128
-    elements are inert and the tile's debit is 168 (40 for the flagged atom-word, 4 per inert element), 40 without the
+    elements are inert and the tile's inert work is 168 (40 for the flagged atom-word, 4 per inert element), 40 without the
     term; reading the three unflagged blocks as the inert ones would make it 424.  The Lean's verdicts are the Python's
     under each ``over_cap`` rule."""
     path = T.proved_pass(tmp_path, H100, key=bytes([4]) * 32, tile=(16, 1))[0]

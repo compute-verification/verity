@@ -1,5 +1,5 @@
 """The words' inert-work counts of a Pearl-C call on the H100 or H200: `fast_tile.words_inert_work` on every word of A′'s
-rows by B̃'s, from debit_sm90.cubin (debit_sm90.cu; build.sh builds it into its tree's debit/) through the driver API
+rows by B̃'s, from debit_sm90.cubin (debit_sm90.cu; build.sh builds it into its tree's inert work/) through the driver API
 (run.py's `Dev`).
 
   InertWork(cubin_bytes).words(a, b) -> (atoms, zeros, bad)

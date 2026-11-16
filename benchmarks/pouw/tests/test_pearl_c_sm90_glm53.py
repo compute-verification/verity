@@ -200,7 +200,7 @@ def test_h200_session_runs_the_tables_shapes():
     prefill's 8192; every step after the check runs at MODEL's linears; it times each linear under the serial schedule,
     graphed and eager, and deferred-a, decode's forward whole (--whole, every in-domain shape) over llama32_1b's every layer
     and one of glm53's, and prefill under the h3 chain beside the default one (TIMING=0: none of it), and after every lease
-    gives up the passes' rows over a debit cap, then verifies them at the verdict's samples and checks their outputs in full.
+    gives up the passes' rows over inert work cap, then verifies them at the verdict's samples and checks their outputs in full.
     With LOCK_MHZ the timing runs at the card's locked clock, reset when the lease ends, the lock's outcome kept out of
     rc.txt."""
     sh = (HERE / "h200.sh").read_text()
@@ -717,8 +717,8 @@ def test_full_fails_on_one_served_y_word_or_one_activation_row_and_names_it(reta
 
 
 def test_volunteer_leaves_each_pass_no_tile_over_an_inert_bound_and_its_transcript_as_captured(retained, tmp_path):
-    """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over a
-    debit cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
+    """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over inert
+    work cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
     verifier's check under it."""
     from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # TT_OUT's gate at k = 256 on a CPU node holding GLM-5.3's snapshot (SNAP), a `research run
 # --cwd source` job writing under $OUT:
-#   * the census with the replayed debit, every family (the standing ones and the cross-group cancellation ones), the
+#   * the census with the replayed inert work, every family (the standing ones and the cross-group cancellation ones), the
 #     Hopper atom, s5 at line norm 16, δ = 1, tiles 64 x 64 and 64 x 16, runs 1-3, the cross-group search on every word
 #     (census_*.json);
 #   * pearlc_k256_gate.py on the served scheme: the exhaustive cross-group and peel searches, then again with real w2 slices

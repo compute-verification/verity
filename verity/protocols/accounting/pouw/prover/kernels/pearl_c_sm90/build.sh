@@ -9,7 +9,7 @@
 #   sass.json            registers and tensor-core, copy and local-memory instruction counts per kernel
 #   harness_gate.json    verity/protocols/accounting/pouw/prover/sass_gate.py's verdict on the cubin (.FTZ and FP32 MUFU outside its pinned
 #                        IEEE sequences), recorded, not enforced here: its pins name sm_120a's ptxas arguments alone
-#   debit/               debit_sm90.cubin: debit_sm90.cu (the words' debit counts, debit.py's) with the same flags, refused
+#   inert work/               debit_sm90.cubin: debit_sm90.cu (the words' inert work counts, debit.py's) with the same flags, refused
 #                        unless ptxas reports no spill or stack frame and its every MMA is a QGMMA.64x32x32.F32.E4M3.E4M3
 #                        (debit_ptxas.txt, debit_mma.txt), in a directory of its own: one Kernel.load reads holds one cubin
 #   ptxas.txt, toolchain.txt (nvcc --version and the full nvcc command line)

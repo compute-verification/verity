@@ -1,6 +1,6 @@
 """``pearl-c-nvfp4-v0`` (`pearl_c4`), with MXFP4 as its contrast line: the casts, the noise lines, the noise atom, the clean-up's
 algebra, the chain's exactness on the domain (which the design's argument turns on), the accounting, the per-row rules and
-debit, the work sampling design through `pearl_c_work`, and the pinned vectors."""
+inert work, the work sampling design through `pearl_c_work`, and the pinned vectors."""
 
 from __future__ import annotations
 
@@ -357,7 +357,7 @@ def test_row_rules_and_inert_work(fmt):
     assert not F.row_passes(f, [0] * 1024)                      # a_E rounds to zero
     one = F.parse_row(spiked(V.rows("rules", "A", 1, 1024)[0], 1024), 1024)
     two = F.parse_row(spiked(V.rows("rules", "A", 1, 1024)[0], 1024, (1, 2 * f.block + 1)), 1024)
-    # screened blocks no longer fail the row (the one-in-64 cap is gone): the debit charges them
+    # screened blocks no longer fail the row (the one-in-64 cap is gone): the inert work charges them
     assert sum(F.dead_blocks(f, one)) == 1 and sum(F.dead_blocks(f, two)) == 2 and F.row_passes(f, one) and F.row_passes(f, two)
     assert not F.row_passes(f, F.parse_row(spiked(V.rows("rules", "A", 1, 1024)[0], 1024, value=2.0 ** 16), 1024))
     e = [F.line(b"\x02" * 32, F.ROLE_EA, i) for i in range(4)]
@@ -496,7 +496,7 @@ def test_item_3_never_charges_more_than_its_block_form(a_blocks, b_blocks):
 
 def test_the_provers_inert_work_is_the_verifiers():
     """Items 3 and 4 read the witness from the tile's own forming on both sides, so a prover forming the committed rows
-    from the unit's seeds gets the verifier's debit exactly; over the credited rows only, the spiked row's dead pairs
+    from the unit's seeds gets the verifier's inert work exactly; over the credited rows only, the spiked row's dead pairs
     drop out."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
     ctx, k = V.ctx_of("screen", (4, 1024, 1024), 0, 0), 1024
@@ -724,7 +724,7 @@ def r1_tile():
 
 def test_r1_uncredits_a_row_whose_own_inert_work_passes_its_cell_bound():
     """R1: the spike row's own F1′ passes ρ·(its cell credit), so it must be
-    declared excluded; declared so, the tile passes, since the Gaussian rows' debit is far under the cap.  Credited, it
+    declared excluded; declared so, the tile passes, since the Gaussian rows' inert work is far under the cap.  Credited, it
     fails the tile; an excluded Gaussian row passes the per-row rules and R1, so its exclusion fails.  The honest
     prover's declaration finds exactly row 0."""
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
@@ -795,8 +795,8 @@ def test_r1_and_the_tile_inert_bound_read_the_discounted_credit(monkeypatch):
 
 
 def test_a_sampled_tile_evaluates_each_rows_f1_once():
-    """R1 on every row and the debit over the credited words read one evaluation of each row's F1′ per encoded tile (F1′
-    is most of the verifier's per-tile cost), and the debit is the uncached one; other operands start afresh."""
+    """R1 on every row and the inert work over the credited words read one evaluation of each row's F1′ per encoded tile (F1′
+    is most of the verifier's per-tile cost), and the inert work is the uncached one; other operands start afresh."""
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
     k, shape = ctx.matmul.shape.k, ctx.matmul.shape
     calls: list[tuple[int, int]] = []
@@ -1121,7 +1121,7 @@ def test_v_ex_leaves_r1_and_the_inert_bound_on_the_credited_rows():
     """A voluntary row doesn't shelter the others from R1: a row declared credited over R1's bound still fails its tile.
     The spike row itself may be given up instead of excluded.  By the band rule a voluntary row takes its band's credit,
     so a tile whose rows share its band has nothing under the cap; a credited row of the next band still has its cap, and
-    a tile whose credited rows' debit passes it fails."""
+    a tile whose credited rows' inert work passes it fails."""
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
     k = ctx.matmul.shape.k
     reason = CW.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (), (), (1,)), tile, a_rows, b_rows, ops)
@@ -1168,7 +1168,7 @@ def failures(s, epoch, prover, tr, splits, records) -> set[str]:
 
 
 def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
-    """`volunteer`, the honest prover's remedy for a tile over the cap, on a scheme whose debit puts tile position 7 at 20
+    """`volunteer`, the honest prover's remedy for a tile over the cap, on a scheme whose inert work puts tile position 7 at 20
     units per word against a cap of 1 per credited word, at a salt key where R1 also excludes A row 15.  R1's rows are
     `declare`'s on the transcript, excluded, so `volunteer` gives up only A row 7 (not a column, which leaves the tile
     over), and the audit accepts; without it the tile fails.  Declared without the transcript, row 15 is credited and
@@ -1259,8 +1259,8 @@ def test_pinned_vectors_serving_tile():
 # ---- beside Pearl-C (FP8): the parts of its tests that read both ------------------------------------------------------
 
 def test_pearl_c4s_per_element_term_3_is_a_no_op_on_pearl_c(monkeypatch):
-    """Pearl-C4's debit (item 3 per element on the witness, `pearl_c4.tile_inert_work`) is its own: Pearl-C (FP8) brings no
-    `tile_inert_bound`, so its audit never reaches Pearl-C4's witness or debit and accepts as before."""
+    """Pearl-C4's inert work (item 3 per element on the witness, `pearl_c4.tile_inert_work`) is its own: Pearl-C (FP8) brings no
+    `tile_inert_bound`, so its audit never reaches Pearl-C4's witness or inert work and accepts as before."""
 
     def unreachable(*args, **kwargs):
         raise AssertionError("Pearl-C reached Pearl-C4's debit")

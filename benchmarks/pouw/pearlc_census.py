@@ -351,7 +351,7 @@ def group_run(a: np.ndarray, b: np.ndarray, ts: list[int], skip: frozenset = fro
 
 
 def debit(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
-    """The replayed debit per word, P1's option (A) (`jointFlags`): on the noisy codes and the ticket's schedule (groups of G
+    """The replayed inert work per word, P1's option (A) (`jointFlags`): on the noisy codes and the ticket's schedule (groups of G
     atoms from +0, each promoted into an FP32 total), flag every atom of every nonempty subset of one group whose joint
     skip leaves the word's final total unchanged. It contains the identities, the groups whose promotion is an identity,
     and every single or joint skip inside one group, however it is absorbed (by a later atom's grid or by a later
@@ -386,7 +386,7 @@ def debit(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndar
 
 
 def inert_work_pure(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """The replayed debit per word with no promotion (one chain over all of k): flag atom t when skipping it alone leaves the
+    """The replayed inert work per word with no promotion (one chain over all of k): flag atom t when skipping it alone leaves the
     word's final value unchanged. It contains the identities. Joint skips of several atoms are the chain's cross-atom hole,
     which only TT_OUT carries once there are no promotion groups to bound them."""
     P, k = a.shape
@@ -562,7 +562,7 @@ def word_with_skip(ap: np.ndarray, bp: np.ndarray, S: set, G: int = 4) -> np.flo
 
 def cross_group(a: np.ndarray, b: np.ndarray, flags: np.ndarray, words: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
     """P1's greedy joint set for the sampled words: a lower bound on the largest jointly skippable set, whose cross-group part
-    no replay-local debit covers (`joint_cross_group`). Returns the set size and its atoms outside the debit's flags."""
+    no replay-local inert work covers (`joint_cross_group`). Returns the set size and its atoms outside the inert work's flags."""
     sizes, beyond = np.zeros(len(words), dtype=np.int64), np.zeros(len(words), dtype=np.int64)
     for w_i, p in enumerate(words):
         S = greedy_set(a[p:p + 1], b[p:p + 1], G)
@@ -576,7 +576,7 @@ def transfer(a_sim: np.ndarray, b_sim: np.ndarray, a: np.ndarray, b: np.ndarray,
     """The statement reviewer's transfer test (cross-group-transfer-probe.py): an adversary that knows the activations, the
     weights and F before the salt simulates a noise sample, finds the greedy set on it, and skips that set on the real sample.
     Per sampled word: does the real ticket word survive the skip, and how many of the set's atoms are outside the real
-    sample's debit flags (the credit it would gain)? Beside it, the real sample's own set and its overlap with the simulated one."""
+    sample's inert work flags (the credit it would gain)? Beside it, the real sample's own set and its overlap with the simulated one."""
     rows = []
     for p in words:
         S_sim = greedy_set(a_sim[p:p + 1], b_sim[p:p + 1], G)

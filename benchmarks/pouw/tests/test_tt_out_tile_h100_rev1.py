@@ -78,7 +78,7 @@ def _tile(fam: str, k: int, rows: int = 4, cols: int = 4, run: int = 1, line_nor
 
 
 def _mends(XA: np.ndarray, XB: np.ndarray) -> int:
-    """The debit's mends over the tile of rows `XA` by `XB` (`pearl_c_inert_work.word_mend` summed over its words, one MAC
+    """The inert work's mends over the tile of rows `XA` by `XB` (`pearl_c_inert_work.word_mend` summed over its words, one MAC
     each), each row's support ends from its own (α, β) as the scheme forms them (`pearl_c.s5_stats`)."""
     ends = []
     for X in (XA, XB):
@@ -140,7 +140,7 @@ def test_cross_group_joint_skips_stay_within_the_gap():
     fragment (`h100S8Frags`: 64 rows by at least 64 columns), so a program saves an atom only by skipping it for every word
     the instruction covers. With the products in hand (more than any program has before computing them), each word's
     greedy set (`greedy_set`) is intersected over the tile's 4 x 4 words, which over-approximates what one fragment's
-    words share, the intersection replayed on every word, and its atoms outside each word's debit (`debit`'s flags) priced
+    words share, the intersection replayed on every word, and its atoms outside each word's inert work (`debit`'s flags) priced
     at a MAC each against the tile's rev1 credit: the event never fires. Priced word by word instead, the same sets do
     fire, so the test reaches the class and the bound rests on the fragment."""
     C.set_atom("hopper")
@@ -168,12 +168,12 @@ def test_cross_group_joint_skips_stay_within_the_gap():
     assert fired_per_word
 
 
-# ---- dead pairs: a reviewer's class, which the debit's dead-pair term charges ---------------------------------------------
+# ---- dead pairs: a reviewer's class, which the inert work's dead-pair term charges ---------------------------------------------
 #
 # Liveness lets k/64 entries of a row sit so far above its noise that no salt moves their code (a dead entry). Where a row
 # of A and a row of B are both dead at a position, that product is the same for every salt, so a program holds it before
 # the salt. P1's flags see only an atom whose skip in place leaves the word unchanged, which these atoms are not; before
-# rev1's mends the debit charged a dead entry's forming and nothing for its products, and the class beat the bound.
+# rev1's mends the inert work charged a dead entry's forming and nothing for its products, and the class beat the bound.
 
 #: code values of the dead entries: each the centre of an E4M3 cell at least 16 wide on either side (448's cell is [432, ∞))
 TOP, MID, LOW, HIGH = 448.0, 320.0, 288.0, 352.0
@@ -302,7 +302,7 @@ def _dead_pair_cost(s: Shape, groups: int, atoms: int, units: int) -> Fraction:
 
 
 def _tile_inert_work(A: np.ndarray, B: np.ndarray, XA: np.ndarray, XB: np.ndarray, groups: int, n: int) -> dict:
-    """The tile's replayed rev1 debit and its terms: flagged atom-words at 32 + fadd/G each, later promotions into +0 at
+    """The tile's replayed rev1 inert work and its terms: flagged atom-words at 32 + fadd/G each, later promotions into +0 at
     fadd, the forming of every element that could be salt-dead and of every unread element at its share of B's columns,
     and the mends (`_mends`) at one MAC each."""
     flags, _ = C.debit(A, B, G)
@@ -328,7 +328,7 @@ def _running(group_words: np.ndarray) -> np.ndarray:
 
 def _dead_pair_case(k: int, n: int, groups: int, units: int, m: int = 8192, run: int = 1) -> dict:
     """One 64 x 64 audit tile of the dead-pair family at depth `k`, in `units` units of shape (m, k, n) that share one
-    weight: whether its rows pass the rules, whether the program's words are the reference's, the tile's replayed debit
+    weight: whether its rows pass the rules, whether the program's words are the reference's, the tile's replayed inert work
     (flagged atom-words, later promotions into +0, and at least every salt-dead element) against its cap, and the
     program's cost against TT_OUT's bound, per word."""
     C.set_atom("hopper")
@@ -352,7 +352,7 @@ def _dead_pair_case(k: int, n: int, groups: int, units: int, m: int = 8192, run:
 
 
 def _over_the_cap_by_its_mends(name: str, case: dict) -> None:
-    """The tile is over its cap, and only by its mends: without them its debit is within the cap, and the class's program
+    """The tile is over its cap, and only by its mends: without them its inert work is within the cap, and the class's program
     beats TT_OUT's bound (the falsification the mends answer), so the test also fails if the class stops reaching it."""
     assert case["rules"], case
     assert case["equal"] == case["words"], case
@@ -367,12 +367,12 @@ def test_dead_pairs_are_over_the_cap():
     rows that put liveness's k/64 dead entries in whole promotion groups, at the same positions in A and B, with signs
     that cancel, a W1 program replaces each such group's four atoms by 16/30 of one (`_dead_pair_program`), and beats
     TT_OUT's bound. The test forms one 64 x 64 audit tile of such rows under §5, checks the rules on every row and the
-    program's 4,096 ticket words against the reference's, and asserts that the tile's replayed debit exceeds its cap by
+    program's 4,096 ticket words against the reference's, and asserts that the tile's replayed inert work exceeds its cap by
     its dead pairs (112 a word), so the tile is not good and TT_OUT does not range over it."""
     _over_the_cap_by_its_mends("dead pairs", _dead_pair_case(k=8192, n=8192, groups=1, units=256))
 
 
-# ---- raised adder: a second class of the same kind, which the debit's forced-zero term charges ------------------------
+# ---- raised adder: a second class of the same kind, which the inert work's forced-zero term charges ------------------------
 #
 # The H100's atom aligns its 32 products and its accumulator to the largest exponent among them and cuts each to that
 # grid. Three products of 448·448 in a group's first atom leave an accumulator of about 602,112, so in the group's other
@@ -500,7 +500,7 @@ def test_raised_adder_groups_are_over_the_cap():
     the group's four (`_raised_program`). At 8192 deep liveness admits twenty such groups of the 64. The test forms one
     64 x 64 audit tile under §5 with every unplanted entry of those atoms zero, so the cut to zero holds for every salt,
     checks the rules on every row and the program's 4,096 ticket words against the reference's. The program beats the
-    bound by about a fifth of the credit, and the test asserts that the tile's replayed debit exceeds its cap by its
+    bound by about a fifth of the credit, and the test asserts that the tile's replayed inert work exceeds its cap by its
     mends: every product of a later atom's unplanted entries is cut on both ends of the support (a forced zero), and the
     top-code entries are dead pairs."""
     _over_the_cap_by_its_mends("raised adder", _raised_case(k=8192, n=8192, groups=20, units=1, fill="zero"))
@@ -513,7 +513,7 @@ def test_planted_cross_group_skips_are_over_the_cap():
     every planted group can be skipped in place for every word of the unit at once, in pairs of groups
     (`_raised_skip_program`), and no flag is set. The program beats the bound by about a tenth of the credit: the
     whole-fragment rule does not bound this class once the adversary chooses the operands. The test forms one 64 x 64
-    audit tile as the test above does, checks the rules and the 4,096 ticket words, and asserts that the tile's debit
+    audit tile as the test above does, checks the rules and the 4,096 ticket words, and asserts that the tile's inert work
     exceeds its cap by its mends, the same tile's as above."""
     case = _raised_case(k=8192, n=8192, groups=20, units=1, fill="zero", program="skip")
     assert case["flagged_in_planted_groups"] == 0, case
@@ -550,7 +550,7 @@ def _live_raiser_rows(side: str, k: int, groups: int, raisers: int, at: float) -
 
 def _live_raiser_case(k: int, groups: int, raisers: int, at: float, n: int = 8192, m: int = 8192) -> dict:
     """One 64 x 64 audit tile of live raisers, formed under §5 as `_raised_tile` forms its own: whether its rows pass the
-    rules, its replayed debit and mends, and its cap."""
+    rules, its replayed inert work and mends, and its cap."""
     C.set_atom("hopper")
     sch = PC.PearlC(forming="v1", device=H100)
     s = Shape(m, k, n)
@@ -578,13 +578,13 @@ def _over_the_cap(name: str, case: dict) -> None:
 
 
 def test_live_raisers_are_over_the_cap():
-    """Four raisers at 432 (the 416/448 boundary) in each of 16 groups: no entry is salt-dead, and the tile's debit
+    """Four raisers at 432 (the 416/448 boundary) in each of 16 groups: no entry is salt-dead, and the tile's inert work
     exceeds its cap by its forced zeros alone."""
     _over_the_cap("live raisers at 432", _live_raiser_case(k=8192, groups=16, raisers=4, at=432.0))
 
 
 def test_sub_rule_raisers_are_over_the_cap():
-    """Five raisers at 368 (the 352/384 boundary, below a reviewer's 384 rule) in each of 14 groups: the tile's debit
+    """Five raisers at 368 (the 352/384 boundary, below a reviewer's 384 rule) in each of 14 groups: the tile's inert work
     exceeds its cap by its forced zeros alone."""
     _over_the_cap("raisers at 368", _live_raiser_case(k=8192, groups=14, raisers=5, at=368.0))
 
@@ -635,7 +635,7 @@ def test_planted_cross_group_skips_at_the_deepest_shape_are_over_the_cap():
 
 def test_honest_tiles_take_no_mends():
     """The mends charge nothing on the census's honest-like tiles: no dead pair and no forced zero on any of their
-    words, so the new terms move no honest tile's debit toward its cap."""
+    words, so the new terms move no honest tile's inert work toward its cap."""
     C.set_atom("hopper")
     for fam in HONEST:
         for k in (1024, 8192):
