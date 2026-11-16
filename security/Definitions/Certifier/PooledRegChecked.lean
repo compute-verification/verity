@@ -61,9 +61,18 @@ every history of the period's coins (`PrCheckMissR` at the phase's statement, pr
 openings), the run judged by the check registered for the phase, `valid (sw i)`: the registration (`SameRegistration`)
 fixes the phase's program, layout and steps but not its check.
 
-It is a hypothesis about the check, proved for no check today: that a phase which accepts rarely does so while the run
-at its registered trace fails the check. `PrCheckMissR` counts only the runs whose `FregR` holds no proof block of a
-class sampled `all`; a run whose `FregR` meets such a class is charged to the phase's error `e i` instead. -/
+It is a hypothesis about the check, proved for no deployed check today: that a phase which accepts rarely does so while
+the run at its registered trace fails the check. `PrCheckMissR` counts only the runs whose `FregR` holds no proof block
+of a class sampled `all`; a run whose `FregR` meets such a class is charged to the phase's error `e i` instead: accepted
+with no sampled block of `FregR` it has probability `0` (`pr_miss_meets_all`), and a phase accepting with a sampled
+block of `FregR` is paid once, at most `e i` (`pr_phaseHit_le`, summed over the phases by `Pr_exists_mem_le_sum` in
+`pooledChecked_of_event`).
+
+It and `CheckedWitness` each say the check holds on an accepted run except with probability `εchk`, at different runs
+and provers, and neither gives the other yet. `CheckedWitness` is at the runs of the extracted witness (`certifierRun`),
+over the extractor's coins as well, for every prover, its runs fixed before the prover; `PhaseChecks` is at `regRunR`,
+which reads the prover's strategy, for the period's own provers. So `CheckedWitness` cannot be stated at `regRunR`'s
+run, and a check that discharges one does not yet discharge the other. -/
 def PhaseChecks [Fintype Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A) {L S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
     (sw : Fin m → AuditStatement) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
