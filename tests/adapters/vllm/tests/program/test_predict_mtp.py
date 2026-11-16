@@ -184,7 +184,7 @@ NORM, K32, MLA = "DsaRMSNorm_v1", "Const32", "FlashMlaV32Decode_v1"
 INDEXER = {"DsaIndexerKRow_v1", "DsaIndexerQ_v1", "DsaMqaLogits_v3", "DsaTopKShortRow_v1"}
 NH = 8
 
-STEP0_ATTENTION = ([F] * 3 + ["Gemm_v2"] * 3 + [NORM] * 3 + [LR] * 3 + ["DsaIndexerKRow_v1"] * 3 + [F] * 3 + [BG] * 3 + [F] * 3
+STEP0_ATTENTION = ([F] * 3 + ["CublasSplitKGemm_v1"] * 3 + [NORM] * 3 + [LR] * 3 + ["DsaIndexerKRow_v1"] * 3 + [F] * 3 + [BG] * 3 + [F] * 3
                    + [Q] * (3 * NH) + ["DsaIndexerQ_v1"] * 3 + ["DsaMqaLogits_v3", K32, "DsaTopKShortRow_v1"] * 3
                    + [K32, K32] + [MLA] * 3 + [BG] * 3 + [F] * 3)
 STEP1_ATTENTION = [F, NORM, LR, F, BG, *[Q] * NH, K32, K32, MLA, BG, F]
