@@ -40,7 +40,7 @@ it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. 
 `benchmarks/one_stage/served_verdicts.sh`'s, whose header gives each step:
 
 1. the endpoint, under a GPU lease, with the committer's weights registration before the first request;
-2. greedy requests from the certifier's traffic generator (`serve_load.py --varied`), closed into one execution phase;
+2. greedy requests from network certification's traffic generator (`serve_load.py --varied`), closed into one execution phase;
 3. SPOT on that execution phase: its advice and request Programs, the circuit of the served execution blocks
    at each class, and the records audit (Flock `--zk` on the sampled proof blocks behind the Lean ZK server, and the
    Lean verifier's verdict);
