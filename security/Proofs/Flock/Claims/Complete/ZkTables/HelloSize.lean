@@ -117,7 +117,7 @@ theorem helloList_sum_le (tags : Tags) (sigma : ByteArray) (hs : sigma.size = 64
   have j3 : jsz (Json.str "bytes retained") = 254 := by decide +kernel
   unfold helloList
   by_cases h9 : tags.hm96Rows = true <;> by_cases hr : tags.retainRounds = true <;>
-    simp only [h9, hr, Bool.false_eq_true, ↓reduceIte, if_true, if_false, List.map_cons, List.map_nil,
+    simp only [h9, hr, Bool.false_eq_true, ↓reduceIte, List.map_cons, List.map_nil,
       List.map_append, List.sum_cons, List.sum_nil, List.sum_append, List.cons_append, List.nil_append] <;>
     omega
 
@@ -125,7 +125,7 @@ theorem helloList_distinct (tags : Tags) (sigma : ByteArray) (mPts : ℕ) (ct : 
     Distinct (helloList tags sigma mPts ct names) := by
   unfold helloList
   by_cases h9 : tags.hm96Rows = true <;> by_cases hr : tags.retainRounds = true <;>
-    simp only [h9, hr, Bool.false_eq_true, ↓reduceIte, if_true, if_false, List.cons_append, List.nil_append] <;>
+    simp only [h9, hr, Bool.false_eq_true, ↓reduceIte, List.cons_append, List.nil_append] <;>
     first | decide +kernel | simp
 
 theorem coins_mem_helloList (tags : Tags) (sigma : ByteArray) (mPts : ℕ) (ct : CoinTree.Spec)
@@ -146,7 +146,7 @@ theorem helloList_good (tags : Tags) (sigma : ByteArray) (mPts : ℕ) (ct : Coin
     exact .str _
   unfold helloList
   by_cases h9 : tags.hm96Rows = true <;> by_cases hr : tags.retainRounds = true <;>
-    simp only [h9, hr, Bool.false_eq_true, ↓reduceIte, if_true, if_false, List.cons_append, List.nil_append,
+    simp only [h9, hr, Bool.false_eq_true, ↓reduceIte, List.cons_append, List.nil_append,
       List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq] <;>
     first
       | exact ⟨.str _, good_toJson _, .str _, harr, hlink, good_coins ct "", .str _, .str _⟩

@@ -169,4 +169,14 @@ theorem recordFits_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
     RecordFitsZkAt FlockDeploy.sha512 (x r) (tabAt r).1 (tabAt r).2 :=
   recordFits_x_of_text hn hr (specText_x_lt hn hr)
 
+/-- **The honest masked prover is accepted at some coins** at the statement, at a witness in scope: `accepts_x` with its
+record-length hypothesis discharged (`recordFits_x`). -/
+theorem accepts_x_of_scope (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) {w : Claims.Flock.Wit}
+    (hS : Claims.Flock.Scope (FlockDeploy.deployZk Readable.relation) (x r))
+    (hR : Claims.Flock.R (FlockDeploy.deployZk Readable.relation).parse (x r) w)
+    (ω : (FlockDeploy.deployZk Readable.relation).Tape) :
+    ∃ c, (Claims.run FlockDeploy.sha512 ((FlockDeploy.deployZk Readable.relation).P w)
+      (FlockDeploy.deployZk Readable.relation).V (x r) ω c).out = .acc :=
+  accepts_x hn hr (recordFits_x hn hr) hS hR ω
+
 end SpotFlock.InstanceStmt
