@@ -239,13 +239,14 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
 
 
 def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_any_id(tmp_path):
-    """A refused Lean verify and an a5 member whose timing is keyed by its chunk's name (no ``draw_counts`` entry) each
-    write null with why, never a figure; recursion's benchmark result is no member of any id."""
+    """A refused Lean verify and an a5 member whose timing is keyed by its chunk's name (no count of its sampled proof
+    blocks) each write null with why, never a figure; recursion's benchmark result is no member of any id."""
 
     refused = PL.read("zk", str(prove_path_arm(tmp_path / "z", "llama", lean=False)))
     chunk = PL.read("sampling", str(a5_out(tmp_path / "s", draw_counts={"OtherTemplate_v1": 4})))
     assert chunk.accepted and chunk.prover_s is None
-    assert "no figure a proof block: member RoPEHead_v1{D=64}'s timing has no count of sampled proof blocks (draw_counts)" in chunk.notes
+    assert any(n.startswith("no figure a proof block: member RoPEHead_v1{D=64}'s timing has no count of sampled proof blocks")
+               for n in chunk.notes)
     results = [PL.read("flock", None), refused, chunk, PL.read("recursion", str(recursion(tmp_path / "r")))]
     written = PL.measured(results, IDS)
     assert len(written) == 9 and all(m["value"] is None and m["why"] for m in written)
@@ -407,7 +408,7 @@ def test_a_prove_path_result_names_the_commit_its_machine_txt_states(tmp_path):
 
 def test_a_served_a5_result_states_its_values_its_bound_its_coins_and_its_commit_from_its_files(tmp_path):
     """A served a5 run's shapes: summary.json's source served beside REGISTERED kind=served, the audit's
-    wrong_units, summary.txt's COINS line and machine.txt's git HEAD (a5_llama1b_h200.sh's third line)."""
+    bound on incorrect proof blocks, summary.txt's COINS line and machine.txt's git HEAD (a5_llama1b_h200.sh's third line)."""
 
     out = a5_out(tmp_path, source="served", audit={"wrong_units": {"bound": 2, "of": 880, "delta": 0.5}}) / "out"
     (out / "machine.txt").write_text(f"uid=0(root)\n13722cef5f43\n{'45400e83995d' + '0' * 28}\nrow dir /w/r/llama32-1b__int8\n")
