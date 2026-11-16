@@ -296,7 +296,7 @@ KNOWN = frozenset({
     "verity_vllm.check.replay.evaluate",
     "verity_vllm.commit.committer.host_retention",
     "verity_vllm.commit.opened",
-    # the compile slice and its pieces (`verity_vllm.compiler`), which the network certifier's drivers under `benchmarks/`
+    # the compile slice and its pieces (`verity_vllm.compiler`), which the network attester's drivers under `benchmarks/`
     # imported from `verity` before the compiler's move into the adapter
     "verity_vllm.compiler.cache_step",
     "verity_vllm.compiler.cache_step_v3",

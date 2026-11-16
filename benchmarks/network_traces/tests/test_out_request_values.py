@@ -1,6 +1,6 @@
 """No request value reaches a job's $OUT, which custody uploads. Each script's copy into $OUT runs on stand-in records,
 with a prompt planted in every file a request's values are in (a rehearsal's plan.json, probe.json, io.json and
-out-witness.jsonl, a network certifier rehearsal's traffic.json and client.json): $OUT gets the public records and no file holding the prompt or a request's id
+out-witness.jsonl, a network attester rehearsal's traffic.json and client.json): $OUT gets the public records and no file holding the prompt or a request's id
 fields. Nor does a row registration whole reach it, with its wiring's digest: the chain's copy of a step's files puts
 the files that hold one on its private side."""
 from __future__ import annotations
@@ -87,7 +87,7 @@ def test_scan_zk_copies_six_files_of_its_own_rehearsal_and_not_its_traffic_or_re
     """The six files the scan's job copies of its own rehearsal hold no request value. They are not public files:
     `cells.jsonl` holds each registration whole with its cost, which a gate's run keeps on its private side (the
     wiring and the cost's two times are private), and `certified.jsonl`, `check.json`, `warden.json` and `serve.log`
-    are the network certifier's own records."""
+    are the network attester's own records."""
     w, out = tmp_path / "W", tmp_path / "OUT"
     copied = {"deployment.json": {"windows": 2}, "cells.jsonl": [{"registration": {"root": "ab"}}],
               "certified.jsonl": [{"window": 0, "head": "cd"}], "check.json": {"accepted": True},

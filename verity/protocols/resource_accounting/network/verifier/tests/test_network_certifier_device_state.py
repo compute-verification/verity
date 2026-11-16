@@ -1,4 +1,4 @@
-"""The network certifier's device state and the start's certificate: a session's base on its key's life is taken once,
+"""The network attester's device state and the start's certificate: a session's base on its key's life is taken once,
 written before it is returned and never given again, and its ordinal is the number of the key's sessions before it; one
 run holds the state at a time; the start's certificate binds the base, the ordinal, the schedule, the link, the session
 and the key; and its tag is no other separator's."""

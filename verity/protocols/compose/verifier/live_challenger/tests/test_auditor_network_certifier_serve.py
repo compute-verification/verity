@@ -1,4 +1,4 @@
-"""The gate's network certifier commands (`network_certifier_command`, `auditor.py`) against the runner they start, the device's
+"""The gate's network attester commands (`network_certifier_command`, `auditor.py`) against the runner they start, the device's
 `network_certifier_serve.py`: each request parses to the run whose minutes, execution phases and key height the gate counts, at
 `network_certifier_serve.py`'s default schedule and at the scan's; the forms the gate publishes are the verifier's constants and
 hold a run's own lines, which the released keys' lists declare; and its relay session is the `session` the device's own tests run."""
@@ -130,7 +130,7 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
 
 def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_schedule_ki_and_ko(tmp_path, capsys):
     """Each class `warden-rehearse --scan --prompts --scan-class` takes (`auditor.SCAN_CLASSES`, the class of record
-    `scan_zk.W63`'s by default) is `scan_zk.SETUPS`' of its name: the gate's network certifier runs at its schedule (`scan_zk.py
+    `scan_zk.W63`'s by default) is `scan_zk.SETUPS`' of its name: the gate's network attester runs at its schedule (`scan_zk.py
     schedule --class`, the one `scan_zk.py prove --class --warden-run` refuses any other of), which its class serves
     and which is the class of record's but for its egress cells, so the gate's group windows hold at it; and the gate
     bounds a prompt by its KI and the tokens by its KO. w63k4's class refuses the class of record's schedule (65
@@ -154,7 +154,7 @@ def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_sch
 
 
 def test_the_gates_network_certifier_windows_are_at_least_every_request_counts_phases_which_its_key_signs(tmp_path):
-    """The gate sizes a network certifier rehearsal's key on `network_certifier_windows` of its requests (`network_certifier_height`), so for
+    """The gate sizes a network attester rehearsal's key on `network_certifier_windows` of its requests (`network_certifier_height`), so for
     every request count it takes, those are at least the execution phases `rehearse` runs (its traffic's last arrival
     and tail): at the scan's schedule on the gate's id traffic and on `--prompts`' arrivals, and at `network_certifier_serve.py`'s
     default (`NETWORK_CERTIFIER_WINDOW_MS`) on its varied traffic; a request count's traffic is the first of the most's. The gate's

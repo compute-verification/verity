@@ -1,7 +1,7 @@
-"""The network certifier's request words (`NetworkCertifierParams.request_words`, `content_rows`' "The words row" and "A
+"""The network attester's request words (`NetworkCertifierParams.request_words`, `content_rows`' "The words row" and "A
 request's words", `connection_rows`), driven tick by tick on `test_network_certifier`'s harness. A schedule
 with them has a fourth table a class, `words.i`: row r is the `max_tokens` and the count of prompt ids of the r-th
-release filed in the class, as the network certifier reads them from the request's bytes, whatever its server
+release filed in the class, as the network attester reads them from the request's bytes, whatever its server
 answers, the count at most the class's P. A request without `max_tokens` at its place, or with an `ignore_eos` key,
 is never released, so it has no row. The head lists the table after the class's other three at the class's count, with the zero root
 where the class has no release, the verifier's read holds a registration to that, and the table's port is by its
@@ -49,7 +49,7 @@ ASKED = ((8, 3), (1, 40), (8, 100), (1, 3), (5, 16), (7, 2))
 #: what the server sends on each, and on each in a second run of the same requests
 SENT = ((11, 22, 33), (9,), tuple(range(8)), (), (5,), (1, 2))
 OTHER = ((1,), (), (3, 4), (), (), (6, 7, 8))
-#: the class the network certifier's rule files each in, and its row there, under either run's answers
+#: the class the network attester's rule files each in, and its row there, under either run's answers
 FILED = ((0, 0), (2, 0), (2, 1), (0, 1), (1, 0), (0, 0))
 #: the releases each execution phase of the run files in each class
 COUNTS = {0: (2, 0, 2, 0), 1: (1, 1, 0, 0), 2: (0, 0, 0, 0)}
@@ -71,7 +71,7 @@ def traffic(sent=SENT):
 
 @pytest.fixture(scope="module")
 def ran():
-    """`traffic` through the network certifier under the schedule with request words: its requests, the device and
+    """`traffic` through the network attester under the schedule with request words: its requests, the device and
     its handed releases by execution phase."""
     reqs, arrivals, answers = traffic()
     device, _, _ = run(answers, arrivals, params=WORDED, windows=3)
@@ -196,7 +196,7 @@ def test_a_releases_words_are_its_requests_whatever_its_server_answers(ran):
 
 
 def test_a_request_without_max_tokens_at_its_place_or_with_an_ignore_eos_key_is_never_released(ran):
-    """The two clients whose requests the rule doesn't read: the network certifier cuts no cell of either, releases
+    """The two clients whose requests the rule doesn't read: the network attester cuts no cell of either, releases
     neither and fails each as its client's, so neither has a place in the release order, a lengths slot or a row of
     any table. Under `max_tokens_cap` the request without `max_tokens` fails at its first cell's read of it, and
     the one with an `ignore_eos` key as no canonical id request (malformed). So every row is of a request without

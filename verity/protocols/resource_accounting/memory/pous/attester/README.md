@@ -75,7 +75,7 @@ The streamed-label wipe's records and verdict (`streamed_wipe.py`) and the messa
   and timed itself, or the run's own data carries an LMS forgery or a SHA-512 collision.
 - `MemoryChallenger.Properties.WipeSurvivorBound` (`security/Properties/Pous/Wipe.lean`): a wipe `wipe-protocol` accepts
   and certifies meets the survivor bound at the `foreign_bits` it publishes, except with `eps` plus the labels' PRF
-  advantage plus the network certifiers' `δ_net`.
+  advantage plus the network attesters' `δ_net`.
 - `Pous.Component.WipeAccepts` (`security/Properties/Pous/Component.lean`): what `wipe-protocol` accepts is a signed
   run, of the parameters' server and run id, that passes every check of `StreamedWipe.verdict`.
 - The continuous audit's memory challenger (`security/Definitions/Pous/Model/Continuous.lean`) enforces its three rules,
