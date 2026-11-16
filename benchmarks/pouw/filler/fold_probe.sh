@@ -7,7 +7,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler K=verity/protocols/accounting/pouw/prover/kernels/filler
+D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/foldprobe.XXXXXX); trap 'rm -rf "$B"' EXIT
 export PF_R_LIST=${PF_R_LIST:-"1 2 3 4 6 8"} PF_NCU_R=${PF_NCU_R:-"1 2 4"} PF_S=${PF_S:-256}
 export PF_FOLD=${PF_FOLD:-XIN13}   # XIN13 or LI

@@ -69,7 +69,7 @@ def kinded() -> dict:
     registered read of a parameter no pin holds: a block's 18,432 fresh bits, 2,048 of the scan state and 16,384 of
     the linears' outputs."""
     from verity_vllm.program.predict.scan_state import SCAN_STATE
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import y_value
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import y_value
 
     fn = _fn(GEMM)
     gid, rows = IF.descriptor_id(fn), dict(IF.layout(fn).rows)

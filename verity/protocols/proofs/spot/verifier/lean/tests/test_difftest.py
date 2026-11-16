@@ -59,10 +59,10 @@ from hypothesis import strategies as st
 import settings
 import verity_difftest as D
 from verity_difftest import protocol as PR
-from verity.protocols.accounting.pouw.verifier import audit as PA
-from verity.protocols.accounting.pouw.verifier.protocol import tagged
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit as PA
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Stratified, Stratum
-from verity.protocols.proofs.spot.device import challenger as CH
+from verity.protocols.proofs.spot.verifier.challenger import challenger as CH
 from verity.protocols.proofs.spot.verifier import schedule as SCH, second_stage as SS, service
 from verity.protocols.proofs.spot.verifier.one_stage import (
     audit,
@@ -77,10 +77,10 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     registered as G,
     docket as R,
 )
-from verity.protocols.proofs.spot.device.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
-from verity.protocols.proofs.spot.device.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
+from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
+from verity.protocols.proofs.spot.verifier.challenger.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
                                               coins_within, draw_coins, draw_first, sampling_design_problem)
-from verity.protocols.proofs.spot.device.coins import ran_out as draw_ran_out
+from verity.protocols.proofs.spot.verifier.challenger.coins import ran_out as draw_ran_out
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import order_why
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 from verity.circuits import codec, partition_object as PO

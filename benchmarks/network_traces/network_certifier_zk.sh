@@ -30,7 +30,7 @@ export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 
 RUN=$W/run
 log "wzk: network-certifier-serve rehearsal (fake endpoint, requests ${WZ_REQUESTS:-6})"
-(cd benchmarks/network_traces && "$PY" -m verity.protocols.accounting.certifier.device.network_certifier_serve rehearse --fake --out "$RUN" --requests "${WZ_REQUESTS:-6}" \
+(cd benchmarks/network_traces && "$PY" -m verity.protocols.resource_accounting.network.attester.network_certifier_serve rehearse --fake --out "$RUN" --requests "${WZ_REQUESTS:-6}" \
   --rate 1 --tail 5 --max-tokens 64 --prompt-max 64 --start-in 2) 2>&1 | tee -a "$OUT/wzk.log" | tail -3
 [ -f "$RUN/check.json" ] || { log "wzk: rehearsal FAILED"; exit 7; }
 mkdir -p "$OUT/run"

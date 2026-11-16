@@ -11,12 +11,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and the difftest harness, both required by path, and `verity-verify-proof sigma-check` is Flock's verifier.
 inputs = ["adapters/vllm/verity_vllm", "verity/circuits", "verity/circuits/kernels",
           "verity/commitments/randomness", "verity/commitments", "verity/commitments/crypto", "verity/__init__.py",
-          "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/protocols/accounting/pouw/verifier/__init__.py",
-          "verity/protocols/accounting/pouw/verifier/protocol.py", "verity/protocols/accounting/pouw/verifier/live_reads.py",
-          "verity/protocols/accounting/pouw/prover/__init__.py",
-          "verity/protocols/accounting/pouw/prover/circuit", "verity/protocols/accounting/pouw/prover/schemes", "verity/protocols/proofs/flock/verifier",
+          "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/protocol.py", "verity/protocols/resource_accounting/compute/pouw/verifier/live_reads.py",
+          "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py",
+          "verity/protocols/resource_accounting/compute/pouw/prover/circuit", "verity/protocols/resource_accounting/compute/pouw/prover/schemes", "verity/protocols/proofs/flock/verifier",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean", "tools/difftest",
-          "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py"]
+          "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py"]
 # Build outputs the tests run (`check` runs this suite after its Lean steps): the difftest server, and the verifier's command.
 artifacts = ["verity/protocols/proofs/flock/verifier/sigma/.lake/build/bin/sigma-difftest",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof"]

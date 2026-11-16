@@ -22,15 +22,15 @@ from typing import Any, ClassVar
 import numpy as np
 from verity.commitments import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.verifier.audit import (
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
     activation_binding,
     hm96_kernel_constants,
     rows_domain,
 )
 
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.manifest import (  # noqa: F401 - kept importable here, as callers read them
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import (  # noqa: F401 - kept importable here, as callers read them
     SaltCoins,
     SaltOpening,
     _entry,
