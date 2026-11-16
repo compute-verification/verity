@@ -898,3 +898,27 @@ def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(w
         pub[name] = _public(c, tmp_path / name)
     assert pub["served"] == pub["other"]
     assert {"index.json", "index-salt.bin", "circuit.json", "registration.json"} <= set(pub["served"])
+
+
+@pytest.mark.slow
+def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_verifier_derives(window, tmp_path):
+    """Slow (minutes) for the window's close, which no cheaper path to `Window.write` skips."""
+    low, _f, values, _w, slots = window
+    c, words = low.circuit, SS.words(CLASS.scan)
+    assert c.registered.values == (SS.SCAN_STATE,)
+    program, digest = c.program()[0], WC.population_digest(c)
+    assert dict(program.fn.signature()[0])[SS.SCAN_STATE].leaves == CLASS.buckets * words
+    state = WR.standin_state(digest, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], KEY, 0, window=RUN)
+    vals = {**values, SS.SCAN_STATE: state}
+    win = IF.Window(c, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
+    win.supply(CR)
+    WR.Rows(low, slots, vals).record(win)
+    win.write(win.close(), tmp_path, {}, registrar=REG, index_salt=WR.index_salt(KEY, 0))
+    rec = json.loads((tmp_path / "registration.json").read_text())
+    (e,) = rec["registered"]
+    scan = CR.Registered.commit(digest, SS.SCAN_STATE, list(state.rows), list(state.salts), schema=CR.SCHEMA_V2, window=RUN)
+    want = CR.registered_entries(program, {SS.SCAN_STATE: words}, {SS.SCAN_STATE: CR.SCHEMA_V2}, RUN)[SS.SCAN_STATE]
+    assert rec["format"] == REG.FORMAT_V2 and e == state.entry() == scan.entry()
+    assert e["value"] == "verity/certifier/scan-state/v1" and e["root"] == rec["window"]["registered_roots"][SS.SCAN_STATE]
+    assert (e["leaves"], e["words"], e["domain"]) == (want["leaves"], want["words"], want["domain"]) == (
+        CLASS.buckets, words, CR.domain(digest, SS.SCAN_STATE, words, CLASS.buckets, window=RUN).domain_id.hex())

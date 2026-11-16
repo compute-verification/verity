@@ -152,7 +152,8 @@ def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
     linear, round s's call c, holds its A row (``o0``, x widened) to row i of the call's A rows and reads its ``y`` as row
     i of the call's y, i its position's row, and its readers read y as its unit's N / 16 output rows in order. Every real
     row of every value is read by exactly one unit, the A rows' filler rows by none, and the circuit's program takes them
-    as its values, round by round and call by call the A rows then the y, ahead of its units' parameters. Each is FP32
+    as its values, round by round and call by call the A rows then the y, then the scan state, ahead of its units'
+    parameters. Each is FP32
     words in ``row-seg/v1`` rows as Pearl+'s trees commit them (`ROW_FORMAT`): its program parameter 32-bit leaves, and
     the ``o0`` and ``y`` ports reading it ``row-seg/v1`` rows in their templates' statements."""
     c, want = low.circuit, {}
@@ -172,11 +173,11 @@ def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
         for ci, (K, N) in enumerate(CALLS):
             assert sorted(rows[PEARL.a(s, ci)]) == sorted(rows[PEARL.y(s, ci)]) == list(range(m))
             assert (c.registered.params[PEARL.a(s, ci)], c.registered.params[PEARL.y(s, ci)]) == (16 * 2 * K, m * 2 * N)
-    assert c.registered.values == tuple(v for s in M for ci in range(len(CALLS)) for v in (PEARL.a(s, ci), PEARL.y(s, ci)))
-    assert [n for n, _ in c.program()[0].fn.signature()[0][:32]] == list(c.registered.values)
-    assert c.registered.formats == {v: WK.ROW_FORMAT for v in c.registered.values} == {v: {"row_schema": IF.SEG,
-                                                                                            "word_bits": 32}
-                                                                                        for v in c.registered.values}
+    pearl = tuple(v for s in M for ci in range(len(CALLS)) for v in (PEARL.a(s, ci), PEARL.y(s, ci)))
+    assert c.registered.values == (*pearl, SS.SCAN_STATE)
+    assert [n for n, _ in c.program()[0].fn.signature()[0][:33]] == list(c.registered.values)
+    assert c.registered.formats == {v: WK.ROW_FORMAT for v in pearl} == {v: {"row_schema": IF.SEG, "word_bits": 32}
+                                                                         for v in pearl}
     sig = dict(c.program()[0].fn.signature()[0][:32])
     for s, m in M.items():
         for ci, (K, N) in enumerate(CALLS):
@@ -199,7 +200,7 @@ def test_each_tables_readers_are_templates_of_their_own(low):
         values.setdefault(tid, set()).add(v)
         read.setdefault(tid, set()).add(u)
     assert all(len(vs) == 1 and read[t] == set(range(units[t])) for t, vs in values.items())
-    assert {v for vs in values.values() for v in vs} == set(c.registered.values)
+    assert {v for vs in values.values() for v in vs} == set(c.registered.values) - {SS.SCAN_STATE}
 
 
 def test_the_census_counts_each_cut_linear_by_shape_and_ties_none(low):
@@ -328,7 +329,7 @@ def test_pearls_values_are_the_rows_the_cut_linears_make(low, filled):
     width."""
     _w, _v, slots, rows = filled
     want = _pearl_values(low, slots)
-    assert sorted(want) == sorted(low.circuit.registered.values)
+    assert sorted(want) == sorted(set(low.circuit.registered.values) - {SS.SCAN_STATE})
     for name, v in want.items():
         assert np.array_equal(rows.value(name, len(v), np.zeros(v.shape[1], np.uint16)), v), name
         made = (rows.value(name, len(v), np.full(v.shape[1], 0xFFFF, np.uint16)) != 0xFFFF).any(axis=1)

@@ -75,7 +75,7 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
     `TokenFeed_v1`'s below the prompt, the previous select's past it) to row i of its round's input-ids table; no other
     output row is held to a table, and no two to one row. The reads fill no input, so the circuit's inputs by what fills
     them are the int8 circuit's without the tables. The circuit's program takes the tables as its values, round by round
-    the A table then the input-ids table, ahead of its units' parameters."""
+    the A table then the input-ids table, then the scan state, ahead of its units' parameters."""
     low = _lowered()
     c = low.circuit
     assert {t: k for fn, k in c.templates if (t := _label(fn)).startswith("Int8RowQuant")} == {
@@ -83,8 +83,8 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
         "Int8RowQuant_v5{K=64,R=1,ROUND=1}": 8, "Int8RowQuant_v5{K=64,R=4,ROUND=1}": 4, "Int8RowQuant_v3{K=128,R=1}": 20}
     assert {p: n for p, n in c.registered.params.items() if p.startswith(("row-table/", "input-ids/"))} == {
         "row-table/0/k64": 6 * 8 * LEAF, "row-table/1/k64": 6 * 8 * LEAF, "input-ids/0": 8 * 2, "input-ids/1": 8 * 2}
-    assert c.registered.values == ("row-table/0/k64", "input-ids/0", "row-table/1/k64", "input-ids/1")
-    assert [n for n, _ in c.program()[0].fn.signature()[0][:4]] == list(c.registered.values)
+    assert c.registered.values == ("row-table/0/k64", "input-ids/0", "row-table/1/k64", "input-ids/1", SS.SCAN_STATE)
+    assert [n for n, _ in c.program()[0].fn.signature()[0][:5]] == list(c.registered.values)
     pos, want = WR.positions(low.fn), {}
     for k, P in enumerate(low.programs):
         quants: dict[int, list[WC.Row]] = {}
