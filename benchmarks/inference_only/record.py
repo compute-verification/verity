@@ -1,9 +1,11 @@
-"""A served run's record, read for `report.py --served`: the inference-only check on the run's files, what it costs in
+"""A served run's record, read for `report.py --from`: the inference-only check on the run's files, what it costs in
 the clear, and the share of a block's work that no PoUW check credits.
 
-* **The files.** The run's `out/` (`OUT_FILES`): its compose's verdicts, its policy, the rate rule's limits and the
-  count's. The Program, the circuit record and the registration log the run registered are named apart, since a run's
-  record keeps them outside `out/`.
+* **The files.** The run's `out/` (`OUT_FILES`), named by its path or by the run directory holding it (`files_of`):
+  its compose's verdicts, its policy, the rate rule's limits and the count's. The Program, the circuit record and the
+  registration log the run registered are its out/'s `REGISTERED`, or files named apart; a log is one record a file,
+  or a `.jsonl` file of one a line (`log_records`). Where no record is named, the data file `OF_RECORD` may name the
+  served run of record (`of_record`); absent or naming none, there is none.
 * **The check** is the policy's record check, read through its command lines: its script writes the case
   (`served_record_case.py --case-only`) and its compiled command judges it (`inference-only-record-check`, built with
   `lake`), each timed in the clear (`built.timed`). The command prints each verdict's whole detail, the private
@@ -54,6 +56,15 @@ LINE = re.compile(r"\[(\d+) s\] (read the case|check: |count: )(.*)")
 #: the files of the run's `out/` read, as each is named there
 OUT_FILES = {"verdicts": "record/verdicts.json", "policy": "inference-only-policy.json",
              "limits": "inference-only-limits.json", "count": "block-counts-*.json"}
+#: where a run's `out/` keeps the Program, the circuit record and the registration log it registered, which `--from`
+#: reads where no `--program`, `--circuit` and `--log` name them; the log one record a line, its first first
+REGISTERED = {"program": "registered/program.json", "circuit": "registered/circuit.json",
+              "log": "registered/log.jsonl"}
+#: the option naming the class whose count (`block-counts-<class>.json`, its class's commas as dashes) a record is read
+#: at, where it holds counts of more than one
+CLASS_OPTION = "--served-class"
+#: the data file naming the served run of record, which the command reads where no `--from` names a record
+OF_RECORD = Path(__file__).resolve().parent / "served_of_record.toml"
 POLICY_FORMAT = "verity-bench/inference-only-policy/v1"
 #: the field that says whether PoUW's verdict is of record
 VERDICT = "protocols.work.verdict"
@@ -63,6 +74,10 @@ OUTPUTS = "the outputs of the linears"
 #: `policy.stated` gives that part
 KINDS = {"linears": OUTPUTS, "scan_state": "the scan state row"}
 NO_TIE = "nothing ties the PoUW verdict to the record the check read"
+#: why the check doesn't run on a record with no Program: the circuit record and the registration name the Program by
+#: its digest and its templates by their ids, and the check reads each template's Definition from the Program's text
+NO_PROGRAM = ("the record holds no Program, which the check reads each template's Definition from (the circuit record "
+              "and the registration name it only by its digest), so the check can't run on it")
 NO_KINDS = ("the record's policy states k as one number, with no k by kind (k_by_kind), so the linears' outputs the tie "
             "takes out of k can't be read from it: it was written before its writer (benchmarks/one_stage/"
             "inference_only.py) stated one, and there is no figure for the tied class")
@@ -74,12 +89,73 @@ class Refused(Exception):
 
 @dataclass(frozen=True)
 class Files:
-    """A run's `out/`, and the Program, circuit record and registration log it registered."""
+    """A run's `out/`, the Program, circuit record and registration log it registered, and the class whose count is
+    read where it holds more than one (`CLASS_OPTION`)."""
 
     out: Path
     program: Path
     circuit: Path
     logs: tuple[Path, ...]
+    served_class: str | None = None
+
+
+def files_of(served: Path, program: Path | None = None, circuit: Path | None = None,
+             logs: tuple[Path, ...] = (), served_class: str | None = None) -> Files:
+    """A served run's files: ``served`` its `out/` or the run directory holding one, and the Program, circuit record and
+    log ``program``, ``circuit`` and ``logs``, else the out/'s `REGISTERED`; ``served_class`` the class whose count is
+    read."""
+    out = served / "out" if not (served / OUT_FILES["verdicts"]).exists() and (served / "out").is_dir() else served
+    if program is None:
+        program, circuit, logs = out / REGISTERED["program"], out / REGISTERED["circuit"], (out / REGISTERED["log"],)
+    return Files(out, program, circuit, tuple(logs), served_class)
+
+
+def run_of(files: Files, verdicts: Mapping[str, Any]) -> str:
+    """The run a record is of: the run its verdicts name, else its directory's name (its out/'s, the directory
+    holding it)."""
+    if isinstance(run := verdicts.get("run"), str) and run:
+        return run
+    return (files.out.parent if files.out.name == "out" else files.out).resolve().name
+
+
+def _class_of(count: Path) -> str:
+    """The class a count file is of, as `CLASS_OPTION` names it: `block-counts-4-27-2.json` is 4,27,2."""
+    return count.name.removeprefix("block-counts-").removesuffix(".json").replace("-", ",")
+
+
+def made_with(verdicts: Mapping[str, Any]) -> dict[str, str | None]:
+    """What PoUW's piece states it was made with, under the keys it writes today: ``session``, the challenger's live
+    session its coins came from (`coins.check.session`, which the piece writes only for live coins), and ``scheme``,
+    its parameter set; each None where the record names none. In-process coins are stated only under a retired key,
+    which this does not read, so a record of them names no session."""
+    row = (verdicts.get("protocols") or {}).get("work")
+    piece = (row.get("piece") or row.get("development")) if isinstance(row, dict) else None
+    piece = piece if isinstance(piece, dict) else {}
+    live = piece["coins"].get("check") if isinstance(piece.get("coins"), dict) else None
+    session, scheme = live.get("session") if isinstance(live, dict) else None, piece.get("scheme")
+    return {"session": session if isinstance(session, str) and session else None,
+            "scheme": scheme if isinstance(scheme, str) and scheme else None}
+
+
+def of_record(path: Path | None = None) -> Path | None:
+    """The served run that ``path`` (default `OF_RECORD`) names as of record (its `record`: a run's out/ or the
+    directory holding it, relative to the repository's root or absolute), or None where the file is absent or names
+    none."""
+    path = OF_RECORD if path is None else path
+    if not path.is_file():
+        return None
+    try:
+        doc = tomllib.loads(path.read_text())
+    except tomllib.TOMLDecodeError as e:
+        raise Refused(f"{path.name}: not TOML ({e})") from None
+    if set(doc) - {"record"}:
+        raise Refused(f"{path.name}: its one key is record, not {sorted(set(doc) - {'record'})}")
+    named = doc.get("record")
+    if named is None:
+        return None
+    if not isinstance(named, str) or not named:
+        raise Refused(f"{path.name}: record is a served run's directory, a path, not {named!r}")
+    return P.ROOT / named
 
 
 def _json(path: Path) -> Any:
@@ -89,14 +165,39 @@ def _json(path: Path) -> Any:
         raise Refused(f"{path}: can't be read as JSON ({type(e).__name__}: {e})") from None
 
 
+def log_records(files: Files) -> list[Any]:
+    """The registration log's records in order: a `.jsonl` file's one a line, another file's its one record."""
+    got: list[Any] = []
+    for path in files.logs:
+        if path.suffix != ".jsonl":
+            got.append(_json(path))
+            continue
+        try:
+            got += [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
+        except (OSError, ValueError) as e:
+            raise Refused(f"{path}: can't be read as JSON lines ({type(e).__name__}: {e})") from None
+    if not got:
+        raise Refused(f"the registration log holds no record ({', '.join(map(str, files.logs))})")
+    return got
+
+
 def read(files: Files) -> dict[str, Any]:
     """The record's files (`OUT_FILES`): its verdicts, its policy, and the limits each rule is judged against, the count's
-    `(c, k, n)` the policy's own. A file that isn't there is named as one the run did not write."""
+    `(c, k, n)` the policy's own, and whether it holds its Program (`program`). A file that isn't there is named as one
+    the run did not write, but the Program, without which the check can't run (`NO_PROGRAM`)."""
     counts = sorted(files.out.glob(OUT_FILES["count"]))
-    if len(counts) > 1:
-        raise Refused(f"{files.out}: a record holds one {OUT_FILES['count']}, the count's limits; it holds {len(counts)}")
-    named = {"Program": files.program, "circuit record": files.circuit,
-             **{f"record {k} of a registration log": p for k, p in enumerate(files.logs)},
+    found = ", ".join(_class_of(p) for p in counts) or "none"
+    if files.served_class is not None:
+        counts = [p for p in counts if _class_of(p) == files.served_class]
+        if not counts:
+            raise Refused(f"{files.out}: {CLASS_OPTION} {files.served_class}: the record holds no count of that class; "
+                          f"it holds counts of the classes {found}")
+    elif len(counts) > 1:
+        raise Refused(f"{files.out}: the record holds counts of {len(counts)} classes, {found}: name the one to read "
+                      f"with {CLASS_OPTION} CLASS")
+    named = {"circuit record": files.circuit,
+             **{("registration log" if p.suffix == ".jsonl" else f"record {k} of a registration log"): p
+                for k, p in enumerate(files.logs)},
              "compose verdicts": files.out / OUT_FILES["verdicts"], "policy": files.out / OUT_FILES["policy"],
              "rate rule's limits": files.out / OUT_FILES["limits"],
              "count's limits": counts[0] if counts else files.out / OUT_FILES["count"]}
@@ -121,12 +222,14 @@ def read(files: Files) -> dict[str, Any]:
         raise Refused(f"{OUT_FILES['policy']}: theta_macs is not linears + 2 × (attention + lm_head)")
     if [count.get(x) for x in "ckn"] != [policy[x] for x in "ckn"]:
         raise Refused(f"{counts[0].name}: the count's limits {[count.get(x) for x in 'ckn']} are not the policy's c, k, n")
-    return {"run": verdicts.get("run"), "verdicts": verdicts, "policy": policy, "limits": limits, "count": counts[0]}
+    return {"run": verdicts.get("run"), "verdicts": verdicts, "policy": policy, "limits": limits, "count": counts[0],
+            "program": files.program.is_file()}
 
 
 def previous(files: Files) -> Any:
     """The `previous` of the run's registration, the log's last record: the record the run's registration follows."""
-    return _json(files.logs[-1]).get("previous")
+    last = log_records(files)[-1]
+    return last.get("previous") if isinstance(last, dict) else None
 
 
 def share(verdicts: Mapping[str, Any], policy: Mapping[str, Any], before: Any) -> dict[str, Any]:
@@ -178,8 +281,15 @@ def checked(files: Files, got: Mapping[str, Any], scratch: Path, clock: Callable
             exe: Path | None = None) -> dict[str, Any]:
     """The case of the run's files, written by `SCRIPT`, and `CHECK`'s two verdicts on it (``exe``, else built here)
     in their public form, with what each step cost; everything written under ``scratch``."""
+    logs = list(files.logs)
+    if any(p.suffix == ".jsonl" for p in logs):
+        # the script reads a record a file
+        records = log_records(files)
+        logs = [scratch / f"log-{k}.json" for k in range(len(records))]
+        for path, rec in zip(logs, records):
+            path.write_text(json.dumps(rec))
     argv = [sys.executable, str(SCRIPT), "--program", str(files.program), "--record", str(files.circuit),
-            "--log", *map(str, files.logs), "--limits", str(got["limits"]), "--count", str(got["count"]),
+            "--log", *map(str, logs), "--limits", str(got["limits"]), "--count", str(got["count"]),
             "--out", str(scratch), "--name", "served", "--case-only"]
     written = B.timed(argv, scratch / "case.out", clock, private=True)
     case = scratch / "served.case.json"

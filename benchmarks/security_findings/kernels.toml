@@ -1,0 +1,36 @@
+# The Ubuntu kernel series still under standard security maintenance, each by the Ubuntu release it is maintained on, until
+# the first day of the month the source's "Kernel release schedule" names as its end of standard security maintenance.
+# `open_findings.py`'s updates-and-kernel check reads it against `uname -r` and the machine's release: a flavour (generic,
+# nvidia) counts as maintained while its series is, and a series that isn't here is not maintained. When a series is added
+# to the source or one ends, this file changes with it.
+source = "https://ubuntu.com/kernel/lifecycle"
+
+[[kernel]]
+series = "5.15"
+release = "22.04"
+until = 2027-05-01
+
+[[kernel]]
+series = "6.8"
+release = "22.04"
+until = 2027-05-01
+
+[[kernel]]
+series = "6.8"
+release = "24.04"
+until = 2029-05-01
+
+[[kernel]]
+series = "7.0"
+release = "24.04"
+until = 2029-05-01
+
+[[kernel]]
+series = "7.0"
+release = "26.04"
+until = 2031-05-01
+
+[[kernel]]
+series = "7.3"
+release = "26.10"
+until = 2027-07-01

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -217,3 +218,29 @@ def test_the_latch_under_its_older_name_still_latches_and_is_renamed(pacer):
     pacer.tick()
     assert not pacer.OLD_LATCH.exists() and pacer.LIMIT_LATCH.read_text() == "2026-11-01T00:00:00Z disk 78.2%\n"
     assert pacer.LIMIT_LATCH.name == "limit-150" and pacer.cluster["policy"] == "Hold", "latched: the limit is LIMIT_LOW_GB"
+
+
+def test_a_sudo_that_refuses_the_bundle_reads_stops_the_pacer_rather_than_reading_zero(tmp_path, monkeypatch):
+    """A locked node's sudo refuses `find` and `du` to research; with their errors sent to /dev/null the old read was 0 GB."""
+    monkeypatch.setenv("VY_PACER_DIR", str(tmp_path / "pacer"))
+    mod = load("release", NEBIUS / "sky" / "release.py", monkeypatch)
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "sudo").write_text('#!/bin/sh\necho "sudo: a password is required" >&2\nexit 1\n')
+    (tmp_path / "bin" / "sudo").chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path / "bin"), prepend=os.pathsep)
+    with pytest.raises(SystemExit, match="sudo refuses /usr/bin/find to this login.*nothing released"):
+        mod.bundles_gb()
+
+
+def test_the_pacer_probes_by_path_exactly_the_programs_its_bundle_reads_run_as_root(tmp_path, monkeypatch):
+    """`sudo -n -l /usr/bin/find` says nothing of a bare `sudo find`, which sudo resolves on PATH: the reads run what was probed."""
+    monkeypatch.setenv("VY_PACER_DIR", str(tmp_path / "pacer"))
+    mod = load("release", NEBIUS / "sky" / "release.py", monkeypatch)
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "sudo").write_text(f'#!/bin/sh\n[ "$1" = -n ] && shift\nif [ "$1" = -l ]; then echo "$2" >> {tmp_path}/probed; '
+                                           f'exit 0; fi\necho "$1" >> {tmp_path}/ran\nexec "$@"\n')
+    (tmp_path / "bin" / "sudo").chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path / "bin"), prepend=os.pathsep)
+    assert mod.bundles_gb() == 0.0 and mod.written_gb({"sweep": str(tmp_path), "row": "r"}) == 0.0
+    probed, ran = ((tmp_path / f).read_text().split() for f in ("probed", "ran"))
+    assert set(ran) == {"/usr/bin/find", "/usr/bin/xargs", "/usr/bin/du"} <= set(probed), (probed, ran)

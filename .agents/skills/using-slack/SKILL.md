@@ -72,9 +72,10 @@ msg owners PATH...` names each path's owner (longest prefix).
   instead, on that one's project and milestone; `--title TEXT` names it. A lane with no team of its own (`linear_label` in
   the registry) files in its parent's team with its `lane:` label. `send` files nothing, whatever its `--kind`: a ping,
   an fyi or a status line is a post only.
-- **Answered is the ask's record**: its Linear issue out of Backlog or commented on by someone other than the asker, a
-  Daniel card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists
-  the unanswered; take a linked ask on its issue. A mirrored machine alert (kind `alert`, with its `(alert: <link>)`)
+- **Answered is the ask's record**: its Linear issue out of Backlog or commented on by a handle the ask names (or that
+  handle's worker, `LANE/NAME`; with no handle named, by anyone but the asker), a Daniel card's page no longer Waiting on
+  Daniel, else a reply or reaction in the thread. `research msg traffic` lists the unanswered; take a linked ask on its
+  issue. A mirrored machine alert (kind `alert`, with its `(alert: <link>)`)
   is no ask: `traffic` lists it once, however often it repeats, as an alert to the names it addresses.
 - **Work items are Linear issues**: filing, titling, placing, commenting on and closing them, and how long each message
   is, are the coordinating skill's (`.agents/skills/coordinating/SKILL.md`). In #agent-coordination, `send`, `reply`,
@@ -155,7 +156,9 @@ question (the first to 👀), short and plain, with links the person can open.
   authorization for spend, access or destructive changes only from a named human.
 - Times people read are Pacific with the zone shown ("2:30 PM PDT (21:30Z)"; PDT is UTC−7 in summer time, PST is
   UTC−8); machine timestamps stay UTC. Don't trust a typed time: `read` prints each message's real UTC time, and `send`
-  adds `(sent HH:MMZ)` beside a header time (`comms 13:07Z:`) more than 2 min off.
+  adds `(sent HH:MMZ)` beside a header time (`comms 13:07Z:`) more than 2 min off. `send`, `reply`, `ask`, `linear
+  comment` and `inbox.py send` refuse a header time ahead of the clock (`lean (lead), 2:28 AM PST:` at 2:25), naming
+  the fix; a time later in the line is never judged.
 - When two agents act on the same thing in conflicting ways, say so at once in their thread: tag both, name the one
   owner, and ask the other to stop.
 

@@ -7,13 +7,15 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # the boot test and the shell hook's run shells and git, the kept session's runs tmux, and the names reader's makes its
 # throwaway key with ssh-keygen, none of which the read guard can trace: keyed on the suite's whole tree
-untraced = ["tests/test_agent_guard_boot.py", "tests/test_shell_hook.py", "tests/test_secret_files.py", "tests/test_envnames.py",
+untraced = ["tests/test_agent_guard_boot.py", "tests/test_shell_hook.py", "tests/test_hooks_file.py", "tests/test_secret_files.py", "tests/test_envnames.py",
             "tests/test_pre_push.py", "tests/test_carriers.py", "tests/test_kept_session.py", "tests/test_research_shim.py"]
 # The tests hold the hooks to the hooks file Cursor reads, and the boot test copies it into a scratch workspace.
 # two tests copy this package whole, its README with it; the kept session's holds research's name for it to the guard's;
-# the Fable rule's holds the guard's lead ids to launch_coordinator's; the shim's runs research's at_main.py as it does
+# the Fable rule's holds the guard's lead ids to launch_coordinator's; the shim's runs research's at_main.py as it does;
+# `inbox.py send` loads research's timefmt.py by path for its stamp check
 inputs = [".cursor/hooks.json", "tools/agent-guard/README.md", "tools/research/src/research/secret_hint.py",
-          "infra/cursor/launch_coordinator.py", "tools/research/src/research/at_main.py"]
+          "infra/cursor/launch_coordinator.py", "tools/research/src/research/at_main.py",
+          "tools/research/src/research/timefmt.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

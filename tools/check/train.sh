@@ -8,7 +8,7 @@
 # `check.py --record --on MACHINE --priority --timeout 36000 --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
 # MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with presigned
 # URLs of the pinned upstream build when COMMIT changes verity/protocols/proofs/flock/ or a Lean package its verifier requires by path
-# (but sigma/, a README.md or PROTOCOL.md) against origin/main, which the run fetches. --agreement sends them whatever the train
+# (but verifier/sigma/, a README.md or PROTOCOL.md) against origin/main, which the run fetches. --agreement sends them whatever the train
 # changes: the lander's rule for a train that adds or changes a guarantee (`lean-audit.json`) anywhere.
 # It prints the run ids (`RUN ID...`); `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds
 # COMMIT's branch. With MACHINE `auto` or a list, check.py launches twins, one run per machine that can take it (`slot.py

@@ -1,0 +1,63 @@
+# The training harness's keys that say rho for a slowdown: what `tools/move/rename.py --map
+# tools/move/training_slowdown_keys_map.toml` renames in `benchmarks/training_slowdown/`. It moves no path and renames no
+# module or Lean declaration, so its change is an ordinary one, reviewed as such; the harness's own suite is its evidence.
+# - The record's slowdown, the number `formalism.at` and `published` give and `grade.slowdown_of` passes on, is under
+#   `"slowdown"`, and Fit's c/(c − d) under `"slowdown_fit"`, as `slowdown_python_map.toml` named their locals.
+# - The grade's block holding that result (`grade.SCHEMA`'s `rho`, and what it rests on, `rests_on.rho`) says whose
+#   slowdown it is: `"record_slowdown"`, beside `S`, the config's. Its number is `s["record_slowdown"]["slowdown"]`.
+#   No reader outside the harness reads `slowdown.json`, so the key and its readers move together here.
+# - The calculator's figure (`calculator._figure`) holds its products term under `"term"`, the name `calculator.slowdown`
+#   already publishes it under (`"term": figure["rho"]`).
+# The rows that name a key's holder stand before the bare key, which is last in each block.
+
+[words]
+
+# the grade's block and its number
+[[words_in]]
+files = ["benchmarks/training_slowdown/training_slowdown/grade.py", "benchmarks/training_slowdown/tests/test_grade.py",
+         "benchmarks/training_slowdown/tests/test_command.py", "benchmarks/training_slowdown/tests/test_repeats.py"]
+[words_in.words]
+'["rho"]["rho"]' = '["record_slowdown"]["slowdown"]'
+'want["rho"]' = 'want["slowdown"]'
+'slowdown["rho"]' = 'slowdown["slowdown"]'
+"slowdown['rho']" = "slowdown['slowdown']"
+'["rests_on"]["rho"]' = '["rests_on"]["record_slowdown"]'
+"r['rho']" = "r['record_slowdown']"
+'{"rho": None' = '{"slowdown": None'
+'"rho": slowdown' = '"record_slowdown": slowdown'
+'"rho": b["rho"]' = '"record_slowdown": b["record_slowdown"]'
+'("rho", "terms"' = '("slowdown", "terms"'
+"the grade's `rho`, the bound of record" = "the record's slowdown, the bound of record"
+"gives a slowdown, `rho`" = "gives a slowdown, the record's slowdown"
+'["rho"]' = '["record_slowdown"]'
+"['rho']" = "['record_slowdown']"
+
+# the calculator's figure: its products term
+[[words_in]]
+files = ["benchmarks/training_slowdown/training_slowdown/calculator.py", "benchmarks/training_slowdown/tests/test_formalism.py",
+         "benchmarks/training_slowdown/tests/test_one_calculator.py"]
+[words_in.words]
+'figure["rho"]' = 'figure["term"]'
+'fig["rho"]' = 'fig["term"]'
+'coded["rho"]' = 'coded["term"]'
+'2.0)["rho"]' = '2.0)["term"]'
+'{"rho": 0.0' = '{"term": 0.0'
+'{"rho": got.term' = '{"term": got.term'
+"its term `rho`," = "its `term`,"
+
+# the record's slowdown and Fit's, and the keys `test_one_calculator` holds to one slowdown
+[[words_in]]
+files = ["benchmarks/training_slowdown/training_slowdown/formalism.py", "benchmarks/training_slowdown/tests/test_formalism.py",
+         "benchmarks/training_slowdown/tests/test_one_calculator.py"]
+[words_in.words]
+"`slowdown`, `rho` or `S` key" = "`slowdown`, `record_slowdown` or `S` key"
+'{"slowdown", "rho", "S"}' = '{"slowdown", "record_slowdown", "S"}'
+"`slowdown_of`'s `rho`, and `S`, p times it" = "`slowdown_of`'s result as `record_slowdown`, and `S`, p times its `slowdown`"
+'"rho_fit"' = '"slowdown_fit"'
+"`rho_fit`" = "`slowdown_fit`"
+'"rho"' = '"slowdown"'
+"'rho'" = "'slowdown'"
+"`rho`" = "`slowdown`"
+
+[rewrite]
+exclude = ["tools/move/**"]
