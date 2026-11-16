@@ -48,15 +48,13 @@ from typing import Any
 
 ENV = "VERITY_DSA_TOPK"
 LOG_ENV = "VERITY_DSA_TOPK_LOG"
-#: the plugin's passes by ``VERITY_DSA_TOPK``: `Canon`'s settings, the same output under each
+#: each mode gives the same output
 MODES = {"canonical": {}, "canonical-bisect": {"refine": False}}
 #: the indexer's top-k ops at the pin, under ``torch.ops._C``
 OPS = ("top_k_per_row_prefill", "top_k_per_row_decode", "persistent_topk", "cooperative_topk")
-#: the device counters: rows rewritten, rows with a tie across the k-th key, rows bisected (a candidate that failed,
-#: over all keys), rows refined (a candidate that failed, from its window's table)
+#: rows_bisected and rows_refined both count rows whose candidate failed
 STATS = ("rows_long", "rows_tied", "rows_bisected", "rows_refined")
-#: a split row's words of the window tables (`dsa_topk_kernels.HROW`: its window's bins, its k-th key's fine bin's
-#: counts, its keys above that bin)
+#: `dsa_topk_kernels.HROW`
 HIST_WORDS = 2048 + 1024 + 1
 #: a segment of a row (a call of few rows splits each over programs) is at least this many keys
 SEG_MIN_KEYS = 8192
@@ -133,8 +131,7 @@ def kernels() -> dict[str, Any]:
 
 class Canon:
     """The device pass, and its counters: `run` rewrites the rows of ``out`` (int32, rows x k) longer than ``k`` keys of
-    ``logits`` (float32, rows x columns) in place. A split row whose candidate fails is refined from its window's
-    table where the k-th key is in it (``refine``; else bisected)."""
+    ``logits`` (float32, rows x columns) in place. ``refine=False`` bisects every row whose candidate fails."""
 
     def __init__(self, seg_min_keys: int = SEG_MIN_KEYS, block: int = BLOCK, num_warps: int = NUM_WARPS,
                  fill: int = FILL, refine: bool = True) -> None:
@@ -225,8 +222,7 @@ class Canon:
         return ws
 
     def fine(self, device: Any, words: int) -> Any:
-        """The window tables of the current stream: int32 zeros that every call leaves at zeros (``fix_count`` and
-        ``fix_emit`` clear what the call's kernels filled), so no call clears them first."""
+        """The current stream's window tables. Every call leaves them zero, so none clears them first."""
         import torch
 
         key = self._stream_key(device)

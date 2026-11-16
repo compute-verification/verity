@@ -5,17 +5,9 @@ A block's two counts ride in one int32 (``gt + (eq << 16)``), so one prefix sum 
 ``BLOCK`` must stay below 2**15, and canon_row reads it as 32-key words. A row's counts accumulate per lane and
 reduce once.
 
-A split row (``count_seg``, ``emit_seg``, then under REFINE ``fix_find``, ``fix_count`` and ``fix_emit``) whose
-candidate fails is refined when the k-th key is in the candidate's window: the keys whose top 13 bits (sign, exponent,
-4 mantissa bits: the fast kernels' fp16 coarse bin, in which their candidate overflow drops keys) are the candidate's
-or a neighbour's, for fp16 rounds a key just below a bin's edge into the bin. ``emit_seg``'s programs histogram
-their segments' window keys by their offset in the window (`FINE` bins of 2**`LOW_BITS`) into the row's table,
-``fix_find``'s find the fine bin of the k-th key and count their keys above it and in it by its last `LOW_BITS`,
-``fix_count``'s read the k-th key from those counts and count their segments against it, and ``fix_emit``'s write
-them at their ranks: three reads of a segment where bisection makes 34 of the row. Every table is all zeros between
-calls. A failed candidate whose window misses the k-th key is bisected by one program. ws holds, a row: each
-segment's (gt, eq), the candidate, each segment's keys above the window, the row's path (`REFINED`, `BISECTED`), its
-fine bin and k-th key, and each segment's (gt, eq) against that key."""
+A split row's failed candidate is refined (``fix_find``, ``fix_count``, ``fix_emit`` under REFINE) where the k-th key
+lies within the candidate's 13-bit key prefix or a neighbour's, since fp16 rounds a key just below a coarse bin's edge
+into the bin; elsewhere one program bisects it. The window tables are all zeros between calls."""
 import triton
 import triton.language as tl
 from triton.language.extra import libdevice
@@ -26,7 +18,7 @@ LOW = tl.constexpr(1024)
 LOW_BITS = tl.constexpr(10)
 #: the window's keys: three 13-bit prefixes of 2**19 keys
 SPAN = tl.constexpr(3 << 19)
-#: a row's words of hist: its window table, its k-th key's fine bin's counts, and its keys above that bin
+#: a row's words of hist: the window's fine bins, the low bins of the k-th key's fine bin, the keys above that bin
 HROW = tl.constexpr(2048 + 1024 + 1)
 REFINED = tl.constexpr(1)
 BISECTED = tl.constexpr(2)
@@ -137,14 +129,13 @@ def _popc(x, HW: tl.constexpr):
 
 @triton.jit
 def _below(counts, x):
-    # the bins wholly below the one where a count from the top reaches the k-th key: x is the keys under it, so the
-    # bin index of the k-th key
+    # the bin holding the key with x keys below it
     return tl.sum((tl.cumsum(counts, axis=0) <= x).to(tl.int32), axis=0)
 
 
 @triton.jit
 def _base(tau):
-    # the first key of the candidate's window: the 13-bit prefix below the candidate's (`WIN`)
+    # the window starts one 13-bit prefix below the candidate's
     return ((tau >> WIN).to(tl.int64) - 1) << WIN
 
 
@@ -279,7 +270,6 @@ def emit_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, hist, stats, S
 
 @triton.jit
 def _zero_slice(h, s, SEG, N: tl.constexpr):
-    # this segment's share of the N words at h back to zeros
     per = tl.cdiv(N, SEG)
     offs = s * per + tl.arange(0, N)
     tl.store(h + offs, tl.zeros([N], dtype=tl.int32), mask=offs < tl.minimum(s * per + per, N))
@@ -294,8 +284,8 @@ def _failed(w, SEG, K: tl.constexpr, SEGP2: tl.constexpr):
 @triton.jit
 def fix_find(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, hist, stats, SEG,
              K: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, SEGP2: tl.constexpr):
-    # a failed row whose window holds the k-th key: the fine bin that holds it, and each segment's keys above that
-    # bin and in it by their last bits, into the row's counts; any other failed row bisected by one program
+    # a failed row whose window holds the k-th key: its fine bin, and each segment's keys above and in that bin; any
+    # other failed row bisected by one program
     r = tl.program_id(0)
     s = tl.program_id(1)
     lo, n = _bounds(r, A, B, ncols, next_n, MODE)
@@ -337,8 +327,7 @@ def fix_find(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, hist, stats, S
 @triton.jit
 def fix_count(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, hist, stats, SEG,
               K: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, SEGP2: tl.constexpr):
-    # a refined row: the k-th key from the row's counts, and each segment's keys above and at it; every failed
-    # row's window table back to zeros
+    # a refined row: the k-th key, and each segment's keys above and at it; clears the failed rows' window tables
     r = tl.program_id(0)
     s = tl.program_id(1)
     lo, n = _bounds(r, A, B, ncols, next_n, MODE)
@@ -365,8 +354,7 @@ def fix_count(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, hist, stats, 
 @triton.jit
 def fix_emit(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, hist, stats, SEG,
              K: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, SEGP2: tl.constexpr):
-    # a refined row: each segment's keys at their ranks from the k-th key, as emit_seg's; the row's counts back to
-    # zeros
+    # a refined row: each segment's keys at their ranks, as emit_seg's; clears the row's low bins
     r = tl.program_id(0)
     s = tl.program_id(1)
     lo, n = _bounds(r, A, B, ncols, next_n, MODE)
