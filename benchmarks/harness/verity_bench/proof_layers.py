@@ -417,8 +417,8 @@ def read_prove_path(d: Path, row: Row) -> None:
         rec = rec or {}
         each = len(audits) == 1 and bool(lean)
         held = [f"RECORDS {k} {rec.get(k)}" for k in ("ok", "accepted", "negatives_refused") if rec.get(k) is not True]
-        held += [f"{k} {v}" for k, v in lean if v is not True] + ([] if each else [f"{len(audits)} A5 result lines with "
-                                                                                   f"{len(lean)} Lean verify verdicts"])
+        held += [f"{k} {v}" for k, v in lean if v is not True]
+        held += [] if each else [f"{len(audits)} A5 result lines with {len(lean)} Lean verify verdicts"]
         held += [] if not audits or (audits[-1].get("audit") or {}).get("accepted") is True else ["a5's checks not accepted"]
         row.accepted = not held
         row.lean = (f"accepted: Lean's {', '.join(sorted({k for k, _ in lean}))} true, with RECORDS ok, accepted and its "
