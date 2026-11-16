@@ -25,11 +25,11 @@ from exfiltration_helpers import (
 from verity_bench import exfiltration as E
 
 
-def test_the_network_certifiers_part_is_beside_it_at_the_requests_its_calculator_counts(tmp_path, monkeypatch):
+def test_the_network_attesters_part_is_beside_it_at_the_requests_its_calculator_counts(tmp_path, monkeypatch):
     """Both parts count the sampling plan's requests, which the network attester's calculator counts by default and
     which are fewer than the census's, over the same GPU-seconds. The command holds no count of its own: the count and
     what its request is are the calculator's inputs as it marks them, none of them given, and where the calculator
-    counts other requests than the rows of record are priced over the command refuses. The certifier's rows are its own
+    counts other requests than the rows of record are priced over the command refuses. The network attester's rows are its own
     calculator's for the class the command reads; and the two are summed under each of its rows by the form: its term
     at each jitter bound, plus the compute audit's part or the entries where the row charges them and they are fewer."""
 
@@ -82,7 +82,7 @@ def test_the_network_certifiers_part_is_beside_it_at_the_requests_its_calculator
     monkeypatch.setattr(lb, "plan", lambda: plan | {"world_requests": plan["world_requests"]._replace(
         value=plan["world_requests"].value / 2)})
     with pytest.raises(ValueError, match="the two parts cover different compute over the datacenter year: 4.74291e\\+12 "
-                                         "requests on the compute audit's side and 2.37145e\\+12 on the network certifier's"):
+                                         "requests on the compute audit's side and 2.37145e\\+12 on the network attester's"):
         E.build(store=recorded(tmp_path / "halved").fresh(), root=REPO)
 
 
@@ -95,7 +95,7 @@ def test_the_scan_rows_mark_is_this_commands_mark_of_that_name():
     assert {name: k.mark for name, k in lb.ROWS.items() if k.mark} == {"scan": E.RUN_NOT_PROVED}
 
 
-def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(tmp_path, monkeypatch):
+def test_the_network_attesters_figures_of_record_are_at_two_release_schedules(tmp_path, monkeypatch):
     """The network attester's figures of record are its document's at D_j = 2, held here to that document: the scan's
     over the world's year is the document's `value`, on the class its calculator assumes by default and on the class
     the command reads, and the design's is each class's own: with no run carrying the stop class's record its stop
@@ -121,7 +121,7 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
     assert sums["scan"]["with_set_time_card"]["certifier_GB"] == theirs["with_set_time_card"]["value"]
     assert wide["certifier"]["default_class"] == {"response_ids": 4096, "eps": 2 ** -20, "value": theirs["value"], "unit": "GB"}
     text = E.render(wide)
-    assert ("- **the network certifier's part: 59,645,644 GB** (modeled, on an assumed class of at most 4,096 ids a response) "
+    assert ("- **the network attester's part: 59,645,644 GB** (modeled, on an assumed class of at most 4,096 ids a response) "
             "as the scan's check charges it today, 26.83 bits a request, and 30,838,408 GB by the design no run has behind it, ") in text
     assert ("30,838,408 GB by the design no run has behind it, its stop class charged its whole schedule, each at D_j = 2, "
             "its term of record, and each failing with at most ε = 9.537e-07 (2^-20) over the world's year, at a scan's δ of "
@@ -137,7 +137,7 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
     assert sums["scan"]["GB"] == pytest.approx(narrow["value"] + YEAR_GB) and sums["design"]["GB"] == pytest.approx(26_406_646, abs=0.5)
     assert doc["certifier"]["default_class"] == wide["certifier"]["default_class"]
     text = E.render(doc)
-    assert ("- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response) "
+    assert ("- **the network attester's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response) "
             "as the scan's check charges it today, 22.83 bits a request, and "
             "26,392,406 GB by the design no run has behind it, before a served audit has sampled a stop block, 26,392,406 GB by "
             "the design no run has behind it, its stop class charged its whole schedule, each at D_j = 2, its term of "
@@ -155,7 +155,7 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
 
     document = lb.document
     monkeypatch.setattr(lb, "document", lambda *a, **kw: document(*a, **kw) | {"schema": "certifier-term/v1"})
-    with pytest.raises(ValueError, match="the network certifier's document is `certifier-term/v1` and this command reads "
+    with pytest.raises(ValueError, match="the network attester's document is `certifier-term/v1` and this command reads "
                                          "`certifier-term/v2`"):
         E.build(store=recorded(tmp_path / "older").fresh(), root=REPO)
 
@@ -188,7 +188,7 @@ def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_l
     for figure, least in (("48,906,024", 5), ("48,920,264", 2), ("24,467,252 GB with the timing taken once", 1)):
         under = [under for under, cell in shown if figure in cell]
         assert len(under) >= least and all(label in u for u in under), figure
-    assert ("- the network certifier's part with a simulated set-time card: 24,453,012 GB with the timing taken once and "
+    assert ("- the network attester's part with a simulated set-time card: 24,453,012 GB with the timing taken once and "
             "the entries charged through the compute audit, its stop class charged its whole schedule; and at D_j = 1, ") in text
     assert ("- together, with a simulated set-time card: 24,467,252 GB with the timing taken once and the entries "
             "charged through the compute audit, its stop class charged its whole schedule; and at D_j = 1, 48,920,264 GB as "
@@ -242,10 +242,10 @@ def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path, list
     text = E.render(doc)
     assert "with no advice priced and with a response's output count taken at 0 under no row: " in text
     assert ("- the output count: 24,453,012 GB (assumed), 11 bits a request. Until a served audit has sampled a stop block the "
-            "server chooses a response's output count, and the network certifier's row `design, no stop block` charges it "
+            "server chooses a response's output count, and the network attester's row `design, no stop block` charges it "
             "as its schedules. No sum takes it at 0: those under `all three` and `design` hold it too, their stop class "
             "charged its whole schedule.\n") in text
-    assert ("- the stop class of the network certifier's rows `lengths`, `all three` and `design` is charged its whole "
+    assert ("- the stop class of the network attester's rows `lengths`, `all three` and `design` is charged its whole "
             "schedule, as the calculator charges it with no record read: no run carries the stop class's record, so the "
             "stop verdicts' reader (`stop_verdicts.of_runs`) was not asked. A sum takes the output count at 0 "
             "only on an execution phase the reader's answer holds, never because its row's schedules read 0:\n"
@@ -289,7 +289,7 @@ def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path, list
     assert "with no advice priced and with a response's output count taken at 0 under no row: " in text
     assert ("as its schedules. No sum takes it at 0: those under `all three` and `design` hold it too, their stop class "
             "charged its whole schedule.") in text
-    assert ("- the stop class of the network certifier's rows `lengths`, `all three` and `design` is charged its whole "
+    assert ("- the stop class of the network attester's rows `lengths`, `all three` and `design` is charged its whole "
             "schedule, by the answer of the stop verdicts' reader (`stop_verdicts.of_runs`) on the runs that carry "
             f"`{E.VERDICTS}` ({HOLDER}). A sum takes the output count at 0 only on an execution phase the reader's answer "
             "holds, never because its row's schedules read 0:\n"
@@ -323,9 +323,9 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
     assert said["source"] == (
         "each execution phase's scan's δ, this command's, in place of the calculator's default: 9.537e-07 (2^-20), the error "
         "a monitoring period's figure is to carry at most, over the 1.155e+13 execution phases of the world's year, the row "
-        "printed that sums the most, so that every row printed carries that error or less. The network certifier's result "
+        "printed that sums the most, so that every row printed carries that error or less. The network attester's result "
         "of record takes its δ so (benchmarks/certifier_term/README.md), and no term depends on it")
-    assert by["scan_delta"] == {"part": "network certifier", "input": "scan_delta", **said}
+    assert by["scan_delta"] == {"part": "network attester", "input": "scan_delta", **said}
 
     rows = {(r["scope"], r["period"]): r for r in theirs["rows"]}
     for p in doc["periods"]:
@@ -346,17 +346,18 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
     assert default["world", "year", "scan"]["eps"] == 2 ** -20
 
     text = E.render(doc)
-    assert ("- the compute audit's part fails with at most δ = 0.01 over the monitoring period. The network certifier's ε "
+    assert ("- the compute audit's part fails with at most δ = 0.01 over the monitoring period. The network attester's ε "
             "over the world's year is each execution phase's scan's δ (assumed), 8.259e-20 (2^-63.39), summed over every "
             "link's execution phases, 1.155e+13 of them: 9.537e-07 (2^-20). The two together fail with at most the sum of "
             "both, 0.01. A figure whose error, summed over everything it covers, is 1 or more is printed as \"no bound at "
             "this period\", with that error and no amount.\n") in text
-    assert ("- the network certifier's part with a simulated set-time card: 24,453,012 GB with the timing taken once and "
+    assert ("- the network attester's part with a simulated set-time card: 24,453,012 GB with the timing taken once and "
             "the entries charged through the compute audit, its stop class charged its whole schedule; and at D_j = 1, ") in text
     assert ("24,544,790 GB by the design no run has behind it, its stop class charged its whole schedule; "
             "ε = 9.537e-07 (2^-20).\n") in text
-    assert ("| compute | period | GPU-seconds | requests | compute audit | bits a request | compute audit's δ | certifier, scan | "
-            "certifier, design, no stop block | certifier, design | scan's δ | certifier's ε | together, scan | "
+    assert ("| compute | period | GPU-seconds | requests | compute audit | bits a request | compute audit's δ | "
+            "network attester, scan | network attester, design, no stop block | network attester, design | scan's δ | "
+            "network attester's ε | together, scan | "
             "together, design, no stop block | together, design | together's error | output count (assumed) |\n") in text
     assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 7,039 | 7,039 | 8.259e-20 | "
             "2.543e-10 | 27,244 | 20,747 | 20,747 | 0.01 | 6,521 |") in text
@@ -426,18 +427,18 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
 
     text = E.render(doc)
     assert "- **the compute audit's part: 14,240 GB** (modeled), 37.81 copies of the weights" in text
-    assert ("- **the network certifier's part: no bound at this period** (modeled, on an assumed class of at most 1,024 ids a "
+    assert ("- **the network attester's part: no bound at this period** (modeled, on an assumed class of at most 1,024 ids a "
             "response). Its ε over the world's year is 3.5, and at 1 or more it bounds nothing, so no amount is printed under "
             "any of its rows.\n") in text
     assert ("- **together: no bound at this period**. The two parts' errors over the world's year sum to 3.51, and at 1 or "
             "more the sum bounds nothing, so no amount is printed for the two together.\n") in text
-    assert "- the output count: no bound at this period (assumed), under the network certifier's ε. Until a served audit" in text
-    assert ("The network certifier's ε over the world's year is each execution phase's scan's δ (assumed), 0.125 (2^-3), "
+    assert "- the output count: no bound at this period (assumed), under the network attester's ε. Until a served audit" in text
+    assert ("The network attester's ε over the world's year is each execution phase's scan's δ (assumed), 0.125 (2^-3), "
             "summed over every link's execution phases, 1.155e+13 of them: 3.5. The two together fail with at most the sum "
             "of both, 3.51.") in text
     head = text.split("\n## Inputs")[0]
     assert " GB" not in "".join(line for line in head.splitlines()
-                                if line.startswith(("- **the network certifier's part", "- **together", "- the output count")))
+                                if line.startswith(("- **the network attester's part", "- **together", "- the output count")))
     assert "with a set-time card" not in head and "its term of record" not in head
     # none of the world year's amounts of the network attester is printed, at either jitter bound or summed; the
     # design's are those of the design before its stop block, its stop class charged its whole schedule
@@ -469,12 +470,12 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     # the network attester's part is bounded and the sum is not: its amounts are printed and the sum's are not
     monkeypatch.setattr(lb, "document", made_up(document, {("world", "year"): 0.995}))
     text = E.render(E.build(store=recorded(tmp_path / "sum").fresh(), root=REPO))
-    assert "- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids" in text
+    assert "- **the network attester's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids" in text
     assert "its term of record, and each failing with at most ε = 0.995 (2^-0.007232) over the world's year" in text
     assert "- **together: no bound at this period**. The two parts' errors over the world's year sum to 1.005" in text
     assert "- the output count: 24,453,012 GB (assumed), 11 bits a request." in text and "- together, " not in text
     # one ε a scope and monitoring period: rows of one that carry two are refused by name
     monkeypatch.setattr(lb, "document", made_up(document, {("world", "year"): 0.5}, design=2.0))
-    with pytest.raises(ValueError, match="the network certifier's rows over the world year carry 2 different ε \\(0.5, 2\\), and "
+    with pytest.raises(ValueError, match="the network attester's rows over the world year carry 2 different ε \\(0.5, 2\\), and "
                                          "this command prints one a scope and monitoring period"):
         E.build(store=recorded(tmp_path / "two").fresh(), root=REPO)

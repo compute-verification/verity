@@ -28,7 +28,7 @@ from verity_bench import exfiltration as E
 def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_source(tmp_path):
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
     by = {i["input"]: i for i in doc["inputs"]}
-    assert all(i["mark"] in E.MARKS and i["source"] and i["part"] in ("compute audit", "network certifier", "both")
+    assert all(i["mark"] in E.MARKS and i["source"] and i["part"] in ("compute audit", "network attester", "both")
                for i in doc["inputs"])
     assert {k: (by[k]["part"], by[k]["mark"], by[k]["value"]) for k in (
         "planner_rows", "compute_share", "delta", "output_bits", "network_check_share", "advice")} == {
@@ -37,13 +37,13 @@ def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_so
         "network_check_share": ("compute audit", "assumed", 0.003), "advice": ("compute audit", "assumed", 0)}
     assert by["lambda"]["mark"] == "assumed" and by["lambda"]["value"] == pytest.approx(1.05)
     assert f"`{E.RECORD}` ({PLAN}, {ROWS})" in by["planner_rows"]["source"] and "2 scopes" in by["planner_rows"]["source"]
-    # the world's requests are the sampling plan's, as the certifier's calculator reads them from the planner
+    # the world's requests are the sampling plan's, as the network attester's calculator reads them from the planner
     requests = by["world_requests"]
     assert (requests["part"], requests["mark"]) == ("both", "modeled") and "benchmarks/spot_figures/breakeven" in requests["source"]
     assert (by["request_count"]["part"], by["request_count"]["value"], by["request_count"]["mark"]) == ("both", "plan", "assumed")
     assert (by["weights"]["part"], by["weights"]["mark"]) == ("both", "measured")
     assert (by["response_ids"]["part"], by["response_ids"]["value"], by["response_ids"]["mark"]) == (
-        "network certifier", 1024, "assumed")
+        "network attester", 1024, "assumed")
     assert (by["mfu_serve"]["part"], by["mfu_serve"]["mark"], by["mfu_serve"]["value"]) == ("both", "assumed", 0.4)
     # a request is the plan's, not the census's
     assert (by["request_tokens"]["value"], by["request_tokens"]["mark"]) == (3320.5, "modeled")
@@ -58,7 +58,7 @@ def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_so
                            "total compute\n")
     assert "- **the compute audit's part: 14,240 GB** (modeled), 37.81 copies of the weights (GLM-5.3 in FP4, 376.7 GB)" in text
     assert "β = 5.542%: its bound, 13,562 GB, times λ = 1.05." in text
-    assert ("- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response) "
+    assert ("- **the network attester's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response) "
             "as the scan's check charges it today") in text
     assert ("24,467,252 GB with the timing taken once and the entries charged through the compute audit, its stop class "
             "charged its whole schedule; and at D_j = 1, ") in text
@@ -152,10 +152,10 @@ def test_the_two_parts_must_cover_the_same_compute_and_weights(tmp_path):
 
     assert build("same")["value"] == pytest.approx(YEAR_GB)
     with pytest.raises(ValueError, match="the two parts cover different compute over the world year: 1e\\+16 GPU-seconds on the "
-                                         "compute audit's side and 1.18247e\\+16 on the network certifier's"):
+                                         "compute audit's side and 1.18247e\\+16 on the network attester's"):
         build("compute", gpu_seconds=1e16)
     with pytest.raises(ValueError, match="the two parts cover different compute over the world year: 2e\\+16 requests on the "
-                                         "compute audit's side and 1.7784e\\+16 on the network certifier's"):
+                                         "compute audit's side and 1.7784e\\+16 on the network attester's"):
         build("requests", q=1e-7, replay_sample=2e9)
     with pytest.raises(ValueError, match="the two parts are shares of different weights: the rows of record hold 3,000,000,000,000"):
         build("weights", weights_bits=3_000_000_000_000, target_bits=3_000_000_000_000 / 1.05)

@@ -57,7 +57,7 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert code == 0 and out.startswith("# verity bench exfiltration: GLM-5.3's exfiltration capacity")
     assert "- **the compute audit's part: 14,240 GB** (modeled)" in out and "## Inputs" in out
     assert "- row `(i) honest`, at the planner's assumed prices: 17,800 GB, at β = 5.542%" in out
-    assert "- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response)" in out
+    assert "- **the network attester's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response)" in out
     assert "\n\n## SPOT's resampling holes in the code that ran\n" in out and "- label: **SPOT**\n" in out
     assert "\n- redrawn sample: " in out and "\n- re-committed execution phase: " in out and ": closed\n" not in out
     code, out, _ = run("--json", "--share", "0.097", "--network-check-share", "0")
@@ -80,7 +80,7 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert {t[k] for p in doc["periods"] for t in p["together"].values() for k in ("certifier_GB", "GB")} == {None}
     code, out, _ = run("--scan-delta", "1/1048576")
     assert code == 0 and "- **the compute audit's part: 14,240 GB** (modeled)" in out
-    assert ("- **the network certifier's part: no bound at this period** (modeled, on an assumed class of at most 1,024 ids a "
+    assert ("- **the network attester's part: no bound at this period** (modeled, on an assumed class of at most 1,024 ids a "
             "response). Its ε over the world's year is 11,012,646, and at 1 or more it bounds nothing") in out
     assert "50,753,639" not in out and out.count("\n| world | year | ") == 2
     code, out, err = run("--scan-delta", "2")
@@ -174,7 +174,7 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
     assert head["inputs"][1:] == audit["inputs"][1:] == ["its error: δ = 0.01 over the world's year, the compute audit's",
                                                          *doc["runs"]]
     assert net["inputs"] == [
-        ("modeled (run, not proved): the network certifier's term of record, its `scan` row as the scan's check charges "
+        ("modeled (run, not proved): the network attester's term of record, its `scan` row as the scan's check charges "
         "it today at D_j = 2, on an assumed class of at most 1,024 ids a response"),
         (f"its error: ε = {E._p(year['eps'])} over the world's year, at a scan's δ of "
         f"{E._p(doc['certifier']['scan_delta']['value'])} (assumed)")]
@@ -234,9 +234,9 @@ def test_the_legend_line_shows_a_rows_mark_as_its_calculator_gives_it(tmp_path, 
     assert [line for line in E.render(doc).splitlines() if line not in base] == [
         f"- scan ({scan['standing']}; run, not proved): {scan['counts']}"]
     net = {(m["period"], m["over"]): m for m in E.measurements(doc, {"benchmarks/x": "network_certifier"})}["year", "world"]
-    assert net["mark"] == "modeled" and net["inputs"][0].startswith("modeled (run, not proved): the network certifier's ")
+    assert net["mark"] == "modeled" and net["inputs"][0].startswith("modeled (run, not proved): the network attester's ")
     monkeypatch.setattr(lb, "document", marked("proved"))
-    with pytest.raises(ValueError, match="^the network certifier's rows scan carry a mark this command doesn't print"):
+    with pytest.raises(ValueError, match="^the network attester's rows scan carry a mark this command doesn't print"):
         E.build(store=recorded(tmp_path / "refused").fresh(), root=REPO)
 
 

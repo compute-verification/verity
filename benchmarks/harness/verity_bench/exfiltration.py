@@ -273,7 +273,7 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
         raise ValueError(f"no figure of the document is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
     share, cert, runs = doc["share"], doc["certifier"], list(doc["runs"])
     scan = cert["legend"]["scan"].get("mark")
-    term = (f"the network certifier's term of record, its `scan` row {TOGETHER['scan']} at D_j = {cert['of_record']}, on "
+    term = (f"the network attester's term of record, its `scan` row {TOGETHER['scan']} at D_j = {cert['of_record']}, on "
             f"an assumed class of at most {_n(cert['response_ids'])} ids a response")
     out = []
     for p in sorted(doc["periods"], key=lambda p: (p["compute"], p["period"]) == ("world", "year")):
@@ -339,7 +339,7 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
         prog="verity bench exfiltration",
         description=f"{MODEL}'s exfiltration capacity in GB over a week, a month and a year of the world's and a "
                     "datacenter's compute, at a share of total compute: the compute audit's part, from the break-even "
-                    "planner's rows of record in the evidence store, beside the network certifier's part, with every "
+                    "planner's rows of record in the evidence store, beside the network attester's part, with every "
                     "input labelled measured, modeled, simulated, assumed, missing or run, not proved. Every figure "
                     "carries the error summed over "
                     f"everything it covers, and one whose error is 1 or more is printed as \"{NO_BOUND}\", with no "
@@ -356,10 +356,10 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
     ap.add_argument("--variant", help=f"the row's variant, as the planner's driver names it (`{VARIANT}`), where a run "
                                       "holds several (default: a run holds one)")
     ap.add_argument("--response-ids", type=int, default=RESPONSE_IDS, metavar="N",
-                    help="the most ids a response holds in the network certifier's class (default "
+                    help="the most ids a response holds in the network attester's class (default "
                          f"{RESPONSE_IDS}, assumed: the class that holds the plan of record's longest output)")
     ap.add_argument("--scan-delta", type=Fraction, metavar="D",
-                    help="the δ of each execution phase's scan of the network certifier, which its rows' ε sum (default: "
+                    help="the δ of each execution phase's scan of the network attester, which its rows' ε sum (default: "
                          "the δ at which the row printed that sums the most execution phases, the world's year, carries "
                          f"an ε of {PERIOD_ERROR}, assumed; no term depends on it)")
     ap.add_argument("--served-run", type=Path, metavar="FILE",
