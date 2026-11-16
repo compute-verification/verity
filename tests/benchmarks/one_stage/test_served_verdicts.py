@@ -4241,8 +4241,7 @@ def test_the_preflight_refuses_pearlplus_tie_without_pearls_piece_beside_h1s_tie
 
 #: the toy tree's compiler of record for the BF16 1B, as prove_path.py lists it: its RoPE heads hold transfer gates
 TOY_GATES = 'GATES_OF_RECORD: dict = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}\n'
-TG_PARTITION = {"templates": ["RoPEHead_v1{D=64}", "SiluMul_v2{I=8192}"], "law": "work:2",
-                "scope": {"op_path_prefix": "model.layers.0.", "steps": [1, 2]}}
+TG_PARTITION = json.loads((HERE.parents[2] / "benchmarks" / "prove_path" / "llama32_1b_tg_l0_step1.json").read_text())
 #: PEARLPLUS_TIE with V3c after step 4, the certifier unsplit, on the BF16 row
 PEARL_TIED = {**PEARL_TIES, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None,
               "ROW_ID": "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"}
@@ -4344,8 +4343,9 @@ def _rehearsal_settings(tmp_path: Path, **changed: str | None) -> tuple[int, lis
 
 def _no_transfer_gates(part: str, sampling_design: str, templates: list[str]) -> str:
     return (f"PREFLIGHT: unsloth/Llama-3.2-1B's compiler of record lists ['RoPEHead_v1{{D=64}}'] as transfer gates "
-            f"(prove_path.GATES_OF_RECORD), every unit of which step 3 proves beside work:K of the rest, and PP_PARTITION "
-            f"{part} is {sampling_design} over {templates}: give a work:K partition that holds them, and in PP_SETS their input sets")
+            f"(prove_path.GATES_OF_RECORD), every unit of which step 3 proves beside work-rate:NUM/DEN of the rest, and "
+            f"PP_PARTITION {part} is {sampling_design} over {templates}: give a work-rate:NUM/DEN partition that holds them, "
+            "and in PP_SETS their input sets")
 
 
 def _partition_preflight(tmp_path: Path, tie: bool, **extra: str) -> tuple[int, list[str], list[str], list[str]]:
@@ -4360,15 +4360,17 @@ def _partition_preflight(tmp_path: Path, tie: bool, **extra: str) -> tuple[int, 
     (None, True, None),
     ({"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2"}, True, ("subset:2", ["SiluMul_v2{I=8192}"])),
     ({**TG_PARTITION, "law": "stratified:2"}, True, ("stratified:2", TG_PARTITION["templates"])),
-    ({**TG_PARTITION, "templates": ["SiluMul_v2{I=8192}"]}, True, ("work:2", ["SiluMul_v2{I=8192}"])),
+    ({**TG_PARTITION, "law": "work:2"}, True, ("work:2", TG_PARTITION["templates"])),
+    ({**TG_PARTITION, "templates": ["SiluMul_v2{I=8192}"]}, True, ("work-rate:2/N", ["SiluMul_v2{I=8192}"])),
     ({"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2"}, False, None),
 ])
 def test_the_preflight_refuses_a_step_3_partition_that_leaves_out_the_served_compilers_transfer_gates(
         tmp_path, given, tie, refusal):
     """Under PEARLPLUS_TIE the served BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of
-    which step 3 proves beside the sampled rest (`serving_rows.work_table_of`), so step 3's partition defaults to a work:2
-    one holding them, and the preflight refuses another sampling design or a partition without them, before anything runs. The int8
-    checkpoint's compiler lists none, so its subset:2 partition passes."""
+    which step 3 proves beside the sampled rest (`serving_rows.work_table_of`), so step 3's partition defaults to the tree's
+    work-rate one holding them, which passes, and the preflight refuses another sampling design (a fixed work:K too, which
+    step 3's stream refuses) or a partition without them, before anything runs. The int8 checkpoint's compiler lists none,
+    so its subset:2 partition passes."""
     (pp := tmp_path / "tree" / "benchmarks" / "prove_path").mkdir(parents=True)
     (pp / "llama32_1b_tg_l0_step1.json").write_text(json.dumps(TG_PARTITION))
     extra = {}
