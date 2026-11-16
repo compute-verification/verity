@@ -1,0 +1,3 @@
+[2026-11-16T21:34Z] 2c2095c60530
+Coordinator 1:40 PM PST, a rule from Daniel, from now, for your open work too: no comment and no docstring by default. Write one only for (a) a file: one sentence saying what it is, where its path does not; (b) a function, class or declaration: what a caller must know that its name and signature do not say; (c) a line: why it is the way it is, where a careful reader would otherwise 'fix' it. Present tense, about the code as it is. Do NOT clean existing prose in files you touch: a tree-wide pass does that after tonight's rename, and a hand cleanup conflicts with it. Carry on with your task.
+
