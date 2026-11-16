@@ -51,9 +51,6 @@ loaded build's own flags (`workspace_bytes`). The other front ends and the scrip
 
 ## Gates and kernel-level benches
 
-- `h1c.sh` runs `h1cgate.py` (`h1c.cu`'s tables against `commit.py`) or `h1agate.py` (the served calls' A tables);
-  `h1r.sh` runs `h1rgate.py`. Each holds
-  its kernel to its reference on a full served step, then times it, on one leased RTX PRO 6000.
 - The references the gates hold kernels to, beside the Definition: `h1v3_ref.py` (H1V3 itself, from the tree on
   `PYTHONPATH`).
 - `job.sh`: `h1u.cu`'s libraries built on a CPU node, then `benchmarks/pouw`'s partials tests on each build on a leased
@@ -70,5 +67,4 @@ loaded build's own flags (`workspace_bytes`). The other front ends and the scrip
 ## Tests
 
 `tests/` is the directory's suite, on the CPU (`pyproject.toml`): `dbw.py`'s report,
-J10-R's workspace sizes, `j10r_so.py`'s references, `dither_manifest.py`'s check, and the settings registry. The GPU gates run in each
-bench's own run, before it times anything.
+J10-R's workspace sizes, `j10r_so.py`'s references, `dither_manifest.py`'s check, and the settings registry.

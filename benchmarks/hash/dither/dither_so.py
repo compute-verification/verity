@@ -11,8 +11,8 @@ after it, beside a later step's forward; their receipts go under a later round. 
                      streams above the GEMM's priority, joined at the last call and at every qkv call under piecewise
                      graphs), exactlin's GEMM with the z/y records (dither-a's -zy) and the served y's records
                      (`dithera_ycommit`).  No seeds and no units: nothing in the forward reads a coin.
-    between steps    under -ab, every call's rows >= m cleared and the step's A tables in one h1c_build (h1agate.py's
-                     `batch`: a per-step A commitment, a scheme change not ruled in, so a separate arm); the step's
+    between steps    under -ab, every call's rows >= m cleared and the step's A tables in one h1c_build (a per-step
+                     A commitment, a scheme change not ruled in, so a separate arm); the step's
                      A slots, scales, A roots, live rows and step into ring slot s mod D; the admit tables (under -pt on
                      their own stream), the z/y leaf tables and the served y's tables (their run-time compare);
                      round s over a-step, admit-step, z-step, y-step and receipt-step, whose leaf is the receipt-table
@@ -263,7 +263,7 @@ def smq_of(v: str) -> tuple[int, int, int]:
 # the A tables: "m" per call in the forward on NA_MULTI streams; "b" once a step between steps (not ruled in); "n" after
 # either: each call's noise on NA_MULTI streams beside the units
 AO = {"m": "per call, in the forward", "mn": "per call, in the forward; noise on its own streams",
-      "b": "once a step (h1agate's batch; not ruled in)", "bn": "once a step (not ruled in); noise on its own streams"}
+      "b": "once a step (not ruled in)", "bn": "once a step (not ruled in); noise on its own streams"}
 NA = DA.NA_MULTI
 
 

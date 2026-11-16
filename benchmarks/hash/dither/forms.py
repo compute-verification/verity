@@ -23,7 +23,7 @@ Z_FORMS = {"zy": (FORM_A, ("the served epilogue commits the per-unit z/y records
 OUT_OF_ORDER = ("receipts beside the served GEMM; outside the statement's order: the step's units read a "
                 "coin flipped before its A and z/y went under a round")
 # a -so arm's parts that no ruling has taken in, each making the arm unadopted
-UNADOPTED_PARTS = {"ab": "-ab/-abn: every call's A table built once a step (h1agate's batch), a per-step A commitment not "
+UNADOPTED_PARTS = {"ab": "-ab/-abn: every call's A table built once a step, a per-step A commitment not "
                          "ruled in",
                    "ov": "-ov/-ov1/-ovp: round s built beside forward s + 1 from ring copies, a round order not ruled in",
                    "j10r-off": ("DITHER_SO_UNITS=j10r off credit's layout ($DITHER_SO_J10R_M=live, "
