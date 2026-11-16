@@ -41,6 +41,7 @@ DECLARED: dict[str, str] = {
     # credentials, read by name and never printed
     "SLACK_BOT_TOKEN": "the Slack bot's token",
     "CURSOR_API_KEY": "the Cursor API key the agent watch reads agents with",
+    "GOALS_KEY": "the site key the Goals editor uses on the production Goals route",
     "RUNPOD_API_KEY": "RunPod's API key",
     "RUNPOD_SSH_KEY_B64": "the RunPod ssh key, base64",
     "NEBIUS_SA_ID": "the Nebius service account's id",

@@ -67,7 +67,8 @@ def test_a_day_is_due_at_its_end_in_pacific_time_and_a_set_tier_or_a_link_places
 def test_an_off_track_goal_a_day_old_and_a_goal_not_written_in_its_last_day_are_named_unless_parked():
     """NOW is 06:00Z on 11 Nov. `a/old` was written a minute over a day ago and `a/fresh` a minute under. `a/soon` and
     `a/reforecast` are due at 16:00Z, written a minute before and a minute after the day before that; `a/far` is due a minute
-    past a day from now. `b/paused` is only under the parked goal; `b/shared` is under it and under the live `b/live`."""
+    past a day from now. `b/paused` is only under the parked goal; `b/shared` is under it and under the live `b/live`.
+    `a/shelved` has the status `parked`: past its date and long unwritten, it is named for neither."""
     old, due = "2026-11-01T00:00:00.000Z", "2026-11-11T08:00-08:00"
     page = [
         goal("a/old", "a", "2026-11-12T18:00-08:00", tier=1, status="off-track", updatedAt="2026-11-10T05:59:00"),
@@ -76,12 +77,13 @@ def test_an_off_track_goal_a_day_old_and_a_goal_not_written_in_its_last_day_are_
         goal("a/reforecast", "a", due, tier=1, updatedAt="2026-11-10T16:01:00.000Z"),
         goal("a/far", "a", "2026-11-11T22:01-08:00", tier=1, updatedAt=old),
         goal("a/unstamped", "a", due, tier=1, status="off-track"),
+        goal("a/shelved", "a", "2026-11-01", tier=1, status="parked", updatedAt=old),
         goal("top/parked", "b", "2026-11-30", tier=1, updatedAt=old, waitingOn=[{"goal": "b/paused"}, {"goal": "b/shared"}]),
         goal("b/paused", "b", due, status="off-track", updatedAt=old),
         goal("b/shared", "b", due, status="off-track", updatedAt="2026-11-09T16:00:00.000Z"),
         goal("b/live", "b", "2026-11-13", tier=1, updatedAt=old, waitingOn=[{"goal": "b/shared"}]),
     ]
-    assert goals_audit.parked(page) == {"top/parked", "b/paused"}
+    assert goals_audit.parked(page) == {"top/parked", "b/paused", "a/shelved"}
     leads = goals_audit.findings(page, datetime.fromisoformat(NOW))
     assert kinds(leads["a"]) == [("stale", "a/old"), ("near", "a/soon")]
     assert kinds(leads["b"]) == [("stale", "b/shared"), ("near", "b/shared")]

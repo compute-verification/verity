@@ -135,6 +135,13 @@ def test_a_site_key_reads_the_page_without_an_identity_and_writes_nothing(monkey
     with pytest.raises(goals.SlackError, match="a site key only reads"):
         route.call({"remove": "demos/both"})
     assert len(sent) == 1
+    editor = goals.Route(key="a-dummy-write-key", writes=True)
+    assert editor.call({"remove": "demos/both"}) == [GOAL] and sent[1:] == [("POST", "Bearer a-dummy-write-key")]
+
+    with pytest.raises(goals.SlackError, match="goes only to"):
+        goals.Route("https://elsewhere.example/api/goals", "a-dummy-write-key", writes=True)
+    monkeypatch.setenv("GOALS_KEY", "a-dummy-write-key")
+    assert goals.main(["--url", "https://elsewhere.example/api/goals", "show"]) == 1 and len(sent) == 2
 
     def refuse(*a, **k):
         raise urllib.error.HTTPError(goals.GOALS, 401, "Unauthorized", {}, io.BytesIO(b'{"error": "invalid_key"}'))
