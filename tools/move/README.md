@@ -6,18 +6,14 @@ These tools turn a move into one generated commit that rewrites every reference 
 commit is generated, anyone can rerun it, so a move lands without a line-by-line review, and every open branch crosses
 it by rerunning it on the branch.
 
-A move is described by a map in this directory: a layout map of old paths to new ones, or a word map of old words to new
-ones. Each tool is the standard library and git, run as a file from the repository's root; it refuses a dirty worktree,
+Each tool is the standard library and git, run as a file from the repository's root; it refuses a dirty worktree,
 and a second run changes nothing.
 
 ## Try one
 
 ~~~sh
-python3 tools/move/rename.py --map tools/move/c_flock_words_map.toml --dry-run
+python3 tools/move/rename.py --help
 ~~~
-
-This runs one word map over the tree in a few seconds and writes nothing. It prints how many files it would rewrite,
-each word it renames with its count, and the sites the map leaves standing on purpose, file by file.
 
 ## The tools
 
@@ -59,6 +55,3 @@ the move once `move_check.py` certifies that run.
 Once it lands, each open branch crosses it:
 
     python3 tools/move/restack.py BRANCH --push-to NEWBRANCH --kept
-
-[`DESIGN.md`](DESIGN.md) holds the maps' format, every step `stage.py` takes and what it refuses, what a certificate
-does and does not say, how `restack.py` reports a crossing, and carrying a branch by a plain merge instead.

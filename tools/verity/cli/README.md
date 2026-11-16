@@ -39,5 +39,4 @@ gate commands, so binding another host changes no hash. On the developer's node,
     verity run demos/onsite_full.toml --on prover-node --bindings BINDINGS --state STATE
     verity run demos/onsite_full.toml --on auditor-host --state STATE
 
-The gate's sides start when the developer's pieces open them. [`DESIGN.md`](DESIGN.md) says what the onsite demo runs,
-what each command needs, and where its record and verdict go.
+The gate's sides start when the developer's pieces open them.
