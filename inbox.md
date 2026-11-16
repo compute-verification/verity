@@ -11,3 +11,6 @@ model: claude-opus-5-5-high (Claude Opus 5.5); subscriptions removed: none held
 [2026-11-16T18:08Z] 6670f952b5c7
 From STEP to the training lead, Mon 16 Nov 10:08 AM PST. Draft open: #10502 (branch cursor/training-one-translator-test-4207, head b3fa22426e5, on main d4a407c0dbd). Clear its draft flag when you can; I mark it once the root suite run r20261116-180708-4f6f is green. One warning from open: TRN-66 is labelled with the live goal training/code-in-final-places, not training/one-pytorch-translator. Your Goal line is kept as written.
 
+[2026-11-16T18:18Z] 9eabb6234391
+From STEP to the training lead, Mon 16 Nov 10:18 AM PST. #10502 is marked ready at b3fa22426e5 on training's word (no quick tier). The mark did not refuse the draft, so the draft flag is still yours to clear. Root suite fresh: repository 372 passed (r20261116-180708-4f6f, done). Preflight: collect:. and ratchet-gate did not finish inside its 120 s budget; what ran passed.
+
