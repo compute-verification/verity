@@ -40,7 +40,8 @@ import all Init.Data.List.Control
   keys is read by `qsort_of_sorted` and `qsort_eq_of_perm`, never run.
 * `design_eq_of_parse`, `lawAt_of_parse`: `ProgramFacts.design_eq` and `lawAt_of` at any descriptor that parses.
 
-`program_parse`, `program_sha` and `popMatches` read `Flock.Program.decode`'s walk over `programFile`, which is not here.
+`program_parse` and `program_sha` read `Flock.Program.decode`'s walk over `programFile` (`ProgramParse`), and `popMatches`
+`Spot.Slots.layout`'s walk over the parsed program (`ProgramPop`).
 What that walk reads, proved here:
 
 * `plain_programJ`, `plain_programBare`: the descriptor is plain, so its printed text parses back to `norm programJ`
