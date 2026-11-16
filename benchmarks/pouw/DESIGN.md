@@ -4,7 +4,7 @@ What a caller may import here, what writes what, and where the shared tools live
 
 ## Standards and imports
 
-Compute accounting's standards are in `benchmarks/machine_model/README.md`: the design registry (one file a design under
+Compute accounting's standards are in `benchmarks/machine_model/DESIGN.md`: the design registry (one file a design under
 decision 79's names, Dither-1S, Dither-2S and Dither-C, which `verity_machine_model.skip` prices, `eps_budget.py`
 prints and `machine-model eps` reads), the ε vocabulary, how a facet is measured (gates, noise, margins, clocks, row
 status), and the per-device data layout.

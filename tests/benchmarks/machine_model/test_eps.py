@@ -457,7 +457,7 @@ SM89 = DEVICES / "sm_89"
 
 
 def test_devices_follow_the_layout():
-    """README "Devices": sm_120 is data/ and the default; any other device is data/devices/sm_NN/, priced once it has a
+    """DESIGN.md "Devices": sm_120 is data/ and the default; any other device is data/devices/sm_NN/, priced once it has a
     model.toml, every row of its census some vector's, and every design's honest MMA a class of its census."""
     assert device() == device("sm_120") == device("sm120") == DATA and devices()[0] == "sm_120"
     assert device("sm89") == device("sm_89") == SM89 and "sm_89" in devices()
