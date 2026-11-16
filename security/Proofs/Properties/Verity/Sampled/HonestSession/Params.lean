@@ -628,9 +628,13 @@ private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
 
 /-- `any` over two elements as their disjunction. `paramsEitherOfJson` tests `proofs`' keys against each of
 `MEMBERS_KEYS` under `any`'s binder, where the walk reduces no field read; this takes each test out from under it, where
-`proofs`' read reduces and `keys?_obj` applies. -/
+`proofs`' read reduces (`bind_some'`, `keys?_mkObj`). -/
 private theorem any_pair {α : Type} (a b : α) (p : α → Bool) : [a, b].any p = (p a || p b) := by
   simp
+
+/-- `bind` of a `some`, as its definitional equation: `proofs`' read is `some`, and the walk hands no `bind` of the blocked
+`keys?` to the kernel, so this exposes `keys?` of the read object for `keys?_mkObj`. -/
+private theorem bind_some' {α β : Type} (a : α) (f : α → Option β) : (some a).bind f = f a := rfl
 
 /-! ## v2's parameters, with every field named -/
 
@@ -896,7 +900,7 @@ private theorem params_full :
     -- `Spot.keys?` and `Spot.sortStrings` are blocked so the walk never hands the parser's key checks (`exactly`, whose
     -- body reads them) to the kernel's `whnf`, which cannot reduce `sortStrings`'s well-founded `Array.qsort`; the rules
     -- below (`keys?_mkObj`, `keys?_obj`, `sortStrings_of_sorted`, `sortStrings_eq_sortLt`) rewrite each occurrence instead.
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, hgw_dg, hgh_dg, any_pair, ratio_half, split_half, poolValues_none,
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, hgw_dg, hgh_dg, any_pair, bind_some', ratio_half, split_half, poolValues_none,
       keys?_mkObj,       keys?_obj, sortStrings_of_sorted, sortStrings_eq_sortLt, PortsFacts.ports_entries, PortsFacts.rest_eq,
       unwindowed_some, Array.mapM_empty]
       block [Flock.canon, Spot.Program.parse, Flock.unhex, Spot.keys?, Spot.sortStrings] shallow []
