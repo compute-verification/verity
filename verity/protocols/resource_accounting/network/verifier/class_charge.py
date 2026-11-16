@@ -89,7 +89,7 @@ from typing import Any
 
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT
 from verity.protocols.resource_accounting.network.verifier.connection_rows import Head
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 
 #: the four verdicts a class owes before it is charged below its schedule
 STOP_RECORD, RESPONSE_TIE, CERTIFIED_READ, COMPUTE_AUDIT = "stop record", "response tie", "certified read", "compute audit"
@@ -249,7 +249,7 @@ A_RECORD = (f"a verdict record is an object with the fields {', '.join(FIELDS)},
 
 
 def charge(head: Head, cls: int, records: Mapping[str, Iterable[Mapping[str, Any]]],
-           schedule: NetworkCertifierParams | None = None) -> ClassCharge:
+           schedule: NetworkAttesterParams | None = None) -> ClassCharge:
     """How class `cls` of the execution phase `head` is signed for is charged, from the verdict records given, by
     verdict: a map from each of `VERDICTS` to its records, a verdict with none left out (the module docstring's
     "All four or none"). `schedule` is the schedule the head names: a class of one that can't be tied is at its

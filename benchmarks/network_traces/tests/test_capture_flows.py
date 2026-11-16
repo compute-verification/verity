@@ -34,7 +34,7 @@ from verity.protocols.resource_accounting.network.verifier import network_attest
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
 from verity.protocols.resource_accounting.network.verifier.io_tie import TRAILER
 from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_END, watermark_head, with_release
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifier, NetworkCertifierParams, audit, cells, read_cell
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttester, NetworkAttesterParams, audit, cells, read_cell
 
 HERE = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -681,8 +681,8 @@ class _Uncommitted(ws.Publisher):
 
 
 def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, held: tuple[int, ...] = (),
-            watermark: bool = True, params: NetworkCertifierParams = PARAMS, order=None, phases: int = 1,
-            arrive: tuple[int, ...] = ()) -> tuple[NetworkCertifier, list[_Writer], _Writer]:
+            watermark: bool = True, params: NetworkAttesterParams = PARAMS, order=None, phases: int = 1,
+            arrive: tuple[int, ...] = ()) -> tuple[NetworkAttester, list[_Writer], _Writer]:
     """`phases` execution phases of the network attester at `params` on a `VirtualClock`, one unless given, published
     as `serve` publishes a run: its records and certificates through `Publisher`, `deployment.json`, and
     `warden.json`'s connections and, with `watermark`, its watermark. Every request arrives before the first tick,
@@ -711,13 +711,13 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
     async def open_watermark():
         return asyncio.StreamReader(), mark
 
-    def settled(w: NetworkCertifier) -> bool:
+    def settled(w: NetworkAttester) -> bool:
         return all(c.server is not None and c.ingress_ended
                    and (c.egress_ended or (c.ordinal - 1 in held and c.bytes_out)) for c in w.active)
 
-    async def main() -> NetworkCertifier:
+    async def main() -> NetworkAttester:
         clock = VirtualClock(-tau / 2)
-        relay = NetworkCertifier(params, connect, origin=0.0, windows=phases, clock=clock, sleep=clock.sleep, publish=publisher,
+        relay = NetworkAttester(params, connect, origin=0.0, windows=phases, clock=clock, sleep=clock.sleep, publish=publisher,
                        withhold=publisher.withhold, watermark=open_watermark if watermark else None)
         running = asyncio.create_task(relay.run())
         tasks = []

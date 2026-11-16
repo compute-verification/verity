@@ -46,7 +46,7 @@ served int8 linear call as its own Program on bits, which `verity.protocols.reso
   beside it is refused (``credit: served-output-not-credited-kernel: ...``), as is a call recorded outside ``apply`` (`UNTRACED`).
   The verdict is the serving process's own, so it is only the call's credit bit (`H1Run.credit_bits`, ``credit`` in its
   manifest row under calls_root, before `draw_root`): credit is the verifier's (core's `credit`).
-* **Requests and rounds** (`pouw_h1_requests`, `Accounting.Served`): round s is step s. `admitting` hands each
+* **Requests and rounds** (`pouw_h1_requests`, `ResourceAccounting.Served`): round s is step s. `admitting` hands each
   step's admitted requests and batch order to `H1Run.admit` before its forward, so each request's entry is a hiding leaf
   under the root of the round that admits it, and each served row's slot names its request, before that round's coin; a
   window serving a row of a request with no entry credits nothing. A window admits only in round 0 unless its

@@ -144,7 +144,7 @@ def Commitment.headerJson (c : Commitment) : String :=
   let fields := c.headerFields.toArray.qsort (·.1 < ·.1)
   "{" ++ ",".intercalate (fields.toList.map fun (k, v) => pyJsonStr k ++ ":" ++ v) ++ "}"
 
-/-- `start_message`: what the challenger hands the network certifier before the fill,
+/-- `start_message`: what the challenger hands the network attester before the fill,
 `SHA-512(START_TAG ‖ u64 len ‖ commitment header)`. Not signed. -/
 def startMessage (c : Commitment) : ByteArray :=
   let head := c.headerJson.toUTF8
@@ -167,7 +167,7 @@ structure Signed where
 def Signed.message (s : Signed) : E ByteArray :=
   StreamedWipe.message s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches
 
-/-- `end_message`: what the challenger hands the network certifier after its last read,
+/-- `end_message`: what the challenger hands the network attester after its last read,
 `SHA-512(END_TAG ‖ u64 len ‖ message ‖ u64 len ‖ signature)`, the session's signed message and its signature. Not
 signed. -/
 def endMessage (s : Signed) : E ByteArray := do

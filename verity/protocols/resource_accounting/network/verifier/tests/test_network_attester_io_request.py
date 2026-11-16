@@ -22,7 +22,7 @@ from verity.protocols.resource_accounting.network.verifier.certificate import Di
 
 B = 512
 #: two lanes of r = 2 slots, 8-bucket windows
-PARAMS = W.NetworkCertifierParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
+PARAMS = W.NetworkAttesterParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
 SHAPE = Q.Shape(B, PARAMS.lanes, PARAMS.slots)
 #: request 1 (100 tokens, 3 cells) and request 3 (60, 3) trickle in over buckets, the others arrive whole, and
 #: request 4 arrives alone at the last bucket of window 0 and ends in window 1
@@ -77,7 +77,7 @@ def test_a_request_parses_to_its_prompt_length(B):
 
 
 def test_every_bucket_of_the_network_certifiers_ingress_is_accepted(link):
-    """The link served through the network attester's own ingress (`network_attester.NetworkCertifier._ingress`): every bucket row is
+    """The link served through the network attester's own ingress (`network_attester.NetworkAttester._ingress`): every bucket row is
     accepted on the verifier's lanes, which chain each connection from (0, 0) to (0, n) over its buckets. Requests
     trickle in over three buckets, two connections share buckets, and a connection moves to lane 0 when the one before
     it ends."""
@@ -118,7 +118,7 @@ def test_redteam_phase6_split_is_refused():
     so its ends move and a floor on the frames' counts accepts an acausal release, unless each request's prompt_len is
     bound to the ingress record's content. The tie reads 400 fields from connection 1's cells, so the swap's lanes are
     refused by the release and, built anyway, by the unit."""
-    params = W.NetworkCertifierParams(cell_bytes=4096, slots=1, lanes=2, window=4, delay=1)
+    params = W.NetworkAttesterParams(cell_bytes=4096, slots=1, lanes=2, window=4, delay=1)
     shape = Q.Shape(4096, 2, 1)
     LONG, SHORT = 400, 16
     link = Q.serve(params, _requests((LONG, SHORT), 4096), (0, 0), (10 ** 6, 10 ** 6), buckets=4)

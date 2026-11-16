@@ -9,7 +9,7 @@ import Mathlib.Basic.ENNReal.Real
 
 PoUB's P2 mode (`verity/protocols/accounting/poub/verifier/p2.py`, its `PROTOCOL.md` §11) audits
 PoUS's `C*`: the weights `W` encoded under P2 (`p2-16448/v4`, `p = 2^16448 − 21065`), a block 2,056 bytes, and a
-receipt of a unit of four blocks (8,224 bytes, 257 sectors), the trace's block (`Accounting.Remote.Held.Trace`). Its
+receipt of a unit of four blocks (8,224 bytes, 257 sectors), the trace's block (`ResourceAccounting.Remote.Held.Trace`). Its
 memory line charges what the node's compute can re-encode, as the Sloth store's does, and these are the codec's terms at
 P2's form, each a named `Prop`:
 
@@ -24,7 +24,7 @@ measured: the H200's at 16,448 bits is the measurement the stated instance waits
 
 @[expose] public section
 
-namespace Accounting.Assumptions
+namespace ResourceAccounting.Assumptions
 
 /-- **`WorkHardness` at P2's form** (drafted, not decided; proposed claim `p2-codec-work`). For every `x ≤ 16,448`,
 completing `x` of a P2 block's 16,448 bits costs at least `x/16,448` of its encode, two modular square roots at
@@ -50,9 +50,9 @@ lattice's dimension and reduction cost grow) and in its offset `t_j`. PoUS's gua
 sequential depth (`P2RingAuditSecure`), not in total work, so it does not give this form. -/
 def WorkHardnessP2 (cRoot : ℕ) (cost : ℕ → ℕ) : Prop := WorkHardness 16448 2 cRoot cost
 
-end Accounting.Assumptions
+end ResourceAccounting.Assumptions
 
-namespace Accounting.Remote.Held.Assumptions
+namespace ResourceAccounting.Remote.Held.Assumptions
 
 variable {Ω : Type}
 
@@ -60,7 +60,7 @@ variable {Ω : Type}
 node's compute re-encodes at most `s / (4 · 32,890) · (v − u) + B` units of a P2 store:
 
 * `s` squarings a tick at 16,448 bits over every GPU and the host, the adversary's best measured rate (as
-  `Accounting.Assumptions.SquaringCeiling` prices the word codec's, at about 1.485× its reference kernel on the GPU);
+  `ResourceAccounting.Assumptions.SquaringCeiling` prices the word codec's, at about 1.485× its reference kernel on the GPU);
 * a unit, four 2,056-byte blocks, at least `4 · 32,890 = 131,560` of them: under `WorkHardnessP2` at
   `c_root = 16,445`, completing any `x` of a unit's `4 · 16,448` bits, spread over its blocks however, costs at least
   `x/(4 · 16,448)` of four blocks' encodes, so the trace's `rebuilt` counts completed bits in units;
@@ -72,4 +72,4 @@ ceiling; the ceiling wants the best kernel's rate at 16,448 bits, every GPU's an
 PoUS's `ring-op-ceiling` reads. -/
 def SquaringCeilingP2 (T : Trace Ω) (s B : ℝ) : Prop := SquaringCeiling T s (4 * 32890) B
 
-end Accounting.Remote.Held.Assumptions
+end ResourceAccounting.Remote.Held.Assumptions

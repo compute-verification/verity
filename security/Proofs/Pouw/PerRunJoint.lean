@@ -19,7 +19,7 @@ hypotheses are at least as strong as `Joint`'s, and an ideal audit has its per-r
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Pouw
 
@@ -129,14 +129,14 @@ end Run
 
 namespace SecurityProofs
 
-theorem JointPerRun : Accounting.Guarantees.JointPerRun := by
+theorem JointPerRun : ResourceAccounting.Guarantees.JointPerRun := by
   intro ι α ΩW ΩQ ΩS _ _ _ _ _ _ _ d r p W Q S εW εQ εS hW hQ hS
   exact r.jointPerRun hW hQ hS
 
-theorem CovertResidualPerRun : Accounting.Guarantees.CovertResidualPerRun := by
+theorem CovertResidualPerRun : ResourceAccounting.Guarantees.CovertResidualPerRun := by
   intro ι α ΩW ΩQ ΩS _ _ _ _ _ _ _ _ d r p W Q S εW εQ εS hW hQ hS
   exact r.covertResidualPerRun hW hQ hS
 
 end SecurityProofs
 
-end Accounting
+end ResourceAccounting

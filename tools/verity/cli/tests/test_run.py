@@ -18,7 +18,7 @@ import pytest
 from verity import config as K
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
@@ -206,7 +206,7 @@ def test_a_bounded_certifier_configuration_round_trips():
     cfg = K.check(K.parse(K.render(bounded(4))), REG.components, REG.workloads)
     table = cfg["params"]["verity/certifier/v0"]
     assert table["max_tokens_cap"] == 4
-    assert NetworkCertifierParams(**{k: v for k, v in table.items() if k != "tie"}).max_tokens_cap == 4
+    assert NetworkAttesterParams(**{k: v for k, v in table.items() if k != "tie"}).max_tokens_cap == 4
     assert K.check(cfg, REG.components, REG.workloads) == cfg
     assert K.digest(cfg) != UNBOUNDED_ONSITE
 
@@ -223,7 +223,7 @@ def test_a_certifier_configuration_with_lengths_rows_round_trips_and_needs_a_sch
         cfg = K.check(K.parse(K.render(with_lengths(**fits | {"lengths": form}))), REG.components, REG.workloads)
         table = cfg["params"]["verity/certifier/v0"]
         assert table["lengths"] == form and "max_tokens_cap" not in table
-        assert NetworkCertifierParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == form
+        assert NetworkAttesterParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == form
         assert K.check(cfg, REG.components, REG.workloads) == cfg
         digests.add(K.digest(cfg))
     assert len(digests) == 3
