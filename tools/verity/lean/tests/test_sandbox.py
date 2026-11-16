@@ -863,15 +863,12 @@ def test_under_the_filter_no_pair_sends_to_a_datagram_socket_bound_outside(tmp_p
     try:
         r = subprocess.run([sys.executable, "-I", "-S", str(SOCKETS), "exec", "--", sys.executable, "-I", "-S", "-c",
                             send, path], capture_output=True, text=True)
-        try:
-            arrived = outside.recv(64)
-        except BlockingIOError:
-            arrived = None
+        assert r.returncode == 0, r.stderr
+        assert r.stdout.splitlines() == ["SOCK_DGRAM refused", "SOCK_RAW refused", "SOCK_SEQPACKET refused"]
+        with pytest.raises(BlockingIOError):
+            outside.recv(64)
     finally:
         outside.close()
-    assert r.returncode == 0, r.stderr
-    assert r.stdout.splitlines() == ["SOCK_DGRAM refused", "SOCK_RAW refused", "SOCK_SEQPACKET refused"]
-    assert arrived is None
 
 
 def test_the_inventory_lists_a_socket_in_a_directory_no_walk_can_list(tmp_path):
