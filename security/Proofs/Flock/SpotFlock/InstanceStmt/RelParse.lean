@@ -108,4 +108,30 @@ theorem parse_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
   rewrite [readOf_x hn hr, Option.bind_some, show _root_.Flock.Readable.Read.parse (ins r).read = _ from hpar]
   rfl
 
+/-- **A one-table statement whose model the trace satisfies is in the deployed relation.** Stated at any statement `st`,
+so the table's numbers (`Tab.Fits`) are read off `st` as a variable: at the concrete statement, the unifier would unfold
+it (`Stmt.m` reads the public file) to compare them. -/
+theorem relS_of_stmt {p : _root_.Flock.Readable.Parsed} {st : Stmt} {w : _root_.Claims.Flock.Wit}
+    (hp : p.sts = #[st]) (L : FlockSoundness.Layout st)
+    (hz : _root_.Flock.Readable.zOf 1 w 0 st.m = TraceRows.zOf TraceVal.zIX st.m)
+    (hS : (L.model (Refine.regionsOf st)).Satisfies
+      (TraceRows.zOf TraceVal.zIX (L.model (Refine.regionsOf st)).m)) :
+    _root_.Claims.Flock.RelS (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation p) w := by
+  refine (_root_.Flock.Readable.relS_relation p w).2 fun c hc => ?_
+  have h1 : p.sts.size = 1 := by rw [hp]; rfl
+  obtain rfl : c = 0 := by omega
+  have e : p.sts[0]! = st := by rw [hp]; rfl
+  have hm : (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation p).m = st.m := by
+    show (p.sts[0]?.map (·.m)).getD 0 = st.m
+    rw [hp]
+    rfl
+  have hk : (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation p).kLog = st.c.kLog := by
+    show (p.sts[0]?.map (·.c.kLog)).getD 0 = st.c.kLog
+    rw [hp]
+    rfl
+  rw [e]
+  refine ⟨⟨hm.symm, hk.symm, (L.model []).hk6, (L.model []).hk, (L.model []).pin.isLt⟩, ?_⟩
+  rw [h1, hz]
+  exact hS
+
 end SpotFlock.InstanceStmt.Rel

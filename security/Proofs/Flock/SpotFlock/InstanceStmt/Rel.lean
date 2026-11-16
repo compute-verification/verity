@@ -114,13 +114,6 @@ theorem rel_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
       (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation) = _
     rw [parse_x hn hr]
     rfl
-  refine (_root_.Flock.Readable.relS_relation (pF r) (wX r)).2 fun c hc' => ?_
-  have h1 : (pF r).sts.size = 1 := rfl
-  obtain rfl : c = 0 := by omega
-  have hz : _root_.Flock.Readable.zOf (pF r).sts.size (wX r) 0 (pF r).sts[0]!.m =
-      TraceRows.zOf TraceVal.zIX (stF r).m := zOf_wX r
-  refine ⟨⟨rfl, rfl, (L.model []).hk6, (L.model []).hk, (L.model []).pin.isLt⟩, ?_⟩
-  rw [hz]
-  exact (hS : (L.model (Refine.regionsOf (stF r))).Satisfies (TraceRows.zOf TraceVal.zIX (stF r).m))
+  · exact relS_of_stmt (p := pF r) (st := stF r) rfl L (zOf_wX r) hS
 
 end SpotFlock.InstanceStmt.Rel
