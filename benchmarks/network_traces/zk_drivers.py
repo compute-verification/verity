@@ -1,5 +1,5 @@
 """zk-drivers: the command line of the network certifier's zero-knowledge drivers, which live in the certifier's prover
-(`verity/protocols/accounting/certifier/prover/`) and take the proof system's benchmark drivers as one
+(`verity/protocols/resource_accounting/network/prover/`) and take the proof system's benchmark drivers as one
 `proof_drivers.ProofDrivers`. This builds it from SPOT's template audit, challenger session and development challenger
 (`a0`, `a5_coins`, `local_challenger`),
 `benchmarks/one_stage/` (`a7`, `a8`, `prove_subprotocol`), Flock's distribution (`verity_flock.circuit`,
@@ -31,7 +31,7 @@ def proof_drivers() -> SimpleNamespace:
     import prove_subprotocol
     import redigest
     from verity_flock import circuit, class_statement
-    from verity.protocols.proofs.spot.device import challenger_session as a5_coins
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as a5_coins
     from verity.protocols.proofs.spot.prover.audit import local_challenger
     import a0
     from benchmarks.network_traces import network_certifier_chain
@@ -41,7 +41,7 @@ def proof_drivers() -> SimpleNamespace:
 
 
 def install() -> None:
-    from verity.protocols.accounting.certifier.prover import proof_drivers as PD
+    from verity.protocols.resource_accounting.network.prover import proof_drivers as PD
 
     PD.install(proof_drivers())
 
@@ -51,7 +51,7 @@ def main(argv=None) -> int:
     if not argv or argv[0] not in DRIVERS:
         raise SystemExit(f"usage: zk_drivers.py {{{'|'.join(DRIVERS)}}} ARGS...")
     install()
-    driver = importlib.import_module(f"verity.protocols.accounting.certifier.prover.{argv[0]}")
+    driver = importlib.import_module(f"verity.protocols.resource_accounting.network.prover.{argv[0]}")
     return driver.main(argv[1:])
 
 

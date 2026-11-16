@@ -9,10 +9,10 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
 - **integrity**, by SPOT's one-stage audit (`verity/protocols/proofs/spot/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed execution phase, the
   prover proves each sampled block with Flock `--zk` behind the Lean ZK server, and the Lean verifier gives the verdict;
-- **work**, by proof of useful work (PoUW, `verity/protocols/accounting/pouw/verifier/`), on the served model itself: the endpoint
+- **work**, by proof of useful work (PoUW, `verity/protocols/resource_accounting/compute/pouw/verifier/`), on the served model itself: the endpoint
   serves PoUW's H1, each execution phase's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
-- **the inference-only policy** (`verity/protocols/policy/inference_only/verifier/`): the registered circuit divides into inference
+- **the inference-only policy** (`verity/protocols/workload_classification/training_detection/inference_only/verifier/`): the registered circuit divides into inference
   blocks within their gate and fresh-input budgets. The served run doesn't run it: the served run doesn't produce the
   declared division yet.
 

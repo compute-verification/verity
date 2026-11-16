@@ -230,7 +230,7 @@ HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 import a5_memo as AM  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
@@ -240,7 +240,7 @@ from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Session, Statement  # noqa: E402
 from verity.commitments import row_table as RT  # noqa: E402
-from verity.protocols.proofs.spot.device import coins as CC
+from verity.protocols.proofs.spot.verifier.challenger import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import (
     draw as D,

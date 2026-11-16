@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import arith_encode as AE, charge_chain as CC
+from verity.protocols.resource_accounting.network.verifier import arith_encode as AE, charge_chain as CC
 from verity_vllm.compiler import compile_slice as CS
 from tests.compiler.test_network_certifier_compile_slice import BOOK
 from tests.compiler.test_network_certifier_compile_slice_w212 import CARRY, CLASS, FITTED, OWN

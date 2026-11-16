@@ -85,18 +85,18 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     H1_PROGRAM as PROGRAM,
 )
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     H1_SCHEME as SCHEME,
 )
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     GateSessions,
     drawn_reads,
     drawn_units,
 )
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     window_units as units,
 )
 
@@ -304,7 +304,7 @@ class H1Windows:
                  sessions: GateSessions | None = None, prover: str | Path | None = None, closer: Any = None,
                  draws: Any = None, model_key: Callable[[str], tuple[bytes, str]] | None = None,
                  clock: Callable[[], float] = time.perf_counter, receipts: bool = False, tie: Any = None) -> None:
-        from verity.protocols.accounting.pouw.prover.serving import (
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
             Writer,
             declared_layout,
             h1_units,
@@ -375,7 +375,7 @@ class H1Windows:
         ``receipts`` noise.cu loaded too), the Lean verifier built (the in-process coins' entropy and each
         release's verdicts) and window 0's reserve ended (`GateSessions.settled`, made here unless made ahead already);
         ``readied``, with where each part's time went (``seconds``)."""
-        from verity.protocols.accounting.pouw.prover.serving import ready_verifier
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving import ready_verifier
         from verity_torch.pouw import Receipts, h1_tables_available
 
         from verity_vllm.protocols.pouw import h1_hooks as PHK
@@ -426,7 +426,7 @@ class H1Windows:
         """Window ``window``'s H1, on the open Commit period: its session (with ``sessions``, `GateSessions.take`), the
         tap on the committer, a fresh `Served`, and the option installed with the session's coins, else the epoch
         ``window``'s."""
-        from verity.protocols.accounting.pouw.prover.serving import Served
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving import Served
         from verity_torch.pouw import Receipts
 
         from verity_vllm import protocols as PO
@@ -472,7 +472,7 @@ class H1Windows:
     def prover_of(self, window: int) -> Path | None:
         """Window ``window``'s prover directory, ``prover/w<k>`` (owner-only, `pouw_h1_prover.private`), or None
         without ``prover``."""
-        from verity.protocols.accounting.pouw.prover.serving import prover_private
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving import prover_private
 
         return None if self.prover is None else prover_private(prover_private(self.prover) / f"w{window}")
 
@@ -603,7 +603,7 @@ class H1Windows:
     def layout(self) -> dict[str, Any]:
         """The window Program's layout as core's credit reads it from its descriptor (`credit.layout_of`), once."""
         if self._layout is None:
-            from verity.protocols.accounting.pouw.prover.serving import (
+            from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
                 descriptor,
                 layout_of,
             )
@@ -620,7 +620,7 @@ class H1Windows:
         window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.draw_k`) and its calls_root.
         ValueError when the session joined no period, the ledger commits it no K, or its window commits no gate
         session's open root."""
-        from verity.protocols.accounting.pouw.prover.serving import committed_k, draw_k
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving import committed_k, draw_k
 
         if held is None:
             return draw_k(self.layout()), run.commits["calls_root"], "the proof system's draw_k (in-process coins)"
@@ -648,7 +648,7 @@ class H1Windows:
         """Window ``window``'s outcome. With ``prover``, a window that served a step and registered its live tables has
         its rounds' live@<s> rows dumped to ``prover/w<k>/live`` (`pouw_h1_live.dump`), its outcome's ``live_dump``;
         with ``receipts``, the calls its producer computed and their time, its ``receipts``."""
-        from verity.protocols.accounting.pouw.prover.serving import dump_live
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving import dump_live
 
         d, c = run.details, run.commits
         live_dump = None
