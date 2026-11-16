@@ -195,19 +195,30 @@ which prints the number:
 
 ~~~text
 bash benchmarks/compute/serve.sh
-research run --on NODE --project verity --source . --cwd clone --timeout 2h -- bash benchmarks/compute/serve.sh
+research run --on NODE --project verity --source . --cwd clone --timeout 4h -- env WORK=/workspace bash benchmarks/compute/serve.sh
 ~~~
 
-The first line is the one for your own machine. The second is how we run it on Verity's machines: `research run` is
-our job runner, which runs the command on one of our machines (a node; `NODE` is its name) and records the run under
-a run id. You need neither.
+The first line, from the clone's root, is the one command a fresh clone needs on your own machine. The second is how we
+run it on Verity's machines, whose environments are under `/workspace`: `research run` is our job runner, which runs
+the command on one of our machines (a node; `NODE` is its name) and records the run under a run id. You need neither.
+
+Its first step, `bootstrap`, installs what the serve needs where it isn't there yet: it runs
+`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B --gpu`, which puts under the directory `WORK` names
+(`~/verity-work` unless set) a Python 3.12 environment with vLLM at commit d9105ea80 and torch 2.13.0+cu129
+(`venv312`, from the vLLM wheel it keeps in `wheels/`), the checkpoint `unsloth/Llama-3.2-1B` at the revision
+`load.toml` pins (about 2.5 GB from Hugging Face, in `hf/`) and flash-attention's taps (`cp/`, which serve.sh's serve
+doesn't load); its install caches, under `WORK/.cache`, it removes where it made them. Its log is
+`out/logs/bootstrap.log`, its own logs and its readiness record are under `out/logs/bootstrap/`, and its seconds are
+a line of `out/steps.txt` like every step's. Where `benchmarks/harness/env.sh` finds the environment already (under
+`WORK`, or at `VERITY_BENCH_VENV`), serve.sh says so in one line and skips the step, so keep `WORK` the same from one
+run to the next.
 
 The record directory is `RUN_DIR`, else the run directory under `research run`, else `./compute-run`. The command
 exits 0 only where both verdicts accept and the number prints. Each step's log is `out/logs/STEP.log`, its status a
 line of `out/steps.txt`, and its seconds are in `out/compute-run.json`'s `steps`. A share it prints is always this
-run's: it refuses a record directory that already holds a record, a refused earlier try's `out/logs` included (remove
-`./compute-run`, or give `RUN_DIR` a new directory, before you run it again), and a failed step ends it with exit 1,
-a sentence naming the step, `out/compute-run.json` written and no number. `COINS=local`, the default, runs a local challenger:
+run's: it refuses a record directory that already holds a record (remove it, or give `RUN_DIR` a new directory), a try
+its checks of the machine refuse (exit 3) writes nothing, and a failed step ends it with exit 1, a sentence naming the
+step and no number. `COINS=local`, the default, runs a local challenger:
 infra's gate code on a scratch auditor host with a test key, each session's challenger its own process on 127.0.0.1,
 so the Lean verdict is taken of record. Of record here means only that the Lean verifier took its of-record path
 (`--of-record`) against the local challenger's key, the test key this run made, not the auditor's: the `ran with`
@@ -225,17 +236,10 @@ It needs:
   own;
 - nvcc from CUDA 13.0 (12.8 or newer) at /usr/local/cuda-13.0, or wherever `CUDA_HOME` names: the kernel is built by
   `benchmarks/harness/setup/pearl_c_sm90.sh`, which hands `build.sh` that toolkit;
-- vLLM at commit d9105ea80 with torch 2.13.0+cu129 and the checkpoint `unsloth/Llama-3.2-1B` at the revision
-  `load.toml` pins (about 2.5 GB from Hugging Face), both installed by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`
-  It puts everything under the directory `WORK` names, `/workspace` unless set: the venv, the checkpoint,
-  flash-attention's taps (which serve.sh's serve doesn't load) and its install caches, of which it removes only those it
-  made. So set `WORK` to a directory of yours for it and for serve.sh, which finds the venv there too. From the
-  clone's root: `cd adapters/vllm && WORK=$HOME/verity-work bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B
-  --gpu`, then back at the root, `WORK=$HOME/verity-work bash benchmarks/compute/serve.sh`. In our measured run from a
-  fresh clone, the clone took 191 s and 2.1 GB, and the bootstrap took 1,069 s and filled `WORK` with 15 GB;
+- network access, and `curl`, for what the `bootstrap` step downloads;
 - this tree's `adapters/torch` importable (`verity_torch`, which the served model's PoUW hooks import):
   `benchmarks/harness/env.sh`, which serve.sh sources, puts every workspace member's packages on `PYTHONPATH`, this
-  one's among them, and serve.sh checks it before any step;
+  one's among them, and serve.sh checks it after the bootstrap, before the cubin;
 - Lean v4.34.0, through [elan](https://github.com/leanprover/elan), to build the Lean verifier: `lake` on `PATH` or
   in `~/.elan/bin`, which serve.sh also checks first;
 - about 2 GB of disk for the run's passes, besides the checkpoint and the vLLM environment; the record itself is about
