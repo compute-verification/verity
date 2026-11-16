@@ -11,11 +11,12 @@ public import Definitions.Certifier.Guarantees.Marks
 # A counted wipe's egress is the network certifier's count over the wipe's span
 
 `MemoryChallenger.WipeProtocol.checkCounted` (`verity/wipe/counted/v0`) publishes the egress its evidence gives
-(`egress_mib`), and the survivor bound it certifies is of the foreign content plus that egress. `WipeCountTied` says what
-that egress is when the network certifier's count over a span (`NetworkCheck.Span.check`, `verity/certifier/span/v0`)
-is accepted for the same marks: at least the bits the device sent in the execution phases from the start mark's phase to
-the end mark's phase plus the span's tail, phases that hold every cell the device sends from the start mark on out of
-what it read by the end mark. The statement only; `Proofs.Properties.Pous.WipeCount` proves it from its antecedents.
+(`egress_mib`), and the survivor bound it certifies is of the foreign content plus that egress. `WipeCountTied` says
+what that egress is when the network certifier's count over a span (`NetworkCheck.Span.check`,
+`verity/certifier/span/v0`) is accepted for the same marks: at least the bits the device sent in the execution phases
+from the start mark's phase to the end mark's phase plus the span's tail, phases that hold every cell the device sends
+from the start mark on out of what it read by the end mark. The statement only; `Proofs.Properties.Pous.WipeCount`
+proves it from its antecedents.
 
 ## The marks
 
@@ -31,9 +32,9 @@ start certificate's SHA-512, the two messages and the bits that can have left ov
 
 Each protocol reads its own half: `WipeProtocol.named` of the wipe's case and `NetworkCheck.Span.named` of the span's.
 Nothing on `main` holds one half to the other: no composition is in the tree, and `checkCounted` is served only by its
-difftest (`tests/test_counted_callers.py`). `SpanTied` is that tie, a named premise stated as narrowly as the proof needs
-it: the two messages agree and the wipe's count, in its unit, is at least the span's. A composition's tie would hold the
-start mark too, which the proof doesn't read.
+difftest (`tests/test_counted_callers.py`). `SpanTied` is that tie, a named premise stated as narrowly as the proof
+needs it: the two messages agree and the wipe's count, in its unit, is at least the span's. A composition's tie would
+hold the start mark too, which the proof doesn't read.
 
 ## What it rests on
 

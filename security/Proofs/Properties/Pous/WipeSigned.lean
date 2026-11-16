@@ -612,6 +612,46 @@ theorem measured_accepts (digest : Nat → ByteArray) {I seed : ByteArray} {k : 
     ⟨Lms.deployed, rfl, List.mem_singleton.2 rfl, m, hm, hlms⟩ rfl rfl rfl (measured_size digest _ _)
     (measured_batch digest _ _)⟩
 
+/-- **The compiled check accepts the measured honest wipe with a start mark and a count**: `measured_accepts` for the
+session that names the start mark `sm`, the evidence giving the count `n` in range beside it. The session's message is
+defined, and its signature verifies over it. -/
+theorem marked_accepts (digest : Nat → ByteArray) (sm : ByteArray) {n : Int} (hn0 : 0 ≤ n)
+    (hn1 : n ≤ StreamedWipe.EGRESS_MAX_UNITS) {I seed : ByteArray} {k : Lms.PrivateKey}
+    (hk : Lms.key Lms.deployed I seed = .ok k) :
+    ∃ (sig : ByteArray) (m : ByteArray) (out : WipeProtocol.Public) (prof : StreamedWipe.Params × Int),
+      { measuredWipe digest k.publicKey sig with startMark := sm }.message = .ok m ∧
+      WipeProtocol.protocol.check (measuredWipeParams k.publicKey) measuredCommitment
+        ⟨some { measuredWipe digest k.publicKey sig with startMark := sm }, some n⟩ = .accept out prof := by
+  obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
+  subst hIk
+  have hroot : (k.tree[1]!).size = Lms.deployed.N :=
+    Properties.CertifierDevice.Proofs.Lms.node_size hk (by decide) 1 le_rfl (by decide)
+  have hpub : k.publicKey.size = 16 + Lms.deployed.N := by
+    simp only [Lms.PrivateKey.publicKey, ByteArray.size_append, hIs, hroot]
+  have hI : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
+  obtain ⟨m, hm⟩ : ∃ m, { measuredWipe digest k.publicKey .empty with startMark := sm }.message = .ok m := by
+    obtain ⟨vs, hvs⟩ := measured_values digest
+    have hvs' : { measuredWipe digest k.publicKey .empty with startMark := sm }.batches.mapM
+        StreamedWipe.Batch.value = .ok vs := hvs
+    unfold StreamedWipe.Signed.message StreamedWipe.message StreamedWipe.recordsRoot
+    rw [hvs']
+    exact ⟨_, rfl⟩
+  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I MEASURED_SESSION m = .ok M := by
+    unfold memoryChallengerMessage
+    simp [hIs]
+    exact ⟨_, rfl⟩
+  obtain ⟨sig, hsig⟩ :=
+    Properties.CertifierDevice.Proofs.Lms.lmsSigns 64 1 20 false Lms.deployed k.I seed k 0 M rfl hk (by decide)
+  obtain ⟨hver, hdec⟩ :=
+    Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed k.I seed k 0 M sig rfl hk hsig
+  have hlms : lmsVerify Lms.deployed k.publicKey MEASURED_SESSION m sig.encode = .ok true := by
+    unfold lmsVerify
+    simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, bind, Except.bind] <;> rfl
+  exact ⟨sig.encode, m, _, _, hm, check_accepts _ _ ⟨some { measuredWipe digest k.publicKey sig.encode with
+    startMark := sm }, some n⟩ { measuredWipe digest k.publicKey sig.encode with startMark := sm } rfl rfl rfl hn0 hn1
+    ⟨Lms.deployed, rfl, List.mem_singleton.2 rfl, m, hm, hlms⟩ rfl rfl rfl
+    (measured_size digest k.publicKey sig.encode) (measured_batch digest k.publicKey sig.encode)⟩
+
 /-- A key seed of the deployed parameters' 64 bytes. -/
 private def HONEST_SEED : ByteArray := ⟨Array.replicate 64 0⟩
 
