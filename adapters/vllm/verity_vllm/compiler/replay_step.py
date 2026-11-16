@@ -86,7 +86,7 @@ does not read.
 certifier's PROTOCOL.md, "Advice v1"):
 1. the committed advice is the decision bits themselves, one per open-step ask in the scan's order, read directly;
 2. a scan of this step over the session's steps, from the empty engine, the arrivals' cursor moving by `taken` and
-   the decisions' by `used`; the certified request records (P, O) are the arrivals, in the network certifier's release
+   the decisions' by `used`; the certified request records (P, O) are the arrivals, in the network attester's release
    order;
 3. the charge: advice v1's arithmetic code run forward over the same decisions (`arith_encode`), each window's coded
    length at most its declared charge, so no decoder runs in the circuit;

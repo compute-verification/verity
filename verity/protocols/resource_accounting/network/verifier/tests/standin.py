@@ -62,7 +62,7 @@ def _deliver(unit: Any, rows: dict[str, bytes], sample: S.Draw, out: Path, *, pr
     return SVC.Delivered(PF.Proof(circuit, public, (session,)), delivered, output)
 
 
-#: the domains by id, as `prove_tie` commits under them (the network certifier's, and the known values'): the stand-in Lean's
+#: the domains by id, as `prove_tie` commits under them (the network attester's, and the known values'): the stand-in Lean's
 #: registered reads climb each port's rows under the domain its id names, which the real verifier derives from the port
 DOMAINS: dict[str, Any] = {}
 
@@ -71,14 +71,14 @@ def prove_tie(tie: Any, cells: Any, sample: S.Draw, lanes: Any, out: Path, *, pr
               accepted: bool = True, words: dict[int, int] | None = None,
               salts: dict[int, dict[str, bytes]] | None = None, units: Sequence[int] | None = None,
               rows: Sequence[bytes] | None = None) -> TS.Delivered:
-    """The delivered proof of the sampled ingress-tie proof blocks (`tie_service.IngressTie`) on the network certifier's
+    """The delivered proof of the sampled ingress-tie proof blocks (`tie_service.IngressTie`) on the network attester's
     opening `cells` (`network_certifier_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: proof
     block t's ``wit`` row its
-    bucket row under the network certifier's salt and its header's registered read of the network certifier's root (`Cells.statement`), its
+    bucket row under the network attester's salt and its header's registered read of the network attester's root (`Cells.statement`), its
     ``pub`` row its lanes and its ``o0`` row its output bit by IoTieRequest's reference (`io_request.reference`),
     which the tests hold to the circuit, each read off the root of the prover's rows of the port as the verifier
     registers its own (`IngressTie.known_tree`, under their public salts). `rows` are the rows the prover proves on
-    instead, under the network certifier's salts and paths; where a unit takes no instance of its lanes, its public row is zero
+    instead, under the network attester's salts and paths; where a unit takes no instance of its lanes, its public row is zero
     and its output 0. `words` forges output words, `salts` the salts delivered for ``pub`` and ``o0``, and `units`
     the public file's unit indices. The public file is a shared-row file as `verity_flock.circuit.write` lays one out:
     each port's table, one row an instance, port-major, then the instances' refs."""

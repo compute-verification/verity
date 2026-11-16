@@ -1,4 +1,4 @@
-"""The network certifier's connection rows: what it signs of the connections it released in an execution phase of a
+"""The network attester's connection rows: what it signs of the connections it released in an execution phase of a
 link, as tables of rows committed as its cells' rows are (`network_certifier_rows`) and listed in one head for that execution
 phase, which it signs once. A schedule has them only where its parameters say so (`NetworkCertifierParams.lengths`): a schedule
 without them has no such head, and its records, cells' heads and certificates are the ones it had. The head lists
@@ -7,16 +7,16 @@ a class after them, or four where it has request words (`NetworkCertifierParams.
 connections is under the one signature, and no proof block opens a row of them under any other head.
 
 **The lengths and fails tables** (`tables`) of execution phase w (`window` w in the code and the records) are made from
-the releases the network certifier hands at execution phase w + 1's close, or under the lengths rows' form 2 at the
+the releases the network attester hands at execution phase w + 1's close, or under the lengths rows' form 2 at the
 run's last close for its last execution phase (`network_certifier.Released`, by slot stride: `network_certifier`'s "The lengths rows").
 The certifier writes them from the cells it cut and released itself, never from the
 server's report, so they say what its records of the same execution phases say, in another order (`of_records` is
-that reading of the records in the clear): that the two agree rests on the network certifier's own code
+that reading of the records in the clear): that the two agree rests on the network attester's own code
 (`trusted-device`), and no proof ties them. Each table is T / `every` rows,
 row j slot stride j's releases in release order in its first slots, K = `NetworkCertifierParams.stride_releases` slots a row and
 the rest zero, every field little-endian:
 
-- `lengths`: a slot is u32 N + 1 ‖ u32 bytes ‖ u32 n, 12 bytes: N the request's place in the network certifier's
+- `lengths`: a slot is u32 N + 1 ‖ u32 bytes ‖ u32 n, 12 bytes: N the request's place in the network attester's
   release order (the field is 0 in an empty slot), bytes its request's bytes, and n its response's `DATA` cells before
   its `END` or `FAIL`, one id event each.
 - `fails`: a slot is u16 class ‖ u16 at, 4 bytes, the slot of the lengths row at the same place: class 1 and at = n
@@ -36,14 +36,14 @@ rows and no other, so a class's tables have one count of rows, the execution pha
 R = `NetworkCertifierParams.phase_releases`, and none where none is filed; a hand that files more than R in a class is
 refused (`content_rows.tables`), and a release that ended in a `FAIL` before any `DATA` cell is filed in none
 (`content_rows`' "The filing"). In a schedule with request words a class has a fourth table, `words.i`: at row r
-the two words the network certifier reads from the request of `request.i`'s row r (`content_rows.request_words`:
+the two words the network attester reads from the request of `request.i`'s row r (`content_rows.request_words`:
 its `max_tokens` and the count of its prompt's ids). The filing rule is called in one place (`_filing`), which
 `tables` lays the content tables by.
 They rest on `trusted-device` as the lengths and fails tables do.
 
 **The filed releases** (`filed`, `filed_record`, `not_filed`). Which class a release is filed in turns on how the
-network certifier ended it (`content_rows`' "The filing"), which no server computes. So with each execution phase's
-head the network certifier hands the prover, beside the rows' salts, the releases it filed in each class:
+network attester ended it (`content_rows`' "The filing"), which no server computes. So with each execution phase's
+head the network attester hands the prover, beside the rows' salts, the releases it filed in each class:
 
     {"format": FILED, "link", "window", "head", "classes": [[N, ...], ...]}
 
@@ -69,7 +69,7 @@ parameters are built (`NetworkCertifierParams`), and the proof block's shape ref
              row_bytes, row_schema}), -1, RangeIndexedDomain(0, rows), hash="sha512")
 
 salt_k is fresh for each row of each table. The opening (`Rows`: each table's rows and their salts) is witness, the
-network certifier's to hand to the prover alone. A table of no row, which only a class's under form 2 can be, has no
+network attester's to hand to the prover alone. A table of no row, which only a class's under form 2 can be, has no
 leaf: its domain is the one above at rows = 0 and its root is 64 zero bytes (`NO_ROWS_ROOT`), which no read opens.
 
 **The signed head** (`Head`), one for each link's execution phase:
@@ -93,7 +93,7 @@ execution phase's releases, so at a schedule where no load releases R of them th
 say.
 
 **The word that no head comes** (`no_head_digest`, `no_head`, `check_no_head`; the lengths rows' form 2 only,
-`NetworkCertifierParams.closes`). Under form 2 the network certifier ends every execution phase of a run in exactly one of two
+`NetworkCertifierParams.closes`). Under form 2 the network attester ends every execution phase of a run in exactly one of two
 certificates of the link's egress in that execution phase: its head's, or this word's, which it signs where it
 doesn't hand the execution phase (`network_certifier`'s "The lengths rows": it, the one before it or the one after it wasn't
 published complete, or the run ended early):
@@ -113,7 +113,7 @@ collision across the two tags). An execution phase with neither has not ended ye
 it has no certificate, and fails closed as a record without one does. Which of the two an execution phase ends in
 is a function of which execution phases' records were published complete, which their certificates already say, so
 the word makes nothing else public. That an execution phase gets one of the two and never both rests on the network
-certifier's own code (`trusted-device`): its signer signs the digest it is asked to. Under form 1 an execution phase
+attester's own code (`trusted-device`): its signer signs the digest it is asked to. Under form 1 an execution phase
 that isn't handed has no certificate of either kind.
 
 **The registration** (`registration`) is the head and its certificate as one JSON object, kept on a run's private
@@ -131,7 +131,7 @@ first_bucket + (j + 1)·every − 1 in `slots` slots of `slot_bytes`; for a cont
 first_bucket + buckets − 1 filed in the schedule's class `class`, a words table's as its class's others.
 `check_registration` is the verifier's read of it: the head is the execution phase's, it lists the schedule's tables
 and no other, each one's domain, rows and layout are the ones the schedule's parameters give, and its one
-certificate verifies under the network certifier's key in the session over the head's digest. Under form 2 a
+certificate verifies under the network attester's key in the session over the head's digest. Under form 2 a
 class's rows are the registration's own, and the verifier holds them to what a count is: at most R, one for the
 class's tables, and with the zero root where it is 0. It derives each domain at the count it read. A registration
 made under another schedule, of either form, with request words or without, has that schedule's digest for its
@@ -226,8 +226,8 @@ def _held(params: NetworkCertifierParams, name: str) -> tuple[bool, bool]:
 
 def tables(params: NetworkCertifierParams, strides: Sequence[Sequence[Released]]) -> dict[str, list[bytes]]:
     """An execution phase's tables, every one its head lists and in the head's order, from its releases by slot
-    stride, as the network certifier hands them: the lengths and fails tables (the module docstring's) and, in a
-    schedule with content rows, each class's own, every release in the class the network certifier's rule files it
+    stride, as the network attester hands them: the lengths and fails tables (the module docstring's) and, in a
+    schedule with content rows, each class's own, every release in the class the network attester's rule files it
     in (`content_rows.file`, by its one call, `_filing`). ValueError for a schedule without connection rows, or
     releases that aren't one execution phase's of it."""
     (_, T, size), (_, _, fails_size) = tables_of(params)[:2]
@@ -252,7 +252,7 @@ def tables(params: NetworkCertifierParams, strides: Sequence[Sequence[Released]]
 
 
 def _filing(params: NetworkCertifierParams, released: Sequence[Released]) -> list[int | None]:
-    """Each release's class by the network certifier's rule (`content_rows.file`, which is called here alone)."""
+    """Each release's class by the network attester's rule (`content_rows.file`, which is called here alone)."""
     return [CT.file(params, r) for r in released]
 
 
@@ -265,7 +265,7 @@ def filed(params: NetworkCertifierParams, strides: Sequence[Sequence[Released]])
 
 
 def filed_record(head: Head, params: NetworkCertifierParams, strides: Sequence[Sequence[Released]]) -> dict[str, Any]:
-    """What the network certifier hands the prover of an execution phase's filing once its head is signed (the
+    """What the network attester hands the prover of an execution phase's filing once its head is signed (the
     module docstring's "The filed releases"): the releases of `strides` in each class, under the digest of `head`,
     the head of their tables. ValueError for a head whose count of a class is not the class's releases."""
     classes = filed(params, strides)
@@ -309,14 +309,14 @@ def releases(params: NetworkCertifierParams, lengths: Sequence[bytes], fails: Se
 def of_records(params: NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid],
                order: Mapping[int, int] | None = None) -> dict[int, tuple[tuple[Released, ...], ...]]:
     """The releases a run's records hold, read in the clear (a rehearsal's reading, as `network_certifier.audit` is, and
-    nothing a verifier runs): each execution phase's by slot stride, as the network certifier hands them and `tables`
+    nothing a verifier runs): each execution phase's by slot stride, as the network attester hands them and `tables`
     takes them. A release is an `END` in the ingress record, in its bucket's slot stride; N is its place among the
     run's, by bucket and then by connection; its request is its connection's ingress `DATA` and `END` payloads; its
     outputs are its connection's egress `DATA` cells, with content rows each one's id; and it failed where its
     egress ends in a `FAIL`. `ingress` and `egress` are each direction's records from the run's first execution
     phase, one each and in order, since N counts from the run's first release. The records count N only while every
     ingress record so far is complete: one that isn't has lost its cells from its fault on, and the releases among
-    them. `order`, each released connection's place by its ordinal as the network certifier's log of the run has
+    them. `order`, each released connection's place by its ordinal as the network attester's log of the run has
     it (`NetworkCertifier.log`'s `release`), gives N past such a record, and is held to the records' count before it; without
     it an execution phase past such a record has no entry. Nor has one with a release whose connection hasn't ended
     in the records. ValueError for a schedule without connection rows, records that aren't a run's from its first, a
@@ -400,7 +400,7 @@ class Entry:
 
 @dataclass(frozen=True, slots=True)
 class Head:
-    """What the network certifier signs, once, for an execution phase's connection rows: its tables. A run keeps it
+    """What the network attester signs, once, for an execution phase's connection rows: its tables. A run keeps it
     on its private side, in the registration."""
 
     link: str
@@ -428,7 +428,7 @@ class Head:
 
 @dataclass(frozen=True)
 class Table:
-    """The network certifier's opening of one table of an execution phase, witness: its rows and their salts, and
+    """The network attester's opening of one table of an execution phase, witness: its rows and their salts, and
     what they commit to."""
 
     link: str
@@ -480,7 +480,7 @@ class Table:
 
 @dataclass(frozen=True)
 class Rows:
-    """The network certifier's opening of an execution phase's connection rows, witness: each table the head lists."""
+    """The network attester's opening of an execution phase's connection rows, witness: each table the head lists."""
 
     link: str
     window: int
@@ -520,7 +520,7 @@ class Rows:
 
     @property
     def witness(self) -> bytes:
-        """What the network certifier keeps for the prover beside the rows: their salts, table by table."""
+        """What the network attester keeps for the prover beside the rows: their salts, table by table."""
         return b"".join(s for t in self.tables for s in t.salts)
 
     @cached_property
@@ -558,7 +558,7 @@ def registration(head: Head, certificate: Certificate, params: NetworkCertifierP
 
 def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: NetworkCertifierParams, link: str,
                        window: int) -> tuple[Head, dict[str, CommitmentDomain]]:
-    """The verifier's read of an execution phase's registration, under the network certifier's key and session and the
+    """The verifier's read of an execution phase's registration, under the network attester's key and session and the
     schedule's parameters: the head and each table's domain as the verifier derived it, or ValueError naming what
     fails. Under form 2 a class's rows are the registration's count of its held rows (the module docstring's "The
     registration"), and the domains are derived at it."""
@@ -620,7 +620,7 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
 
 
 def no_head_digest(link: str, window: int, params: NetworkCertifierParams) -> bytes:
-    """The 64 bytes the network certifier signs to say that an execution phase of a link has no head (the module
+    """The 64 bytes the network attester signs to say that an execution phase of a link has no head (the module
     docstring's "The word that no head comes"). ValueError for a schedule whose execution phases don't each end in
     one of the two (`NetworkCertifierParams.closes`)."""
     if not params.closes:
@@ -645,7 +645,7 @@ def no_head(certificate: Certificate, params: NetworkCertifierParams) -> dict[st
 
 def check_no_head(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: NetworkCertifierParams, link: str,
                   window: int) -> None:
-    """The verifier's read of the word that an execution phase has no head, under the network certifier's key and
+    """The verifier's read of the word that an execution phase has no head, under the network attester's key and
     session and the schedule's parameters: ValueError naming what fails."""
     want = {"format": NO_HEAD, "link": link, "window": window, "parameters": params.digest.hex()}
     for k, v in want.items():

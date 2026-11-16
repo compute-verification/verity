@@ -1,9 +1,9 @@
-"""scan-zk: the network certifier's step-indexed scan composed in zero knowledge, in the generator form, one
+"""scan-zk: the network attester's step-indexed scan composed in zero knowledge, in the generator form, one
 execution phase a registration. An execution phase's start unit (`ingress_scan.IngressScanStart`) copies the state its
 scan starts from, the one the record before it committed (the run's first: the empty state); ingress bucket t
-(`ingress_scan.IngressScanBucket`) reads the network certifier's ingress row t, the scan's state S_{t−1} and its
+(`ingress_scan.IngressScanBucket`) reads the network attester's ingress row t, the scan's state S_{t−1} and its
 boundary's slot entries, and computes S_t and its egress view; egress bucket t (`egress.EgressBucket`) reads that view
-and computes the network certifier's egress row t. Every row of every unit, input or output, is a registered read,
+and computes the network attester's egress row t. Every row of every unit, input or output, is a registered read,
 proved by Flock
 `prove --zk` behind the Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except
 the honest round on the challenger's coins (``--challenger``), a `service.Stream`'s.
@@ -15,24 +15,24 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a slot stride, 8 an execution phase) with the
-  network certifier's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
-  egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the network certifier at
+  network attester's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
+  egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the network attester at
   `PARAMS`, 32-bucket execution phases; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8
   slots, 32 prompt ids and 4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5
   (KO + 1); ``test`` (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5, KO 8, KI
   100) and 16-bucket execution phases, whose units a CPU proves in minutes; and ``test2`` (`TEST2`), test's over two
   execution phases, with a fourth request admitted in the first and anchored at the second's first boundary.
-* **The run** (`scan_traffic.serve`: the network certifier's own `_ingress` and `_egress`, ticked as `NetworkCertifier._tick`
+* **The run** (`scan_traffic.serve`: the network attester's own `_ingress` and `_egress`, ticked as `NetworkCertifier._tick`
   ticks them) carries the setup's network-certifier-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the
   fifth waits in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), w63k4's five at w63's
   arrivals (prompts of at most 32 ids, responses of 3, 4, 1, 4 and 2, the fifth in request 1's slot at 28 as w63's),
   test's three (the third in the first's slot past its egress). Each execution phase of each link is committed by the
-  network certifier and its head signed by a test-size LMS key (`network_certifier_rows.attest`); each registration is read back by
+  network attester and its head signed by a test-size LMS key (`network_certifier_rows.attest`); each registration is read back by
   the verifier (`network_certifier_rows.check_registration`).
-* **A network certifier's run** (``--warden-run RUN``, `network_certifier_run`) in its place: a network_certifier_serve run's directory
+* **A network attester's run** (``--warden-run RUN``, `network_certifier_run`) in its place: a network_certifier_serve run's directory
   (``serve``'s, or the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule
   (w63's: ``scan_zk.py schedule``) carrying the scan's traffic (``rehearse --ids``). The verifier reads
-  ``deployment.json`` (the network certifier's public key, the session, the schedule and its digest) and each link's
+  ``deployment.json`` (the network attester's public key, the session, the schedule and its digest) and each link's
   registration of each execution phase of the group in ``cells.jsonl``, its head's signature verified under that key;
   the prover's rows are the records under ``cells.salts``, held to that head. Each is refused by name where it doesn't
   hold, as is a schedule the class doesn't serve and a response that isn't id-form.
@@ -85,15 +85,15 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   partition or reads (`registered.reads`) aren't the members'. The start unit reads ``sin``, the state the
   execution phase starts from (the start, below), and outputs ``o0``, that row through two NOTs, committed as state leaf
   0, a committed row the verifier never opens: the row bucket 0's ``sin`` and the first boundary's Programs read is
-  the start by gates. Ingress unit t reads ``row`` (the network certifier's ingress row t), ``sin`` (state leaf t,
+  the start by gates. Ingress unit t reads ``row`` (the network attester's ingress row t), ``sin`` (state leaf t,
   S_{t−1}) and each slot j's ``prog<j>`` (``prog<j>`` leaf ⌊t / EVERY⌋, its boundary's entry of the slot, one table row
   a boundary,
   `NetworkCheck.Period`'s `readsEntries`), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t + 1,
   and ``o2``, its view, committed as view leaf t. Egress unit t reads ``state`` (view leaf t) and outputs ``o0``, its
-  render bit, and ``o1``, the row it computes, committed as the network certifier's egress row t. Each output row but a
+  render bit, and ``o1``, the row it computes, committed as the network attester's egress row t. Each output row but a
   public o0 is a registered read of the row it is committed as (`Registered.checkPort` holds a hidden-output statement's
   output rows, the verifier's PROTOCOL.md §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the
-  view the one leaf ingress t computes and egress t reads, and the egress row the one the network certifier signed: the
+  view the one leaf ingress t computes and egress t reads, and the egress row the one the network attester signed: the
   chains are wires through the registered roots, not the prover's word. `Registered.checkPort` holds every instance of a
   registered port, so the last unit's o1, the state the execution phase ends in, which no state leaf holds, is a
   member's own rows (`Frame`), committed and never opened: the port the next execution phase's start reads
@@ -104,8 +104,8 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   verdict publishes them (``rests_on_period_check``, the lanes' ``prog<j>``): the acceptance rests on a period check,
   `NetworkCheck.Period`'s `wired`, which ties each ``prog<j>``'s rows to the audit that registered them and refuses
   this run's stand-in block, no pinned `SlotEntry_v1` (`period_case.UNWIRED`). The registration's roots also name, as
-  ``rows/<direction>/<w>`` (`network_certifier_roots`), the root and domain of each network certifier row registration a member's
-  network certifier port reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
+  ``rows/<direction>/<w>`` (`network_certifier_roots`), the root and domain of each network attester row registration a member's
+  network attester port reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **The start**: the start unit's ``sin`` is one-stage's registered value `CARRY` (the Program's parameter ``0.sin``,
   one row/v2 row), which the execution phase's record, a v2 record, names with its root and domain. The run's first
   record holds `CARRY` at the root the verifier computes and pins, the empty state's row under one-stage's registered
@@ -124,7 +124,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   record a start may name is for the check that reads the records after it.
 * **Every port registered**: the verifier's registered reads name every port of every member's circuit, inputs and
   output rows (`Flock.Registered.checkComplete`, which `verity-verify-proof` runs whenever ``--registered`` is given), so no
-  output reads a row the statement commits afresh. A port no scan tree or network certifier row registration holds
+  output reads a row the statement commits afresh. A port no scan tree or network attester row registration holds
   (each proof block's public o0, the last ingress proof block's o1, a block member's ``x``) is the member's own rows of
   it (`Frame`, value ``frame``), committed under its statement's frame binding (`frame_binding`, over the member's
   input set), so its root is the member's frame root of the port, which the round's registration names before any
@@ -136,16 +136,16 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   (`scan_ok.constants`, the period check's `okChecks`); it is opened as before, under that salt, which the
   prover sends.
 * **The answers** (``answers.json``, `answers`): for each execution phase W of the group, the scan's registration of W,
-  the network certifier's two row registrations of W and the scan's one-stage answer for W (`window_answer`), which
+  the network attester's two row registrations of W and the scan's one-stage answer for W (`window_answer`), which
   `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records' certificates:
   accepted, one-stage's profile and bound at ``--delta`` (every unit sampled, the bound 0); refused, a reject naming
   the members Lean refused. Beside them, ``audits``: each execution phase's block round's, the compute audit whose
   lanes' o0 are that execution phase's scan's ``prog<j>`` (its registration and answer, its Program's descriptor, its
   free inputs NR·nb·NE, every bit of every slot entry, which the rows form's K charges to the execution phase tied to
   it, and no steps).
-* **A void run** (a network certifier run whose network certifier failed a connection closed, its `FAIL` in the egress
-  row it signed, its reason in the ``fails`` record): the scan renders the connection's end where the network certifier
-  wrote `FAIL`, and that bucket alone differs from the network certifier's row. Its FAILs are in the group's last
+* **A void run** (a network attester run whose network attester failed a connection closed, its `FAIL` in the egress
+  row it signed, its reason in the ``fails`` record): the scan renders the connection's end where the network attester
+  wrote `FAIL`, and that bucket alone differs from the network attester's row. Its FAILs are in the group's last
   execution phase (`link` refuses a group with one earlier: the execution phase after a refused one has no start the
   verifier holds). That execution phase's block round and its honest round are proved, the honest one expected refused
   by Lean's registered reads ("does not open") at its egress member (`rounds_of`, `targets`), every other member held,
@@ -157,14 +157,14 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   (leaves a + 1 and a + 2, a that bucket in its execution phase): ingress unit a's o1, the S_a it computes, doesn't open
   leaf a + 1, nor units a + 1's and a + 2's theirs. ``tampered``, in the first execution phase with a `DATA` cell: an
   egress-only Program of T units, one egress row's `DATA` id changed and the execution phase re-signed (a network
-  certifier that saw a byte the scan doesn't render; a network certifier run's re-signed by the driver's own key, under
+  attester that saw a byte the scan doesn't render; a network attester run's re-signed by the driver's own key, under
   which the verifier reads it): egress unit t's o1, the row its view renders, doesn't open the signed row t. ``unread``
   (`_unread`), in the execution phase of the group's first bucket U ≥ 1 where a request's Program starts (its slot's
   `occ` 1): a Program of the T ingress units alone, its slot j's ``prog<j>`` tree the honest one but for its entry at
   U's boundary, its read bit cleared (no Program reads the request): every registered read holds, since the read bit
   enters the unit's ok bit alone and its S_U and view are the honest ones, and Lean holds its proofs, but bucket U's o0
   opens to 0, so the execution phase is refused. Its units are every bucket's, not U's alone, so that unit m of the
-  ingress template is bucket m, which reads the network certifier's row m, as in every Program that batches the
+  ingress template is bucket m, which reads the network attester's row m, as in every Program that batches the
   template; every one is sampled, whatever ``--draw``. A prover that sets the bit with n 0 and no outputs passes here,
   since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the `SCAN_STATE` it
   reads, which the period check holds to the scan's state tree (`stateTied`). ``stale`` (`STALE`, ``stale-<the last
@@ -182,7 +182,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round
   sampled at the stratified rate of K in its N (`rule_of`: a stream's rule is a rate) as prove_path's records audit
   samples (`a5_coins`): for each execution phase, one session of the auditor's challenger on the execution phase's root
-  (`window_root`: the network certifier's session and the execution phase's signed registrations), and the round's
+  (`window_root`: the network attester's session and the execution phase's signed registrations), and the round's
   `service.Stream` (`spec_of`, `stream_of`: its own copy of the round's Program the generator form the round registers)
   on its coins (`a5_coins.RankCoins`): the stream registers the round, the coins commit to the registration's digest,
   and its select samples once (Lean's `Select.select` on the bytes read). Once the session has ended, the outcome of
@@ -259,9 +259,9 @@ _spec.loader.exec_module(traffic)
 
 
 class Setup(NamedTuple):
-    """A class the scan is proved at, the network certifier's schedule it serves and the synthetic run's traffic:
+    """A class the scan is proved at, the network attester's schedule it serves and the synthetic run's traffic:
     request i's prompt ``prompts[i]`` (max_tokens ``max_tokens`` + i, seed ``seed``·i) arrives at bucket ``arrivals[i]``
-    and is answered ``responses[i]``, and the network certifier serves ``windows`` execution phases, every connection
+    and is answered ``responses[i]``, and the network attester serves ``windows`` execution phases, every connection
     ended by the last's end; the chain round swaps S_A and S_{A+1}."""
 
     name: str
@@ -351,7 +351,7 @@ FRAME_BINDING = domains.FLOCK_CIRCUIT_BINDING
 
 def value(kind: str) -> str:
     """A scan registration's value: a tree's, ``state``'s, ``view``'s or lane j's slot entries' (``prog<j>``), or
-    ``frame``, a member's own rows of a port no tree or network certifier row registration holds (`Frame`), registered
+    ``frame``, a member's own rows of a port no tree or network attester row registration holds (`Frame`), registered
     as the member's frame root of the port; ``start``'s is the state the scan starts from, the record's own
     registered value (`CARRY`)."""
     return CARRY if kind == "start" else f"verity/certifier/scan-{kind}/v1"
@@ -664,7 +664,7 @@ def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | 
 
 def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
     """The synthetic run (`scan_traffic.serve`), each execution phase of `windows` of each link committed by the network
-    certifier and its head signed by the driver's test-size LMS key (`network_certifier_rows.attest`), each registration read back
+    attester and its head signed by the driver's test-size LMS key (`network_certifier_rows.attest`), each registration read back
     by the verifier."""
     setup.cls.serves(setup.params)
     reqs = [_request(setup, i, p) for i, p in enumerate(setup.prompts)]
@@ -700,7 +700,7 @@ def network_certifier_run(run: Path, setup: Setup, windows: list[int], out: Path
     """A network_certifier_serve run's execution phases `windows` as the verifier reads them, refused by name where they don't
     hold: the deployment's schedule (its digest, and the class serving it) and public key; each link's registration of
     each execution phase in ``cells.jsonl`` verified under that key and session (`network_certifier_rows.check_registration`: the
-    network certifier's
+    network attester's
     signature over the head of the rows' root); and the records' rows under ``cells.salts`` (`network_certifier_rows.Cells.of`)
     that head. The units read those rows. The Programs' outputs (the slot entries' ids) are each connection's ids
     as its egress record carries them (`io_tie.parse_cell`), every egress cell an id-form one or a `FAIL` (a void run:
@@ -921,7 +921,7 @@ def v3c_trees(window: Path, cls: IS.Class, states: list[list[int]],
 def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0,
          v3c: Path | None = None) -> SimpleNamespace:
     """The run (`synthetic`, or `network_certifier_run`'s of a network_certifier_serve run), execution phases start … start + group − 1 of
-    each link registered by the network certifier and read back by the verifier, and the scan's chain over their rows
+    each link registered by the network attester and read back by the verifier, and the scan's chain over their rows
     from the empty state (`scan_traffic.chain`): what each execution phase's rounds are cut from (`window_of`). The
     group's negatives are placed here, each in one execution phase: the chain round's swap in bucket ``setup.A``'s, the
     unread round's unit (`_unread`) and the tampered round's egress execution phase (`_tamper`); none in a void run,
@@ -987,7 +987,7 @@ def header_refusal(ports: dict, entries: dict) -> str | None:
 
 def registered_file(mr: SimpleNamespace) -> dict:
     """Member `mr`'s `--registered` file, the verifier's own (`stage` writes it, `a0.lean_verify` passes it, and a Lean
-    verdict's `registered` reports its roots): each network certifier port at the head `network_certifier_rows.check_registration`
+    verdict's `registered` reports its roots): each network attester port at the head `network_certifier_rows.check_registration`
     read under the deployment's key, never a root of the prover's."""
     return WR.reads_file(mr.ports)
 
@@ -998,14 +998,14 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     `registered` entries and the verifier's own ports, one for every port of its circuit
     (`Flock.Registered.checkComplete`), the host's read of them (`network_certifier_rows.refusal`, `tree_refusal`: the ports in
     its signature's order, inputs, o0, then the other outputs), each unit's o0 word and its output rows as the
-    references compute them (``made``, None where the ingress reference gives none), and the network certifier's row
+    references compute them (``made``, None where the ingress reference gives none), and the network attester's row
     registration each of its ports reads (``network_certifier``). An ingress unit's ``prog<j>`` is one table row a slot entry it
     reads of lane j's tree (``refs``, `registered.table`), since a timestep's units read their boundary's; its ``sin``
     reads state leaf t and its o1 opens leaf t + 1, the execution phase's last unit's none. The start unit's ``sin``
     reads the one leaf of the execution phase's start (``at.start``: the verifier's own row of the empty state, or the
     last o1 of the execution phase before), and its o0, that row, is a registered read of state leaf 0, no public word.
     Lane j's block member's unit j·nb + b reads ``x``, slot entry b of the lane, its free input, and its o0, that entry,
-    is a registered read of ``prog<j>``'s leaf b, no public word (``outputs`` None). A port no tree or network certifier
+    is a registered read of ``prog<j>``'s leaf b, no public word (``outputs`` None). A port no tree or network attester
     row registration holds (each proof block's public o0, the last proof block's o1, a block member's x) is the
     member's own rows of it (`Frame`, value ``frame``), registered as its frame root in its statement's input set
     ``set_name`` (its template's, `set_of`, which names no round and no execution phase; a block member's its lane's
@@ -1095,7 +1095,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
 def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
     """The rounds execution phase `at` (`window_of`) is proved in, by kind, each with its templates and outcome: the
     block and the honest round (`ROUNDS`), and the group's negatives placed in it (`link`): chain, tampered and unread.
-    A void execution phase's (the network certifier failed a connection closed, a `FAIL` in the egress row it signed)
+    A void execution phase's (the network attester failed a connection closed, a `FAIL` in the egress row it signed)
     the block and its honest round alone, refused by Lean's registered reads ("does not open") at its egress member,
     where the scan renders the connection's end. With V3c's trees (``--v3c``) no block round: V3c's own audit proves its
     slot entries. The stale round's execution phase (``at.claimed``, `host`) has that round alone."""
@@ -1545,8 +1545,8 @@ def staged_wires(members: list[dict]) -> list[str]:
 
 def window_root(at: SimpleNamespace) -> str:
     """The root the challenger's session opens on (128 hex digits) for execution phase `at` (`window_of`): the SHA-512
-    of the network certifier's session and the execution phase's registrations, one a link, whose heads the network
-    certifier signed. The gate opens a root once, ever, so a network certifier run's execution phase is sampled once."""
+    of the network attester's session and the execution phase's registrations, one a link, whose heads the network
+    attester signed. The gate opens a root once, ever, so a network attester run's execution phase is sampled once."""
     return hashlib.sha512(canonical_json({"format": WINDOW_ROOT, "session": at.session.hex(),
                                           "registrations": {s: x.registration
                                                             for s, x in sorted(at.sides.items())}})).hexdigest()
@@ -1693,9 +1693,9 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
 # --- the audit ----------------------------------------------------------------------------------------------------------
 
 def network_certifier_roots(members) -> list[dict]:
-    """The registration's ``rows/<direction>/<w>`` roots: each network certifier row registration its members' network
-    certifier ports read (an ingress proof block's ``row``, an egress proof block's ``o1``), its root and domain as the
-    network certifier registered them (`network_certifier_rows.registration`, read back by the verifier), its T rows the leaves. A
+    """The registration's ``rows/<direction>/<w>`` roots: each network attester row registration its members' network
+    attester ports read (an ingress proof block's ``row``, an egress proof block's ``o1``), its root and domain as the
+    network attester registered them (`network_certifier_rows.registration`, read back by the verifier), its T rows the leaves. A
     period check (`NetworkCheck.Period`'s rows form) holds an execution phase's answer to its rows by these, by root and
     domain.
 
@@ -1722,8 +1722,8 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
           port: int, k: int | None = None, coins: SimpleNamespace | None = None,
           carry: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
-    instance or a shared port's table row; the scan's registrations' roots; and the network certifier's row
-    registrations its network certifier ports read, `network_certifier_roots`, before any coin), its units sampled by the
+    instance or a shared port's table row; the scan's registrations' roots; and the network attester's row
+    registrations its network attester ports read, `network_certifier_roots`, before any coin), its units sampled by the
     verifier's Lean (`draw --stratified k` on a development challenger's coins, `a0.challenger_sample`; every unit when
     `k` is None) or, given the challenger's
     ``coins``, by the round's `service.Stream` on them (`stream_of`; `a5_coins.RankCoins`, rank 0), each member's
@@ -1971,7 +1971,7 @@ def answers(ats: Sequence[SimpleNamespace], out: Path, results: Mapping[str, dic
     """``answers.json`` (`ANSWERS`) of the honest rounds' audits of execution phases ``ats`` (``results``, by round,
     each round's files under ``out / <round>``): for each execution phase W, in order, the scan's registration of W, its
     answer (`window_answer`: accepted where the round's outputs all open to 1; a refused round's, a void execution
-    phase's, names the members Lean refused) and the network certifier's ingress and egress row registrations of W, the
+    phase's, names the members Lean refused) and the network attester's ingress and egress row registrations of W, the
     rows form's evidence of W but its certificates. With W's block round's audit, the compute audit whose lanes' o0 are
     W's scan's
     ``prog<j>`` (``audits``, in execution phase order): its registration and answer, and the terms a period's parameters

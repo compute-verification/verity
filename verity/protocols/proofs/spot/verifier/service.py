@@ -1635,7 +1635,7 @@ class Stream:
     (`partition.mixed_population_program`'s, `(name, leaves, width)` each, `width` an integer or a leaf type's shape, a
     `Digest`'s `(8, 64, 1)`), which a registration registers as its program's (R7, which reads each by its type: a
     supplied value of `Digest`s in Digest order); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
-    the window's Program where it is another form than the mixed population (the network certifier's scan in its
+    the window's Program where it is another form than the mixed population (the network attester's scan in its
     generator form, one batch a template reading a shared input, say): its proof blocks under the check's query are the
     templates', one range each, in the window's order, and it is each docket's population program, a docket
     whose `counts` aren't its ranges' refused (`population`); the stream's digest names it. `log` is the prover's records the challenger logged before the
