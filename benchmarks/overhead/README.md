@@ -2,16 +2,11 @@
 
 `verity bench overhead` is the one front door for an overhead measurement: a scheme's prover overhead γ over stock, at a
 card's operating points, from labelled runs of record alone. Its code is `verity-bench`'s (`benchmarks/harness`:
-`verity_bench/overhead.py` holds the rules, `overhead_node.py` and `overhead_node.sh` the node side, `overhead_records.py`
+`verity_bench/overhead.py` holds the rules, `overhead_node.py` the node side, `overhead_records.py`
 the store side and the table, and `kit.py`, the harness's kit, the run's lease, γ's pairing and the result's measurements
 with their host stamp); this directory holds its runner.
 
 ```text
-verity bench overhead points [--card h200] [--on NODE]       sweep m on one GPU of NODE for C and L (a research run)
-verity bench overhead points --store RUN                      store RUN's points as the card's next version, of record
-verity bench overhead run --scheme S [--point C|L|all]        time S against stock at the card's points (a research run)
-    [--cubin ART]                                             the cubin S's arm loads, sent with the run
-verity bench overhead run --record RUN                        label RUN a run of record, once it stands as a whole
 verity bench overhead table [--json]                          γ per scheme, point and card, from runs of record alone
 ```
 
@@ -20,10 +15,7 @@ record at the H200's C and L (`run.py`'s `METRICS`, `overhead_records.record`), 
 Today's run of record times no commitment of the output (each layer's output hash isn't counted, the note below), so
 their titles say so until a run of record whose arm commits y is labelled.
 
-A run takes one GPU of its node through the node's `gpu-lease`, which waits for it and holds it for the run's bound
-(`research run --on NODE -- gpu-lease 1 --wait --max-min M -- bash benchmarks/harness/overhead_node.sh ...`; `research run
---gpus` is refused on a node whose GPUs gpu-lease doesn't hand out). The H200's node is `vy-dc-h200`. Its outputs are `out/points.json` or `out/overhead.json` and `out/busy.json`, beside each
-`bench.py` result and log.
+A run's outputs are `out/points.json` or `out/overhead.json` and `out/busy.json`, beside each `bench.py` result and log.
 
 ## The operating points
 
@@ -38,13 +30,13 @@ graph replays' wall time, summed. A sweep or a timed run in which one of the car
 - **L**: the largest m whose time, and every sampled time below it, stays within 10% of the time at m = 1.
 
 The sweep times every power of two from 1 to 32,768, then bisects each point's bracket on multiples of 16 until it is one
-step wide, so both points are multiples of 16. `points --store` keeps the sweep as a versioned art of kind
+step wide, so both points are multiples of 16. The sweep's points are a versioned art of kind
 `verity-bench-overhead-points/v1`, labelled `run_of_record=overhead-points`; the version it replaces is labelled
 `superseded_by` it, and a γ timed at superseded points is refused.
 
 ## γ
 
-`run` times the scheme's arm (`overhead.SCHEMES`: a PoUW harness arm and the stock scaling its useful output matches)
+A timed run times the scheme's arm (`overhead.SCHEMES`: a PoUW harness arm and the stock scaling its useful output matches)
 beside every finalist stock kernel of that scaling and the tune's fastest one's twin (`bench.py --twins`), in one
 `bench.py` process under Nsight Systems. Warm-up is the harness's own. At each shape the timed pass runs untraced (graph
 replays for wall time, bursts for the host's CPU), and a traced pass of the same entries runs beside it (`--traced`):
@@ -73,9 +65,9 @@ with a 95% interval from the ratios' order statistics (`kit.paired`).
 ## The source check
 
 An overhead of record comes only from a labelled run of this door. A run is the door's when its recorded command is the
-node job `bash benchmarks/harness/overhead_node.sh points|run` with only the options the door gives it, under the
-`gpu-lease` that holds its GPU, and it set no variable with `--env` but `VERITY_BENCH_VENV`: `points --store` and `run
---record` refuse any other, so a wrapper script, a patched interpreter or another environment never makes a record. Points
+door's node job (`overhead_records.NODE_JOB`, `points` or `run`) with only the options the door gave it, under the
+`gpu-lease` that holds its GPU, and it set no variable with `--env` but `VERITY_BENCH_VENV`: storing points and labelling
+a run of record refuse any other, so a wrapper script, a patched interpreter or another environment never makes a record. Points
 are stored only from a sweep under the door's rule (C's share, L's slack, the grid and the largest m). A γ stands when its
 run is the door's, labelled `run_of_record=overhead`, passed with exit 0 from a clean tree, was timed at points of record
 that nothing supersedes, ran the arm's cubin from the `art:` id it was sent (the art's bytes are a binary the run's SASS
@@ -99,7 +91,7 @@ against stock `fp8-e4m3-rowwise`, as `stock`'s A/A control is. A run of record t
 concurrent schedule's overlapping lanes share SMs and need their own accounting, so it stays development only until that
 exists. The arm keeps the harness's arm contract (`benchmarks/pouw/harness/arm.py`):
 
-- its cubin: `run --cubin ART` fetches the art (one file) where the door runs and sends it with the run, and the arm loads
+- its cubin: the art (one file) is sent with the run, and the arm loads
   the file `$VERITY_BENCH_CUBIN` names and lists it in its build record's `binaries`, so the SASS gate passes it before
   anything is timed. A run whose gate passed no binary with the sent cubin's bytes is refused; one sent no cubin is
   development only;

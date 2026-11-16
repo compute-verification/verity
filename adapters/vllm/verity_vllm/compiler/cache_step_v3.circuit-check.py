@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _pool_stream_roots() -> list[Any]:
-    """The pool stream at the certifier test's widths (a 6-block pool, 4-bit requests, 3-bit block indices, 3-bit
+    """The pool stream at the network attester tests' widths (a 6-block pool, 4-bit requests, 3-bit block indices, 3-bit
     holders, 8-bit times) with two slots and two list entries: each part once, and the wiring the parts' own checks
     can't reach, the two scans' carries from the initial registers and the verdict."""
     from verity_vllm.compiler.cache_step_v3 import statics, unit
