@@ -51,7 +51,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
      reject (`rehearsed`). Its records are then audited as rows (`rows_check`): `network_attester_chain.rows_audit_case` of the
      run, checked by ``network-rows`` (``--rows``, else built in verity/protocols/resource_accounting/network/verifier/lean;
      `NetworkCheck.RowsAudit`, `ROWS`), which holds each record to its certified head and each certificate to the
-     deployment's key in its session, then runs the certifier program's rows audit (`NetworkCertifier.Rows.audit`):
+     deployment's key in its session, then runs the certifier program's rows audit (`NetworkAttester.Rows.audit`):
      every egress row must be the one the schedule the records show renders, so cells cut, clocked or ordered
      otherwise are refused. It holds no egress cell to the id egress form; step 2 does (`network_attester_chain.io`, which
      refuses an egress cell that isn't an id-form cell), and step 3's chain does, in its rerun of the network
@@ -130,7 +130,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
     run, the client's address and that file. Exit 2 when the gate refused the request or a session is open already,
     1 when the session ended before its relay listened, the reason in OUT/session.json. The session then runs to
     its execution phases' end whatever its caller does: nothing ends it early, and its last connection is admitted
-    `NetworkCertifierParams.span` + 1 buckets before that end.
+    `NetworkAttesterParams.span` + 1 buckets before that end.
   - ``close`` runs after the load: it waits for the session's end, keeps the lane's fetch where the piece reads it
     (SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz) and publishes to OUT what the rehearsal front does (``session.json``,
     ``bundle.tgz`` and ``status.json``, through the leak guard), with the front's exits: 0 when the gate's check

@@ -28,7 +28,7 @@ Stated in the actual-circuit model; none is proved here.
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
 open Finset
 
@@ -36,7 +36,7 @@ open Finset
 releases the salt at `tₛ` and decodes the trace with `read` from what it receives before `t_d`; a program is a
 prover, a strategy with runs in `𝓕` causal from every tick whose oracle calls are the hash's gates `hash`; its cost is
 the prover's work at `π` in `[tₛ + ℓ, t_d − ℓ)`). With `HonestClock` at `CM_A`
-(`Accounting.SecurityProofs.Actual.honestClock`), `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline` then bounds the work
+(`ResourceAccounting.SecurityProofs.Actual.honestClock`), `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline` then bounds the work
 between the salt and the deadline. -/
 def B1 (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {L : Type} [LinearOrder L] [Fintype L]
     (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Trace)
@@ -75,7 +75,7 @@ former): what `O` does during `I = [a, b)` takes at most (the number of records 
 with `res_out = jitter · (buckets of I) · #cert + β°_X (b − a)`, a jitter word per certifier. A wire from `X` to a
 certifier runs on a certified link and one from `X` to `O` on an uncertified one, by `Links`. The model ranges the
 secrets over those whose runs accept every window and meet integrity: that is `B4` at the strategy restricted to them
-(`Ω` a subtype), whose premises restrict (`CausalFrom` by `Accounting.SecurityProofs.Actual.causalFrom_comp`, the others
+(`Ω` a subtype), whose premises restrict (`CausalFrom` by `ResourceAccounting.SecurityProofs.Actual.causalFrom_comp`, the others
 pointwise or by shrinking a range), so it needs no statement of its own. -/
 def B4 : Prop :=
   ∀ {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L) (ℓ : L → L → ℕ) (ends : E → L × L)
@@ -104,4 +104,4 @@ def B4Covered : Prop :=
         (S r).seen '' ↑(((S r).record cert record).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)).encard *
         ((2 ^ (jitter * ((Finset.Ico a b).image bucket).card * cert.card) : ℕ) : ℕ∞)
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

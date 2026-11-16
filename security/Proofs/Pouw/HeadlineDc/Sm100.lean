@@ -2,7 +2,7 @@ module
 
 public import Proofs.Pouw.HeadlineDc.Branches
 public import Definitions.Pouw.Guarantees.HeadlineDc
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # The B200's headline at the data sheet
@@ -23,10 +23,10 @@ public import Proofs.Accounting.Lemmas.TS
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.HeadlineDc
+namespace ResourceAccounting.SecurityProofs.TS.HeadlineDc
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Accounting.SecurityProofs.TS
-  Accounting.SecurityProofs.TS.Headline
+open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity ResourceAccounting.SecurityProofs.TS
+  ResourceAccounting.SecurityProofs.TS.Headline
 
 /-- ♭'s counts on DS-100, its four lists in `labelled`'s order. -/
 def flat100 : Sparse := Sm100.flatWords ++ Sm100.flatFold ++ Sm100.flatFill ++ Sm100.flatSkip
@@ -236,19 +236,19 @@ theorem sm100_unfolded :
   rw [sm100_Nw, sm100_bnd, div_mul_eq_mul_div, le_div_iff₀ hB]
   linarith
 
-end Accounting.SecurityProofs.TS.HeadlineDc
+end ResourceAccounting.SecurityProofs.TS.HeadlineDc
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
-  Accounting.SecurityProofs.TS.Headline Accounting.SecurityProofs.TS.HeadlineDc
+open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
+  ResourceAccounting.SecurityProofs.TS.Headline ResourceAccounting.SecurityProofs.TS.HeadlineDc
 
 /-- The B200's headline at the data sheet: `Whole.sheetDIdealFloor_whole` at π* (`Sm100.lamStar`, DS_issue ⅔ +
 DS_alu ⅓), `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and `δ = 2^-40`, (I7) from the
 receipt split (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`, binding at `√δ_fork` by
 `Whole.moved_le_sqrt`), FILL-OPT from the data, and the terms bounded by `Whole.headline_of_branches`: the folded
 branch by `sm100_folded`, the unfolded one by `sm100_unfolded`. -/
-theorem Sm100SheetHeadline : Accounting.Guarantees.TS.Sm100SheetHeadline := by
+theorem Sm100SheetHeadline : ResourceAccounting.Guarantees.TS.Sm100SheetHeadline := by
   intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
   set δbind := Real.sqrt δfork
   have hL := luck_of_receipt_half Pl.game G hG hPinG hOp hRL
@@ -274,4 +274,4 @@ theorem Sm100SheetHeadline : Accounting.Guarantees.TS.Sm100SheetHeadline := by
   exact ⟨ha, lt_of_lt_of_le hlt (Whole.headline_of_branches Sm100.model Sm100.flat Sm100.lamStar
     sm100_isCert sm100_wf Sm100.checks sm100_S _ hδlo _ (sm100_folded _ hδlo) sm100_unfolded)⟩
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

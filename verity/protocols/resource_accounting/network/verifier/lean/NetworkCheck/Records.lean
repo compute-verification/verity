@@ -52,7 +52,7 @@ namespace NetworkCheck.Records
 
 open Lean (Json toJson)
 open NetworkCheck.Check (Grid Certified LinkOpening Evidence TransferBlocks Profile)
-open NetworkCertifier (ClockSync)
+open NetworkAttester (ClockSync)
 
 def protocolId : String := "verity/network-records/v3"
 def commitmentTag : String := "verity-network-certifier/records/v2"
@@ -70,16 +70,16 @@ structure Commitment where
   bytes : ByteArray
 
 /-- A logical frame of the evidence with its payload kept as bytes. `toLogical` is the frame as `Check.evidenceOf` reads
-it, `NetworkCertifier.LogicalFrame` with the payload's bits, most significant first. -/
+it, `NetworkAttester.LogicalFrame` with the payload's bits, most significant first. -/
 structure ByteFrame where
   payload : ByteArray
   anchor : Nat
   index : Nat
 
-def ByteFrame.toLogical (f : ByteFrame) : NetworkCertifier.LogicalFrame := ⟨Check.bitsOfBytes f.payload, f.anchor, f.index⟩
+def ByteFrame.toLogical (f : ByteFrame) : NetworkAttester.LogicalFrame := ⟨Check.bitsOfBytes f.payload, f.anchor, f.index⟩
 
 /-- The frame without its content: when the shaper hands it (`eligible`) reads only its anchor and its index. -/
-def ByteFrame.timing (f : ByteFrame) : NetworkCertifier.LogicalFrame := ⟨[], f.anchor, f.index⟩
+def ByteFrame.timing (f : ByteFrame) : NetworkAttester.LogicalFrame := ⟨[], f.anchor, f.index⟩
 
 /-- `Check.LinkOpening` with each payload kept as bytes. -/
 structure ByteLink where
@@ -240,10 +240,10 @@ def single (r : Certified) : Check.Commitment := ⟨#[r], .empty⟩
 def statusViolation (s : Option String) : Option String := s.map (s!"status:{·}")
 
 /-- `handingFrom` with the hand times so far reversed in `acc`, so a run of any length takes no stack. -/
-def handingRev (T W : Nat) (syncs : Fin W → ClockSync) : Nat → List NetworkCertifier.LogicalFrame → List Nat → List Nat
+def handingRev (T W : Nat) (syncs : Fin W → ClockSync) : Nat → List NetworkAttester.LogicalFrame → List Nat → List Nat
   | _, [], acc => acc
   | last, f :: fs, acc =>
-    let h := if hw : f.anchor / T < W then max (NetworkCertifier.eligible f (syncs ⟨f.anchor / T, hw⟩)) last
+    let h := if hw : f.anchor / T < W then max (NetworkAttester.eligible f (syncs ⟨f.anchor / T, hw⟩)) last
       else max (max last (W * T)) f.anchor
     handingRev T W syncs h fs (h :: acc)
 

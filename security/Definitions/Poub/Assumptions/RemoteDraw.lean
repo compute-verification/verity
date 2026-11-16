@@ -37,8 +37,8 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # What PoUB's opening sample assumes (trusted)
 
-The premises of `Accounting.Guarantees.Remote.PooledSample`, which derives the memory line's `LiveCoins` from the
-verifier's opening sample (`Accounting.Remote.Sample`), each a named `Prop` on a session and the trace over its coins:
+The premises of `ResourceAccounting.Guarantees.Remote.PooledSample`, which derives the memory line's `LiveCoins` from the
+verifier's opening sample (`ResourceAccounting.Remote.Sample`), each a named `Prop` on a session and the trace over its coins:
 
 * `Live`: window `t`'s size and correct receipts are fixed before its openings coin is released, by the other coins and
   the earlier windows' openings coins, never by its own or a later one. The verifier releases the coin after the
@@ -65,9 +65,9 @@ and independent of the other coins, as the challenger flips them (the trace's un
 
 @[expose] public section
 
-namespace Accounting.Remote.Sample.Assumptions
+namespace ResourceAccounting.Remote.Sample.Assumptions
 
-open Accounting.Remote.Held
+open ResourceAccounting.Remote.Held
 
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type}
 
@@ -91,4 +91,4 @@ windows' wrong receipts. -/
 def Counted (D : Run n m s κ X) (T : Trace (SampleCoins n κ X)) : Prop :=
   ∀ ω, T.accepts ω → T.incorrect ω ≤ D.incorrect ω
 
-end Accounting.Remote.Sample.Assumptions
+end ResourceAccounting.Remote.Sample.Assumptions

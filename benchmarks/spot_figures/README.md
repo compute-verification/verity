@@ -121,7 +121,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     comparison at one machine's verification phase that pays their measured tax (`REPLAYS`, `BATCH_INVARIANT`). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
     expert), dash-dot, labelled with the card's `label` (what of the cut is built, checked, proved and served), a
     line only for a model with that card; (A″) is the same on the card `head-scores-values`'s cut (a sparse-attention
-    head's key block as its scores unit and its values units on column blocks, which read the block's key rows from
+    head's key block as its scores proof block and its values proof blocks on column blocks, which read the block's key rows from
     their writers' committed rows). A new configuration, such as another cut, is a new
     entry with its own line.
   - A two-stage line's first stage is the one the verifier runs: a verification phase, one committed trace and the
@@ -228,7 +228,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
       proof blocks, each charged its own blocks' committed bits, so a wholly incorrect request is charged every bit it
       commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, each of
       its tokens as the token select's 32-bit output word, the `design` card's `token_bytes` (`served_bits`): at most
-      the response cap of the model's `certifier` card, the network attester's schedule (`NetworkCertifierParams`), whose cap
+      the response cap of the model's `certifier` card, the network attester's schedule (`NetworkAttesterParams`), whose cap
       ingress refuses a request past and `NetTiming.Guarantees.ResponseCapped` holds each response to, else every one
       of its tokens (`--served request` takes every token under a cap too), in
       `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`), which still counts which of a request's proof
@@ -330,7 +330,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   `workload_card.py` writes it from the census file and nothing else, so no stratum is edited by hand. The 128k
   workload's sparse-MLA blocks are that card's, counted over the serve plan's requests as serving splits a row
   (`breakeven/mla128.py`). The figure of record's driver (`breakeven/headline.py`) cuts the head as it is served, by
-  the `partition` card `head-scores-values`: each head's key block its scores unit and its values units on 64
+  the `partition` card `head-scores-values`: each head's key block its scores proof block and its values proof blocks on 64
   columns, which read the block's key rows from their writers' committed rows (one writer a column block for all the
   heads); its rows carry that card's label. `--whole` prices the head as the `workload` card's whole key blocks and end
   block instead, for comparison.

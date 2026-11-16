@@ -24,7 +24,7 @@ The FIFO releases no more frames than were enqueued (`queue_add`), and no more a
 
 @[expose] public section
 
-open NetworkCertifier (ClockSync LogicalFrame expectedRow queue released enqueued handingFrom handingBuckets payloads)
+open NetworkAttester (ClockSync LogicalFrame expectedRow queue released enqueued handingFrom handingBuckets payloads)
 open Properties.Certifier (programGrid bytesGrid)
 
 namespace Properties.NetworkRecords.Program
@@ -83,8 +83,8 @@ theorem sum_enqueued_le (T W : Nat) (syncs : Fin W → ClockSync) (frames : List
   omega
 
 theorem offset_last {S t : Nat} (f : Nat → Fin (S + 1)) :
-    NetworkCertifier.offset (fun u : Fin (t + 1) => f u.1) (Fin.last t) = ((List.range t).map fun u => (f u : Nat)).sum := by
-  unfold NetworkCertifier.offset
+    NetworkAttester.offset (fun u : Fin (t + 1) => f u.1) (Fin.last t) = ((List.range t).map fun u => (f u : Nat)).sum := by
+  unfold NetworkAttester.offset
   rw [List.finRange_succ_last, List.filter_append]
   have h1 : (List.map Fin.castSucc (List.finRange t)).filter (fun u => decide (u < Fin.last t)) =
       List.map Fin.castSucc (List.finRange t) :=
@@ -99,7 +99,7 @@ theorem offset_last {S t : Nat} (f : Nat → Fin (S + 1)) :
 theorem expectedRow_frame {S T W : Nat} {syncs : Fin W → ClockSync} {frames : List LogicalFrame} {t : Nat}
     {s : Fin S} {f : List Bool} (h : expectedRow S T W syncs frames t s = some f) :
     ∃ k < frames.length, f = payloads frames k := by
-  unfold expectedRow NetworkCertifier.fifoGrid NetworkCertifier.fill at h
+  unfold expectedRow NetworkAttester.fifoGrid NetworkAttester.fill at h
   split at h
   · rename_i hs
     refine ⟨_, ?_, (Option.some.inj h).symm⟩

@@ -14,11 +14,11 @@ from verity.protocols.resource_accounting.network.attester import device_party a
 from verity.protocols.resource_accounting.network.verifier import out_commit as O
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.runtime.framing import decode, encode
 
 LINK = "node0/uplink0"
-SCHEDULE = NetworkCertifierParams(window=4, bucket_ms=10)
+SCHEDULE = NetworkAttesterParams(window=4, bucket_ms=10)
 PARAMS = {"params": asdict(SCHEDULE), "windows": 2, "origin": 1_000}
 IDENTITY = Identity(NC.NETWORK_CERTIFIER, capabilities={"signing-key": object()})
 
@@ -35,7 +35,7 @@ def _phase(kept) -> D.Phase:
     return D.Phase(window, LINK, records, D.Out(b"\x05" * O.SALT_BYTES * 2, b'{"root":"00"}'))
 
 
-class Answering(D.NetworkCertifier):
+class Answering(D.NetworkAttester):
     """The party with its unwritten parts answering from the fixtures above."""
 
     def open_session(self, identity: Identity) -> D.Opened:
@@ -57,7 +57,7 @@ def test_the_partys_sends_are_exactly_the_manifests():
         assert len(set(types)) == len(types)
         assert set(types) == NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, peer).types
     assert D.PROTOCOL.manifest is NC.MANIFEST and set(D.PROTOCOL.parties) == {NC.NETWORK_CERTIFIER}
-    assert isinstance(D.PROTOCOL.parties[NC.NETWORK_CERTIFIER](), D.NetworkCertifier)
+    assert isinstance(D.PROTOCOL.parties[NC.NETWORK_CERTIFIER](), D.NetworkAttester)
 
 
 @pytest.mark.parametrize("call", [
@@ -69,7 +69,7 @@ def test_the_partys_sends_are_exactly_the_manifests():
 ], ids=["open_session", "certify", "sign", "collect", "start"])
 def test_each_unwritten_part_raises_naming_its_goal(call):
     with pytest.raises(NotImplementedError, match=f"^{D.GOAL}: "):
-        call(D.NetworkCertifier())
+        call(D.NetworkAttester())
 
 
 def _encoded(actions) -> list[tuple[str, str]]:
@@ -83,7 +83,7 @@ def _encoded(actions) -> list[tuple[str, str]]:
 
 
 def test_what_it_hands_out_encodes_on_the_manifests_channels():
-    p = D.NetworkCertifier()
+    p = D.NetworkAttester()
     sent = _encoded(p.hand_out(_phase(_kept(1)))) + _encoded(p.hand_out_run(D.Opened(b"{}")))
     sent += _encoded(p.close(b"{}"))
     assert {t for _, t in sent} == {t for types in D.SENDS.values() for t in types}

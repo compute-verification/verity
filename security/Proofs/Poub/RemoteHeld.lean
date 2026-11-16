@@ -9,7 +9,7 @@ import Proofs.Pouw.Prob
 /-!
 # The snapshot a PoUB session shows held
 
-`Accounting.Guarantees.Remote.Held` from its premises: at each outcome where the sketch bound and the live coins' bound
+`ResourceAccounting.Guarantees.Remote.Held` from its premises: at each outcome where the sketch bound and the live coins' bound
 hold (a union bound, `holdsAnd`), each credited pass's registered blocks are its wrong receipts, the blocks in node
 memory at its start, those on a chip then (at most `S`) and those that came in during the pass (`pass_le`). The passes
 are consecutive (`sum_passes`), so what came in during them came in over `[t_0, t_P) ⊆ [s₀, e]`, one interval: at most
@@ -21,9 +21,9 @@ Both time-held forms are proved in `Proofs.Poub.RemoteHeld.OverTime`.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
-open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Pouw
+open Finset ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions Pouw
 
 variable {Ω : Type} {T : Trace Ω}
 
@@ -136,8 +136,8 @@ theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β Br Bd W : ℝ} (hE : 0 < E) (
     exact_mod_cast hin
   linarith
 
-/-- **The snapshot held, under Identity** (`Accounting.Guarantees.Remote.Held`). -/
-theorem Held : Accounting.Guarantees.Remote.Held := by
+/-- **The snapshot held, under Identity** (`ResourceAccounting.Guarantees.Remote.Held`). -/
+theorem Held : ResourceAccounting.Guarantees.Remote.Held := by
   intro Ω _ T S s₀ e s E β Br Bd W δs δc hE hs hβ hI hsq hd hS hr hc hk hw
   refine holdsMono (fun ω ha h => ?_) (holdsAnd hk hw)
   obtain ⟨hm, h0, hP⟩ := hc ω ha
@@ -150,10 +150,10 @@ theorem links_of_identity (hI : Identity T) : Links T 0 0 := fun ω u v _ => by
 
 /-- **The time-held line under Identity is the link-charged one at links of rate 0 and burst 0**: `HeldOverTime`
 follows from `HeldOverTimeLinks`. -/
-theorem heldOverTime_of_links (h : Accounting.Guarantees.Remote.HeldOverTimeLinks) :
-    Accounting.Guarantees.Remote.HeldOverTime := by
+theorem heldOverTime_of_links (h : ResourceAccounting.Guarantees.Remote.HeldOverTimeLinks) :
+    ResourceAccounting.Guarantees.Remote.HeldOverTime := by
   intro Ω _ T K S s E β Br Bd W δs δc hE hs hβ hW hI hsq hd hS hr hp hcov hk hw
   simpa only [add_zero] using h Ω T K S s E β 0 Br Bd 0 W δs δc hE hs hβ le_rfl hW (links_of_identity hI) hsq hd hS
     hr hp hcov hk hw
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

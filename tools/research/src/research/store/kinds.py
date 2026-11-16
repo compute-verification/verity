@@ -117,7 +117,7 @@ KINDS: dict[str, str] = {
                            "requests and served tokens, opened weights) and stays on the node",
     "execution-evidence/v1": "application evidence of one stage's execution (stages.txt, admission.json) — not telemetry, and "
                              "never when or where each process ran (timeline.jsonl, topology.json stay on the node); meta {row, stage}",
-    "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per certifier window "
+    "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per network attester's window "
                           "(benchmarks/network_e2e/encodings/measure.py): payload tree = table.json (per trace, window, "
                           "subject and code, and the summary) + table.md + codebook.json (+ codebooks/fold-K.json, each "
                           "fold's held-out codebook); meta {corpus, commit, codebook_digest, T, tau_us}",

@@ -16,9 +16,16 @@ from functools import partial
 from types import SimpleNamespace
 from typing import Any
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import H1_COMMIT_SCHEME as SCHEME
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import CommitTap, Sites
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import commit_site as site
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    H1_COMMIT_SCHEME as SCHEME,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    CommitTap,
+    Sites,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    commit_site as site,
+)
 
 from verity_vllm import settings
 from verity_vllm.acquire.sources.int8_source import Int8Source

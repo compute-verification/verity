@@ -40,7 +40,7 @@ each lock. `summarize.py --arms fp32-beside` writes `summary.json`: each point's
 never the one asked for), and a verdict on each reading, 32 (both pipes at 1980 MHz, the default) and 29.58 (the
 tensor pipe at 1830 MHz): it is refuted by a point whose MACs or adds over its host interval exceed the tensor's
 ceiling at that reading's clock or the FP32 pipe's at 1980 MHz. p = R_t,alone / R_f,mixed, an add's price in the
-tensor pipe's own time (the unit CMP-438 refused), is given for B, C and D as a diagnostic and judged against
+tensor pipe's own time, is given for B, C and D as a diagnostic and judged against
 nothing. `--no-lock` runs only the default clock and calls no sudo; a clock whose lock is refused is skipped either
 way.
 

@@ -23,7 +23,7 @@ implementations in when it is imported.
     (`use_int8_arm`).
 
   ``site`` is the linear's ordinal in the forward pass. Beside the calls are the names a serve loop needs to manage a
-  window (its coins, salt session, gate, draw and outcome), the schemes' names, settings and refusals, the hand-ins
+  window (its coins, salt session, gate, sample and outcome), the schemes' names, settings and refusals, the hand-ins
   (`use_int8_arm`, `use_tensors`, `use_h1_device`), and the row-table kernels' build and table helpers the adapter's
   step-root and history tables run (`row_table_nvcc`, `row_table_host_lib`, `hm_tables`,
   `leaf_prefixes`, `table_width`, `u64_words`, …). The package defines the calls, their types and four wrappers that

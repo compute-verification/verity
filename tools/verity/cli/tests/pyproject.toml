@@ -1,0 +1,44 @@
+# The suite of the distribution `verity-cli`: a virtual member that depends on it, so the suite keys on what the
+# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.
+[project]
+name = "verity-cli-tests"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["verity-cli"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["test_lean_deployed.py", "test_lean_try.py", "test_onsite_served.py", "test_run.py",
+            "test_verify_proof.py"]
+# `verity run` and `verity config` (`tests/test_run.py`): `verity`, the configuration's checks
+# (`verity.config`), what step 0's declarations read (`NetworkAttesterParams`, the sampling design's parser) and the core parties
+# the test's table (`tests/step0.py`) runs. The served window's onsite configuration and its table
+# (`tests/test_onsite_served.py`): `verity_cli/served_table.py`, the piece scripts whose existence its dry run checks, and
+# each demo file (`served_table.DEMOS`), which it holds to the table's rendering byte for byte (`onsite_full.toml` is also
+# where the table reads the auditor's pins).
+# `verity lean try` (`tests/test_lean_try.py`): the axiom probe it loads, and `siblings.py` (with the `headers.py` it
+# loads), which gives every try its package's Lean options. `verity lean deployed` (`tests/test_lean_deployed.py`): the Lean
+# check whose `trust_gaps` it calls, and the tree's locks through git (those under `verity` come with it).
+# The check's four scripts the dispatch starts by path (`tests/test_main.py`), which the test only checks exist.
+inputs = ["verity", "tools/difftest/python/verity_difftest", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/siblings.py",
+          "tools/check/check.py", "tools/check/move_check.py", "tools/check/live.py", "tools/check/tasks.py",
+          "tools/verity/lean/headers.py", "tools/verity/lean/check.py", "security/lean-audit.json",
+          "security/Properties/lean-audit.json", "security/Proofs/lean-audit.json",
+          "benchmarks/one_stage/served_verdicts.sh", "benchmarks/one_stage/served_verdicts.py",
+          "benchmarks/network_traces/certifier_piece.py", "demos/onsite_full.toml", "demos/onsite_compute.toml",
+          "demos/onsite_network.toml", "demos/remote.toml"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["test_onsite_served.py"]
+paths = ["verity"]
