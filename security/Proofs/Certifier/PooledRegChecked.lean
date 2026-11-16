@@ -652,7 +652,7 @@ theorem prCheckMissR_le_prCheckMiss (H : Msg → Msg) (D : Compiled Coin A) {L S
       obtain rfl : Pt' = Pt := Option.some.inj (hPt'.symm.trans hPt)
       exact Or.inl ⟨hacc, w, s', Pt', hw, hs, hPt, hd, _, Set.mem_singleton _, hv⟩
     · exact Or.inr ⟨hr.1, he⟩
-  refine hstep.trans (add_le_add_left ?_ _)
+  refine hstep.trans (add_le_add le_rfl ?_)
   have hKS : D.KS H := Claims.SamplingGeneric.compilerKS Coin A D H hA hb hS
   have hsub : Pr (fun r : Ω × (Fin (D.V.k x) → Coin) × D.E.C x => (run H P D.V x r.1 r.2.1).out = .acc ∧
       ¬∃ w s Pt, (D.E.eval H P x r.1 r.2.1 r.2.2).1 = some w ∧ D.parse x = some s ∧ D.partition s = some Pt ∧

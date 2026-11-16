@@ -146,7 +146,7 @@ theorem outLay_refuses_allTrue :
     ¬ CheckedUnique notProg notPart notStmt.design outLay 1 {0} (fun _ => True) := by
   intro h
   have hrow := h 0 Nat.one_pos [[]] [[]] (fun _ => false) (fun g => decide (g = 0)) (fun _ => none)
-    rfl rfl (fun _ _ => rfl) (fun g hg => by have hg0 : g ≠ 0 := by simpa using hg; simp [hg0])
+    rfl rfl (fun _ _ => rfl) (fun g hg => by simp only [Finset.mem_singleton] at hg; simp [hg])
     (fun g b hb => by simp at hb) trivial trivial 0
   have hv1 : valOver notProg (outLay.inputOf 1 [[]] (fun _ => false)) (fun _ => none) 1 = true := by
     rw [notProg_valOver_one _ rfl rfl, inputOf_of_mem_freeInputs rfl (fun _ => false) zero_mem_freeInputs_notProg]
@@ -154,7 +154,7 @@ theorem outLay_refuses_allTrue :
     rw [notProg_valOver_one _ rfl rfl,
       inputOf_of_mem_freeInputs rfl (fun g => decide (g = 0)) zero_mem_freeInputs_notProg]
   have hc := congrFun hrow 0
-  simp only [rowOf, outLay, hv1, hv2] at hc
+  simp [rowOf, outLay, hv1, hv2] at hc
 
 /-- At the honest instance the phase is registered as the period's with no input registered: its statement parses to
 `twoStmt` with the partition `twoPart`. -/
