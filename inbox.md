@@ -1,3 +1,0 @@
-[2026-11-16T20:42Z] 68ded285f138
-Coordinator 12:55 PM PST, for item 7 (decided with benchmarks on Linear BENCH-64, read benchmarks' 12:41 PM comment there): benchmarks' #10546 (marked) adds kit.report(..., from_run=RUN), which writes the document but NO measurement when RUN is not the run it is in. Our answer is yes: the compute metrics' command becomes the served run itself (verity bench compute on a card), run.py --from becomes a reprint that writes no point (pass from_run once #10546 is on main; if it is not yet, make the metric's command the measuring run and take the --from command off the weekly loop), and h200_share.py --from must stop writing a point past the kit. Include h200_share.py in your item 7. Say in your return what waits on #10546.
-
