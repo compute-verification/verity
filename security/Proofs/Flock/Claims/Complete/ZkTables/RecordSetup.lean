@@ -46,7 +46,7 @@ theorem Raw.ins_tags {w : Raw} {s : Ins} (h : w.ins = .ok s) :
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
-  all_goals first | (cases h; done) | (cases h; exact ⟨_, by assumption, rfl, by assumption⟩)
+  all_goals first | (cases h; done) | (cases h; exact ⟨_, by assumption, rfl, by assumption⟩) | (exfalso; contradiction)
 
 /-- A masked setup's statement has the hm96 rows (`Ins.setup` refuses any other). -/
 theorem Ins.setup_hm96Rows {s : Ins} {p : SessionSpec × Array Stmt} (h : s.setup = .ok p) :
@@ -54,7 +54,7 @@ theorem Ins.setup_hm96Rows {s : Ins} {p : SessionSpec × Array Stmt} (h : s.setu
   unfold Ins.setup at h
   by_contra hn
   have hf : s.read.tags.hm96Rows = false := by simpa using hn
-  simp [hf] at h
+  simp [hf, throw_bind'] at h
 
 end FlockDeploy
 
@@ -142,7 +142,7 @@ theorem setup_facts {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array
   subst hspec
   subst hsts
   have hsp := (FlockSoundness.Discharge.Hidden.setupHidden_specP hd).choose_spec
-  have hms := FlockSoundness.Discharge.HiddenExec.setupHidden_hm96P hl hd
+  have hms := FlockSoundness.Discharge.Hidden.setupHidden_hm96P hl hd
   have hct := setupHidden_coinTree hd
   rw [hco] at hct
   have hrange := (checkInRange_ok _ _ _).1 hsp.inRange
