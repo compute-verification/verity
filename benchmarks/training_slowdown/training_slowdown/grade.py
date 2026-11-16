@@ -644,6 +644,17 @@ def two_pricings(jobs: dict[str, list[dict]]) -> str | None:
             f"other. Counted {PRICED[True]}: {some(named)}. Counted {PRICED[False]}: {some(unnamed)}. Either {MIXED}")
 
 
+def start_fit(starts: dict, name: str) -> tuple[dict, list[str]]:
+    """The fit through the starts on start `name`'s data (`starts` is the registry's `starts` table), and those
+    starts' names. Raises `ValueError` where they give none."""
+    data = [n for n, e in starts.items() if e.get("data") == starts[name].get("data")]
+    f = fit([(policy.c0(starts[n])[0], starts[n]["l0_bpb"]) for n in data])
+    if f is None:
+        raise ValueError(f"grade: the {len(data)} starts on data {starts[name].get('data')!r} give no fit: it takes "
+                         f"{FIT_MIN} frontier points spanning a factor {FIT_SPAN:g} in C0")
+    return f, data
+
+
 def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
           others: dict[str, list[dict]] | None = None, as_if_assumed: bool = False) -> dict:
     """The slowdown of `config` (its `name`, `start`, `target.gain`, `policy`, `honest` and `seeds`) from its jobs
@@ -658,11 +669,7 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
         raise ValueError(f"grade: no start {config['start']!r} in the starts registry ({', '.join(starts)})")
     entry, g = starts[config["start"]], float(config["target"]["gain"])
     pol = policy.named(config["policy"], entry["shape"])
-    data = [n for n, e in starts.items() if e.get("data") == entry.get("data")]
-    f = fit([(policy.c0(starts[n])[0], starts[n]["l0_bpb"]) for n in data])
-    if f is None:
-        raise ValueError(f"grade: the {len(data)} starts on data {entry.get('data')!r} give no fit: it takes "
-                         f"{FIT_MIN} frontier points spanning a factor {FIT_SPAN:g} in C0")
+    f, data = start_fit(starts, config["start"])
     me, hon = config["name"], config["honest"]
 
     def job(r: dict) -> dict:

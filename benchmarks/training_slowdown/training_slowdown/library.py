@@ -1,6 +1,6 @@
 """The library of training algorithms, and each entry's slowdown under its policy.
 
-    python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DIR]
+    python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DIR] [--records DIR]
 
 An entry is a config of `attacks/` (`training_slowdown.config`): a route and its dials at a start, with the policy it
 is read under. There is one kind of entry, whatever its route computes: a new one is a config of a route `routes/`
@@ -25,6 +25,11 @@ A row has no slowdown, and says why, where the capture refuses the step, where t
 rates take, where the trace doesn't classify the products at the policy's k, and where the entry's E keeps less than
 the trained weights (`CODED`): a weight then costs at most E's bits a trained weight, which only a run's record has,
 so the grade reads that entry (`training_slowdown.grade`).
+
+With `--records DIR`, where each run of record `of_record.toml` names is at `DIR/RUN/PATH`, it then prints each
+entry's parts from its record apart (`training_slowdown.score`): its cost to its target in gates, that cost over the
+least recorded cost at its start, the products-term factor above and the paused search's score. None is the
+Glossary's slowdown and it combines none of them; a row with no figure in a column says why.
 """
 from __future__ import annotations
 
@@ -41,7 +46,7 @@ if __name__ == "__main__" and not __package__:
 
 import numpy as np
 
-from . import calculator, config, policy, starts, traced, work
+from . import calculator, config, policy, score, starts, traced, work
 from .capture import products
 from .codecs import Identity
 from .grade import per_period
@@ -229,19 +234,127 @@ def text(rows: list[dict]) -> str:
     return "\n".join(out + ["", *(f"{k}: {v}." for k, v in PARTS.items())])
 
 
+FACTOR = ("products-term factor: the slowdown column's figure, a lower bound on that algorithm's own padded size ratio "
+          "under (H), (E) and the batch premise; multiplied into nothing here")
+SEARCH_SCORE = "the paused search's score: S as the grade computes it from the run of record (`grade.grade`)"
+TRACED_ONLY = "traced step only: of_record.toml holds the entry to no run of record"
+
+
+def of_records(cfgs: list[config.Config], rows: list[dict], root: Path, reg: dict) -> tuple[list[dict], dict]:
+    """Each row's parts read with its run of record under `root` (`score`): C_e, C_e / T_ref and the paused search's
+    score, beside the row's products-term factor, and T_ref by start (`score.reference`). An entry `of_record.toml`
+    holds to no run has none of them, and says so; a held record missing under `root` is refused (`score.read`)."""
+    def graded(cfg: config.Config) -> dict:
+        return {"name": cfg.name, "start": cfg.start.name, "target": cfg.target, "policy": cfg.policy,
+                "honest": cfg.honest, "seeds": cfg.seeds}
+
+    held, loaded = score.held(), {}
+    recs = {}
+    for cfg in cfgs:
+        if (h := held.get(cfg.name)) is not None:
+            key = (h["run"], h["path"])
+            recs[cfg.name] = loaded[key] = loaded.get(key) or score.read(cfg.name, h, root)
+    costs = {}
+    for cfg in cfgs:
+        if cfg.name in recs:
+            try:
+                costs[cfg.name] = (cfg.start.name, score.cost_to_target(recs[cfg.name], cfg.start.name,
+                                                                        float(cfg.target["gain"]), reg["starts"]))
+            except ValueError as e:
+                costs[cfg.name] = (cfg.start.name, {"reached": False, "why": f"refused by the grade: {e}"})
+    refs = score.reference(costs)
+    out = []
+    for cfg, r in zip(cfgs, rows):
+        factor = ({"factor": r["slowdown"]} if r["slowdown"] is not None else
+                  {"factor": None, "why": "not computed: " + r["binds"]})
+        if cfg.name not in recs:
+            out.append({"entry": cfg.name, "start": cfg.start.name, "factor": factor, "why": TRACED_ONLY})
+            continue
+        rec, cost = recs[cfg.name], costs[cfg.name][1]
+        others = {n: recs[n] for n in recs if n not in (cfg.name, cfg.honest) and costs[n][0] == cfg.start.name
+                  and next(c for c in cfgs if c.name == n).target == cfg.target}
+        out.append({"entry": cfg.name, "start": cfg.start.name, "factor": factor,
+                    "read": {"seed": score.job(rec)["seed"], "split": score.SPLIT,
+                             "harness": rec.get("schema") or rec.get("te_core") or rec.get("training_slowdown")},
+                    "cost": cost, "ratio": score.ratio(cost, refs.get(cfg.start.name)),
+                    "search_score": score.search_score(graded(cfg), rec, reg, recs.get(cfg.honest), others)})
+    return out, refs
+
+
+def records_text(parts: list[dict], refs: dict, root: Path) -> str:
+    """The parts as `--records` prints them: one row an entry, each cell a figure or a short reason, every reason in
+    full under the table, then T_ref at each start and what each column is."""
+    def cell(part: dict | None, key: str, fmt) -> tuple[str, str | None]:
+        if part is None:
+            return "no record", TRACED_ONLY
+        if part.get(key) is None:
+            why = part.get("why") or "none"
+            return ("misses the target" if why.startswith("misses") else "refused" if why.startswith("refused")
+                    else "not computed"), why
+        return fmt(part[key]), None
+
+    def bracket(xs: list[float], digits: int) -> str:
+        return "..".join("0 (the start)" if x == 0 else f"{x:.{digits}g}" for x in xs)
+
+    lines, why = [], {}
+    for p in parts:
+        cost = p.get("cost") and (p["cost"] | {"value": p["cost"]["gates"] if p["cost"]["reached"] else None})
+        cells = {"C_e, gates": cell(cost, "value", lambda x: bracket(x, 4)),
+                 "C_e / T_ref": cell(p.get("ratio"), "ratio", lambda x: bracket(x, 3)),
+                 "products-term factor": cell(p["factor"], "factor", lambda x: f"{x:.4g}"),
+                 "the paused search's score": cell(p.get("search_score"), "score", lambda x: f"{x:.4g}")}
+        read = p.get("read")
+        lines.append([p["entry"], p["start"],
+                      f"seed {read['seed']}, {read['split']}, {read['harness']}" if read else "no record",
+                      *(c[0] for c in cells.values())])
+        for k, (_, w) in cells.items():
+            if w:
+                why.setdefault(("every part from a record" if w == TRACED_ONLY else k, w), {})[p["entry"]] = None
+    starts_at = sorted({p["start"] for p in parts})
+    fits = {s: next((p["cost"]["fit"] for p in parts if p["start"] == s and (p.get("cost") or {}).get("reached")),
+                    None) for s in starts_at}
+    return "\n".join([
+        f"\nwith the runs of record under {root}: {score.UNIT}",
+        table(["entry", "start", "read", "C_e, gates", "C_e / T_ref", "products-term factor",
+               "the paused search's score"], lines),
+        "\nwhy a cell holds no figure, each reason with the entries it holds for",
+        *(f"{k}: {w} ({len(es)}): {', '.join(es)}" for (k, w), es in why.items()),
+        "\nT_ref, by start",
+        *(f"{s}: " + (f"{refs[s]['gates']:.4g} gates, {refs[s]['entry']}'s; {refs[s]['label']}" if s in refs else
+                      "none: no entry at this start reaches its target")
+          + (f" (target on a fit of {fits[s]['points']} points{', provisional' if fits[s]['provisional'] else ''})"
+             if fits[s] else "") for s in starts_at),
+        "",
+        "C_e: the gates the record counts to the entry's target, from its last scored checkpoint above the target "
+        "to its first at or below; 0 (the start) where no scored checkpoint comes before the first at or below.",
+        "C_e / T_ref: each end of C_e over T_ref, T_ref being the high end of its entry's C_e.",
+        f"{FACTOR}.",
+        f"{SEARCH_SCORE}.",
+        "None of these is the Glossary's slowdown, and none is combined with another here."])
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("entry", nargs="*", help="an entry: a config's file, or its name in attacks/ (default: every one)")
     ap.add_argument("--starts", type=Path, default=starts.REGISTRY, help="the starts registry")
     ap.add_argument("--out", type=Path, default=None, help="where library.json goes")
+    ap.add_argument("--records", type=Path, default=None,
+                    help="the runs of record, each at DIR/RUN/PATH as of_record.toml names it: prints each entry's "
+                         "cost to its target, over the least recorded cost at its start, and the paused search's "
+                         "score, beside the factor")
     a = ap.parse_args(argv)
     reg = starts.registry(a.starts)
-    rows = [row(config.load(p, reg)) for p in entries(a.entry)]
+    cfgs = [config.load(p, reg) for p in entries(a.entry)]
+    rows = [row(cfg) for cfg in cfgs]
     print(text(rows))
+    parts, refs = of_records(cfgs, rows, a.records, reg) if a.records else (None, None)
+    if parts is not None:
+        print(records_text(parts, refs, a.records))
     if a.out:
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "library.json").write_text(json.dumps(
-            {"schema": SCHEMA, "rows": [r | {"periods": periods(r)} for r in rows], "parts": PARTS}, indent=1) + "\n")
+            {"schema": SCHEMA, "rows": [r | {"periods": periods(r)} for r in rows], "parts": PARTS}
+            | ({"of_record": {"rows": parts, "reference": refs}} if parts is not None else {}), indent=1) + "\n")
         if not a.entry and a.starts == starts.REGISTRY:
             write_metric(a.out, rows)
     return 0

@@ -62,13 +62,11 @@ from __future__ import annotations
 
 import argparse
 import collections
-import hashlib
 import json
 import math
 import re
 import sys
 import tempfile
-import tomllib
 from fractions import Fraction
 from pathlib import Path
 
@@ -76,8 +74,8 @@ import torch
 
 from . import as_math, config, gates, library, run, starts
 from .model import LM
+from .score import HELD, held, read
 
-HELD = Path(__file__).with_name("of_record.toml")
 SCHEMA = "of-record/v1"
 #: a record's E `format` beside the codec kinds (`codecs.Codec.kind`) that are the same kind of encoding: the trained
 #: tensors whole (`full`, and `model`, a program's own model's tensors whole where they aren't the start's), and their
@@ -103,27 +101,6 @@ DROPS_ROWS = "--trunc"
 AVERAGES = "--ema-frac"
 #: a number as a program's arguments write one
 NUMBER = re.compile(r"[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?")
-
-
-def held(path: Path = HELD) -> dict:
-    """Each held entry's run of record: `{entry: {"run", "art", "path", "sha256"}}`; where its record holds fused
-    attention backward rows and no trace, `"partial"`, the gradients those calls asked for (`as_math.parse`); where
-    its record's program computes lines the route rightly doesn't, `"record_only"`, those lines (`named`); and where
-    its config's trained weights leave θ after the second step, `"step"`, the step compared and why (`steps`)."""
-    return tomllib.loads(Path(path).read_text())["held"]
-
-
-def read(name: str, h: dict, root: Path) -> dict:
-    """`name`'s record under `root`, refused unless it is the file `of_record.toml` names."""
-    path = Path(root) / h["run"] / h["path"]
-    fetch = f"`research data fetch {h['art']} --to {Path(root) / h['run']} --path {h['path']}`"
-    if not path.is_file():
-        raise SystemExit(f"of_record: {name}'s record is not at {path} ({fetch})")
-    raw = path.read_bytes()
-    if hashlib.sha256(raw).hexdigest() != h["sha256"]:
-        raise SystemExit(f"of_record: {path} is not the record {HELD.name} names for {name}: its sha256 is "
-                         f"{hashlib.sha256(raw).hexdigest()} ({fetch})")
-    return json.loads(raw)
 
 
 def modal(rec: dict) -> tuple[dict, int]:

@@ -32,6 +32,7 @@ to what it measures bumps `VERSION` (`training_slowdown/__init__.py`), which eve
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the attack search's grade of a config: S, p times the record's slowdown, from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
 | `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the entry point's on that step) and what binds, and its planned run over each fleet and period |
+| `score.py` | an entry's parts from its run of record, apart: its cost to its target (`cost_to_target`), the reference cost at its start (`reference`), their ratio (`ratio`) and the paused search's score (`search_score`); which run is an entry's run of record and its file (`held`, `read`) |
 | `of_record.py`, `of_record.toml` | an entry beside its run of record: the entry's counted step set beside the run's record's (`compare`), equal, or what differs, each expected difference named by its rule; the data file names each held entry's run, the record's artifact, its path and its sha256, the gradients its attention's backward asked for where the record can't say, and the lines of the record's own program a route doesn't compute |
 | `calculator.py` | the slowdown calculator (`benchmarks/slowdown`) as this package reads it, and the one module here that does: the benchmark's one slowdown (`slowdown`, below), a fixed policy's numbers, the fleets and periods a figure is presented over and the rows of β(k) |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
@@ -67,7 +68,7 @@ string naming what the products term rests on states which: `formalism.RESTS_ON`
 ## The library of training algorithms
 
 ~~~text
-python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DIR]
+python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DIR] [--records DIR]
 ~~~
 
 The library is the configs of `attacks/`. An entry is a route and its dials at a start, with the policy it is read
@@ -125,6 +126,14 @@ partial where an entry has none). Run by its path from the repository's root, as
 same command. A row has no slowdown, and says why, where the capture
 refuses the step, where the bound can't read it, and where the entry's E keeps less than the trained weights: a
 weight then costs at most E's bits a trained weight, which only a run's record has, so the grade reads that entry.
+
+`--records DIR`, the runs of record at `DIR/RUN/PATH` as `of_record.toml` names them, adds a table of each entry's parts
+read from its record (`score.py`), apart: C_e, the gates the record counts to the entry's target, bracketed between its
+last scored checkpoint above the target and its first at or below; C_e / T_ref, each end over the least recorded cost at
+the entry's start (`score.reference`, the one place the reference is chosen); the products-term factor above; and the
+paused search's score, S as the grade computes it from the record, or the grade's reason it has none. The unit is gates,
+and GPU-hours are not computed. None of these is the Glossary's slowdown and the table combines none of them; a cell
+with no figure holds a short reason, each given in full below the table, and an entry held to no run of record says so.
 
 ## An entry beside its run of record
 
