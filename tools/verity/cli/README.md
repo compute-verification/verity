@@ -18,8 +18,8 @@ tools beside it and holds no check of its own. `uv run verity --help` prints the
 | `verity graph run ID --work DIR` | one task of it run here, with its result (`verity-result/v1`) |
 | `verity graph check --local [--family F]` | the graph run serially here, uncached: the reference executor |
 | `verity bench NAME [ARGS]` | `benchmarks/<NAME>/`'s runner, its `run.py` or `run.sh` |
-| `verity demo [NAME] [ARGS]` | `verity run demos/NAME.toml ARGS`, the demo's one file (`demos/README.md`); NAME defaults to `onsite_compute` |
-| `verity run CONFIG` | the parties a configuration places on this machine, and its verdict |
+| `verity demo [NAME] [ARGS]` | `verity run demos/NAME.toml ARGS`, the demo's one file (`demos/README.md`), with an `--on` for each of its machines unless ARGS give one; NAME defaults to `onsite_compute` |
+| `verity run CONFIG` | the parties a configuration places on the machines this host stands for, and its verdict |
 | `verity config new\|check\|hash` | write, check or hash a configuration |
 | `verity verify proof [ARGS]` | Flock's Lean verifier, the executable `lake build` writes in `verity/protocols/proofs/flock/verifier`, with ARGS as its own, in the directory you are in |
 | `verity lean try FILE` | `lake env lean FILE` in the Lake package that holds it, the Lean edit loop; with `--on NODE` on a project machine |
@@ -59,7 +59,7 @@ smaller demo file holds those of the subprotocols it lists), and they are inside
 
 | Entry point | What it is |
 |---|---|
-| `verity run demos/onsite_full.toml [--dry-run] [--on MACHINE] [--bindings FILE] [--state DIR]` | Reads the configuration and the bindings, runs the pieces of the parties placed on this machine, and keeps the run under `STATE`: the served window's public record in `STATE/out`, and the monitoring period's `VERDICT` line, printed and written to `STATE/record/verdicts.jsonl`. |
+| `verity run demos/onsite_full.toml [--dry-run] [--on MACHINE ...] [--bindings FILE] [--state DIR]` | Reads the configuration and the bindings, builds Flock's Lean verifier where it isn't built, runs the pieces of the parties placed on the machines this host stands for (an `--on` for each), and keeps the run under `STATE`: the served window's public record in `STATE/out`, and the monitoring period's `VERDICT` line, printed and written to `STATE/record/verdicts.jsonl`. |
 | `served_table.configuration(commit: str, demo: str = "onsite_full") -> dict[str, Any]` | A demo file's configuration as data (`served_table.DEMOS`). |
 | `served_table` | What `verity run` reads of the served window: `MANIFESTS` (each subprotocol's declaration, a `Component`), `WORKLOADS` (the workload's declaration with its piece), `PARTIES` (each subprotocol's piece for each of its parties, a `Piece`), `ORDER`, and `live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result`, which runs the pieces of the parties here and returns each party's outcome or refusal. |
 
@@ -80,6 +80,11 @@ The gate's and the auditor device's sides are started by their gates when the de
 record, the onsite check and the period's verdict:
 
     verity run demos/onsite_full.toml --on auditor-host --state STATE
+
+Every party on one host, as `verity demo onsite_full` runs it, the record saying coins `simulated` since the challenger
+shares the developer's host:
+
+    verity run demos/onsite_full.toml --on prover-node --on gate-host --on auditor-host --bindings BINDINGS --state STATE
 
 A run of record launches each of the two commands under `research run`, and `benchmarks/demo_minutes/onsite_minutes.py`
 reads the minutes from those two runs (`vllm/onsite-demo-minutes` in `benchmarks/demo_minutes/metrics.toml`).
