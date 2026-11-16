@@ -37,7 +37,7 @@ def u32_field(field: bytes) -> int | None:
 
 
 def id_request_max_tokens(head: bytes) -> int | None:
-    """The `max_tokens` of an id request at offset 0 (the network certifier's cells), read from its first bytes at the
+    """The `max_tokens` of an id request at offset 0 (the network attester's cells), read from its first bytes at the
     place `id_request` fixes for it: `ID_REQUEST_HEAD`, a u32 content-length, CRLF CRLF and `MAX_TOKENS_KEY`, then the
     u32; None where any of them isn't there."""
     if head[:len(ID_REQUEST_HEAD)] != ID_REQUEST_HEAD or \
@@ -76,7 +76,7 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
     eight (six decimals), `model` and `user` each in `ID_NAME_BYTES`, and each prompt id in its own `ID_FIELD_BYTES`.
     No field straddles a frame: spaces (JSON's whitespace) before one that would move it, with its key, to the next.
     At 4096-byte frames every field but the prompt's is in the first frame. `offset` is the request's first byte's
-    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the network certifier's
+    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the network attester's
     cells, which carry the bytes alone. The workload's declaration (`certifier.prover.workload.id_request`) writes the
     same bytes at offset 0, held equal by `tests/test_network_certifier_id_request_writers.py`."""
     if offset not in (0, LENGTH.size):

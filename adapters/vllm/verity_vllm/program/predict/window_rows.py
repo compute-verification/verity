@@ -475,7 +475,7 @@ class Rows:
     """Every unit's output rows of ``lowered``'s circuit (module docstring) as u16 words by template and output, with each
     unit's source and an embedding read's opening ports, from each slot's `Slot` (in slot order) and the circuit's
     registered values by parameter (`window_weights.weight_values` with their rows kept, and the scan state's,
-    `scan_state.SCAN_STATE`, with its rows: the network certifier's, a row a bucket of the window), of which an embedding
+    `scan_state.SCAN_STATE`, with its rows: the network attester's, a row a bucket of the window), of which an embedding
     read opens its table's (its ``rows``, ``salts`` and ``path``) and a slot's `ScanSlots_v2` reads the scan state's row at
     its anchor. Refused unless every unit's every row is filled once."""
 

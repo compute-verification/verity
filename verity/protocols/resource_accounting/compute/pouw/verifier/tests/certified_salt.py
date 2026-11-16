@@ -1,4 +1,4 @@
-"""A network certifier as PoUW reads it, for PoUW's tests: what `salt.revealed` and `salt.committed` take
+"""A network attester as PoUW reads it, for PoUW's tests: what `salt.revealed` and `salt.committed` take
 (`reveal(p, registration)` and `committed(p, registration)`, 64 bytes each, or a `RuntimeError`), and what a certified
 `served_commit.Challenger` takes beside them: the run its stream names (`certifier_run`: the key's id, a 32-byte run id
 and the ingress link) and the key and run id its `Deployment` pins (`certifier_key`, `run_id`).

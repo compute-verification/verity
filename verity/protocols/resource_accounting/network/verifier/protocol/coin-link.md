@@ -3,7 +3,7 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 ## The coin link (`coin_link`)
 
 D7 (`security/Definitions/Certifier/Guarantees.lean`, "The coins (D7)") puts the challenger's coins on one more
-ingress link of the server's network certifier: its timing is charged on the ingress grid, its content is exempt for
+ingress link of the server's network attester: its timing is charged on the ingress grid, its content is exempt for
 coin openings that open against the challenger's committed coin root, and everything else on it is counted. The
 prover's requests for coins are egress, charged on their own grid. `coin_link.CoinLink` is that link for one window's
 session, and `verity/protocols/compose/verifier/live_challenger/coin_link.py` runs it on the challenger's host.
@@ -11,7 +11,7 @@ session, and `verity/protocols/compose/verifier/live_challenger/coin_link.py` ru
 ### The path
 
 The challenger (`spot.remote`, served by `serve.py`) and the link run on one auditor device, the device that
-runs the server's network certifier (`trusted-device`). A window's session takes this path:
+runs the server's network attester (`trusted-device`). A window's session takes this path:
 
 1. The gate's `open` signs the open entry, which binds the session to the prover's root, then starts `auditor.py run`.
 2. `serve.py` signs the challenger's record, which states the session's coin commitment, then listens on the host's
@@ -61,7 +61,7 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
   and the same record. Flow control carries nothing from inside either. A side that leaves more than `BACKLOG` bytes
   untaken fails the link closed (`delivery-refused`), as does a queue past Q (`overflow`) or cells still queued when
   their connection ends (`dropped`). Each fault cuts the connection at that tick and is its execution phase's status.
-- **One clock (RP8).** The ticks read the network certifier's clock (`pacer.raw_clock`, the host's raw monotonic clock,
+- **One clock (RP8).** The ticks read the network attester's clock (`pacer.raw_clock`, the host's raw monotonic clock,
   which no time service steers) from one origin read on it, and `serve.py`'s release log reads the same clock. A tick
   whose wait ends early waits again, so none runs before its time on that clock. A tick later than `slack` (25 ms)
   faults both grids for the rest of the execution phase (`monitor-unavailable`). It never shifts the grid. A host that

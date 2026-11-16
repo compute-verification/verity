@@ -3,7 +3,7 @@ harness's `ProtocolPort`.
 
 The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module docstring) and runs the real `Audit`:
 `check_link` on each egress link, then `check_ingress_link` on each ingress link, under the certifier's `LmsKey` in its
-session. The cases are generated spatial units: an honest network certifier (`grid.Certifier` driven by
+session. The cases are generated spatial units: an honest network attester (`grid.Certifier` driven by
 `schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
 a small LMS key in a sampled certifier session, then one change
 (`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence. The issuer

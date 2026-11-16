@@ -1,11 +1,11 @@
-"""`prove_path.kept_scan`: a served window's scan state and slots off the network certifier's run the certifier front kept
+"""`prove_path.kept_scan`: a served window's scan state and slots off the network attester's run the certifier front kept
 under the serve dir (`certifier_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
 boundaries at buckets 0 and 16 of a 32-bucket execution phase), published as `network_certifier_serve.Publisher` publishes a served one
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and
 2, so execution phase 0's class Programs 1, 3 and 5 start them (slot nb·j + b), each one's row at its anchor its prompt; a
 fourth, admitted at bucket 5 and released in execution phase 0, is anchored at 32, so execution phase 1's Program 6 starts it.
 Each window's state rows are the scan's state tree's for its execution phase. A window whose requests start in two
-execution phases, a request the network certifier didn't certify, a class whose window isn't its execution phase or whose scan
+execution phases, a request the network attester didn't certify, a class whose window isn't its execution phase or whose scan
 doesn't serve it, and a prompt past the class's prompt cap are refused by name; so are a kept run that won't read, one
 whose certified I/O isn't accepted or whose ingress execution phases aren't 0, 1, …, and certified I/O read with a request
 that has no END or without a request the scan starts. A serve dir with no kept run gives None, and the unpacked fetch
@@ -86,7 +86,7 @@ SESSION = bytes(range(32))
 
 def _served(users: Sequence[str] = USERS) -> ST.Served:
     """`PROMPTS`' id requests (of ``users``, `USERS` unless given) arriving at `ARRIVALS` and answered `RESPONSES`,
-    served through the network certifier over 2 execution phases at `CLASS`'s scan schedule."""
+    served through the network attester over 2 execution phases at `CLASS`'s scan schedule."""
     scan = CLASS.scan
     params = W.NetworkCertifierParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
                             queue=scan.lanes, window=CLASS.buckets, ingress_cells=scan.C, ingress_buckets=scan.WITHIN,
@@ -98,7 +98,7 @@ def _served(users: Sequence[str] = USERS) -> ST.Served:
 
 def _kept(d: Path, served: ST.Served, records: Callable[[str, Any], Any] = lambda kind, rec: rec,
           deployment: Callable[[dict], dict] = lambda dep: dep) -> Path:
-    """A serve dir under ``d`` whose certifier front kept the network certifier's run of ``served``, each of its records
+    """A serve dir under ``d`` whose certifier front kept the network attester's run of ``served``, each of its records
     as ``records`` gives it (by its kind, ``ingress``, ``egress`` or ``failed``) and its deployment.json as
     ``deployment`` gives it."""
     params = served.params
@@ -122,7 +122,7 @@ def _kept(d: Path, served: ST.Served, records: Callable[[str, Any], Any] = lambd
 
 @pytest.fixture(scope="module")
 def serve_dir(tmp_path_factory) -> Path:
-    """A serve dir whose certifier front kept the network certifier's run of `_served`."""
+    """A serve dir whose certifier front kept the network attester's run of `_served`."""
     return _kept(tmp_path_factory.mktemp("kept"), _served())
 
 
@@ -147,7 +147,7 @@ def test_a_windows_slots_are_the_requests_the_scan_starts_there(serve_dir):
 
 
 def test_a_windows_state_rows_are_the_rows_of_the_scans_state_tree(serve_dir):
-    """The rows window-commit registers as the window's `SCAN_STATE` are the ones the network certifier's scan puts in
+    """The rows window-commit registers as the window's `SCAN_STATE` are the ones the network attester's scan puts in
     its state tree for the execution phase (`scan_traffic.chain` over its own rows, then `ingress_scan.window_state`, as
     scan_zk's `link` builds it), in execution phase 0 and in execution phase 1: what a period's check needs before it can tie
     the two to one root."""
@@ -225,7 +225,7 @@ def test_a_kept_run_that_wont_read_or_whose_io_or_phases_arent_whole_is_refused_
 def test_an_accepted_ios_request_with_no_end_or_a_start_it_doesnt_hold_is_refused_by_name(serve_dir, monkeypatch):
     """A request of the window with no END, and a connection the scan starts whose request the certified I/O doesn't
     hold. No kept run whose certified I/O `network_certifier_chain.io` accepts has either: an accepted request is a whole id
-    request, whose last bytes the network certifier sends in an END cell (an id request never fills its last cell),
+    request, whose last bytes the network attester sends in an END cell (an id request never fills its last cell),
     and accepted I/O holds every connection whose cells carry a request. So it is `io`'s reading of the kept run that is
     edited."""
     io = WCH.io

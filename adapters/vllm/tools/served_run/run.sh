@@ -8,7 +8,7 @@
 #            (`predict row`, held to the traced workload dir placement.toml's COMMIT_RUN names), its requests
 #            (serve_load.py --varied), every closed sampling block sealed, the sampling
 #            block's SPOT (Flock --zk behind the Lean ZK server, and the Lean verifier's verdict), PoUW, the
-#            bandwidth audit, PoUS and the network certifier where each has its piece, and one record of every verdict.
+#            bandwidth audit, PoUS and the network attester where each has its piece, and one record of every verdict.
 #            The run's exit (`research status RUN`) is the record's: 0 only for the accept of a compiled Lean composite
 #            of record (composed off the served node), 2 for pending, which means no composite of record yet and is
 #            what a window run on the served node ends with, not a crash, and 1 for a rejection, a refused composite or
