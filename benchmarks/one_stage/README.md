@@ -18,7 +18,9 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `prover/audit/compose_circuit.py` does.
 - `pod.sh`: the entry point on a CPU pod.
 - `a5_llama1b_h200.sh`: A5 over a GPU-served window, in one job on an H200 node, from a clone of the tree
-  (`bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 row on one H200 under `gpu-lease`: its Build and
+  (`A5_CORES=CPUS bash benchmarks/one_stage/a5_llama1b_h200.sh`, CPUS the cores the machine's map gives you, e.g. `40-59`:
+  every `gpu-lease` the script takes names them with `--cores`, and it refuses before any build without them where
+  `gpu-lease` is). Llama-3.2-1B int8's B4 row on one H200 under `gpu-lease`: its Build and
   Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
   (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
   a `served` window under the 64-byte run root. Then the Commit's CPU replay (the prover's pre-flight check, on the node), and
