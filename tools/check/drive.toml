@@ -73,7 +73,8 @@ lowrisk_per_tick = 20
 # holds), with the memory line of record computed from the verifier's runs (auditor_line.py); and the guards that hold
 # everything else to those rules: the Lean check (tools/verity/lean/), the
 # whole-tree invariants (root tests/: the import order and its listing, verifier cost), the check and this file
-# (tools/check/, and its old-path copies in tools/verity/check/), the graph lister that lists the executor's gating
+# (tools/check/, and in tools/verity/check/ the merge drivers' shims that clones from before the move run), the graph
+# lister that lists the executor's gating
 # tasks (tools/verity/graph/), the merge drivers (.gitattributes), and the landing rules themselves (queue.py); and what
 # runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (tools/research/),
 # the move scripts and maps the loop runs and certifies a move against (tools/move/), the agent guard and its hooks

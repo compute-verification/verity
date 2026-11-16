@@ -62,9 +62,12 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                  "merge.lakefile-lists.name": "lakefile.toml: each side's requires and roots (tools/verity/lean/merge.py)",
                  "merge.lakefile-lists.driver": _lean_driver("--lakefile "),
                  "merge.fixture-map.name": "artifacts.json: each side's fixtures (tools/check/merge_map.py)",
-                 "merge.fixture-map.driver": "python3 tools/check/merge_map.py %O %A %B %P",
+                 # a branch cut before tools/verity/check moved to tools/check holds the script only at its old place
+                 "merge.fixture-map.driver": "f=tools/check/merge_map.py; [ -f \"$f\" ] || f=tools/verity/check/merge_map.py; "
+                                             "python3 \"$f\" %O %A %B %P",
                  "merge.markdown-rows.name": "Markdown: each side's rows of a table (tools/check/merge_rows.py)",
-                 "merge.markdown-rows.driver": "python3 tools/check/merge_rows.py %O %A %B %P",
+                 "merge.markdown-rows.driver": "f=tools/check/merge_rows.py; [ -f \"$f\" ] || f=tools/verity/check/merge_rows.py; "
+                                               "python3 \"$f\" %O %A %B %P",
                  "merge.vllm-allowlist.name": "the vLLM lints' allowlists and dead-code keep map: each side's entries "
                                               "(adapters/vllm/tests/lint/merge_allowlist.py)",
                  # a crossing of the layout move merges once in each layout, so the script is found at either place

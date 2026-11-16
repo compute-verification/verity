@@ -80,7 +80,7 @@ from typing import NamedTuple
 
 from . import quick_tier
 from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, LAUNCH_LOST_S, LEAN_AUDIT_RE, LEAN_STEP,
-                      NOT_STARTED, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
+                      NOT_STARTED, OWN_TRAIN, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
                       _suite_log, elsewhere, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps,
                       step_named, step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root)
 from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git, allowed, judge_report, tier_report
@@ -91,9 +91,6 @@ from .vqueue_records import FAULT_RE
 
 #: a candidate's state from its two verdicts' (`combine`): the first of these either has
 ORDER = (FAIL, INFRA, PENDING, LIST_FAILED, PASS)
-#: the train.sh a candidate's check launches with: the loop's own, deployed with its pin, so a candidate's tree doesn't decide
-#: how its launch is waited for
-OWN_TRAIN = Path(__file__).resolve().parents[3] / "check" / "train.sh"
 #: a line of the loop's deselect list (`deselection`) that is a test's node id, its file's path from the repository's root
 DESELECT_RE = re.compile(r"(?!/|\.\./)[\w./-]+\.py::\S+")
 #: what declares lean-agreement's reads: the graph build family, whose lean-agreement task reads `VERIFIER`'s files and
