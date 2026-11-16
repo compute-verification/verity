@@ -46,8 +46,8 @@ sys.path.insert(0, str(MM))
 from verity_machine_model.model import census, entries, holds, model, vector, vectors  # noqa: E402
 
 __all__ = ["BULK_BYTES", "bulk_counts", "census", "class_of", "CLASS_RULES", "facet_loads", "gate_loops",
-           "l2_bytes_per_s", "L2_ROW", "load_rows", "main", "MMA_FORMS", "model", "program", "rates_by_class",
-           "unpriced"]
+           "l2_bytes_per_s", "L2_ROW", "load_rows", "main", "METRIC", "MMA_FORMS", "model", "program",
+           "rates_by_class", "record", "unpriced"]
 
 SMSPS = 4
 
@@ -426,25 +426,54 @@ def cmd_table(a: argparse.Namespace) -> int:
     return 0
 
 
+METRIC = "compute-research/largest-facet-load"
+
+
+def record(out: Path, programs: list[dict], epoch: str | None, failed: str | None) -> None:
+    """Writes the run's validation and, when `failed` is None and a program was timed, the largest load any program puts
+    on any row as `METRIC`."""
+    from verity_bench import kit
+
+    w = kit.writer(out)
+    why = failed or (None if programs else "no program was timed")
+    w.validation("failed" if why else "passed", "probe.py gate and run",
+                 why or f"{len(programs)} programs gated and timed")
+    if why:
+        return
+    pairs = [(v, r, p) for p in programs for r, v in p["load"].items()]
+    if not pairs:
+        w.measurement(METRIC, None, "load", mark="measured", why="no timed program loads a row",
+                      extra={"epoch": epoch, "programs": len(programs)})
+        return
+    v, r, p = max(pairs, key=lambda t: t[0])
+    w.measurement(METRIC, v, "load", mark="measured",
+                  extra={"row": r, "probe": p["probe"], "epoch": epoch, "programs": len(programs)})
+
+
 def cmd_summary(a: argparse.Namespace) -> int:
     """Exits 2 when the rows hold no timed program, 1 when a facet is beaten."""
     rows = load_rows(a.rows, a.full)
     if not rows:
         print(f"no program was timed: {', '.join(map(str, a.rows))} hold no row", file=sys.stderr)
+        if a.record:
+            record(a.record, [], a.epoch, a.failed)
         return 2
     m = model()
     epoch = a.epoch or m.current
     c = census(m, epoch)
     vrows = in_vector(epoch)
-    viol = []
+    viol, programs = [], []
     for row in rows:
         p = program(row, c, m.cycle_u, a.generic, a.l2)
+        programs.append(p)
         for r, v in p["load"].items():
             if v > 1 + a.margin:
                 viol.append({"row": r, "load": v, "probe": p["probe"], "run": p["run"], "sass": p["sass"],
                              "sm_mhz": p["sm_mhz"], "in_vector": r in vrows, "tags": p["tags"], "x": p["x"],
                              "l2_bps": p["l2_bps"]})
     viol.sort(key=lambda d: -d["load"])
+    if a.record:
+        record(a.record, programs, epoch, a.failed)
     if a.json:
         print(json.dumps(viol, indent=1))
         return 1 if viol else 0
@@ -708,6 +737,10 @@ def main(argv: list[str] | None = None) -> int:
                                         help="report load > 1 + margin (default 0: the rows already carry the 2%%)")
     sub.choices["summary"].add_argument("--json", action="store_true")
     sub.choices["summary"].add_argument("--worst", action="store_true", help="only the worst program of each row")
+    sub.choices["summary"].add_argument("--record", type=Path, metavar="OUT",
+                                        help="also write the run's result, with the largest load, through the kit")
+    sub.choices["summary"].add_argument("--failed", metavar="WHY",
+                                        help="with --record: a gate failed, so the result holds no measurement")
     sub.choices["refit"].add_argument("--row", required=True)
     sub.choices["refit"].add_argument("--margin", type=float, default=0.02)
     sub.choices["refit"].add_argument("--form", help="the MMA form on the tensor axis (default: the worst program's)")
