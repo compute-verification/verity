@@ -216,7 +216,7 @@ def heldTop (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt)
 /-- **The registered top's frame-v3 domain** at `size` commit strings: `Registered.domain` at the program the
 registration `reg` names under META's digest (`RecVStar.registration`), none where the registration names none. -/
 def topDom (st : Flock.Stmt) (reg : Lean.Json) (size : ℕ) : Option ByteArray :=
-  (Flock.RecVStar.registration (some reg) (metaRegistration st)).toOption.bind fun r => r.bind fun pe =>
+  (Flock.RecVStar.docket (some reg) (metaRegistration st)).toOption.bind fun r => r.bind fun pe =>
     (Flock.Registered.domain pe.1 Flock.RecVStar.STACKED Flock.RecVStar.TOP_ROW_WORDS size
       Flock.Registered.WORD_BITS).toOption
 
