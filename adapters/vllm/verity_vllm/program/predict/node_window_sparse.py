@@ -12,6 +12,8 @@ DSA attention:
   hold them (a key a row, the port cut that many ways), the blocks after a chain's first the state the one before returns,
   then the head's end (or, past one split, its column ends and combines). A template's units are place-major, then member,
   then head.
+* The indexer, past `index_topk` keys: its fused key and head-weight GEMM (`CublasSplitKGemm_v1`) is its ``SLICES`` along N,
+  and `DsaIndexerKRow_v1` and `DsaIndexerQ_v1` each the row itself (`indexer_row`).
 * The MoE layer: the router gate's GEMM (`CublasSplitKGemmF32Out_v1`, `LlBf16DotprodGemm_v1`) is its ``SLICES`` along N;
   `MoeRouterSigmoidBias_v1` its ``SLOTS``, an output row a slot's weight or expert id; `Fp8GroupQuantUe8m0_v1` the row
   itself; and `MoeExpertFp8Gemm(W)_v1` cut per expert, its blocks apart (`expert_gemm`): block GEMMs reading their block's
@@ -69,6 +71,30 @@ def latent_row(w: NodeWindow, j: int, node: Any) -> None:
     _weight_rows(w, node, 2, t, "cs", a)
     (_o, W), = IF.layout(fn).outs
     w.out(j, node, [Piece(0, W, Row(t, a, "o0", W))])
+
+
+def indexer_row(w: NodeWindow, j: int, node: Any) -> None:
+    """The indexer's rows (`DsaIndexerKRow_v1`, `DsaIndexerQ_v1`), each the row itself: a member's unit reads each argument
+    whole, a weight's (its norm's weights, its position's ``cs`` row) as its run of the weights record and a node's by wire,
+    and returns each output as a row of its own (the e4m3 key or query and its f32 scale or head weights). A node's argument
+    of several writers is gathered, unless its whole row is no longer than `interface.LAST_BLOCK_BYTES` (`DsaIndexerQ_v1`'s
+    32 head weights, a GEMM slice each), which no gather unit's rows outgrow, so Flock's composer would refuse it: the port
+    then reads the writers' rows as they are, cut that many ways."""
+    spec, M = descriptor_id(node.fn), w.members(node)
+    fn = _part(spec, spec_base(spec))
+    t, a = w.unit(_family(node), fn, M)
+    for k, (port, words) in enumerate(IF.layout(fn).rows):
+        if all(s[:2] == ("p", WEIGHTS) for s in w.segments(w.arg(node, k, 0))):
+            _weight_rows(w, node, k, t, port, a)
+            continue
+        rows = w.take(node, k)
+        short = not isinstance(rows, _Free) and len(rows[0]) > 1 and 2 * words <= IF.LAST_BLOCK_BYTES
+        w.feed(t, port, a, rows if short else w.take(node, k, whole=True), (M,))
+    outs, at = [], 0
+    for o, n in IF.layout(fn).outs:
+        outs.append(Piece(at, at + n, Row(t, a, o, n)))
+        at += n
+    w.out(j, node, outs)
 
 
 def batched_gemm(w: NodeWindow, j: int, node: Any) -> None:
@@ -325,6 +351,9 @@ FAMILIES: dict[str, Lowering] = {
     "DsaLatentRow": latent_row,
     "BatchedGemm": batched_gemm,
     "SparseMlaSplit": sparse_mla_split,
+    "CublasSplitKGemm": row_gemm,
+    "DsaIndexerKRow": indexer_row,
+    "DsaIndexerQ": indexer_row,
     "CublasSplitKGemmF32Out": row_gemm,
     "LlBf16DotprodGemm": row_gemm,
     "MoeRouterSigmoidBias": router_slots,
@@ -333,5 +362,5 @@ FAMILIES: dict[str, Lowering] = {
     "MoeExpertFp8GemmW": expert_gemm,
 }
 
-__all__ = ["BLOCK_WORDS", "FAMILIES", "batched_gemm", "expert_gemm", "group_quant", "latent_row", "router_slots", "row_gemm",
-           "sparse_mla_split"]
+__all__ = ["BLOCK_WORDS", "FAMILIES", "batched_gemm", "expert_gemm", "group_quant", "indexer_row", "latent_row", "router_slots",
+           "row_gemm", "sparse_mla_split"]
