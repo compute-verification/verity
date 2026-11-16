@@ -1,11 +1,19 @@
 # served_errors
 
-`verity bench served_errors [--json]` evaluates, at the sizes we serve, error terms of the quoted guarantees that
-have no value from a Lean instance or a run. Each row is a term, the guarantee it sits in, its formula, the sizes it
-is evaluated at, its value (log2 of a probability unless the row gives a percentage), the premises the formula
-rests on and a tag: `modeled`, or `assumed` where the value rests on a constant taken rather than bounded. Evaluating a
-formula discharges none of its premises, and a row whose guarantee is open says so. A sum takes every term at one
-budget, which the row states. `run.py`'s docstring lists the sizes and where each parameter is read.
+Some of the guarantees we quote have error terms that no Lean instance or run gives a value for. This benchmark
+evaluates each of those terms at the sizes we serve, one row each, beside the guarantee it sits in and what its formula
+rests on; evaluating a formula discharges nothing. `run.py`'s docstring says how to read a row, and lists the sizes and
+where each parameter is read.
+
+## Try it
+
+~~~sh
+uv run verity bench served_errors
+~~~
+
+It needs only the checkout and takes under a second. Each row prints the term, its value, its tag and the sizes it is
+evaluated at, and under it the guarantee, the formula and, in brackets, what the formula rests on. `--json` prints the
+same rows as JSON.
 
 The terms:
 
