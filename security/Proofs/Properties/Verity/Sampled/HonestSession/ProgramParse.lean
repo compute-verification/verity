@@ -36,13 +36,17 @@ import all Init.Data.Array.Subarray
 import all Init.Data.Range.Basic
 
 /-!
-# The rules of `Flock.Program.decode`'s walk over the descriptor (`ProgramFacts.program_parse`)
+# `Flock.Program.decode` on the descriptor (`ProgramFacts.program_parse`, `design_eq`, `lawAt_of`, `program_sha`)
 
 The descriptor's bytes are its JSON printed (`canon_programJ`), so `decode` reads `norm programJ`
-(`FirewallJson.parse_printJson`), and `fwd_walk` carries `decodeOf` over it rule by rule. Each rule below is one stop of that
-walk: the descriptor's id checks, the node keys' sort (read by `qsort_of_sorted`, never run), `Ty`'s equality at the
-descriptor's types, the width check `Widths.bodyBad` (as `bodyBadK`, which the kernel evaluates), and the program's SHA-512,
-which stays `Sha512.hash` of the printed bare descriptor (`canon_bare`), never evaluated. The walk itself is not here yet.
+(`FirewallJson.parse_printJson`), which is `programJ` (`norm_programJ`), and `fwd_def` carries `decodeOf` over it rule by
+rule to `decV` (`decode_V`, `decode_file`). Each rule is one stop of that walk: the descriptor's id checks, the node keys'
+sort (read by `qsort_of_sorted`, never run), `Ty`'s well-founded functions at the descriptor's types (`tyBeq_v16`,
+`tyOfJson_v16`, `leavesK`; `composite` as `compositeK`, whose `leaves` closure reads `leavesK`), the width check
+`Widths.bodyBad` (as `bodyBadK`), loops as structural recursions (`forInSt`, `forInEx`), each decoded definition folded into
+its name (`defIn16`, `defNot16`, `defUnit`, `defRoot`), and the program's SHA-512, which stays `Sha512.hash` of the printed
+bare descriptor (`canon_bare`), never evaluated. A consumer reads `decV` through `decV_defs`, `decV_root`, `decV_ids` and
+`decV_units`.
 -/
 
 @[expose] public section
@@ -69,10 +73,12 @@ theorem canon_programJ : canon programJ = .ok (Firewall.printJson programJ) :=
 theorem canon_programBare : canon programBare = .ok (Firewall.printJson programBare) :=
   JsonCanon.jsonFacts.canon_plain plain_programBare printable_programBare
 
-/-- The last stop: the bare descriptor `decode` hashes is `norm programBare`, whose canonical text is `programBare`'s. -/
-theorem canon_bare (j : Json) (h : j = FlockSoundness.Discharge.Recursion.FirewallJson.norm programBare) : canon j = .ok (Firewall.printJson programBare) := by
-  subst h
-  rw [JsonCanon.jsonFacts.canon_norm plain_programBare, canon_programBare]
+/-- `norm` leaves the descriptor as it is: its members are already in key order, as the parser's trees insert them. -/
+theorem norm_programJ : FlockSoundness.Discharge.Recursion.FirewallJson.norm programJ = programJ := by kernel_rfl'
+
+/-- The last stop: the bare descriptor `decode` hashes is `programBare`, whose canonical text is its printed JSON. -/
+theorem canon_bare (j : Json) (h : j = programBare) : canon j = .ok (Firewall.printJson programBare) := by
+  subst h; exact canon_programBare
 
 theorem ends_in16 : "Input16_v1".endsWith "_v1" = true := by
   show String.Slice.Pattern.BackwardSliceSearcher.endsWith "_v1".toSlice "Input16_v1".toSlice = true
@@ -112,8 +118,7 @@ theorem inputId_not16' (s : String) (h : s = "Not16_v1") : Program.inputId? s = 
 theorem qsort_sorted (a : Array String) (h : a.toList.Pairwise (· < ·)) : a.qsort (· < ·) = a :=
   Array.toList_inj.1 (Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted h)
 
-/-- `composite`'s match on a node object (`keys`), at a node the walk evaluates to an object: its keys' branch, so the sort
-under it is no longer under a binder. -/
+/-- A node object's tree, read by `keysK_match`: the node keys' sort is then no longer under a binder. -/
 def isObj : Json → Bool
   | .obj _ => true
   | _ => false
@@ -121,11 +126,6 @@ def isObj : Json → Bool
 def objKvs : Json → Std.TreeMap.Raw String Json compare
   | .obj kvs => kvs
   | _ => {}
-
-private theorem keys_match (β : Type) (nd : Json) (f : Std.TreeMap.Raw String Json compare → β) (g : Json → β)
-    (h : isObj nd = true) : Program.composite.match_3 (fun _ => β) nd f g = f (objKvs nd) := by
-  cases nd <;> simp [isObj] at h
-  rfl
 
 /-- `Ty`'s equality test (well-founded) at the descriptor's two types. -/
 theorem tyBeq_v16 (a b : Program.Ty) (ha : a = .value 16) (hb : b = .value 16) : (a == b) = true := by
@@ -235,6 +235,325 @@ end Widths
 private theorem ds_defs (d : Array Program.Defn) (i : Std.HashMap String Nat) (b : Std.HashSet String) (w : Nat) :
     (Program.DecState.mk d i b w).defs = d := rfl
 
-theorem form_beq_false (a b : Program.Form) (h : (a == b) = false) : (a == b) = false := h
+private theorem ds_index (d : Array Program.Defn) (i : Std.HashMap String Nat) (b : Std.HashSet String) (w : Nat) :
+    (Program.DecState.mk d i b w).index = i := rfl
+
+private theorem ds_busy (d : Array Program.Defn) (i : Std.HashMap String Nat) (b : Std.HashSet String) (w : Nat) :
+    (Program.DecState.mk d i b w).busy = b := rfl
+
+private theorem ds_walked (d : Array Program.Defn) (i : Std.HashMap String Nat) (b : Std.HashSet String) (w : Nat) :
+    (Program.DecState.mk d i b w).walked = w := rfl
+
+/-- The state monad's bind, the pair destructured by a match the walk reduces on its constructor: no projection of the
+state is left behind in the values the walk carries. -/
+theorem stBindM {σ ε α β : Type} (x : StateT σ (Except ε) α) (f : α → StateT σ (Except ε) β) (s : σ) :
+    (x >>= f) s = (x s >>= fun p => match p with | (a, s') => f a s') := rfl
+
+theorem mapM_st_nil {σ ε α β : Type} (xs : Array α) (f : α → StateT σ (Except ε) β) (s : σ) (h : xs = #[]) :
+    (xs.mapM f : StateT σ (Except ε) (Array β)) s = .ok (#[], s) := by
+  subst h; rw [Array.mapM_empty]; rfl
+
+/-- A loop of `Except` over a list, by structural recursion. -/
+def forInEx {ε α β : Type} (f : α → β → Except ε (ForInStep β)) : List α → β → Except ε β
+  | [], b => .ok b
+  | a :: as, b => f a b >>= fun r => match r with
+    | .done b => .ok b
+    | .yield b => forInEx f as b
+
+theorem forIn_list_ex {ε α β : Type} (l : List α) (b : β) (f : α → β → Except ε (ForInStep β)) :
+    (forIn l b f : Except ε β) = forInEx f l b := by
+  induction l generalizing b with
+  | nil => rfl
+  | cons a as ih =>
+    rw [List.forIn_cons]
+    show (f a b >>= fun r => _) = (f a b >>= fun r => _)
+    congr 1
+    funext r
+    cases r with
+    | done b' => rfl
+    | yield b' => exact ih b'
+
+theorem forIn_arr_ex {ε α β : Type} (xs : Array α) (b : β) (f : α → β → Except ε (ForInStep β)) :
+    (forIn xs b f : Except ε β) = forInEx f xs.toList b := by
+  rw [← Array.forIn_toList, forIn_list_ex]
+
+theorem forIn_range_ex {ε β : Type} (r : Std.Legacy.Range) (b : β) (f : Nat → β → Except ε (ForInStep β)) :
+    (forIn r b f : Except ε β) = forInEx f (List.range' r.start r.size r.step) b := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range', forIn_list_ex]
+
+section Decode
+open Flock.Program
+
+/-- `Ty.leaves` (well-founded), by structural recursion at a value and an array of values (`leaves_eq`). -/
+def leavesK : Ty → Nat
+  | .value _ => 1
+  | .array n (.value _) => n * 1
+  | t => t.leaves
+
+theorem leaves_eq : @Ty.leaves = leavesK := by
+  funext t
+  cases t with
+  | value w => simp [leavesK, Ty.leaves]
+  | array n e => cases e <;> simp [leavesK, Ty.leaves]
+  | tuple fs => simp [leavesK]
+  | record fs => simp [leavesK]
+
+/-- `Ty.ofJson` (well-founded) at the descriptor's two types. -/
+theorem tyOfJson_v16 (j : Json) (h : j = v16) : Ty.ofJson j = .ok (.value 16) := by
+  subst h; rw [Ty.ofJson.eq_def]; rfl
+
+theorem tyOfJson_a16 (j : Json) (h : j = .arr #[.str "Array", jn 1, v16]) :
+    Ty.ofJson j = .ok (.array 1 (.value 16)) := by
+  subst h; rw [Ty.ofJson.eq_def]
+  show (do let e ← Ty.ofJson v16; pure (Ty.array 1 e) : V Ty) = _
+  rw [tyOfJson_v16 _ rfl]; rfl
+
+/-- `composite` with `leavesK` for `Ty.leaves` (`composite_K`): its `leaves` closure, which `parseParts` calls, is then one the
+kernel evaluates, since no rule rewrites inside a let-bound function. -/
+private def compositeK (fuel : Nat) (desc : Flock.Program.Desc) (fid : String) (d : Json) (form id : String) :
+    Flock.Program.D Flock.Program.Defn := do
+  let n + 1 := fuel | throw "definitions nest deeper than this verifier follows"
+  let parts := id.splitOn "_v"
+  let name := "_v".intercalate parts.dropLast
+  let ver := parts.getLast!
+  if !(form == "composite" && parts.length ≥ 2 && name.length > 0 && ver.length > 0 && ver.all Char.isDigit
+      && s!"{name}_v{ver.toNat!}" == id) then
+    throw s!"definition '{fid}': form '{form}', id '{id}' (a composite's id is Name_vN)"
+  let bindings := (d.getObjVal? "bindings").toOption.getD Json.null
+  let .obj bkv := bindings | throw s!"definition '{fid}': bindings"
+  let names := bkv.toArray.map (·.1)
+  let statics ← if names.size < 2 || !fid.contains '{' then pure names else do
+    let order := (Flock.Program.recordPairs fid).map (·.1)
+    if order.qsort (· < ·) != names.qsort (· < ·) then
+      throw s!"definition '{fid}': binding record keys {names.qsort (· < ·)} do not match its id"
+    pure order
+  let mut rec_ := #[]
+  for k in statics do rec_ := rec_.push s!"{k}={← liftV (canon ((bindings.getObjVal? k).toOption.getD Json.null))}"
+  let key := id ++ (if statics.isEmpty then "" else "{" ++ ",".intercalate rec_.toList ++ "}")
+  modify fun s => { s with busy := s.busy.insert fid }
+  if key != fid then throw s!"definition '{fid}': a composite is keyed by its id and binding record, '{key}'"
+  for (_, v) in bkv.toArray do Flock.Program.staticFns n desc v
+  let b := (d.getObjVal? "body").toOption.getD Json.null
+  let params ← Flock.Program.liftV (Flock.Program.paramsOf ((b.getObjVal? "params").toOption.getD Json.null) s!"definition '{fid}'")
+  let retType ← Flock.Program.liftV (Flock.Program.Ty.ofJson ((b.getObjVal? "ret_type").toOption.getD Json.null))
+  let .ok (.arr nds) := b.getObjVal? "nodes" | throw s!"definition '{fid}': body nodes"
+  let outs ← Flock.Program.liftV (nds.mapM fun nd => Flock.Program.at_ desc.types ((nd.getObjVal? "out").toOption.getD Json.null) "types")
+  let leaves := fun (p : Bool) (i : Nat) => if p then params[i]?.map (leavesK ·.2) else outs[i]?.map (leavesK ·)
+  let mut nodes : Array Flock.Program.Node := #[]
+  let mut offsets := #[0]
+  for k in [0:nds.size] do
+    let nd := nds[k]!
+    let pre := s!"definition '{fid}' node {k}"
+    let fname ← Flock.Program.liftV (Flock.Program.at_ desc.callees ((nd.getObjVal? "fn").toOption.getD Json.null) "callees")
+    let .str fname := fname | throw s!"KeyError: no definition {fname.compress}"
+    let ci ← Flock.Program.getDef n desc fname
+    let callee := (← get).defs[ci]!
+    let fstr := (nd.getObjValAs? String "form").toOption.getD ""
+    let keys : Array String := match nd with
+      | .obj kvs => (kvs.toArray.map (fun (kv : String × Json) => kv.1)).qsort (· < ·)
+      | _ => #[]
+    let form ← match fstr with
+      | "primitive" => pure Flock.Program.Form.prim
+      | "call" => pure Flock.Program.Form.call
+      | "batch" => pure Flock.Program.Form.batch
+      | "scan" => pure Flock.Program.Form.scan
+      | _ => throw s!"{pre}: form '{fstr}' with keys {keys}"
+    if keys.toList != Flock.Program.nodeKeys form then throw s!"{pre}: form '{fstr}' with keys {keys}"
+    if (form == .prim && !callee.prim) then throw s!"{pre}: a primitive node does not call a composite ({callee.key})"
+    if ((form == .call || form == .scan) && callee.prim) then throw s!"{pre}: a {fstr} node does not call a primitive ({callee.key})"
+    let .ok (.arr ajs) := nd.getObjVal? "args" | throw s!"{pre}: args"
+    let axes ← if form == .batch then
+        match nd.getObjVal? "axes" with
+        | .ok (.arr xs) => xs.mapM fun x => match x with
+          | .null => pure none
+          | x => match Flock.Program.natJ? x with
+            | some a => pure (some a)
+            | none => throw s!"{pre}: batch counts"
+        | _ => throw s!"{pre}: batch counts"
+      else pure #[]
+    let n ← if form == .batch || form == .scan then
+        match (nd.getObjVal? "n").toOption.bind Flock.Program.natJ? with
+        | some n => pure n
+        | none => throw s!"{pre}: {fstr} counts"
+      else pure 1
+    let nxs ← if form == .scan then
+        match (nd.getObjVal? "n_xs").toOption.bind Flock.Program.natJ? with
+        | some x => if x < ajs.size then pure x else throw s!"{pre}: scan counts"
+        | none => throw s!"{pre}: scan counts"
+      else pure 0
+    let earlier := fun (k2 a : Nat) => if k2 < nodes.size then nodes[k2]!.args[a]?.map (·.seq) else none
+    let args ← Flock.Program.liftV (ajs.mapM fun aj => do
+      let ty ← Flock.Program.at_ desc.types ((aj.getObjVal? "type").toOption.getD Json.null) "types"
+      let ps ← match Flock.Program.parseParts ((aj.getObjVal? "refs").toOption.getD Json.null) leaves earlier with
+        | .ok ps => pure ps
+        | .error e => throw s!"{pre}: {e}"
+      let seq := Flock.Program.Seq.ofParts ps
+      if seq.count != leavesK ty then throw s!"{pre}: reference count {seq.count} does not match type {ty.render} ({leavesK ty} leaves)"
+      pure ({ ty, seq } : Flock.Program.Arg))
+    let (out, args) ← Flock.Program.liftV (Flock.Program.buildNode fid k form callee args axes n nxs)
+    if !(out == outs[k]!) then throw s!"{pre}: declares out {outs[k]!.render}, computes {out.render}"
+    let node : Flock.Program.Node := { form, fn := ci, args, out, axes, n, nxs }
+    nodes := nodes.push node
+    offsets := offsets.push (offsets.back! + (if form == .prim then 1 else node.members * callee.gates))
+  let earlier := fun (k2 a : Nat) => nodes[k2]?.bind fun x => x.args[a]?.map (·.seq)
+  let ret ← match Flock.Program.parseParts ((b.getObjVal? "ret").toOption.getD Json.null) leaves earlier with
+    | .ok ps => pure (Flock.Program.Seq.ofParts ps)
+    | .error e => throw s!"definition '{fid}' ret: {e}"
+  if ret.count != leavesK retType then
+    throw s!"definition '{fid}' ret: reference count {ret.count} does not match type {retType.render} ({leavesK retType} leaves)"
+  let body : Flock.Program.Body := { params, retType, nodes, ret, offsets }
+  let st ← get
+  match (Flock.Program.Widths.bodyBad st.defs fid body).run st.walked with
+  | .ok (some m) _ => throw m
+  | .ok none w => set { st with walked := w }
+  | .error e _ => throw s!"definition '{fid}': E_REINTERPRET unchecked: {e}"
+  return { key := fid, id, prim := false, params, ret := retType, body,
+           gates := offsets.back!, paramLeaves := params.foldl (· + leavesK ·.2) 0, outLeaves := leavesK retType }
+
+private theorem composite_K (fuel : Nat) (desc : Flock.Program.Desc) (fid : String)
+    (d : Json) (form id : String) (s : Flock.Program.DecState) :
+    Flock.Program.composite fuel desc fid d form id s = compositeK fuel desc fid d form id s := by
+  rw [Flock.Program.composite.eq_def, leaves_eq]
+  rfl
+
+private theorem keysK_match (β : Type) (nd : Json) (f : Std.TreeMap.Raw String Json compare → β) (g : Json → β)
+    (h : isObj nd = true) : compositeK.match_3 (fun _ => β) nd f g = f (objKvs nd) := by
+  cases nd <;> simp [isObj] at h
+  rfl
+
+/-! The decoded definitions, named: the walk folds each record into its name as it is decoded (`fold_in16`, …), so the
+state it carries stays small. -/
+
+def defIn16 : Defn :=
+  { key := "Input16_v1", id := "Input16_v1", prim := true, params := #[], ret := .value 16,
+    binding := some RUN, gates := 1, paramLeaves := 0, outLeaves := 1 }
+
+def defNot16 : Defn :=
+  { key := "Not16_v1", id := "Not16_v1", prim := true, params := #[("a", .value 16)], ret := .value 16,
+    gates := 1, paramLeaves := 1, outLeaves := 1 }
+
+def unitBody : Body :=
+  { params := #[("x", .value 16)], retType := .value 16,
+    nodes := #[{ form := .prim, fn := 1, args := #[{ ty := .value 16, seq := Seq.ofParts #[.affine true 0 0 1] }],
+                 out := .value 16 }],
+    ret := Seq.ofParts #[.affine false 0 0 1], offsets := #[0, 1] }
+
+def defUnit : Defn :=
+  { key := templateId, id := templateId, prim := false, params := #[("x", .value 16)], ret := .value 16,
+    body := unitBody, gates := 1, paramLeaves := 1, outLeaves := 1 }
+
+def rootBody : Body :=
+  { params := #[], retType := .value 16,
+    nodes := #[{ form := .batch, fn := 0, args := #[], out := .array 1 (.value 16), axes := #[], n := 1 },
+      { form := .call, fn := 2, args := #[{ ty := .value 16, seq := Seq.ofParts #[.affine false 0 0 1] }],
+        out := .value 16 }],
+    ret := Seq.ofParts #[.affine false 1 0 1], offsets := #[0, 1, 2] }
+
+def defRoot : Defn :=
+  { key := rootId, id := rootId, prim := false, params := #[], ret := .value 16, body := rootBody,
+    gates := 2, paramLeaves := 0, outLeaves := 1 }
+
+theorem fold_in16 (k i : String) (p : Bool) (ps : Array (String × Ty)) (r : Ty) (bi : Option String) (bd : Body)
+    (g pl ol : Nat) (hk : k = defIn16.key) (hi : i = defIn16.id) (hp : p = defIn16.prim) (hps : ps = defIn16.params)
+    (hr : r = defIn16.ret) (hbi : bi = defIn16.binding) (hbd : bd = defIn16.body) (hg : g = defIn16.gates)
+    (hpl : pl = defIn16.paramLeaves) (hol : ol = defIn16.outLeaves) : Defn.mk k i p ps r bi bd g pl ol = defIn16 := by
+  subst hk hi hp hps hr hbi hbd hg hpl hol; rfl
+
+theorem fold_not16 (k i : String) (p : Bool) (ps : Array (String × Ty)) (r : Ty) (bi : Option String) (bd : Body)
+    (g pl ol : Nat) (hk : k = defNot16.key) (hi : i = defNot16.id) (hp : p = defNot16.prim) (hps : ps = defNot16.params)
+    (hr : r = defNot16.ret) (hbi : bi = defNot16.binding) (hbd : bd = defNot16.body) (hg : g = defNot16.gates)
+    (hpl : pl = defNot16.paramLeaves) (hol : ol = defNot16.outLeaves) : Defn.mk k i p ps r bi bd g pl ol = defNot16 := by
+  subst hk hi hp hps hr hbi hbd hg hpl hol; rfl
+
+theorem fold_unit (k i : String) (p : Bool) (ps : Array (String × Ty)) (r : Ty) (bi : Option String) (bd : Body)
+    (g pl ol : Nat) (hk : k = defUnit.key) (hi : i = defUnit.id) (hp : p = defUnit.prim) (hps : ps = defUnit.params)
+    (hr : r = defUnit.ret) (hbi : bi = defUnit.binding) (hbd : bd = defUnit.body) (hg : g = defUnit.gates)
+    (hpl : pl = defUnit.paramLeaves) (hol : ol = defUnit.outLeaves) : Defn.mk k i p ps r bi bd g pl ol = defUnit := by
+  subst hk hi hp hps hr hbi hbd hg hpl hol; rfl
+
+theorem fold_root (k i : String) (p : Bool) (ps : Array (String × Ty)) (r : Ty) (bi : Option String) (bd : Body)
+    (g pl ol : Nat) (hk : k = defRoot.key) (hi : i = defRoot.id) (hp : p = defRoot.prim) (hps : ps = defRoot.params)
+    (hr : r = defRoot.ret) (hbi : bi = defRoot.binding) (hbd : bd = defRoot.body) (hg : g = defRoot.gates)
+    (hpl : pl = defRoot.paramLeaves) (hol : ol = defRoot.outLeaves) : Defn.mk k i p ps r bi bd g pl ol = defRoot := by
+  subst hk hi hp hps hr hbi hbd hg hpl hol; rfl
+
+end Decode
+
+/-! **`decode` on the descriptor's JSON**: the walk of `decodeOf` from `programJ`, rule by rule. -/
+fwd_def decV decode_V : Program.decodeOf (some (.ok programJ))
+    by [hs_contains_insert, hs_contains_empty, hs_contains_erase, hm_get_insert, hm_get_empty, fst_mk, snd_mk,
+      forIn_st_nil, forIn_range_st, stPure, splitOn_root, splitOn_unit, all_list, toNat_one, repr_one, stBindM,
+      stGet, stSet, stModify, iteApp, domainError_none, mapM_except, tyOfJson_v16, tyOfJson_a16, leaves_eq,
+      composite_K, fold_in16, fold_not16, fold_unit, fold_root, keysK_match, forIn_arr_ex, forIn_range_ex,
+      foldl_insert_get, inputId_in16, inputId_not16', qsort_sorted, tyBeq_v16, tyBeq_a16, recordFunctionIds_hs,
+      isInputId_not16, registered_not16, bodyBad_run, ds_defs, ds_index, ds_busy, ds_walked, mapM_st_nil, canon_bare]
+    block [String.hash, Flock.canon, Firewall.printJson, Sha512.hash] shallow []
+
+/-! What a consumer reads of `decV`: its definitions by name, its root, and its one unit. -/
+
+theorem decV_defs : decV.defs = #[defIn16, defNot16, defUnit, defRoot] := by kernel_rfl'
+
+theorem decV_root : decV.root = 3 := by kernel_rfl'
+
+theorem decV_programFn : decV.programFn = "HsProg_v0" := by kernel_rfl'
+
+theorem decV_ids : decV.defs.toList.map (·.id) = ["Input16_v1", "Not16_v1", templateId, rootId] := by
+  rw [decV_defs]; rfl
+
+/-- The root calls the template once: one proof block (`nUnits`). -/
+theorem decV_units :
+    ((decV.defs[decV.root]!).body.nodes.toList.filter fun x => (decV.defs[x.fn]!).key == templateId).length = nUnits := by
+  rw [decV_defs, decV_root]; decide +kernel
+
+theorem decV_sha512 : decV.sha512 = Sha512.hash (Firewall.printJson programBare).toUTF8 := by kernel_rfl'
+
+/-- The registered bytes are the descriptor's JSON printed. -/
+theorem programFile_eq : programFile = (Firewall.printJson programJ).toUTF8 := by
+  unfold programFile
+  rw [canon_programJ]
+  rfl
+
+theorem desc_bytes : (⟨desc.toArray⟩ : ByteArray) = programFile := by
+  unfold desc
+  generalize programFile = b
+  cases b
+  simp
+
+/-- **`decode programFile = .ok decV`**. -/
+theorem decode_file : Program.decode programFile = .ok decV := by
+  rw [Program.decode_eq_of, Program.readJson, programFile_eq, Properties.CanonRoundTrip.fromUTF8?_toUTF8, Option.map_some,
+    FlockSoundness.Discharge.Recursion.FirewallJson.parse_printJson plain_programJ, norm_programJ]
+  exact decode_V
+
+theorem parse_file : Spot.Program.parse programFile = .ok ⟨.ofProg decV, decV⟩ := by
+  unfold Spot.Program.parse
+  rw [decode_file]
+  rfl
+
+theorem program_eq : program = ⟨.ofProg decV, decV⟩ := by
+  unfold program
+  rw [parse_file]
+  rfl
+
+/-- **`ProgramFacts.program_parse`**. -/
+theorem program_parse : Spot.Program.parse ⟨desc.toArray⟩ = .ok program := by
+  rw [desc_bytes, parse_file, program_eq]
+
+/-- **`ProgramFacts.design_eq`**. -/
+theorem design_eq : Flock.Bridge.designAt desc query law none nUnits = .subset 1 := design_eq_of_parse program_parse
+
+/-- **`ProgramFacts.lawAt_of`**. -/
+theorem lawAt_of : ∀ (v : Spot.Registration.Verifier), v.program = program → v.query = query → v.law = law →
+    v.workTable = none → lawAt v nUnits = .ok (Flock.Bridge.designAt desc query law none nUnits) :=
+  lawAt_of_parse program_parse
+
+/-- **`ProgramFacts.program_sha`**: the hash `decode` takes is of the bare descriptor's printed text, never evaluated. -/
+theorem program_sha : program.sha512 = programSha := by
+  rw [program_eq]
+  show decV.sha512 = programSha
+  rw [decV_sha512]
+  unfold programSha
+  rw [canon_programBare]
+  rfl
 
 end Verity.Sampled.Instance.HonestSession.ProgramParse
