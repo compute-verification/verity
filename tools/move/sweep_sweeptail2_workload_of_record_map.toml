@@ -1,0 +1,17 @@
+# "row of record" outside `adapters/vllm/`, in the benchmarks' own words (GLOSSARY.md Older names: "row of record" is, in
+# `adapters/vllm/`, a workload of record until vLLM's workloads move; a benchmark's recorded run is a benchmark result): what
+# `tools/move/rename.py --map tools/move/sweep_sweeptail2_workload_of_record_map.toml` renames, in the three comments of
+# `benchmarks/compute/run.py` and `benchmarks/spot_figures/tests/test_headline.py`, and nowhere else. It leaves the adapter
+# (`manifests/records.json` holds the word as a key).
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/compute/run.py", "benchmarks/spot_figures/tests/test_headline.py"]
+words = { "row of record" = "benchmark result of record" }
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py"]

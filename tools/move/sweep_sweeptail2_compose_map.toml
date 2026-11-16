@@ -1,0 +1,16 @@
+# "composite protocols" in compose's README (GLOSSARY.md Older names: "composite protocol" is compose, over onsite's or
+# remote's list, and "protocol soundness is stated per configuration"): what `tools/move/rename.py --map tools/move/sweep_sweeptail2_compose_map.toml` renames.
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/compose/verifier/lean/README.md"]
+[words_in.words]
+"two composite protocols, onsite and remote," = "two configurations, onsite and remote,"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/check/tests/test_move_check.py", ".agents/skills/friction/SKILL.md"]

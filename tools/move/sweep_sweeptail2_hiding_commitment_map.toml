@@ -1,0 +1,24 @@
+# "salted commitment" in two docstrings (GLOSSARY.md Older names: "salted leaf", "salted commitment" are the hiding leaf and
+# the hiding commitment): what `tools/move/rename.py --map tools/move/sweep_sweeptail2_hiding_commitment_map.toml` renames. The
+# phrase stands across a line break in both, so each row is the words before the break; `salted` alone has other senses and is
+# renamed only here.
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/resource_accounting/network/verifier/service.py"]
+[words_in.words]
+"the ZK server's salted" = "the ZK server's hiding"
+
+[[words_in]]
+files = ["verity/protocols/proofs/flock/prover/tests/test_rec_vstar.py"]
+[words_in.words]
+"rec-step2's salted" = "rec-step2's hiding"
+"opening the salted" = "opening the hiding"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/check/tests/test_move_check.py", ".agents/skills/friction/SKILL.md"]

@@ -1,0 +1,16 @@
+# "IR primitives" in a docstring of Flock's prover (GLOSSARY.md Older names: "IR primitives" is the circuit's primitives,
+# `verity.circuits`): what `tools/move/rename.py --map tools/move/sweep_sweeptail2_circuit_map.toml` renames.
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/proofs/flock/prover/python/verity_flock/ir_sampling.py"]
+[words_in.words]
+"by the IR primitives" = "by the primitive circuits"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/check/tests/test_move_check.py", ".agents/skills/friction/SKILL.md"]
