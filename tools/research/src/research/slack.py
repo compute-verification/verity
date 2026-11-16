@@ -362,12 +362,11 @@ def check_registry(reg: dict, path: str) -> dict:
         if not NAME_RE.match(name) or name in handles:
             raise SlackError(f"registry {path}: bad or duplicate handle {name!r}")
         handles.add(name)
-        for k in ("remit", "charter"):
-            if not isinstance(h.get(k), str) or not h[k]:
-                raise SlackError(f"registry {path}: @{name} has no {k}")
-            if STORE_PATH in h[k]:
-                raise SlackError(f"registry {path}: @{name}'s {k} cites an agent store ({STORE_PATH}...), which is its agent's "
-                                 "scratch: cite a note (note:<id>), a ruling or a PR instead, or say it in plain words")
+        if not isinstance(h.get("remit"), str) or not h["remit"]:
+            raise SlackError(f"registry {path}: @{name} has no remit")
+        if STORE_PATH in h["remit"]:
+            raise SlackError(f"registry {path}: @{name}'s remit cites an agent store ({STORE_PATH}...), which is its agent's "
+                             "scratch: cite a note (note:<id>), a ruling or a PR instead, or say it in plain words")
         if "holder" in h and not (isinstance(h["holder"], str) and HOLDER_RE.fullmatch(h["holder"])):
             raise SlackError(f"registry {path}: @{name}'s holder {h['holder']!r}: its coordinator's agent id alone (bc-<8 hex>-"
                              "<4>-<4>-<4>-<12>, or a desktop agent's bare UUID), with no prose; the agents that post as it are "
@@ -397,10 +396,6 @@ def check_registry(reg: dict, path: str) -> dict:
             raise SlackError(f"registry {path}: @{name}'s staffs: the names of the agents its holder alone may register "
                              "(`research queue delegate`), as lower-case patterns such as `review-*`, each matching no handle, "
                              "so it can never hand a lane's own name to another")
-        lineage = h.get("lineage", [])
-        if not isinstance(lineage, list) or not all(isinstance(a, str) and AGENT_ID_RE.fullmatch(a) for a in lineage):
-            raise SlackError(f"registry {path}: @{name}'s lineage: the agent ids that held it before (bc-<8 hex> or its full "
-                             "form), so a handover's predecessor stays known without a second id in `holder`")
         old = h.get("retired_usergroups", [])
         current = {o.get("usergroup") for o in reg["handles"]}
         if not isinstance(old, list) or any(not isinstance(g, str) or not GROUP_ID_RE.match(g) or g in current
@@ -1825,7 +1820,7 @@ def cmd_handles(ns: argparse.Namespace, reg: dict) -> int:
         print(f"#{key:<20} {ch.get('id') or 'id not recorded':<12} subscribers: {subs}\n  {ch['purpose']}")
     for h in reg["handles"]:
         print(f"@{h['handle']:<10} {h.get('usergroup') or '-':<12} {h['holder'] or 'no holder: its inbox is not open'}\n"
-              f"  {h['remit']}\n  charter: {h['charter']}")
+              f"  {h['remit']}")
     for p in reg.get("humans", []):
         print(f"human {p['name']} ({p.get('slack_user') or 'user id not recorded'})")
     for p in reg.get("collaborators", []):

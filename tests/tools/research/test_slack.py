@@ -266,14 +266,12 @@ def test_the_old_channel_name_still_selects_ask_daniel_and_an_alias_may_not_shad
         slack.load_registry(registry)
 
 
-def test_every_handle_names_exactly_one_holder_and_a_predecessor_goes_in_its_lineage(registry):
+def test_every_handle_names_exactly_one_holder(registry):
     """Two holders in one handle split its doorbells and the watch's view (two coordinators would answer one chat).  A
-    handover's outgoing id goes in `lineage`.  A handle no agent has taken yet has no `holder` key."""
+    handle no agent has taken yet has no `holder` key."""
     reg = json.loads(REAL_REGISTRY.read_text())
     many = {h["handle"]: slack.AGENT_ID_RE.findall(h["holder"] or "") for h in reg["handles"] if "holder" in h}
     assert {h: ids for h, ids in many.items() if len(ids) != 1} == {}, "one agent per handle: a second lane gets its own handle"
-    with pytest.raises(slack.SlackError, match="lineage"):
-        slack.check_registry({**reg, "handles": [{**reg["handles"][0], "lineage": ["gen-3"]}, *reg["handles"][1:]]}, "r")
 
 
 @pytest.mark.parametrize("holder", [
@@ -288,14 +286,13 @@ def test_a_holder_is_one_agent_id_with_no_prose(registry, holder):
         slack.check_registry({**reg, "handles": [{**reg["handles"][0], "holder": ok}, *reg["handles"][1:]]}, "r")
 
 
-@pytest.mark.parametrize("key", ["charter", "remit"])
-def test_a_charter_or_remit_never_cites_an_agents_store(registry, key):
+def test_a_remit_never_cites_an_agents_store(registry):
     """An agent's store is its scratch (AGENTS.md "Where writing goes"): nobody else can open it."""
     reg = json.loads(REAL_REGISTRY.read_text())
     store = "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)"
-    with pytest.raises(slack.SlackError, match=rf"@infra's {key} cites an agent store \(/cursor/stores/...\).*cite a note \(note:<id>\)"):
-        slack.check_registry({**reg, "handles": [{**reg["handles"][0], key: store}, *reg["handles"][1:]]}, "r")
-    assert not any(slack.STORE_PATH in h[k] for h in reg["handles"] for k in ("charter", "remit"))
+    with pytest.raises(slack.SlackError, match=r"@infra's remit cites an agent store \(/cursor/stores/...\).*cite a note \(note:<id>\)"):
+        slack.check_registry({**reg, "handles": [{**reg["handles"][0], "remit": store}, *reg["handles"][1:]]}, "r")
+    assert not any(slack.STORE_PATH in h["remit"] for h in reg["handles"])
 
 
 def test_a_handles_examples_are_a_few_one_line_questions(registry):
@@ -3835,7 +3832,7 @@ def stale_checkout(tmp_path, registry) -> tuple[Path, Callable[[Callable[[dict],
 
 
 def new_handle(name: str) -> Callable[[dict], None]:
-    return lambda reg: reg["handles"].append({"handle": name, "remit": f"the {name} slice", "charter": "x", "owns": []})
+    return lambda reg: reg["handles"].append({"handle": name, "remit": f"the {name} slice", "owns": []})
 
 
 def test_routing_reads_origin_mains_registry_fetched_at_most_every_30_minutes(registry, tmp_path, monkeypatch):
