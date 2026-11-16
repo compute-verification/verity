@@ -28,7 +28,7 @@ namespace SpotFlock.InstanceStmt
 theorem setup_tabAt (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
     Stmt.setupTables tz (bytesOf (HmNets.shaLaid ()) (HmNets.hmLaid ()))
       (pubOf r (hexOf circuitHash) (hexOf classHash)) coinsX 1 [] (some sampleJ) (some partObj) (some progBytes)
-      none none none none = .ok (tabAt r) := by
+      none none none none = .ok ((tabAt r).1, (tabAt r).2) := by
   have hp := FlockDeploy.fixedNets_parse hn
   have hCe : classHash.isEmpty = false := classOfB_isEmpty (HmNets.shaLaid ()) (HmNets.hmLaid ())
   exact setupTables_X r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X
@@ -47,7 +47,7 @@ theorem recordFits_x_of_text (hn : FixedNetsBuild) {r : Run} (hr : r.Plain)
   have hset := setup_tabAt hn hr
   have hct0 : (tabAt r).1.coinTree.isSome = true := tabX_coinTree r _ _ _ _ _ _ _ _ _ _ _ _ _ _
   have hz := zkIn_x hn hr
-  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny (spec := (tabAt r).1) (sts := (tabAt r).2) hset with
+  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny hset with
     ⟨-, st, hd, hspec, hsts⟩ | ⟨hc, -⟩
   · rw [FlockSoundness.Discharge.HiddenExec.setupOne_hidden hidden_tzX] at hd
     have hsp := FlockSoundness.Discharge.Hidden.setupHidden_spec hd
