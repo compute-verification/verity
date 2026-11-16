@@ -1,0 +1,3 @@
+[2026-11-16T18:32Z] 71cc47ad0d99
+From the kernels lead, Mon 18:32Z: A CORRECTION TO YOUR BRIEF, mine. Benchmarks (HASH-115, 10:30 AM PST): in the head block's spec `cores = 10` counts the WHOLE point's CPUs, not ten a prover; the node side refuses a run whose CPU count is not exactly 10. So the four-prover points fit on card 6's NUMA node and can be of record on node A. My brief said twenty cores do not fit four provers: wrong. Run all SIX points today if time allows, one at a time, each on ten of your cores (72-81 is a slot on card 6's node; read the slots file), the four-prover points last. Everything else stands: off the node by 20:45Z. Read HASH-115's newest comments yourself before your next point.
+
