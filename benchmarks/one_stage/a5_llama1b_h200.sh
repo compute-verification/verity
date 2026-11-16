@@ -18,7 +18,10 @@
 #    a stratified rate (stratified-rate:NUM/DEN, which the Commit registers as the window's stratified design): one session
 #    on its own keyed coin tree from a development challenger of its own (FC_COINS=tree, FLOCK_CHALLENGER=1), served the
 #    challenger session's stratified sample and held to it by Lean's `verify --coins tree --stratified K`; no ZK server, and
-#    no OneStageZk, which checks --zk sessions only. summary.json's ``epsilon`` is the sample's bound at several deltas.
+#    no OneStageZk, which checks --zk sessions only. The COINS line reads where the sessions' coin trees came from off the
+#    audit's own summary (``coin_trees``: window, the challenger session's release log; own, a challenger of each
+#    session's own), and a --zk challenger audit whose summary says other than window fails the run (rc 20) with no line.
+#    summary.json's ``epsilon`` is the window's sampling design's bound at several deltas (`Stratified.count_bound`).
 #
 #   research run --on MACHINE --project verity --source TREE --cwd clone --mem-gb 448 --timeout 3h \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/one_stage/a5_llama1b_h200.sh
@@ -199,7 +202,7 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
   git -C "$TREE" rev-list --first-parent HEAD > "$BASE/main.txt" || return 23
   "$TPY" -m verity_numerical.bench.generate --subcircuit "${A5_SUBCIRCUIT:-rope-head/d64/neox-bf16}" --n 4 --seed 1 \
     --out "$BASE/sets" > "$OUT/a5/sets.log" 2>&1 || return 24
-  FLOCK_CHALLENGER=${A5_PLAIN:+1} RAYON_NUM_THREADS=$(nproc) RUST_MIN_STACK=$((64 << 20)) "$TPY" benchmarks/prove_path/records_audit.py audit --window "$WD" \
+  FLOCK_CHALLENGER=1 RAYON_NUM_THREADS=$(nproc) RUST_MIN_STACK=$((64 << 20)) "$TPY" benchmarks/prove_path/records_audit.py audit --window "$WD" \
     --sampling-design "$rate" --circuit "$(sha512sum "$WD/circuit.json" | cut -c1-128)" --run "$run" --template-sets "$BASE/sets" \
     --challenger local --deployed-key ${A5_PLAIN:+--plain} --main "$BASE/main.txt" \
     --m0-pythonpath "$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/adapters/vllm:$TREE/adapters/torch" \
@@ -274,10 +277,9 @@ print("WEIGHTS root_bytes=" + ",".join(sorted({str(len(r) // 2) for r in roots})
 PY
 grep -a '^A5 ' "$OUT/a5/a5.log" 2>/dev/null | tail -1 | cut -c1-4000 | tee -a "$OUT/summary.txt"
 grep -a -E '^V2(CASE)? ' "$OUT/a5/v2.log" 2>/dev/null | cut -c1-2000 | tee -a "$OUT/summary.txt"
-A5_COINS=$A5_COINS A5_PLAIN=$A5_PLAIN CARD=$CARD "$PY" - "$OUT/a5" <<'PY' | tee -a "$OUT/summary.txt"
+A5_COINS=$A5_COINS A5_PLAIN=$A5_PLAIN CARD=$CARD WD=$WD "$TREE/.venv/bin/python" - "$OUT/a5" <<'PY' | tee -a "$OUT/summary.txt"
 import json, os, pathlib, sys
-from fractions import Fraction
-from math import comb
+from verity.protocols.proofs.spot.verifier.one_stage.audit import core_sampling_design
 d = pathlib.Path(sys.argv[1])
 s = next((p for p in (d / "a5" / "summary.json", d / "summary.json") if p.is_file()), d / "summary.json")
 def read(p):
@@ -292,13 +294,19 @@ rate, card = read(s).get("law") if isinstance(read(s).get("law"), str) else None
 lines = [x for x in (d / "a5.log").read_text(errors="replace").splitlines() if x.startswith("A5 ")] if (d / "a5.log").is_file() else []
 audit = next((json.loads(x[3:]).get("audit") for x in reversed(lines) if '"audit"' in x), None) or {}
 accepted = "accepted" if audit.get("accepted") is True else "NOT accepted"
+TREES = {"window": "every session's coin tree from the release log of the window's one challenger session",
+         "own": "each session's coin tree from a development challenger of its own"}
+trees = summ.get("coin_trees")
+if trees not in TREES or (os.environ["A5_COINS"] == "challenger" and not os.environ["A5_PLAIN"] and trees != "window"):
+    sys.exit(f"a5_llama1b_h200.sh: no COINS line: the audit's summary says coin_trees={trees!r}, and a --zk audit on the "
+             f"challenger's coins must have every session's tree from that challenger session's release log (window)")
+trees = f"coin trees {trees}: {TREES[trees]}"
 sample = (f"law {law.get('law', '?')} k={law.get('k', '?')} of {summ.get('population', '?')} units, delta {summ.get('delta', '?')}, "
           f"drew {len(summ['draw']) if isinstance(summ.get('draw'), list) else '?'}" + (f", sampled at {rate}" if rate else ""))
 if os.environ["A5_PLAIN"]:
     line = (f"COINS draw: one local challenger session (the auditor device's service run on this machine, a development "
             f"stand-in for the auditor's, its key made for the run at the deployed LMS parameters), {sample}; sessions: Flock "
-            f"plain, no ZK server, its one session on a development challenger of its own (coin trees "
-            f"{summ.get('coin_trees', '?')}); the audit {accepted}" + (", by Flock's plain per-session Lean verify --coins tree "
+            f"plain, no ZK server ({trees}); the audit {accepted}" + (", by Flock's plain per-session Lean verify --coins tree "
             "--stratified K and Lean's draw" if audit.get("accepted") is True else "") + "; SPOT's one-stage check does not "
             f"apply (OneStageZk checks --zk sessions); {card}")
 elif os.environ["A5_COINS"] == "challenger":
@@ -307,13 +315,11 @@ elif os.environ["A5_COINS"] == "challenger":
     verdict = {"0": "accepted", "1": "rejected", "2": "undecided or no case"}.get(rc, "did not run")
     line = (f"COINS draw: one local challenger session (the auditor device's service run on this machine, a development "
             f"stand-in for the auditor's, its key made for the run at the deployed LMS parameters), {sample}; sessions: Flock "
-            f"--zk behind the Lean ZK server, every session's coin tree from that challenger session's release log (coin "
-            f"trees {summ.get('coin_trees', '?')}); the audit {accepted}; SPOT's one-stage check (OneStageZk v2, "
+            f"--zk behind the Lean ZK server ({trees}); the audit {accepted}; SPOT's one-stage check (OneStageZk v2, "
             f"spot-one-stage-zk) {verdict}; {card}")
 else:
     line = (f"COINS draw: development coins (in-process secrets.token_bytes), no auditor's challenger, by Lean's draw, {sample}; "
-            f"sessions: Flock {'plain' if summ.get('plain') else '--zk'}, each on a development challenger local to its session "
-            f"(coin trees {summ.get('coin_trees', '?')}), arm {summ.get('arm', '?')} "
+            f"sessions: Flock {'plain' if summ.get('plain') else '--zk'} ({trees}), arm {summ.get('arm', '?')} "
             f"({'the ZK server' if summ.get('firewall') else 'no ZK server'}); {accepted} by Flock's per-session Lean verify "
             f"--zk and Lean's draw, not by SPOT's one-stage check (OneStageZk did not run; it refuses a case naming no "
             f"challenger); {card}")
@@ -322,19 +328,22 @@ if s.is_file():  # benchmarks' printer reads summary.json's coins, an object: th
     doc = read(s)
     doc["coins"] = {**(doc.get("coins") if isinstance(doc.get("coins"), dict) else {}), "text": line,
                     **({"source": "challenger", "challenger": "local"} if os.environ["A5_COINS"] == "challenger" else {})}
-    n, k = summ.get("population"), law.get("k")
-    if isinstance(n, int) and isinstance(k, int) and 0 < k <= n:
-        # profile.Stratified.count_bound for one stratum: the largest m whose C(n-m, k)/C(n, k) is at least delta
-        def bound(delta):
-            return max(m for m in range(n + 1) if Fraction(comb(n - m, k), comb(n, k)) >= Fraction(delta))
-        doc["epsilon"] = {"k": k, "population": n, "rule": "except with probability delta, an accepted audit has at most "
-                          "wrong_units of the population's units wrong, the largest m with C(population-m, k)/C(population, k) "
-                          ">= delta; epsilon = wrong_units/population",
-                          "table": [{"delta": x, "wrong_units": bound(x), "epsilon": round(bound(x) / n, 6)}
+    # the window's sampling design as registered, a stratified one with its strata (a stratum a template)
+    reg = next((read(p) for p in (d / "window" / "registration.json", d / "a5" / "window" / "registration.json",
+                                  pathlib.Path(os.environ["WD"]) / "registration.json") if p.is_file()), {})
+    design, n = reg.get("law"), reg.get("population")
+    profile = core_sampling_design(design, n) if isinstance(design, dict) and isinstance(n, int) else None
+    if profile is not None:
+        doc["epsilon"] = {"design": design, "population": n,
+                          "rule": "except with probability delta, an accepted audit has at most wrong_units of the population's "
+                          "units wrong: the window's sampling design's Stratified.count_bound(delta), a stratum a template; "
+                          "epsilon = wrong_units/population",
+                          "table": [{"delta": x, "wrong_units": profile.count_bound(x), "epsilon": round(profile.count_bound(x) / n, 6)}
                                     for x in (0.5, 0.1, 0.01, 1e-3, 1e-6, 1e-9)]}
     s.write_text(json.dumps(doc, indent=1, sort_keys=True))
 PY
+cs=${PIPESTATUS[0]}; [ "$cs" != 0 ] || cs=
 tail -8 "$OUT/verdicts.txt" 2>/dev/null | tee -a "$OUT/summary.txt"
 vr=; [ "$A5_COINS" != challenger ] || [ -n "$A5_PLAIN" ] || { vr=$(awk '/^V2RC /{print $2}' "$OUT/a5/v2.log" 2>/dev/null); vr=${vr:-2}; }
-echo "replay rc=$rr a5 rc=$ar${vr:+ v2 rc=$vr}" | tee -a "$OUT/summary.txt"
-exit $(( rr != 0 ? 17 : ar != 0 ? 18 : vr != 0 ? 19 : 0 ))
+echo "replay rc=$rr a5 rc=$ar${vr:+ v2 rc=$vr}${cs:+ coins rc=$cs}" | tee -a "$OUT/summary.txt"
+exit $(( rr != 0 ? 17 : ar != 0 ? 18 : vr != 0 ? 19 : cs != 0 ? 20 : 0 ))
