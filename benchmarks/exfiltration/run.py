@@ -45,10 +45,11 @@ def measured(doc: Mapping[str, Any]) -> list[dict]:
 
 def report(doc: Mapping[str, Any], text: str, *, made_up: bool, withdrawn: Sequence[str]) -> int:
     """`--from`'s last step: the print, the document as one line and the measurements, through `kit.report`. The
-    planner's rows record no coins (`ran with: not stated`)."""
+    planner's rows record no coins (`ran with: not stated`). A made-up record writes no measurement, under a research
+    run or not: a metric's points are runs' figures, and its document says it is made up."""
     # the figure is modeled, every input marked: no Lean verifier passes on the planner's rows, so none refuses a number
-    return kit.report("exfiltration", text, doc, measured(doc), mark="modeled", ran_with=None, accepted=None,
-                      made_up=made_up, withdrawn=withdrawn)
+    return kit.report("exfiltration", text, doc, () if made_up else measured(doc), mark="modeled", ran_with=None,
+                      accepted=None, made_up=made_up, withdrawn=withdrawn)
 
 
 if __name__ == "__main__":

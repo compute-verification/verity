@@ -451,8 +451,7 @@ made up.
 ## How a cheating change is refused
 
 The command refuses two parts that cover different GPU-seconds, requests or weights, and two runs of record that both
-hold a scope with neither superseded; a run whose two rows files differ on one case is left out, and is listed with
-why. A figure whose error is 1 or
-more prints no amount. A record that says it is made up (`made_up` in its `job.json`) is printed as made up, and its
-measurements are marked modeled and made up, never measured. A run id given to `--from` is fetched past the store's
-withdrawals, and a withdrawn record is refused.
+hold a scope with neither superseded; a run whose two rows files differ on one case is left out, and is listed with why.
+A figure whose error is 1 or more prints no amount. A record that says it is made up (`made_up` in its `job.json`) is
+printed as made up, and writes no measurement, under a research run or not: its document alone, which says so. A run id
+given to `--from` is fetched past the store's withdrawals, and a withdrawn record is refused.

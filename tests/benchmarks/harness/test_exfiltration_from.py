@@ -52,17 +52,27 @@ def test_the_made_up_record_prints_the_tables_as_made_up_with_no_store(monkeypat
     assert doc["value"] == pytest.approx(YEAR_GB) and doc["schema"] == E.SCHEMA
 
 
-def test_with_a_place_to_write_each_figure_is_written_modeled_and_made_up(monkeypatch, capsys, no_store, tmp_path):
-    monkeypatch.setenv("OUT", str(tmp_path / "out"))
-    assert run(monkeypatch, "--from", str(MADE_UP)) == 0
-    capsys.readouterr()
-    got = json.loads((tmp_path / "out" / "result.json").read_text())["measurements"]
+@pytest.mark.parametrize("place", ["RESEARCH_RUN_DIR", "OUT"])
+def test_a_made_up_record_writes_no_measurement_under_a_run_and_a_real_one_writes_its_figures(
+        monkeypatch, capsys, no_store, tmp_path, place):
+    """Under a research run (or with `OUT` set) the made-up record leaves its document, saying made up, and no result:
+    no metric gets a point from it. The same rows in a record that says nothing of itself write the three figures."""
+    real = tmp_path / "real"
+    shutil.copytree(MADE_UP, real, ignore=shutil.ignore_patterns("job.json"))
     metrics = runpy.run_path(str(RUNNER))["METRICS"]
-    assert {m["name"] for m in got} == set(metrics)
-    assert all(m["mark"] == kit.MADE_UP_MARK and m["made_up"] is True for m in got)
-    year = {m["name"]: m for m in got}
-    assert (year[next(iter(metrics))]["period"], year[next(iter(metrics))]["over"]) == ("year", "world")
-    assert json.loads((tmp_path / "out" / "exfiltration.json").read_text())["made_up"] is True
+    for record in (MADE_UP, real):
+        at = tmp_path / f"run-{record.name}"
+        monkeypatch.setenv(place, str(at))
+        assert run(monkeypatch, "--from", str(record)) == 0
+        capsys.readouterr()
+        out = at / "out" if place == "RESEARCH_RUN_DIR" else at
+        names = {"exfiltration.json"} | ({"result.json"} if record == real else set())
+        assert {p.name for p in at.rglob("*") if p.is_file()} == names
+        assert json.loads((out / "exfiltration.json").read_text()).get("made_up") is (True if record == MADE_UP else None)
+    got = json.loads((at / "result.json").read_text())["measurements"]
+    assert {m["name"] for m in got} == set(metrics) and all(m["mark"] == "modeled" for m in got)
+    by = {m["name"]: m for m in got}
+    assert (by[next(iter(metrics))]["period"], by[next(iter(metrics))]["over"]) == ("year", "world")
 
 
 def test_a_record_directory_gives_the_figures_the_stores_runs_of_record_give(tmp_path):
@@ -91,8 +101,8 @@ def test_a_record_that_says_nothing_of_itself_is_not_called_made_up(monkeypatch,
 
 @pytest.mark.parametrize("given, said", [
     ("nowhere", "{at}: no such directory, and not a run id: give --from the directory of a run's record"),
-    ("empty", "no run of record holds the planner's rows: empty holds no planner rows (`out/rows.jsonl`, "
-              "`out/three/rows.jsonl`) and no plan (`out/mix.json`) (give --from a run's record that does)"),
+    ("empty", ("no run of record holds the planner's rows: empty holds no planner rows (`out/rows.jsonl`, "
+               "`out/three/rows.jsonl`) and no plan (`out/mix.json`) (give --from a run's record that does)")),
 ])
 def test_a_from_that_names_no_record_of_rows_is_refused_in_one_line(monkeypatch, capsys, no_store, tmp_path,
                                                                     given, said):
