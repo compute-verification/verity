@@ -1,0 +1,39 @@
+schema = "verity-bench/steady-spec/v0"
+id = "glm53-flock-steady-head-block-h200-c24"
+# `glm53-flock-steady-head-block-h200`'s two four-prover points on 24 cores instead of ten: six a prover, all on the
+# card's NUMA node on a node whose NUMA nodes hold 24 cores each. `cores` is in a point's identity, so these are other
+# points than the ten-core spec's. Launch with `verity-bench run SPEC --direct NODE`, NODE an H200 node of
+# `verity_bench.jobs.DIRECT_NODES` with a GPU slot of 24 cores on one NUMA node.
+workload = "glm53"
+card = "h200"
+cores = 24
+sessions = 120
+ahead = 2
+driver = "595.91.07"
+cuda_toolkit = "13.3.73"
+setup = "benchmarks/harness/setup/flock_prover.sh"
+
+[env]
+RUST_MIN_STACK = "67108864"
+
+[admission]
+max_minutes = 90
+mem_gb = 300
+
+[[row]]
+type = 'census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}'
+n = 256
+pin = "4b31e7caba0113987350c49cb19e8a5d18558a517aa3297986cd5f9732e4f3f9eb589b79c47a3da24870ba151250eee25fef7a2872acebc14c0e2185acb6b0b5"
+provers = [4]
+warm = 3
+period = 2
+staged = "art:860142a5a87de2cbc17b60c00781de6f4648ef78f0d85530010965400cfd0430/out/row1"
+
+[[row]]
+type = 'census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}'
+n = 256
+pin = "be5bca5c30515dc443efd8889063517410e610d334806931acd7d6348e10ae9cda1b7091e5b6385bc7d403d01fcf511fa1d389ddd486e63f4688e86395ca646a"
+provers = [4]
+warm = 3
+period = 2
+staged = "art:860142a5a87de2cbc17b60c00781de6f4648ef78f0d85530010965400cfd0430/out/row2"
