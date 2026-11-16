@@ -93,6 +93,21 @@ open Flock Transcript FlockComplete FlockDeploy FlockComplete.Replay
 
 variable {H : Claims.Msg → Claims.Msg}
 
+/-- **Level 0's masked cap is at most `2^14` bytes**: `2^cap` digests of 64 bytes, `cap ≤ 8`. -/
+theorem capBytes_le (h64 : Claims.Out64 H) {wideLeaf : Bool} {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35)
+    {v : Schedule × ℕ} (hv : Zk.schedule wideLeaf m = .ok v) {g extra lanePad salt} {cm : Commit}
+    (hcm : commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) MerkleScheme.hm96Sha512 (v.1.levels.getD 0 default)
+      v.2 g extra lanePad salt = .ok cm) :
+    (Lg.capBytes cm.cap).size ≤ 16384 := by
+  have h64' := JsonRT.hOf_size h64
+  obtain ⟨-, -, -, hcap8⟩ := L0.zkSchedule_sizes h25 h35 hv
+  obtain ⟨-, -, hL, -, -, -, -, -, -, -, hcapd, -⟩ := L0.zkSch_facts h25 h35 hv
+  obtain ⟨-, -, -, -, -, hcs0, hcw0⟩ := L0.commitPZk_shape (fun _ _ _ e => hm96_node h64' _ _ e)
+    (fun _ _ _ e => hm96_leaf h64' _ _ e) (hcapd 0 (by omega)) hcm
+  rw [Lg.capBytes_size hcw0, hcs0]
+  exact (Nat.mul_le_mul (by decide : MerkleScheme.hm96Sha512.digestLen ≤ 64)
+    (Nat.pow_le_pow_right (by decide) (hcap8 0 (by omega)))).trans (by decide)
+
 /-- **Every round of a masked rep that returns holds at most `|d| + 2^16` bytes**, `d` its stream's domain, at a
 statement of `25 ≤ m ≤ 35` under `hm96-sha512/v1` with `k_log ≤ m`. -/
 theorem rep_bytes (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35)
@@ -128,20 +143,11 @@ theorem rep_bytes (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (h25 : 2
     omega
   have h64' := JsonRT.hOf_size h64
   obtain ⟨hv2, hext, hk0, hcap8⟩ := L0.zkSchedule_sizes h25 h35 hin.schedule
-  obtain ⟨-, -, hL, -, -, -, -, -, -, -, hcapd, -⟩ := L0.zkSch_facts h25 h35 hin.schedule
-  have hnode : ∀ l r v, (MerkleScheme.hm96Sha512.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).node l r =
-      .ok v → v.size = MerkleScheme.hm96Sha512.digestLen := fun _ _ _ e => hm96_node h64' _ _ e
-  have hleaf : ∀ row s v, (MerkleScheme.hm96Sha512.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).leaf row s =
-      .ok v → v.size = MerkleScheme.hm96Sha512.digestLen := fun _ _ _ e => hm96_leaf h64' _ _ e
   have hcm : commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) MerkleScheme.hm96Sha512
       (v.1.levels.getD 0 default) v.2 (packed tr (Setup.ofCircuit st).m) (ω.extra i) (ω.lanePad i) (ω.salt i 0 0) =
         .ok cm := by
     rw [← hmerk]; exact hin.commit
-  obtain ⟨-, -, -, -, -, hcs0, hcw0⟩ := L0.commitPZk_shape hnode hleaf (hcapd 0 (by omega)) hcm
-  have hcap0 : (Lg.capBytes cm.cap).size ≤ 16384 := by
-    rw [Lg.capBytes_size hcw0, hcs0]
-    exact (Nat.mul_le_mul (by decide : MerkleScheme.hm96Sha512.digestLen ≤ 64)
-      (Nat.pow_le_pow_right (by decide) (hcap8 0 (by omega)))).trans (by decide)
+  have hcap0 := capBytes_le h64 h25 h35 hin.schedule hcm
   rw [hmerk] at hlig
   obtain ⟨ht', -⟩ := L0.honestZ (sch := v.1) (tPad := v.2) resp (Claims.hOf H) MerkleScheme.hm96Sha512 _ cm _ _ lay
     pads.h rep (ω.extra i) (ω.lanePad i) (ω.salt i rep) (ω.nonce i rep)
@@ -163,7 +169,7 @@ theorem rep_bytes (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (h25 : 2
       rw [getElem!_pos lg.recursiveCaps j hj, Lg.capBytes_size hs2, hs1]
       exact (Nat.mul_le_mul (by decide : MerkleScheme.hm96Sha512.digestLen ≤ 64)
         (Nat.pow_le_pow_right (by decide) (hcap8 (j + 1) (by omega)))).trans (by decide)
-    · rw [getElem!_neg lg.recursiveCaps j hj]
+    · rw [getElem!_neg lg.recursiveCaps j hj, show (default : Array ByteArray) = #[] from rfl]
       simp [Lg.capBytes]
   have hyr' : lg.finalProof.yr.size ≤ 512 := by
     rw [hyr]

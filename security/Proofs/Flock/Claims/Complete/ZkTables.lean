@@ -29,6 +29,7 @@ public import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
 public import Proofs.Flock.Claims.Complete.ZkTables.View
 public import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
 public import Proofs.Flock.Claims.Complete.ZkTables.RepBytes
+public import Proofs.Flock.Claims.Complete.ZkTables.RecordBytes
 public import Proofs.Flock.Claims.Complete.ZkTables.Parts
 public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 public import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
