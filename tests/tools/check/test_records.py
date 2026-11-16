@@ -297,7 +297,7 @@ def test_the_step_and_the_session_are_told_where_to_list_their_records_once_circ
 def test_only_a_check_that_runs_circuit_check_fetches(parts, builds):
     check = CHECK
     assert check.builds_records(parts) is builds
-    suite = next(s.name for s in check.SUITES.discover() if s.path == check.CIRCUIT_SUITE)
+    suite = next(s.name for s in check.SUITES.discover() if check.CIRCUIT_SUITE in (s.path, *check.SUITES.LAYOUT.tested(s.path)))
     assert check.builds_records([f"pytest:{suite}:1/2"]) and not check.builds_records(["pytest:repository"])
 
 

@@ -23,7 +23,7 @@ def _load(name, path):
     return mod
 
 
-PRT = _load("enc_pool_row_trace", HERE.parent / "pool_row_trace.py")
+PRT = _load("enc_pool_row_trace", HERE.parents[3] / "benchmarks" / "network_e2e" / "encodings" / "pool_row_trace.py")
 
 PREFIX = {"cached": 185, "cached at an edge": 157, "checks": 1261, "copies at an edge": 1, "edges": 1, "hit blocks": 52, "keys": 185, "lookups": 14,
           "ops": 1261, "steps": 155}
