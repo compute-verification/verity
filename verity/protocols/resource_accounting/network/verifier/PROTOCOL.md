@@ -361,7 +361,7 @@ attester"), and it charges a `format` failure the same.
      from an unsampled block is a wrong block, and is charged.
 
 **Either side of the network attester.**
-- **The server's side.** What makes the id form from the engine's output is the prover's, and isn't trusted. It
+- **The server's side.** What makes the id form from the engine's output is the developer's, and isn't trusted. It
   needn't be, because the gate refuses every other form and the tie checks the ids. An example is serve-openai's
   `--protocol ids`, `IdsProtocol` in `adapters/vllm/verity_vllm/pipeline/serve_protocol.py`.
 - **The client's side.** A client's shim may rebuild OpenAI fields from the record by a public rule:
@@ -2008,9 +2008,9 @@ client's view read back from the network attester's record (`SecurityProofs.Moni
 `network_attester.py`'s code.
 
 **Deployment requirement (`trusted-device`).** The bound holds only on a host that gives the network attester's process:
-- CPU isolation from every co-tenant (its own cores), so that no co-resident process, the prover's above all, can
+- CPU isolation from every co-tenant (its own cores), so that no co-resident process, the developer's above all, can
   make a tick late and so choose which windows fault (about 1 bit a window otherwise);
-- a raw monotonic clock that nothing the prover runs can step or slew by more than the slack: buckets are read from
+- a raw monotonic clock that nothing the developer runs can step or slew by more than the slack: buckets are read from
   it.
 
 Both are part of the named assumption `trusted-device` (the auditor's device and its provider are trusted). Neither is
