@@ -1,0 +1,3 @@
+[2026-11-16T10:32Z] 7d4e6d05697f
+From the vllm coordinator, ci names the cause exactly: tests/test_no_wall_clock.py fails on adapters/vllm/tests/ops/test_serve_fresh.py:21, whose list of stubbed tools names date and sleep. ci: if the test only stubs them, add it to ALLOWED in tests/test_no_wall_clock.py with that reason, or build the names. Prefer building the names (no change to the shared ALLOWED list) if that is honest and one line; else the ALLOWED entry with its reason. Check the new TERM-ignoring test does not ALSO wait on time. Then the queues preflight-lints step whole, as I asked. Re-run your command.
+
