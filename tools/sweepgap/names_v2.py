@@ -73,6 +73,12 @@ DEVICE_CUE = re.compile(r"""(?ix)certifier['’]?s?[ ]+(?:sign|signs|signed|key|
 NET_PHRASE = re.compile(r"(?i)network[ _-]certifiers?")
 
 
+def cased(sp: str, new: str) -> str:
+    if sp.isupper() and len(sp) > 1:
+        return new.upper()
+    return new[0].upper() + new[1:] if sp[0].isupper() else new
+
+
 def spell_of(sp: str, matched: str) -> str:
     return sp if len(sp) > len(matched) else matched
 
@@ -117,7 +123,7 @@ for r in rows:
         continue
     low = sp.lower()
     if f.endswith(".lean") and re.fullmatch(r"(?i)certifiers?", sp) and re.search(r"(?i)network certifiers?", line):
-        add(term, sp, '"network certifier" in a Lean line', f, ln, kind, own, "RENAME", "network attester" if low == "certifier" else "network attesters",
+        add(term, sp, '"network certifier" in a Lean line', f, ln, kind, own, "RENAME", cased(sp, "network attester" if low == "certifier" else "network attesters"),
             "the words map renames it in a comment or docstring; a string literal stays")
         continue
     if f.endswith(".lean"):
@@ -140,12 +146,12 @@ for r in rows:
         continue
     if low in ("certifier", "certifiers"):
         if NET_PHRASE.search(line):
-            add(term, sp, '"network certifier" (the row\'s phrase)', f, ln, kind, own, "RENAME", "network attester" if low == "certifier" else "network attesters", "")
+            add(term, sp, '"network certifier" (the row\'s phrase)', f, ln, kind, own, "RENAME", cased(sp, "network attester" if low == "certifier" else "network attesters"), "")
         elif PROTO_CUE.search(line):
             add(term, sp, "the protocol (its id, area, audit or claim ids)", f, ln, kind, own, "OTHER SENSE", "",
                 "the bare word names the network protocol, not the device: no row renames it (tools/move/ontology_words_map.toml's note)")
         elif DEVICE_CUE.search(line):
-            add(term, sp, '"the certifier" for the device (the row)', f, ln, kind, own, "RENAME", "the network attester" if low == "certifier" else "the network attesters", "")
+            add(term, sp, '"the certifier" for the device (the row)', f, ln, kind, own, "RENAME", cased(sp, "the network attester" if low == "certifier" else "the network attesters"), "")
         else:
             add(term, sp, "bare, no cue on the line", f, ln, kind, own, "ASK", "",
                 f"is this the device (then the network attester) or the protocol (then the word stays)?")
