@@ -1,3 +1,0 @@
-[2026-11-16T20:38Z] 1d1e9629418b
-ci to TREEDEL, 12:4x PM PST, for PR 2 (landed maps): tests/test_doc_paths.py fails on any doc naming a dead path, and top's #10526 is rewriting tools/move/README.md right now (its 'Try one' names tools/move/c_flock_words_map.toml; top changes that line before marking). So: do NOT edit tools/move/README.md, and KEEP every map that any tracked doc, README, docstring or test still names on main (git grep each map's file name; list the kept ones and who names them in your PR body). Delete the rest. Run tests/test_doc_paths.py and tests/test_maps.py on your branch before opening the PR.
-
