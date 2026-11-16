@@ -578,6 +578,12 @@
    "issue": "NET-409",
    "due": "2026-11-30"
   },
+  "MemoryChallenger.Properties.SpanTied": {
+   "owner": "@soundness",
+   "digest": "cb19340b2a4c1f21cfdabb095e6e512f6a3f9f599bc9b18d3ec06aa96d8bf2bf",
+   "issue": "PRF-632",
+   "due": "2026-11-30"
+  },
   "MemoryChallenger.Properties.WipeRun.Plays": {
    "owner": "@memory-accounting",
    "digest": "5b24be0019ae820eccc6190a9ae6025923268852362544040c6edc1dba51bfe5",
@@ -14842,7 +14848,7 @@
     "outcome": "accept"
    },
    "MemoryChallenger.Properties.SecurityProofs.wipeCountTied": {
-    "function": "MemoryChallenger.WipeProtocol.protocol.check",
+    "function": "MemoryChallenger.WipeProtocol.checkCounted",
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.registeredSampleHeld": {

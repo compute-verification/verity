@@ -93,6 +93,11 @@
    "except": [],
    "why": "the count over a span is code: the period's check with what it imports (its schedule, certificate and row registration decoders, v4's certificate and its one LMS check, the core interface), the read of the link and the key off the registered hardware (the core interface's Site) and the table of domain separators, no Mathlib and nothing of Security"
   },
+  "NetworkCheck.Registered": {
+   "imports": ["CoreProtocol.Site"],
+   "except": [],
+   "why": "the read of the network certifier's link and key off the registered hardware is code: the core interface's Site alone, no Mathlib and nothing of Security"
+  },
   "NetworkCheck.RowsAudit": {
    "imports": ["NetworkCheck.Period", "NetworkCheck.Records", "NetworkCertifier.Rows"],
    "except": [],
