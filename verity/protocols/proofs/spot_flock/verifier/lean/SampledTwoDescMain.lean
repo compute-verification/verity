@@ -16,9 +16,14 @@ params, the boundary registration, the rule and the interior's params, replay bl
   of units (`sizes`);
 * on the play with its second template given the first's name, which `namesOnce` must refuse; a play of fewer than two
   templates has no such case, and the line says so;
-* on the play with its interior registering a value, which the check must refuse at that clause.
+* on the play with its interior registering a value, which the check must refuse at that clause;
+* each template's member's circuit file (its digest) and the names of the tables its reference statement reads
+  (`refOf`'s, the member's own: `Spot.OneStageZk.ownTables`), and the pinned tables the blobs hold
+  (`Spot.OneStageZk.tablesOf`), on the play and on the play whose blobs also hold, under its pinned digest, a pinned
+  table no template's member looks up (`withUnlooked`), which a reference statement must not read.
 
-It exits 0 when the play passes, each refused case is refused at its clause, and `why` agrees with `descOk` on all.
+It exits 0 when the play passes, each refused case is refused at its clause, `why` agrees with `descOk` on all, and the
+play with the table no member looks up has the play's reference tables and verdict.
 No party runs it and nothing dispatches to it: nothing in the form calls `descOk` yet.
 -/
 
@@ -129,6 +134,37 @@ def renamed (it : Spot.Run.Interior) : Spot.Run.Interior :=
 def registering (it : Spot.Run.Interior) : Spot.Run.Interior :=
   { it with params := { it.params with verifier := { it.params.verifier with registered := #[("x", 1)] } } }
 
+/-- The first pinned table no template's member's circuit looks up (`Spot.OneStageZk.lookupsOf`), none where one does
+not read or every pinned table is looked up. -/
+def unlooked (p : SampledTwo.Params) (bs : Core.Blobs) : Option Flock.MufuTable := do
+  let looked ← (List.range p.circuits.size).mapM fun t => do
+    let m ← memberOf p t
+    (bs.get m.own.circuit "circuit" >>= Spot.OneStageZk.lookupsOf).toOption
+  Flock.MUFU_TABLES.find? fun q => !looked.any (·.contains q.name)
+
+/-- The blobs with an entry under the pinned table `q`'s digest, its bytes empty: a pinned table the blobs hold. -/
+def withUnlooked (bs : Core.Blobs) (q : Flock.MufuTable) : Core.Blobs :=
+  match Flock.unhex q.sha512 with
+  | .ok d => { bs with entries := bs.entries.push (d, ByteArray.empty) }
+  | .error _ => bs
+
+/-- The names of each template's reference tables (`refOf`'s), none for a template whose reference statement is
+refused. -/
+def refTables (p : SampledTwo.Params) (bs : Core.Blobs) : List (Option (List String)) :=
+  (List.range p.circuits.size).map fun t => (refOf p bs t).toOption.map fun r => r.tables.map (·.1)
+
+/-- Lines a template: its member's circuit digest and its reference tables' names, as JSON; then the pinned tables the
+blobs hold. -/
+def tableLines (what : String) (p : SampledTwo.Params) (bs : Core.Blobs) : List String :=
+  let ts := refTables p bs
+  ((List.range p.circuits.size).map fun t =>
+    let c := ((memberOf p t).map (·.own.circuit)).getD ""
+    let names := match ts.getD t none with
+      | some ns => (Lean.toJson ns).compress
+      | none => "null"
+    s!"{what}: template {t}: circuit {c}, reference tables {names}") ++
+  [s!"{what}: pinned tables the blobs hold {(Lean.toJson ((Spot.OneStageZk.tablesOf bs).map (·.1))).compress}"]
+
 /-- One line: the case, `descOk`'s verdict and `why`'s. -/
 def report (what : String) (ok : Bool) (w : Option String) : String :=
   s!"{what}: descOk {ok}, {match w with | none => "pass" | some c => s!"refused at {c}"}"
@@ -172,10 +208,25 @@ def main (args : List String) : IO UInt32 := do
       let okR := descOk p bs i itR
       let wR := why (clauses p bs i itR)
       IO.println (report "play with its interior registering a value" okR wR)
+      for l in tableLines "play" p bs do IO.println l
+      let tablesKept ← match unlooked p bs with
+        | none =>
+          IO.println "play with a pinned table no member looks up: not made, every pinned table is looked up"
+          pure true
+        | some q =>
+          let bsT := withUnlooked bs q
+          let okT := descOk p bsT i it
+          let wT := why (clauses p bsT i it)
+          let what := s!"play with a pinned table no member looks up ({q.name})"
+          IO.println (report what okT wT)
+          for l in tableLines what p bsT do IO.println l
+          pure (okT == ok && wT == w && refTables p bsT == refTables p bs)
+      out.flush
       let agree := (ok == w.isNone) && (okN == wN.isNone) && (okR == wR.isNone)
       if !agree then IO.println "why disagrees with descOk"
+      if !tablesKept then IO.println "a pinned table no member looks up changed a reference statement or the verdict"
       let named := !two || (!okN && wN == some "namesOnce")
-      return if agree && ok && named && !okR && wR == some "registersNone" then 0 else 1
+      return if agree && ok && named && !okR && wR == some "registersNone" && tablesKept then 0 else 1
   | _ =>
     IO.eprintln "usage: sampled-two-desc check PARAMS COMMITMENT EVIDENCE [BLOB ...]"
     return 64

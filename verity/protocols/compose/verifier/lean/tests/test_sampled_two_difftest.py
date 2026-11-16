@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import copy
 import functools
+import hashlib
 import json
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -22,6 +24,7 @@ from hypothesis import strategies as st
 import reference as R
 import sampled_two as T
 import verity_difftest as D
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
 from verity_difftest import canonical
 
@@ -265,3 +268,48 @@ def test_the_form_refuses_a_statement_that_is_not_its_session_s(tmp_path) -> Non
     reason = T.stmts_sessions(own, swapped)
     assert reason == T.STMT_SESSION(0)
     _refuses(tmp_path, d, {**ev, "statements": swapped}, reason)
+
+
+#: a line of `sampled-two-desc check`'s for one template: the case, the template, its member's circuit digest and the
+#: names of its reference statement's tables (`refOf`'s), as JSON
+REF_TABLES = re.compile(r"^(?P<case>.+): template (?P<t>\d+): circuit (?P<circuit>[0-9a-f]*), reference tables (?P<tables>.+)$")
+#: its line for the pinned tables the blobs hold (`Spot.OneStageZk.tablesOf`)
+HELD = re.compile(r"^(?P<case>.+): pinned tables the blobs hold (?P<tables>.+)$")
+#: the case `sampled-two-desc` makes of the play whose blobs also hold a pinned table no member looks up
+UNLOOKED = re.compile(r"^play with a pinned table no member looks up \((?P<name>\w+)\)$")
+
+
+@pytest.mark.slow
+def test_the_descriptor_check_reads_each_member_s_own_tables() -> None:
+    """`SampledTwoDesc.refOf` sets each template's reference statement up at its member's own lookup tables
+    (`Spot.OneStageZk.ownTables`), the tables the per-member form hands the member's session. On the kept honest play
+    (`CASE`) and on that play with its blobs also holding, under its pinned SHA-512, a pinned table no member's circuit
+    looks up, `sampled-two-desc check` passes, and each template's reference tables are the Python twin's
+    (`proofs.own_tables` over its circuit's `proofs.lookups_of` and the blobs' SHA-512s), never the pinned tables the
+    blobs hold (`tablesOf`) where those differ. It catches a reference statement read at the blobs' tables, which no
+    other test reaches: every other case's blobs hold no pinned table."""
+    d = Path(VERITY_SETTINGS.VERITY_SAMPLED_TWO_CASE or CASE)
+    assert (d / "params.json").is_file(), (
+        f"{d} is not fetched: `uv run research data fetch-fixtures "
+        "verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case`")
+    blobs = sorted((d / "blobs").iterdir())
+    files = [str(d / f) for f in ("params.json", "commitment.json", "evidence.json")] + [str(b) for b in blobs]
+    out = subprocess.run([str(D.build(PORT.package, "sampled-two-desc")), "check", *files],
+                         capture_output=True, text=True, check=False)
+    assert out.returncode == 0, (out.stdout + out.stderr)[-4000:]
+    by_digest = {hashlib.sha512(b.read_bytes()).hexdigest(): b for b in blobs}
+    lines = out.stdout.splitlines()
+    unlooked = [m["name"] for x in lines if (m := UNLOOKED.match(x.split(": descOk")[0]))]
+    assert len(unlooked) == 1, out.stdout[-4000:]
+    extra = f"play with a pinned table no member looks up ({unlooked[0]})"
+    digests = {"play": set(by_digest), extra: set(by_digest) | {PF.MUFU_SHA512[unlooked[0]]}}
+    held = {m["case"]: json.loads(m["tables"]) for x in lines if (m := HELD.match(x))}
+    assert held == {"play": PF.own_tables(list(PF.MUFU_SHA512), digests["play"]),
+                    extra: PF.own_tables(list(PF.MUFU_SHA512), digests[extra])}, held
+    assert unlooked[0] in held[extra]
+    refs = [m for x in lines if (m := REF_TABLES.match(x))]
+    assert {m["case"] for m in refs} == set(digests), out.stdout[-4000:]
+    for m in refs:
+        lookups = PF.circuit_lookups(by_digest[m["circuit"]])
+        assert unlooked[0] not in lookups
+        assert json.loads(m["tables"]) == PF.own_tables(lookups, digests[m["case"]]), (m.group(0), lookups)
