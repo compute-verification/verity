@@ -1,0 +1,62 @@
+module
+
+public import Flock.Blake3Row
+public import Flock.Bytes
+public import Flock.Comp
+
+/-!
+The verifier's tests on vector files, each a command of its own (`field-test`, `hash-test`, `comp-check`): the field's
+product and inverse, the hashes, and the pinned compression circuit's load. No check of a session reads them.
+-/
+
+@[expose] public section
+
+namespace Flock.SelfTest
+
+def parseHex128 (s : String) : Option F128 := do
+  if s.length != 32 then none
+  let v ← (String.toNat? ("0x" ++ s)) <|> (s.foldl (fun acc c => acc.bind fun n =>
+      let d := if c.isDigit then some (c.toNat - 48) else if 'a' ≤ c && c ≤ 'f' then some (c.toNat - 87) else none
+      d.map (fun d => n * 16 + d)) (some 0))
+  pure ⟨(v % 2^64).toUInt64, (v / 2^64).toUInt64⟩
+
+def fieldTest (path : String) : IO UInt32 := do
+  let lines ← IO.FS.lines path
+  let mut bad := 0
+  for l in lines do
+    match (l.splitOn " ").map parseHex128 with
+    | [some a, some b, some p, some i] =>
+      if a * b != p || F128.inv a != i then bad := bad + 1
+    | _ => bad := bad + 1
+  IO.println s!"field-test: {lines.size} cases, {bad} failures; phi8(2) = {(phi8 2).toHex}"
+  return (if bad == 0 then 0 else 1)
+
+def bytesOfHex (s : String) : ByteArray := match unhex s with | .ok b => b | .error _ => ByteArray.empty
+
+def hashTest (path : String) : IO UInt32 := do
+  let lines ← IO.FS.lines path
+  let mut bad := 0
+  for l in lines do
+    match l.splitOn " " with
+    | [kind, key, msg, want] =>
+      let m := bytesOfHex msg
+      let got := match kind with
+        | "sha256" => Sha256.hash m
+        | "sha512" => Sha512.hash m
+        | "blake3" => Blake3.hash m
+        | _ => Blake3.keyedHash (bytesOfHex key) m
+      if hexOf got != want then
+        bad := bad + 1
+        IO.println s!"MISMATCH {kind} len={m.size}"
+    | _ => bad := bad + 1
+  IO.println s!"hash-test: {lines.size} cases, {bad} failures"
+  return (if bad == 0 then 0 else 1)
+
+def compCheck (path : String) : IO UInt32 := do
+  let b ← IO.FS.readBinFile path
+  let t0 ← IO.monoMsNow
+  match Comp.load Blake3Row.spec b with
+  | .ok c => IO.println s!"comp-check: ok, D_b3 {hexOf c.digest} ({(← IO.monoMsNow) - t0} ms)"; return 0
+  | .error e => IO.println s!"comp-check: {e}"; return 1
+
+end Flock.SelfTest

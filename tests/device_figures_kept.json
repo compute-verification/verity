@@ -1,0 +1,6 @@
+{
+  "rule": "a number that equals a device's figure and stays, saying why (tests/lint/test_device_figures.py)",
+  "entries": [
+    {"file": "adapters/vllm/tools/description_sizes.json", "count": 18, "lane": "vllm", "why": "a template's description size in bytes (1830), not a clock"}
+  ]
+}

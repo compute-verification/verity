@@ -1,0 +1,18 @@
+{
+ "format": 2,
+ "roots": ["Evaluate"],
+ "exempt": {
+  "Evaluate.Main": "the verity-evaluate executable's entry point, one line: Evaluate.evaluateFn behind Difftest.serve, each audited in its own package"
+ },
+ "layers": {
+  "Evaluate": {
+   "imports": ["Evaluate", "Base", "Circuits", "Difftest", "Lean"],
+   "except": [],
+   "why": "the evaluator is code: its modules import only one another, Lean core, the base (`core_base`), the circuit format (`core_circuits`) and the difftest harness (`verity_difftest`), no Mathlib and nothing of `security/`"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
+ }
+}

@@ -1,0 +1,257 @@
+#!/bin/bash
+# First boot of the Nebius server, as root, from cloud-init's runcmd (launch.sh embeds it); safe to run again.
+#
+#   - sshd: keys only, no root, only $VY_USER, and room for many concurrent connections (MaxStartups, MaxSessions);
+#   - the data disk (/dev/disk/by-id/virtio-data) is formatted ONLY when it holds no filesystem, and mounted at /workspace, where
+#     the tooling already looks: /workspace/hf (HF_HOME, the weight cache), /workspace/research (the research root),
+#     /workspace/ramlock (--mem-gb reservations), /workspace/cp (the vLLM integration's build root, as on a RunPod pod: its
+#     pipeline and tests create directories there, and /workspace itself is root's);
+#   - /run/gpu-lease for gpu-lease, and the lease: vy-lease.service runs research's lease.sh as $VY_USER, which stops this VM
+#     through the Nebius API (vy-nebius-stop, the attached service account's token from the metadata service) once the lease
+#     and its grace have passed.  Every boot grants VY_BOOT_LEASE_S so a started VM is not stopped before anyone can extend it.
+# Its settings come from /etc/vy/vy.env, written by cloud-init.
+set -euo pipefail
+. /etc/vy/vy.env
+U=${VY_USER:-research}
+DEV=/dev/disk/by-id/virtio-${VY_DATA_DEVICE_ID:-data}
+LEASE_DIR=/home/$U/.research
+log() { echo "vy-setup: $*"; }
+
+cat > /etc/ssh/sshd_config.d/10-vy.conf <<EOF
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+AllowUsers $U
+X11Forwarding no
+EOF
+# sshd keeps the first value it reads; on the nodes a MaxStartups in a drop-in didn't take effect (the main file's own line won),
+# and at the default 10:30:100 ssh from runs and agents was refused at random. So both go first in the main file.
+sed -i -E '/^[[:space:]]*#?[[:space:]]*(MaxStartups|MaxSessions)[[:space:]]/d' /etc/ssh/sshd_config
+sed -i '1i MaxStartups 200:30:400\nMaxSessions 64' /etc/ssh/sshd_config
+# Inbound IPv4 TCP packets that carry IP options are dropped before anything sees them (normal traffic never carries them),
+# and MPTCP stays off; deploy.toml installs the same three files on running nodes.
+mkdir -p /etc/vy
+cat > /etc/vy/drop-ipv4-options.nft <<'EOF'
+add table ip vy_drop_ipv4_options
+delete table ip vy_drop_ipv4_options
+table ip vy_drop_ipv4_options {
+  chain prerouting {
+    type filter hook prerouting priority -300; policy accept;
+    meta l4proto tcp ip hdrlength > 5 counter drop
+  }
+}
+EOF
+cat > /etc/systemd/system/vy-drop-ipv4-options.service <<'EOF'
+[Unit]
+Description=Drop inbound IPv4 TCP packets that carry IP options
+DefaultDependencies=no
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/vy/drop-ipv4-options.nft
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo 'net.mptcp.enabled = 0' > /etc/sysctl.d/90-vy-mptcp-off.conf
+command -v nft > /dev/null || { apt-get update -q && apt-get install -y -q nftables; }
+systemctl daemon-reload
+systemctl enable vy-drop-ipv4-options.service
+systemctl restart vy-drop-ipv4-options.service
+sysctl -q -p /etc/sysctl.d/90-vy-mptcp-off.conf
+# cloud-init writes it after systemd-sysctl has run, on the nodes deploy.toml gives it (launch.sh)
+[ ! -e /etc/sysctl.d/61-vy-userns.conf ] || sysctl -q -e -p /etc/sysctl.d/61-vy-userns.conf || log "61-vy-userns.conf not applied"
+sshd -t && { systemctl reload ssh || systemctl reload sshd || true; }
+
+for _ in $(seq 60); do [ -e "$DEV" ] && break; sleep 2; done
+[ -e "$DEV" ] || { log "no data disk at $DEV"; exit 1; }
+if [ -z "$(blkid -o value -s TYPE "$DEV" || true)" ]; then
+  log "formatting $DEV (it holds no filesystem)"
+  # one inode per 64 KiB: at 256 KiB a 2 TB disk ran out of inodes with 46% of its bytes used, a Lean build tree being 0.5-1M inodes
+  mkfs.ext4 -q -L vy-data -m 0 -i 65536 -E lazy_itable_init=1,lazy_journal_init=1 "$DEV"
+fi
+mkdir -p /workspace
+grep -q ' /workspace ' /etc/fstab || echo "LABEL=vy-data /workspace ext4 defaults,noatime,nofail,x-systemd.device-timeout=120 0 2" >> /etc/fstab
+mountpoint -q /workspace || mount /workspace
+install -d -o "$U" -g "$U" /workspace/hf /workspace/hf/hub /workspace/hf/prefetch /workspace/research /workspace/ramlock \
+  /workspace/cache /workspace/cache/uv /workspace/cp
+
+# TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB, so a few at once would fill it
+install -d -m 1777 -o root -g root /workspace/tmp
+# the check cache (~/.cache/verity-check, a busy node's Lean build trees: 150 GB and more) lives on /workspace as well; on the
+# root disk a Security build filled it mid-run. A real directory there is the node's live cache: it is moved with its slots
+# drained, never here.
+CC=$(getent passwd "$U" | cut -d: -f6)/.cache/verity-check
+install -d -o "$U" -g "$U" /workspace/research/cache /workspace/research/cache/verity-check "$(dirname "$CC")"
+if [ ! -e "$CC" ] && [ ! -L "$CC" ]; then
+  ln -sT /workspace/research/cache/verity-check "$CC" && chown -h "$U:$U" "$CC"
+elif [ ! -L "$CC" ]; then
+  log "$CC is a directory on the root disk: move it onto /workspace/research/cache with the node's check slots drained"
+fi
+if [ -n "${VY_FS_TAG:-}" ]; then   # a shared filesystem launch.sh attached (NEBIUS_FILESYSTEM_ID), shared by every VM it is attached to
+  mkdir -p /workspace/fs
+  grep -q ' /workspace/fs ' /etc/fstab || echo "$VY_FS_TAG /workspace/fs virtiofs defaults,nofail 0 0" >> /etc/fstab
+  mountpoint -q /workspace/fs || mount /workspace/fs
+  chown "$U:$U" /workspace/fs
+fi
+# 12 h, not 10 d: every job's TMPDIR, so a suite's dead pytest temp trees cost inodes until they age out
+echo 'd /workspace/tmp 1777 root root 12h' > /etc/tmpfiles.d/workspace-tmp.conf
+touch /etc/environment
+# UV_SYSTEM_CERTS (the pinned uv's name for what was --native-tls): uv reads the system trust store, not the roots it ships
+for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID TMPDIR=/workspace/tmp \
+    UV_SYSTEM_CERTS=1; do
+  grep -q "^${kv%%=*}=" /etc/environment || echo "$kv" >> /etc/environment
+done
+
+echo 'd /run/gpu-lease 1777 root root -' > /etc/tmpfiles.d/gpu-lease.conf
+systemd-tmpfiles --create /etc/tmpfiles.d/gpu-lease.conf
+# gpu-lease hands out this VM's GPUs: a `research run --on` here sees none unless it asks with --gpus N (research.remote).
+# The cluster's nodes say otherwise in /etc/vy/direct-gpus (cluster_up.sh), which the runner reads first.
+# vy-gpu-adopt holds the lease of a GPU some process uses without one, until it exits, and logs it (gpu_adopt.py).
+install -d -m 755 /etc/vy
+if nvidia-smi -L 2> /dev/null | grep -q '^GPU ' && [ ! -e /etc/vy/direct-gpus ]; then
+  touch /etc/vy/gpu-lease-host
+  install -D -o "$U" -g "$U" -m 755 /usr/local/share/vy/gpu_adopt.py /workspace/verity-guest/bin/gpu_adopt.py
+  cat > /etc/systemd/system/vy-gpu-adopt.service <<EOF
+[Unit]
+Description=hold the gpu-lease lease of a GPU a process uses without one, until it exits (gpu_adopt.py)
+After=local-fs.target
+
+[Service]
+User=$U
+ExecStart=/usr/bin/python3 /workspace/verity-guest/bin/gpu_adopt.py loop
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -q
+# python3-numpy: `python3 tools/verity/lean/check.py --update` runs PoUW's vector generators, which import numpy, under that
+# python3. python3.12-dev and build-essential: Triton compiles cuda_utils.c against Python.h at a vLLM engine's first start
+apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev build-essential util-linux ripgrep
+# The trust store: the Nebius images ship with apt's daily timers off, so ca-certificates stayed at the image's and
+# kept roots Ubuntu had removed. Upgrade it now, and turn the timers on: unattended-upgrades then keeps it and the rest of
+# Ubuntu's security pocket current, by /etc/apt/apt.conf.d/52vy-trust (apt-security-updates.conf, which cloud-init wrote and
+# deploy.toml installs: no kernel or driver package moves under a run). `research deploy drift` lists a node that still
+# trusts a distrusted root.
+apt-get install -y -q --only-upgrade ca-certificates 'libnss3*'
+systemctl enable --now apt-daily.timer apt-daily-upgrade.timer
+UV_VERSION=0.12.20        # tools/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
+[ "$(uv --version 2> /dev/null | cut -d' ' -f2)" = "$UV_VERSION" ] \
+  || curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
+if [ ! -x /usr/local/bin/nebius ]; then
+  curl -sSL https://storage.eu-north1.nebius.cloud/cli/install.sh | env HOME=/opt/nebius bash
+  ln -sf /opt/nebius/.nebius/bin/nebius /usr/local/bin/nebius
+fi
+
+install -d -o "$U" -g "$U" -m 700 "$LEASE_DIR"
+install -o "$U" -g "$U" -m 755 /usr/local/share/vy/lease.sh "$LEASE_DIR/lease.sh"
+if [ ! -s "$LEASE_DIR/lease" ] && [ -n "${VY_LEASE_EPOCH:-}" ]; then
+  printf '%s %s %s\n' "$VY_LEASE_EPOCH" "$(date -u -d "@$VY_LEASE_EPOCH" +%Y-%m-%dT%H:%M:%SZ)" launch > "$LEASE_DIR/lease"
+  chown "$U:$U" "$LEASE_DIR/lease"
+fi
+cat > /usr/local/sbin/vy-lease-loop <<'EOF'
+#!/bin/sh
+LEASE_MACHINE_ID=$(curl -sf -H 'Metadata: true' http://metadata.nebius.internal/v1/instance-data/id) || exit 1
+export LEASE_MACHINE_ID
+exec /bin/sh "$LEASE_DIR/lease.sh" loop
+EOF
+chmod 755 /usr/local/sbin/vy-lease-loop
+cat > /etc/systemd/system/vy-lease.service <<EOF
+[Unit]
+Description=research lease: stop this VM through the Nebius API once its lease has expired
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=$U
+Environment=LEASE_DIR=$LEASE_DIR
+Environment=LEASE_TERMINATE_CMD=/usr/local/sbin/vy-nebius-stop
+ExecStartPre=/bin/sh $LEASE_DIR/lease.sh extend ${VY_BOOT_LEASE_S:-7200} boot
+ExecStart=/usr/local/sbin/vy-lease-loop
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# The hard deadline (/etc/research/deadline, `EPOCH ISO BY`, root's): lease.sh clamps every extension to it, and this timer, which the
+# research user can neither edit nor stop, stops the VM from EPOCH - 300 s whatever the lease files say.
+install -d -m 755 /etc/research
+if [ -n "${VY_DEADLINE_EPOCH:-}" ] && [ ! -s /etc/research/deadline ]; then
+  printf '%s %s %s\n' "$VY_DEADLINE_EPOCH" "$(date -u -d "@$VY_DEADLINE_EPOCH" +%Y-%m-%dT%H:%M:%SZ)" launch > /etc/research/deadline
+fi
+cat > /usr/local/sbin/vy-deadline-check <<'EOF'
+#!/bin/sh
+f=/etc/research/deadline
+[ -e "$f" ] || exit 0
+d=""; read -r d _rest < "$f" 2>/dev/null
+case $d in ''|*[!0-9]*) d=0;; esac
+[ "$(date +%s)" -ge $((d - 300)) ] || exit 0
+id=$(curl -sf -H 'Metadata: true' http://metadata.nebius.internal/v1/instance-data/id) || id=unknown
+logger -t vy-deadline "deadline $d reached: stopping $id"
+/usr/local/sbin/vy-nebius-stop "$id" && exit 0
+# A VM whose recovery_policy is FAIL (every preemptible one) stays stopped and unbilled after a guest poweroff, so that is the
+# fallback when the attached service account can't stop it through the API; under RECOVER Nebius restarts it.
+logger -t vy-deadline "API stop of $id refused: powering off"
+exec systemctl poweroff
+EOF
+chmod 755 /usr/local/sbin/vy-deadline-check
+cat > /etc/systemd/system/vy-deadline.service <<'EOF'
+[Unit]
+Description=stop this VM through the Nebius API once /etc/research/deadline has passed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vy-deadline-check
+EOF
+cat > /etc/systemd/system/vy-deadline.timer <<'EOF'
+[Unit]
+Description=check the hard deadline every minute
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# Fixed clocks node-wide at every boot, so timings repeat: the graphics lock below holds under full bf16 load beneath the board's
+# power limit, where unlocked GPUs ride the power limit and drift; the RTX PRO 6000 has one memory clock (its card's
+# clock.memory).  Only root can change them.
+cat > /etc/systemd/system/vy-clocks.service <<EOF
+[Unit]
+Description=lock every GPU's clocks (graphics ${VY_GPU_CLOCK_MHZ:-2100} MHz, memory ${VY_MEM_CLOCK_MHZ:-12481} MHz)
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/nvidia-smi -pm 1
+ExecStart=/usr/bin/nvidia-smi -lgc ${VY_GPU_CLOCK_MHZ:-2100},${VY_GPU_CLOCK_MHZ:-2100}
+ExecStart=/usr/bin/nvidia-smi -lmc ${VY_MEM_CLOCK_MHZ:-12481},${VY_MEM_CLOCK_MHZ:-12481}
+ExecStop=/usr/bin/nvidia-smi -rgc
+ExecStop=/usr/bin/nvidia-smi -rmc
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now vy-lease.service
+systemctl enable --now vy-deadline.timer
+[ ! -e /etc/systemd/system/vy-gpu-adopt.service ] || systemctl enable --now vy-gpu-adopt.service
+[ "${VY_LOCK_CLOCKS:-1}" = 0 ] || systemctl enable --now vy-clocks.service   # the clocks are the RTX PRO 6000's
+
+nvidia-smi -pm 1 > /dev/null 2>&1 || log "nvidia-smi -pm 1 refused (persistence mode stays off)"
+date -u +%Y-%m-%dT%H:%M:%SZ > /var/lib/vy-setup.done
+log "done"

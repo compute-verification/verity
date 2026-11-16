@@ -1,0 +1,71 @@
+# The network certifier's device code, out of the certifier's `verifier/` into its `device/`: what
+# `tools/move/layout.py --map tools/move/certifier_device_map.toml` moves and rewrites.
+#
+# `device/` holds the programs the auditor's devices run (`tests/tree.toml`), as PoUS's memory challenger's party sits in
+# `pous/device/`. Three files are the device's alone, and move: its party (`device_party.py`), what it needs of the
+# party runtime (`device_needs.py`), and its end of the challenges' link (`coin_link.py`), which only the auditor host's
+# challenger service (`verity/protocols/compose/device/live_challenger/`) imports. The move makes the `__init__.py` of
+# the new package and rewrites each path and module name that names the three.
+#
+# What stays in `verifier/`: every module the verifier reads, the relay (`warden.py`) and its pacer (`pacer.py`) among
+# them, since the verifier's modules read the schedule's parameters and the cells' layout from `warden.py` and
+# `active.py` imports the pacer; the manifest (`parties.py`); and the three files' tests, which stay in the verifier's
+# suite as PoUS's party's do in its verifier's. No root moves ([roots] old == new). No file is split or deleted. The
+# format is `layout_map.toml`'s.
+#
+# What no map writes, and so follows the move by hand: the import listing's place for `device/`
+# (`tests/import_order.toml`), and the device's README, which said it had no Python package.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+
+[paths]
+"verity/protocols/accounting/certifier/verifier/coin_link.py" = "verity/protocols/accounting/certifier/device/coin_link.py"
+"verity/protocols/accounting/certifier/verifier/device_needs.py" = "verity/protocols/accounting/certifier/device/device_needs.py"
+"verity/protocols/accounting/certifier/verifier/device_party.py" = "verity/protocols/accounting/certifier/device/device_party.py"
+
+[retired]
+# the paths this map empties
+paths = [
+    "verity/protocols/accounting/certifier/verifier/coin_link.py",
+    "verity/protocols/accounting/certifier/verifier/device_needs.py",
+    "verity/protocols/accounting/certifier/verifier/device_party.py",
+]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, every Lean file (a path in a Lean comment keeps the old name until an edit of that file
+# takes it: a rewritten Lean file recompiles every module that imports it), every kernel source, and the layout of
+# record.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
+# Rewritten though a pattern above matches: the fixtures' READMEs, the Lake manifests, the adapter's Definitions
+# manifest, and the pins and vectors that record their sources' paths, which their tests read at those paths.
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json",
+           "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c_u.json"]
+# the auditor's host's pinned tree, from which its units and the gate name the device's files
+root_prefixes = ["/opt/vy-challenger/current/"]
+
+
+[modules]
+# the rename [paths] implies (`layout.py --modules`)
+"verity.protocols.accounting.certifier.verifier.coin_link" = "verity.protocols.accounting.certifier.device.coin_link"
+"verity.protocols.accounting.certifier.verifier.device_needs" = "verity.protocols.accounting.certifier.device.device_needs"
+"verity.protocols.accounting.certifier.verifier.device_party" = "verity.protocols.accounting.certifier.device.device_party"
