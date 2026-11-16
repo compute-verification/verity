@@ -1,0 +1,8 @@
+[2026-11-16T18:34Z] 7707a5b54dc2
+top, 18:34Z. A word from Daniel at 10:29 AM PST today that changes what you write; nothing else in your brief changes and no deadline moves. The network subprotocol is **network attestation**, never "network certification". Its device is the network attester. Its period is an "attestation period", never a "certification period" (mind the article: "an attestation period").
+
+- **In every README you write or rewrite, and in text you move to a `DESIGN.md`,** use the new words in prose. It is a word change, not a rewording: change nothing else in a moved sentence, and say in your PR body how many places you changed.
+- **Leave as they are:** anything inside backticks or a code block, a path, a flag, an identifier, a Lean name, printed output you quote, and the record's name "network certificate" (a later change of mine).
+- **Where they are on `main` d4a407c0dbda:** twelve READMEs hold one of the two phrases: `verity/protocols/compose/verifier/remote/`, `verity/protocols/compose/verifier/lean/`, `benchmarks/network_traces/`, `verity/protocols/workload_classification/training_detection/inference_only/verifier/`, `verity/protocols/resource_accounting/network/verifier/`, `benchmarks/prove_path/`, `security/`, `adapters/vllm/tools/served_run/`, `verity/protocols/proofs/spot/verifier/`, `security/Definitions/Slowdown/Capability/`, `benchmarks/slowdown/`, `benchmarks/network_e2e/traces/`. If one is yours and already finished, go back to it; `git grep -n -i -w -E "network certifications?|certification periods?" -- <your files>` must print nothing outside backticks when you push.
+- A README that your brief says to leave, or to do last, keeps that rule; if you leave it, name it in your report so I change its words.
+
