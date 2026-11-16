@@ -14,7 +14,8 @@ stopped whenever a VM was suspended: suspending any agent VM stops nothing that 
 The config (watchers.toml, deployed as /data/watchers/watchers.toml) lists the loops. Each [[loop]] runs as its own process group
 with the config's [env], its own `env`, and the KEY=VALUE lines of its `env_files`, so a credential reaches only the loops that
 name its file. Its output is appended to <dir>/log/<name>.log. A loop that exits is started again RESTART_S later. One whose
-`needs` (a file, such as a credential not placed yet) is missing waits, and starts once it exists. Every executable `*.sh` in
+`needs` (a file, such as a credential not placed yet) or `env_files` entry is missing waits, and starts once it exists; a file of
+`optional_env_files` is read when it is there and ignored when it isn't, and never holds the loop. Every executable `*.sh` in
 <dir>/extra.d runs the same way, except that one exiting 0 is done (`<name>.done` beside it) and isn't started again: a one-off
 timed job (restore a slot when a run ends) goes there instead of a tmux session on an agent VM. In argv and env values, `{dir}`
 and `{src}` stand for the config's `dir` and `src`.
@@ -89,6 +90,7 @@ class Loop:
     env: dict[str, str] = field(default_factory=dict)
     env_files: list[str] = field(default_factory=list)
     needs: list[str] = field(default_factory=list)
+    optional_env_files: list[str] = field(default_factory=list)
     once: bool = False                      # extra.d: an exit of 0 is done
     done_file: str | None = None
     proc: subprocess.Popen | None = None
@@ -109,7 +111,7 @@ class Loop:
 
 def loop_env(lp: Loop) -> dict[str, str]:
     env = {**lp.env}
-    for f in lp.env_files:
+    for f in [*lp.env_files, *(f for f in lp.optional_env_files if Path(f).exists())]:
         env.update({k: v for k, v in env_file(Path(f)).items() if k != "PYTHONPATH"})   # load() checked lp.env's
     return env
 
@@ -130,7 +132,8 @@ def load(path: Path) -> tuple[dict, list[Loop]]:
             raise ValueError(f"loop name {spec['name']!r}: lower-case letters, digits and dashes")
         loops.append(Loop(spec["name"], [expand(a, dirs) for a in spec["argv"]],
                           {**base, **{k: expand(str(v), dirs) for k, v in (spec.get("env") or {}).items()}},
-                          [expand(p, dirs) for p in spec.get("env_files", [])], [expand(p, dirs) for p in spec.get("needs", [])]))
+                          [expand(p, dirs) for p in spec.get("env_files", [])], [expand(p, dirs) for p in spec.get("needs", [])],
+                          optional_env_files=[expand(p, dirs) for p in spec.get("optional_env_files", [])]))
     names = [lp.name for lp in loops]
     if len(set(names)) != len(names):
         raise ValueError(f"a loop name repeats: {names}")
@@ -344,7 +347,8 @@ def replaced(new: list[Loop], live: list[Loop], allow: set[str]) -> tuple[list[s
             if name not in allow:
                 dropped.append(name)
             continue
-        for what, a, b in (("argv", old.argv, lp.argv), ("env_files", old.env_files, lp.env_files), ("needs", old.needs, lp.needs)):
+        for what, a, b in (("argv", old.argv, lp.argv), ("env_files", old.env_files, lp.env_files), ("needs", old.needs, lp.needs),
+                             ("optional_env_files", old.optional_env_files, lp.optional_env_files)):
             if a != b:
                 lines.append(f"    {name}: {what} differs\n        live  {' '.join(a) or '(none)'}\n"
                              f"        new   {' '.join(b) or '(none)'}")
@@ -363,7 +367,7 @@ def cmd_check(ns: argparse.Namespace) -> int:
                          cfg["_base_env"], {lp.name for lp in loops})
     bad = 0
     for lp in loops:
-        names = sorted(lp.env) + [f"{f}:*" for f in lp.env_files]
+        names = sorted(lp.env) + [f"{f}:*" for f in [*lp.env_files, *lp.optional_env_files]]
         miss = lp.missing()
         print(f"{lp.name}: {' '.join(lp.argv)}\n    env {', '.join(names)}" + (f"\n    waits for {', '.join(miss)}" if miss else ""))
         if not Path(lp.argv[0]).is_absolute() and not any((Path(p) / lp.argv[0]).exists()
