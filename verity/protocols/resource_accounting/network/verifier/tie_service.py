@@ -3,12 +3,12 @@
 certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md, "The ingress
 tie").
 
-**What is committed** is the network attester's own (`network_certifier_rows`): an ingress execution phase's T bucket rows, row t
+**What is committed** is the network attester's own (`network_attester_rows`): an ingress execution phase's T bucket rows, row t
 bucket t's S = L·R slots of B bytes (a slot no connection holds B zero bytes), each an `hm96-sha512/row/v2` row under
 the network attester's fresh salt in its `frame-v3-sha512` tree under the network attester's domain
-(`network_certifier_rows.domain`: the session, the link, ingress and the window), whose root the network attester's signed head
-names (`network_certifier_rows.CellsHead`). The tie registers that root with the challenger (`IngressTie.registration`, on the head
-`network_certifier_rows.check_registration` reads off the network attester's signed registration); the rows and their salts are
+(`network_attester_rows.domain`: the session, the link, ingress and the window), whose root the network attester's signed head
+names (`network_attester_rows.CellsHead`). The tie registers that root with the challenger (`IngressTie.registration`, on the head
+`network_attester_rows.check_registration` reads off the network attester's signed registration); the rows and their salts are
 the prover's, which the network attester hands it privately, and the challenger and the verifier see the root. A
 registration is one execution phase, its `window` provenance `{"kind": "served", "window": w}` held to the
 registration's order (`IngressTie.register`), and T proof blocks, proof block t bucket row t. Selection is `All`.
@@ -17,7 +17,7 @@ registration's order (`IngressTie.register`), and T proof blocks, proof block t 
 `io_request.IoTieRequest_v1{B, L, R}` and its circuit digest, pinned in `io_request.circuit-check.json` and held to the
 Definition by circuit-check (`gate`, as `head_check.gate` holds the head check), with one output bit, IoTieRequest's.
 Its witness row is the bucket row itself, which the proof system's registered read holds to the network attester's root
-(`network_certifier_rows.bucket_port`: proof block t reads row t, the verifier's own `--registered` port, `IngressTie.registered`),
+(`network_attester_rows.bucket_port`: proof block t reads row t, the verifier's own `--registered` port, `IngressTie.registered`),
 so no gate hashes it. A size class no sidecar pins has a gate that names no digest, and no proof of its proof block is
 accepted (`proved`).
 
@@ -75,9 +75,9 @@ from verity.circuits.program import Program
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.protocols.resource_accounting.network.verifier import advice as ADV, head_check as HC, io_request as Q
-from verity.protocols.resource_accounting.network.verifier import service as SVC, network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier import service as SVC, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
@@ -154,7 +154,7 @@ _PROOF_BLOCK = _unit(_expanded)
 
 
 def request_cells(prompt_len: int, B: int) -> int:
-    """The network attester's request cells of an id request of a `prompt_len`-token prompt (`network_certifier.cells`' cut, which
+    """The network attester's request cells of an id request of a `prompt_len`-token prompt (`network_attester.cells`' cut, which
     `io_request.carries` reads)."""
     return len(Q.carries(prompt_len, B)) - 1
 
@@ -304,7 +304,7 @@ def window_cells(releases: Sequence[Q.Release], T: int) -> dict[int, int]:
 @dataclass(frozen=True)
 class IngressTie:
     """The ingress tie on one link, every field public: the link, the network attester's schedule
-    (`network_certifier.NetworkCertifierParams`: B, its lanes L, its r and its buckets a window T), the session that names the network
+    (`network_attester.NetworkCertifierParams`: B, its lanes L, its r and its buckets a window T), the session that names the network
     attester's domains, and the proof deadline in seconds."""
 
     link: str
@@ -375,7 +375,7 @@ class IngressTie:
         return S.Stream(self.spec, self.unit, **kwargs)
 
     def domain(self, window: int) -> CommitmentDomain:
-        """The network attester's domain of the ingress execution phase's T rows (`network_certifier_rows.domain`)."""
+        """The network attester's domain of the ingress execution phase's T rows (`network_attester_rows.domain`)."""
         return WR.domain(self.params, self.session, self.link, Direction.INGRESS, window)
 
     def ports(self, window: int) -> dict[str, dict[str, Any]]:
@@ -397,7 +397,7 @@ class IngressTie:
 
     def registration(self, head: WR.CellsHead, previous: str | None = None) -> dict[str, Any]:
         """One-stage's record of the execution phase: the network attester's root of its rows, from its head
-        (`network_certifier_rows.check_registration`'s, the network attester's signed registration as the challenger reads it),
+        (`network_attester_rows.check_registration`'s, the network attester's signed registration as the challenger reads it),
         and nothing of the rows. Raises `ValueError` on a head of another link, direction, schedule or session."""
         self._held(head)
         roots = [{"port": VALUE, "root": head.root.hex(), **self.ports(head.window)[VALUE]}]
@@ -438,7 +438,7 @@ class IngressTie:
                    reads_from: int = 0) -> dict[str, Any] | None:
         """The verifier's own `--registered` file, which names every port of the statement (Flock's
         `Registered.checkComplete`): unit `reads_from + t`'s ``wit`` row reads row t of the network attester's root
-        (`network_certifier_rows.bucket_port`), and its ``pub`` and ``o0`` rows row t of the values the verifier registers at
+        (`network_attester_rows.bucket_port`), and its ``pub`` and ``o0`` rows row t of the values the verifier registers at
         known content on its own `lanes` (`known`), each named with its rows and salts (`KNOWN_KEY`), from which the
         Lean verifier recomputes its root. None where `known` is."""
         self._held(head)

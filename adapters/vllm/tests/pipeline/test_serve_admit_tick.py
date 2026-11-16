@@ -1252,7 +1252,7 @@ REQUEST_LINES = [(b"POST /v1/completions HTTP/1.1", True), (b"GET /health HTTP/1
                  (b"P(ST /verity/watermark HTTP/1.1", False), (b"POST", False), (b"", False)]
 
 
-def test_serve_openai_takes_for_a_requests_line_what_the_network_certifier_does():
+def test_serve_openai_takes_for_a_requests_line_what_the_network_attester_does():
     """`hd.request_line` over first lines well formed and not: it gives a line's method and target where the network
     attester puts its release on a request that begins with the line, and None where the certifier passes the bytes on
     as the client wrote them."""
@@ -1263,7 +1263,7 @@ def test_serve_openai_takes_for_a_requests_line_what_the_network_certifier_does(
         assert hd.request_line(line) == (tuple(line.decode().split(" ")[:2]) if is_one else None), line
 
 
-def test_serve_openai_refuses_what_the_network_certifier_passes_on_without_its_release_over_http():
+def test_serve_openai_refuses_what_the_network_attester_passes_on_without_its_release_over_http():
     """Two requests of a client's whose first line has a byte after its version, so the network attester passes each on
     as the client wrote it (`release.with_release`): a whole watermark stream for the run, whose one line names releases
     0 and 1 lost, and a completion (its body not JSON, so no server serves it) that names itself the run's release 0.
@@ -1305,7 +1305,7 @@ def test_serve_openai_refuses_what_the_network_certifier_passes_on_without_its_r
     assert e.admit.summary() == {"numbered": 1, "unordered": 0, "passed": 0, "lost": 0, "watermarks": 1, "runs": 1}
 
 
-def test_serve_openai_names_a_header_as_the_network_certifier_does():
+def test_serve_openai_names_a_header_as_the_network_attester_does():
     """A request with a client's own release headers, one byte before each one's name or between the name and its
     colon, on which the network attester then puts its release (`release.with_release`), dropping those of the
     client's it takes for release headers. One over HTTP, the byte ``\\xa0`` (its body not JSON, so it is answered at
