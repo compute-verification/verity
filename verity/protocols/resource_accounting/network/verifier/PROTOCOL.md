@@ -923,12 +923,12 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network atte
 | Accepted runs of the check, over its first m execution phases | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per execution phase opened at 16 × 8 sync values under J, counted from the run's first | no Lean statement |
 | The reference schedule, k advice bits per execution block | `E·k + n·log2 D` bits over E execution blocks of g·T buckets, for n ≤ E·g·T steps | `NetTiming.encard_accSeqs_le_constantRate` |
 | The reference schedule, over the first m execution blocks | `min(E, m)·k + n·log2 D` bits, for n ≤ m·g·T steps | `NetTiming.encard_accSeqs_le_constantRate_executionPhases` |
-| The circuit's Program under a sampled audit of its step proof blocks, at δ | `c + log2 #(incorrect sets) + Σ_{v incorrect} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and an incorrect set is one `RAcc δ` allows (in `M_δ`, no proof block sampled `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no proof block may be incorrect, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
+| The circuit's Program under a sampled audit of its step proof blocks, at δ | `c + log2 #(incorrect sets) + Σ_{v incorrect} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and an incorrect set is one `RAcc δ` allows (in `M_δ`, no proof block sampled `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no proof block may be incorrect, and it is `c + n·log2 D` | `NetTiming.encard_accSeqsSampled_le`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `NetTiming.sampledLeak_reg`, and at the registration's values `SecurityProofs.SampledLeakRegistered` |
 | The network attester (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each execution phase's sampled charge (the row above) at the network attester's rows | for a decoder of the client's view, under `trusted-device`, `Claims.SamplingGeneric.Compiled.KS` and `Commitment.Binds`, `SecurityProofs.MonitoringPeriodLeakAccepted` |
 | No advice, under J (D = 1) | 0 bits: one accepted sequence for the ingress | `NetTiming.encard_accSeqs_le_constantRate` at k = 0 and D = 1 |
-| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
-| Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
-| Ingress, per execution phase (the K charge's unit) | `T·log2(r_in + 1)` bits per execution phase over the first m whole ones, plus `T·log2 D` of jitter per execution phase, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
+| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressObsDecodableLeContents` at one content assignment |
+| Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressObsDecodableLeContents` |
+| Ingress, per execution phase (the K charge's unit) | `T·log2(r_in + 1)` bits per execution phase over the first m whole ones, plus `T·log2 D` of jitter per execution phase, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLeContents` at n = m·T |
 
 **The advice's charge.** The advice string is the circuit's Program's content advice, so its charge is the sampled row's
 `c`. The sampled leak bound takes `c` as declared and public, with the premise that at most `2^c` advice values are
@@ -955,7 +955,7 @@ Each run's egress must equal the Program's, which needs every egress frame tied,
 step proof block can be incorrect: every step proof block sampled `All`, or a sampled audit at δ ≥ miss(1). At a smaller δ an accepted
 sampled audit gives `Accepted` only with the incorrect proof blocks' committed gates held as advice
 (`SampledAuditAccepted`), and the charge adds the incorrect proof blocks' committed bits and log2 of the number of possible
-incorrect sets, except with probability δ + ε_ks + ε_bind over the selection (`SecurityProofs.SampledLeakAccepted`).
+incorrect sets, except with probability δ + ε_ks + ε_bind over the selection (`NetTiming.sampledLeak_reg`).
 Charging an execution phase only for those up to it would need a causality assumption about the Program, which the statement
 doesn't take.
 
@@ -979,9 +979,9 @@ plus what survived that wipe, as a share of K: 9.12e7 bits under the inference-o
 
 Every statement in the table's Lean column named `SecurityProofs.…` is a guarantee in `security/lean-audit.json`, frozen
 as no-function: each is stated over the model, not the network check's code (`security/Proofs/Certifier/README.md`,
-"The records"); one named `NetTiming.…` is a lemma, proved and audited, with no record. The ingress bounds
-are over a monitoring period (the K charge, `SecurityProofs.EncardIngressObsDecodableLe`) and per execution phase
-(`SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, whose interaction is any link's). The egress charge per
+"The records"); one named `NetTiming.…` is a lemma, proved and audited, with no record. The ingress bound
+(`SecurityProofs.EncardIngressObsDecodableLeContents`) is over a monitoring period (the K charge), and per execution
+phase at n = m·T, its interaction any link's. The egress charge per
 execution phase, `log2 #Σ_sync` for each one opened, counted from the run's first, is the check's, which no Lean
 states, as no Lean states the table's two rows of the check's accepted runs. The steps of their proofs are lemmas
 (`security/Proofs/Certifier/Lemmas.lean`): proved and audited, with no record.
@@ -1002,21 +1002,18 @@ first m execution phases' rows read only the content advice and their syncs, and
 of the check: the queue and the hand ticks carry from one execution phase into the next, so the run shown before one
 need not fix the rows its sync gives.
 
-The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
-or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
+The ingress bound is proved in Lean, for a decoder in X that reads the records
+(`SecurityProofs.EncardIngressObsDecodableLeContents`), and so for one that reads the wire, a function of the records
+under W2. It counts `(r_in + 1)^T` occupancies per ingress
 execution phase (times `D^T` for jitter, 1 under J), given the frames' content, on runs whose statuses are all complete
 (`StatusComplete`). The reference audits ingress statuses (see above), so an accepted verdict on every link of ∂X
-establishes `StatusComplete` for the execution phases audited. That is the acceptance hypothesis of every ingress guarantee:
-`SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe`, their `Contents` versions and
-the two per-execution-phase forms. Over the first m whole execution phases of a run (n = m·T; for the K charge, the run from the last
+establishes `StatusComplete` for the execution phases audited. That is the ingress guarantee's acceptance
+hypothesis. Over the first m whole execution phases of a run (n = m·T; for the K charge, the run from the last
 wipe) the count factors per execution phase: `(r_ℓ + 1)^T` on each link in each execution phase, `T·log2(r_in + 1)` bits, which
-is the K charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, and
-`SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase` for the `Contents` version).
+is the K charge's unit.
 
-The `Contents` versions drop the one given content: messages whose frames follow some content assignment in a set `Cs`
-number at most `#Cs` times that count. So Lean proves, for the set `Ms` of messages counted, `log2 #Ms ≤ log2 #Cs` plus
-the timing bits (`SecurityProofs.EncardIngressObsDecodableLeContents`, and
-`SecurityProofs.EncardIngressDecodableLeContents` for the wire). The K charge adds content bits, charged as reads, to
+Messages whose frames follow some content assignment in a set `Cs` number at most `#Cs` times that count. So Lean
+proves, for the set `Ms` of messages counted, `log2 #Ms ≤ log2 #Cs` plus the timing bits. The K charge adds content bits, charged as reads, to
 timing bits. Taking `log2 #Cs` to be those content bits is an accounting step, not part of the theorem. It is exact
 under fixed-length frames (W3): N frames of B bytes have `2^(8·B·N)` contents, so for `Cs` all of them, `log2 #Cs` is
 the `8·B·N` bits read.
@@ -1088,8 +1085,8 @@ of the incorrect proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ
    is, except with probability δ_audit, `Accepted` for some (a, φ). `Accepted` is the exact binding, in which every
    recorded row is the Program's. An audit that recomputes the grid gets it, and a sampled audit does not.
    For the circuit's Program, `SampledAuditAccepted` (proved) is that bridge with φ the incorrect proof blocks' committed
-   gates, and `SecurityProofs.EncardAccSeqsSampledLe` is its count: φ costs those gates' bits plus log2 of the number
-   of possible incorrect sets. `SecurityProofs.SampledLeakAccepted` composes the two, with a pinned at the registered inputs.
+   gates, and `NetTiming.encard_accSeqsSampled_le` is its count: φ costs those gates' bits plus log2 of the number
+   of possible incorrect sets. `NetTiming.sampledLeak_reg` composes the two, with a pinned at the registered inputs.
 5. **The advice set.** `#𝒜_c ≤ 2^(c+1) − 1`. `encode` is injective (A5), so distinct advice values are distinct bit
    strings of at most c bits. A prefix-free code gives `#𝒜_c ≤ 2^c` by Kraft, with the charge the decoder's own length
    of the symbols it decoded, whichever of a message's codewords the prover sent.

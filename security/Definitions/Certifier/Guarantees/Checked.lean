@@ -37,8 +37,8 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The leak bound with checked inputs
 
-`SampledLeakAccepted` with each statement's checked inputs `chk` left out of the count: the free inputs a check on the
-whole run pins (`Definitions.Certifier.Checked`). Each statement's check pins its checked inputs
+`NetTiming.sampledLeak_reg`'s bound with each statement's checked inputs `chk` left out of the count: the free inputs a
+check on the whole run pins (`Definitions.Certifier.Checked`). Each statement's check pins its checked inputs
 (`CheckedUnique`), and the trace's run is valid except with probability `εchk` (`CheckedWitness` at `traceRun`), so a
 run whose observations the bound counts is a valid run, whose checked inputs the rest of the run fixes: they cost no
 advice bits. The incorrect proof blocks' committed bits are charged at the most any possible incorrect set commits,

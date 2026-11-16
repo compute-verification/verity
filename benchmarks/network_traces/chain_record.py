@@ -145,7 +145,7 @@ SCAN_ACCEPTS = ("honest", "block")
 OUT_BITS = 16
 #: what `pooled_k`'s K rests on until its two per-window inputs are discharged
 POOLED_CONDITION = ("NetTiming.Guarantees.PooledLeakAccepted is conditional: its per-window inputs hesc "
-                     "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
+                     "(proofs' SampledKSLive) and hleak (the live sampledLeak_reg) are not discharged")
 #: why a report without ``--period-answer`` writes no block entry
 NO_PERIOD_ANSWER = "no --period-answer: no certifier/v0 answer on the period"
 #: why a report writes no block entry for any answer the period check gives

@@ -159,8 +159,8 @@ def rDec (ws : List (Obs 1 1 2)) : Fin 3 → Fin 3 := fun k =>
 Read inward (`NetTiming.Protocol.Ingress`): the outside's message is `z`, and its sender delivers `z k` frames `[true]`
 at step `k`; X's device is `rOp`, reacting to the last count it saw. The certifier is the witness certifier without jitter,
 so J holds with `D = 1`, and W4's allocation is the full two slots. Every hypothesis of
-`Guarantees.EncardIngressDecodableLe` holds at once, and all `27 = (2 + 1)^3` messages are decoded: the bound is met
-exactly. -/
+`Guarantees.EncardIngressObsDecodableLeContents` at one content assignment holds at once, with the decoder reading the
+wire under W2, and all `27 = (2 + 1)^3` messages are decoded: the bound is met exactly. -/
 
 /-- The witness certifier read inward, with no jitter. -/
 def iCertifier : Certifier 1 1 2 (Fin 3) WAct (Obs 1 1 2) where
@@ -197,8 +197,8 @@ theorem ingress_witness_tight :
 /-! ## An allocation below the slot count
 
 The link has two slots and an allocation of one frame: the certifier releases at most one frame per bucket, whatever the
-sender asks, and the outside asks for both slots to send a 1. Every hypothesis of `Guarantees.EncardIngressDecodableLe`
-holds with `r = 1 < S = 2`, and all `8 = (1 + 1)^3` messages are decoded: the bound is met exactly, and it is below the
+sender asks, and the outside asks for both slots to send a 1. Every hypothesis of the ingress bound holds with
+`r = 1 < S = 2`, and all `8 = (1 + 1)^3` messages are decoded: the bound is met exactly, and it is below the
 `(2 + 1)^3 = 27` that `r = S` gives. -/
 
 /-- The allocated certifier's network certificate: `min(count, 1)` frames `[true]`, left-packed, no jitter, complete statuses. -/

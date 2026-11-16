@@ -11,8 +11,7 @@ Definitions only. `docs/network-transparency/timing-channel.md` §1–§2.
 link's row, one jitter class, and every boundary link's coverage status. The formalization is for egress: the secret is
 inside X, and what the observations carry out of X is counted. Ingress is the operator's move, which the operator
 chooses from what it has observed. The ingress direction is the mirror image: `Definitions.Certifier.Ingress`
-(`Ingress.lean`) reads this interaction inward, and its guarantees are `Guarantees.EncardIngressObsDecodableLe`
-and `Guarantees.EncardIngressDecodableLe`, with their `…Contents` versions.
+(`Ingress.lean`) reads this interaction inward, and its guarantee is `Guarantees.EncardIngressObsDecodableLeContents`.
 
 **Emission and acceptance are separate.** The certifier's `obs` and `wire` say what is recorded and emitted, whatever
 happens. The verifier's `Accepted` is a predicate on an observation prefix and a declared advice string, and it reads

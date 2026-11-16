@@ -43,7 +43,7 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     audit gives that count (AdviceIn, freeInputs, AsReg, RLeak); the runs before a
     run, which a period's operator reads (runsBefore)
 ../../Definitions/Certifier/Guarantees/SampledCharge.lean  trusted: the leak bound under a sampled audit, and what
-    an accepted one establishes (SampledLeakAccepted)
+    an accepted one establishes at the registration's values (SampledLeakRegistered)
 ../../Definitions/Certifier/TapRows.lean  trusted: the network attester's rows: its registration at the
     transfer gates (certifierVal, CertifierRegisters, fillTrace), the leak relation at them
     (RLeakCertifier) and the collision finder against its openings (Btap)
@@ -102,8 +102,6 @@ Advice.lean     Theorem 3 (the 2^A cap, and at k bits per execution block)
 Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap of k bits per execution block,
     causality, the blocks opened, the composed statement) and its witness
 Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
-PerWindow.lean  the last two over the run's first `m` whole execution blocks, and the ingress bound
-    over the first `m` periods of `T` buckets: the factor per block and per period
 Cells.lean     the network attester's code is the client view: its lane is the client view of its first late
     cell (certifierLane_eq), and so are its code's cells (certifierCode_eq), which
     Tap reads the network attester's cells from
@@ -249,13 +247,12 @@ runs, and no violation policy is modelled.
 outside's message `m`, held by `snd m` (the operator and colluding endpoints, choosing when ingress frames arrive); `op`
 is X's devices; the record's rows are what the ingress links release into X; the wire is everything that enters X. The
 outside sees every record and can recompute X's moves from them, so it reacts to X's egress. The ingress frames'
-content and order are the Program's input, charged as reads; `Guarantees.EncardIngressObsDecodableLe` bounds what
-their timing carries into X for a decoder reading the records, and `Guarantees.EncardIngressDecodableLe` for one
-reading the wire. Both are proved: on the runs counted, a record sequence is determined by each step's frame count on
+content and order are the Program's input, charged as reads; `Guarantees.EncardIngressObsDecodableLeContents` bounds
+what their timing carries into X for a decoder reading the records, and so for one reading the wire, a function of the
+records under W2. It is proved: on the runs counted, a record sequence is determined by each step's frame count on
 each link and its jitter class, since under W4 a row is its frames in slot order and the content fixes which frames
-come next. `Guarantees.EncardIngressObsDecodableLeContents` and `Guarantees.EncardIngressDecodableLeContents` drop the
-one prescribed content: messages whose frames follow some content assignment in a set `Cs` number at most `#Cs` times
-the timing bound: for the set `Ms` of messages counted, `log2 #Ms ≤ log2 #Cs` plus the timing bits. The K accounting
+come next. Messages whose frames follow some content assignment in a set `Cs` number at most `#Cs` times the timing
+bound: for the set `Ms` of messages counted, `log2 #Ms ≤ log2 #Cs` plus the timing bits. The K accounting
 charges content bits, as reads, plus timing bits. Taking `log2 #Cs` to be those content bits is an accounting step, not
 part of the theorem. It is exact under fixed-length frames (W3): N frames of B bits have `2^(N·B)` contents, so for
 `Cs` all of them, `log2 #Cs` is the `N·B` bits read.
@@ -286,14 +283,14 @@ For the ingress bound the same `Prop`s are read inward: `Regenerates` is W2 for 
 
 `NetTiming.SecurityProofs.Sanity` shows every hypothesis is satisfiable: one network attester meets W2–W6 and J together, a
 Program with no timing advice accepts exactly one secret despite a reacting operator (`zP_accepts_one`), and
-`ingress_witness` meets every hypothesis of `Guarantees.EncardIngressDecodableLe` at once, with a bound it meets exactly
-(`ingress_witness_tight`).
+`ingress_witness` meets every hypothesis of `Guarantees.EncardIngressObsDecodableLeContents` at one content assignment
+at once, its decoder reading the wire under W2, with a bound it meets exactly (`ingress_witness_tight`).
 `allocated_witness` meets them again with an allocation below the slot count (`r = 1 < S = 2`): its 8 messages meet
 that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `Allocated` has content.
 
 ## The records
 
-The lock (`lean-audit.json`'s `guarantees`) holds the 6 statements of `Guarantees.lean`, the sampled audit's charge
+The lock (`lean-audit.json`'s `guarantees`) holds the statement of `Guarantees.lean`, the sampled audit's charge
 (`../../Definitions/Certifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network attester
 (`../../Definitions/Certifier/Guarantees/MonitoringPeriod.lean`) with its bound with checked inputs (`../../Definitions/Certifier/Guarantees/MonitoringPeriodChecked.lean`), the monitoring period's
 incorrect proof blocks
@@ -301,16 +298,14 @@ incorrect proof blocks
 (`../../Definitions/Certifier/Guarantees/PooledLeak.lean`) and it at the registered openings
 (`../../Definitions/Certifier/Guarantees/PooledReg.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
-last three by `pooledIncorrectBlocks`, `pooledLeak` and `pooledLeakRegistered`). All 18 are under `shape.frozen` as
-`frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `EgressPrediction`'s `AccSeqs`,
+last three by `pooledIncorrectBlocks`, `pooledLeak` and `pooledLeakRegistered`). All but `ResponseCapped` are under
+`shape.frozen`, `no-function` among each one's categories: each is stated over the model (an arbitrary `Interaction`, an abstract `EgressPrediction`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 possible incorrect set; the period's also over the network attester's code as `Definitions` states it, which no compiled
 program implements yet), not over the network check's code, and no Lean states that an accepted run of the check is
-a run the first 6 count. Two are the
-ingress theorems (`PROTOCOL.md`'s "Capacity"):
-
-- ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
-  `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerExecutionPhase`.
+a run the ingress bound counts. One is the ingress theorem (`PROTOCOL.md`'s "Capacity"), the K charge
+(`NetTiming.SecurityProofs.Ingress`): `EncardIngressObsDecodableLeContents`, which at `n = m·T` is
+`(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment, the factor per execution phase.
 
 The check's egress bits per execution phase, `log2 #Σ_sync`, are its bound over its first `m`, not one of these, and
 no Lean states it: the check is the reference Program as one execution block of its `W` execution phases, where the
@@ -318,11 +313,8 @@ per-block forms give only their total, so the finer count comes from the program
 phase's sync moves only at or after its start. An execution phase's bits given the run before it need not be bounded so for the check:
 the queue and the hand ticks carry across them.
 
-The other 16 are the rest of the Capacity table's bounds:
+The others are the rest of the Capacity table's bounds:
 
-- **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
-  `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
-  `EncardIngressObsDecodableLeContentsPerExecutionPhase`.
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, the bound of
   `Claims.SamplingGeneric.Compiled.KS` at `RAcc δ`, at any compiled sampled verifier, on the statements whose layout
   fits the program: no incorrect proof block is sampled `all`, and the advice holding the incorrect proof blocks'
@@ -330,14 +322,13 @@ The other 16 are the rest of the Capacity table's bounds:
   discharges its `Compiled.KS` hypothesis at an assembled sampling record from the compiler at Flock
   (`Claims.SamplingGeneric.flockKS`): `sampledAuditAccepted_of` over any Flock record, `sampledAuditAccepted_zk` and
   `sampledAuditAccepted_plain` at the masked and plain records.
-- **The leak bound under a sampled audit** (`SampledCharge.lean`):
-  `EncardAccSeqsSampledLe`, the count of the sequences accepted with a possible incorrect set: the inputs other than the
-  ingress, the incorrect proof blocks' committed bits and the choice of incorrect set. `SampledLeakAccepted` is what an accepted
-  sampled audit establishes: with `SampledAuditAccepted` as its hypothesis and `Compiled.KS` at the compiled verifier,
+- **The leak bound under a sampled audit** (`SampledCharge.lean`, `SampledLeak.lean`), two lemmas that
+  `SampledLeakRegistered`'s proof uses: `encard_accSeqsSampled_le`, the count of the sequences accepted with a possible
+  incorrect set: the inputs other than the ingress, the incorrect proof blocks' committed bits and the choice of
+  incorrect set; and `sampledLeak_reg`, what an accepted sampled audit establishes: with `SampledAuditAccepted` as its hypothesis and `Compiled.KS` at the compiled verifier,
   the carried sequences of length `k` are among those the count bounds except with probability `δ + ε_ks + ε_bind`
   (`RLeak`), and the count holds with `c` the number of free inputs not in the statement's registered inputs `reg`
-  (`freeInputs`, at `AsReg`), at whatever values the trace holds at `reg`. It is `SampledLeak.lean`'s
-  `sampledLeak_reg`. `RAcc` pins the inputs to the trace, so the values at `reg` are the trace's; that the
+  (`freeInputs`, at `AsReg`), at whatever values the trace holds at `reg`. `RAcc` pins the inputs to the trace, so the values at `reg` are the trace's; that the
   registration's commitment binds them is a separate statement, not yet proved. `Compiled.KS` is an open premise in
   the lock, and `SampledAuditAccepted` is proved.
 - **The leak through the network attester over a monitoring period** (`MonitoringPeriod.lean`): `MonitoringPeriodLeakAccepted` composes
@@ -369,7 +360,7 @@ The other 16 are the rest of the Capacity table's bounds:
   `CommitmentScheme.Binds` and `trusted-device`. The union over the monitoring period's live coins and the registration's
   binding of the developer's values at `reg` are not yet stated. `Compiled.KS` stands in for proofs' live bound
   (`Flock.Guarantees.SampledKSLive`), which replaces it once locked, with live forms of `SampledAuditAccepted` and
-  `SampledLeakAccepted`.
+  `sampledLeak_reg`.
 - **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledIncorrectBlocksLe` is the bound over
   many periods, cumulative rather than per execution phase, and a fact of probability with no named assumption. Over `m`
   execution phases on independent live coins (their coins are the product `Fin m → Ω`), execution phase `i` sampling a uniform
@@ -393,7 +384,7 @@ The other 16 are the rest of the Capacity table's bounds:
   proof block's output limit. The network attester is one device, as in the period's bound: on every schedule its
   record format holds, the cells the client receives read back from its record (`certifier_cells_read`), so its one named
   assumption is `trusted-device`. Over live audits the two inputs are `Flock.Guarantees.SampledKSLive` at each one's
-  history and the live `SampledLeakAccepted` (P2), neither discharged, so it is not the deployed system's bound over a
+  history and the live `sampledLeak_reg` (P2), neither discharged, so it is not the deployed system's bound over a
   monitoring period until they are.
 - **That leak at the trace with the registered openings** (`PooledReg.lean`): `PooledLeakRegistered` is
   `PooledLeakAccepted`'s first conclusion with both inputs proved, at one trace's incorrect sets (`WregR`). Its rate
@@ -402,7 +393,7 @@ The other 16 are the rest of the Capacity table's bounds:
   check `valid` over a run's values pins the inputs `chk` where a valid run's values there are a function of the
   ingress, the other inputs and the incorrect proof blocks' held values (`CheckedUnique`), and misses an invalid
   accepted run with probability at most `εchk` on the runs it is held to (`CheckedWitness`, a scope; `traceRun` below).
-  - `SampledLeakChecked` is `SampledLeakAccepted` with the leak relation and the count taken over valid runs only, at
+  - `SampledLeakChecked` is `sampledLeak_reg`'s bound with the leak relation and the count taken over valid runs only, at
     `κ + εchk`: the count charges `freeInputs \ (reg ∪ chk)`. Its honest lemma is `SampledAuditAccepted_honest`, at
     its one stated premise `Compiled.KS`.
   - `SampledLeakCarried` is `SampledLeakChecked` for a run that opens a row at its opening gates (`OpensAtInputs`)
@@ -484,9 +475,9 @@ Every statement, lemma and witness here is proved. The reference implementation,
 ## Modelling choices a reader of the statements checks
 
 1. **Steps are buckets across all of ∂X.** The note states its bounds per execution phase of a link. The guarantees
-   count steps, and Theorem 1(b)'s tree lemma is still stated per step. The per-execution-phase ones read a monitoring period
-   of whole blocks, each with its parent's hypotheses at that length and no other. The ingress bound is
-   `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment over the first `m` periods of `T` buckets, `n = m·T` (`EncardIngressObsDecodableLePerExecutionPhase`, and its `Contents` version);
+   count steps, and Theorem 1(b)'s tree lemma is still stated per step. The ingress bound at `n = m·T` is
+   `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment over the first `m` periods of `T` buckets
+   (`EncardIngressObsDecodableLeContents`);
    `Packed`, `Allocated` and `JitterBounded` bound every step's branching whatever came before.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
    more permissive, so the bounds cover more Programs.
@@ -508,17 +499,16 @@ The ingress bound adds these:
    version follows under W2. Read inward, W2 (`Regenerates`) also covers whatever outside-influenced thing X can see of
    its own egress (backpressure, release timing): it is all a function of the record.
 9. **Conditioned on the content.** The messages counted are those whose frames on each link, in the order released, are
-   a prefix of one prescribed list `c ℓ` (the Program's input, charged as reads; order is content, since the Program
-   reads frames in order). How many frames have arrived by the last step counted is timing, and is in the count. Messages that
-   also vary the content are bounded by partitioning them by their content: the `Contents` versions count those
-   following some assignment in `Cs`, at most `#Cs` × the bound.
+   a prefix of `c ℓ` for some content assignment `c` in `Cs` (the Program's input, charged as reads; order is content,
+   since the Program reads frames in order). How many frames have arrived by the last step counted is timing, and is in
+   the count. Partitioned by their content, they number at most `#Cs` × the timing bound.
 10. **Acceptance is the statuses only** (`StatusComplete`). The verifier also checks the egress rows against the
     Program, which only removes runs, so the bound covers every accepted run and more. W5 and W6 are not needed: W2
     and W4 hold for every action, faults included, and complete statuses carry nothing.
 11. **One allocation per link, one bucket width.** Link `ℓ` has allocation `r ℓ` (`Allocated`) within the shared slot
     count `S`, and every link shares the step, a bucket of ∂X. Ingress links with different bucket widths are not
     modelled. Over the first `m` whole execution phases each contributes `(r ℓ + 1)^T`
-    (`EncardIngressObsDecodableLePerExecutionPhase`).
+    (`EncardIngressObsDecodableLeContents` at `n = m·T`).
 12. **No Program, no clock.** The bound reads no Program and no advice: the outside sender chooses when frames arrive,
     so no clock pins ingress timing. Jitter on the inward release adds `D^n` (J, `D = 1` when tested ideal). W3's frame
     length and the FIFO rule are not used; the FIFO network attester attains the bound (`encard_fifoGrids`, read for the ingress

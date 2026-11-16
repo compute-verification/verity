@@ -32,7 +32,6 @@ public import Proofs.Certifier.TapRows
 public import Proofs.Certifier.MonitoringPeriod
 public import Proofs.Certifier.PooledLeak
 public import Proofs.Certifier.Schedule
-public import Proofs.Certifier.PerWindow
 public import Proofs.Certifier.Sanity
 public import Proofs.Certifier.Code
 public import Proofs.Certifier.Tap
@@ -87,8 +86,8 @@ import Mathlib.Topology.Sheaves.Init
 
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the
 theorem of the same statement in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3),
-`Ingress` (the ingress bound), `PerWindow` (the ingress bound over whole periods) or `SampledCharge` (the leak bound
-under a sampled audit: the incorrect proof blocks' charge), and every lemma behind them. `Schedule` counts the
+`Ingress` (the ingress bound) or `SampledCharge` (the leak bound under a sampled audit: the incorrect proof blocks'
+charge), and every lemma behind them. `Schedule` counts the
 constant-rate Program's runs (Theorem 3 for it), for `Accepted` and `Causal`. `SampledLeak` composes `SampledCharge`'s
 count with `SampledAuditAccepted`, taken as a hypothesis (`NetTiming.sampledLeak`), which the module `SampledAuditAccepted` proves, and `SampledLeakReg` moves its count to the
 registration's values
@@ -112,9 +111,9 @@ at the network attester's rows with a valid run, and the count of the period's r
 empty pool. `MonitoringPeriod` proves `MonitoringPeriodLeakAccepted` as its instance at no checked input. `MonitoringPeriodCheckedChecks` checks the
 checked statement: which run its check is held to, and its nontrivial and honest lemmas. `MonitoringPeriodCheckedExclusion` shows
 the read-back is needed: at a placed window the count fails without `RecordFormat.ReadsBy`.
-`MonitoringPeriodFails` proves the period's bounds with each failure charged as it happens (`MonitoringPeriodLeakFails`,
-`MonitoringPeriodLeakFailsAtMost`, `MonitoringPeriodLeakCharged`): `MonitoringPeriodLeakChecked` at each fail pattern, at the pattern's operator and
-registered values, summed over the patterns. `MonitoringPeriodFailsChecks` checks them at a placed window whose operator follows
+`MonitoringPeriodFails` proves the period's bounds with each failure charged as it happens (`MonitoringPeriodLeakFailsAtMost`,
+`MonitoringPeriodLeakCharged`, through the count at exactly `j` failures, `monitoringPeriodLeakFails`): `MonitoringPeriodLeakChecked`
+at each fail pattern, at the pattern's operator and registered values, summed over the patterns. `MonitoringPeriodFailsChecks` checks them at a placed window whose operator follows
 the fail pattern: the failures' factor is met, and the charged count fails at weights that sum past one.
 `MonitoringPeriodLengths` shows a record format of each lane's length, released data and fail cell reads back under the link's
 registered parameters (`LengthsRows.readsBy`).
@@ -152,23 +151,9 @@ theorem NoFaultOfAccepted : NetTiming.Guarantees.NoFaultOfAccepted := @NetTiming
 theorem RecordedRowEqFill : NetTiming.Guarantees.RecordedRowEqFill := @NetTiming.recorded_row_eq_fill
 theorem EncardAccSeqsLeAdvice : NetTiming.Guarantees.EncardAccSeqsLeAdvice := @NetTiming.encard_accSeqs_le_advice
 
-theorem EncardIngressObsDecodableLe : NetTiming.Guarantees.EncardIngressObsDecodableLe :=
-  @NetTiming.encard_ingress_obsDecodable_le
-theorem EncardIngressDecodableLe : NetTiming.Guarantees.EncardIngressDecodableLe :=
-  @NetTiming.encard_ingress_decodable_le
 theorem EncardIngressObsDecodableLeContents : NetTiming.Guarantees.EncardIngressObsDecodableLeContents :=
   @NetTiming.encard_ingress_obsDecodable_le_contents
-theorem EncardIngressDecodableLeContents : NetTiming.Guarantees.EncardIngressDecodableLeContents :=
-  @NetTiming.encard_ingress_decodable_le_contents
-theorem EncardIngressObsDecodableLePerExecutionPhase : NetTiming.Guarantees.EncardIngressObsDecodableLePerExecutionPhase :=
-  @NetTiming.encard_ingress_obsDecodable_le_perExecutionPhase
-theorem EncardIngressObsDecodableLeContentsPerExecutionPhase :
-    NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerExecutionPhase :=
-  @NetTiming.encard_ingress_obsDecodable_le_contents_perExecutionPhase
 
-theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
-theorem SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted :=
-  NetTiming.sampledLeak_reg NetTiming.SecurityProofs.SampledAuditAccepted
 theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
   have hSA := @NetTiming.SecurityProofs.SampledAuditAccepted
   intro _ _ _ _ _ H D hks hb L K S lay k δ hδ reg ops β Dj hβ
@@ -178,7 +163,6 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem MonitoringPeriodLeakChecked : NetTiming.Guarantees.MonitoringPeriodLeakChecked := NetTiming.monitoringPeriodLeakChecked
-theorem MonitoringPeriodLeakFails : NetTiming.Guarantees.MonitoringPeriodLeakFails := NetTiming.monitoringPeriodLeakFails
 theorem MonitoringPeriodLeakFailsAtMost : NetTiming.Guarantees.MonitoringPeriodLeakFailsAtMost := NetTiming.monitoringPeriodLeakFailsAtMost
 theorem MonitoringPeriodLeakCharged : NetTiming.Guarantees.MonitoringPeriodLeakCharged := NetTiming.monitoringPeriodLeakCharged
 theorem MonitoringPeriodLeakAccepted : NetTiming.Guarantees.MonitoringPeriodLeakAccepted := NetTiming.monitoringPeriodLeak
