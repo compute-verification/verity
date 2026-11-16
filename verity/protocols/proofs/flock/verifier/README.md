@@ -1,24 +1,34 @@
-# Flock
+# Flock's verifier
 
-Flock's executable verifier, `verity-verify-proof` (run as `verity verify proof`) and the other executables `lakefile.toml`
-builds, in Lean 4 at the toolchain `lean-toolchain` pins. What it checks, its commands
-and its agreement with upstream's Rust verifier are in `verity/protocols/proofs/flock/prover/agreement/README.md`; its guarantees are in
-`security/Definitions/Flock/Guarantees/` and `security/Proofs/Flock/`.
+Flock is Verity's proof system: a prover shows that one statement about one circuit holds of committed values, and with
+`--zk` it shows it in zero knowledge. This directory is Flock's verifier, written in Lean 4. Its definitions are what
+the soundness proofs are about, and the same definitions, compiled, are the binary that checks a proof:
+`verity-verify-proof`, which `verity verify proof` runs. It replays a recorded proof session offline, on the CPU, and
+every coin it reads comes from the session's live record.
 
-It fetches nothing. It requires, by path, the three base packages every Lean package of the tree loads:
-`verity/circuits/base` (`Base`: bytes, SHA-512, canonical JSON and the JSON parser), `circuits` (`Circuits`: the
-program format, its decoder, the partition and annotations) and `commitments` (`Commitments`: frame-v3 and the sampling
-of proof blocks). Their declarations keep the namespace `Flock`. A module that moved there keeps its old name here as a
-re-export, one `public import` and nothing else (`Flock/Bytes.lean` re-exports `Base.Bytes`), until every importer names
-the base module. A job that builds this package outside the checkout copies it with those three
-(`verity/protocols/proofs/flock/prover/pod/lake_closure.py`).
+The ZK server's Lean is here too (`Flock.ZkServer`), and so is the recursion's (`FlockRec`, `VStar`).
 
-The libraries are layers, each loading only the ones before it: the verifier (`Flock`'s modules outside the next two),
-the ZK server (`FlockZkServer`, which imports `Flock.ZkServer` and the modules under it) and the recursion (`FlockRec`,
-which imports the `Flock.Rec*` modules, with `VStar`). `tests/verity/protocols/proofs/flock/prover/test_lean_layers.py` gives each module its layer and fails on an import
-of a layer above; the imports that still point up are its `UP`, each with what removes it.
+## Try it
+
+~~~sh
+bash tools/verity/lean/setup.sh verity/protocols/proofs/flock/verifier
+(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof)
+verity verify proof --help
+~~~
+
+The first line installs elan, the toolchain this directory pins and the packages it requires; it fetches nothing else.
+The second builds the verifier on the CPU, and the third prints its commands. What each command checks and its flags
+are in [the agreement's README](../prover/agreement/README.md), with how the verifier is held to upstream's Rust one.
+
+## What it is proved to do
+
+Its guarantees are stated in `security/Definitions/Flock/Guarantees/` and proved in `security/Proofs/Flock/`; the one
+soundness theorem over everything it accepts is
+[`FailClosed.flock_verify_sound`](../../../../../security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean).
 
 The proofs are about the Lean definitions, so the running binary also trusts the pinned toolchain's compiler and the Lean
 runtime it links, the C compiler that builds both, and the C library under them, and no declaration here swaps a
 definition for code no proof reads (`@[extern]`, `@[implemented_by]`, `unsafe`, `native_decide`), which
 `tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py` refuses.
+
+[`DESIGN.md`](DESIGN.md) has the packages it requires and how its libraries are layered.
