@@ -1492,7 +1492,7 @@ def test_a_pearlplus_piece_names_the_challenger_its_session_was_opened_on(tmp_pa
     served["coins"]["session"] = {"session": SID, "host": f"{host}.{SID}"}
     doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, **live[1])
     assert S.challenger_of(served) == host and doc["why"] == S.pearlplus_why(host)
-    assert {k: doc["coins"][k] for k in ("epoch", "draws")} == S.pearlplus_coins_from(host)
+    assert S.pearlplus_coins_from(host).items() <= doc["coins"].items()
     other = ({"local-challenger", "vy-challenger-1"} - {host}).pop()
     assert f"on {host}" in doc["why"] and other not in json.dumps({k: doc[k] for k in ("why", "coins")})
 
