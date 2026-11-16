@@ -81,7 +81,7 @@ def test_reference_is_the_registered_relations_set(dist):
 
 
 @pytest.mark.parametrize("dist", ["randn", "int", "edge"])
-def test_the_stress_definition_check_runs_the_registered_relation(dist):
+def test_stress_definition_runs_the_registered_relation(dist):
     pytest.importorskip("torch")
     import stress
     T, D = registered(), stress.definition_code()
