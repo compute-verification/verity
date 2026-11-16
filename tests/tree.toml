@@ -165,7 +165,7 @@ means = "the package, which re-exports nothing"
 
 [[tree]]
 path = "verity/README.md"
-means = "the distribution's module list"
+means = "the distribution's outline"
 
 [[tree]]
 path = "verity/tests/"

@@ -202,7 +202,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   checks, and defines every other layer's circuit from it.
 - **Integrations are frontends, and Verity is agnostic to them.** Verity's vocabulary is circuits, values,
   commitments, coins, proofs and verdicts; models, checkpoints, requests, batches and schedulers stay out of `verity/`, and
-  those still in it (the certifier's advice format, vLLM's scheduler) move out. An integration hands Verity only: a
+  those still in it (network certification's advice format) move out to the adapter. An integration hands Verity only: a
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.commitments` scheme and registered
@@ -235,7 +235,7 @@ everything that can make a claim false or can't be undone still fail.
 ## Circuits
 
 A change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) passes
-`uv run circuit-check <definition|template|row>`, with its report in the PR. A new Definition gets a binding in its
+`uv run circuit-check <definition|template|request>`, with its report in the PR. A new Definition gets a binding in its
 module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), which the suite enforces.
 
 ## Checking and merging

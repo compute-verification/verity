@@ -274,7 +274,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | What | Today | At the end |
 | --- | --- | --- |
 | The circuits of served kernels | `adapters/vllm/verity_vllm/definitions/`, the circuits a protocol names among them | what a protocol names to `verity/circuits/ops/` |
-| GPU code | 64 directories, 30 of them under `benchmarks/`. A served run loads PoUW's kernel from there, which rule 9 forbids | each protocol's `prover/`, `verity/commitments/`, the adapter |
+| GPU code | 64 directories, 30 of them under `benchmarks/` | each protocol's `prover/`, `verity/commitments/`, the adapter |
 | The compute audit's cost model, and the commands that run an audit on a served run | in SPOT (`prover/audit/`, `prover/cost/`, `verifier/one_stage/`, `verifier/challenger/`), but the audit commands still load scripts under `benchmarks/` (the proof subprotocol, the network attester's pieces, the one-stage replay, the tampered stagings, the bundle's format), and the demo's orchestration script runs them | SPOT's `prover/` and `verifier/`, started from a demo's configuration. The measured proving costs stay recorded under `benchmarks/` and are handed in as data |
 | Registration | The log's Lean and Python, the site entry's check and both difftests are in `verity/protocols/registration/`. The site log's own types (its entries, refusals and digests, and `Site.ofLog`) are still in the interface's `CoreProtocol/Site.lean`, and their Python (the log and the site entry's check) in `verity/device.py` | `verity/protocols/registration/`, an accounting protocol that runs once, over `device.py`'s types. Its Lean is cut out of the interface's package, so it is a code change and not in the two chains of moves |
 | The policy's two calculators | `benchmarks/inference_only/` and `benchmarks/slowdown/` | training renames the slowdown one |
@@ -286,13 +286,13 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 
 | What | Today |
 | --- | --- |
-| Every protocol has parties | Only SPOT, PoUS and the remote memory-read audit do |
+| Every protocol has parties | SPOT, PoUW, PoUS, PoUB, network certification and the inference-only policy declare theirs; the proofs below SPOT, registration and compose don't |
 | The messages between workload and prover as one stated list | Function calls and files; 15 files with no settled name or place |
 | PoUW's serving code and GPU kernels in one package under `verity/protocols/resource_accounting/compute/pouw/`, reached by one call | The serving code is in `verity/protocols/resource_accounting/compute/pouw/prover/serving/` (12,000 lines), reached by `run_matmul` and `observe_matmul`. The adapter keeps the option with its H1 hooks, the serve loops (`serve_h1`, `serve_pearl`, `serve_tie`), Pearl's row GEMM (`gemm_rows`), H1's commit at acquire, the ncp-v2 replay check and the GPU row-table commit (3,500 lines); the last two and `serve_pearl` still import modules below `serving`. Kernel checks are under `benchmarks/` |
 | Benchmarks and demos reach the adapter through its public interface only | 133 modules are reached past it |
 | Each demo is one file under `demos/` that `verity run` starts: `remote.toml`, `onsite_network.toml`, `onsite_compute.toml` (the default) and `onsite_full.toml` | The four files are there and `demos/` holds nothing else. `verity run` resolves only `onsite_full.toml`, as a dry run with no party live: it refuses `remote.toml` by name, since Pearl+ has no party, and stops on the two smaller onsite files. Its table writes each file and reads back only the pins, where the file should be the source the code reads |
 | Dither and the FP4 variant (Pearl-C4) are protocols being tried, under `verity/protocols/experimental/` | Dither's kernels and circuit are there, and Pearl-C4's kernel; Pearl-C4's scheme, circuit and vectors are in PoUW's package, whose own circuits load its circuit |
-| The team's platform is in its own repository, today's `compute-verification/infra` | `infra/`, the run recorder and the agents' guard are in this one: copied there with their history by 20 Nov, cut from here 27 Nov. The move tool stays, since its maps are this tree's records |
+| The team's platform is in its own repository, today's `compute-verification/infra` | `infra/`, the run recorder and the agents' guard are in this one until their day in `tests/tree.toml`. The move tool stays, since its maps are this tree's records |
 | Python never returns accept or reject | Several protocols still decide in Python. SPOT's two-stage outcome is joined in Python; its Lean check is written and refuses every audit until its proof exists |
 | Each accounting protocol takes the registered hardware and says which part it accounts for | None does |
 | The security model has the auditor's devices as parties, each with a key the auditor pins and its whole signing history | Only the challenger is a party, so no onsite memory or network claim can be proved yet |
@@ -302,7 +302,6 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The compiler cuts a period's circuit into pieces wired to each other | For the demo's model the pieces are wired only where the eight GPUs combine results, so the audit's second round runs over a stand-in |
 | Every kernel the serving settings run has a circuit held to the kernel on an H200 | Three of five on `main` (the cache's write and both its reads) |
 | Every kind of piece in a request has a statement the Lean verifier accepts | 111 of the plan's 1,272 kinds (5 on Boolean versions only) by a stored record; the other 1,161 have none; `cover_count.py --card` checks its kinds |
-| Every benchmark on the dashboard | 5 of 69 wired; 3 of the 5 show a value no older than their schedule allows |
 | The proofs' status on the dashboard: guarantees fully proved, open premises per lead | Printed by the Lean check only |
 | Every area of `security/` has a lead | 826 of its 4,816 files fall to lean because no lead claims them |
 | A memory-read session is proved in zero knowledge | Each span's openings go to the verifier as they are |
