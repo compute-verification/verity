@@ -33,5 +33,16 @@ Each is a `lake exe` in `lean/`.
 | `inference-only-check INSTANCE TRUSTED` | the verdict on one instance, as JSON; `--count` the count of (c, k)-inference blocks, `--policy` the policy alone |
 | `inference-only-record-check CASE` | the record form on one case written from a served run's files, for the private record only |
 
-`verity bench inference_only` runs the count on the class this tree builds
-([`benchmarks/inference_only`](../../../../../../benchmarks/inference_only/README.md)).
+The benchmark [`benchmarks/inference_only`](../../../../../../benchmarks/inference_only/README.md) runs the count on the
+class this tree builds.
+
+## Names
+
+A few older names stay here until a change of their own renames each (`GLOSSARY.md`, Older names): `benchmarks/nci`;
+a verdict's failure rule `"nci"`, its key `ius` for its inference blocks with the names that compute it, and the
+refusal codes `input-in-iu`, `gate-in-no-iu` and `empty-iu`; the toy Definitions the vector generators build
+(`NciHandBlk`, `NciDecl…`); `baseline_difftest/`, the θ difftest's directory, whose bytes the lock pins; "baseline"
+for the registered information, also the θ difftest's name in its printed messages; "IU" and "inference block" for
+an inference block, in the lock's reasons; "fresh input bits" for fresh input
+bits, in the lock's reasons and the liveness difftest's message; and `novel` for fresh input: the variable of the
+check's rate rule and of its Python reference, and a mode of the liveness difftest.

@@ -1,7 +1,7 @@
 # The inference-only policy: design
 
 The policy's interface in full, what it asks, why it separates inference from training, its Lean (the definition, the
-guarantees and what each assumes), the check, and the older names it keeps. [`README.md`](README.md) says what the
+guarantees and what each assumes), and the check. [`README.md`](README.md) says what the
 policy is and gives one thing to try.
 
 ## Interface
@@ -148,14 +148,3 @@ compliance verdict witnesses the policy at its rate (`DescWitnesses`); on a verd
 every block meets the (c, k) budgets at c = `gamma` and k = α·c (`refines`, a lemma of `Reports`). What is open is the step from the check's
 accept to that verdict as a property (`theta_desc` is a proof lemma), and remote doesn't run the check yet. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.
-
-## Names
-
-A few older names stay here until a change of their own renames each (`GLOSSARY.md`, Older names): `benchmarks/nci`;
-a verdict's failure rule `"nci"`, its key `ius` for its inference blocks with the names that compute it, and the
-refusal codes `input-in-iu`, `gate-in-no-iu` and `empty-iu`; the toy Definitions the vector generators build
-(`NciHandBlk`, `NciDecl…`); `baseline_difftest/`, the θ difftest's directory, whose bytes the lock pins; "baseline"
-for the registered information, also the θ difftest's name in its printed messages; "IU" and "inference block" for
-an inference block, in the lock's reasons; "fresh input bits" for fresh input
-bits, in the lock's reasons and the liveness difftest's message; and `novel` for fresh input: the variable of the
-check's rate rule and of its Python reference, and a mode of the liveness difftest.
