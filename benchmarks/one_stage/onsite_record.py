@@ -93,7 +93,7 @@ run's, or the follow-on's where it audits), and the network certifier's chain dr
 each one's sampling_design (``draws``, `CHAIN_DRAWS`); ``open`` unless each COINS line names the live challenger (`LIVE_COINS`) and,
 where the network certifier accepted, each chain draw takes everything, naming each draw that doesn't
 (``open_draws``), and ``missing`` where the run published no COINS line. While they are open, live-coins is named
-wherever a figure rests on that draw: the sampled-proofs verdict's, ``of_record``'s and the composite's error's
+wherever a figure rests on that draw: the SPOT verdict's, ``of_record``'s and the composite's error's
 ``conditional_on``, and the figure of record's ``open`` and ``conditional_on`` and its periods'.
 
 **One program a day** (``one_program_a_day``, `DAY`): not claimed, and open by its name in the record and its line
@@ -1335,7 +1335,7 @@ def lines(out: Path, name: str) -> list[str]:
 
 
 def coins(out: Path) -> dict[str, Any]:
-    """SPOT's coins as the run's COINS lines name them (`COINS`): each line's sampled-proofs part, None where
+    """SPOT's coins as the run's COINS lines name them (`COINS`): each line's SPOT part, None where
     it names none, and ``open`` unless every part names the live challenger (`LIVE_COINS`); ``missing`` where the run
     published no COINS line."""
     said = [m[1].strip() if (m := re.search(r"sampled proofs: ([^;]*)", x)) else None

@@ -1483,7 +1483,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
         neg["public-file-altered-after-the-proof (Lean roots)"] = {**a0.altered_public(
             a.lean, last, last["n"], sdir, out / "neg-altered-public", dict(rec, leaf_layer=leaf_layer), check, zk=True),
             "member": last["name"], "row": f"instance {last['n'] - 1}, port {last['ports'][-1].name}"}
-    # the sampled-proofs docket and sample, as A6 checks them
+    # the SPOT docket and sample, as A6 checks them
     fewer = R2.program([(plan_m["defn"], plan_m["n"]), (map_m["defn"], map_m["n"])], mixed=True)
     v = V.check(rec, fewer, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}

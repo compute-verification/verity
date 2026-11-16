@@ -18,7 +18,7 @@ and the served egress is missing. SPOT's coins are live only where
 every COINS line names the live challenger at a named peer, and the network certifier's chain draws only where each
 takes everything; otherwise, or with none, live-coins is open by name (each chain draw by its own), the figure of
 record charges ℓ_a + 1 for each tied audit whatever else holds, and it and its cells are conditional on the coins, and
-so is the sampled-proofs verdict where its draw is the one open. While certifier-key is open an accepted network
+so is the SPOT verdict where its draw is the one open. While certifier-key is open an accepted network
 verdict is not established and its bound conditional on it. It closes only where the lock holds PeriodLeakRegistered
 at its guarantee taking hA, hr and hkey as auditor-record and the run's check of the auditor's inputs holds:
 its certifier-key record's key, LMS parameters and session are the period's, and its registration, which checks,
@@ -304,7 +304,7 @@ def network_row(public: dict | None) -> dict:
             "answer": answer(public)}
 
 
-#: the sampled-proofs part of a COINS line naming the live challenger, as served_verdicts.sh says it under PP_CHALLENGER
+#: the SPOT part of a COINS line naming the live challenger, as served_verdicts.sh says it under PP_CHALLENGER
 GATE = "the challenger gate:research@toy-gate (peer toy-peer)"
 
 
@@ -356,7 +356,7 @@ def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None
                audit: dict | None = AUDITED, draw: dict = SUBSET1, bound: int = N - 1) -> Path:
     """A toy $OUT: SPOT accepted under ``draw`` with ``bound`` (`integrity_answer`), its audit's record
     ``audit`` (none where None), PoUW and the network certifier missing unless given, the given composites and
-    certifier case, and its COINS line, its sampled-proofs part ``coins`` (none where None); and beside it the auditor's
+    certifier case, and its COINS line, its SPOT part ``coins`` (none where None); and beside it the auditor's
     inputs (`auditor_files`)."""
     out = tmp_path / "out"
     auditor_files(out)
@@ -473,7 +473,7 @@ def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list
     ``schedule``, whose caps are the schedule's (`Schedule.rowsCells`) unless given, the network certifier's key, LMS
     parameters and session the auditor's record's (`CERTIFIER`) and any other ``params``, and whose commitment holds
     ``audits``' dockets, with ``registration`` its published advice registration, none where None, ``coins`` its
-    COINS line's sampled-proofs part (`served_out`), ``draws`` its chain report, none where None, and remote's
+    COINS line's SPOT part (`served_out`), ``draws`` its chain report, none where None, and remote's
     composite and, where ``onsite``, onsite's (`with_onsite`), the composite of record that composed its case."""
     pouw = {"protocol": "verity/pouw/period/v1", "owner": "compute-accounting", "verdict": "accept", "reason": None}
     if caps is None:
@@ -691,7 +691,7 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
     assert rec["bound"]["of_record"]["open"] == ["circuit", *open_] and "periods_tight" not in rec
 
 
-#: COINS lines' sampled-proofs parts that name no live challenger, as served_verdicts.sh says them
+#: COINS lines' SPOT parts that name no live challenger, as served_verdicts.sh says them
 DEVELOPMENT = {
     "served": (f"a local development challenger session on {NODE}, the served node, not an auditor's (PP_CHALLENGER "
                "local)"),
@@ -724,7 +724,7 @@ def with_coins(tmp_path: Path, said: list[str]) -> dict:
 def test_coins_no_line_names_live_leave_the_figure_of_record_and_each_cell_conditional_on_them(tmp_path, capsys, said):
     """A run whose COINS lines name a local development challenger session (the served node's, a deferral's or its
     follow-on's), a gate at no named peer, another challenger or no SPOT's coins, or that published none, has
-    its coins open, live-coins by name: the sampled-proofs verdict, the run's being of record, the figure of record and
+    its coins open, live-coins by name: the SPOT verdict, the run's being of record, the figure of record and
     each of its cells are conditional on them, and the figure of record charges ℓ_a + 1 for the tied audit though both
     checks are held and every premise discharged, with no tight K beside it."""
     rec, cond = with_coins(tmp_path, said), [OR.COINS_OPEN]

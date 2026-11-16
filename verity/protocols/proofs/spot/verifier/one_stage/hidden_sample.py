@@ -1,4 +1,4 @@
-"""A sample over hidden positions, the Python mirror of `Spot.HiddenSample` (held to it by the sampled-proofs
+"""A sample over hidden positions, the Python mirror of `Spot.HiddenSample` (held to it by the SPOT
 difftest's `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces).
 
 A stratum's population is `M` positions whose layout is private. Before the sampling coin the prover commits a calls table,
