@@ -18,7 +18,7 @@ import pytest
 VLLM = Path(__file__).resolve().parents[2]
 SCRIPT = VLLM / "verity_vllm" / "ops" / "serve_fresh.sh"
 BASH = shutil.which("bash") or "/bin/bash"
-TOOLS = ("realpath", "dirname", "cut", "awk", "tr", "df", "tail", "mkdir", "bash", "date", "setsid", "sleep")
+TOOLS = ("realpath", "dirname", "cut", "awk", "tr", "df", "tail", "mkdir", "bash", "date", "setsid")
 HOSTILE = {"WORK": "/workspace", "VENV": "/workspace/venv312", "HF_HOME": "/workspace/hf", "FA2": "/workspace/cp/fa2",
            "UV_CACHE_DIR": "/root/.cache/uv", "PIP_CACHE_DIR": "/root/.cache/pip", "HOME": "/root",
            "XDG_CACHE_HOME": "/root/.cache", "TRITON_CACHE_DIR": "/workspace/cache/triton"}
@@ -63,8 +63,8 @@ def test_dry_run_takes_the_directory_the_caller_names(tmp_path: Path) -> None:
 
 
 def _machine(tmp_path: Path, cards: str | None, *, nvcc: bool = True, uv: bool = True) -> dict[str, str]:
-    """A PATH holding only the tools the checks use, a fake `nvidia-smi` printing `cards`, a fake `uv`, and a CUDA_HOME
-    whose bin/nvcc exists or not."""
+    """A PATH holding only the tools the checks use, a fake `nvidia-smi` printing `cards`, a fake `uv`, a `sleep` that
+    returns at once, and a CUDA_HOME whose bin/nvcc exists or not."""
     b, cuda = tmp_path / "bin", tmp_path / "cuda"
     b.mkdir(exist_ok=True)
     (cuda / "bin").mkdir(parents=True, exist_ok=True)
@@ -72,7 +72,9 @@ def _machine(tmp_path: Path, cards: str | None, *, nvcc: bool = True, uv: bool =
         found = shutil.which(t)
         assert found, f"{t} is not on PATH"
         (b / t).symlink_to(found)
-    fakes = {"nvidia-smi": f"#!/bin/sh\nprintf '{cards}\\n'\n" if cards is not None else None, "uv": "#!/bin/sh\n" if uv else None}
+    # `sleep` returns at once: the script's polls (STOP_GRACE_S of them) then wait on no clock
+    fakes = {"nvidia-smi": f"#!/bin/sh\nprintf '{cards}\\n'\n" if cards is not None else None, "uv": "#!/bin/sh\n" if uv else None,
+             "sleep": "#!/bin/sh\n"}
     if nvcc:
         fakes[str(cuda / "bin" / "nvcc")] = "#!/bin/sh\n"
     for name, text in fakes.items():
@@ -127,7 +129,7 @@ def test_a_signal_to_the_script_stops_the_step_it_is_running_and_everything_that
 
 def test_a_step_that_ignores_term_is_killed_before_the_script_prints_its_last_line(tmp_path: Path) -> None:
     """A server signalled mid-startup acted on TERM minutes later, after the script had exited and its caller had removed
-    the work directory: the script waits STOP_GRACE_S for the step's group, KILLs what is left, and only then says so."""
+    the work directory: the script polls the step's group STOP_GRACE_S times, KILLs what is left, and only then says so."""
     ops = tmp_path / "tree" / "adapters" / "vllm" / "verity_vllm" / "ops"
     ops.mkdir(parents=True)
     (tmp_path / "tree" / "pyproject.toml").write_text("")
@@ -147,7 +149,7 @@ def test_a_step_that_ignores_term_is_killed_before_the_script_prints_its_last_li
         os.set_blocking(held.fileno(), False)
         assert os.read(held.fileno(), 1) == b"", "the stand-in outlived the script"   # EOF, not EAGAIN: no writer is left
     assert p.returncode == 143, (out, err)
-    assert "outlived TERM by 1 s; KILL" in err
+    assert "outlived TERM by 1 poll(s); KILL" in err
     assert out.strip().splitlines()[-1] == "SERVE-FRESH FAILED bootstrap: stopped by a signal"
 
 

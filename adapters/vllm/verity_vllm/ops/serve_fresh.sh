@@ -83,8 +83,8 @@ if [ "$DRY" = 0 ]; then
 fi
 # Each child runs in a process group of its own and is waited on in the background, so a signal to this script or a failure
 # stops it and everything it started (the compilers, the server and its engine) rather than leaving them on the card. A server
-# signalled mid-startup can take minutes to act on TERM, so the script waits for the whole group to be gone (STOP_GRACE_S,
-# default 60), KILLs what is left, and only then prints its last line.
+# signalled mid-startup can take minutes to act on TERM, so the script polls, a second apart, for the whole group to be gone
+# (STOP_GRACE_S polls, default 60), KILLs what is left, and only then prints its last line.
 CHILD=""; STEP=start
 in_group() {   # a process of group $1 that is not a zombie
   local f s a
@@ -100,7 +100,7 @@ stop_group() {
   local g=$CHILD i; CHILD=""
   kill -TERM -- "-$g" 2> /dev/null
   for ((i = 0; i < ${STOP_GRACE_S:-60}; i++)); do in_group "$g" || return 0; sleep 1; done
-  echo "serve_fresh: process group $g outlived TERM by ${STOP_GRACE_S:-60} s; KILL" >&2
+  echo "serve_fresh: process group $g outlived TERM by ${STOP_GRACE_S:-60} poll(s); KILL" >&2
   kill -KILL -- "-$g" 2> /dev/null
   while in_group "$g"; do sleep 1; done
 }
