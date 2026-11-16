@@ -169,12 +169,12 @@ A period's wipe is `wipe_run` (the prover's, beside `wipe_prover`) answered by `
 Verity's wipe subprotocol, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
 `verity/protocols/resource_accounting/memory/pous/attester/lean/`). An accepted wipe publishes `M` (every declared tier), the reads `k` the
 memory challenger chose (`wipe_party --reads`, 2152 by default; the prover never names them), `r = ratio(k)` and the
-foreign content it may leave, `M` (vacuous), since no network certifier signs the egress `E` the bound is taken at;
+foreign content it may leave, `M` (vacuous), since no network attester signs the egress `E` the bound is taken at;
 an unsigned session is undecided. The session signs no egress: the check takes one count as evidence beside the signed
 session (`egress_mib`, whole MiB; none given is `EGRESS_MAX_UNITS`; one out of range is rejected) and holds it to
 nothing, so it certifies no wipe on it (`wipe_period.uncounted`) and names it as the evidence writer's
 (`writer_gap`). `certify` gives `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128`
-(`R` the declared memory past the fill), which the check that composes the wipe with the network certifier is to
+(`R` the declared memory past the fill), which the check that composes the wipe with the network attester is to
 publish once it ties `E` to the certifier's count between the session's marks. `wipe_run.subprotocol(period_dir, node, out, side_of=...)` is the wipe's run in the all-protocols period runner.
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
@@ -203,7 +203,7 @@ memory challenger for the wipe (`period.json`'s `deployment`: the configuration'
 reads rehearsal, no bound, whatever the host names say (`memory_challenger.trusted_device`, which PoUS's placement
 reads too); the placement's `kind` (`own-host`, `simulated`,
 `prover-node`) is what the names say, a label. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
-no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
+no network attester counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe
 declares whole, the host's DRAM, its disks), what the prover's store leaves out (the placement's `store_gaps`, by
 tier: a GPU's driver reserve when NVML gave no total, as the wipe declares the larger of CUDA's and NVML's totals and
@@ -211,7 +211,7 @@ NVML's counts the reserve, `wipe_store.Cuda.info`; what its disks leave outside 
 (the check given no count). The placement names no device: the store as the prover measured it (the GPU's name, uuid
 and bus id among it) stays in the prover's own record, `wipe.json`'s `prover`. The record
 also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
-which a network certifier counts the egress over.
+which a network attester counts the egress over.
 `wipe.disk` puts the node's disks in the same session (`wipe_store.Disk`, laid ahead of the card or host memory by
 `wipe_store.Joint`; `demo.sh --disk PATH`): a fill file of the session's own in each target directory, or a raw block
 device, written with `O_DIRECT` and synced before the prover acknowledges the fill. The whole disks under the targets

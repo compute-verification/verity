@@ -1,4 +1,4 @@
-"""Per-token timing traces of real vLLM serving, for sizing the network certifier.
+"""Per-token timing traces of real vLLM serving, for sizing the network attester.
 
 One job (`run.sh`, queued on one leased GPU) starts vLLM's OpenAI-compatible server on that GPU from
 the node's local weights, replays recorded request mixes open-loop with a streaming client on the same host, and records

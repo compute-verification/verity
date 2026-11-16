@@ -26,7 +26,7 @@ path: `research msg owners PATH`.
 |---|---|
 | `Accounting` | The device model every resource audit is about, and a joint audit's run on it |
 | `Assumptions` | The named assumptions: the few `Prop`s the guarantees take without proof |
-| `Certifier` | The network certifier's protocol: grids, the interaction, the Program |
+| `Certifier` | The network attester's protocol: grids, the interaction, the Program |
 | `Claims` | Flock's claim statements, over Core's interaction model |
 | `Core` | The model every area states its guarantees in: circuits, partitions, coins |
 | `Flock` | The vocabulary Flock's guarantees are stated in, extracted from `Proofs/Flock` |

@@ -1,12 +1,12 @@
 """``--admit tick`` under vLLM's own OpenAI server, without serve-openai (`serve_admit`'s certified tick): `TickFeed`, the
-server's ASGI ``--middleware``, appends the network certifier's releases and its watermark to a feed file, and `register`, a
+server's ASGI ``--middleware``, appends the network attester's releases and its watermark to a feed file, and `register`, a
 vLLM general plugin, puts a `serve_admit.TickGate` that reads the feed (`FeedReader`) in front of every V1 scheduler the
 engine core process builds, and makes the engine core's input loop wait on it. Both read ``VERITY_TICK`` (`tick_config`).
 The trace corpus serves so (`benchmarks/network_e2e/traces/corpus.py`, ``--admit tick``).
 
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
 stdlib, `verity_vllm.settings`, `verity_vllm.engine.hooks` and `serve_admit`, and `register` imports vLLM only once
-``VERITY_TICK`` is set. `serve_admit` reads a watermark line with the network certifier's own reader
+``VERITY_TICK`` is set. `serve_admit` reads a watermark line with the network attester's own reader
 (`verity.protocols.resource_accounting.network.verifier.release`, which imports only the stdlib), and imports it when the first line
 comes, so only the API server's process does, and it needs ``verity``, this package's dependency, on its path.
 """

@@ -4,7 +4,7 @@
 # frame, N2's network-records and SPOT's verifier built in the tree. From a clone, as a job of 96 GB whose
 # input is the run's tarball n2-run.tar.gz:
 #   env N2_MEM_GB=96 N2_RUN=n2-run.tar.gz bash benchmarks/network_traces/n2_zk.sh
-# The run: an active network certifier's directory, as its server writes it, from N2_RUN, a tarball sent with `--send`
+# The run: an active network attester's directory, as its server writes it, from N2_RUN, a tarball sent with `--send`
 # holding it at its top.
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_RUN (the tarball's name under the run's inputs/)
 #      N2_ROUNDS (n2_zk.py's --rounds, proved one after another: one ZK server

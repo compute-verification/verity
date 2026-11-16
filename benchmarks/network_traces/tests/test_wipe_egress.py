@@ -1,4 +1,4 @@
-"""The wipe's egress count (`wipe_egress.py`) over a gate network certifier run built here at the gate's scan schedule
+"""The wipe's egress count (`wipe_egress.py`) over a gate network attester run built here at the gate's scan schedule
 and signed under a small LMS key: the execution phases meeting [t0 − pad, t1 + pad) and none other, each at the
 schedule's capacity; a window reaching before the session's origin or past its last window, a certificate missing or
 failing to verify, a run the gate's check refused, and an `out/` file other than the one `end.json` hashed each leave
@@ -36,7 +36,7 @@ ORIGIN = 1793035442.0242794
 WINDOWS = 6
 SESSION = bytes(range(32))
 LINK, FAILS = RC.LINK, f"{RC.LINK}-fails"
-#: the device the gate's `end.json` names for a network certifier run
+#: the device the gate's `end.json` names for a network attester run
 DEVICE = "warden"
 MS = 1_000_000
 
@@ -60,7 +60,7 @@ def _certificate(link: str, w: int, q: int, session: bytes = SESSION) -> dict:
 
 def gate_run(root: Path, *, forged: frozenset = frozenset(), missing: frozenset = frozenset(),
              accepted: bool = True) -> Path:
-    """A network certifier run's `end.json` and `out/` as the gate publishes them: each window's egress and fails
+    """A network attester run's `end.json` and `out/` as the gate publishes them: each window's egress and fails
     certificates (signed in another session when (link, w) is in `forged`, left out when in `missing`), and of a run
     its check didn't accept no certificate at all."""
     run = root / "c-test"

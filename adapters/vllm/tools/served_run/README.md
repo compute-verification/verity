@@ -65,13 +65,13 @@ gets no verdict.
 
 ## The auditor's parties
 
-The auditor's parties are the verifier, the challenger, the network certifier and the memory challenger. The
+The auditor's parties are the verifier, the challenger, the network attester and the memory challenger. The
 challenger is an auditor device reached through its gate, and its live coins are PoUW's always and SPOT's when
 `PP_CHALLENGER` names it, V3c's audit, the SPOT audit of record, among them. Otherwise a local development
 challenger session on the endpoint's node samples the proof blocks, which shows the path but is no auditor's coins, and
 `served_verdicts.sh` takes it only in a development run, which `placement.toml` says it is (`DEVELOPMENT=1`).
 The verifier flips no coins of its own. The other three are not
-placed: the Lean verifier runs on the endpoint's node beside the prover, and the network certifier and the memory
+placed: the Lean verifier runs on the endpoint's node beside the prover, and the network attester and the memory
 challenger, which onsite's pieces read, may run there too. Being placed needs each of them on a machine the developer
 doesn't control.
 
@@ -85,7 +85,7 @@ doesn't control.
   only when they agree.
 - The load, `serve_load.py`: `served_verdicts.sh`'s one execution phase of varied requests (`--varied`, or with
   `LOAD=fixed` one full execution phase of fixed length), or `serve.sh`'s `BURSTS` bursts of `PER_BURST` requests, each
-  burst sealed on its own (8 and 4 by default), or with `VARIED=N` and `ADMIT=release-order` the network certifier's
+  burst sealed on its own (8 and 4 by default), or with `VARIED=N` and `ADMIT=release-order` the network attester's
   varied traffic.
 - `placement.toml`: where each run goes and what its node holds. That is the node's venv, CUDA, HF cache, taps and
   workload dirs, and the flags the run recorder starts each run with, among them the gate PoUW's coins come from.

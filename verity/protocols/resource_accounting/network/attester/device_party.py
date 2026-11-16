@@ -1,4 +1,4 @@
-"""The network certifier's device as a party of the deployment layer (`verity.runtime`): `NetworkCertifier`, the role
+"""The network attester's device as a party of the deployment layer (`verity.runtime`): `NetworkCertifier`, the role
 `parties.NETWORK_CERTIFIER` of the certifier's manifest (`parties.MANIFEST`), and `PROTOCOL`, that manifest with it.
 
 Its needs are the manifest's: its clock and coins are the runtime's sources, and its signing key the capability
@@ -86,7 +86,7 @@ class Phase:
 
 
 class NetworkCertifier:
-    """The network certifier's device on one link: `start` and `on` are the runtime's calls, and the rest its life."""
+    """The network attester's device on one link: `start` and `on` are the runtime's calls, and the rest its life."""
 
     def __init__(self) -> None:
         self.identity: Identity | None = None
