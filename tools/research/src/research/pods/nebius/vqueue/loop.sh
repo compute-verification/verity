@@ -27,8 +27,8 @@
 # environment or a credential file says.
 #
 # The node's paths follow ci's args on the command line, so a flag of args naming another host's file never wins: the log, the
-# lock, the five lists (each read as empty while it is missing, as on any host; a tick names the missing ones in one line) and
-# --graph2, graph2.sh beside this script. The steps after a landing publish the Lean cache with lean_publish.sh beside it
+# lock and the five lists (each read as empty while it is missing, as on any host; a tick names the missing ones in one line).
+# The steps after a landing publish the Lean cache with lean_publish.sh beside it
 # (RESEARCH_LEAN_PUBLISH; a credential file may set it empty to turn the publish off).
 #
 # Credentials, none in this file or its unit: VQ_CRED/*.env (root's, readable by the group: the store's key, the Slack token)
@@ -49,8 +49,8 @@ CONFIG=78     # what the node holds can't run a tick: the unit stays failed unti
 SKIP=75       # this tick can't run, the next may: the loop goes on
 # each list's flag and its file under live/
 LISTS="--deselect=deselect --keep-runs=keep-runs --wide-file=wide --heavy-file=heavy --pins-file=pins"
-# what a credential file may set: the store's remote, the Slack token, and the names graph2.sh and lean_publish.sh read
-KEYS="AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY R2_ACCOUNT_ID R2_BUCKET R2_ENDPOINT SLACK_BOT_TOKEN VQ_GRAPH2_NODE VQ_LEAN_NODE \
+# what a credential file may set: the store's remote, the Slack token, and the names lean_publish.sh reads
+KEYS="AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY R2_ACCOUNT_ID R2_BUCKET R2_ENDPOINT SLACK_BOT_TOKEN VQ_LEAN_NODE \
 RESEARCH_LEAN_PUBLISH"
 
 if [ "${1:-}" = git ]; then
@@ -159,7 +159,7 @@ tick() {
     # shellcheck disable=SC2046
     PYTHONPATH=$CODE/tools/research/src exec "$PY" -m research queue vqueue $(grep -v '^[[:space:]]*#' "$dir/args") \
       --repo "$CLONE" --log "$dir/decisions.jsonl" --state "$dir/state.json" --lock "$dir/vqueue.lock" \
-      --priority-file "$H/live/priority" --frozen "$dir/frozen" "${listed[@]}" --graph2 "$LIB/graph2.sh" --once $flag "$@"
+      --priority-file "$H/live/priority" --frozen "$dir/frozen" "${listed[@]}" --once $flag "$@"
   )
 }
 

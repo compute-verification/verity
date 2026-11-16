@@ -7,7 +7,7 @@
 #     by hand does so as this user (`sudo -u vy-vqueue`).
 #   - its ssh key, made here once under the name research reads (~/.runpod/ssh/runpodctl-ssh-key) and never copied anywhere:
 #     the public half is printed, for research's authorized_keys on each machine the loop's args name with --on or --heavy-on,
-#     graph2's (graph2.sh's VQ_GRAPH2_NODE), the merge mirror's and the Lean cache's (lean_publish.sh's VQ_LEAN_NODE). The key
+#     the merge mirror's and the Lean cache's (lean_publish.sh's VQ_LEAN_NODE). The key
 #     every agent holds never comes to this node.
 #   - /etc/vy/vqueue (root's, 0750, the loop's group): the credentials root puts there by hand, never from git. `*.env` files
 #     are the loop's to read (0640): the store's key (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, R2_ACCOUNT_ID, R2_BUCKET,
