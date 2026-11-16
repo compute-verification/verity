@@ -1034,7 +1034,7 @@ real EOS. The registered thing is a precommitted ahead-of-time compiler. After s
 **advice** string that encodes everything serving made unpredictable: in advice v0, each request's lengths and finish,
 each step's batch rows, and each step's release bucket. The compiler turns the advice into each step's circuit, and the
 network attester certifies the I/O. SPOT checks two things: that the committed values pass the compiled circuits (the
-step proof blocks), and that they agree with the certified I/O (the tie proof blocks). N2 is to hold each window's egress counts to
+step proof blocks), and that they agree with the certified I/O (the tie proof blocks). N2 is to hold each execution phase's egress counts to
 the ingress counts and the advice; no N2 proof block does yet. The advice's length is the leak, charged as `A_c` in the
 accepted-runs bound.
 
@@ -1045,12 +1045,12 @@ each attack costs under the design, and the adversarial cases each part's tests 
 
 ### The argument
 
-The notation is for one audit of W windows:
+The notation is for one audit of W execution phases:
 - I is the certified ingress: the requests' bytes and counts. It is charged on ingress, as reads and timing (the K
   charge), and nothing below charges it again.
 - w is the weights, under a root registered before any coin.
-- `compile` is `compile_steps(registered, ·)`. It is registered with the codec, a cap c on the advice's charged bits,
-  Σ_sync and (T, r, B, τ_b, Q), all before the audit's first window.
+- `compile` is `compile_steps(registered, ·)`. It is registered with the codec, a limit c on the advice's charged bits,
+  Σ_sync and (T, r, B, τ_b, Q), all before the audit's first execution phase.
 - a is the advice the prover registers, and 𝒜_c is the set of advice strings whose charge `bits(a)` is at most c.
 - The proof blocks are the step proof blocks of the compiled circuits, the tie proof blocks, and N2's proof blocks (one
   per execution phase).
@@ -1072,7 +1072,7 @@ of the incorrect proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ
 2. **With no incorrect proof block, the egress is a function of I and a.** Every committed value is the forward evaluation of the
    compiled circuits from I, w and a, because every value a circuit reads has exactly one writer (A2). Each tie proof
    block then holds its frame to the canonical frame of the committed token at the (request, position) the advice maps
-   it to. N2 holds each window's counts to the counts that the ingress counts and the advice derive. So the egress rows
+   it to. N2 holds each execution phase's counts to the counts that the ingress counts and the advice derive. So the egress rows
    are the Program `constantRate T W ss frames` with content advice a: `frames ins a ℓ` gives each frame's payload,
    anchor and logical index.
 3. **An incorrect proof block adds its influence.** Take the content advice of step 2 to be (a, φ), where φ is the incorrect
@@ -1125,18 +1125,18 @@ Each assumption, and what breaks without it:
   `compile` refuses a read with no writer. Without A2, a value nobody checks feeds the circuits, and every sample passes
   (attacks 4 and 6).
 - **A3, the tie and the step proof blocks are sampled at ε at δ, not all.** N2's proof blocks are `All`, and so is the
-  compile slice on every advised window, never sampled: its carry chain binds only proved proof blocks and its scan pins
+  compile slice on every advised execution phase, never sampled: its carry chain binds only proved proof blocks and its scan pins
   `en` ([protocol/compile-slice.md](protocol/compile-slice.md)). The step proof blocks add I_ε at
   probability δ_audit. A wrong tie proof block adds 8·B bits unless the tie is `All` too (attack 8). The bound holds on
-  accepted audits only, as every capacity bound here does: a rejected window may already have carried up to its unbound
+  accepted audits only, as every capacity bound here does: a rejected execution phase may already have carried up to its unbound
   capacity.
 - **A4, the advice is bound to the run before the coins.** The registration that the challenger receipts before its
   sample holds the advice's canonical digest (or every compiled Program's digest), with the run, the link and the
-  windows in its context. Every consumer (the compiler, N2 and the tie) reads that one advice. If the advice can follow
+  execution phases in its context. Every consumer (the compiler, N2 and the tie) reads that one advice. If the advice can follow
   the sample, the prover picks, after the sample, an a under which the sampled proof blocks pass. The error then grows
   to as much as
-  #𝒜_c · δ, which is vacuous. Each window's advice must precede its own proof blocks' sample. It may follow an earlier
-  window's sample, since an earlier window's incorrect proof blocks are counted in Φ by their exits, whatever later
+  #𝒜_c · δ, which is vacuous. Each execution phase's advice must precede its own proof blocks' sample. It may follow an earlier
+  one's sample, since an earlier one's incorrect proof blocks are counted in Φ by their exits, whatever later
   circuits read them.
 - **A5, the charge is the encoding every consumer decodes.**
   - `bits` counts the canonical, self-delimiting encoding of every field any consumer reads, and no consumer reads
@@ -1148,20 +1148,20 @@ Each assumption, and what breaks without it:
     not produce: padding bits, a trailing byte, a non-minimal integer, an unused enumeration value. Or the auditor's
     side re-encodes the decoded advice rather than forwarding the prover's bytes, as the Flock ZK server relay
     re-encodes a round.
-  - Each window's part is self-delimiting, and the windows' charges sum to the whole encoding.
-  - Each field is charged to a window no later than the first window whose rows it can change. Then the first m
-    windows' charges bound the first m windows, which the per-window form needs, as `expected_grids` gives it for the
+  - Each execution phase's part is self-delimiting, and their charges sum to the whole encoding.
+  - Each field is charged to an execution phase no later than the first one whose rows it can change. Then the first m
+    execution phases' charges bound the first m, which the per-execution-phase form needs, as `expected_grids` gives it for the
     syncs. A prefill step that releases nothing is still charged.
 - **A6, the network attester's clock.** The buckets are the network attester's, under `trusted-device`, W1 to W6 and J (D = 1
   is no jitter), and the advice's release buckets are network attester buckets. Nothing else in the accounting reads a time.
   The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
   their deadlines, so they stay out of anything published, or they are charged.
-- **A7, the advice set is fixed before the run.** The codec and the cap c are registered before the audit's first
-  window, and the audit refuses advice over the cap, as it refuses a sync outside Σ_sync. `A_c = log2 #Ac` in the
-  spec needs the set fixed before the run. Without a registered cap, the realized charge is sound only in the
+- **A7, the advice set is fixed before the run.** The codec and the limit c are registered before the audit's first
+  execution phase, and the audit refuses advice over the limit, as it refuses a sync outside Σ_sync. `A_c = log2 #Ac` in the
+  spec needs the set fixed before the run. Without a registered limit, the realized charge is sound only in the
   indexed form: for every c, the runs whose charge is at most c number at most 2^(c+1) times the rest.
 
-The claim does not say three things: that the advice is what serving did (attack 7), anything about rejected windows,
+The claim does not say three things: that the advice is what serving did (attack 7), anything about rejected execution phases,
 and the ingress terms, which stay the K charge's.
 
 ### Attacks
@@ -1178,57 +1178,58 @@ Moved to [protocol/advice-v0.md](protocol/advice-v0.md).
 Under advice v1 (the next section's end) the compile slice's proof block replays the scheduler one step proof block per
 engine step. Each proof block is `ReplayStep_v1` (`verity_vllm.compiler.replay_step`): the committed queue state, the
 next A certified arrivals and the next A decisions go in, and the step's rows and next state come out. The chain hands
-the state from proof block to proof block as the state rows of one produced value a window (`one_stage.produced`, value
-`replay-state`, `hm96-sha512/row/v2` bit rows), beside a window row (value `replay-window`). Each proof block reads its
+the state from proof block to proof block as the state rows of one produced value an execution phase (`one_stage.produced`, value
+`replay-state`, `hm96-sha512/row/v2` bit rows), beside an execution-phase row (value `replay-window`). Each proof block reads its
 rows at public positions, and no gate hashes a row: the Lean verifier checks each read's path.
 
 **The step's cursors are private.** The step reads its arrivals and decisions at the scan's cursors, which move by its
-`taken` and `used`, and where a step stands in the certified arrivals or the window's decisions is the schedule
+`taken` and `used`, and where a step stands in the certified arrivals or the execution phase's decisions is the schedule
 itself. A registered read sits at a position the verifier derives, so no proof block can read the arrival record at the
 cursor. So:
-- once a window, `ReplayLoad` writes the window row: the certified arrivals not yet taken, then the window's own (K of the network
-  attester's slots), as `queue` (at most Q), and the window's decoded decisions as `dec` (at most D), all read at public
+- once an execution phase, `ReplayLoad` writes the execution-phase row: the certified arrivals not yet taken, then the
+  execution phase's own (K of the network attester's slots), as `queue` (at most Q), and its decoded decisions as `dec` (at most D), all read at public
   positions;
 - every step proof block reads that one row, and its state row carries the cursors as private heads `qh` and `dh`.
-  `ReplayAdvance` checks the step's A arrivals and A decision bits are the window row's at the heads. It finds them with a
+  `ReplayAdvance` checks the step's A arrivals and A decision bits are the execution-phase row's at the heads. It finds them with a
   log shifter that computes only the A entries it returns: about Q + A·bitlen(Q) muxes an element bit, where moving
   the whole queue would take Q·bitlen(A).
 
 **The rows'** layouts are `verity_vllm.compiler.replay_chain`'s (`row_fields`, `window_fields`). The state row's state
 group is ReplayStep_v1's state input and next-state output, bit for bit, at the shape's AS and EW (`Shape`'s two
 statics): with EW, `run_pfx R×EW` after `run_comp`; with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`. It
-adds the heads `qh` and `dh` and `steps`, the window's executed steps still to come. The window row is the queue (at
-most Q) and the decisions ``dec`` (at most D) with ``left``. With AS an arrival carries its cap (O = max_tokens): `q_cap
+adds the heads `qh` and `dh` and `steps`, the execution phase's executed steps still to come. The execution-phase row
+is the queue (at most Q) and the decisions ``dec`` (at most D) with ``left``. With AS an arrival carries its limit
+(O = max_tokens): `q_cap
 Q×1` after `q_O`, as the step's `arr_cap` and the network attester slots' `a_cap`. In every row the valid elements of
 each group are a prefix and the rest are zero bits, and `decode` and `decode_window` refuse any other row.
 
-**A window** is the state rows S_0 … S_{P+1}, with P the public cap on its steps, and two window rows: the last
-window's and its own. Proof block 0, `ReplayLoad`, reads state rows 0 and 1 and both window rows. Proof block u ≥ 1 is
-step u: ReplayStep_v1 on state row u, with `ReplayAdvance` checking the step's arrivals and bits against window row 1
-and checking state row u + 1. Steps past the window's executed count are idle: the next row is the row, and
+**An execution phase** is the state rows S_0 … S_{P+1}, with P the public limit on its steps, and two execution-phase
+rows: the last one's and its own. Proof block 0, `ReplayLoad`, reads state rows 0 and 1 and both execution-phase rows. Proof block u ≥ 1 is
+step u: ReplayStep_v1 on state row u, with `ReplayAdvance` checking the step's arrivals and bits against execution-phase row 1
+and checking state row u + 1. Steps past the execution phase's executed count are idle: the next row is the row, and
 `ReplayAdvance`'s `active` = 0 drops the proof block's rows.
-- The load refuses a state row 0 that leaves steps to run or has read past its window row's decisions, a queue past
-  Q, more than D decisions (the carried ones and the window's) or P steps. A step refuses arrivals taken past what is
+- The load refuses a state row 0 that leaves steps to run or has read past its execution-phase row's decisions, a queue past
+  Q, more than D decisions (the carried ones and the execution phase's) or P steps. A step refuses arrivals taken past what is
   left or past A, and decisions read past what is left or past A.
-- **The carry.** Window w's state row 0 is window w − 1's last state row, and its window row 0 is window w − 1's window
-  row 1, each under the same salt (`commit_window(carry=…)`), so the verifier checks that their openings b‖c are equal
-  (`check_chain`, `C-carry`). Decisions a window leaves unread carry: the load writes the window's after the last
-  window row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a decision to the
-  earlier of its step's window and its arrival's ingress window, up to two windows before its step's: at T = 20, 5 of
-  async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries from window 0 to their
-  steps in windows 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
-- **The end.** `ReplayClose` reads the session's last state row and window row and refuses a session that ends with a
-  step to run or a decision unread (`close`). The compile slice's proof block charges each decision in the window that
+- **The carry.** Execution phase w's state row 0 is execution phase w − 1's last state row, and its execution-phase
+  row 0 is execution phase w − 1's execution-phase row 1, each under the same salt (`commit_window(carry=…)`), so the verifier checks that their openings b‖c are equal
+  (`check_chain`, `C-carry`). Decisions an execution phase leaves unread carry: the load writes its own after the last
+  execution-phase row's unread ones, as it does the queue's arrivals. A5 ("What it rests on", above) charges a
+  decision to the earlier of its step's execution phase and its arrival's ingress execution phase, up to two before
+  its step's: at T = 20, 5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries
+  from execution phase 0 to their steps in execution phases 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
+- **The end.** `ReplayClose` reads the session's last state row and execution-phase row and refuses a session that ends with a
+  step to run or a decision unread (`close`). The compile slice's proof block charges each decision in the execution phase that
   commits it, A5's, in commit order, which is the order the scan reads them in. So a carried decision is charged where
   it is committed and read where its step is, and none is left uncharged or unread
   ([protocol/compile-slice.md](protocol/compile-slice.md)).
 - **The start.** The session's first rows are the empty engine (`empty`, with NB − 1 free blocks) and the empty
-  window, under the public salts `empty_salts`, whose openings the verifier computes (`C-first`).
+  execution-phase row, under the public salts `empty_salts`, whose openings the verifier computes (`C-first`).
 
 **Cost** (`size`). A step costs `ReplayAdvance`'s ANDs: the two fronts, about (Q + A·QW)·(1 + IW + 2·LW) and
-D + A·DW, and about 2·width for the idle select and the equality. It also costs three reads and one state row. A
-window costs P steps and one `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3
-path of depth ⌈log2(P + 2)⌉, or 1 for a window row. A session adds one `ReplayClose` (13 ANDs at the sync
+D + A·DW, and about 2·width for the idle select and the equality. It also costs three reads and one state row. An
+execution phase costs P steps and one `ReplayLoad`, P + 2 state rows and two execution-phase rows, and 3P + 4 reads,
+each a frame-v3 path of depth ⌈log2(P + 2)⌉, or 1 for an execution-phase row. A session adds one `ReplayClose` (13 ANDs at the sync
 KV-pressure trace's shape) and its two reads.
 
 ## Advice v0's validity (`verity_vllm.compiler.advice_check`)
@@ -1238,7 +1239,7 @@ decodes to a well-formed v0 advice, is the Boolean Definition
 
     AdviceCheck_v1{L} (bits: Array<L, Value<1>>, length: Array<LW, Value<1>>) -> Value<1>
 
-with L the public cap in bits, a multiple of 40, and LW = bitlen(L / 8). `bits` is the string in stream order and
+with L the public limit in bits, a multiple of 40, and LW = bitlen(L / 8). `bits` is the string in stream order and
 `length` its byte count, least significant bit first; bits past 8·length aren't read. The output is 1 exactly when
 `verity_vllm.compiler.advice_check.reference` holds: length ≤ L / 8, and `decode` takes the bytes up to three refusals
 the circuit doesn't make yet (`DEFERRED`). It makes every other refusal of `decode`: the grammar (version, minimal
@@ -1257,10 +1258,10 @@ derived `kind`, no resume of a finished request, no request twice in a step, and
   which only the replay knows: matching them takes a second sort, by position, and up to five releases can end in one
   block.
 
-**Under advice v1 this isn't what the compile slice's proof block proves.** At 8.7 × 10^10 ANDs for a 60 s window's 10.6
+**Under advice v1 this isn't what the compile slice's proof block proves.** At 8.7 × 10^10 ANDs for a 60 s execution phase's 10.6
 Mbit, v0's validity is too costly to be the compile slice's proof block's proof. The replay runs vLLM's scheduler
 exactly on every corpus trace, and advice v1 is what the certified record, the replay and the derived fields leave, a
-residual of a few hundred bits a window coded prefix-free, and `v1.decode(bytes, certified record)` gives I1 v0. So the
+residual of a few hundred bits an execution phase coded prefix-free, and `v1.decode(bytes, certified record)` gives I1 v0. So the
 compile slice's proof block takes v1 and produces v0 by replay, and most of v0's validity holds by construction. The
 three deferred rules are then:
 - unique ids are certified, by the network attester's admission order and the request records;
@@ -1279,8 +1280,8 @@ three deferred rules are then:
    record, then its rows in stream order.
 
 **Cost** (`size`): ANDs = (L / 5)·(parse + replay) + C(L / 5)·swap + the ends, with C(n) ≈ n·log2(n)² / 4
-comparators: 470,116 at L = 240 and 1.49 × 10^8 at 40,000. The 60 s llama8b-shape window's v0 advice, 10.6 Mbit,
-would cost 8.67 × 10^10, 70% of it the sort. A public cap on the rows, the sort's permutation as a private input or a
+comparators: 470,116 at L = 240 and 1.49 × 10^8 at 40,000. The 60 s llama8b-shape execution phase's v0 advice, 10.6 Mbit,
+would cost 8.67 × 10^10, 70% of it the sort. A public limit on the rows, the sort's permutation as a private input or a
 narrower w_len would each cut that, each a change to what the Definition states.
 
 ## Advice v1 (`verity_vllm.pipeline.advice_code.codec`)
