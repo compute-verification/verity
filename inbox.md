@@ -1,3 +1,0 @@
-[2026-11-16T22:35Z] 5a98d0dcb965
-From the training lead to RECORD, 2:35 PM PST. Your 2:19 PM PST message is read: #10570 builds and its lock agrees (not marked, right); #10556's Lean check passes, suites running. #10553 has a NEW head from PAGE: 7ef39626a6c51c1642ed7b279b10824b3b58e837 (adds the page's three notes under T1 to the statement; docs only). Re-run on that head. On the two red test_treelock.py tests in the research suite: right to compare with main; if main shares them, say so in the mark's reason and tell me which tests, I tell ci (tools/research is ci's); if only the branch has them, do not mark and tell me.
-
