@@ -1,0 +1,13 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# modeled: computed in the run from tiers.py's defaults and the slowdown calculator's bound, no measurement
+[[metric]]
+id = "compute-accounting/remote-slowdown-best-pouw"
+title = "Remote slowdown, best PoUW design"
+owner = "compute-accounting"
+unit = "times"
+axis = "The lower bound on hidden training's slowdown under the remote composition at tier T1 with the best plausible PoUW design (1% free compute, the clock attested, PoUW's deficit at most 0.25%), the slowdown statement's first figure, modeled from the inference-only policy's parameters."
+better = "higher"
+command = "research run --on auto --cwd source -- bash -c 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/nci/run.py'"
+every = "7d"

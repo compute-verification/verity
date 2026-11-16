@@ -1,0 +1,13 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# modeled: computed from data/ in the run, no measurement; member measured is the measured reading
+[[metric]]
+id = "compute-accounting/rtx-pro-6000-headline-eps"
+title = "Machine model headline epsilon, modeled"
+owner = "compute-accounting"
+unit = "share of credit"
+axis = "The core ε of the RTX PRO 6000's design of record in the tensor–scalar model at the data sheet's reading (vector DS-120, q* = ½, operands free, credit ♭), the share of a node's credited work it may not have performed, modeled from the machine model's data."
+better = "lower"
+command = "research run --on auto --cwd source -- bash -c 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/machine_model/run.py'"
+every = "7d"
