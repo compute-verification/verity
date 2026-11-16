@@ -7,7 +7,7 @@ Writes `DIR/difftest/instances.jsonl`, one instance per line as `Lms.Difftest.ev
 results from the checkout's `verity.commitments.crypto.lms`: whether `Params` admits the set, whether `Signature.decode` reads the
 signature, the `digits` of its message hash, `root_of`, and `verify`, with `null` where Python raises `ValueError`. The
 Lean audit runs `Lms/DifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256), and
-`verity/commitments/tests/test_lms_lean_difftest.py` checks that this script still writes them.
+`tests/verity/commitments/test_lms_lean_difftest.py` checks that this script still writes them.
 
 The keys are `keygen`'s, at every W, at N = 64 and at `TOY_N`, of heights 1 to 5. At heights 11, 20 (`DEPLOYED`'s) and 30,
 whose keygen takes minutes to hours, a key's tree is a stand-in: `sign_at`'s one-time signature is the seed's, its path
