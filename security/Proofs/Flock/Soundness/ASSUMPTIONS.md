@@ -318,8 +318,8 @@ wipe's labels `SHA-512(LABEL_TAG ‖ K ‖ u64 i)` (`Assumptions.Keyed`).
   streams at indices whose framings (`Randomness.frames`) are pairwise distinct, each read to `L i` bytes
   (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
   `η`. `Randomness.lean` is the Lean spec of `verity.commitments.randomness` v2 (on `Flock.Sha512.hash`): it reproduces
-  `verity/commitments/randomness/tests/vectors.json`, and Python matches its vectors
-  (`verity/protocols/proofs/flock/prover/tests/test_randomness_spec.py`). For the wipe's labels under that key, at
+  `tests/verity/commitments/randomness/vectors.json`, and Python matches its vectors
+  (`tests/verity/protocols/proofs/flock/prover/test_randomness_spec.py`). For the wipe's labels under that key, at
   distinct u64 indices, each a whole 64-byte digest, the labels pass `E` as independent uniform 64-byte strings do, plus `η`.
 - **Per test, as `SHA512CRExpected` is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
   most that many stream tuples. `keyedExecutionPhase_escape_le` takes A4 for one test per set `B` (`executionPhaseTest`: the window sample
