@@ -1,7 +1,11 @@
 # Lean declarations out of the tree, each file whole on the commit below.
-# `record`: each rests on `SpotFlock.RecordNames.recordOk_of_check`, that a registration check with no code leaves a
-# record naming `HeldOf.namesOf v`, which is false at a verifier holding a certified entry (R7 holds the record's
-# `registered` to the verifier's own entries and its certified ones).
+# `record`: each rests on `recordsHeldAt_of`, that both of an accepted play's records name `HeldOf.namesOf` of their
+# registrations' verifiers, which `RecordNames.recordOk_of_check` gives only at a verifier holding no certified entry
+# (R7 holds the record's `registered` to the verifier's own entries and its certified ones, `names_of_check`). The
+# form's parse refuses none at the boundary registration (`SampledTwo.paramsAt`, `OneStage.paramsParsed`), and the
+# interior's (`paramsAt` too) is held to none only through the interior audit's parse of the same object, across
+# `paramsAt`'s canonical round trip. `CheckFacts`, `checkFacts_of_check` and `recordOk_of_facts` are what
+# `names_of_check` replaced.
 # `tables`: each states or rests on the blobs holding exactly the pinned tables a member's circuit looks up
 # (`HoldsRegisteredTables`, `Spot.OneStageZk.tablesOf`), while the per-member form hands each member its own tables
 # (`Spot.OneStageZk.ownTables`).
@@ -14,7 +18,7 @@ files = [
 
 [record]
 "security/Proofs/Properties/Verity/SampledTwo/RecordNames.lean" = [
-  "CheckFacts", "checkFacts_of_check", "recordOk_of_facts", "recordOk_of_check",
+  "CheckFacts", "checkFacts_of_check", "recordOk_of_facts",
 ]
 "security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean" = [
   "recordsHeldAt_of", "playAccepts_form", "acceptsRun_form", "reachedAccepts_form", "acceptsRun_form_at",

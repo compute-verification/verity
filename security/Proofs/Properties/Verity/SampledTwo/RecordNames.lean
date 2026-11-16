@@ -470,10 +470,10 @@ theorem paramsOfJson_certified {j : Json} {p : Spot.OneStage.Params} (h : Spot.O
   | some _ => simp [hf, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   | none =>
     cases hp : Spot.OneStage.paramsParsed j with
-    | error _ => simp [hf, hp, bind, Except.bind, pure, Except.pure] at h
+    | error _ => simp [hf, hp, bind, Except.bind] at h
     | ok q =>
       by_cases hb : Spot.Draw.bernoulli q.verifier.samplingDesign = true
-      · simp [hf, hp, hb, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+      · simp [hf, hp, hb, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
       · simp [hf, hp, hb, bind, Except.bind, pure, Except.pure] at h
         subst h
         exact paramsParsed_certified hf hp
