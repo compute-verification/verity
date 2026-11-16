@@ -103,6 +103,29 @@ def test_a_run_of_record_refuses_a_debug_setting() -> None:
         r.of_record({"PX_TRACE": "0"})
 
 
+def test_of_finds_a_directorys_registry_from_its_code_and_from_its_tests_where_they_are_mirrored(tmp_path) -> None:
+    """The suite of `bench/x` is at `tests/bench/x` and `bench/x` keeps its `settings.py` alone: its code and its tests
+    load it. Tests that are a package imported as `tests` (`tests/d/tests`) load their distribution's."""
+    def registry_at(d: Path, prefix: str) -> None:
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "settings.py").write_text("from verity_config.settings import VALUE, Registry, Setting\n"
+                                       f"REGISTRY = Registry(__file__, ('{prefix}_',), Setting('{prefix}_N', int, 1, VALUE, 'n'))\n")
+    (tmp_path / "pyproject.toml").write_text("")
+    registry_at(tmp_path / "bench" / "x", "MX")
+    registry_at(tmp_path / "d", "MD")
+    (tmp_path / "d" / "pyproject.toml").write_text("")
+    for suite in ("tests/bench/x", "tests/d/tests"):
+        (tmp_path / suite).mkdir(parents=True)
+        (tmp_path / suite / "pyproject.toml").write_text("")
+    code = ST.of(tmp_path / "bench" / "x" / "sub" / "run.py")
+    assert code.MX_N == 1 and code is ST.of(tmp_path / "tests" / "bench" / "x" / "test_run.py")
+    assert ST.of(tmp_path / "tests" / "d" / "tests" / "test_d.py") is ST.of(tmp_path / "d" / "d.py")
+    (tmp_path / "tests" / "e").mkdir()
+    (tmp_path / "tests" / "e" / "pyproject.toml").write_text("")
+    with pytest.raises(LookupError, match="has no settings registry"):
+        ST.of(tmp_path / "tests" / "e" / "test_e.py")
+
+
 def test_of_loads_the_distributions_registry_by_its_path(tmp_path, monkeypatch) -> None:
     for name in ("a", "b"):
         d = tmp_path / name
