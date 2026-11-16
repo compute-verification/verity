@@ -3,12 +3,7 @@ module
 public import Definitions.Core.Partition
 public import Definitions.Core.RegisteredCircuit
 
-/-!
-# The toy circuit the slowdown witnesses are stated at
-
-Four one-bit gates: `0`, a registered input (the weight); `1`, a fresh input (the token); `2` and `3`, each
-`0 ∧ 1`. `P1` puts the two computed gates in one proof block.
--/
+/-! The toy circuit the slowdown witnesses are stated at. -/
 
 @[expose] public section
 
