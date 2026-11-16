@@ -23,10 +23,10 @@
 #    session's own), and a --zk challenger audit whose summary says other than window fails the run (rc 20) with no line.
 #    summary.json's ``epsilon`` is the window's sampling design's bound at several deltas (`Stratified.count_bound`).
 #
-#   research run --on MACHINE --project verity --source TREE --cwd clone --mem-gb 448 --timeout 3h \
+#   research run --on MACHINE --project verity --source TREE --cwd clone --mem-gb 32 --timeout 3h \
 #     --env GPU_LEASE_WHO=LANE --env A5_CORES=CPUS -- bash benchmarks/one_stage/a5_llama1b_h200.sh
 #   or, on a machine of your own, from the tree's root: bash benchmarks/one_stage/a5_llama1b_h200.sh   (its record in ./out)
-# Memory: it checks none; proof_layers.sh, which runs it three times, asks for 64 GB of host memory available.
+# Memory: it checks none; proof_layers.sh, which runs it three times, asks for 96 GB of host memory available.
 # Uses: about 3 GB of disk under A5_ROOT
 #   while it runs (the row dir and the window, removed at exit) and 0.3 GB for M0's Flock build (A5_FLOCK_WORK, kept), and 13-16 min on one H200 with M0's
 #   build kept (the uv, Lean and M0 builds run behind the GPU stages; a machine's first run builds Flock and Lean cold).

@@ -50,6 +50,11 @@ def test_it_reads_only_the_settings_it_names():
     assert all(f"#   {s} " in header for s in SETTINGS)
 
 
+def test_it_refuses_under_96_gb_of_host_memory_available():
+    assert re.findall(r'\[ "\$\{mem_gb:-0\}" -ge (\d+) \]', TEXT) == ["96"]
+    assert "under 96 GB of\n# host memory available" in TEXT
+
+
 def test_every_refusal_comes_before_the_first_step():
     first_step = TEXT.index("trap finish EXIT")
     refusals = [m.start() for m in re.finditer(r"\brefuse \"", TEXT)]

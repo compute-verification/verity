@@ -20,7 +20,7 @@
 #                  time's report (STEP.time), and steps.log
 #   --dry-run      every check, then each step's line; nothing runs and nothing is made
 # Refused before anything is downloaded or built, each in one line with its fix: a setting missing; not the tree's root;
-# nvidia-smi, taskset, python3 or cargo missing; card A5_CARD not an H200 (the runs serve on one, sm_90); under 64 GB of
+# nvidia-smi, taskset, python3 or cargo missing; card A5_CARD not an H200 (the runs serve on one, sm_90); under 96 GB of
 # host memory available (MemAvailable: on a shared node the others' memory is not this job's); A5_CORES not a CPU list
 # this job may run on; under 25 GB free under WORK; WORK not empty; results already in --out. Each run's steps.log has
 # what the job used.
@@ -54,8 +54,8 @@ command -v cargo >/dev/null || [ -x "$HOME/.cargo/bin/cargo" ] \
   || refuse "no cargo: Flock's prover builds with it (verity/protocols/proofs/flock/prover/pod/60-circuit.sh); install Rust (https://rustup.rs) and rerun"
 card=$(nvidia-smi --query-gpu=name --format=csv,noheader -i "$A5_CARD" 2>/dev/null | head -1)
 [[ $card == *H200* ]] || refuse "card $A5_CARD is ${card:-not one nvidia-smi names}, not an H200: the runs serve on one H200 (sm_90); set A5_CARD to an H200's index"
-mem_gb=$(awk '/^MemAvailable:/ {print int($2 / 1048576)}' /proc/meminfo)
-[ "${mem_gb:-0}" -ge 64 ] || refuse "${mem_gb:-0} GB of host memory available, not 64: the bootstrap's builds and each run need up to that of their own; wait for other jobs to end or run on another machine"
+mem_gb=$(awk '/^MemAvailable:/ {print int($2 * 1024 / 1e9)}' /proc/meminfo)
+[ "${mem_gb:-0}" -ge 96 ] || refuse "${mem_gb:-0} GB of host memory available, not 96: the bootstrap's native builds need most of that of their own; wait for other jobs to end or run on another machine"
 python3 - "$A5_CORES" <<'EOF' || exit 2
 import os, re, sys
 spec = sys.argv[1]
@@ -71,7 +71,7 @@ WORK=$(realpath -m "$WORK")
   || refuse "WORK=$WORK is not empty: the script removes WORK when it ends, so it takes only a new or empty directory"
 d=$WORK; while [ ! -d "$d" ]; do d=$(dirname "$d"); done
 [ -w "$d" ] || refuse "can't write $d: give a WORK you can make"
-free_gb=$(df -Pk "$d" | awk 'NR == 2 {print int($4 / 1048576)}')
+free_gb=$(df -Pk "$d" | awk 'NR == 2 {print int($4 * 1024 / 1e9)}')
 [ "${free_gb:-0}" -ge 25 ] || refuse "${free_gb:-0} GB free under $d, not 25: the job needs 25 GB there; free some or give another WORK"
 RESULTS=$(realpath -m "${RESULTS:-${RESEARCH_RUN_DIR:-.}/out}")
 case $RESULTS/ in "$WORK"/*) refuse "--out $RESULTS is inside WORK, which is removed at the end: give a directory outside it" ;; esac
@@ -117,7 +117,7 @@ sample() {  # one line: the job's own PSS, the machine's memory in use and WORK'
   own=$(for k in $(ps -o pid= -s "$SID"); do awk '/^Pss:/ {print $2}' "/proc/$k/smaps_rollup" 2>/dev/null; done | awk '{t += $1} END {print t + 0}')
   echo "$own $(awk '/^MemTotal:/ {t = $2} /^MemAvailable:/ {a = $2} END {print t - a}' /proc/meminfo) $(du -sk "$WORK" 2>/dev/null | cut -f1)" >> "$MEM"
 }
-peak() { tail -n +"$((from + 1))" "$MEM" | awk -v c="$1" '$c > m {m = $c} END {printf "%.1f GB", m / 1048576}'; }
+peak() { tail -n +"$((from + 1))" "$MEM" | awk -v c="$1" '$c > m {m = $c} END {printf "%.1f GB", m * 1024 / 1e9}'; }
 ( while :; do sample; sleep 10; done ) &
 SAMPLER=$!
 finish() {  # at exit, success or failure: the records copied to --out, then WORK removed
@@ -139,7 +139,7 @@ for n in "${STEPS[@]}"; do
   sample; t0=$SECONDS from=$(($(wc -l < "$MEM") - 1))
   if [ -n "$TIME" ]; then
     { $TIME -v -o "$RESULTS/$n.time" bash -c "set -o pipefail; ${CMD[$n]}"; } 2>&1 | tee "$RESULTS/$n.log"; rc=${PIPESTATUS[0]}
-    rss=$(awk -F': ' '/Maximum resident set size/ {if ($2 < 1048576) printf "%d MB", $2 / 1024; else printf "%.1f GB", $2 / 1048576}' "$RESULTS/$n.time")
+    rss=$(awk -F': ' '/Maximum resident set size/ {if ($2 < 976563) printf "%d MB", $2 * 1024 / 1e6; else printf "%.1f GB", $2 * 1024 / 1e9}' "$RESULTS/$n.time")
   else
     bash -c "set -o pipefail; ${CMD[$n]}" 2>&1 | tee "$RESULTS/$n.log"; rc=${PIPESTATUS[0]}
     rss="not measured (no /usr/bin/time)"
