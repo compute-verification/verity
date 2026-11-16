@@ -18,7 +18,7 @@ import pytest
 from verity import config as K
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
@@ -399,11 +399,11 @@ class StandIn(D.Machine):
 
 
 def registry(verdicts: dict | None = None, certifier_rc: int = 0) -> R.Registry:
-    def network_certifier(cfg, state, local):
+    def network_attester(cfg, state, local):
         write(state / "blocks" / "certifier-session" / "relay.json", {"periods": len(periods(state))})
         return certifier_rc
 
-    parties = {**REG.parties, "certifier": {**REG.parties["certifier"], "network-certifier": network_certifier}}
+    parties = {**REG.parties, "certifier": {**REG.parties["certifier"], "network-certifier": network_attester}}
     return R.Registry(REG.components, REG.workloads, REG.workers, parties, REG.order,
                       functools.partial(D.live, machine=lambda c, s: StandIn(c, s, verdicts or {})))
 

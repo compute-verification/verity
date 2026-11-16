@@ -79,10 +79,10 @@ from verity.circuits.types import Array, Tuple
 from verity.protocols.resource_accounting.network.verifier import connection_rows as CR
 from verity.protocols.resource_accounting.network.verifier import head_check as HC
 from verity.protocols.resource_accounting.network.verifier import io_request as Q
-from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_FIELD_BYTES
 from verity.protocols.resource_accounting.network.verifier.connection_rows import Rows, Table
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 
 BIT = HC.BIT
 U16 = Array(16, BIT)
@@ -426,7 +426,7 @@ class Refused(ValueError):
 
 class Read(NamedTuple):
     """One registered read of a statement: the row as u16 words, its salt (the prover's) and the header's `registered`
-    entry, `{"value", "positions", "paths"}` (`network_certifier_rows.Cells.statement`'s form)."""
+    entry, `{"value", "positions", "paths"}` (`network_attester_rows.Cells.statement`'s form)."""
 
     words: list[int]
     salt: bytes
