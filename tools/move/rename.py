@@ -41,6 +41,10 @@ code, a string literal, a data file, backticks, a name, a path or a constant's n
 command regenerates the pin). Such a move moves no path, renames no declaration (`--moves` prints `{}`) and leaves every
 lock and pin as it was.
 
+A map with `scope = "code"` renames only code: in a file a lexer reads, never a comment, a docstring, Markdown or a
+string literal (an interpolated literal's braces are code), so a key or a message a name shares keeps its bytes; a data
+file (a lock's hand-kept text, never its records) is renamed as without a scope. Such a move moves no path.
+
 Every mode refuses a map whose [[words_in]] files, [keep_in] or [keep_paths] name a path or glob that no tracked file
 matches (`Words.unmatched`), naming each, rather than skip the renames or keeps it holds for a file since moved or deleted.
 """
@@ -425,8 +429,8 @@ class Words:
         self.keep_in: dict[str, list[str]] = data.get("keep_in", {})
         self.keep_paths: dict[str, list[str]] = data.get("keep_paths", {})
         self.scope: str | None = data.get("scope")
-        if self.scope not in (None, "prose"):
-            raise SystemExit(f"the word map: scope {self.scope!r}: the one scope is \"prose\"")
+        if self.scope not in (None, "prose", "code"):
+            raise SystemExit(f"the word map: scope {self.scope!r}: the scopes are \"prose\" and \"code\"")
         self._rules: dict[tuple[int, ...], list[tuple[list[str], str, str]]] = {}
         self._patterns: dict[tuple[tuple[int, ...], tuple[int, ...]], tuple[re.Pattern, list[str]]] = {}
 
@@ -463,8 +467,9 @@ class Words:
         pattern, new = self.rules(path, text)
         if pattern.search(text) is None:
             return text
-        parts = regions(path, text) if self.scope and protect else None
-        if parts is not None and all(k != PROSE for _, _, k in parts):
+        code = self.scope == "code"
+        parts = regions(path, text) if self.scope and protect and not (code and language(path, text) == "data") else None
+        if parts is not None and not code and all(k != PROSE for _, _, k in parts):
             return text
         held = [(m.start(), m.end()) for k in self.keep if protect for m in k.finditer(text)]
         if held and path.endswith(".py") and (names := [(m.start(), m.end()) for m in EXPORTS.finditer(text)]):
@@ -490,7 +495,8 @@ class Words:
             i = bisect.bisect_left(starts, m.end()) - 1               # the last span starting before the match ends
             to = _rewrapped(w, new[m.lastindex - 1]) if "\n" in w else new[m.lastindex - 1]
             if to == w or w in skip or (i >= 0 and reach[i] > m.start()) or \
-                    (parts is not None and (not prose_word(text, parts, m.start(), m.end()) or NAMED.search(to))):
+                    (parts is not None and code and any(kind_at(parts, j) != CODE for j in range(m.start(), m.end()))) or \
+                    (parts is not None and not code and (not prose_word(text, parts, m.start(), m.end()) or NAMED.search(to))):
                 if kept is not None:
                     kept[re.sub(GAP, " ", w)] += 1
                 return w
@@ -886,11 +892,11 @@ def main(argv: list[str] | None = None) -> int:
                          "each at its file's path on this tree, or drop it:\n  " + "\n  ".join(missing))
     words.hold(files)
     if a.moves:
-        print(json.dumps({} if words.scope else lock_moves(root, words, files), indent=1))
+        print(json.dumps({} if words.scope == "prose" else lock_moves(root, words, files), indent=1))
         return 0
     if not a.dry_run and not a.allow_dirty and L.git(root, "status", "--porcelain").strip():
         raise SystemExit(f"{root}: the worktree isn't clean")
-    fixed = pinned(root) if words.scope else set()
+    fixed = pinned(root) if words.scope == "prose" else set()
     run = L.Run(root, L.Layout({"roots": {"old": {}, "new": {}}, "paths": {}}), a.dry_run)
     run.old_of = {}
     present = [p for p in files if os.path.lexists(root / p)]

@@ -704,6 +704,25 @@ def test_a_data_file_under_a_prose_map_is_left_as_it_is():
     assert kept == {"draw": 1, "firewall": 1}
 
 
+CODE = M.Words({"scope": "code", "words": {"registration": "docket"}})
+
+
+@pytest.mark.parametrize("path, old, new", [
+    ("L.lean",
+     '/-- The registration. -/\nstructure E where\n  registration : String -- a registration\n'
+     'def f (e : E) := ("registration", e.registration, s!"registration {e.registration}", { e with registration := "" })\n',
+     '/-- The registration. -/\nstructure E where\n  docket : String -- a registration\n'
+     'def f (e : E) := ("registration", e.docket, s!"registration {e.docket}", { e with docket := "" })\n'),
+    ("a.py", '"""A registration."""\nregistration = {"registration": 1}  # the registration\n',
+     '"""A registration."""\ndocket = {"registration": 1}  # the registration\n'),
+    ("x.json", '{"shape": "Spot.registration"}\n', '{"shape": "Spot.docket"}\n'),
+])
+def test_a_code_map_renames_only_code(path, old, new):
+    """Under `scope = "code"` a word is renamed in code alone: not in a comment, a docstring or a string literal, which keep
+    a key's or a message's bytes, but inside an interpolated literal's braces; a data file is renamed as without a scope."""
+    assert CODE.sub(old, path) == new
+
+
 def test_a_prose_move_moves_nothing_and_leaves_what_a_json_pin_records(toy, capsys):
     """A prose move renames no path and no declaration, and leaves a file a JSON pin records for the pin's command."""
     (toy / "tools/check").mkdir(parents=True)
