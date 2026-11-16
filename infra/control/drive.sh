@@ -44,9 +44,9 @@ QUEUE=/root/.research/queue/verity
 CONF=/root/.config/verity
 STOP=$DIR/stopped
 TICK=/root/drive-tick.lock
-# TMPDIR is on the volume: a train's check.py --record holds ~8 GiB in check-lean-deps-* at its peak, which took the pod's 20 GiB
+# TMPDIR is on the volume: a candidate's check.py --record holds ~8 GiB in check-lean-deps-* at its peak, which took the pod's 20 GiB
 # root overlay to 95%. post_train.py's lock is under it too (tempfile.gettempdir()), so change it only between ticks.
-# A train's checkout (~430 MB) is on the container disk ($TRAIN_TREES): on the volume, uv and Python's imports from it left
+# A candidate's checkout (~430 MB) is on the container disk ($TRAIN_TREES): on the volume, uv and Python's imports from it left
 # check.py in NFS waits for minutes, and launches registered no run. `prune_trees` removes one an hour after its last
 # change once no process runs in it, so a few an hour stay a few GB.
 # RESEARCH_EXECUTOR_ENQUEUE is the task executor's enqueue command (infra/executor, on this pod), which `research executor
@@ -123,7 +123,7 @@ deploy() {
     || { echo "drive: $sha is on neither checked nor main: deploy only landed code" >&2; return 1; }
   echo "$sha" > "$DIR/deployed.new" && mv "$DIR/deployed.new" "$DIR/deployed" && echo "drive: runs $sha from the next tick"
 }
-# Under the tick lock: each train checkout in $TRAIN_TREES unchanged for an hour and no process's cwd, with its log, and each
+# Under the tick lock: each candidate's checkout in $TRAIN_TREES unchanged for an hour and no process's cwd, with its log, and each
 # after-landing tree there as old and as idle (`research-after-land-*`, which a killed job leaves), and the queue clone's worktree
 # records of what is gone; and $REPO's packs folded into one once they pass 50: each checkout there fetches the blobs it lacks as
 # a pack of its own, and git's auto maintenance never repacks a partial clone's such packs

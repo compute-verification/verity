@@ -1,5 +1,5 @@
 [Unit]
-Description=renice to 19 every research run that did not come through a check slot, so the train checks win the cores (pods/nebius/slot_only.py --renice, /etc/vy/direct-runs-nice)
+Description=renice to 19 every research run that did not come through a check slot, so the candidates' checks win the cores (pods/nebius/slot_only.py --renice, /etc/vy/direct-runs-nice)
 ConditionPathExists=/etc/vy/direct-runs-nice
 
 [Service]

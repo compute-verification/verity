@@ -1122,7 +1122,7 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
 
 # ---- failed checks (relay-side: GitHub and the Slack registry name each PR's lane) ---------------------------------------------
 
-MERGE_THREAD = "1790957906.278529"      # #agent-coordination's merge thread, where the lander and the lanes follow the trains
+MERGE_THREAD = "1790957906.278529"      # #agent-coordination's merge thread, where the lander and the lanes follow the candidates
 LANDER = "ci"
 REPO_SLUG = "compute-verification/verity"
 # Node 2 too without N2_GUARD: its check slots run whole checks at any time, so one niced read of their run files a minute is
@@ -1146,7 +1146,7 @@ BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LANE_RE = re.compile(r"-([0-9a-f]{4})$")
 # a log's first failing line: the first line matching the first of these that any line matches, else its last line
 FAILING = (r"\b(?:FAILED|ERROR) \S+::\S+", r"(?i)\berror(?:\[\w+\])?:", r"\bFAIL(?:ED)?\b|\bfailed\b|Error\b|Traceback")
-#: the most of a failed ratchet gate's lines (`reds.RATCHET_FAILED_RE`) a row carries: a train's merges, and a few more
+#: the most of a failed ratchet gate's lines (`reds.RATCHET_FAILED_RE`) a row carries: a candidate's merges, and a few more
 RATCHET_LINES = 40
 #: the check's jobs and their owners
 CI_TOML = "tools/check/ci.toml"
@@ -1360,8 +1360,8 @@ def lane_of(reg: dict, branch: str) -> str | None:
 
 
 def train_prs(subjects: list[str]) -> list[int]:
-    """The PRs of a train: its first-parent subjects from the head, while each is the lander's `Merge #N (sha)` (or a `Merge
-    main (sha)` that brings the train up to main)."""
+    """The PRs of a candidate: its first-parent subjects from the head, while each is the lander's `Merge #N (sha)` (or a `Merge
+    main (sha)` that brings the candidate up to main)."""
     out = []
     for s in subjects:
         if m := TRAIN_RE.match(s):
@@ -1377,7 +1377,7 @@ def _pr(ctx: Ctx, n: int) -> dict:
 
 
 def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str]]:
-    """(number, branch) of each open PR the run checks: a train's, else the PR whose head it is."""
+    """(number, branch) of each open PR the run checks: a candidate's, else the PR whose head it is."""
     gh = ["gh", "-R", REPO_SLUG, "pr"]
     if nums := list(dict.fromkeys(train_prs(row.get("subjects") or []))):
         out = []
@@ -1453,7 +1453,7 @@ def _hm(utc: str | None) -> str:
 
 def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None:
     """The post for one failed check run, or None for one nobody needs telling about: cancelled by hand before any step failed
-    (whoever cancelled it knows), or neither a train nor sent by the lander (a lane's own check: it reads its own result).  It
+    (whoever cancelled it knows), or neither a candidate nor sent by the lander (a lane's own check: it reads its own result).  It
     rings, first who acts (`reds.red_owners`), the lane of each open PR the run checks and, of a failed ratchet gate, of each
     merge its log says the gate fails (`reds.ratchet_prs`, open or not), then the owner ci.toml at the run's commit gives the
     failed step's job and the ratchet gate's (`reds.job_owner`), then the lander."""

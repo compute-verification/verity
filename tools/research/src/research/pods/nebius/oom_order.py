@@ -45,8 +45,8 @@ LOG = Path("/workspace/monitoring/oom-order.jsonl")
 PROC = Path("/proc")
 GB = 1e9                          # research.mem's GB
 OVER, SPAN, WITHIN, MAX = 500, 500, 0, 1000
-#: a run under a reservation marked "priority": true (a train check's slot) ranks this much lower, so a research job
-#: growing back into its reservation is killed before a train: landing comes first
+#: a run under a reservation marked "priority": true (a candidate's check's slot) ranks this much lower, so a research job
+#: growing back into its reservation is killed before a candidate's check: landing comes first
 PRIORITY = 500
 DISABLED = -1000
 #: a run's runner (`python3 -m research run`), in its run's scope but never one of its processes (nor its session's sshd)
