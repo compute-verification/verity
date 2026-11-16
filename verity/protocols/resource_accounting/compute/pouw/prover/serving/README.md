@@ -32,7 +32,7 @@ implementations in when it is imported.
   that imports a name sees its module's current attribute.
 - **Loaded by:** the serving engine's adapter (its PoUW protocol package and its `pipeline`, `acquire`, `program` and
   `commit` packages) and the device adapter; PoUW's prover tests
-  (`verity/protocols/resource_accounting/compute/pouw/prover/tests/`), SPOT's prove path, and PoUW's `kernels/served_zk/`; and the
+  (`tests/verity/protocols/resource_accounting/compute/pouw/prover/`), SPOT's prove path, and PoUW's `kernels/served_zk/`; and the
   benchmarks under `benchmarks/pouw/`, `benchmarks/one_stage/`, `benchmarks/harness/`, `benchmarks/hash/`,
   `benchmarks/commitments/` and `benchmarks/serve_tax/`, which import its modules directly.
 - **Loads:** `verity.circuits`, `verity.commitments`, `verity.errors`, the rest of `verity.protocols.resource_accounting.compute.pouw`

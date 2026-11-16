@@ -2,7 +2,7 @@
 
     python3 adapters/vllm/tools/scorecard.py [--json] [--top N] [--root REPO]
 
-* **ratchets**: each shrink-only allowlist under ``adapters/vllm/tests`` (``**/allowlists/*.json`` and
+* **ratchets**: each shrink-only allowlist under ``tests/adapters/vllm/tests`` (``**/allowlists/*.json`` and
   ``**/*allowlist*.json``, any JSON with an ``entries`` list) and its number of entries.
 * **size**: library modules (``verity_vllm/**/*.py`` less ``tests/`` and ``test_*.py``, as the lints scan) over 800,
   600 and 400 lines, functions over 150 and 100 lines, and the largest modules.

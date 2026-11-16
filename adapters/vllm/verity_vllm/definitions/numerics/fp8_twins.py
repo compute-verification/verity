@@ -101,7 +101,7 @@ def np_online_weight_quant(w_bf16: np.ndarray) -> tuple[np.ndarray, np.float32]:
     """CPU twin of `Fp8PerTensorOnlineLinearMethod.process_weights_after_loading` on the bf16 tensor [N, K]:
     amax over the tensor (aminmax + abs + maximum in bf16 — exact), s_w = f32(amax) / 448 (torch f32 RN),
     W_q = cvt(f32(W) * (1.0f / s_w)) (static_scaled_fp8_quant: reciprocal multiply, then clamp ±448, then cvt).  Held to the
-    serving run's committed words in `adapters/vllm/verity_vllm/definitions/tests/test_fp8_twins.py`."""
+    serving run's committed words in `tests/adapters/vllm/verity_vllm/definitions/test_fp8_twins.py`."""
     wf = np_bf16_to_f32(w_bf16)
     amax = np.float32(np.max(np.abs(wf)))
     s_w = np.float32(amax / np.float32(448.0))

@@ -4,7 +4,7 @@
     python benchmarks/tree/lint_counts.py REF [--lists NAME,NAME,...]      # from inside the repository's checkout
 
 A ratchet lint holds what it finds in the tree to a committed list: ``tests/lint/allowlists/NAME.json`` for the
-repository's lints and ``adapters/vllm/tests/lint/allowlists/NAME.json`` for the vLLM adapter's.  A list bounds the
+repository's lints and ``tests/adapters/vllm/tests/lint/allowlists/NAME.json`` for the vLLM adapter's.  A list bounds the
 findings only where its lint fails on a finding past its entry.  Where the lint warns, the tree may hold more than the
 list says, so a count of entries reads low.  This prints the lints' own count beside the lists'.
 
@@ -31,7 +31,7 @@ How a list is read:
   (``NO_RATCHETS``): it is a reading's, its lint finds nothing outside it and its module has no ``allowed()``.
 * ``lean_retired_terms``, which ``tests/test_retired_terms.py`` holds: the Lean files' sites of its ``offenders`` and
   its ``lean_allowed()``, as its own ``--prune`` reads them.
-* ``superseded_versions``, which circuit-check's suite holds (``tools/verity/circuit_check/tests/``): the files of
+* ``superseded_versions``, which circuit-check's suite holds (``tests/tools/verity/circuit_check/``): the files of
   the superseded versions its ``superseded(registered())`` finds, and of the versions its list's entries name and the
   superseded ones its ``held`` lines name, each one site.
 * An adapter lint (the ``test_*.py`` whose ``NAME``, or ``LIST``, is the list's name): its ``scan()``'s violations
@@ -80,7 +80,7 @@ ADAPTER = "adapters/vllm"
 ADAPTER_LINT = f"{ADAPTER}/tests/lint"
 #: a repository list that no ``tests/lint/test_NAME.py`` holds: (how it is read, the module that holds it)
 ELSEWHERE = {"lean_retired_terms": ("lean_terms", "tests/test_retired_terms.py"),
-             "superseded_versions": ("superseded", "tools/verity/circuit_check/tests/test_superseded_versions.py")}
+             "superseded_versions": ("superseded", "tests/tools/verity/circuit_check/test_superseded_versions.py")}
 #: the lists whose lint runs ruff
 RUFF = ("repo_ruff", "ruff", "ruff_vllm")
 #: what would have a lint import, or mypy follow, another checkout's code

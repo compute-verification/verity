@@ -67,7 +67,7 @@ LEFT_OUT = ()
 SKIP = {
     GLOSSARY: "the term source: its table of older names says where each old name stays",
     "tools/move/": "the word maps name the words they retire",
-    "tools/check/tests/test_move_check.py": "its toy moves rename the words the maps retire",
+    "tests/tools/check/test_move_check.py": "its toy moves rename the words the maps retire",
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
     "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the terms it refuses",
@@ -135,9 +135,9 @@ OTHER_SENSES = re.compile("|".join((OTHER_NAMES, *CAP_SENSES.values())))
 #: tests of a PoUW session's cap, which name none either, with their vectors' cap ``CAP``
 LIVE_CAPS = ("verity/protocols/resource_accounting/compute/pouw/prover/circuit/live.py",
              "verity/protocols/resource_accounting/compute/pouw/verifier/live_reads.py",
-             "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_circuit_live.py",
-             "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_window.py",
-             "verity/protocols/resource_accounting/compute/pouw/verifier/tests/window_vectors.py")
+             "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_live.py",
+             "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_window.py",
+             "tests/verity/protocols/resource_accounting/compute/pouw/verifier/window_vectors.py")
 #: the vLLM adapter's files of a request's length cap, its ``max_tokens``, which name no Pearl term: the continuation
 #: controller that lifts a request to its cap, the workload and executed prefix that declare it, and their tests, whose
 #: ``CAP`` in capitals is the same cap
@@ -219,7 +219,7 @@ OWN_NAMES = {
         (r"_PeriodAuditor",
          "the auditor of H1's challenge period in the vLLM adapter's PoUW tests: a span of time, which GLOSSARY.md's row "
          "of \"window\" calls a period, and not the stretch of time a bound is about that its row of `*Period*` retires",
-         ("adapters/vllm/tests/pipeline/test_serve_h1.py", "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py")),
+         ("tests/adapters/vllm/tests/pipeline/test_serve_h1.py", "tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py")),
     ),
     "row of record": (
         (r"row[\s_]+of[\s_]+record",
@@ -250,13 +250,13 @@ HELD_KEYS = {
     "flock-firewall": (("benchmarks/recursion_e2e/rec_profile.py", "benchmarks/recursion_e2e/README.md"),
                        "reads a stored recursion run, benchmarks'"),
     "FIREWALL-REFUSED": (("benchmarks/recursion_e2e/rec_profile.py", "benchmarks/recursion_e2e/README.md",
-                          "benchmarks/recursion_e2e/tests/test_recursion_e2e.py"),
+                          "tests/benchmarks/recursion_e2e/test_recursion_e2e.py"),
                          "reads a stored recursion run, benchmarks'"),
     "t.firewall_recheck": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
     "sampled-proofs:*": (("benchmarks/harness/README.md", "benchmarks/harness/specs/llama31-8b-fp8-1gpu-commit-served.toml",
-                          "benchmarks/harness/tests/test_bench.py", "benchmarks/harness/verity_bench/vllm/commit_arm.py"),
+                          "tests/benchmarks/harness/test_bench.py", "benchmarks/harness/verity_bench/vllm/commit_arm.py"),
                          "a stored run's arm key, vllm's"),
-    "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "benchmarks/harness/tests/test_bench.py"),
+    "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py"),
                     "the PoUW commitment's key, compute-accounting's"),
 }
 #: a character of an identifier a held key stands in
@@ -902,8 +902,8 @@ def test_a_request_s_length_cap_is_its_own_in_capitals_too_and_pearl_s_other_spe
                                                                                                *pearl]
     names = ('assert (r1["served_output_len"], r1["executed_prefix_len"], r1["cap_exhausted"], r1["eos_stop"]) == '
              '(32, 32, True, False)\nmax_tokens_cap: int | None = None  # stopped_before_cap\n')
-    assert said(names, "adapters/vllm/tests/check/test_executed_prefix.py") == []
-    assert said(names + "# the response cap, cap_exhaust\n", "adapters/vllm/tests/check/test_executed_prefix.py") == [
+    assert said(names, "tests/adapters/vllm/tests/check/test_executed_prefix.py") == []
+    assert said(names + "# the response cap, cap_exhaust\n", "tests/adapters/vllm/tests/check/test_executed_prefix.py") == [
         (3, "cap"), (3, "cap")]
 
 
@@ -917,7 +917,7 @@ def test_a_logit_soft_cap_is_its_own_in_capitals_too_and_pearl_s_other_spellings
     for path in SOFTCAP_CAPS:
         assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of SOFTCAP_CAPS with it"
         assert said(chain + pearls, path) == pearl
-    assert said(chain + pearls, "adapters/vllm/tests/program/test_fa2.py") == [(1, "CAP"), (1, "CAP"), *pearl]
+    assert said(chain + pearls, "tests/adapters/vllm/tests/program/test_fa2.py") == [(1, "CAP"), (1, "CAP"), *pearl]
 
 
 def test_a_soft_cap_in_prose_is_another_sense_and_pearl_s_cap_beside_it_is_not() -> None:
@@ -942,7 +942,7 @@ def test_a_cap_in_bytes_or_words_is_another_sense_and_a_cap_beside_it_is_not() -
 def test_a_compute_capability_is_another_sense_and_a_cap_beside_it_is_not() -> None:
     """A CUDA compute capability as the tests name a manifest's (``cap80``, ``cap90_fa2``); the parameter ``cap`` beside
     it, and a number no capability has, still count."""
-    path = "adapters/vllm/tests/program/test_applicability.py"
+    path = "tests/adapters/vllm/tests/program/test_applicability.py"
     line = '@pytest.mark.parametrize("name,cap,sms", [("cap80_108", [8, 0], 108), ("sms132", [8, 9], 132)])\n'
     assert said(line, path) == [(1, "cap")]
     assert said("cap90_fa2, cap100, cap120_site; cap3, cap1000\n", path) == [(1, "cap"), (1, "cap")]
@@ -960,7 +960,7 @@ def test_a_launch_s_rows_cap_is_another_sense_and_a_cap_beside_it_is_not() -> No
 
 def test_fa3_s_split_cap_is_another_sense_and_a_cap_beside_it_is_not() -> None:
     """FA3's cap on its number of splits, by its names; a "cap" beside it still counts."""
-    path = "adapters/vllm/tests/check/test_served_check.py"
+    path = "tests/adapters/vllm/tests/check/test_served_check.py"
     line = "kw = dict(capture_sizes=[1, 2, 4, 8], max_num_seqs=8, split_cap=SV.SPLIT_CAP, device=H200)\n"
     assert said(line, path) == []
     assert said(line + "# the splits' cap, splits_cap\n", path) == [(2, "cap"), (2, "cap")]
