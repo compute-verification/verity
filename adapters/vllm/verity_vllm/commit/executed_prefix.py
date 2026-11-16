@@ -181,7 +181,7 @@ def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[
     # tokens.json (a_r per request, the lag attestation), the link falls to G6 for a_r, and the class would fault 'a_r is not linked
     # (linked=False)' + 'LAG rule not attested' -- a MISSING INPUT read as a verdict on the Program.  The fact names the missing file(s);
     # the consumer faults on it by name.
-    account_missing = [] if by_commit else [leg for leg, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
+    account_missing = [] if by_commit else [name for name, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
     past = {} if cov is None or cov.rows_past_the_stop is None else cov.rows_past_the_stop.steps_past_by_request
     eos = stop.get("eos")   # the Program's declared EOS ids: None where it declares no stop rule; a declared empty list is no id
     eos_set = None if eos is None else ({int(x) for x in eos} if eos else set())

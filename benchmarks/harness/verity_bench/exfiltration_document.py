@@ -87,8 +87,7 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
     def one(part: str, name: str, value: Any, unit: str, mark: str, source: str) -> dict:
         return {"part": part, "input": name, "value": value, "unit": unit, "mark": mark, "source": source}
 
-    # `exfiltration/v3`'s part names, held until a format version; the print says the Glossary's (`render`'s `_said`)
-    audit, both, net = "compute audit", "both", "network certifier"
+    audit, both, net = "compute audit", "both", "network attester"
     priced = head["priced"] or {"ways": {}}
     default = (priced.get("sources") or {}).get("default")
 
@@ -178,7 +177,8 @@ def _row_label(point: Mapping) -> str:
     return f"{_pct(table)} of its proving priced by the table's rows" if table else ASSUMED_LABEL
 
 
-def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, variant: str | None) -> dict:
+def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, variant: str | None,
+                      record: Path | None = None) -> dict:
     """Row `ASSUMED_ROW` over the world's year at ``share``, beside the figure ``head`` and under its label
     (`_row_label`, `ASSUMED_LABEL` where it is not read): its run, budget, δ and amount, and what prices its proving
     (`_sources`); or, with no amount, why it is not read: no run of record holds it, or its rows cover other compute or
@@ -186,7 +186,7 @@ def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, varian
 
     out = {"row": ASSUMED_ROW, "label": ASSUMED_LABEL, "GB": None, "why": None}
     try:
-        scopes, plans, _, _ = rows_of_record(store, row=ASSUMED_ROW, step=step, variant=variant)
+        scopes, plans, _, _ = rows_of_record(store, row=ASSUMED_ROW, step=step, variant=variant, record=record)
         if "world year" not in scopes:
             return out | {"why": f"no run of record holds its world year's rows (they hold {', '.join(sorted(scopes))})"}
         run, rows = scopes["world year"]
@@ -202,7 +202,7 @@ def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, varian
 def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, row: str = ROW, step: str = STEP,
           variant: str | None = None, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
           served: Mapping[str, Any] | None = None, store: Any = None, root: Path | None = None,
-          local_only: bool = False) -> dict:
+          local_only: bool = False, record: Path | None = None) -> dict:
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
     part at ``share`` of total compute for each scope of record, the network attester's rows at the world's year
     for a class of at most ``response_ids`` ids a response with each execution phase's scan at ``scan_delta`` (None:
@@ -243,23 +243,28 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
 
     Where the store holds the stop class's verdicts (`stop_verdicts`), `stop_class` is their account (`stop_class`),
     and where it is complete the output count's input, where the inputs list one, carries its mark; the runs left
-    out are among `refused`. With none the document holds no `stop_class`."""
+    out are among `refused`. With none the document holds no `stop_class`.
+
+    With ``record`` (a run's record directory, `--from`), the rows of record are that directory's alone, read with no
+    store: no label is read, no run carries the stop class's record, and the calculator is handed no answer."""
 
     if not (0 < share < 1 and 0 <= network_check < share):
         raise ValueError(f"the share of total compute is in (0, 1) and the network check's own below it, not {share!r} "
                          f"and {network_check!r}")
     measured = served_share(served)
     root = root or jobs.repository_root()
-    completion = jobs.StoreCompletion(store, root=root, local_only=local_only)
-    if not local_only:
-        completion.pull_labels()
-    scopes, plans, runs, refused = rows_of_record(completion.store, row=row, step=step, variant=variant)
-    labelled = verdict_runs(completion.store)
+    if record is None:
+        completion = jobs.StoreCompletion(store, root=root, local_only=local_only)
+        if not local_only:
+            completion.pull_labels()
+        store = completion.store
+    scopes, plans, runs, refused = rows_of_record(store, row=row, step=step, variant=variant, record=record)
+    labelled = {} if record is not None else verdict_runs(store)
     stop, answer = None, None
-    if (verdicts := stop_verdicts(completion.store, labelled)) is not None:
+    if record is None and (verdicts := stop_verdicts(store, labelled)) is not None:
         stop = stop_class(*verdicts[:2])
         refused = [*refused, *verdicts[2]]
-        answer = stop_charge(root, completion.store, labelled)
+        answer = stop_charge(root, store, labelled)
     points = {scope: at_share(scope, run, its, share, plans.get(scope)) for scope, (run, its) in scopes.items()}
     if "world year" not in points:
         held = sorted({run for run, _ in scopes.values()})
@@ -268,7 +273,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     head = points["world year"]
     world_run, world_rows = scopes["world year"]
     less = at_share("world year", world_run, world_rows, share - network_check)
-    assumed = None if row == ASSUMED_ROW else at_assumed_prices(completion.store, head, share, step, variant)
+    assumed = None if row == ASSUMED_ROW else at_assumed_prices(store, head, share, step, variant, record)
     measured["given"] = {"share": share, "mark": "assumed", "GB": head["GB"]}
     measured.update(GB=None, beta=None, inside=None, no_GB=None)
     if measured["value"] is not None:

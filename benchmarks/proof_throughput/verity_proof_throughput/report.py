@@ -104,7 +104,7 @@ def baseline(results: Sequence[Mapping[str, Any]], commit: str) -> dict[str, Any
 
 
 def best(rows: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
-    """The row with the highest VU throughput."""
+    """The row with the most proof blocks per second."""
     rows = [r for r in rows if r.get("vu.per_second")]
     return max(rows, key=lambda r: r["vu.per_second"]) if rows else None
 
