@@ -41,7 +41,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 import of_record_lean as ORL
 import served_commit as SC
 
-_spec = importlib.util.spec_from_file_location("certified_salt", Path(CC.__file__).resolve().parent / "tests/certified_salt.py")
+_spec = importlib.util.spec_from_file_location("certified_salt", Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/compute/pouw/verifier/certified_salt.py")
 CS = sys.modules["certified_salt"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(CS)
 

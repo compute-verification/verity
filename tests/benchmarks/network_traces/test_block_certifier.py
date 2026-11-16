@@ -87,7 +87,7 @@ def test_the_block_leg_fits_the_block_records_schema_its_fixture_and_its_runner_
             leg_schema.validate(got)
             row = {"answer": a, "quantity": a["public"], "owner": OWNER, "runs": [run]}
             assert B.subprotocol("certifier", row, server=x["node"], runs=[run]) == got
-    rec = json.loads((E2E / "tests" / "fixtures" / "block-record-r2-period0.json").read_text())
+    rec = json.loads((E2E.parents[2] / "tests" / "benchmarks" / "one_stage" / "interfaces" / "fixtures" / "block-record-r2-period0.json").read_text())
     fx = rec["legs"]["certifier"]
     assert BC.block_leg({**fx["answer"], "protocol": fx["protocol"]}, server=fx["server"], runs=fx["runs"],
                         owner=fx["owner"]) == fx

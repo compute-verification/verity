@@ -36,7 +36,7 @@ from verity_vllm.commit.committer.native_host import ACQUIRE_CLASSES
 
 ROOT = (Path(__file__).parents[5] / "adapters" / "vllm")
 MAP = ROOT / "manifests" / "capture-maps" / "deepseek-v4-eager-hopper-tp8-v0.json"
-CONFIG_PATH = ROOT / "tests" / "check" / "fixtures" / "deepseek_v4" / "config.json"
+CONFIG_PATH = ROOT.parents[1] / "tests" / "adapters" / "vllm" / "tests" / "check" / "fixtures" / "deepseek_v4" / "config.json"
 CMAP = CM.load(MAP)
 CONFIG = json.loads(CONFIG_PATH.read_text())
 TP = CMAP["target"]["tensor_parallel_size"]

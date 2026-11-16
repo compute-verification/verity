@@ -17,13 +17,13 @@ HERE = Path(__file__).resolve().parent
 def _a10(monkeypatch) -> types.ModuleType:
     """a10 over stand-ins for a9 and a11, whose module-level names it binds and `rewritten` never reads: the real ones import the
     served units and circuit-check, which this suite does not read.  Loaded under its own name, so no other test imports it."""
-    monkeypatch.syspath_prepend(str(HERE.parent))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "benchmarks" / "one_stage"))
     for name, attrs in (("a9", ("capture_words",)), ("a11", ("ROW", "fold_values", "operands", "save_values"))):
         stub = types.ModuleType(name)
         for a in attrs:
             setattr(stub, a, None)
         monkeypatch.setitem(sys.modules, name, stub)
-    spec = importlib.util.spec_from_file_location("a10_under_test", HERE.parent / "a10.py")
+    spec = importlib.util.spec_from_file_location("a10_under_test", HERE.parents[2] / "benchmarks" / "one_stage" / "a10.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
