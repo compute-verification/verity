@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
@@ -28,13 +29,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypeGuard
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]                     # adapters/vllm
+ROOT = HERE.parents[4] / "adapters" / "vllm"                     # adapters/vllm
 REPO = ROOT.parents[1]
 PKG = ROOT / "verity_vllm"
 CORE_PKG = REPO / "verity"
 #: the scanned packages: the integration's
 LIBRARY = (PKG,)
 ALLOWLISTS = HERE / "allowlists"
+#: the integration's tests, which its lints name ``tests/...`` (`rel`, `path_of`), and the argument naming them for a tool
+#: run from ``ROOT``
+TESTS = HERE.parent
+TESTS_ARG = os.path.relpath(TESTS, ROOT)
 SKIP_DIRS = frozenset({"__pycache__", "tests"})
 
 
@@ -76,7 +81,14 @@ def library_files(suffix: str = ".py", root: Path | None = None) -> tuple[Path, 
 
 
 def rel(p: Path) -> str:
+    if p.is_relative_to(TESTS):
+        return f"tests/{p.relative_to(TESTS).as_posix()}"
     return (p.relative_to(ROOT) if p.is_relative_to(ROOT) else p.relative_to(REPO)).as_posix()
+
+
+def path_of(key: str) -> Path:
+    """The file or directory a lint's key names (`rel`'s inverse for the integration's)."""
+    return TESTS.joinpath(*key.split("/")[1:]) if key.split("/")[0] == "tests" else ROOT / key
 
 
 def module_name(p: Path) -> str:

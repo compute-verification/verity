@@ -14,7 +14,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-spec = importlib.util.spec_from_file_location("stage_under_test", HERE.parent / "stage.py")
+spec = importlib.util.spec_from_file_location("stage_under_test", HERE.parents[2] / "tools" / "move" / "stage.py")
 ST = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ST)
 spec = importlib.util.spec_from_file_location("stage_move_check", ROOT / ST.MOVE_CHECK)
@@ -247,7 +247,7 @@ def test_a_git_that_cant_commit_is_refused_before_anything_runs(tmp_path, monkey
 
 def _recipe() -> str:
     """README.md's `research run` line for a node, to its last continued line, less its block's indent."""
-    lines = (HERE.parent / "README.md").read_text().splitlines()
+    lines = (HERE.parents[2] / "tools" / "move" / "README.md").read_text().splitlines()
     start = next(i for i, line in enumerate(lines) if line.startswith("    research run "))
     end = next(i for i in range(start, len(lines)) if not lines[i].endswith("\\"))
     return "\n".join(line[4:] for line in lines[start:end + 1])

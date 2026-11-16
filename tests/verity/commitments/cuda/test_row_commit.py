@@ -241,9 +241,9 @@ def _check_hm96(run: Run, forms: int) -> None:
 # --- the tests ----------------------------------------------------------------------------------------------------------------
 
 def test_the_package_names_the_header_and_it_includes_the_one_sha512() -> None:
-    assert ROW_COMMIT.resolve() == SOURCE.parents[1] / "row_commit.cuh"
+    assert ROW_COMMIT.resolve() == (SOURCE.parent / "../../../../verity/commitments/cuda/row_commit.cuh").resolve()
     assert '#include "sha512.cuh"' in ROW_COMMIT.read_text()
-    assert '#include "../row_commit.cuh"' in SOURCE.read_text()
+    assert '#include "../../../../verity/commitments/cuda/row_commit.cuh"' in SOURCE.read_text()
 
 
 def test_leaves_at_every_uint_length_are_the_domains(host: ctypes.CDLL) -> None:

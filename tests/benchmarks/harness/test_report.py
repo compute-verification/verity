@@ -38,9 +38,9 @@ def loaded(name: str, path: Path, **beside: ModuleType) -> ModuleType:
                 sys.modules[k] = v
 
 
-COMPUTE = loaded("compute_suite", BENCHMARKS / "compute" / "tests" / "test_compute.py",
+COMPUTE = loaded("compute_suite", BENCHMARKS.parent / "tests" / "benchmarks" / "compute" / "test_compute.py",
                  run=loaded("compute_run", BENCHMARKS / "compute" / "run.py"))
-MEMORY = loaded("memory_suite", BENCHMARKS / "memory" / "tests" / "test_memory.py")
+MEMORY = loaded("memory_suite", BENCHMARKS.parent / "tests" / "benchmarks" / "memory" / "test_memory.py")
 
 
 def compute(tmp_path: Path, monkeypatch) -> int:
