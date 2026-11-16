@@ -22,10 +22,8 @@ allowances the same way.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each still runs in a candidate's check,
-and its red holds nothing; under the loop's `--gate check` or `verdict`, a red that the run beside the candidate's base didn't have rings
-its owners. Under the loop's `--gate graph2`, `ratchet-gate` runs with
-`lean-agreement` in a run of their own beside the executor's check of the candidate (`research.vqueue_slim`), which waits
-for that run's preflights and `lean-agreement`, not its `ratchet-gate`. A red `ratchet-gate` (drive.toml's `warn_steps`
+and its red holds nothing; a red that the run beside the candidate's base didn't have rings
+its owners. A red `ratchet-gate` (drive.toml's `warn_steps`
 too) names the merges its log fails, whose lanes fix it forward in their next PR; a candidate's `ratchet-gate` judges only
 the merges above its base. `circuit-check` goes back on the gate once `circuit-check --all` fits inside the rest of the
 check; `ratchet-gate` is in no shard plan, and reports without blocking a merge.
@@ -205,8 +203,7 @@ over recent recorded checks, and its reds so far. What isn't recorded shows as u
 PRs land through the verified queue (`research queue vqueue`): its flags are `drive.toml` and its admission rules are
 `queue.toml`. A PR's ready mark runs the landing gates `drive.toml` names on its head, and its warn gates
 (`gates/markdown_caps.py`) too, whose failure only warns. The loop merges the marked PRs that are reviewed or low-risk onto
-`main` as a candidate, checks it (by default graph2's tasks, with `lean-agreement` and `ratchet-gate` run beside them; under
-`--gate check`, every job, those off the gate too, in shards: `train.sh --deferred`), and
+`main` as a candidate, checks it (every job, those off the gate too, in shards: `train.sh --deferred`), and
 moves `main` only to a candidate with no new failure, each gating task passed or failing on its base too (under `--gate
 verdict` a plain candidate, AGENTS.md's, lands on its members' land verdicts and the quick tier, and `main`'s whole check
 follows); `post_train.py`

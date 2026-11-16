@@ -36,7 +36,7 @@ land = "review"
 # against it, so a head that merged `main` is marked
 land_into = "main"
 # these three keys and `executor_enqueue` are parsed (`DriveFlags`) and read by no other code: the loop's `--gate` checks each
-# candidate (graph2's task check with a run beside it, or the whole check as `--shards` shards)
+# candidate (the whole check as `--shards` shards)
 after_landing_no_cache = false
 after_landing_shards = 3
 executor = "shadow"
@@ -73,9 +73,8 @@ lowrisk_per_tick = 20
 # holds), with the memory line of record computed from the verifier's runs (auditor_line.py); and the guards that hold
 # everything else to those rules: the Lean check (tools/verity/lean/), the
 # whole-tree invariants (root tests/: the import order and its listing, verifier cost), the check and this file
-# (tools/check/, and in tools/verity/check/ the merge drivers' shims that clones from before the move run), the graph
-# lister that lists the executor's gating
-# tasks (tools/verity/graph/), the merge drivers (.gitattributes), and the landing rules themselves (queue.py); and what
+# (tools/check/, and in tools/verity/check/ the merge drivers' shims that clones from before the move run), the task
+# graph's contract, which keys Lean modules (tools/verity/graph/), the merge drivers (.gitattributes), and the landing rules themselves (queue.py); and what
 # runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (tools/research/),
 # the move scripts and maps the loop runs and certifies a move against (tools/move/), the agent guard and its hooks
 # (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock). Every `attester/` and `verifier/` is excluded

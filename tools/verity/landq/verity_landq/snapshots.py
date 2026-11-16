@@ -11,7 +11,7 @@ the candidates with the verdict their results make, and the outcomes of decided 
 each action into a `model` decision with the same effect on the world, and calls it again until it asks for nothing new,
 as a loop that ticks often would.  A tick that builds waits for its trees before deciding again, as the loop's builds
 finish within its tick.  A candidate's verdict is `fail` once a task failed, else `infra` once a task's outcome is an infra
-error, though others still run, as the loop reads graph2's, else `pass` once every listed task passed, else `pending`.  An
+error, though others still run, else `pass` once every listed task passed, else `pending`.  An
 infra outcome a retry asks for again is set aside.  The driver fills each field the contract has and leaves the rest to
 their defaults: a failure's key, its key on the candidate's base, its failing tests and the base's (as the world's results
 give them), whether the verdict has ended (every listed task has an outcome) with its infra errors beside its failures, a

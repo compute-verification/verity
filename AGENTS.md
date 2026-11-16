@@ -256,8 +256,8 @@ A part's verdict is reused while a hash of its declared inputs, the base image a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. Every commit of
 `main` is checked whole, before it lands or, for a plain candidate under `--gate verdict`, right after: the verified queue's
 loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
-verdict, are low-risk or are certified moves onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
-ratchet-gate run beside them; under `--gate check`, every job in shards), and fast-forwards `main` only to a candidate with
+verdict, are low-risk or are certified moves onto `main` as a candidate, checks it (every job,
+in shards), and fast-forwards `main` only to a candidate with
 no new failure: each gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or
 fails on its base too. Under `--gate verdict` a plain candidate lands on its members' land verdicts and the quick tier,
 `main`'s whole check follows each landing, and a red check reverts the one culprit or, with no culprit, sends plain
@@ -271,7 +271,7 @@ those above it are rebuilt without them. A candidate holding a Lean, lock or spe
 commit of the lock records it regenerated, so `main` moves only to regenerated records. What drive.toml lets warn (its
 `warn_gates` and `warn_steps`), a step off the gate and a lock's bookkeeping hold nothing, and the owner fixes it in their
 next PR: a warn gate's failure is printed at the ready mark, a red off the gate that its base's run doesn't share is rung to
-who acts on it under the loop's `--gate check` or `verdict` (to no one under graph2), and a lock's bookkeeping is told to `lean` and each
+who acts on it, and a lock's bookkeeping is told to `lean` and each
 owner a warning names. How a PR lands, from its ready mark to `main`, and the loop's rule for each case: the team skill's
 Landing.
 

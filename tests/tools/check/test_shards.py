@@ -55,7 +55,7 @@ BESIDE_BUILD = (*FLOCK[2:], "lean-suites:verity/protocols/proofs/recursion/verif
 WITH_RUST = (COMPOSITION[1], POUW[0], *VLLM[1:], CERTIFIER[1], *THIRDS[2], "lean-suites:*")
 #: pytest's suites the 3-pod plan runs beside lean-build; the rest (`pytest:*`) go beside the security analysis's audit
 PYTEST_BESIDE_BUILD = tuple(f"pytest:{s}" for s in (
-    "research", "adapters/vllm/verity_vllm/definitions", "verity/circuits/ops", "verity-graph",
+    "research", "adapters/vllm/verity_vllm/definitions", "verity/circuits/ops",
     "benchmarks/training_slowdown", "repository", "verity/protocols/resource_accounting/memory/pous/verifier"))
 
 

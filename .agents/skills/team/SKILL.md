@@ -73,8 +73,7 @@ fast-forwards `main` to one with no new failure:
   records run) off the chain, beside batches touching no Lean input, then goes on the chain's
   top with its regenerated records committed and is checked on that commit, so
   `main` moves only to regenerated records.
-- A candidate's check is graph2's tasks by default, with lean-agreement and ratchet-gate beside them (under `--gate
-  check`, every step in shards), judged on the merge gate, where an unexpired allowance of policy.toml at its base
+- A candidate's check is every step in shards, judged on the merge gate, where an unexpired allowance of policy.toml at its base
   covers a failure. On a pass `main` moves to it. Under `--gate verdict` a plain candidate (no move, nothing in
   drive.toml's `verdict_excludes`, nor its `lowrisk_excludes` outside `verdict_plain`) lands on land verdicts and the quick tier; `main`'s
   whole check follows; its red reverts the culprit or, with none, sends plain ones to the whole check. A failure its base shares

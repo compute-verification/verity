@@ -700,7 +700,7 @@ def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None 
             z.close()
 
 
-#: how ``--binding`` refuses a name no catalog binding has (`verity graph`'s circuit-binding runner tells it by this)
+#: how ``--binding`` refuses a name no catalog binding has
 NO_BINDING = "the catalog has no binding of that name"
 
 

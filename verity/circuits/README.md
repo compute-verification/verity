@@ -86,11 +86,6 @@ report in the PR.
   that same cache and has the ones it lacks built and stored there once (`tests/tools/verity/circuit_check/conftest.py`);
   either can list the records its catalog rests on (`--records-manifest FILE`, `CIRCUIT_CHECK_RECORDS_MANIFEST`), by which
   a store carries them to another run.
-- The fine-grained check ([`verity graph`](../../tools/verity/graph/README.md)) has circuit-check as one
-  `circuit-catalog` task, which builds those records, one `circuit-binding` task per catalog binding, which checks only that
-  binding's targets from them (`circuit-check --all --catalog-units --binding NAME`), and a `circuit-coverage` task, which
-  holds the bindings circuit-check makes to the ones the tasks list
-  (`tools/verity/graph/verity_graph/families/circuit_binding.py`).
 
 ### Regenerating pins and fixtures: `tools/check/pins.py`
 
