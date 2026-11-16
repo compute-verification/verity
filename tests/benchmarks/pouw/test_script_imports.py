@@ -67,7 +67,7 @@ def test_no_script_is_another_suites_unless_this_suites_inputs_hold_it():
     """A directory with its own ``pyproject.toml`` is a suite of its own. The read guard fails this suite when a test reads
     a file of one that this suite's ``inputs`` do not hold, and the test above reads every script: so `NOT_SCRIPTS` names
     each such directory."""
-    inputs = tomllib.loads((POUW / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
+    inputs = tomllib.loads((TESTS / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
     held = {POUW.parents[1] / i for i in inputs}
     theirs = sorted({own.parent.name for own in POUW.glob("*/pyproject.toml")
                      if own.parent not in held and any(own.parent in p.parents for p in CT.scripts())})

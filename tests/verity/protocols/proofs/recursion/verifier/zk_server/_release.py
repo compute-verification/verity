@@ -24,7 +24,7 @@ import verity_difftest as D
 from verity_flock import zk_server as FW
 
 HERE = Path(__file__).resolve().parent
-PKG = HERE.parent
+PKG = HERE.parents[6] / "verity" / "protocols" / "proofs" / "recursion" / "verifier" / "zk_server"
 ROOT = Path(__file__).resolve().parents[7]
 FLOCK = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover"
 LEAN_FLOCK = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier"

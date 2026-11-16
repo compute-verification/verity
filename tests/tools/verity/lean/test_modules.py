@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_modules", HERE.parent / "modules.py")
+spec = importlib.util.spec_from_file_location("lean_modules", HERE.parents[3] / "tools" / "verity" / "lean" / "modules.py")
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
 
