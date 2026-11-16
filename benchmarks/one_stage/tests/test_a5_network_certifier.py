@@ -19,8 +19,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
-from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
+from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
 from verity.commitments.periods import rows as SR
 
@@ -28,8 +28,8 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "network_traces" / "tests"))
 import a5_network_certifier as AW  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
-from verity.protocols.accounting.certifier.device.tests import relay_runs as tws  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import relay_check as RC  # noqa: E402
+from verity.protocols.resource_accounting.network.attester.tests import relay_runs as tws  # noqa: E402
 
 N, REST = 8, 4
 

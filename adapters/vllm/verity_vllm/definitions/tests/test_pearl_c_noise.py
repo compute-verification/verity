@@ -1,4 +1,4 @@
-"""-h3's noise derivation as registered Definitions (`verity.protocols.accounting.pouw.prover.circuit.pearl_c_noise`), word and Boolean,
+"""-h3's noise derivation as registered Definitions (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise`), word and Boolean,
 against PoUW's reference (`schemes.pearl_c`: `seed_b`, `row_digest`, `row_seed`, `line_key`, `sample_line`) on random and
 edge inputs, and on the vectors the Lean specification proves of its own noise (`Pouw.PearlC.W1Checks`: `seedB_vec`,
 `rowDigest_vec`, `rowSeed_vec`, `lineEA_vec`, `lineFB_vec`).
@@ -25,8 +25,8 @@ from verity.circuits.evaluation.bits import evaluate_words
 from verity.commitments.gates import sha512 as SHA
 from verity.commitments.gates.sha512 import compress_ref, pad_tail, words_be
 from verity.circuits.ops.boolean.versions import boolean_version, sigma_lift
-from verity.protocols.accounting.pouw.prover.circuit import pearl_c_noise as N
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_c_noise as N
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 
 #: the Lean vectors' salt, weight root and activation row (`W1Checks`' `vSalt`, `vRoot`, `vRow`), at unit 3 and row 5
 SALT = bytes(range(32))

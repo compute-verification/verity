@@ -15,30 +15,30 @@ untraced = [
     "tests/test_pous_served_piece_sh.py",
     "tests/test_pous_served_wipe.py",
 ]
-# tests/ checks the harness against PoUS itself (verity.protocols.accounting.pous.verifier) and the census's hardware ids;
+# tests/ checks the harness against PoUS itself (verity.protocols.resource_accounting.memory.pous.verifier) and the census's hardware ids;
 # pod.sh runs bench/placement.py's deployment gate (GATE_ROLE). Of `verity`, what the tests import, and what the `lake` they
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
-inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
-          "verity/__init__.py", "verity/errors.py", "verity/protocols/accounting/pous",
-          "verity/protocols/interface", "verity/protocols/accounting/pous/prover",
+inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
+          "verity/__init__.py", "verity/errors.py", "verity/protocols/resource_accounting/memory/pous",
+          "verity/protocols/interface", "verity/protocols/resource_accounting/memory/pous/prover",
           "verity/protocols/proofs/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
-          "verity/commitments/lms", "tools/difftest", "verity/protocols/accounting/pous/device",
+          "verity/commitments/lms", "tools/difftest", "verity/protocols/resource_accounting/memory/pous/attester",
           "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
           # PoUB over the P2 store, which p2_v1/serve.py runs, and what it imports; its party's
           # Lean verifier, `poub-verifier`, which `p2_parties` has `lake` build in poub/lean
-          "verity/protocols/accounting/poub/verifier", "verity/protocols/proofs/spot/verifier/profile.py",
-          "verity/protocols/accounting/poub/prover/__init__.py", "verity/protocols/accounting/poub/prover/audit_prover.py",
-          "verity/protocols/accounting/poub/prover/p2_prover.py", "verity/protocols/accounting/poub/prover/p2_party_prover.py",
-          "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/device/challenger.py",
-          "verity/protocols/proofs/spot/device/remote.py", "verity/circuits",
+          "verity/protocols/resource_accounting/memory/poub/verifier", "verity/protocols/proofs/spot/verifier/profile.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/__init__.py", "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/p2_prover.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_party_prover.py",
+          "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/challenger.py",
+          "verity/protocols/proofs/spot/verifier/challenger/remote.py", "verity/circuits",
           # PoUB's poub/prover/p2_stage/bandwidth.py serves the store through the staging decode, whose modules it imports;
           # test_pous_p2_bandwidth.py loads it and runs it as a script
-          "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py",
-          "verity/protocols/accounting/poub/prover/p2_stage/layout.py", "verity/protocols/accounting/poub/prover/p2_stage/stage.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/layout.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py",
           # the weight store's placement reads the committed configurations' hashes (`period.deployment`,
           # `memory_challenger.COMMITTED`), which say whether trusted-device's premise holds
           "tools/verity/cli/verity_cli/configurations.toml",
@@ -55,26 +55,26 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           # that module imports) and the block record's subprotocol
           "benchmarks/one_stage/served_verdicts.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py",
           "benchmarks/census/deployments.json",
-          "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/audit.py",
-          "verity/protocols/accounting/pouw/verifier/coins.py", "verity/protocols/accounting/pouw/verifier/core_check.py",
-          "verity/protocols/accounting/pouw/verifier/verifier.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/coins.py", "verity/protocols/resource_accounting/compute/pouw/verifier/core_check.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/verifier.py",
           "verity/protocols/proofs/spot/verifier/one_stage/docket.py",
           "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
           "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
-          "verity/protocols/accounting/pouw/verifier/protocol.py", "verity/protocols/accounting/pouw/verifier/salt.py",
-          "verity/protocols/accounting/pouw/verifier/window.py", "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/protocol.py", "verity/protocols/resource_accounting/compute/pouw/verifier/salt.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/window.py", "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
           "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
           # the deployment layer and its wire, which the memory challenger's and the wipe's sides are started through
           # (`verity.runtime.stream.Side`) and the challenger's parties run on
           "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "verity/tests/tests/test_channel.py",
-          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py",
-          "verity/protocols/accounting/pouw/__init__.py", "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py",
+          "verity/protocols/resource_accounting/compute/pouw/__init__.py", "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           # p2_store/store.py gives the store as the circuit requirement's `Store`, whose module reads the census
           "adapters/vllm/verity_vllm/definitions/__init__.py",
           "verity/circuits/census.py", "verity/circuits/requirement.py",
           # the P2 store's default weights generator (`p2_store/store.py`'s `GENERATOR`), which its test lays out and commits
-          "verity/protocols/accounting/pous/prover/served_weights.py",
+          "verity/protocols/resource_accounting/memory/pous/prover/served_weights.py",
           # the lease script served_piece.sh and served_wipe.sh take where a node has no gpu-lease: their tests check
           # that it is where the scripts look for it
           "tools/research/src/research/pods/sh/gpu_lease.sh"]
@@ -84,4 +84,4 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pous_wipe_resume.py"]
-paths = ["verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/protocols/accounting/pous", "verity/channel.py", "verity/tests/tests/test_channel.py"]
+paths = ["verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/protocols/resource_accounting/memory/pous", "verity/channel.py", "verity/tests/tests/test_channel.py"]
