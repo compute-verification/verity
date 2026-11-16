@@ -30493,13 +30493,10 @@
    }
   },
   "Definitions.Assumptions": {
-   "digest": "6227aa2650c219be0952d6426d6e9e0b838e5a055d73f3c17ccc208de7155ec0",
+   "digest": "b6100214e044d293646c52cf1d5d17e96e0b380173e47b389ae6ed1632ff1193",
    "definitions": {
     "Slowdown.Cut.Assumptions.Exports": "944144f4e44d0bad334321158a9726e2dfc4f8150b6bbc821e1dd32eecbc74cc",
-    "Slowdown.Cut.Assumptions.Hardness": "3dfdcdd64bf2ea2fee25ff7d2640a45c7b7001195a04a51e28f4f1598f4bb5bc",
-    "Slowdown.Formalism.Assumptions.CutCost": "f0ca0ea47c5fd2d467d6df02064abffd979c8b63dc32f650a395a06c69a90a67",
-    "Slowdown.Formalism.Assumptions.EfficiencyFloor": "5be9221af7371d4e0ba26d8a534760e50adbd7ead2e3c0706d775d3916d26e79",
-    "Slowdown.Formalism.Assumptions.TokenWork": "576edbc16850c58e8f230b52e8372a90620e1c68265d3eca38e51287ab4a949f"
+    "Slowdown.Cut.Assumptions.Hardness": "3dfdcdd64bf2ea2fee25ff7d2640a45c7b7001195a04a51e28f4f1598f4bb5bc"
    }
   },
   "Definitions.Assumptions.Flock": {
@@ -32635,13 +32632,6 @@
     "Verity.Advice.root": "20d043a5ddd8e423900ae0e01420ca859f6215492688a8ae3dd8e00c0e285c8f",
     "Verity.Advice.rowInput": "e4f45cd2cb576a4445a3bec2df74d16aa4963241cc75498c9f78c3e9b350b151",
     "Verity.Advice.saltInput": "a569d0eb1b9698594b64c8adfae3f195e0fbdd0235fb79f091a4a689ec46a75f"
-   }
-  },
-  "Definitions.Core.Annotation": {
-   "digest": "7709cad1d4985dc3d66e725299e81008451ac5b8e1af06c2ef0f1e02e8b5d061",
-   "definitions": {
-    "Verity.Annotation": "11934c7b4bc82f0c8e0adaaa67ae0be23f5c6d8cafcbba1c259dfb07e20cef2d",
-    "Verity.Annotation.holds": "6299df41fb09a80c810eccf8a70f5706742de18792a3711272d7795252fb5fa9"
    }
   },
   "Definitions.Core.Assumptions": {
