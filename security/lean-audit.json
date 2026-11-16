@@ -264,10 +264,15 @@
    "digest": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
    "why": "A scope: an opened row costs no advice bits only where the previous run's check pins its closing row, a valid run's closing row a function of its inputs, as CheckedUnique pins its checked inputs; the deployed check's honest witness concludes it."
   },
+  "NetTiming.Covered": {
+   "owner": "@network-accounting",
+   "digest": "ccee422986c657af27297ae2bc6396a375226194e77cac80a7e44f9a70e4814c",
+   "why": "A scope inside RLeakCertifierChecked, which ExecutionPhaseGoodChecked holds: the observation sequences the leak relation speaks of are those whose every status at every step of the horizon is complete. The honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at a toy code (`placedCode`) at one placed window with nothing registered or checked, not at the deployed check."
+  },
   "NetTiming.ExecutionPhasesPlaced": {
    "owner": "@network-accounting",
    "digest": "eb224719d0b462afe48c9b1c9d71e602e1fb77181e5062f27e5a5a0ac3c2fb4d",
-   "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as MonitoringPeriodLeakAccepted takes them inline. The honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at a period of no windows only, where it asks nothing, and exhibits no period of one or more windows at which it holds together with `Compiled.KS`; the witness at one or more windows that an accepting run passes is NET-313's, due 30 Nov."
+   "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as MonitoringPeriodLeakAccepted takes them inline. The honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it, with `Compiled.KS`, at a period of one window, at a toy code (`placedCode`: one copy statement, a verifier that checks only that the statement is `[]`, sample rate 0, nothing sampled or opened), not the deployed check."
   },
   "NetTiming.FaultyGate": {
    "owner": "@network-accounting",
