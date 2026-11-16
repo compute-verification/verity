@@ -558,7 +558,7 @@ class _Named:
         return self.window(w), self.got[1]
 
 
-def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_the_draw_coin(tmp_path, monkeypatch):
+def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_the_sampling_coin(tmp_path, monkeypatch):
     """With ``commit_record`` the window names, in its tap's place, a registration of another Program that reuses its
     tables. The window's registration W is a v2 record of its served entries under its Program and open root, chained
     after the prover's last record, and one-stage's reuse form reads each of its tables from W in the log
@@ -604,7 +604,7 @@ def _fails(run):
     (_fails, "ValueError: window-commit refused the window"),
 ], ids=["a-table-root-off", "ids-table-missing", "a-table-twice", "not-chained-after-w", "v1", "not-its-registration",
         "hook-fails"])
-def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_opens_no_draw_coin(tmp_path, monkeypatch,
+def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_opens_no_sampling_coin(tmp_path, monkeypatch,
                                                                                                 named, why):
     """A named record that doesn't reuse the window's tables from its own registration, or a ``commit_record`` that
     fails: the window binds no Commit record under calls_root (credit refuses it at ``commit``), its sampling coin stays
