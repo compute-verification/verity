@@ -238,7 +238,7 @@ def _check_origin(h) -> None:
 # collision.  For a compact (progression-form) operand the trie walk over a node-space progression of `count` runs is memoised per
 # (prefix node, base, delta, count) WITHIN ONE CALL (the producers named by a (step, index) base are this RootView's, under this cone):
 # the attention gather at position t+1 is the gather at position t plus one producer, so it costs ONE trie step instead of t -- the
-# run count no longer multiplies the work.  The relation is unchanged: every memoised node is the trie node the full walk would reach.
+# run count does not multiply the work.  The relation is unchanged: every memoised node is the trie node the full walk would reach.
 # A non-node progression is one trie step of its own (a different item set, the same partition: the operand is a normal form).  Values stay equality keys inside ONE process (`_Hashes` carries the pid).
 _trie: dict[tuple, int] = {}         # (prefix node, run item) -> node; node 0 = the empty operand; per process, released on leave
 

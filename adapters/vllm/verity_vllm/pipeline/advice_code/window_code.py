@@ -2,7 +2,7 @@
 
 The advice code (`codec`) charges nothing for what is certified (the network attester's admission order, the request
 records, the release buckets), replayed (the scheduler replay, `replay`) or derived (`derived`'s rules), and sends only the
-residual, one `Window` (the certifier's `window_charge.Advice`) per sampling block, each field's values in the
+residual, one `Window` (network certification's `window_charge.Advice`) per sampling block, each field's values in the
 order its reader asks for them:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived (`codec.Decision`);
 - `hits`: each admitting row's prefix-cache hit in hit units, from the step where the no-eviction bound fails
@@ -41,7 +41,7 @@ or less) holds when the charge is at least the length of a prefix-free encoding.
   the bits read past it decide nothing in an accepted string.
 - Delimiting costs the termination's 2 bits per window that codes anything (`Encoded.lens`). A window whose message is
   the only one possible costs nothing.
-- A window's charge is under 2^20 bits, its tail and its second segment counted: the certifier counts it in
+- A window's charge is under 2^20 bits, its tail and its second segment counted: network certification counts it in
   `arith_encode.CW` bits, and `Encoder` and `Decoder` refuse a charge that count does not hold, where they sum it
   (`_charge`).
 - A window may carry a tail after its segment: plain fixed-width fields whose widths the reader knows before it reads
@@ -203,14 +203,14 @@ def capped(bits: Sequence[int], lens: Sequence[int], most: int) -> bytes:
 
 
 def _charge(lens: list[int], w: int | None, n: int) -> None:
-    """Adds n bits to window w's charge, a new window's where w is None. Refuses (ValueError) a charge the certifier's
+    """Adds n bits to window w's charge, a new window's where w is None. Refuses (ValueError) a charge network certification's
     count of it, `CW` bits wide, does not hold."""
     if w is None:
         w = len(lens)
         lens.append(0)
     lens[w] += n
     if lens[w] >> CW:
-        raise ValueError(f"window {w}: its charge is {lens[w]} bits, and the certifier counts a window's charge in {CW} bits, "
+        raise ValueError(f"window {w}: its charge is {lens[w]} bits, and network certification counts a window's charge in {CW} bits, "
                          f"so it is under {1 << CW}; register a shorter window, so that less is charged to one")
 
 

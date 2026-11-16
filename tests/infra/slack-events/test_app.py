@@ -35,17 +35,12 @@ def callback(eid: str = "Ev1", **ev) -> dict:
             "event": {"type": "message", "channel": CHAT, "user": LUKE, "ts": f"{int(T0)}.000100", "text": "hello", **ev}}
 
 
-def test_a_signed_message_is_published_keyed_on_its_channel_and_ts_and_answered_200(world):
-    """Reconciliation keys a post it finds the same way (`message_key`), so the one that comes second is dropped; an event
-    that is no message keeps Slack's id."""
+def test_a_signed_event_is_published_keyed_on_its_event_id_and_answered_200(world):
     r = post_event(client(world), world, callback())
     assert r.status_code == 200 and r.json() == {"ok": True}
     [(topic, payload, key)] = world.deps.queue.sent
-    assert (topic, key) == (TOPIC, f"message:{CHAT}:{int(T0)}.000100") and payload["event_id"] == "Ev1"
-    assert payload["kind"] == "event" and payload["event"]["channel"] == CHAT
+    assert (topic, key) == (TOPIC, "Ev1") and payload["kind"] == "event" and payload["event"]["channel"] == CHAT
     assert world.deps.cache.get(LAST_ENQUEUED) == T0                         # the watchdog's stall check reads it
-    joined = {"type": "event_callback", "event_id": "Ev2", "event": {"type": "team_join", "user": {"id": LUKE}}}
-    assert post_event(client(world), world, joined).status_code == 200 and world.deps.queue.sent[-1][2] == "Ev2"
 
 
 def test_url_verification_answers_the_challenge_and_publishes_nothing(world):
@@ -65,14 +60,41 @@ def test_every_signed_request_stamps_slack_heard_at_ignored_ones_too_and_a_refus
     assert world.deps.queue.sent == []
 
 
-def test_slacks_event_and_reconciliations_find_of_one_post_enqueue_it_once(world):
+def test_slacks_late_event_and_reconciliations_find_of_one_post_are_both_queued_and_it_rings_once(world):
+    """Reconciliation queues under its own key, so a post Slack's event reaches late is queued twice; the second delivery
+    finds the first's routing line and doorbell and adds neither."""
     from slack_events import crons
+    from slack_events.consumer import consume
     post = world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
     world.clock.t += crons.SETTLE_S + 1
     assert crons.reconcile(world.deps)["queued"] == 1
     data = {"type": "event_callback", "event_id": "EvLate", "event": {"type": "message", "channel": CHAT, **post}}
     assert post_event(client(world), world, data).status_code == 200
-    assert [k for _, _, k in world.deps.queue.sent] == [f"message:{CHAT}:{post['ts']}"]
+    assert [k for _, _, k in world.deps.queue.sent] == [f"reconcile:{CHAT}:{post['ts']}", "EvLate"]
+    assert [consume(world.deps, p, 1) for p in world.deps.queue.on(TOPIC)] == ["unaddressed: @top"] * 2
+    assert len(world.rung("top")) == 1 and len(world.lines(CHAT, post["ts"])) == 1
+
+
+@pytest.mark.parametrize("who", ["person", "external"])
+def test_a_post_whose_event_was_queued_and_lost_is_requeued_by_reconciliation_once(world, who):
+    """Slack's event reached the queue and was then lost with no trace (no doorbell, no routing or dead-letter line).
+    Under its own key reconciliation still queues the post, once while the queue keeps that key, and its delivery is
+    the record."""
+    from conftest import COORD
+    from slack_events import crons
+    from slack_events.consumer import consume
+    ch, by = (CHAT, {"user": LUKE}) if who == "person" else (COORD, {"username": "Codex", "bot_id": BOT,
+                                                                       "subtype": "bot_message"})
+    post = world.slack.add(ch, text="@circuits is the TP8 sweep done?", **by)
+    data = {"type": "event_callback", "event_id": "EvLost", "event": {"type": "message", "channel": ch, **post}}
+    assert post_event(client(world), world, data).status_code == 200                  # queued, never consumed
+    world.clock.t += crons.SETTLE_S + 1
+    for _ in range(3):                                                     # every run finds it; the queue keeps one
+        assert crons.reconcile(world.deps)["queued"] == 1
+        world.clock.t += 600
+    assert [k for _, _, k in world.deps.queue.sent] == ["EvLost", f"reconcile:{ch}:{post['ts']}"]
+    assert consume(world.deps, world.deps.queue.on(TOPIC)[1], 1) == "rule" and len(world.rung("circuits")) == 1
+    assert crons.reconcile(world.deps)["queued"] == 0                      # rung: the doorbell is the record
 
 
 @pytest.mark.parametrize("case,why", [("bad", "bad signature"), ("stale", "stale"), ("future", "stale"),
