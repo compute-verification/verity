@@ -146,7 +146,7 @@ then review the records' diff).
 files `Sanity.lean` imports) or adding a `.lean` file under
 `Definitions/Pous`, regenerating it from this directory (`tools/check/pins.py --regen` runs this command, and
 `--stale` fails while it would hash a file the list lacks), and running the audit (`bash check.sh`). A file the command
-starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them too (`verity/protocols/resource_accounting/memory/pous/verifier/tests/test_pous_trusted.py` names it):
+starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them too (`tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_trusted.py` names it):
 
 ~~~bash
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \

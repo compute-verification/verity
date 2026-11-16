@@ -115,8 +115,8 @@ sweep (every session's verdict and the prover's exit), and `agreement/` (compare
 ## Tests
 
 ~~~sh
-uv run pytest verity/protocols/proofs/flock/prover/tests                          # in `check`; several minutes on 4 cores
-FLOCK_IR_SLOW=1 uv run pytest verity/protocols/proofs/flock/prover/tests/test_ir_lowering.py   # the five 2^19/2^21-row proof blocks
+uv run pytest tests/verity/protocols/proofs/flock/prover                          # in `check`; several minutes on 4 cores
+FLOCK_IR_SLOW=1 uv run pytest tests/verity/protocols/proofs/flock/prover/test_ir_lowering.py   # the five 2^19/2^21-row proof blocks
 cd verity/protocols/proofs/flock/verifier && lake build               # the Lean verifier; `check` builds and audits it
 ~~~
 
