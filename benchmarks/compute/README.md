@@ -35,7 +35,7 @@ How the work is done, and nothing the verifier reads:
 - **The sample size, locally.** On your machine you are the verifier too, so you choose t, the number of tiles sampled
   (`served_passes.py verify --draws`, 459 by default). The verifier takes a share ε_s off the credit for what the
   sample could miss. Where no sampled tile is over its inert-work bound, ε_s is about ln(1/δ_s)/t: 1/100 at t = 459
-  and δ_s = 1/100. Each sampled tile over its bound enlarges ε_s (`overInertBoundDraws`, below), so the number moves
+  and δ_s = 1/100. Each sampled tile over its bound enlarges ε_s (its rule is below), so the number moves
   with the sample from one run to the next, on the same kernel and load. Doubling t halves ε_s, which raises the
   number by about half of ε_s's deduction (in the fixture below, from 95.66% to about 96.15%), and doubles the replay.
   In an audit t is the auditor's.
