@@ -141,9 +141,7 @@ HISTORY_ROW_BYTES = 2 * 576 + 192 + 128
 HISTORY_FILL = (1.4, 1.0, 2.0)
 #: the measured serving runs of `SERVED_HIGH` and `EDGE_PAUSE`, and of `ENGINE_STEP`, `STEP_ROWS` and `REQUEST_RATE`
 SERVED_RUNS = ["r20261107-155724-3f53", "r20261111-162328-f498"]
-#: the canonical DSA top-k that makes GLM-5.3's replay bit-exact, a share of serving: prod-record over prod-trace on
-#: the agentic load at 4 users, its pass bisecting every wrong fast selection, the mean over lifetime pairs and its 95%
-#: interval; and its run
+#: a share of serving: the mean over lifetime pairs, then its 95% interval
 TOPK_SHARE = (0.0837, 0.0713, 0.0961)
 TOPK_RUNS = ["r20261116-122320-c688"]
 #: the serve tax's part a server pays only if it snapshots at each replay block's edge
@@ -323,9 +321,10 @@ def priced_card(model: str = "GLM-5.3", serving: str = "assumed") -> dict:
     topk = {"part": "deterministic top-k", "status": "measured", "share": TOPK_SHARE[0], "low": TOPK_SHARE[1],
             "high": TOPK_SHARE[2],
             "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served "
-                      "engine against the same server with it off (prod-record over prod-trace), sampled agentic "
-                      "sessions at 4 users whose contexts pass 2,048 keys, the mean over server-lifetime pairs and "
-                      "its 95% interval; its pass then bisected every wrong fast selection by one program, which its "
+                      "engine against the same server with it off (prod-record over prod-trace), one engine on eight "
+                      "H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions "
+                      "at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% "
+                      "interval; its pass then bisected every wrong fast selection by one program, which its "
                       "refinement replaces"}
     invariant = {"part": "batch-invariant kernels", "status": "measured", "share": BATCH_INVARIANT[0],
                  "low": BATCH_INVARIANT[1], "high": BATCH_INVARIANT[2],

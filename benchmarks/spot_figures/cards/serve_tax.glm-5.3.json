@@ -68,7 +68,7 @@
       "share": 0.0837,
       "low": 0.0713,
       "high": 0.0961,
-      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over server-lifetime pairs and its 95% interval; its pass then bisected every wrong fast selection by one program, which its refinement replaces"
+      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; its pass then bisected every wrong fast selection by one program, which its refinement replaces"
      }
     ],
     "runs": [
@@ -131,7 +131,7 @@
       "share": 0.0837,
       "low": 0.0713,
       "high": 0.0961,
-      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over server-lifetime pairs and its 95% interval; its pass then bisected every wrong fast selection by one program, which its refinement replaces"
+      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; its pass then bisected every wrong fast selection by one program, which its refinement replaces"
      },
      {
       "part": "batch-invariant kernels",
@@ -186,7 +186,7 @@
       "share": 0.0837,
       "low": 0.0713,
       "high": 0.0961,
-      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over server-lifetime pairs and its 95% interval; its pass then bisected every wrong fast selection by one program, which its refinement replaces"
+      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; its pass then bisected every wrong fast selection by one program, which its refinement replaces"
      }
     ],
     "runs": [
