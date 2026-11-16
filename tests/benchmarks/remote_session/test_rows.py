@@ -3,7 +3,8 @@
 numbers, ends the run saying what a word is. `rows.reference`, the whole-store check's receipts, is the reference
 receipter's at both row counts, at the int8 extremes and at any first block. `rows.whole_store` asks a leaf pass
 for its receipts for its one pass and puts the store's mode back, and leaves `rs_pass`'s mode alone. Every path of the tree `rows.sh` names is
-one the tree has, so the build a card waits on doesn't end at a moved file."""
+one the tree has, so the build a card waits on doesn't end at a moved file; the base tree it compiles links every
+directory `session.cu`'s includes reach, and its build's checks run on the Python its steps run on."""
 from __future__ import annotations
 
 import re
@@ -93,3 +94,29 @@ def test_every_path_rows_sh_names_is_in_the_tree():
             "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py",
             "verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py"} <= paths
     assert sorted(p for p in paths if not (ROOT / p).exists()) == []
+
+
+def test_the_base_tree_links_every_directory_session_cu_includes_reach():
+    script = (ROOT / "benchmarks/remote_session/rows.sh").read_text()
+    pr = "verity/protocols/resource_accounting/memory/poub/prover"
+    links = {m.group(1).replace("$PR", pr) for m in re.finditer(r'ln -s "\$TREE/([^"]+)" "\$B/base/\1"', script)}
+    assert "verity/circuits" in links
+    reached, todo = set(), [ROOT / pr / "remote_session/session.cu"]
+    while todo:
+        f = todo.pop()
+        for name in re.findall(r'^#include "([^"]+)"', f.read_text(), re.M):
+            p = (f.parent / name).resolve()
+            assert p.is_file(), f"{f.relative_to(ROOT)} includes {name}, which is no file of the tree"
+            if p not in reached:
+                reached.add(p)
+                todo.append(p)
+    outside = sorted(str(p.relative_to(ROOT)) for p in reached if not any(p.is_relative_to(ROOT / d) for d in links))
+    assert outside == [], f"rows.sh's base tree links {sorted(links)}: link the directories of {outside} too"
+
+
+def test_the_build_checks_run_on_the_python_the_steps_run_on():
+    lines = (ROOT / "benchmarks/remote_session/rows.sh").read_text().splitlines()
+    runs = [i for i, line in enumerate(lines) if re.search(r"\$RS/\w+\.py", line) and not line.lstrip().startswith("#")]
+    py = [i for i, line in enumerate(lines) if line.startswith("export PY=")]
+    assert len(runs) >= 4 and len(py) == 1 and py[0] < min(runs)
+    assert [lines[i] for i in runs if re.search(r"\bpython3? \$RS/", lines[i])] == []
