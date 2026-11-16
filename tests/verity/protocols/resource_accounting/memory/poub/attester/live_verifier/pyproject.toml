@@ -5,6 +5,7 @@
 # paths the gate's command line names), whose record `fetch` ships and `replay` replays through both verifiers.
 [tool.pytest.ini_options]
 testpaths = ["."]
+pythonpath = ["../../../../../../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]

@@ -72,7 +72,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import served_verdicts as S
 from verity_e2e_demo import block_record as BR
 
@@ -492,7 +492,7 @@ def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_p
         (piece / f).parent.mkdir(parents=True, exist_ok=True)
         (piece / f).write_text(f)
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / "out")}
-    run = lambda: subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "private-pieces"],  # noqa: E731
+    run = lambda: subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "private-pieces"],  # noqa: E731
                                  cwd=tmp_path, env=env, check=False).returncode
     assert run() == 0
     assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
@@ -1177,7 +1177,7 @@ def test_the_served_nodes_run_exits_nonzero_since_its_record_reads_no_composite(
     reads none and is pending, and the run's exit is that record's (2), or 1 where a step failed: never 0. The main run
     serves before it records, which no harness here stubs, so this reads the script: its one record of `$OUT/pieces`
     takes no --composite, and the run ends on the record's exit."""
-    script = (HERE.parent / "served_verdicts.sh").read_text()
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
     on_node = [c for c in re.findall(r'^"\$TPY" benchmarks/one_stage/served_verdicts\.py record .*?publish_lines$', script,
                                      re.M | re.S) if '--pieces "$OUT/pieces"' in c]
     assert len(on_node) == 1 and "--composite" not in on_node[0], on_node
@@ -2796,7 +2796,7 @@ def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tupl
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
            "D": str(tmp_path / "serve"), "OUT": str(tmp_path / "out"), "CLASSES": classes, **extra}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "circuits", "0"], cwd=tree, env=env,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "circuits", "0"], cwd=tree, env=env,
                         check=False).returncode
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), (tmp_path / "limits").read_text().split()
 
@@ -2830,7 +2830,7 @@ def _weights(tmp_path: Path, **extra: str) -> tuple[int, list[str]]:
     (venv / "python").chmod(0o755)
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
            "OUT": str(tmp_path / "out"), **extra}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "weights"], cwd=tree, env=env,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "weights"], cwd=tree, env=env,
                         check=False).returncode
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
 
@@ -2849,7 +2849,7 @@ def test_the_weights_step_writes_the_serves_first_registration_record_and_says_w
     first = json.loads((serve / "deployment-registration.json").read_text())
     assert first["previous"] is None and first == json.loads((out / "deployment-registration.json").read_text())
     assert json.loads((out / "weights_registration.json").read_text())["values"] == {"weights/w@64": first["registered"][0]}
-    script = (HERE.parent / "served_verdicts.sh").read_text()
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
     assert "printf '%s\\n' weights_registration.json deployment-registration.json " in script
     rc, lines = _weights(tmp_path / "refused", REFUSE="1")
     assert rc == 1 and len(lines) == 1 and lines[0].startswith("NO WEIGHTS REGISTRATION: "), lines
@@ -2930,7 +2930,7 @@ def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str
         _script(tree / INFERENCE_ONLY_CHECK, "exit 0")
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
            "ORDER": str(tmp_path / "order"), "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False).returncode
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False).returncode
     said, order = tmp_path / "out" / "verdicts.txt", tmp_path / "order"
     return (rc, said.read_text().splitlines() if said.exists() else [],
             [json.loads(x) for x in order.read_text().splitlines()] if order.exists() else [])
@@ -3086,7 +3086,7 @@ def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_co
         (out / "inference-only-policy.json").write_text(json.dumps({"c": 10 ** 12, "k": 10 ** 12, "n": n}))
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(out),
            "CLASSES": "4,32,4", "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path)}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "block-counts", "0"], cwd=tree, env=env,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "block-counts", "0"], cwd=tree, env=env,
                         check=False).returncode
     (line,) = (out / "verdicts.txt").read_text().splitlines()
     assert rc == 0 and line.startswith(said), line
@@ -3118,7 +3118,7 @@ def _one_stage(tree: Path, *, linked: bool = True) -> None:
     tree's own prove_path.py rather than SPOT's."""
     one = tree / "benchmarks" / "one_stage"
     one.mkdir(parents=True, exist_ok=True)
-    for f in HERE.parent.iterdir() if linked else ():
+    for f in (HERE.parents[2] / "benchmarks" / "one_stage").iterdir() if linked else ():
         if f.name != "window_commit.py":
             (one / f.name).symlink_to(f, target_is_directory=f.is_dir())
     (one / "window_commit.py").write_text(WINDOW_COMMIT)
@@ -3238,7 +3238,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
            "MAIN_FILE": str(tmp_path / "main.txt"), "DEVELOPMENT": "1", "COMPOSITE": "", "PEARLPLUS_INODES": "0",
            "VY_CHALLENGER_1_HOST": CHALLENGER_HOST}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
     read = lambda f: (tmp_path / f).read_text().split() if (tmp_path / f).exists() else []  # noqa: E731
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), read("order"), read("limits")
@@ -3811,7 +3811,7 @@ def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins
                              f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
     _script(gate := tmp_path / "gate", FAKE_GATE)
     (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
-    (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    (one / "served_verdicts.py").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py")
     env = {**(PEARL_TIED if tie else {}), "POUW": "pearlplus", "PEARLC_CHALLENGER_GATE": str(gate) if live else ""}
     rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200",
                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **env)
@@ -3856,7 +3856,7 @@ def test_under_pouw_pearlplus_the_challenger_peer_takes_its_default_only_where_t
                              f'exit 9; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
     _script(gate := tmp_path / "gate", FAKE_GATE)
     (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
-    (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    (one / "served_verdicts.py").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py")
     rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", POUW="pearlplus",
                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                       PEARLC_CHALLENGER_GATE=str(gate) if live else "", PEARLC_CHALLENGER_PEER=peer)
@@ -3877,7 +3877,7 @@ def test_the_run_keeps_the_builds_checkpoint_config_beside_its_predicted_json(tm
                              'fi\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && exit 9\n'
                              f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
     (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
-    (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    (one / "served_verdicts.py").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py")
     named = tmp_path / "clone" / "LLAMA.config.json"
     if there:
         named.parent.mkdir()
@@ -3912,7 +3912,7 @@ def test_the_preflight_refuses_a_pearlplus_challenger_peer_with_no_gate(tmp_path
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "POUW": "pearlplus", **extra}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     line = ("PREFLIGHT: PEARLC_CHALLENGER_PEER is vy-peer and PEARLC_CHALLENGER_GATE is empty, which leaves Pearl+'s coins "
@@ -3923,7 +3923,7 @@ def test_the_preflight_refuses_a_pearlplus_challenger_peer_with_no_gate(tmp_path
 
 def test_the_script_parses_whole():
     """bash parses a top-level command only once a run reaches it, and no toy run here reaches the serve's later steps."""
-    run = subprocess.run(["bash", "-n", str(HERE.parent / "served_verdicts.sh")], capture_output=True, text=True)
+    run = subprocess.run(["bash", "-n", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh")], capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
 
 
@@ -4048,7 +4048,7 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
     PEARLPLUS_TIE it isn't run."""
     tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
     (tree / "benchmarks").mkdir(parents=True)
-    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
+    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage", target_is_directory=True)
     (tmp_path / "compare.py").write_text(FAKE_COMPARE)
     _script(venv / "python", f'[ "$1" = benchmarks/one_stage/served_compare.py ] && {{ shift; exec {sys.executable} '
                              f'{tmp_path}/compare.py "$@"; }}\nexec {sys.executable} "$@"')
@@ -4337,7 +4337,7 @@ def _rehearsal_settings(tmp_path: Path, **changed: str | None) -> tuple[int, lis
                 "HELD_GAMMA": "25"}
     settings = {k: v for k, v in {**settings, **changed}.items() if v is not None}
     (tmp_path / "record.env").write_text("".join(f"{k}={shlex.quote(str(v))}\n" for k, v in settings.items()))
-    run = subprocess.run(["bash", str(HERE.parent / "rehearsal.sh"), "settings", str(tmp_path / "record.env")],
+    run = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "rehearsal.sh"), "settings", str(tmp_path / "record.env")],
                          env={"PATH": os.defpath}, capture_output=True, text=True, check=False)
     return run.returncode, run.stdout.splitlines(), run.stderr
 
@@ -4641,7 +4641,7 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
            "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
            "GIT_CEILING_DIRECTORIES": str(tmp_path), "DEVELOPMENT": "1"}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
-    return subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "defer", SHORT], cwd=tmp_path / "served-tree",
+    return subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "defer", SHORT], cwd=tmp_path / "served-tree",
                           env=env, check=False, capture_output=True, text=True)
 
 
@@ -5098,7 +5098,7 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True
            "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
            "GIT_CEILING_DIRECTORIES": str(tmp_path)}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
-    return subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *cmd], cwd=tmp_path / "served-tree",
+    return subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), *cmd], cwd=tmp_path / "served-tree",
                           env=env, check=False, capture_output=True, text=True)
 
 
@@ -5291,7 +5291,7 @@ def _compose(tmp_path: Path, keep: tuple[str, ...] = (), link: tuple[str, Path] 
            "FLOCK_WORK": str(tmp_path / "fw"), "ORDER": str(tmp_path / "order"), "HOST": "vy-auditor-2",
            "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path)}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "compose"], cwd=tree, env=env, check=False,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "compose"], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
     said = tmp_path / "compose-out" / "verdicts.txt"
     order = tmp_path / "order"
@@ -5384,7 +5384,7 @@ OTHER_CHARACTERS = "sets K to a value of other characters than A-Za-z0-9._/:+@=,
 
 def _read_env(f: Path, names: str) -> dict[str, str]:
     """`f`'s settings by `names`, as `served_verdicts.sh compose` reads them (the script's own `read_env`)."""
-    fns = re.search(r"^ENV_VALUE=.*?^}\n", (HERE.parent / "served_verdicts.sh").read_text(), re.S | re.M)
+    fns = re.search(r"^ENV_VALUE=.*?^}\n", (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text(), re.S | re.M)
     assert fns, "served_verdicts.sh defines no ENV_VALUE and read_env"
     script = (f'{fns.group(0)}read_env "$1" "{names}" || {{ echo "$ENV_REFUSED" >&2; exit 1; }}\n'
               f'for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done')
@@ -5617,7 +5617,7 @@ def test_handoff_host_writes_a_deferrals_hand_off_again_at_its_settings_naming_w
         env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / out),
                "SERVE_ROOT": str(tmp_path / "root"), "HOST": "cpu-6", "RESEARCH_SOURCE_SHA": SHA,
                "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
-        rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "handoff", *host],
+        rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "handoff", *host],
                             cwd=tmp_path / "served-tree", env=env, check=False, capture_output=True).returncode
         said = tmp_path / out / "verdicts.txt"
         return rc, said.read_text().splitlines() if said.exists() else []
@@ -5670,7 +5670,7 @@ def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3
                "SERVE_ROOT": str(tmp_path / "root"), "HOST": "cpu-6", "RESEARCH_SOURCE_SHA": SHA,
                "GIT_CEILING_DIRECTORIES": str(tmp_path), "COMPOSE_GATE": f"{sys.executable} {gate}",
                "GATE_SEEN": str(seen), **extra}
-        rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "gate-compose", str(dd / "pieces"),
+        rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "gate-compose", str(dd / "pieces"),
                              str(dd / "inference-only.json"), *host], cwd=tmp_path / "served-tree", env=env, check=False,
                             capture_output=True).returncode
         said = tmp_path / out / "verdicts.txt"
@@ -5910,7 +5910,7 @@ def _copy(tmp_path: Path, kind: str, to: str, **extra: str) -> tuple[int, list[s
     env = {"PATH": f"{_hosts(tmp_path)}:{tmp_path / 'copy-bin'}:{os.defpath}", "HOME": str(tmp_path), "D": str(d),
            "OUT": str(tmp_path / "copy-out"), "SERVE_ROOT": str(tmp_path / "root"), "HOST": "vy-dc-h200",
            "COPIED": str(copied), "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "copy", kind, to], cwd=tmp_path / "served-tree",
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "copy", kind, to], cwd=tmp_path / "served-tree",
                         env=env, check=False, capture_output=True).returncode
     said = tmp_path / "copy-out" / "verdicts.txt"
     there = copied / to.split("@")[-1] / str(d).lstrip("/")
@@ -6037,7 +6037,7 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "LOAD": load, "CERTIFIER_FRONT": front, "SERVE_ARGS": serve_args}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     assert (rc, said) == ((3, [line]) if line else (0, []))
@@ -6080,7 +6080,7 @@ def test_the_preflight_takes_a_session_only_whole_and_none_of_it_under_another_l
     (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
         f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
     _script(venv / "python", f'exec {sys.executable} "$@"')
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, check=False,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, check=False,
                         env={"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent),
                              "OUT": str(tmp_path / "out"), **env}).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
@@ -6106,7 +6106,7 @@ def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_comma
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "PRODUCT": product, "ONSITE_PIECES": str(ONSITE_PIECES), **extra}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     assert (rc, said) == ((3, [line]) if line else (0, []))
@@ -6126,7 +6126,7 @@ def test_onsite_defaults_come_from_the_file_onsite_pieces_names(tmp_path, produc
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "PRODUCT": product, **({"ONSITE_PIECES": pieces} if pieces else {})}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     assert (rc, (tmp_path / "called").read_text().split() if (tmp_path / "called").exists() else []) == (0, called)
 
@@ -6162,7 +6162,7 @@ def test_the_preflight_refuses_a_checkpoint_the_trees_pous_piece_does_not_pin(tm
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "ONSITE_PIECES": "pieces.sh", "POUS_CMD": pous_cmd, "REPO": "some/model", "REV": "abc"}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "pous-pins"], cwd=tree, env=env,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "pous-pins"], cwd=tree, env=env,
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     assert (rc, said) == ((3, [line]) if line else (0, []))
@@ -6194,7 +6194,7 @@ def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "ONSITE_PIECES": "nowhere/pieces.sh"}
-    got = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+    got = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                          check=False, capture_output=True, text=True)
     assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: ONSITE_PIECES={tree}/nowhere/pieces.sh is not a file")
 
@@ -6236,11 +6236,11 @@ def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused
     settings.write_text("LOAD=front\nCERTIFIER_FRONT=\n")
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "SETTINGS": str(settings)}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
     assert (rc, said) == (3, ["PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"])
-    got = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree,
+    got = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree,
                          env={**env, "SETTINGS": str(tmp_path / "missing.env")}, check=False, capture_output=True, text=True)
     assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: SETTINGS={tmp_path / 'missing.env'} is not a readable file")
 
@@ -6263,7 +6263,7 @@ def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_comma
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "PRODUCT": product, **extra}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     assert (rc, said) == ((3, [line]) if line else (0, []))
@@ -6293,7 +6293,7 @@ def test_served_composite_builds_each_product_in_a_lake_package_of_this_tree():
     """served_composite.sh writes out each product's Lake package directory (`package`), and each is a package this tree
     has. A directory built from the product's name follows no move of the packages, and the stand-in trees of the tests
     below would go on agreeing with it."""
-    script = (HERE.parent / "served_composite.sh").read_text()
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh").read_text()
     packages = re.findall(r"\) echo (verity/[\w/]+) ;;", script)
     assert len(packages) >= 2 and 'exe "$x" "$(package "$x")"' in script, (
         "served_composite.sh: write each product's package directory out in `package`, as a path a layout move rewrites")
@@ -6358,7 +6358,7 @@ sys.exit(1)
                  "that sum to 9000 bytes, and the limit a check is started on is 8000 bytes; too large to read")
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "COMPOSE_OFF_NODE": "0"}
-    run = lambda: subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
+    run = lambda: subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
                                  check=False, capture_output=True, text=True)
     host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()
     on = (f"COMPOSITE: composed on {host}, which holds the serve dir, from the cases the served node wrote there, not "
@@ -6520,7 +6520,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
+    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
 
     def case(where: str, of: str) -> None:
         (d / "private" / where).mkdir(parents=True)
@@ -6541,7 +6541,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
         case(ONSITE_OWN[protocol][3], protocol)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
-    r = subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
+    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
                        check=False, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     said = (out / "verdicts.txt").read_text()
@@ -6584,7 +6584,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
+    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
     own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])
            if p != certifier}
     for p, where in own.items():
@@ -6605,7 +6605,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     (out / "pieces" / "certifier" / "answer.json").write_text(json.dumps({"protocol": certifier, "verdict": "accept"}))
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
-    r = subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
+    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
                        check=False, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert certifier in C.COMPONENTS["onsite"] and certifier not in C.COMPONENTS["remote"]
@@ -6884,7 +6884,7 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
            "OUT": str(tmp_path / "out"), "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, **env}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
     return rc, (tmp_path / "argv").read_text().splitlines() if (tmp_path / "argv").exists() else []
 
@@ -6996,7 +6996,7 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
            "OUT": str(tmp_path / "out"), "H1_GATE": "", **env}
     try:
-        rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
+        rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
                             capture_output=True).returncode
     finally:  # an endpoint the runner left up is ended here, by its own pid and only while it is still that stand-in
         pid = int((tmp_path / "pid").read_text()) if (tmp_path / "pid").is_file() else None
@@ -7205,14 +7205,14 @@ def _workspace_reach(*modules: str) -> dict[str, str]:
     """Each workspace package an import statement reaches from `modules`, theirs or a reached module's, in a function
     too, by top-level name: its import root relative to the workspace's root (where `verity` is), as this environment
     imports it. A name this environment doesn't import from the workspace is not followed."""
-    repo = Path(importlib.util.find_spec("verity").origin).parents[1]
+    repo = Path(importlib.util.find_spec("verity").origin).resolve().parents[1]
     roots: dict[str, Path | None] = {}
 
     def root(top: str) -> Path | None:
         if top not in roots:
             # `__main__` has no spec where pytest runs as a script, and find_spec refuses it
             spec = None if top in sys.stdlib_module_names or top == "__main__" else importlib.util.find_spec(top)
-            where = (Path(spec.origin).parent if spec and spec.origin else None)
+            where = (Path(spec.origin).resolve().parent if spec and spec.origin else None)
             where = where.parent if where and spec.submodule_search_locations else where
             roots[top] = where if where and where.is_relative_to(repo) and "site-packages" not in where.parts else None
         return roots[top]
@@ -7246,7 +7246,7 @@ def test_the_serve_steps_python_path_names_the_import_root_of_every_workspace_pa
     so it imports each workspace package from the PYTHONPATH the script exports: that path names the import root of every
     package serve-openai's imports reach, a function's included (`verity_vllm.engine.spec`'s `verity_config`, which it
     reaches only once it serves, and the `verity_flock` of H1's sampled proof blocks)."""
-    m = re.search(r"^export PYTHONPATH=(\S+)$", (HERE.parent / script).read_text(), re.M)
+    m = re.search(r"^export PYTHONPATH=(\S+)$", (HERE.parents[2] / "benchmarks" / "one_stage" / script).read_text(), re.M)
     assert m, f"{script} exports no PYTHONPATH"
     named = {p.removeprefix("$TREE").lstrip("/") or "." for p in m.group(1).split(":")}
     reached = _workspace_reach("verity_vllm.pipeline.cli", "verity_vllm.pipeline.serve_openai")

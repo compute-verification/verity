@@ -67,10 +67,11 @@ def test_a_gates_merge_runs_the_record_driver_in_a_clone_without_it(tmp_path):
 
 
 @pytest.mark.parametrize("script", ["tests/adapters/vllm/tests/lint/merge_allowlist.py",
+                                    "/".join(["adapters/vllm", "tests/lint/merge_allowlist.py"]),
                                     "integrations/vllm/tests/lint/merge_allowlist.py"])
 def test_the_vllm_allowlist_driver_merges_in_either_layout(tmp_path, script):
-    """A crossing of the layout move merges once at the move's base and once on the moved `main`, so the vLLM lints' driver
-    is found at its moved place and at its old one: with only one place named, the other merge left the lists conflicted."""
+    """A crossing of a layout move merges once at the move's base and once on the moved `main`, so the vLLM lints' driver
+    is found at each of its places: with only one place named, the other merge left the lists conflicted."""
     def git(*a):
         return subprocess.run(["git", "-c", "commit.gpgsign=false", *a], cwd=tmp_path, check=True, capture_output=True, text=True,
                               env=gates.git_env(GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",

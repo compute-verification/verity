@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import member_seconds as MS  # noqa: E402  (a script beside the suite, importable only once its dir is on the path)
 
 PROVER, VERIFIER, LOOP = MS.PROGRAMS

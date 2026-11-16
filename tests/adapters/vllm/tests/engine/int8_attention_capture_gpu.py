@@ -28,7 +28,7 @@ from verity_vllm.pipeline import (
     match_capture,  # first: match_capture applies the engine environment before vLLM is imported
 )
 
-WORKLOAD_FROM = Path(__file__).parents[2] / "workloads" / "llama32-1b__int8__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager.json"
+WORKLOAD_FROM = Path(__file__).parents[5] / "adapters" / "vllm" / "workloads" / "llama32-1b__int8__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager.json"
 PROMPTS = (5, 3)
 MAX_TOKENS = 2
 STEPS = (0, 1)

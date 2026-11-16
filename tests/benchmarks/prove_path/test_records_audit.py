@@ -56,8 +56,8 @@ from verity.circuits.ops import gemm as G
 from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent)
-sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[1] / "one_stage"))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "prove_path"))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import records_audit as RA  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # noqa: E402
 
@@ -158,7 +158,7 @@ def test_a_registry_template_resolves_in_a_fresh_audit_process():
     tid = descriptor_id(bind(BX.ScanSlotsV2, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=occ, LP=lp, MAX=mx, IDS=ids))
     code = f"""
 import sys
-sys.path.insert(0, {str(HERE.parent)!r})
+sys.path.insert(0, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r})
 import records_audit as RA
 from verity.circuits.codec import descriptor_id
 assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
@@ -715,7 +715,7 @@ def test_the_verifier_tie_tests_tie_is_the_audits_on_their_toys():
     fresh process, where the ``settings`` the verifier's tests import is their own registry."""
     code = f"""
 import sys
-sys.path[:0] = [{str(HERE)!r}, {str(HERE.parent)!r}]
+sys.path[:0] = [{str(HERE)!r}, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r}]
 import records_audit as RA
 from verity.circuits.codec import descriptor_id
 import json
@@ -1706,7 +1706,7 @@ def test_the_audit_from_the_records_loads_of_verity_vllm_only_a_catalog_package(
     code = f"""
 import json, sys
 from pathlib import Path
-sys.path.insert(0, {str(HERE.parent)!r})
+sys.path.insert(0, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r})
 import records_audit as RA
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, docket as R
 import a5 as A5
