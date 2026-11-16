@@ -100,6 +100,12 @@ PUBLIC = {
                                                  "benchmarks/inference_only reads",
     "verity_vllm.observe.kernel_trace": "I2: a served engine's device kernels, read from a Kineto trace of its steps, which "
                                          "benchmarks/route_capture reads",
+    "verity_vllm.observe.events": "I2: the observation log's event vocabulary (schema verity-capture/log/v1), the facts a "
+                                  "capture writes about one eager execution, which benchmarks/one_stage's a11 reads",
+    "verity_vllm.observe.log": "I2: the observation log's reader (read_log, split_steps, header_of), with no GPU and no "
+                               "vLLM, which benchmarks/one_stage's a11 reads",
+    "verity_vllm.observe.fold.fold": "I2: the fold of an observation log and a profile into an unexpanded Program (fold, "
+                                     "FoldResult, summarize), which benchmarks/one_stage's a11 runs",
     "verity_vllm.program.predict.step_needs": "I7: what the DSA decoder calls for one served engine step at its launch, each "
                                               "refusal counted in its place, which benchmarks/route_capture's gap reads",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
@@ -219,6 +225,16 @@ PUBLIC = {
     "verity_vllm.check.weights_of_record": "I7: the weights of record: a Commit's weights checked against the pinned "
                                            "checkpoint (build_record, check, compose), and the Program parameter the record "
                                            "is of (PARAM), which benchmarks/inference_only reads",
+    "verity_vllm.check.checkpoint_index": "I7: a checkpoint of record's safetensors shards, each tensor's byte range read "
+                                          "by positioned reads, and the shard pin (CheckpointIndex), which "
+                                          "benchmarks/one_stage and benchmarks/spot_proved stage from",
+    "verity_vllm.check.fp8_ue8m0": "I7: the block-FP8 weights vLLM rewrites at load, as the weights of record hold them "
+                                   "(Rewrites, build_roles, requant, absorbed), which benchmarks/one_stage and "
+                                   "benchmarks/spot_proved stage from",
+    "verity_vllm.check.replay.index": "I7: the Program rows sampled replay reads, indexed per request (ProgramIndex, "
+                                      "row_args, const_word), which benchmarks/one_stage and benchmarks/prove_path read",
+    "verity_vllm.check.replay.opening": "I7: committed words by identity, the store sampled replay reads "
+                                        "(CommittedStore), which benchmarks/one_stage and benchmarks/prove_path read",
     "verity_vllm.definitions": "I7: the adapter's catalog of Definitions, public for its import alone, which registers the "
                                "catalog with the Boolean-versions lookup (verity.circuits.ops.boolean.versions); it exports "
                                "no name",
@@ -293,12 +309,8 @@ PUBLIC = {
 KNOWN = frozenset({
     "verity_vllm.acquire.sources.attention_source",
     "verity_vllm.acquire.sources.taps",
-    "verity_vllm.check.checkpoint_index",
     "verity_vllm.check.fold_compare",
-    "verity_vllm.check.fp8_ue8m0",
     "verity_vllm.check.replay.evaluate",
-    "verity_vllm.check.replay.index",
-    "verity_vllm.check.replay.opening",
     "verity_vllm.commit.committer.host_retention",
     "verity_vllm.commit.opened",
     # the compile slice and its pieces (`verity_vllm.compiler`), which the network attester's drivers under `benchmarks/`
@@ -394,10 +406,7 @@ KNOWN = frozenset({
     "verity_vllm.engine.profiles.engine_classes",
     "verity_vllm.engine.served",
     "verity_vllm.engine.vllm_adapter",
-    "verity_vllm.observe.events",
-    "verity_vllm.observe.fold.fold",
     "verity_vllm.observe.fold.patterns.pouw",
-    "verity_vllm.observe.log",
     "verity_vllm.pipeline.advice",
     "verity_vllm.pipeline.advice_windows",
     "verity_vllm.pipeline.build_instances",
