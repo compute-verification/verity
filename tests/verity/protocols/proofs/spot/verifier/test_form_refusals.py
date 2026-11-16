@@ -38,7 +38,7 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "form-refusals"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
 ROOT = Path(__file__).resolve().parents[6]
 #: Flock's public-input sessions' stage (its `test_lean_public_inputs.py`), a fetched fixture under this suite's inputs
-PUBLIC_INPUTS = Path(__file__).resolve().parents[3] / "flock" / "prover" / "tests" / "fixtures" / "public-inputs"
+PUBLIC_INPUTS = Path(__file__).resolve().parents[2] / "flock" / "prover" / "fixtures" / "public-inputs"
 #: a descriptor of one primitive Definition, which reads no registered value
 DESCRIPTOR = {"schema": "verity-ir/descriptor/v1", "callees": [], "definitions": {"Main_v1": {"form": "primitive"}},
               "root": "Main_v1"}

@@ -1205,7 +1205,7 @@ def test_every_metric_row_reads_the_run_of_record_its_header_names():
     has a row."""
     import re
     import tomllib
-    text = (HERE.parent / "metrics.toml").read_text()
+    text = (HERE.parents[2] / "benchmarks" / "compute" / "metrics.toml").read_text()
     named = re.search(r"^# RUN OF RECORD: (r\d{8}-\d{6}-[0-9a-f]{4}),", text, re.M)
     assert named, "metrics.toml's header names no run of record"
     rows = tomllib.loads(text)["metric"]

@@ -19,7 +19,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.commitments import advice as ADV
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE.parent), str(HERE.parents[1] / "one_stage")]
+sys.path[:0] = [str(HERE.parents[2] / "benchmarks" / "prove_path"), str(HERE.parents[2] / "benchmarks" / "one_stage")]
 import a8 as A8  # noqa: E402
 import served_statics_zk as Z  # noqa: E402
 

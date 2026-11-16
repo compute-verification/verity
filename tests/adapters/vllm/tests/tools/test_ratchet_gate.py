@@ -826,7 +826,7 @@ def test_a_base_lint_run_that_ends_without_its_document_decides_no_verdict_and_n
     assert isinstance(e.value.__cause__ or e.value.__context__, error)
 
 
-REAL_LINT = SCRIPT.parents[1] / "tests" / "lint"
+REAL_LINT = SCRIPT.parents[3] / "tests" / "adapters" / "vllm" / "tests" / "lint"
 RUFF_LINT = "tests/adapters/vllm/tests/lint/test_ruff.py"
 RUFF_JSON = "tests/adapters/vllm/tests/lint/allowlists/ruff.json"
 RUFF_TOML = '[lint]\nselect = ["F"]\n'

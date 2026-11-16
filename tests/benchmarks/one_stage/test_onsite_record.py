@@ -62,7 +62,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 
 import composite as CO  # noqa: E402
 import onsite_record as OR  # noqa: E402
@@ -1130,7 +1130,7 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
     connections a phase, each capped at 5 egress cells, so k_sched and k_fail charge 128 · ⌈log2 6⌉ = 384 bits a phase
     each, the period's check's terms however few connections were served; with the jitter T_j log2 d_jit = 32 at
     d_jit = 2, a phase's terms but ℓ_{a,j} and k_{skip,j} are 800 bits."""
-    sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
+    sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "network_traces"))
     from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
     scan = dict(SCAN, jitter=schedule["window"])
@@ -1159,7 +1159,7 @@ def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whol
     phase's scan's 2^-64 and its charged audit's δ_i, never the answer's 1/2. Drawn whole, every one of its proof
     blocks proved, the entries and its δ_i leave the bound. With a check open, each phase's figure of record adds the
     run's advice cap ℓ_a + 1 = 2^23 + 1, 8,390,305 bits a phase drawn in part."""
-    sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
+    sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "network_traces"))
     from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
     scan = dict(SCAN, delta=f"1/{2 ** 64}", free=0, faulty_entries=entries, jitter=32)
@@ -1191,7 +1191,7 @@ def test_eps_is_pooled_over_each_monitoring_period_at_its_windows_with_the_tied_
     period's cell its windows (its phases times its links) times that, the cell's own eps, with the tied audits read
     over those windows. Drawn whole, none is read and eps is the scans' δ alone. The ONSITE line states the count and
     each period's pooled eps beside the per-window term, and the record and its line leave the node as written."""
-    sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
+    sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "network_traces"))
     from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
     entries = 896 if drawn < 16 else 0

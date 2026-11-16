@@ -492,7 +492,7 @@ def test_a_store_that_cannot_be_opened_for_the_references_leaves_the_loopbacks_n
 
 
 def test_every_reference_of_the_tree_has_a_reader():
-    assert set(json.loads((HERE.parent / "references.json").read_text())) == set(M.READERS)
+    assert set(json.loads((HERE.parents[2] / "benchmarks" / "memory" / "references.json").read_text())) == set(M.READERS)
 
 
 def test_the_loopback_runs_both_processes_through_run_sh_and_says_it_certifies_nothing(store, capsys, monkeypatch):

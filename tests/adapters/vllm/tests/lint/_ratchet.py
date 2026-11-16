@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypeGuard
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]                     # adapters/vllm
+ROOT = HERE.parents[4] / "adapters" / "vllm"                     # adapters/vllm
 REPO = ROOT.parents[1]
 PKG = ROOT / "verity_vllm"
 CORE_PKG = REPO / "verity"

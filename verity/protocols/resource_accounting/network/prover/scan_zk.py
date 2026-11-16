@@ -252,7 +252,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, d
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.protocols.resource_accounting.network.verifier.scan_answer import _found, window_answer
 
-_TRAFFIC = Path(__file__).resolve().parents[1] / "verifier/tests/scan_traffic.py"
+_TRAFFIC = Path(__file__).resolve().parents[5] / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "scan_traffic.py"
 _spec = importlib.util.spec_from_file_location("scan_traffic", _TRAFFIC)
 traffic = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)

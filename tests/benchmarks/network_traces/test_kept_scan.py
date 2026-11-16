@@ -41,7 +41,7 @@ from verity_vllm.program.predict.window_circuit import WindowClass
 
 HERE = (Path(__file__).resolve().parent.parent / "prove_path")
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "prove_path"))
 import prove_path as PP  # noqa: E402
 
 
