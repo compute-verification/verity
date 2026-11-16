@@ -574,7 +574,7 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   carry no finish.
 
 **The two ingress ties** between the advice's requests and the network attester's certified ingress record:
-- **Each request's arrival ordinal is order[i]: checked in this unit.** The advice numbers requests in order of first
+- **Each request's arrival ordinal is order[i]: checked in this proof block.** The advice numbers requests in order of first
   row (`advice` validates it), and the map's q for request i is order[i] + 1 ((b), (c)). The network attester writes the stream
   of every cell in a connection's slots (its pads, its data cells and its `END`) as its request's ingress ordinal on
   the link, from 1, and the proof block holds it to q. Every request's `END` is released in one of the session's
@@ -592,11 +592,11 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
 
 **The ingress tie** (`io_request`, `IoTieRequest{B, L, R}`: the reference, the network attester's own ingress as its fake
 upstream (`serve`, which drives `network_attester.NetworkCertifier._ingress`) and the Boolean Definitions, with its sidecar). It is one
-unit a bucket row of the network attester's ingress at selection `All`, with one output bit. It holds the prompt
+proof block a bucket row of the network attester's ingress at selection `All`, with one output bit. It holds the prompt
 lengths the advice states to the certified bytes: the phase-6 attack swapped two prompt lengths keeping their total,
 which no count of the link's frames refuses, and so released an output before its request was in. B is the cell size
 (4,096 served), L the network attester's lanes and R its r, so a row is the bucket's L·R slots.
-The row is the registered port (`network_attester_rows.bucket_port`: unit t reads row t), as the egress unit's is, so the
+The row is the registered port (`network_attester_rows.bucket_port`: proof block t reads row t), as the egress proof block's is, so the
 proof system's registered read holds it to the network attester's ingress root and no gate hashes it. A row's lanes are its
 live connections by ordinal, R slots each (`network_attester.NetworkCertifier._ingress`), and an unheld lane is B zero bytes a slot. The
 proof block outputs 1 exactly when, in each lane of ordinal q:
@@ -648,21 +648,21 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   tie, and none the prover states or delivers is taken: the phase-7 attack stated the swapped split, and the phase-10
   attack delivered a verdict built for the forged advice's digest, every window accepted.
 - **Through the proof system** (`tie_service.IngressTie`). A registration is one ingress execution phase, the
-  network attester's salted root of its T bucket rows, held to the window's order, and T proof blocks, unit t bucket
-  row t. The unit is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
+  network attester's salted root of its T bucket rows, held to the window's order, and T proof blocks, proof block t bucket
+  row t. The proof block is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
   (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the network attester's root by
   the verifier's own registered read (`network_attester_rows.bucket_port`). The statement is a shared-row file every port of
   which is one of the verifier's registered reads (Flock's `Registered.checkComplete`): `wit` at the network
   attester's root, and `pub` and `o0` at known content the verifier registers itself (`IngressTie.known`), each
-  unit's lanes (`io_request.lanes`, from the advice it holds and the network attester's release, taken in the clear)
+  proof block's lanes (`io_request.lanes`, from the advice it holds and the network attester's release, taken in the clear)
   and the output word 1, under public salts, which hide nothing since both rows are public. The verifier
-  decides each window on the proof alone, each unit's `pub` row opened to its own lanes, and reports the advice's
+  decides each window on the proof alone, each proof block's `pub` row opened to its own lanes, and reports the advice's
   digest. `IngressTie.tie` reads the verdict from the stream's outcomes of record
   alone, on the link and the stream's registrations. Window w is accepted when its outcome is, decided on the proof
   for the advice's digest. Every window is refused unless the stream registers exactly the advice's windows in order,
   the release is the network attester's schedule for the advice and puts `received`'s request cells in each window,
   and the profile's framing is the network attester's cut (`tie_service.framing`) with no own frame. A connection's
-  lanes chain from (0, 0) into its first bucket to (0, n) out of its `END`'s, so the units together hold each
+  lanes chain from (0, 0) into its first bucket to (0, n) out of its `END`'s, so the proof blocks together hold each
   request's count across the buckets it spans. A size class with no pinned digest has no accepted proof.
   `tests/test_network_attester_tie_service.py` holds the phase-9 attack's carried field count, its forged advice and
   phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`), and
@@ -764,7 +764,7 @@ S + 1 reads a proof block, and recomputes no root and hashes no row.
 - e = σ·P + `row`, with σ the place of `step` among the bucket's steps;
 - the id is port row `step`'s `row`-th id: `runner.sampler/sampled_token_ids` of step `step` at batch row `row`.
 
-So each `release[k]` is output k's frame bucket in the network attester's certified egress record. The unit checks
+So each `release[k]` is output k's frame bucket in the network attester's certified egress record. The proof block checks
 this by position: a cell's bucket is its row in the network attester's registered tree,
 and the map puts output k's cell in row `release[k]` − w·T and nowhere else.
 
@@ -923,7 +923,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network atte
 | Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | no Lean statement |
 | The reference schedule, k advice bits per execution block | `E·k + n·log2 D` bits over E execution blocks of g·T buckets, for n ≤ E·g·T steps | `NetTiming.encard_accSeqs_le_constantRate` |
 | The reference schedule, over the first m execution blocks | `min(E, m)·k + n·log2 D` bits, for n ≤ m·g·T steps | `NetTiming.encard_accSeqs_le_constantRate_executionPhases` |
-| The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(incorrect sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and an incorrect set is one `RAcc δ` allows (in `M_δ`, no unit sampled `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
+| The circuit's Program under a sampled audit of its step proof blocks, at δ | `c + log2 #(incorrect sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and an incorrect set is one `RAcc δ` allows (in `M_δ`, no unit sampled `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
 | The network attester (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each window's sampled charge (the row above) at the network attester's rows | for a decoder of the client's view, under `trusted-device`, `Claims.SamplingGeneric.Compiled.KS` and `Commitment.Binds`, `SecurityProofs.MonitoringPeriodLeakAccepted` |
 | No advice, under J (D = 1) | 0 bits: one accepted sequence for the ingress | `NetTiming.encard_accSeqs_le_constantRate` at k = 0 and D = 1 |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
@@ -952,7 +952,7 @@ data checked by `verity/protocols/resource_accounting/network/verifier/tests/tes
 
 The bound charges the declared `c`, not the realized lengths, since a run counts if any advice within it explains it.
 Each run's egress must equal the Program's, which needs every egress frame tied, and which the tie gives only when no
-step unit can be faulty: every step unit sampled `All`, or a sampled audit at δ ≥ miss(1). At a smaller δ an accepted
+step proof block can be incorrect: every step proof block sampled `All`, or a sampled audit at δ ≥ miss(1). At a smaller δ an accepted
 sampled audit gives `Accepted` only with the incorrect proof blocks' committed gates held as advice
 (`SampledAuditAccepted`), and the charge adds the incorrect proof blocks' committed bits and log2 of the number of possible
 incorrect sets, except with probability δ + ε_ks + ε_bind over the selection (`SecurityProofs.SampledLeakAccepted`).
@@ -1029,17 +1029,17 @@ link that carries the coins: [protocol/coin-link.md](protocol/coin-link.md).
 
 ## Advice for arbitrary serving: what it can carry
 
-The goal is network accounting for arbitrary vLLM usage: no FIXLEN, no fixed request size, and
+The goal is network certification for arbitrary vLLM usage: no FIXLEN, no fixed request size, and
 real EOS. The registered thing is a precommitted ahead-of-time compiler. After serving, the prover hands it an
 **advice** string that encodes everything serving made unpredictable: in advice v0, each request's lengths and finish,
 each step's batch rows, and each step's release bucket. The compiler turns the advice into each step's circuit, and the
 network attester certifies the I/O. SPOT checks two things: that the committed values pass the compiled circuits (the
-step units), and that they agree with the certified I/O (the tie units). N2 is to hold each window's egress counts to
-the ingress counts and the advice; no N2 unit does yet. The advice's length is the leak, charged as `A_c` in the
+step proof blocks), and that they agree with the certified I/O (the tie proof blocks). N2 is to hold each window's egress counts to
+the ingress counts and the advice; no N2 proof block does yet. The advice's length is the leak, charged as `A_c` in the
 accepted-runs bound.
 
 This section attacks that claim through its parts: the advice codec (`advice.py`, with `encode`,
-`decode` and `bits`), the I/O tie unit (`io_tie`) and the compiler
+`decode` and `bits`), the I/O tie proof block (`io_tie`) and the compiler
 (`verity_vllm.program.predict.compile_steps`). It gives the argument, every assumption the argument rests on, what
 each attack costs under the design, and the adversarial cases each part's tests must carry.
 
@@ -1592,7 +1592,7 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
     witness, but what holds ``cert`` to the certified record is a stand-in, the honest cert row under the network attester's
     salt, until max_tokens is read from the certified body. The circuit bounds max_tokens only from above, so a lower
     one the output still fits passes at a lower charge. `compile_slice_zk` proves `CompileSlice_v7` against that
-    stand-in (its ``max-tokens`` unit is refused by the b‖c check alone); a proof of the length rule is open
+    stand-in (its ``max-tokens`` proof block is refused by the b‖c check alone); a proof of the length rule is open
     (`send_lengths` stays on until one holds it).
 - In `CompileSlice_v1`, `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns)
   as witness it bounds, and `CacheStep_v1` derives the hits only while the no-eviction bound holds. `CompileSlice_v4`
