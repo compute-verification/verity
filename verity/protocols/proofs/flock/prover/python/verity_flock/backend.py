@@ -91,7 +91,7 @@ class Flock:
             return Unsupported(f"K = {sub.k}: needs a multiple of {pipe.k} whose {pipe.word_bits}-bit rows are whole "
                                "BLAKE3 blocks and more than one chunk")
         if sub.k != 1536:
-            return Unsupported(f"K = {sub.k}: the instance sets are K = 1536")
+            return Unsupported(f"K = {sub.k}: the input sets are K = 1536")
         if shutil.which(self.binary) is None:
             return Unavailable(f"{self.binary} isn't built on this machine (verity/protocols/proofs/flock/prover/pod/20-pure.sh)")
         return Supported(relation)

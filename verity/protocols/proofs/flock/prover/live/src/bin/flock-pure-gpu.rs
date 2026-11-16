@@ -841,7 +841,7 @@ fn replay(st: &Arc<PureStmt>, inst: &Arc<Instances>, rec: &Value, proofs: &[Vec<
     let mid = if st.lay.tail().is_some() { unit_words_at(st, &inputs, 15) } else { Vec::new() };
     let publics = Publics { cv: cvs, y16, acc, mid }.bytes();
     if rec["link"]["publics_sha256"][TABLE].as_str() != Some(hex(&sha256(&publics)).as_str()) {
-        return Err("C4: the record's committed publics are not this instance set's chunk values, accumulators and outputs".into());
+        return Err("C4: the record's committed publics are not this input set's chunk values, accumulators and outputs".into());
     }
     let v = PureVerifier { st: st.clone(), inst: inst.clone(), digests };
     v.statement_publics(TABLE, &publics)?;

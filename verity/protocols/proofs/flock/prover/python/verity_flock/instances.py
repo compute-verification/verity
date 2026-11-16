@@ -89,7 +89,7 @@ def _relation(name: str) -> Relation:
     try:
         return _relations()[name]
     except KeyError:
-        raise SystemExit(f"no instance set for relation {name!r}; known: {sorted(_relations())}") from None
+        raise SystemExit(f"no input set for relation {name!r}; known: {sorted(_relations())}") from None
 
 
 def _frozen(rel):

@@ -703,7 +703,7 @@ fn replay(st: &Arc<VllmStmt>, inst: &Arc<Instances>, rec: &Value, proofs: &[Vec<
     let (_, digests) = st.compressions(inst);
     let publics = Publics { digest: digests }.bytes();
     if rec["link"]["publics_sha256"][TABLE].as_str() != Some(hex(&sha256(&publics)).as_str()) {
-        return Err("C4: the record's committed publics are not this instance set's position-leaf digests".into());
+        return Err("C4: the record's committed publics are not this input set's position-leaf digests".into());
     }
     let v = VllmVerifier { st: st.clone(), inst: inst.clone(), ports: p.clone() };
     v.statement_publics(TABLE, &publics)?;

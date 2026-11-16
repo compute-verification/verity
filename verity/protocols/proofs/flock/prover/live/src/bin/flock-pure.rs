@@ -351,7 +351,7 @@ impl Pure {
     }
 
     fn for_instances(inst: &Instances, net: Arc<UnitNet>) -> Self {
-        assert_eq!(net.relation, inst.relation, "the circuit description lowers another relation than the instance set's");
+        assert_eq!(net.relation, inst.relation, "the circuit description lowers another relation than the input set's");
         assert_eq!(net.out_cols.len() == 2, inst.header["epilogue"].as_bool().unwrap());
         Self::new(inst.vus, inst.units, inst.row_bytes, net)
     }
@@ -830,7 +830,7 @@ fn selftest(p: Arc<Pure>, inst: Instances, other_net: Option<Arc<UnitNet>>) {
     t("coins_before_commit", "R5 (no coin before the statement's publics)", Plan { commit: CommitMode::Skip, ..h() }, false, None, None);
     let mut other_set = inst.clone();
     other_set.header["instances"]["range"] = json!([0, p.vus + 1]);
-    t("hello_for_other_instance_set", "Σ (instance reference)", h(), false, None, Some(&other_set));
+    t("hello_for_other_input_set", "Σ (instance reference)", h(), false, None, Some(&other_set));
     let mut other_rows = inst.clone();
     other_rows.x[100] ^= 1;
     t("verifier_holds_other_rows", "Σ (roots)", h(), false, None, Some(&other_rows));
@@ -882,7 +882,7 @@ fn replay(p: &Arc<Pure>, inst: &Instances, rec: &Value, proofs: &[Vec<u8>]) -> R
     let (_, _, public) = p.rows(inst);
     let publics = f128_bytes(&public[p.fixed.len()..]);
     if rec["link"]["publics_sha256"][TABLE].as_str() != Some(hex(&sha256(&publics)).as_str()) {
-        return Err("C4: the record's public words are not this instance set's chunk values and outputs".into());
+        return Err("C4: the record's public words are not this input set's chunk values and outputs".into());
     }
     let v = PureVerifier { p: p.clone(), digests: c.digests, out: inst.out.clone() };
     v.statement_publics(TABLE, &publics)?;
