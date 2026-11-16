@@ -223,7 +223,8 @@ theorem bitsProgs_outBit (ms : Spot.Bits.Members) {m u k j t x : ℕ} (hm : m < 
       ∃ ws, (bitsProgs ms).gates[Spot.Bits.base ms m + x]? = some (.and ws) := by
   obtain ⟨ho, hlt, ws, hws⟩ := memberProg_outBit _ _ hx
   refine ⟨mem_outs_bitsProgs ms hm ho, ws.map (Spot.Bits.base ms m + ·), ?_⟩
-  rw [bitsProgs_gate_base ms hm hlt, hws] <;> rfl
+  rw [bitsProgs_gate_base ms hm hlt, hws]
+  rfl
 
 /-! ## Input bits -/
 
@@ -264,7 +265,8 @@ theorem bitsProgs_inBit (ms : Spot.Bits.Members) {m u k p t x : ℕ} (hm : m < m
     (hr : Spot.Bits.owner (Spot.Bits.keyProg ms[m].1 ms[m].2.size) x ≠ none) :
     (bitsProgs ms).gates[Spot.Bits.base ms m + x]? = some .input := by
   obtain ⟨hlt, hin⟩ := memberProg_inBit _ _ hx hr
-  rw [bitsProgs_gate_base ms hm hlt, hin] <;> rfl
+  rw [bitsProgs_gate_base ms hm hlt, hin]
+  rfl
 
 /-! ## The unit net's read columns -/
 
@@ -275,10 +277,7 @@ theorem getD_set_true {m : Array Bool} {y x : ℕ} (h : (m.set! y true).getD x f
   · refine Or.inl ?_
     have hyx : y ≠ x := fun e => hxy e.symm
     have : (m.set! y true).getD x false = m.getD x false := by
-      first
-        | simp [Array.set!, Array.getD_eq_getD_getElem?, Array.getElem?_setIfInBounds, hyx]
-        | simp [Array.set!_eq_setIfInBounds, Array.getD_eq_getD_getElem?, Array.getElem?_setIfInBounds, hyx]
-        | simp [Array.getD_eq_getD_getElem?, hyx]
+      simp [Array.set!, Array.getD_eq_getD_getElem?, hyx]
     rwa [this] at h
 
 theorem foldl_inner_reads (nIn x : ℕ) : ∀ (r : List ℕ) (m : Array Bool),
@@ -289,12 +288,12 @@ theorem foldl_inner_reads (nIn x : ℕ) : ∀ (r : List ℕ) (m : Array Bool),
     rw [List.foldl_cons] at h
     rcases foldl_inner_reads nIn x r _ h with h1 | ⟨h1, h2⟩
     · by_cases hy : y < nIn
-      · rw [if_pos hy] at h1
+      · rw [ite_eq_left hy] at h1
         rcases getD_set_true h1 with h3 | h3
         · exact Or.inl h3
         · subst h3
           exact Or.inr ⟨List.mem_cons_self, hy⟩
-      · rw [if_neg hy] at h1
+      · rw [ite_eq_right hy] at h1
         exact Or.inl h1
     · exact Or.inr ⟨List.mem_cons_of_mem _ h1, h2⟩
 
@@ -372,23 +371,23 @@ theorem inCol_mem_stack_row (c : _root_.Flock.Circuit) {k j0 x : ℕ} (hk : k < 
   · left
     rw [stack_a_getD _ _ _ hlt]
     unfold Spot.Bits.Rows.stackRow
-    rw [hmod, hdiv, if_neg (show ¬ (1 + j0 = 0) by omega), Nat.add_sub_cancel_left]
+    rw [hmod, hdiv, ite_eq_right (show ¬ (1 + j0 = 0) by omega), Nat.add_sub_cancel_left]
     exact List.mem_map.2 ⟨x, hx, by simp [Spot.Bits.Rows.stackCol, hxn]⟩
   · right
     rw [stack_b_getD _ _ _ hlt]
     unfold Spot.Bits.Rows.stackRow
-    rw [hmod, hdiv, if_neg (show ¬ (1 + j0 = 0) by omega), Nat.add_sub_cancel_left]
+    rw [hmod, hdiv, ite_eq_right (show ¬ (1 + j0 = 0) by omega), Nat.add_sub_cancel_left]
     exact List.mem_map.2 ⟨x, hx, by simp [Spot.Bits.Rows.stackCol, hxn]⟩
 
 theorem keyWire_of_keyIdx (c : _root_.Flock.Circuit) (n u col b : ℕ) (hcol : col < (bitsRows c).nIn)
     (hb : Spot.Bits.keyIdx c (bitsRows c).nIn col = some b) :
     keyWire c n u col = 2 + u * (bitsRows c).nIn + b := by
   unfold keyWire
-  rw [if_pos hcol]
+  rw [ite_eq_left hcol]
   have hk : ((Array.range (bitsRows c).nIn).map (Spot.Bits.keyIdx c (bitsRows c).nIn)).getD col none =
       Spot.Bits.keyIdx c (bitsRows c).nIn col := by
     simp [Array.getD_eq_getD_getElem?, hcol]
-  rw [hk, hb] <;> rfl
+  rw [hk, hb]
 
 /-- **The source gate on an input bit the unit net reads is owned by its unit.** -/
 theorem owner_inGate_of_unitReads {c : _root_.Flock.Circuit} {n u k p t g : ℕ}
