@@ -1,0 +1,17 @@
+# The write probe on each node, the instance its node's name (vy-write-probe@vy-nebius-1): hostnames aren't node names here.
+[Unit]
+Description=who writes to /workspace on %i, and whether an allocation covers them (write_probe.py probe)
+RequiresMountsFor=/workspace
+StartLimitIntervalSec=1h
+StartLimitBurst=10
+
+[Service]
+# root, as under the tmux pane's `sudo -n`: it reads every thread's /proc/PID/task/TID/io, pods' included
+ExecStart=/usr/bin/python3 /workspace/verity-guest/bin/write_probe.py probe --node %i --every 60 --mbps 10
+Restart=on-failure
+RestartSec=60
+Nice=19
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

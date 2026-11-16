@@ -1,0 +1,194 @@
+# The network certifier's programs, out of `benchmarks/network_traces/` into the certifier's `device/` and `prover/`:
+# what `tools/move/layout.py --map tools/move/certifier_programs_map.toml` moves and rewrites.
+#
+# `device/` takes what a served run starts on the auditor's side of the link: the relay's serving loop
+# (`warden_serve.py`) and the parts and flags it runs with (`runner_parts.py`, `runner_cli.py`), the certifier's key
+# (`certifier_key.py`), the offline check that writes the registrations' file (`connection_rows_run.py`), the load relay
+# (`load_relay.py`), and the guard on what a record releases (`leak_guard.py`, `released_keys.py`, each with its
+# declared data). `prover/` takes the zero-knowledge drivers that prove the certifier's checks (`scan_zk.py`,
+# `egress_zk.py`, `warden_zk.py`, `n2_zk.py`, `n2_tie_zk.py`, `leak_scan.py`), the period's scan
+# (`scan_period.py`), the block certifier and its window chain (`block_certifier.py`, `window_chain.py`) and the stop
+# verdicts (`stop_verdicts.py`). Each file's tests, and the fixture only they read, go to the destination's `tests/`.
+#
+# What stays in `benchmarks/network_traces/`: the measurements and the rehearsals' records (captures, probes, the load
+# bench, `record.py`, `replay.py`, the deviations, the egress wipe), the served session and its settings, the chain's
+# record and the cases run over it (`chain_record.py`, `warden_chain.py`, `certifier_piece.py`, `negatives.py`,
+# `kind_scan.py`, `leak_bounds.py`), the demo endpoint and stub, the shell drivers (`*.sh`), and the test of what the
+# drivers copy into a job's output (`test_out_request_values.py`); and the compiled slice's driver (`compile_slice_zk.py`,
+# with its test), which reads vLLM's scheduler, whose modules go to the vLLM adapter, which nothing under `verity/` may
+# import. No root moves ([roots] old == new). No file is split
+# or deleted. The format is `layout_map.toml`'s.
+#
+# What no map writes, and so follows the move by hand: a bare import of a moved module (`import warden_serve`, found by
+# the `sys.path` entry of `benchmarks/network_traces/`) and a moved module's bare import of one that stays, the suites'
+# declarations of the new `tests/` directories, and the import listing's rows (`tests/import_order.toml`).
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+
+[paths]
+"benchmarks/network_traces/warden_serve.py" = "verity/protocols/accounting/certifier/device/warden_serve.py"
+"benchmarks/network_traces/runner_parts.py" = "verity/protocols/accounting/certifier/device/runner_parts.py"
+"benchmarks/network_traces/runner_cli.py" = "verity/protocols/accounting/certifier/device/runner_cli.py"
+"benchmarks/network_traces/connection_rows_run.py" = "verity/protocols/accounting/certifier/device/connection_rows_run.py"
+"benchmarks/network_traces/certifier_key.py" = "verity/protocols/accounting/certifier/device/certifier_key.py"
+"benchmarks/network_traces/load_relay.py" = "verity/protocols/accounting/certifier/device/load_relay.py"
+"benchmarks/network_traces/leak_guard.py" = "verity/protocols/accounting/certifier/device/leak_guard.py"
+"benchmarks/network_traces/leak_guard.json" = "verity/protocols/accounting/certifier/device/leak_guard.json"
+"benchmarks/network_traces/released_keys.py" = "verity/protocols/accounting/certifier/device/released_keys.py"
+"benchmarks/network_traces/released_keys.json" = "verity/protocols/accounting/certifier/device/released_keys.json"
+"benchmarks/network_traces/tests/test_warden_serve.py" = "verity/protocols/accounting/certifier/device/tests/test_warden_serve.py"
+"benchmarks/network_traces/tests/test_warden_serve_phase10.py" = "verity/protocols/accounting/certifier/device/tests/test_warden_serve_phase10.py"
+"benchmarks/network_traces/tests/test_session_start.py" = "verity/protocols/accounting/certifier/device/tests/test_session_start.py"
+"benchmarks/network_traces/tests/test_endpoint_call.py" = "verity/protocols/accounting/certifier/device/tests/test_endpoint_call.py"
+"benchmarks/network_traces/tests/test_connection_rows_run.py" = "verity/protocols/accounting/certifier/device/tests/test_connection_rows_run.py"
+"benchmarks/network_traces/tests/test_certifier_term.py" = "verity/protocols/accounting/certifier/device/tests/test_certifier_term.py"
+"benchmarks/network_traces/tests/test_load_relay.py" = "verity/protocols/accounting/certifier/device/tests/test_load_relay.py"
+"benchmarks/network_traces/tests/test_leak_guard.py" = "verity/protocols/accounting/certifier/device/tests/test_leak_guard.py"
+"benchmarks/network_traces/tests/test_released_keys.py" = "verity/protocols/accounting/certifier/device/tests/test_released_keys.py"
+"benchmarks/network_traces/tests/fixtures/weights-v1-tiny.json" = "verity/protocols/accounting/certifier/device/tests/fixtures/weights-v1-tiny.json"
+"benchmarks/network_traces/scan_zk.py" = "verity/protocols/accounting/certifier/prover/scan_zk.py"
+"benchmarks/network_traces/egress_zk.py" = "verity/protocols/accounting/certifier/prover/egress_zk.py"
+"benchmarks/network_traces/warden_zk.py" = "verity/protocols/accounting/certifier/prover/warden_zk.py"
+"benchmarks/network_traces/n2_zk.py" = "verity/protocols/accounting/certifier/prover/n2_zk.py"
+"benchmarks/network_traces/n2_tie_zk.py" = "verity/protocols/accounting/certifier/prover/n2_tie_zk.py"
+"benchmarks/network_traces/leak_scan.py" = "verity/protocols/accounting/certifier/prover/leak_scan.py"
+"benchmarks/network_traces/scan_period.py" = "verity/protocols/accounting/certifier/prover/scan_period.py"
+"benchmarks/network_traces/block_certifier.py" = "verity/protocols/accounting/certifier/prover/block_certifier.py"
+"benchmarks/network_traces/window_chain.py" = "verity/protocols/accounting/certifier/prover/window_chain.py"
+"benchmarks/network_traces/stop_verdicts.py" = "verity/protocols/accounting/certifier/prover/stop_verdicts.py"
+"benchmarks/network_traces/tests/test_scan_zk.py" = "verity/protocols/accounting/certifier/prover/tests/test_scan_zk.py"
+"benchmarks/network_traces/tests/test_scan_zk_challenger.py" = "verity/protocols/accounting/certifier/prover/tests/test_scan_zk_challenger.py"
+"benchmarks/network_traces/tests/test_scan_zk_lean_one.py" = "verity/protocols/accounting/certifier/prover/tests/test_scan_zk_lean_one.py"
+"benchmarks/network_traces/tests/test_scan_zk_v3c.py" = "verity/protocols/accounting/certifier/prover/tests/test_scan_zk_v3c.py"
+"benchmarks/network_traces/tests/test_egress_zk.py" = "verity/protocols/accounting/certifier/prover/tests/test_egress_zk.py"
+"benchmarks/network_traces/tests/test_warden_zk.py" = "verity/protocols/accounting/certifier/prover/tests/test_warden_zk.py"
+"benchmarks/network_traces/tests/test_n2_zk.py" = "verity/protocols/accounting/certifier/prover/tests/test_n2_zk.py"
+"benchmarks/network_traces/tests/test_n2_tie_zk.py" = "verity/protocols/accounting/certifier/prover/tests/test_n2_tie_zk.py"
+"benchmarks/network_traces/tests/test_leak_scan.py" = "verity/protocols/accounting/certifier/prover/tests/test_leak_scan.py"
+"benchmarks/network_traces/tests/test_block_certifier.py" = "verity/protocols/accounting/certifier/prover/tests/test_block_certifier.py"
+"benchmarks/network_traces/tests/test_window_chain.py" = "verity/protocols/accounting/certifier/prover/tests/test_window_chain.py"
+"benchmarks/network_traces/tests/test_stop_verdicts.py" = "verity/protocols/accounting/certifier/prover/tests/test_stop_verdicts.py"
+"benchmarks/network_traces/tests/fixtures/certifier-period-answers.json" = "verity/protocols/accounting/certifier/prover/tests/fixtures/certifier-period-answers.json"
+
+[retired]
+# the paths this map empties
+paths = [
+    "benchmarks/network_traces/warden_serve.py",
+    "benchmarks/network_traces/runner_parts.py",
+    "benchmarks/network_traces/runner_cli.py",
+    "benchmarks/network_traces/connection_rows_run.py",
+    "benchmarks/network_traces/certifier_key.py",
+    "benchmarks/network_traces/load_relay.py",
+    "benchmarks/network_traces/leak_guard.py",
+    "benchmarks/network_traces/leak_guard.json",
+    "benchmarks/network_traces/released_keys.py",
+    "benchmarks/network_traces/released_keys.json",
+    "benchmarks/network_traces/tests/test_warden_serve.py",
+    "benchmarks/network_traces/tests/test_warden_serve_phase10.py",
+    "benchmarks/network_traces/tests/test_session_start.py",
+    "benchmarks/network_traces/tests/test_endpoint_call.py",
+    "benchmarks/network_traces/tests/test_connection_rows_run.py",
+    "benchmarks/network_traces/tests/test_certifier_term.py",
+    "benchmarks/network_traces/tests/test_load_relay.py",
+    "benchmarks/network_traces/tests/test_leak_guard.py",
+    "benchmarks/network_traces/tests/test_released_keys.py",
+    "benchmarks/network_traces/tests/fixtures/weights-v1-tiny.json",
+    "benchmarks/network_traces/scan_zk.py",
+    "benchmarks/network_traces/egress_zk.py",
+    "benchmarks/network_traces/warden_zk.py",
+    "benchmarks/network_traces/n2_zk.py",
+    "benchmarks/network_traces/n2_tie_zk.py",
+    "benchmarks/network_traces/leak_scan.py",
+    "benchmarks/network_traces/scan_period.py",
+    "benchmarks/network_traces/block_certifier.py",
+    "benchmarks/network_traces/window_chain.py",
+    "benchmarks/network_traces/stop_verdicts.py",
+    "benchmarks/network_traces/tests/test_scan_zk.py",
+    "benchmarks/network_traces/tests/test_scan_zk_challenger.py",
+    "benchmarks/network_traces/tests/test_scan_zk_lean_one.py",
+    "benchmarks/network_traces/tests/test_scan_zk_v3c.py",
+    "benchmarks/network_traces/tests/test_egress_zk.py",
+    "benchmarks/network_traces/tests/test_warden_zk.py",
+    "benchmarks/network_traces/tests/test_n2_zk.py",
+    "benchmarks/network_traces/tests/test_n2_tie_zk.py",
+    "benchmarks/network_traces/tests/test_leak_scan.py",
+    "benchmarks/network_traces/tests/test_block_certifier.py",
+    "benchmarks/network_traces/tests/test_window_chain.py",
+    "benchmarks/network_traces/tests/test_stop_verdicts.py",
+    "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json",
+]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, every Lean file (a path in a Lean comment keeps the old name until an edit of that file
+# takes it: a rewritten Lean file recompiles every module that imports it), every kernel source, and the layout of
+# record.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
+# Rewritten though a pattern above matches: the fixtures' READMEs, the Lake manifests, the adapter's Definitions
+# manifest, and the pins and vectors that record their sources' paths, which their tests read at those paths.
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json",
+           "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c_u.json"]
+# the auditor's host's pinned tree, from which its units and the gate name the device's files
+root_prefixes = ["/opt/vy-challenger/current/"]
+
+
+[modules]
+# the rename [paths] implies (`layout.py --modules`)
+"benchmarks.network_traces.block_certifier" = "verity.protocols.accounting.certifier.prover.block_certifier"
+"benchmarks.network_traces.certifier_key" = "verity.protocols.accounting.certifier.device.certifier_key"
+"benchmarks.network_traces.connection_rows_run" = "verity.protocols.accounting.certifier.device.connection_rows_run"
+"benchmarks.network_traces.egress_zk" = "verity.protocols.accounting.certifier.prover.egress_zk"
+"benchmarks.network_traces.leak_guard" = "verity.protocols.accounting.certifier.device.leak_guard"
+"benchmarks.network_traces.leak_scan" = "verity.protocols.accounting.certifier.prover.leak_scan"
+"benchmarks.network_traces.load_relay" = "verity.protocols.accounting.certifier.device.load_relay"
+"benchmarks.network_traces.n2_tie_zk" = "verity.protocols.accounting.certifier.prover.n2_tie_zk"
+"benchmarks.network_traces.n2_zk" = "verity.protocols.accounting.certifier.prover.n2_zk"
+"benchmarks.network_traces.released_keys" = "verity.protocols.accounting.certifier.device.released_keys"
+"benchmarks.network_traces.runner_cli" = "verity.protocols.accounting.certifier.device.runner_cli"
+"benchmarks.network_traces.runner_parts" = "verity.protocols.accounting.certifier.device.runner_parts"
+"benchmarks.network_traces.scan_period" = "verity.protocols.accounting.certifier.prover.scan_period"
+"benchmarks.network_traces.scan_zk" = "verity.protocols.accounting.certifier.prover.scan_zk"
+"benchmarks.network_traces.stop_verdicts" = "verity.protocols.accounting.certifier.prover.stop_verdicts"
+"benchmarks.network_traces.tests.test_block_certifier" = "verity.protocols.accounting.certifier.prover.tests.test_block_certifier"
+"benchmarks.network_traces.tests.test_certifier_term" = "verity.protocols.accounting.certifier.device.tests.test_certifier_term"
+"benchmarks.network_traces.tests.test_connection_rows_run" = "verity.protocols.accounting.certifier.device.tests.test_connection_rows_run"
+"benchmarks.network_traces.tests.test_egress_zk" = "verity.protocols.accounting.certifier.prover.tests.test_egress_zk"
+"benchmarks.network_traces.tests.test_endpoint_call" = "verity.protocols.accounting.certifier.device.tests.test_endpoint_call"
+"benchmarks.network_traces.tests.test_leak_guard" = "verity.protocols.accounting.certifier.device.tests.test_leak_guard"
+"benchmarks.network_traces.tests.test_leak_scan" = "verity.protocols.accounting.certifier.prover.tests.test_leak_scan"
+"benchmarks.network_traces.tests.test_load_relay" = "verity.protocols.accounting.certifier.device.tests.test_load_relay"
+"benchmarks.network_traces.tests.test_n2_tie_zk" = "verity.protocols.accounting.certifier.prover.tests.test_n2_tie_zk"
+"benchmarks.network_traces.tests.test_n2_zk" = "verity.protocols.accounting.certifier.prover.tests.test_n2_zk"
+"benchmarks.network_traces.tests.test_released_keys" = "verity.protocols.accounting.certifier.device.tests.test_released_keys"
+"benchmarks.network_traces.tests.test_scan_zk" = "verity.protocols.accounting.certifier.prover.tests.test_scan_zk"
+"benchmarks.network_traces.tests.test_scan_zk_challenger" = "verity.protocols.accounting.certifier.prover.tests.test_scan_zk_challenger"
+"benchmarks.network_traces.tests.test_scan_zk_lean_one" = "verity.protocols.accounting.certifier.prover.tests.test_scan_zk_lean_one"
+"benchmarks.network_traces.tests.test_scan_zk_v3c" = "verity.protocols.accounting.certifier.prover.tests.test_scan_zk_v3c"
+"benchmarks.network_traces.tests.test_session_start" = "verity.protocols.accounting.certifier.device.tests.test_session_start"
+"benchmarks.network_traces.tests.test_stop_verdicts" = "verity.protocols.accounting.certifier.prover.tests.test_stop_verdicts"
+"benchmarks.network_traces.tests.test_warden_serve" = "verity.protocols.accounting.certifier.device.tests.test_warden_serve"
+"benchmarks.network_traces.tests.test_warden_serve_phase10" = "verity.protocols.accounting.certifier.device.tests.test_warden_serve_phase10"
+"benchmarks.network_traces.tests.test_warden_zk" = "verity.protocols.accounting.certifier.prover.tests.test_warden_zk"
+"benchmarks.network_traces.tests.test_window_chain" = "verity.protocols.accounting.certifier.prover.tests.test_window_chain"
+"benchmarks.network_traces.warden_serve" = "verity.protocols.accounting.certifier.device.warden_serve"
+"benchmarks.network_traces.warden_zk" = "verity.protocols.accounting.certifier.prover.warden_zk"
+"benchmarks.network_traces.window_chain" = "verity.protocols.accounting.certifier.prover.window_chain"

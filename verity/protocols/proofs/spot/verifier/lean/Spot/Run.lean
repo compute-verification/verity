@@ -1,0 +1,415 @@
+/-
+The proof system's run of one registration, from its public check through its verdict, as `service.Stream` makes it on a Spec
+whose selection rule `Select.Rule` reads: what the challenger holds once a delivered proof's outcome is decided, and every
+check the stream ran on it, in the stream's order.
+
+* `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
+  the rule's rate over it and the program's strata (`Select.Rule.over`, `Select.strataSizes`: `rate`, a count of none or
+  more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate sampling design
+  whose strata or table don't apply), then R1–R8 (`Docket.check`) against the challenger's copies under the sampling design the rule names over
+  that population (`Select.Rule.samplingDesignOver`, whatever sampling design the copies carry) and that work table, a `bernoulli` sampling
+  design at any `p` (`Draw.bernoulli`: `bernoulli`), a
+  program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
+  the receipt (`registration.receipt`);
+* `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
+  sampled audit's soundness statement); the sample of record on the bytes of the challenger's coins (`Select.select`,
+  under the rule over the program's population, `Select.resolve`); the verifier has no coins of its own, so a sample that
+  read any byte carries evidence (`coins`) that the bytes are exactly the coins of the verifier's family (`family`, the
+  run's own, never the evidence's) that the session the ledger opens for the
+  registration's window (the verifier's `windowRoot`), under the verifier's challenger key and its copy of main's
+  first-parent history (`key`, `main`: the run's own, which the evidence does not name), released after the
+  registration's digest, every one read and each
+  opening checked against the challenger's commitment (`Challenger.coinsReason`), and one that read none carries none
+  (`coinsCode`, code `coins`), missing evidence, no key, no window or no family refused, and a family whose log shows a
+  root other than the registration's digest refused by its own code (`family`: a family's coins follow one registration, so a
+  second registration's coins are another family's, and an interior registration's too); then the sample is held to the
+  registration and the expanded sampling design (`Draw.checkDraw`);
+* under a two-stage rule (`Select.Rule.twoStage grain replay k`), the registration is the boundary commitment over the
+  replay blocks, the population of the challenger's program under its query, which is the rule's `grain` (else `grain`),
+  and `select` is the first stage, its replay sample. Then `interiors`: the interior registration (`Interior`) over the
+  sample's `Q · n` proof blocks, `n = Σ n_t` those of one replay block, `n_t` its instances of template `t`
+  (`Select.replayCells` of the challenger's replay block Program under the check's query), template-major, replay block
+  `sample[i]`'s instances of template `t` being `[off_t + i·n_t, off_t + (i+1)·n_t)`, `off_t = Q · Σ_{t'<t} n_t'`: the
+  public-items rule on the interior values, the population (else `interior-population`), its strata those parts, the
+  check's templates in its order and each one range (else `interior-parts`, `cellParts`), its window (else
+  `interior-window`: the boundary registration's, or the one the verifier computes from the boundary registration's
+  digest and the sample, `interiorRunOk`), R1–R8 against its copies under `subset:Q·n` (all of them committed),
+  `population-order`, each history table its copies name being a port of the boundary registration's record at the
+  root and domain they computed for it (`tablesServed`: `interior-table`), and its receipt; and `second`: the second
+  stage on its own
+  coins (`Select.selectSecond`, the rule's counts over the cells, `Select.Counts.over`), read after the interior
+  registration's digest and carrying their evidence as the first stage's do (`coins`);
+* `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
+* `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
+  audit record (`Record.record`, with the names of the values the verifier holds certified entries for) over the
+  sample's proved units, and under a two-stage rule the interior registration's
+  over the second stage's sample, with round 2's statement check of the second-stage sessions' statements against the
+  interior registration, the second stage's cells and the design's links and wires, the rows their units read and the
+  names of what the block returns, which the verifier derives from the replay block's Definition in the challenger's
+  program (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`,
+  `SecondStage.replayReturns`), as its `statements` check
+  (`SecondStage.checkAny`, the two-stage form allowed only when `run`'s `form` is, by default `SecondStage.FORM`); the
+  symbol accepts when every audit record does. Each audit record takes the sessions' reads of its registration's own
+  ports at their own roots (`Record.lessOwnReads`); under a two-stage rule round 2 holds their rows. Each holds the
+  reads of the window values its params name to their entries' roots (`Record.windowReads`).
+
+A step's refusal is `{"step", "codes"}`; a decided run is `{"receipt", "draw", "read", "symbol", "public", "audit"}`, the
+audit record as the text of Python's `canonical_json`, and under a two-stage rule `interior`, the interior registration's
+`{"receipt", "draw", "read", "audit"}` in the same forms.
+`Stream.outcome` holds its own outcome to this run (`verifier.run`). A run whose proof came after the proof deadline is
+the clock's (`late`).
+-/
+module
+
+public import Spot.OneStage
+public import Spot.Select
+public import Spot.Slots
+public import Spot.PopOrder
+public import Spot.Service
+public import Spot.ChallengerCoins
+public import Spot.SecondStage
+public import Spot.SecondStagePass
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
+
+namespace Spot.Run
+
+open Lean (Json)
+open Flock (V)
+
+def RECEIPT : String := "verity/registration-receipt/v1"
+
+/-- A two-stage run's interior registration and second stage: the challenger's copies for the interior registration
+(its program, the population of the replay sample's proof blocks, under the check's query), one replay block's Program,
+the interior values, the record and its place in the log, the second stage's coins and their evidence, read under the
+run's challenger key and its copy of main's history (`Input.key`, `Input.main`: a run has one challenger), its audit
+record's proved units, instances, served units and session roots, the second-stage sessions' statements
+(`SecondStage.Stmt`), and the circuit file each template's sessions verify against, by SHA-512, with the reference
+header and registered reads round 2 holds their statements to (`SecondStage.headerOk`, `SecondStage.valuesOk`), as the
+auditor's params name them (`templateCircuits`), and the registered tables they pin (`pinnedTables`). The design's links and wires, their rows and the names of what the
+block returns are the verifier's own, from the replay block's Definition in the boundary program
+(`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`, `SecondStage.replayReturns`), and
+never part of it. -/
+structure Interior where
+  params : OneStage.Params
+  replay : Program
+  values : Array Service.Value
+  record : Json
+  received : String
+  source : ByteArray
+  coins : Json := Json.null
+  family : Option String := none
+  provedUnits : Option (Array Int)
+  instances : Option Int
+  served : Json
+  sessionRoots : Json
+  statements : Option (Array Json) := none
+  circuits : Array (String × String × Json × Json) := #[]
+  reads : Array (String × Nat) := #[]
+  tables : Array (String × Json) := #[]
+
+/-- `values` are the Spec's values, a two-stage rule's boundary values. `key` is the verifier's challenger key and
+`main` its copy of main's first-parent history, which the coins' evidence is read under (`coinsCode`): they are the
+verifier's own, and no evidence names them. -/
+structure Input where
+  params : OneStage.Params
+  record : Json
+  rule : Select.Rule
+  values : Array Service.Value
+  declared : Array String
+  challenger : String
+  received : String
+  source : ByteArray
+  closure : Option (Array (Int × Array Int))
+  sessions : Array Json
+  verdicts : Array (String × Json)
+  outputs : Array String
+  statement : Json
+  delta : Json
+  provedUnits : Option (Array Int)
+  instances : Option Int
+  served : Json
+  sessionRoots : Json
+  coins : Json := Json.null
+  family : Option String := none
+  key : Option Challenger.ChallengerKey := none
+  main : Json := Json.null
+  interior : Option Interior := none
+
+private def refused (step : String) (codes : Array String) : Json :=
+  Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]
+
+private def hexDigit (c : Char) : Bool := ('0' ≤ c && c ≤ '9') || ('a' ≤ c && c ≤ 'f')
+
+/-- `service._DIGEST.match`: 128 lowercase hex digits, which `$` lets a final newline follow. -/
+def digest? : Json → Bool
+  | .str s => (s.length == 128 || (s.length == 129 && s.endsWith "\n")) && (s.toList.take 128).all hexDigit
+  | _ => false
+
+/-- `service._read_of`: a params entry's `read`, `{"V": <rows>, "H": <words a row>}` of two positive integers, as
+`(V, H)`; none for anything else. -/
+def readOf? (j : Json) : Option (Nat × Nat) :=
+  match keys? j, nat? (getD j "V"), nat? (getD j "H") with
+  | some #["H", "V"], some v, some h => if 0 < v && 0 < h then some (v, h) else none
+  | _, _, _ => none
+
+/-- `service._table_entry`: a pinned table's entry under parameter `p`, the entry the tables' registration names for
+it: exactly `value`, `root`, `leaves`, `words` and `domain`, and `word_bits` where its words are not 16-bit; `value` is
+`p`, `root` and `domain` 128 lowercase hex digits, and `leaves`, `words` and `word_bits` positive integers. -/
+def tableEntry? (p : String) (e : Json) : Bool :=
+  let hex := fun (j : Json) => match j with | .str s => s.length == 128 && s.all hexDigit | _ => false
+  let pos := fun (j : Json) => (nat? j).any (0 < ·)
+  ((keys? e) == some #["domain", "leaves", "root", "value", "words"] ||
+    ((keys? e) == some #["domain", "leaves", "root", "value", "word_bits", "words"] && pos (getD e "word_bits"))) &&
+  jeq (getD e "value") (.str p) && hex (getD e "root") && hex (getD e "domain") && pos (getD e "leaves") &&
+  pos (getD e "words")
+
+/-- `service.template_circuits`: the auditor's params naming each template's circuit file and its registered reference
+statement's header and registered reads, a two-stage run's `interior.params.proofs`, `{"templates": [{"template":
+<descriptor id>, "circuit": <SHA-512, lowercase hex>, "header": <the registered reference statement's header>,
+"registered": <the registered reads it reads, null for none>}, ...]}`, as (template, circuit, header,
+registered) in the order the check's template query `query` names the templates (`Select.templateIds`), which is
+REPLAY_c's first-instance order (`Select.replayCells`); `null` names no file and gives none. An entry may also record
+its template as a table read, `"read": {"V": <rows>, "H": <words a row>}` (`templateReads`), and the params may add
+`"tables": {<parameter>: <entry>, ...}`, the registered tables the auditor pinned before any coin, each the entry the
+tables' registration names for it (`tableEntry?`, `pinnedTables`). An error for any other form, a circuit that isn't
+128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor null, a read that
+isn't two positive counts, a pinned table that isn't such an entry, and a list that doesn't name each of the check's
+templates once, in its order. -/
+def templateCircuits (proofs query : Json) : V (Array (String × String × Json × Json)) := do
+  if proofs matches .null then return #[]
+  let ids ← Select.templateIds query
+  let form := "the params' proofs are {\"templates\": [{\"template\": <descriptor id>, \"circuit\": <SHA-512>, " ++
+    "\"header\": <object>, \"registered\": <object or null>}, ...]}, an entry's \"read\" {\"V\": <rows>, " ++
+    "\"H\": <words>}, and \"tables\" {<parameter>: <the tables' registration's entry>}"
+  let (true, .arr es) := (keys? proofs == some #["templates"] || keys? proofs == some #["tables", "templates"],
+      getD proofs "templates") | throw form
+  if let some ts := field? proofs "tables" then
+    let .obj _ := ts | throw form
+    if let some (p, e) := (entries ts).find? fun (p, e) => !tableEntry? p e then
+      throw (s!"{form}: a pinned table's entry is exactly value (its parameter), root, leaves, words and domain, and " ++
+        s!"word_bits where its words are not 16-bit, root and domain SHA-512s in lowercase hex and the counts positive " ++
+        s!"integers: {p} {e.compress}")
+  let named ← es.mapM fun e =>
+    let bad := s!"{form}, each circuit a SHA-512 in lowercase hex, each header an object, each registered " ++
+      s!"an object or null and each read two positive counts: {e.compress}"
+    let keys := (keys? e).map fun ks => ks.filter (· != "read")
+    let read := (field? e "read").all fun r => (readOf? r).isSome
+    match keys, getD e "template", getD e "circuit", getD e "header", getD e "registered" with
+    | some #["circuit", "header", "registered", "template"], .str t, .str c, .obj h, r =>
+      if c.length == 128 && c.all hexDigit && ((r matches .obj _) || (r matches .null)) && read then
+        pure (t, c, Json.obj h, r)
+      else throw bad
+    | _, _, _, _, _ => throw bad
+  if named.map (·.1) != ids then
+    throw s!"the params name the circuits of {named.map (·.1)}, not the check's templates {ids}, each once, in its order"
+  return named
+
+/-- `service.template_reads`: the templates the auditor's params `proofs` record as table reads, each with its
+table's rows, `(template, V)`, for params `templateCircuits` accepted: an entry's `"read": {"V", "H"}` is the auditor's
+record that the template check (`flock-read-tmpl check V H CIRCUIT`, `Flock.ReadNet.check`) accepted the circuit file
+whose SHA-512 the entry names as the read of a table of `V` rows of `H` 16-bit words. The check ran where the params
+were made; the verifier runs none, and takes a template with no such record as no read. -/
+def templateReads (proofs : Json) : Array (String × Nat) :=
+  (match getD proofs "templates" with | .arr es => es | _ => #[]).filterMap fun e =>
+    match getD e "template", (field? e "read").bind readOf? with
+    | .str t, some (v, _) => some (t, v)
+    | _, _ => none
+
+/-- `service.pinned_tables`: the registered tables the auditor's params `proofs` pin, `(parameter, entry)` each, for
+params `templateCircuits` accepted: the entries the tables' registration names, which the auditor pinned before any
+coin and round 2 takes a read's table from beside round 1's record (`SecondStage.Own.tables`, `SecondStage.oneTable`). -/
+def pinnedTables (proofs : Json) : Array (String × Json) :=
+  match getD proofs "tables" with
+  | ts@(.obj _) => entries ts
+  | _ => #[]
+
+/-- The receipt the stream writes for an accepted registration: its digest, the challenger and its place in the log. -/
+def receipt (record : Json) (challenger received : String) : V Json := do
+  return Json.mkObj [("format", Json.str RECEIPT), ("registration", Json.str (← Docket.digestHex record)),
+    ("verifier", Json.str challenger), ("received", Json.str received)]
+
+/-- The sample's coins are the challenger's, or the code its step is refused with: a sample that read any byte carries
+evidence that holds of the bytes it read (`Challenger.coinsReason`, under the challenger key `key` and the copy `main`
+of main's first-parent history the verifier holds, after the registration's digest, for the window whose
+open root `window` the verifier holds and the family `family` the verifier names), so missing evidence, or a verifier
+that holds no key or no window or names no family, is a refusal (`coins`) and never a skip; one that read none (`All`)
+carries none (`null`). A family whose log shows a root other than the registration's digest has its own code (`family`,
+`Challenger.FAMILY_ROOT`). -/
+def coinsCode (key : Option Challenger.ChallengerKey) (main coins record : Json) (window family : Option String)
+    (read : ByteArray) : Option String :=
+  if read.isEmpty then (if coins matches .null then none else some "coins") else
+  match key, window, family, Docket.digest record with
+  | some key, some w, some label, .ok after =>
+    (Challenger.coinsReason key main coins w label after read).map fun why =>
+      if why == Challenger.FAMILY_ROOT then "family" else "coins"
+  | _, _, _, _ => some "coins"
+
+/-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, holding each value
+its verifier `v` holds a certified entry for to have a reported read (`Record.certifiedCheck`), and the reads of the
+window values `named` (`OneStage.Params.windowValues`; none by default) to their window entries' roots. -/
+def audit (i : Input) (v : Docket.Verifier) (record receipt draw samplingDesign : Json) (proved : Array Int)
+    (instances : Int) (served sessionRoots : Json) (named : Array String := #[]) : V Json :=
+  do Record.record (← Record.inputOf (Json.mkObj ([("registration", record), ("receipt", receipt),
+    ("draw", draw), ("law", samplingDesign), ("proved_units", Json.arr (proved.map Lean.toJson)),
+    ("instances", Lean.toJson instances), ("statement", i.statement), ("verdicts", Json.mkObj i.verdicts.toList),
+    ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots),
+    ("certified", Json.arr (v.certified.map fun x => Json.str x.1.value))] ++
+    if named.isEmpty then [] else [("window_values", Json.arr (named.map Json.str))])))
+
+/-- Under a two-stage rule, the check's query is the rule's `grain`. -/
+private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
+  match rule with
+  | .twoStage grain _ _ => jeq query grain
+  | _ => true
+
+/-- **Each history table the interior reads is one the boundary registration served** (`interior-table`): every table
+`tables` names, at the root and domain id `HistoryTable.rootsOf` computed for it, is a port of the boundary
+registration's record `record` of that name with that root and domain, at the port's last root (`Record.byPort`, the one
+round 1's checks hold). The interior's copies name the tables round 2 recomputes from the writers it opens; this holds
+each one to the table round 1 registered under its name, so no table only the interior's copies name is read. -/
+def tablesServed (record : Json) (tables : Array (String × ByteArray × ByteArray)) : Bool :=
+  let ports := Record.byPort record
+  tables.all fun (name, root, domain) => match ports.find? (·.1 == name) with
+    | some (_, r) => jsonStrIs (getD r "root") (Flock.hexOf root) && jsonStrIs (getD r "domain") (Flock.hexOf domain)
+    | none => false
+
+/-- **The interior registration's window** is the boundary registration's, or the one the verifier computes from the
+boundary registration's digest `digest` (lowercase hex) and the replay sample (`SecondStage.interiorRoot`); `boundary`
+and `interior` are the two registrations' window roots as the verifier holds them. So one session samples both stages,
+or the second stage's is the session on the one root the boundary registration and its sample name: the second stage
+is sampled on no other window. -/
+def interiorRunOk (boundary interior : Option String) (digest : String) (sample : Array Nat) : Bool :=
+  interior == boundary || (interior.isSome && interior == SecondStage.interiorRoot digest sample)
+
+/-- **The parts the replay block's cells give** a sample of `q` replay blocks: the templates `ids`, in that order,
+template `t` the `q · ns[t]` slots from `q · Σ_{s<t} ns[s]`. -/
+def cellParts (q : Nat) (ids : Array String) (ns : Array Nat) : Array SecondStage.Part :=
+  ((List.range ids.size).map fun t => ⟨ids.toList.getD t "", q * (ns.toList.take t).sum, ns.getD t 0⟩).toArray
+
+/-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
+in each cell: the interior, its receipt, the second stage's sample and sampling design, and the bytes it read; or the
+refusal's step and codes. The interior's registration is SPOT's check alone (`Docket.check`): this package has no
+caller's check (`VStar.Recursive.Caller.check`), so it refuses no interior for the caller's facts (the declared day, the
+binding, the seed salt, the registered compiler, the pool's marks and chain, and the verdicts); the stream refuses those
+when the interior registers (`one_stage.verifier.check`, `Caller.gate`), and the two-stage form gates its run
+(`VStar.Recursive.SampledTwo.checkBlobsAt`). -/
+def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Array Nat) :
+    V (Except (String × Array String) (Interior × Json × Json × Json × Nat)) := do
+  let v := it.params.verifier
+  let pub ← Service.checkPublic it.record (Json.str v.scheme) (← Docket.queryDigest v.query) it.values i.declared
+  if !pub.codes.isEmpty then return .error ("interiors", pub.codes)
+  let ns ← Select.replayCells it.replay v.query
+  let ids ← Select.templateIds v.query
+  let ks ← k.over ids ns
+  let m := sample.size * ns.toList.sum
+  if nat? (getD it.record "population") != some m then return .error ("interiors", #["interior-population"])
+  let strata ← Partition.strata v.program v.query
+  if SecondStage.parts sample.size strata ≠ some (cellParts sample.size ids ns) then
+    return .error ("interiors", #["interior-parts"])
+  let boundary ← Docket.digestHex i.record
+  if !interiorRunOk i.params.verifier.windowRoot v.windowRoot boundary sample then
+    return .error ("interiors", #["interior-window"])
+  let v := { v with samplingDesign := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
+  let codes := Docket.check it.record v
+  if !codes.isEmpty then return .error ("interiors", codes)
+  if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
+  if !tablesServed i.record it.params.tables then return .error ("interiors", #["interior-table"])
+  let receipt ← receipt it.record i.challenger it.received
+  let (draw, read) ← Select.selectSecond sample ns ks it.source
+  if let some code := coinsCode i.key i.main it.coins it.record v.windowRoot it.family (it.source.extract 0 read) then
+    return .error ("second", #[code])
+  return .ok (it, receipt, draw, Select.secondSamplingDesign sample ns ks, read)
+
+/-- The second stage, under a two-stage rule, over the first stage's replay sample `sample`; none under a one-stage
+rule. -/
+def secondStage (i : Input) (sample : Array Nat) :
+    V (Except (String × Array String) (Option (Interior × Json × Json × Json × Nat))) :=
+  match i.rule, i.interior with
+  | .twoStage _ _ k, some it => return (← interiorSteps i it k sample).map some
+  | .twoStage _ _ _, none => return .error ("interiors", #["interior"])
+  | _, some _ => throw "a one-stage run has no interior registration"
+  | _, none => return .ok none
+
+/-- The interior registration's audit record over the second stage's proved units, with round 2's statement check
+(`SecondStage.checkAny`, the two-stage form allowed where `form` is) over the first stage's replay sample `sample`:
+whether it accepts, and the run's `interior` entry; nothing under a one-stage rule. -/
+def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
+    Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
+  | none => return (true, [])
+  | some (it, receipt, draw, samplingDesign, read) => do
+    let proved := it.provedUnits.getD (Draw.proved draw)
+    let rec_ ← audit i it.params.verifier it.record receipt draw samplingDesign proved (it.instances.getD proved.size) it.served
+      it.sessionRoots it.params.windowValues
+    let strata ← Partition.strata it.params.verifier.program it.params.verifier.query
+    let own : SecondStage.Own :=
+      { sample, parts := SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
+        drawn := (Draw.proved draw).map Int.toNat,
+        links := SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
+        reported := Record.sessionRegistered i.verdicts, verified := SecondStage.verifiedOf i.verdicts,
+        refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
+        wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
+        rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
+        widths := SecondStage.replayWidths i.params.verifier.program.prog it.replay.prog.programFn,
+        returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
+        supplied := it.params.verifier.supplied,
+        fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1),
+        reads := it.reads, tables := it.tables }
+    let rec_ := SecondStage.attach rec_ (SecondStage.checkAny form own it.statements)
+      (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
+    return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
+      ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])
+
+/-- The run, step by step; an error where the Python raises. The second stage's statement check allows the two-stage
+form where `form` does, by default the switch (`SecondStage.FORM`); a caller that decides last by the switch itself runs
+it at `form := true`. Its registration step is SPOT's check alone (`Docket.check`), as `interiorSteps`' is: it
+refuses no record for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the
+pool's marks and chain, and the verdicts), which the stream refuses at registration, before any run
+(`one_stage.verifier.check`, `Caller.gate`), and the two-stage form after its run
+(`VStar.Recursive.SampledTwo.checkBlobsAt`). -/
+def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
+  let v := i.params.verifier
+  if !grainHolds i.rule v.query then return refused "register" #["grain"]
+  let qd ← Docket.queryDigest v.query
+  let pub ← Service.checkPublic i.record (Json.str v.scheme) qd i.values i.declared
+  if !pub.codes.isEmpty then return refused "register" pub.codes
+  let some n := nat? (getD i.record "population") | return refused "register" #["population"]
+  if n == 0 then return refused "register" #["population"]
+  let some rule := i.rule.over n (Select.strataSizes v.program v.query) | return refused "register" #["rate"]
+  let samplingDesign ← rule.samplingDesignOver n
+  let .ok workTable := i.rule.tableOver v.program v.query v.workTable | return refused "register" #["rate"]
+  let v := { v with samplingDesign, workTable }
+  let codes := Docket.check i.record v
+  if !codes.isEmpty then return refused "register" codes
+  if Draw.bernoulli samplingDesign then return refused "register" #["bernoulli"]
+  if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]
+  let receipt ← receipt i.record i.challenger i.received
+  let derived ← Draw.derive v.program v.query samplingDesign v.workTable
+  if i.closure.isSome then return refused "select" #["closure"]
+  let (draw, _, read) ← Select.select (← Select.resolve i.rule v.program v.query) v.program v.query v.workTable
+    i.closure i.source
+  if let some code := coinsCode i.key i.main i.coins i.record v.windowRoot i.family (i.source.extract 0 read) then
+    return refused "select" #[code]
+  let codes := Draw.checkDraw draw (getD i.record "population") derived
+  if !codes.isEmpty then return refused "select" codes
+  let drawn := Draw.proved draw
+  match ← secondStage i (drawn.map Int.toNat) with
+  | .error (step, codes) => return refused step codes
+  | .ok inner =>
+    if i.sessions.isEmpty || !i.sessions.all digest? then return refused "deliver" #["sessions"]
+    let held ← Service.checkVerdicts i.verdicts i.sessions i.outputs
+    if !held.codes.isEmpty then return refused "outcome" held.codes
+    let ofRecord := (i.verdicts.qsort (·.1 < ·.1)).filter (truthy <| getD ·.2 "of_record")
+    let shown := if i.outputs.isEmpty then Json.mkObj [] else getD ((ofRecord[0]?.map (·.2)).getD Json.null) "public"
+    let proved := i.provedUnits.getD drawn
+    let instances := i.instances.getD proved.size
+    let rec_ ← audit i v i.record receipt draw derived proved instances i.served i.sessionRoots i.params.windowValues
+    let (accepted₂, staged) ← interiorAudit form i (drawn.map Int.toNat) inner
+    let accepted := jeq (getD rec_ "accepted") (.bool true) && accepted₂
+    return Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),
+      ("symbol", Json.str (if accepted then "accept" else "reject")),
+      ("public", if accepted then shown else Json.mkObj []), ("audit", Json.str (← PyJson.canonical rec_))] ++ staged)
+
+end Spot.Run

@@ -1,0 +1,4 @@
+order = 334
+path = "`theory/`"
+runs_on = "CPU; the `.sh` probes an RTX PRO 6000"
+what = "Exact checks of the premises PoUW's resource accounting rests on, most of them the fold receipts' (`Accounting.Assumptions.TS`'s `FoldOpt`, `NoSum`, `ScalarRoute`): checks on `exact_kit`'s registry, the C enumerators they drive and sm_120 probes, each read by a test or a Lean docstring (its README lists every script, what it checks and who reads it)"

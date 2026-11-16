@@ -1,0 +1,28 @@
+# The inference-only policy of Llama 3.2 1B as served: its public numbers, stated. This tree does not build the served
+# class, so `run.py` prices these numbers and no check here reads them.
+source = "the policy the serve states for its class before it starts: the class's c, k and n, and one block's work at the class's fixed load"
+
+model = "unsloth/Llama-3.2-1B"
+# the class: slots, prompt ids, outputs. A block is one slot's session, prompt + outputs - 1 positions.
+class = [4, 32, 4]
+# c: Boolean gates a block: two-input gates, as the Lean count counts a block Definition's by the gate table, with
+# every primitive priced (`BitAtx32_v1` at 147, as `definitions.boolean.gate_table` prices it; a count that leaves it
+# unpriced is a lower bound and not this c). Not the block's gates at their widths, `inference_blocks.budgets`'s c.
+# k: fresh input bits a block. n: blocks.
+c = 13818131814643
+k = 422197408
+n = 25165824
+
+# One block's work in MACs by kind: the layers' linears, priced at the card's dense int8 rate, and attention's products
+# and the LM head, priced at its BF16 rate, half of that. `total` is the block's work in the policy's unit, a linear's
+# MAC one and a BF16 MAC two: linears + 2 × (attention + lm_head).
+[work]
+linears = 34057748480
+attention = 41287680
+lm_head = 1050673152
+total = 36241670144
+
+# What the class leaves outside the circuit: the layers' linears. A block reads each value of their outputs as fresh
+# input, this many bits a value.
+[outside]
+linears = 32

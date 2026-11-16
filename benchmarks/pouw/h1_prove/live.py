@@ -1,0 +1,247 @@
+"""live.py: a served H1 window's live units (``live@<s>``, `circuit.live`) through SPOT, the
+verifier's side and the prover's staging; `live.sh` proves them by Flock --zk and has Lean verify them.
+
+    python live.py prepare --live DIR --work W
+    python live.py summarize --work W --out OUT
+    python live.py evidence --work W --out LIVE.json
+
+DIR is the serving process's dump (`pouw_h1_live.dump`, `pouw_h1_gpu --live-dump`'s DIR/<window>): DIR/window.json is public (T, S, the
+prefix, the window Program's digest, the open root, the session, the live tables' roots, each round's served rows m_s and
+round 0's requests' max_tokens), and DIR/<s>/ the prover's rows and openings of round s.
+
+``prepare``:
+
+1. The verifier, from DIR/window.json alone, builds the live Program of T and S (`live.program_v2`, credit's) and its
+   template-instance partition (`live.query_v2`): W/verifier/program.json and partition.json, Lean's ``--program`` and
+   ``--partition``. Unit s is round s's ``live@<s>``. Each round's ``--registered`` file is `live_reads.reads_file` at the
+   round's served rows m_s and the public max_tokens.
+2. The verifier checks each opened row of DIR/<s>/opening.json against its registered root, at the position its file
+   reads (`registered.verify_read`): the slot rows ``slots@<s>``'s and the header rows ``requests@0``'s. It then builds its
+   own public file of the round (`h1unit.verifier_pub`) from the opened ``b || c`` and its own rows of ``m@<s>``,
+   ``round@<s>``, ``caps`` and ``live-ok`` (`live_reads.m_table`, `round_table`, `caps_table`, `ok_table`, all public).
+3. The prover stages each round as a one-instance shared-row statement on its rows (`UnitStager` of `live.template_v2(T)`,
+   bound to the live Program and partition, the instance unit s). Its pub.bin must be the verifier's byte for byte, and the
+   staged ok must be `live.live_ok_v2`'s on the round's words.
+
+The checks of W/plan.tsv (``C`` lines; ``S`` lines are the statements to prove):
+
+* ``honest-<s>``: round s's statement against the verifier's own files. ACCEPT, every round.
+* ``m-other``: round 0's honest session against the verifier's files at m_0 + 1, a window whose ``live@0`` claims rows it
+  didn't serve. REJECT.
+* ``m-claimed``: a prover that claims m_0 + 1, staged on its rows with that m (the unit computes ok = 0), against the
+  files at m_0 + 1. Its ok row opens no row of ``live-ok``. REJECT.
+* ``other-round`` (S > 1): round 0's honest session against round 1's files. REJECT.
+
+``summarize`` reads Lean's verdicts into OUT/live-summary.json, each against its expectation.
+
+``evidence`` writes the window's live evidence as core's credit reads it (`credit.LIVE_STATEMENTS`: the live descriptor
+and each round's honest statement's circuit, public file and sessions; `evidence`), which ``served_verdicts.py pouw
+--live-evidence`` hands credit, whose verifier verifies each session itself.
+
+**Past T = `live.PIECE_ROWS`** (`R`) a round's live check is cut by rows (`live.PouwLiveRows_v1`, `form`): the Program is
+`live.program_rows` of P = T / R pieces a round, unit u = s·P + j round s's piece j, each statement one piece on its R
+rows of round s's slot table, the first R headers and caps and the known ``base@<j>`` (`live_reads.reads_file_rows`),
+its ok row u of S·P. ``prepare --units`` stages only the units it lists (each a statement of its own, the size of a
+T 64 unit, whatever T is). The checks are the same, each at its unit (``honest-<s>-<j>``), ``m-claimed`` at the piece
+holding row m_0 (or piece 0 when m_0 = T, which every piece refuses), and ``other-piece`` (P > 1): unit 0's honest
+session against unit 1's files, another base. REJECT. Credit's form is the v2 one: it doesn't read the pieced Program yet.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+
+import numpy as np
+
+from verity.circuits.codec import canonical_json, encode_program
+from verity.protocols.resource_accounting.compute.pouw.prover.lowering.live import (check_openings, claimed, files, form, live_stager,
+                                                                   piece_opening, piece_rows, program_of, stage, verifier_pub)
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+
+EXPECT = {"honest": "ACCEPT", "m-other": "REJECT", "m-claimed": "REJECT", "other-round": "REJECT", "other-piece": "REJECT"}
+
+
+def log(msg: str) -> None:
+    print(msg, flush=True)
+
+
+def cmd_prepare(a: argparse.Namespace) -> int:
+    live, work = Path(a.live), Path(a.work)
+    pub = json.loads((live / "window.json").read_text())
+    T, S, served = pub["T"], pub["S"], pub["served"]
+    r, p = form(pub)
+    vp, sp = work / "verifier", work / "st"
+    vp.mkdir(parents=True, exist_ok=True)
+    program, query = program_of(pub)
+    part = P.partition(program, query)
+    (vp / "program.json").write_bytes(canonical_json(encode_program(program)))
+    (vp / "partition.json").write_text(json.dumps(part))
+    units = [u for u in range(len(served) * p) if a.units is None or u in a.units]
+    log(f"live Program: T={T} S={S}, {P.evaluate(program, query).population} units ({p} a round of {r} rows), rounds "
+        f"served {served}, staging {len(units)}")
+    stager = live_stager(T, work / "circuit.txt", part, None if p == 1 else r)
+    head = {"meta": stager.meta, "pin": stager.pin, "class": stager.class_sha512}
+    (work / "pin.txt").write_text(stager.pin)
+    record = {"T": T, "S": S, "R": r, "pieces": p, "served": served, "program_sha512": part["program"],
+              "partition": P.digest(part), "ands": stager.low.layout.counts["ands"], "circuit_sha512": stager.pin,
+              "rounds": {}}
+    plan, problems = [], []
+    rounds: dict[int, tuple[dict, dict]] = {}
+
+    def round_rows(s: int) -> tuple[dict, dict]:
+        if s not in rounds:
+            rounds[s] = (dict(np.load(live / str(s) / "rows.npz")), json.loads((live / str(s) / "opening.json").read_text()))
+        return rounds[s]
+
+    def unit(u: int) -> tuple[dict, dict]:
+        z, opening = round_rows(u // p)
+        return piece_rows(pub, u, z), piece_opening(pub, u, opening)
+
+    def tag_of(u: int) -> str:
+        return f"honest-{u}" if p == 1 else f"honest-{u // p}-{u % p}"
+
+    def statement(tag: str, z: dict, u: int, m: int, opening: dict) -> Path:
+        d = sp / tag
+        got = stage(stager, z, d, u)
+        reg = files(pub, u, m)
+        (vp / f"{tag}.registered.json").write_text(json.dumps(reg))
+        (vp / f"{tag}.pub.bin").write_bytes(verifier_pub(head, pub, u, m, opening, reg))
+        (d / "pin.txt").write_text(stager.pin)
+        record["rounds"][tag] = {"round": u // p, "m": m, "staged_ok": got["ok"]} | ({} if p == 1 else {"piece": u % p})
+        plan.append(f"S\t{tag}\t{d}\t1")
+        return d
+
+    def other(tag: str, of: str, u: int, m: int, opening: dict) -> None:
+        o = vp / tag
+        reg = files(pub, u, m)
+        o.with_suffix(".registered.json").write_text(json.dumps(reg))
+        o.with_suffix(".pub.bin").write_bytes(verifier_pub(head, pub, u, m, opening, reg))
+        plan.append(f"C\t{tag}\t{sp / of}\t{o.with_suffix('.pub.bin')}\t{o.with_suffix('.registered.json')}\t"
+                    f"{EXPECT[tag]}")
+
+    for u in units:
+        m = served[u // p]
+        z, opening = unit(u)
+        problems += check_openings(pub, u, opening, files(pub, u, m))
+        tag = tag_of(u)
+        d = statement(tag, z, u, m, opening)
+        if (d / "pub.bin").read_bytes() != (vp / f"{tag}.pub.bin").read_bytes():
+            problems.append(f"{tag}: the prover's pub.bin is not the verifier's own file")
+        if record["rounds"][tag]["staged_ok"] != 1:
+            problems.append(f"{tag}: the unit's ok is 0 at the served rows m = {m}")
+        plan.append(f"C\t{tag}\t{d}\t{vp / f'{tag}.pub.bin'}\t{vp / f'{tag}.registered.json'}\t{EXPECT['honest']}")
+        if u == 0:
+            other("m-other", tag, 0, m + 1, opening)
+            c_u = min(m // r, p - 1)
+            cz, copening = unit(c_u)
+            c = statement("m-claimed", claimed(cz, pub, c_u, m + 1), c_u, m + 1, copening)
+            if record["rounds"]["m-claimed"]["staged_ok"] != 0:
+                problems.append(f"m-claimed: the unit's ok is 1 at m = {m + 1}, past the served rows")
+            plan.append(f"C\tm-claimed\t{c}\t{c / 'pub.bin'}\t{vp / 'm-claimed.registered.json'}\t{EXPECT['m-claimed']}")
+            if p > 1:
+                other("other-piece", tag, 1, m, unit(1)[1])
+    if S > 1 and len(served) > 1 and 0 in units and p in units:
+        d1 = vp / tag_of(p)
+        plan.append(f"C\tother-round\t{sp / tag_of(0)}\t{d1}.pub.bin\t{d1}.registered.json\t{EXPECT['other-round']}")
+    record["problems"] = problems
+    (work / "record.json").write_text(json.dumps(record, indent=1))
+    (work / "plan.tsv").write_text("\n".join(plan) + "\n")
+    log("PREPARED " + json.dumps({k: record[k] for k in ("T", "S", "R", "pieces", "served", "ands", "problems")}))
+    return 1 if problems else 0
+
+
+
+
+def _verdict(p: Path) -> dict | None:
+    if not p.exists():
+        return None
+    v = [json.loads(x[8:]) for x in p.read_text().splitlines() if x.startswith("VERDICT ")]
+    return {**v[0], "accepted": all(x.get("accepted") for x in v), "sessions": len(v),
+            "why": next((x.get("why", "") for x in v if not x.get("accepted")), "")} if v else None
+
+
+def cmd_summarize(a: argparse.Namespace) -> int:
+    work, out = Path(a.work), Path(a.out)
+    record = json.loads((work / "record.json").read_text())
+    checks = []
+    for line in (work / "plan.tsv").read_text().splitlines():
+        kind, tag, *rest = line.split("\t")
+        if kind != "C":
+            continue
+        v = _verdict(out / "lean" / f"{tag}.out")
+        err = out / "lean" / f"{tag}.err"
+        word = ("ACCEPT" if v["accepted"] else "REJECT") if v else "NONE"
+        checks.append({"tag": tag, "expect": rest[-1], "verdict": word, "pass": word == rest[-1],
+                       "why": (v or {}).get("why") or (err.read_text(errors="replace").strip().splitlines()[-1:] if err.exists() else []),
+                       "units": (v or {}).get("units")})
+    ok = not record["problems"] and bool(checks) and all(c["pass"] for c in checks)
+    accepted = [c for c in checks if c["tag"].startswith("honest-") and c["verdict"] == "ACCEPT"]
+    doc = {"ok": ok, "T": record["T"], "S": record["S"], "R": record.get("R", record["T"]),
+           "pieces": record.get("pieces", 1), "served": record["served"], "ands": record["ands"],
+           "live_accepted": f"{len(accepted)}/{sum(t.startswith('honest-') for t in record['rounds'])}", "problems": record["problems"], "checks": checks,
+           "circuit_sha512": record["circuit_sha512"], "program_sha512": record["program_sha512"],
+           "partition": record["partition"], "inputs_sha512": hashlib.sha512((work / "plan.tsv").read_bytes()).hexdigest()}
+    (out / "live-summary.json").write_text(json.dumps(doc, indent=1))
+    log("LIVE " + json.dumps({k: doc[k] for k in ("ok", "live_accepted", "problems")}
+                             | {"checks": {c["tag"]: [c["verdict"], c["expect"]] for c in checks}}))
+    return 0 if ok else 1
+
+
+def evidence(work: Path) -> dict:
+    """The window's live evidence as core's credit reads it (`credit.LIVE_STATEMENTS`): the live Program's descriptor (its
+    canonical JSON without annotations, whose SHA-512 is the program its sessions were proved under) in hex, and each
+    round's statement, ``{circuit, public, round, sessions}``: the live circuit file, the verifier's own public file and
+    the honest statement's sessions, which credit verifies itself; a round cut by rows has one a staged piece, with its
+    ``piece``. ValueError on a round with no session."""
+    record = json.loads((work / "record.json").read_text())
+    desc = json.loads((work / "verifier" / "program.json").read_bytes())
+    raw = canonical_json({k: v for k, v in desc.items() if k != "annotations"})
+    if hashlib.sha512(raw).hexdigest() != record["program_sha512"]:
+        raise ValueError(f"{work}'s live descriptor is not the program its statements were staged under")
+    out = []
+    for tag, r in sorted(record["rounds"].items(), key=lambda kv: (kv[1]["round"], kv[1].get("piece", 0))):
+        if not tag.startswith("honest-"):
+            continue
+        sessions = sorted(str(p) for p in (work / "st" / tag / "sessions").glob("*") if p.is_dir())
+        if not sessions:
+            raise ValueError(f"round {r['round']}'s statement {tag} has no session under {work / 'st' / tag}: prove it first")
+        out.append({"circuit": str(work / "circuit.txt"), "public": str(work / "verifier" / f"{tag}.pub.bin"),
+                    "round": r["round"], "sessions": sessions} | ({"piece": r["piece"]} if "piece" in r else {}))
+    return {"descriptor": raw.hex(), "statements": out}
+
+
+def cmd_evidence(a: argparse.Namespace) -> int:
+    try:
+        doc = evidence(Path(a.work))
+    except (OSError, ValueError, KeyError) as e:
+        log(f"LIVE-EVIDENCE refused: {type(e).__name__}: {e}")
+        return 1
+    Path(a.out).write_text(json.dumps(doc, indent=1))
+    log(f"LIVE-EVIDENCE {len(doc['statements'])} rounds, descriptor {hashlib.sha512(bytes.fromhex(doc['descriptor'])).hexdigest()[:16]}")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("evidence")
+    p.add_argument("--work", required=True)
+    p.add_argument("--out", required=True)
+    p = sub.add_parser("prepare")
+    p.add_argument("--live", required=True)
+    p.add_argument("--work", required=True)
+    p.add_argument("--units", type=lambda v: {int(x) for x in v.split(",")}, default=None,
+                   help="stage only these units (u = s·P + j; default every served round's)")
+    p = sub.add_parser("summarize")
+    p.add_argument("--work", required=True)
+    p.add_argument("--out", required=True)
+    a = ap.parse_args(argv)
+    return {"prepare": cmd_prepare, "summarize": cmd_summarize, "evidence": cmd_evidence}[a.cmd](a)
+
+
+__all__ = ["check_openings", "evidence", "files", "form", "live_stager", "main", "piece_opening", "program_of"]
+
+if __name__ == "__main__":
+    raise SystemExit(main())

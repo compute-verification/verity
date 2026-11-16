@@ -1,0 +1,15 @@
+# The retired word "link window" in its PoUB sense, a link's burst `B_l` (MEM-152's retired words), by
+# `python3 tools/move/rename.py --map tools/move/link_burst_figures_map.toml`: PoUB's `timing.Figures.link_window_bytes`
+# is `link_burst_bytes`, the name the ledger's node and the Lean line already store the burst under, beside
+# `timing.LINK_BURST_BYTES` (`link_burst_poub_map.toml`). `Figures` is never serialized, so no stored bytes change.
+
+[words]
+
+[rewrite]
+exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "GLOSSARY.md", "tests/lint/**",
+           "tests/test_retired_terms.py", "verity/protocols/accounting/certifier/**", "security/**/Certifier/**"]
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/timing.py", "verity/protocols/accounting/poub/verifier/ledger.py",
+         "verity/protocols/accounting/poub/verifier/session/verifier.py"]
+words = { "link_window_bytes" = "link_burst_bytes" }
