@@ -66,6 +66,8 @@ The package `verity_vllm`, by what each part does:
 | `protocols` | What each protocol needs on the engine: SPOT, PoUW, PoUS and PoUB. |
 | `pipeline` | The endpoint and the command line. |
 
+[`DESIGN.md`](DESIGN.md) says how serving, the endpoint and replay work.
+
 ## Development
 
 ~~~sh
@@ -73,8 +75,3 @@ uv sync --all-packages --extra torch-cpu
 ~~~
 
 This installs the adapter with CPU-only torch. vLLM itself serves only on a GPU node.
-
-## Read next
-
-- [`DESIGN.md`](DESIGN.md): how serving, the endpoint and replay work, in detail, and the vocabulary the code uses.
-- [`tools/served_run/README.md`](tools/served_run/README.md): the served run, from serving to every protocol's verdict.

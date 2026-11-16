@@ -47,13 +47,7 @@ Import from the module that owns an object. `verity` itself re-exports nothing.
 | | [PoUB](protocols/resource_accounting/memory/poub/verifier/README.md) | Memory: how much of a node's memory read rate is left uncertified. |
 | | [Network attester](protocols/resource_accounting/network/verifier/README.md) | Network: what left on a link is what the registered circuit produces from what entered. |
 | Workload classification | [Inference-only](protocols/workload_classification/training_detection/inference_only/verifier/README.md) | The workload is inference: its circuit divides into blocks that each read little fresh input. |
-| Compose | [Remote](protocols/compose/verifier/remote/README.md) and onsite | One verdict from a list of the protocols above. This is what an auditor runs. |
+| Compose | [Remote](protocols/compose/verifier/remote/README.md) and onsite | One verdict from a list of the protocols above. This is what an auditor runs, and what a [demo](../demos/README.md) runs end to end. |
 
 A protocol has up to three parts: its verifier, its prover, and an attester where the auditor has hardware at the
 site. Two more protocols are being tried: Dither and [Pearl-C4](protocols/experimental/pearl_c4/README.md).
-
-## Read next
-
-- [`ARCHITECTURE.md`](../ARCHITECTURE.md): the three roles, and each part's interface.
-- [The Lean interface](protocols/interface/README.md) that each protocol's verifier implements.
-- [`demos/README.md`](../demos/README.md): the protocols run together, end to end.

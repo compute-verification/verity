@@ -18,6 +18,7 @@ each adding protocols to the one before.
 | `onsite_full` | SPOT, network attester, memory wipe, PoUW, inference-only, PoUS, PoUB | As a dry run. No run of record yet. |
 
 Only `onsite_full` is the onsite protocol itself. The two smaller sizes run part of it.
+[`verity/README.md`](../verity/README.md) says what each protocol tells the auditor.
 
 ## Try one
 
@@ -29,9 +30,3 @@ This resolves the demo's parties and the channels between them, prints them, and
 
 `verity demo NAME` runs a demo for real. That takes machines bound to the roles its file names, which the
 [`verity` command's README](../tools/verity/cli/README.md) describes.
-
-## Read next
-
-- [`verity/README.md`](../verity/README.md): what each protocol in the table tells the auditor.
-- [The remote protocol](../verity/protocols/compose/verifier/remote/README.md): what a remote verdict rests on, and
-  what is still open.

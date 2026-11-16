@@ -211,8 +211,8 @@ How fast the team's leads answer each other: measured on Linear's comments, not 
 
 ## Rules
 
-- A benchmark imports like any other caller: `verity`, an adapter's public modules, the harness, and other
-  benchmarks.
+- A benchmark imports like any other caller: `verity`, an adapter's public modules,
+  [the harness](harness/README.md), and other benchmarks.
 - Nothing outside `benchmarks/` imports a benchmark.
 - It writes measurements, under its run's output directory. Results, tables and plots are not committed.
 - It writes no verdict. Whether an audit passed is the verifier's to say.
@@ -222,8 +222,3 @@ How fast the team's leads answer each other: measured on Linear's comments, not 
 A metric is one named number a benchmark records. A benchmark declares each metric it is held to in a `metrics.toml`
 beside its runner, and the dashboard's Metrics tab shows them. [`DESIGN.md`](DESIGN.md) lists a metric's keys and says
 how a value reaches the tab.
-
-## Read next
-
-- [`DESIGN.md`](DESIGN.md): the rules above in full, the core benchmarks' interface, and metrics.
-- [`harness/README.md`](harness/README.md): the shared harness, and the kit that runners share.
