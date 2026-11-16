@@ -514,8 +514,8 @@
    "digest": "505b11022fbe503f22d3674f173c46fadc2384a86cdb2bef2718d6d3df5d770e"
   },
   "Proofs.Flock.SessionLoop.Concrete.Fwd": {
-   "why": "fwd_walk and fwd_def, a tactic and a command that step through a computation of the verifier by its head (a let, a jump, a bind, an if or a match, and a for loop whose body always yields as a fold) to the value it returns, rewriting by the hypotheses and lemmas they are given, in the concrete statement's walks of its circuit file's parse, its public file's load, Raw.ins and Ins.setup (SessionLoop/Concrete/File.lean to Inputs.lean); fwd_def adds the value as a definition and the walk's equation as a theorem with addDecl. kernel_rfl' closes an equation under metadata with Eq.refl, and case_both cases one discriminant on both sides of an equation (Concrete/Delta.lean). They run only inside the elaborator and read or write nothing outside it, and the kernel checks every definition and proof they add.",
-   "digest": "1c1004a1c823cdd032886588665a1556689f795177e36ef1b41c6523671b48bd"
+   "why": "fwd_walk and fwd_def, a tactic and a command that step through a computation of the verifier by its head (a let, a let applied to arguments, which takes them under it, a jump, a bind, an if or a match, and a for loop whose body always yields as a fold) to the value it returns, rewriting by the hypotheses and lemmas they are given (and, where none applies to a term the kernel can't evaluate, reducing its projections of constructor applications; in a condition still undecided, reducing its β-redexes and the matches whose discriminants the kernel's whnf takes to constructors, then one subterm under a sort the kernel can't reduce (Array.qsort, which it never hands to the kernel's whnf) to its weak-head constructor form by one kernel whnf, then a match whose discriminants evaluate to constructors to the branch they select), in the concrete statement's walks of its circuit file's parse, its public file's load, Raw.ins and Ins.setup (SessionLoop/Concrete/File.lean to Inputs.lean), SPOT[Flock]'s instance statement's (SpotFlock/InstanceStmt), the inference-only decoder's (InferenceOnly/DecodeEmpty.lean) and the honest session's files (Verity/Sampled/HonestSession); fwd_def adds the value as a definition and the walk's equation as a theorem with addDecl. kernel_rfl' closes an equation under metadata with Eq.refl, and case_both cases one discriminant on both sides of an equation (Concrete/Delta.lean). They run only inside the elaborator and read or write nothing outside it, and the kernel checks every definition and proof they add.",
+   "digest": "e3ab34fc0afb7b3462d90c2897f3036be42d5bd3c5e74eba51c5a280ac470845"
   },
   "Proofs.Flock.Soundness.Discharge.Hidden.OkWith": {
    "why": "absurd_step, ok_step, name_ok and clear_walked, elabs that walk a setup's do-block towards OkWith by its head (the transport lemmas of Hidden/Sibling.lean and Hidden/CanonOk.lean): they read only the goal and the local context, and run refine of the module's okWith lemmas, rw by a hypothesis, split, exfalso with apply and rfl, a rename and a clear. They run only inside the elaborator, read no files and do no IO, and the kernel replays every proof they build.",
@@ -543,11 +543,11 @@
   },
   "Proofs.Properties.Verity.Sampled.HonestSession.CircuitFileMeta": {
    "why": "plainT, a macro that closes plainS j = true for a literal Json j (the honest circuit file's metadata objects, CircuitFileWalk.lean) by first over exact of the module's plainS_hex, plainS_hexArr and plainS_leafOs, refine of plainS_mkObj and plainS_arr with simp only, and/intros and itself, and simp. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "cc364d70f02ee1cb0b3462252626e5799eb35bb056fb7b5cff2277b444603ea6"
+   "digest": "158d37553614f1e1fad1f485e5326a2f4899f73ed37e7b7f397f5edcb6ba6b40"
   },
   "Proofs.Properties.Verity.Sampled.HonestSession.Params": {
    "why": "plstr, a local macro that closes Firewall.plain j = true for a literal Json j (this module's plainness lemmas) by a single simp over Firewall.plain, plainList and plainStr with the def-named strings unfolded so their literals reduce; and nfix, a macro that closes jnorm j = j for a shallow literal Json j (norm_query, norm_law and the module's other norm facts) by first over rfl, refine of norm_arr_fix and norm_mkObj_fix (with kernel_rfl' for the keys' order) with simp only, repeat' apply And.intro and itself. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "5ffbf7992d4642f583ca07d9489864a28d529da9f5f00b9ad08604f2357e7f94"
+   "digest": "a6bd933f63cc6f13c6baac59dbc0544d3f0b53e38cb383d1389a4e0ebe47d930"
   },
   "Proofs.Properties.Verity.Sampled.HonestSession.PortsFacts": {
    "why": "kernel_rfl', a local copy of Fwd's tactic of that name (an elab): it closes a = b by assigning Eq.refl a to the goal, leaving the kernel to check a ≡ b, in the module's equations on the parameters' ports and rest. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
@@ -555,7 +555,7 @@
   },
   "Proofs.Properties.Verity.Sampled.HonestSession.SetupReads": {
    "why": "lawMatch%, a term elaborator that names Stmt.setupHidden's auxiliary match on an (Except _ Draw.Law × _) for law_match: it reads Stmt.setupHidden's body's constants (getConstInfo, getMatcherInfo?), the matchers' discriminant types (forallTelescopeReducing, whnfR), and returns that matcher's constant or throws an error naming the matches it saw. It runs only inside the elaborator and does no IO, and the kernel replays every proof that uses it.",
-   "digest": "9a4b6c5ae69ecb6a40ef387b4047c01d4af35e5efa9708eb50fcdaef48c8d327"
+   "digest": "25f21a32aff22898dbb8caae10100adf02fb7b480f120f5c6e75facb09e4eafd"
   },
   "Proofs.Properties.Verity.SampledTwo.JpWalk": {
    "why": "name_lets, jp_mono, jp_body, jp_close, jp_core, jp_disch, jp_ext and jp_walk, the tactics that walk a registration check's do block by its join points (SampledTwo/RecordNames.lean's proofs that a check with no code names its registration's names): elaborators and macros that rename the context's lets and expand to simp only, dsimp only, split, apply, exact, intro, obtain, extract_lets and assumption over the module's code-list lemmas. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
