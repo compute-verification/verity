@@ -21,8 +21,9 @@ has no `registered` key, since its keys are exactly R1's `KEYS`. Both read the r
 
 R7's check with no code is also walked down the one path that adds none (`JpWalk`'s `jp_walk`, `checkRegistered_pass`).
 
-Where the verifier holds no certified entry, as parameters `OneStage.paramsOfJson` returns hold none
-(`paramsOfJson_certified`), the record names the registration's names (`recordOk_of_check`).
+So the record names the registration's ports and its registered then certified values (`recordOk_of_check`,
+`HeldOf.recordNamesOf`). Parameters that name no `certified` hold no certified entry (`paramsParsed_certified`), and
+there those are the registration's names (`HeldOf.recordNamesOf_of_none`).
 -/
 
 @[expose] public section
@@ -446,7 +447,7 @@ theorem names_of_check {rec : Json} {v : Verifier} (h : check rec v = #[]) (hn :
     rw [registered_null hk, hreg, hcert]
     simp [namesEq]
 
-/-! ## A verifier with no certified entry -/
+/-! ## Certified entries -/
 
 open Properties.Spot.SecurityProofs (bind_eq_ok) in
 /-- **Parameters that name no `certified` hold no certified entry**: `OneStage.paramsParsed` reads the entries from
@@ -473,33 +474,13 @@ theorem paramsParsed_certified {j : Json} {p : Spot.OneStage.Params} (hf : Spot.
   · rw [hf] at hc
     cases hc
 
-/-- **Parameters `OneStage.paramsOfJson` returns hold no certified entry**: it refuses parameters that name
-`certified` (`CERTIFIED_REFUSED`) and returns `paramsParsed`'s of the rest. -/
-theorem paramsOfJson_certified {j : Json} {p : Spot.OneStage.Params} (h : Spot.OneStage.paramsOfJson j = .ok p) :
-    p.verifier.certified = #[] := by
-  unfold Spot.OneStage.paramsOfJson at h
-  cases hf : Spot.field? j "certified" with
-  | some _ => simp [hf, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
-  | none =>
-    cases hp : Spot.OneStage.paramsParsed j with
-    | error _ => simp [hf, hp, bind, Except.bind] at h
-    | ok q =>
-      by_cases hb : Spot.Draw.bernoulli q.verifier.samplingDesign = true
-      · simp [hf, hp, hb, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
-      · simp [hf, hp, hb, bind, Except.bind, pure, Except.pure] at h
-        subst h
-        exact paramsParsed_certified hf hp
-
-/-- **A registration check with no code names the registration's names** (`HeldOf.namesOf`), where the verifier lists
-each port once and holds no certified entry, as parameters `OneStage.paramsOfJson` returns hold none
-(`paramsOfJson_certified`): its registered values are then the verifier's registered values (`names_of_check`). -/
+/-- **A registration check with no code names the registration's names** in its record: its ports, and its registered
+values followed by its certified ones (`HeldOf.recordNamesOf`), where the verifier lists each port once
+(`names_of_check`). -/
 theorem recordOk_of_check {rec : Json} {v : Verifier} (h : check rec v = #[])
-    (hn : (v.ports.map (·.1)).toList.Nodup) (hc : v.certified = #[]) :
-    recordOk rec (HeldOf.namesOf v) = true := by
+    (hn : (v.ports.map (·.1)).toList.Nodup) : recordOk rec (HeldOf.recordNamesOf v) = true := by
   obtain ⟨hp, hr⟩ := names_of_check h hn
-  have he : (v.certified.map (·.1.value)).toList = [] := by simp [hc]
-  rw [he, List.append_nil] at hr
-  unfold recordOk HeldOf.namesOf
+  unfold recordOk HeldOf.recordNamesOf
   rw [Bool.and_eq_true]
   exact ⟨hp, hr⟩
 

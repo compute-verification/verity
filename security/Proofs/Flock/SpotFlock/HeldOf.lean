@@ -20,7 +20,9 @@ session statement, the code the frame is built from, and the rounds past round 1
 * `vus`: each template's units, `n_t` a request over the boundary layout's requests (`unitsOf`);
 * `k`, `names`, `refReads`: the counts, and the templates' names and reference reads in the params' order;
 * `links`, `wires`, `rows`: the second stage's, from the outer block's Definition (`SecondStage.replayLinks` and the rest);
-* `boundaryNames`, `interiorNames`: each registration's verifier's ports and registered values (`namesOf`);
+* `boundaryNames`: the boundary registration's verifier's ports, and its registered values followed by its certified
+  ones (`recordNamesOf`);
+* `interiorNames`: the interior registration's verifier's ports and registered values (`namesOf`);
 * `xS₀`: template `t`'s reference statement (`refStmt`), each in Flock's masked scope (`zkOk`), decided;
 * `frame`: SPOT's own frame at the wired program, from `Unread.c₀` (`withFrame`), as HONEST2's instance sets it.
 
@@ -39,7 +41,8 @@ strata making the held copy's parts at the replay sample the first stage selects
 same at every sample's size, gives it (`partsAt_of_partsAre`), but no held copy meets `PartsAre` where the interior
 program has a stratum (`not_partsAre`: at `q = 0`, `SecondStage.partOf` refuses). `HeldMatches.refs` (`RefsAre`)
 holds by construction (`refsAre_of`): the held copy's reference headers are the params'. So do the names the run's
-records must hold to (`namesHeld_of`): the boundary and interior registrations' ports and registered values.
+records must hold to (`namesHeld_of`): the boundary registration's ports and its registered then certified values, and
+the interior registration's ports and registered values.
 
 ## What this does not show
 
@@ -72,6 +75,15 @@ structure Unread where
 /-- **A registration's names**: its verifier's ports and registered values, in its order. -/
 def namesOf (v : Spot.Docket.Verifier) : Names :=
   ⟨(v.ports.map (·.1)).toList, (v.registered.map (·.1)).toList⟩
+
+/-- **The names a registration's record holds**: its verifier's ports, and its registered values followed by its
+certified ones, the values the registration check holds the record's `registered` to. -/
+def recordNamesOf (v : Spot.Docket.Verifier) : Names :=
+  ⟨(v.ports.map (·.1)).toList, (v.registered.map (·.1)).toList ++ (v.certified.map (·.1.value)).toList⟩
+
+/-- At a verifier with no certified entry, the names its record holds are its names. -/
+theorem recordNamesOf_of_none {v : Spot.Docket.Verifier} (h : v.certified = #[]) : recordNamesOf v = namesOf v := by
+  simp [recordNamesOf, namesOf, h]
 
 /-- **The boundary registration the first stage samples on**, as `Run.run` hands it to `Select.select`: the verifier's
 copies with the sampling design the rule expands over the boundary record's population and the work table it expands, the resolved
@@ -142,7 +154,7 @@ def held₀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (u : Unread) (first : 
   links := Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record
   wires := Spot.SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn
   rows := Spot.SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn
-  boundaryNames := namesOf i.params.verifier
+  boundaryNames := recordNamesOf i.params.verifier
   interiorNames := namesOf it.params.verifier
   xS₀ := refStmt u.xs
   xS₀_ok := hz
@@ -365,11 +377,11 @@ theorem refsAre_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h
   exact refHeaders_eq it.circuits
 
 /-- **The held names are the two registrations'**, at a held copy `heldOf` builds: the boundary registration's ports
-and registered values (`namesOf` at the params' verifier) and the interior registration's (at the interior's), the
-names the run's records must hold to (`recordsOk`). -/
+and registered then certified values (`recordNamesOf` at the params' verifier) and the interior registration's ports
+and registered values (`namesOf` at the interior's), the names the run's records must hold to (`recordsOk`). -/
 theorem namesHeld_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held}
     (hh : heldOf i it u = some h) :
-    h.boundaryNames = namesOf i.params.verifier ∧ h.interiorNames = namesOf it.params.verifier := by
+    h.boundaryNames = recordNamesOf i.params.verifier ∧ h.interiorNames = namesOf it.params.verifier := by
   obtain ⟨first, ns, ks, l, hz, -, -, -, rfl, -⟩ := heldOf_spec hh
   unfold withFrame
   exact ⟨rfl, rfl⟩
