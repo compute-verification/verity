@@ -626,12 +626,6 @@ on it; this exposes the inner `sortStrings` over the tree's structurally-reducib
 private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
     Spot.keys? (Lean.Json.obj kvs) = some (Spot.sortStrings (kvs.toArray.map (·.1))) := rfl
 
-/-- `any` over two elements as their disjunction. `paramsEitherOfJson` tests `proofs`' keys against each of
-`MEMBERS_KEYS` under `any`'s binder, where the walk reduces no field read; this takes each test out from under it, where
-`proofs`' read reduces to `some` and `params_full`'s `hpk` gives its keys. -/
-private theorem any_pair {α : Type} (a b : α) (p : α → Bool) : [a, b].any p = (p a || p b) := by
-  simp
-
 /-! ## v2's parameters, with every field named -/
 
 /-- A verifier that names its window's open root has no unwindowed registered value: `unwindowed` returns `#[]` at once
@@ -892,18 +886,31 @@ private theorem params_full :
     have hgk_pub : Spot.Challenger.hexOf? (.str gk) = some keyPub := by
       show (Flock.unhex gk).toOption = some keyPub
       rw [← hgk, Flock.Hex.unhex_hexOf]; rfl
-    -- `proofs`' keys, as `paramsEitherOfJson`'s `MEMBERS_KEYS` test reads them once `any_pair` takes it out from under
-    -- the `any`: the read is `some` of the one statement's `proofs`, whose keys are its own, neither of the per-member
-    -- form's. Stated of that term, so the walk rewrites it without handing the blocked `keys?` to the kernel.
-    have hpk : (some (Json.mkObj [("circuit", Json.str gc), ("public", Json.str gp), ("registered", Json.null)])).bind
-        Spot.keys? = some #["circuit", "public", "registered"] := by
-      show Spot.keys? (Json.mkObj [("circuit", Json.str gc), ("public", Json.str gp), ("registered", Json.null)]) = _
+    -- `paramsEitherOfJson` takes the per-member form where `proofs`' keys are one of `MEMBERS_KEYS`; the parameters'
+    -- `proofs` is the one statement's, whose keys are neither, so it is `paramsOfJson`. A rule keyed on
+    -- `paramsEitherOfJson`, which the walk meets once: its side condition is `proofs`' read, which the kernel evaluates.
+    -- (A rule keyed on the `any` or on `bind`, heads the walk meets throughout, runs out of heartbeats matching.)
+    have hpk : Spot.keys? (Json.mkObj [("circuit", Json.str gc), ("public", Json.str gp), ("registered", Json.null)]) =
+        some #["circuit", "public", "registered"] := by
       rw [keys?_mkObj, sortStrings_eq_sortLt]; kernel_rfl'
+    have heither : ∀ j : Json, Spot.field? j "proofs" =
+        some (Json.mkObj [("circuit", Json.str gc), ("public", Json.str gp), ("registered", Json.null)]) →
+        Spot.OneStageZk.paramsEitherOfJson j = Spot.OneStageZk.paramsOfJson j := by
+      intro j h
+      have hc : (Spot.OneStageZk.MEMBERS_KEYS.any fun x => ((Spot.field? j "proofs").bind Spot.keys? == some x)) =
+          false := by
+        rw [h]
+        show (Spot.OneStageZk.MEMBERS_KEYS.any fun x => (Spot.keys?
+          (Json.mkObj [("circuit", Json.str gc), ("public", Json.str gp), ("registered", Json.null)]) == some x)) = false
+        rw [hpk]
+        first | rfl | decide
+      unfold Spot.OneStageZk.paramsEitherOfJson
+      first | (rw [hc]; rfl) | (simp only [hc]; rfl) | simp [hc]
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9, ?f10⟩
     -- `Spot.keys?` and `Spot.sortStrings` are blocked so the walk never hands the parser's key checks (`exactly`, whose
     -- body reads them) to the kernel's `whnf`, which cannot reduce `sortStrings`'s well-founded `Array.qsort`; the rules
     -- below (`keys?_mkObj`, `keys?_obj`, `sortStrings_of_sorted`, `sortStrings_eq_sortLt`) rewrite each occurrence instead.
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, hgw_dg, hgh_dg, any_pair, hpk, ratio_half, split_half, poolValues_none,
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, hgw_dg, hgh_dg, heither, ratio_half, split_half, poolValues_none,
       keys?_mkObj,       keys?_obj, sortStrings_of_sorted, sortStrings_eq_sortLt, PortsFacts.ports_entries, PortsFacts.rest_eq,
       unwindowed_some, Array.mapM_empty]
       block [Flock.canon, Spot.Program.parse, Flock.unhex, Spot.keys?, Spot.sortStrings] shallow []
