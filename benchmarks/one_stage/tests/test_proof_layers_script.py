@@ -1,7 +1,7 @@
-"""`proof_layers.sh` is the README's commands for the proof-layers table's three benchmarks, as one command: its runs
-carry the settings and sampling designs the README's by-hand lines carry, its steps run in the README's order, it reads
-only the settings it names, and it refuses before its first step, a missing setting by name. Read as text, and run only
-as far as a refusal: nothing is built."""
+"""`proof_layers.sh` runs the proof-layers table's three benchmarks as one command: its runs carry the settings and
+sampling designs of the README's section on them, its steps run in that section's order, it reads only the settings it
+names, and it refuses before its first step, a missing setting by name. Read as text, and run only as far as a refusal:
+nothing is built. The suite keys without its Markdown, so the section's runs are written out here (`LAWS`, `PLAIN`)."""
 
 from __future__ import annotations
 
@@ -16,16 +16,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 SCRIPT = HERE.parent / "proof_layers.sh"
 TEXT = SCRIPT.read_text()
-README = (HERE.parent / "README.md").read_text()
 SETTINGS = ["A5_CARD", "A5_CORES", "WORK", "GPU_LEASE_WHO"]
-
-
-def by_hand() -> str:
-    """The README's by-hand block of the proof-layers section: the code block after the one with the script's line."""
-    section = README.split("## The three benchmarks of the proof-layers table", 1)[1].split("\n## ", 1)[0]
-    blocks = re.findall(r"~~~sh\n(.*?)~~~", section, re.S)
-    assert len(blocks) == 2 and "proof_layers.sh" in blocks[0], "the section holds the one line, then the by-hand block"
-    return blocks[1]
+LAWS = {"flock": "stratified-rate:880/880", "zk": "subset:880", "sampling": "subset:256"}
+PLAIN = {"flock": "A5_PLAIN=1 ", "zk": "", "sampling": ""}
 
 
 def test_the_script_parses():
@@ -33,16 +26,12 @@ def test_the_script_parses():
 
 
 def test_its_runs_and_partitions_are_the_readmes():
-    hand = by_hand()
-    laws = dict(b.split("=", 1) for b in re.search(r"for b in (.*?); do", hand).group(1).split())
-    runs = {m[1]: m[0] for m in re.findall(r"A5_COINS=challenger (A5_PLAIN=1 )?A5_PARTITION=\$WORK/partition-(\w+)\.json", hand)}
-    assert list(laws) == list(runs) == ["flock", "zk", "sampling"]
     script_laws = {name: law for law, name in re.findall(r"\$\(part (\S+) (\w+)\)", TEXT)}
     script_runs = {name: plain for plain, name in re.findall(r'\$\(run "(A5_PLAIN=1 )?" (\w+)\)', TEXT)}
-    assert script_laws == laws
-    assert script_runs == runs
-    assert "bash benchmarks/one_stage/a5_llama1b_h200.sh" in TEXT
-    assert "pod_bootstrap.sh --cases LLAMA32_1B_INT8" in TEXT and "pod_bootstrap.sh --cases LLAMA32_1B_INT8" in hand
+    assert script_laws == LAWS
+    assert script_runs == PLAIN
+    assert "A5_COINS=challenger $1A5_PARTITION=" in TEXT and "bash benchmarks/one_stage/a5_llama1b_h200.sh" in TEXT
+    assert "pod_bootstrap.sh --cases LLAMA32_1B_INT8" in TEXT
     assert "verity bench prove layers --flock" in TEXT and "--recursion" not in TEXT
 
 
