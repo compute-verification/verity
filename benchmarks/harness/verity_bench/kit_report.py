@@ -13,6 +13,7 @@ re-exported by `kit`:
 
 from __future__ import annotations
 
+import enum
 import json
 import os
 import re
@@ -42,7 +43,13 @@ OWN_WORD = "coins by the record's own word, not checked"
 SCOPED = re.compile(r" \(only ([^()]+)\)$")
 #: research's run ids, the one form `record_dir` reads through the store
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
-_UNSAID = object()
+
+
+class _Unsaid(enum.Enum):
+    UNSAID = enum.auto()
+
+
+_UNSAID = _Unsaid.UNSAID
 
 
 class NoRecord(ValueError):
@@ -138,7 +145,7 @@ _pair = ran_with
 
 def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapping[str, Any]] = (), *,
            document: bool = True, mark: str | None = None, out: str | os.PathLike | None = None,
-           ran_with: tuple[str, Mapping[str, Any]] | None | object = _UNSAID, accepted: bool | None = None,
+           ran_with: tuple[str, Mapping[str, Any]] | None | _Unsaid = _UNSAID, accepted: bool | None = None,
            why: str | None = None, made_up: bool = False, withdrawn: Sequence[str] = ()) -> int:
     """A command's last step, the one way it prints and writes its number: prints `text`, then `doc` as one line of
     JSON, and where it has a place to write (`out` where the caller names one, its `--out`; else under a research run its
