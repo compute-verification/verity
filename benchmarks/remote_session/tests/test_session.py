@@ -835,7 +835,7 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
     replays to its verdict through both verifiers. The clock ticks as each pass starts as well as when it ends, so
     time passes between a coin leaving and the root after it, as on the verifier's own clock: at one tick a pass, a
     paced window's 1 ns is a whole pass and each boundary waits for the tick its next root comes at."""
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
     ticking = TickingBackend.run_pass
 
     def run_pass(self, seed: bytes, plan=None):
@@ -1275,7 +1275,7 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
     the prover that dropped half its blocks rejected at the window and sample it was rejected at live, at a receipt,
     which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
     import hashlib
     import json
 
@@ -1303,7 +1303,7 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
 def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, monkeypatch):
     """A paced session's transcript names its pace (`audit.Pace`'s k and T), which both verifiers hold each window's
     roots to, so its replay is the paced session's: accepted, with its record's pace."""
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
     import json
 
     import replay
@@ -1326,7 +1326,7 @@ def test_a_session_sampled_four_windows_a_coin_is_accepted_through_both_verifier
     transcript replays to the same verdict through both verifiers. A prover that dropped half its blocks is rejected
     at a receipt."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
     import json
 
     import replay

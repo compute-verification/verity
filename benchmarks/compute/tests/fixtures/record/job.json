@@ -1,0 +1,12 @@
+{
+ "schema": "telemetry/job/v0.2",
+ "run": {
+  "id": "r20000101-000000-aaaa"
+ },
+ "store": {
+  "conditions": {
+   "source.commit": "cccccccccccccccccccccccccccccccccccccccc",
+   "source.dirty": false
+  }
+ }
+}

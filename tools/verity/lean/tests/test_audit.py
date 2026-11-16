@@ -6076,7 +6076,8 @@ def test_discovery_skips_the_controls(tmp_path):
     (tmp_path / "a").mkdir()
     (tmp_path / "a" / "lean-audit.json").write_text("{}")
     assert A.packages(tmp_path) == [tmp_path / "a"]
-    assert A.FIXTURES not in A.packages(A.HERE.parent)
+    assert (A.FIXTURES / "control" / "lakefile.toml").is_file()
+    assert [p for p in A.packages(A.FIXTURES.parents[1]) if p.is_relative_to(A.FIXTURES)] == []
 
 
 def test_a_file_changed_during_the_run_is_reported(tmp_path):

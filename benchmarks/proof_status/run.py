@@ -2,6 +2,9 @@
 `lean/deployed-guarantees` (the deployed guarantees), `lean/deployed-gap-zero` (those at a trust gap of zero, its target
 all of them), `lean/trust-gap` (each deployed guarantee's gap in premises, its `member` the guarantee's Lean name) and,
 for each lead the locks name, `lean/open-premises` and `lean/no-honest-witness` (its `member` the lead's handle).
+Each of those three is written last for the whole, with no member: the premises in any guarantee's gap, the open
+premises and the guarantees with no honest witness, each counted once. A reader that keys by name alone takes an id's
+last-written reading as the row's, so the row shows the whole and its members sit beside it.
 
     research run --on auto --cwd source -- uv run python benchmarks/proof_status/run.py
 
@@ -40,9 +43,12 @@ def main() -> None:
     w.measurement("lean/deployed-gap-zero", totals["gap_zero"], "guarantees", target=totals["deployed"], mark="measured")
     for g in guarantees:
         w.measurement("lean/trust-gap", len(g["gap"]), "premises", target=0, mark="measured", member=g["name"])
+    w.measurement("lean/trust-gap", totals["gap_premises"], "premises", target=0, mark="measured")
     for lead, counts in totals["by_owner"].items():
         w.measurement("lean/open-premises", counts["open"], "premises", mark="measured", member=lead)
         w.measurement("lean/no-honest-witness", counts["no_honest_witness"], "guarantees", mark="measured", member=lead)
+    w.measurement("lean/open-premises", totals["open"], "premises", mark="measured")
+    w.measurement("lean/no-honest-witness", totals["no_honest_witness"], "guarantees", mark="measured")
     w.validation("passed", "benchmarks/proof_status/run.py",
                  f"read {len(doc['locks'])} Lean locks at {doc['commit']}: {totals['deployed']} deployed guarantees, "
                  f"{len(totals['by_owner'])} leads")
