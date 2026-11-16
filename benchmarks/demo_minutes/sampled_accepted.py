@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""The share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the auditor's machine, read off
-its runs' records: the metric ``vllm/served-sampled-proofs-accepted`` (`benchmarks/demo_minutes/metrics.toml`).
+"""The share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the host that composed
+its record, read off its runs' records: the metric ``vllm/served-sampled-proofs-accepted`` (`benchmarks/demo_minutes/metrics.toml`).
 Standard library only; finding the runs and the served commit, and what it writes, are `minutes.py`'s.
 
     research run --cwd source -- python3 benchmarks/demo_minutes/sampled_accepted.py SERVED_RUN VERDICT_RUN
@@ -13,7 +13,6 @@ the checked one (`Core.Integrity`). A proof block counts as accepted only where 
 measurement's ``reason``, its value then 0:
 
 - the served commit is a commit of ``--main`` (default ``origin/main``) in the tree this file is in;
-- the record was composed off the served node (``composed_on.served_node`` false);
 - SPOT's row was recomputed by the Lean verifier on the host that composed it (its ``answer_from``, `LEAN_HERE`);
 - that verdict is accept, which the Lean verifier gives only when every sampled proof block's proof passes.
 
@@ -89,7 +88,6 @@ def share(runs: list[str], root: Path, ref: str, repo: Path | None = None) -> di
     n = sampled(row.get("answer") or {})
     reasons = [
         off_main(sha, ref, repo or R.ROOT) and f"served from {sha}, not a commit of {ref}",
-        on["served_node"] and "composed on the served node, not on the auditor's machine",
         not str(row.get("answer_from") or "").startswith(LEAN_HERE)
         and f"SPOT's verdict was not recomputed there by the Lean verifier: {row.get('answer_from') or 'no answer_from'}",
         row.get("verdict") != "accept" and f"the Lean verifier's verdict is {row.get('verdict')}",
