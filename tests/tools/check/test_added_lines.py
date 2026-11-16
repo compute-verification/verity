@@ -153,13 +153,13 @@ def test_a_base_without_the_lints_can_t_judge(tmp_path):
 
 
 def test_it_is_off_the_merge_gate_and_a_warning_wherever_it_runs(tmp_path, monkeypatch):
-    """A red holds nothing: policy.toml takes the step off the merge gate, drive.toml rings it as a warn step and runs the script
-    at a ready mark as a warn gate, whose failure the mark prints and lands all the same; and the step runs the script as the
+    """A red holds nothing: policy.toml takes the step off the merge gate, and drive.toml runs the script at a ready mark as a
+    warn gate, whose failure the mark prints and lands all the same; and the step runs the script as the
     run's base has it, skipping a base without one."""
     job = next(j for j in D.load() if j.name == "added-lines")
     assert not job.gate and job.name not in {j.name for j in D.gated(D.load())}
     drive = tomllib.loads((ROOT / "tools" / "check" / "drive.toml").read_text())
-    assert "added-lines" in drive["warn_steps"] and "tools/check/added_lines.py" in drive["warn_gates"]
+    assert "tools/check/added_lines.py" in drive["warn_gates"]
     assert "tools/check/added_lines.py" not in drive["landing_gates"]
 
     check = CHECK

@@ -256,8 +256,8 @@ A part's verdict is reused while a hash of its declared inputs, the base image a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. Every commit of
 `main` is checked whole, before it lands or, for a plain candidate under `--gate verdict`, right after: the verified queue's
 loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
-verdict, are low-risk or are certified moves onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement,
-ratchet-gate and added-lines run beside them; under `--gate check`, every job in shards), and fast-forwards `main` only to a candidate with
+verdict, are low-risk or are certified moves onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
+ratchet-gate run beside them; under `--gate check`, every job in shards), and fast-forwards `main` only to a candidate with
 no new failure: each gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or
 fails on its base too. Under `--gate verdict` a plain candidate lands on its members' land verdicts and the quick tier,
 `main`'s whole check follows each landing, and a red check reverts the one culprit or, with no culprit, sends plain

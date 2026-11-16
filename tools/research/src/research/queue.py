@@ -771,7 +771,7 @@ GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 #: the steps of a check (`tools/check/check.py`), of which `DriveFlags.warn_steps` names some
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
-               "ratchet-gate", "added-lines")
+               "ratchet-gate")
 #: an entry of `DriveFlags.lowrisk_excludes`, `DriveFlags.verdict_plain` or `DriveFlags.verdict_excludes`: a directory from the
 #: repository's root ending in `/`, one file's path from the root (a `/` before its end, no glob), or a file name glob (no `/`)
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+(?:[\w.-]+)?|[\w.*?\[\]-]+")

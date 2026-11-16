@@ -22,8 +22,7 @@ or the same id) moved, and isn't new: the tree holds no more of it.  A file whos
 change adds (those on the lines its diff adds first) and the lint's fix.
 
 It warns and holds nothing back: `check`'s `added-lines` step runs it as BASE has it, against the run's base (`check.py`'s
-`added_lines`), off the merge gate (policy.toml's `off_gate`) and among drive.toml's `warn_steps`, and drive.toml's
-`warn_gates` runs `main`'s copy at a ready mark's preflight and on a PR's merge, which print what it names as a warning.
+`added_lines`), off the merge gate (policy.toml's `off_gate`), and drive.toml's `warn_gates` runs `main`'s copy at a ready mark's preflight and on a PR's merge, which print what it names as a warning.
 Before marking a branch, run `python3 tools/check/added_lines.py origin/main HEAD`.
 Exit 0 passed, 1 failed (with `--json`, each failure's `why` and `fix`), 2 can't judge (why on stderr; with `--json`, in the
 document too).

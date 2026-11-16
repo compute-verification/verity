@@ -1218,8 +1218,7 @@ def combine(graph: Verdict, slim: Verdict) -> Verdict:
 
 #: the steps whose reads can't be bounded, each keyed on the whole tree, and why
 WHOLE = {"preflight-lints": "its lints read every file (`check.lints_key`)",
-         "ratchet-gate": "it judges the merges above the base, not a tree",
-         "added-lines": "it judges the change from the base, not a tree"}
+         "ratchet-gate": "it judges the merges above the base, not a tree"}
 
 
 def reads(repo: Path, commit: str, step: str) -> frozenset[str] | str:

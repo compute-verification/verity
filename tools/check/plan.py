@@ -461,7 +461,7 @@ def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = 
                               "the train's check runs it", required=False))
         elif j == "added-lines":
             parts.append(Part(j, j, None, "no-verdict", why="it judges the change from the check's base, not the tree: the "
-                              "run beside a candidate's check and the mark's preflight run it", required=False))
+                              "train's check and the mark's preflight run it", required=False))
         elif j in IMPLIED:
             parts.append(Part(j, j, None, "implied"))
         elif j != "pytest":

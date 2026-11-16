@@ -455,7 +455,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     verified queue runs with `--gate check` (under `--gate verdict`, every candidate but a plain one): one beside each
     candidate and beside `main` each time it moves, `main`'s saying
     which failures a candidate inherits. Under `--gate graph2`, the default, graph2's tasks check a candidate, with
-    lean-agreement, ratchet-gate and added-lines run beside them.
+    lean-agreement and ratchet-gate run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
     lands on its ready mark alone once the queue's rerun of its map on its batch's tip is certified (`tools/move/README.md`).

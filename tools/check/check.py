@@ -209,9 +209,8 @@ doesn't name:
                     (sharded, in the shard its plan names, else in the last)
     added-lines     `tools/check/added_lines.py BASE HEAD`, as BASE has it (BASE the commit in the run's `check-base.txt`,
                     else origin/main): whether the change from BASE adds a retired term, an issue id or a run id to a file.
-                    Off the gate and among drive.toml's `warn_steps`, so a red is rung, never held; the run beside each
-                    candidate's check runs it (`research.landing.SLIM_STEPS`), and the mark's preflight runs it as a warn
-                    gate (drive.toml's `warn_gates`)
+                    Off the gate (policy.toml's `off_gate`), so a red holds nothing; a ready mark's preflight and the
+                    sync run `main`'s copy as a warn gate (drive.toml's `warn_gates`)
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run, whose every step also runs with Lake's
 local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical inputs:
