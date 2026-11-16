@@ -6,7 +6,7 @@ tree; a package's tests live in its own `tests/`. Its tests read the whole tree,
 | What they hold the tree to | Tests |
 | --- | --- |
 | the dependency rules | `test_boundaries.py`, `test_integration_boundaries.py`, `test_vllm_public_api.py` |
-| what the tree may hold, and Markdown caps | `test_repository.py`, `test_protocol_specs.py` |
+| what the tree may hold, and Markdown limits | `test_repository.py`, `test_protocol_specs.py` |
 | no dead reference after a move | `test_doc_paths.py`, `test_module_strings.py`, `test_gate_paths.py`, `test_pythonpath_entries.py` |
 | prose that stays true | `test_retired_terms.py`, `test_provider_names.py`, `test_glossary_lean_names.py` |
 | the Lean packages, their pins, and a verifier's cost | `test_lean_packages.py`, `test_pins.py`, `test_verifier_cost.py` |
@@ -50,7 +50,7 @@ tree, `--move OLD NEW` follows a moved file, and `--prune` deletes the entries w
 
 `conftest.py`'s `BOOKKEEPING` names the tests whose findings warn (a `Bookkeeping` warning in pytest's summary) and pass:
 lane text, ruff's lint, retired terms, doc paths, Lean and CLI naming, provider names, stale allowlist entries,
-Markdown caps and the Lean bar's three soft rules. A scan's own tests, and a listed test that raises anything but a failed check, still fail.
+Markdown limits and the Lean bar's three soft rules. A scan's own tests, and a listed test that raises anything but a failed check, still fail.
 `test_bookkeeping.py` holds the list to the tree.
 
 ~~~sh

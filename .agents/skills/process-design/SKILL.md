@@ -44,7 +44,7 @@ A "no" costs velocity unless the proposal says why it's worth it.
 4. **Labels rather than blocks**, unless the error would pass unnoticed until it cost a lot (a redefinition that makes a
    guarantee vacuous while the axiom audit passes)?
 5. **One source, the rest generated?** A hand-kept copy doubles edits and drifts.
-6. **No serialization point?** A file every PR edits, one queue or one reviewer caps parallel lanes and turns one failure
+6. **No serialization point?** A file every PR edits, one queue or one reviewer limits parallel lanes and turns one failure
    into many waits.
 7. **Following it is the cheapest way to explore?** Otherwise work moves outside it and the cost returns at integration.
 8. **Each decision it asks for stands alone, with a default that proceeds?** Waits grow sharply near a reviewer's

@@ -167,7 +167,7 @@ def test_lean_module_roots_are_disjoint():
 
 
 def test_every_record_merges_with_the_driver():
-    """`.gitattributes` sends every `lean-audit.json` to `tools/verity/lean/merge.py`, and the unread ratchet's caps to its
+    """`.gitattributes` sends every `lean-audit.json` to `tools/verity/lean/merge.py`, and the unread ratchet's limits to its
     `--limits` driver, and each record's `reads` digests are the ones the driver recomputes from their definitions."""
     spec = importlib.util.spec_from_file_location("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     merge = importlib.util.module_from_spec(spec)
@@ -328,16 +328,16 @@ def test_the_inline_list_only_shrinks():
           "its issue and due date), or state it as a lock-listed guarantee's conclusion")
 
 
-#: how far a cap here may stand above its count ({"CAP key": room}): changes queued on `next` when the caps came to equal
-#: their counts moved the counts and not the caps, so each room is the gap between `next`'s count and `main`'s, and each
-#: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
+#: how far a limit here may stand above its count ({"CAP key": room}): changes queued on `next` when the limits came to equal
+#: their counts moved the counts and not the limits, so each room is the gap between `next`'s count and `main`'s, and each
+#: limit holds on both. Once those changes have landed, a limit and its room come down to the count together.
 ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/accounting/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proofs/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
 
 
 def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
-    """Drive's lock run (`lean_audit.py --bookkeeping warn`) repairs the unread caps and this file's caps on what the locks
+    """Drive's lock run (`lean_audit.py --bookkeeping warn`) repairs the unread limits and this file's limits on what the locks
     list, and drive commits them beside the locks (`research.merge.REPAIRED`, which the merge gate holds to the run's copies):
-    the two name the same files, and each cap here is the one-line dict `lean_audit.held_caps` rewrites."""
+    the two name the same files, and each limit here is the one-line dict `lean_audit.held_caps` rewrites."""
     import ast
 
     def assigned(path: str) -> dict[str, ast.expr]:
@@ -361,11 +361,11 @@ def _lock(pkg: Path) -> dict:
 
 
 def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: str) -> None:
-    """``got``, a count by key, held to the cap ``caps`` (this file's ``name``), which equals it: a count above its cap
-    fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
+    """``got``, a count by key, held to the limit ``caps`` (this file's ``name``), which equals it: a count above its limit
+    fails with ``fix``, and a limit above its count by more than its `ROOM` warns, naming the value to lower it to, so a
     change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
-    the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-limits` merge driver
-    (`tools/verity/lean/merge.py --limits`) merges two changes to a cap three-way: one side's change alone stands, and two
+    the limit (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-limits` merge driver
+    (`tools/verity/lean/merge.py --limits`) merges two changes to a limit three-way: one side's change alone stands, and two
     changes add, except two lowerings, which take the larger."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
     assert not over, (f"{what} grew in {over}: {fix} (where a merged change lowered the cap while the other took room "
@@ -383,7 +383,7 @@ TREES_EXCEPT = {"security": 29}
 
 def test_the_trees_except_list_only_shrinks():
     """A lock's `trees.except` never grows: a statement reads only the spec, and `check.py` fails an entry that excepts
-    nothing, which goes with its cap here."""
+    nothing, which goes with its limit here."""
     _held("TREES_EXCEPT", TREES_EXCEPT, {_rel(p): len(_lock(p).get("trees", {}).get("except", {})) for p in lake_packages()},
           "`trees.except`", "move the definition the statement reads from `Proofs/` into `Definitions/` instead")
 
@@ -395,7 +395,7 @@ FOUR_NAMES_EXCEPT = {"security": 3}
 
 def test_the_four_names_exceptions_only_shrink():
     """A lock's `four_names_except` never grows: a new guarantee is stated in the four-name form, and `check.py` fails an
-    entry that is in it, which goes with its cap here."""
+    entry that is in it, which goes with its limit here."""
     _held("FOUR_NAMES_EXCEPT", FOUR_NAMES_EXCEPT, {_rel(p): len(_lock(p).get("four_names_except", {})) for p in lake_packages()},
           "`four_names_except`", "state the guarantee as `X.SecurityProofs.G : X.Guarantees.G` (`check.py --lift` writes it)")
 
@@ -680,7 +680,7 @@ def test_an_entry_of_the_replay_list_that_matches_no_audited_module_is_named():
 
 
 def test_every_cap_merges_key_by_key():
-    """Each cap here is one line the `lean-limits` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
+    """Each limit here is one line the `lean-limits` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
     three-way, key by key, instead of conflicting."""
     merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     caps = [s for s in Path(__file__).read_text().splitlines() if re.match(r"[A-Z][A-Z_]* = \{", s)
@@ -690,7 +690,7 @@ def test_every_cap_merges_key_by_key():
 
 
 def test_a_cap_fails_above_its_count_and_warns_below_it_beyond_its_room():
-    """`_held` on toy counts: a count above its cap fails, naming the check's fix, and a cap above its count by more than
+    """`_held` on toy counts: a count above its limit fails, naming the check's fix, and a limit above its count by more than
     its room only warns, naming the value to lower it to."""
     import pytest
 

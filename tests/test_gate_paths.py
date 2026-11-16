@@ -165,7 +165,7 @@ def test_the_lean_inputs_of_the_queues_loop_are_the_files_a_lean_key_holds_or_a_
     land on a verdict that never read it.  Every file an audit's key (`lean_audit.inputs`) or a records key
     (`lean_changed.closure_inputs`) declares here is one, and every file a lock run's commit writes (each package's lock,
     `merge.REPAIRED`).  The loop counts nothing else but what `lean_inputs` names beside the keys: the code that runs the
-    lean-audit step (check's, `LEAN_AUDIT_STEP`, and the unread ratchet), the caps a lock run repairs, and a Lean source no
+    lean-audit step (check's, `LEAN_AUDIT_STEP`, and the unread ratchet), the limits a lock run repairs, and a Lean source no
     key holds."""
     from research.merge import REPAIRED
     from research.vqueue_slim import LEAN_AUDIT_STEP

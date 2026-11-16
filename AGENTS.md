@@ -202,7 +202,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   commitments, coins, proofs and verdicts; models, checkpoints, requests, batches and schedulers stay out of `verity/`, and
   those still in it (the certifier's advice format, vLLM's scheduler) move out. An integration hands Verity only: a
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
-  choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
+  choices, a registered compiler (a circuit with a public length limit) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.commitments` scheme and registered
   before any coin (under a two-stage sampling design, a sampled replay block's interior between its two stages); and on a
   sample, the sampled proof blocks' openings, to the prover behind the ZK server.
@@ -227,7 +227,7 @@ deleted, not rerun. A test that adds more than about a minute to `check` says in
 cheaper test can't.
 
 Bookkeeping warns and a later PR fixes it: what can be put right after landing without any claim being false meanwhile. The root suite's bookkeeping tests (`BOOKKEEPING` in `tests/conftest.py`: lane text, retired terms, doc
-paths, naming, stale allowlists, Markdown caps) and ruff's style findings warn. Ruff's errors, a crashed scan and
+paths, naming, stale allowlists, Markdown limits) and ruff's style findings warn. Ruff's errors, a crashed scan and
 everything that can make a claim false or can't be undone still fail.
 
 ## Circuits
@@ -321,8 +321,8 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   in a candidate's records run. A PR's own check still fails on it. The records run repairs it in its records commit and
   warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
   the witnesses rule holds to missing witnesses, a stale entry, a premise a `trust_gap` entry lists that its guarantee
-  no longer rests on, a missing owner, or a cap of `unread-caps.json` or
-  `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
+  no longer rests on, a missing owner, or a limit of `unread-caps.json` or
+  `tests/test_lean_packages.py`. A limit more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
   malformed lock always fail. Lock files conflict on merge only where `tools/verity/lean/merge.py` can't vouch for the
   merge: a lock in a `format` newer than it knows, the worktree's copy merging in newer merge rules, or a merge that would
   drop most of a section. The registered driver runs `origin/main`'s copy wherever the repository has that ref.
