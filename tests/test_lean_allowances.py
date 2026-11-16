@@ -5,7 +5,7 @@ that runs Lean's tools for the tree gives one: the check and its steps, the merg
 Lean tasks, the ready mark's preflight, the `verity` command, and the Lean tools beside the two.
 None of their sources so much as names the option, in a command it builds or in one it tells a lane to run. That
 `check.py` has no such option and that the fast path hands it none is the Lean suite's
-(`tools/verity/lean/tests/test_records_allow.py`)."""
+(`tests/tools/verity/lean/test_records_allow.py`)."""
 from __future__ import annotations
 
 import re

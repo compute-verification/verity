@@ -157,7 +157,7 @@ VERIFIED_VALUES = (VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERAB
 COMMIT_MAP_VALUES = ("accepted", "retracted")
 #: Mirrors `PROOF_CLASSES` in `benchmarks/numerical/python/verity_numerical/bench/contract.py` + `COMPONENT`, the frozen ledger's
 #: (a bucket measured alone is no proof class).  The store imports no bench package (the `research` rule), so the spelling is copied
-#: here; `benchmarks/numerical/tests/bench/test_bench_contract.py` checks the copy.
+#: here; `tests/benchmarks/numerical/bench/test_bench_contract.py` checks the copy.
 PROOF_CLASSES = ("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND",
                  "COMPONENT")
 AUTHENTICATION_VALUES = ("included", "included-hash", "included-hash-shared", "excluded")
