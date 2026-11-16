@@ -121,4 +121,53 @@ theorem helloList_sum_le (tags : Tags) (sigma : ByteArray) (hs : sigma.size = 64
       List.sum_append, List.cons_append, List.nil_append] <;>
     omega
 
+theorem helloList_distinct (tags : Tags) (sigma : ByteArray) (mPts : ℕ) (ct : CoinTree.Spec) (names : Array String) :
+    Distinct (helloList tags sigma mPts ct names) := by
+  unfold helloList
+  by_cases h9 : tags.hm96Rows = true <;> by_cases hr : tags.retainRounds = true <;>
+    simp only [h9, hr, ↓reduceIte, List.cons_append, List.nil_append] <;>
+    first | decide +kernel | simp
+
+theorem coins_mem_helloList (tags : Tags) (sigma : ByteArray) (mPts : ℕ) (ct : CoinTree.Spec)
+    (names : Array String) : ("coins", ct.coins "") ∈ helloList tags sigma mPts ct names := by
+  unfold helloList
+  by_cases h9 : tags.hm96Rows = true <;> by_cases hr : tags.retainRounds = true <;>
+    simp [h9, hr]
+
+theorem helloList_good (tags : Tags) (sigma : ByteArray) (mPts : ℕ) (ct : CoinTree.Spec) (names : Array String) :
+    ∀ p ∈ helloList tags sigma mPts ct names, Good p.2 := by
+  have hlink : Good (Json.mkObj [("sigma", Json.str (hexOf sigma)), ("m", Lean.toJson mPts),
+      ("points", Lean.toJson (2 : Nat))]) := by
+    refine good_mkObj (by first | decide +kernel | simp) ?_
+    simp only [List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
+    exact ⟨.str _, good_toJson _, good_toJson _⟩
+  have harr : Good (Json.arr (names.map Json.str)) := good_arr_of fun x hx => by
+    obtain ⟨s, -, rfl⟩ := Array.mem_map.1 hx
+    exact .str _
+  unfold helloList
+  by_cases h9 : tags.hm96Rows = true <;> by_cases hr : tags.retainRounds = true <;>
+    simp only [h9, hr, ↓reduceIte, List.cons_append, List.nil_append, List.mem_cons, List.mem_nil_iff, or_false,
+      forall_eq_or_imp, forall_eq] <;>
+    first
+      | exact ⟨.str _, good_toJson _, .str _, harr, hlink, good_coins ct "", .str _, .str _⟩
+      | exact ⟨.str _, good_toJson _, .str _, harr, hlink, good_coins ct "", .str _⟩
+      | exact ⟨.str _, good_toJson _, .str _, harr, hlink, good_coins ct ""⟩
+
+/-- **The prover's `Hello` is short** where the verifier's names a keyed coin tree, a `64`-byte `Σ` and `m_pts ≤ 64`: at
+most the weights of the table names and, twice, of the coin tree's `coins`, and `7346`. -/
+theorem helloLen_le {tags : Tags} {sigma : ByteArray} {mPts : ℕ} {ct : CoinTree.Spec} {names : Array String}
+    {hello : String} (hh : Flock.helloOf tags sigma mPts (.tree ct) names = .ok hello) (hs : sigma.size = 64)
+    (hm : mPts ≤ 64) {spec : SessionSpec} (hspec : spec.hello = hello) {ct' : CoinTree.Spec}
+    (hct : spec.coinTree = some ct') :
+    helloLen spec ≤ jsz (Json.arr (names.map Json.str)) + 2 * jsz (ct.coins "") + 7346 := by
+  obtain ⟨m, kvs, hown, -, -, -, hg⟩ := hello_ok hh
+  obtain ⟨hz, hc, -⟩ := FlockComplete.JsonRT.canon_ok _ hg
+  have hown' : Flock.JsonParse.parse spec.hello = .ok (.obj m) := by rw [hspec]; exact hown
+  have e : helloLen spec = hz.length := by simp only [helloLen, hct, hown', Except.toOption, hc]
+  rw [helloOf_tree] at hh
+  have h1 := hello_hz_le (ct := ct) hh (helloList_distinct tags sigma mPts ct names)
+    (helloList_good tags sigma mPts ct names) (coins_mem_helloList tags sigma mPts ct names) hown hc
+  have h2 := helloList_sum_le tags sigma hs mPts hm ct names
+  omega
+
 end FlockComplete.ZkTables

@@ -6,6 +6,9 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
+import Proofs.Flock.Claims.Complete.ZkTables.HelloSize
+import Proofs.Flock.Claims.Complete.Json.CanonSize
 
 /-!
 # The two-instance statement's honest record fits its length word, from its spec's text
@@ -66,5 +69,60 @@ theorem recordFits_x_of_text (hn : FixedNetsBuild) {r : Run} (hr : r.Plain)
     exact FlockComplete.ZkTables.recordFitsZk_of_text FlockDeploy.out64_sha512 (t := st.tags.table) rfl hct hown hc st
       h25 h35 hms (by have := hsp.m; omega) hrange.2.1 rfl (by have := hsp.mPts; omega) (Nat.le_refl 2) hfit
   · exact absurd hc (Nat.lt_irrefl 1)
+
+theorem repStr_size (n : ℕ) (hn : n < 2) : (toString n).utf8ByteSize ≤ 4 := by
+  have h1 : (toString n).length ≤ 1 :=
+    (Nat.length_repr_le_iff (n := n) (k := 1) (by decide)).2 (by interval_cases n <;> norm_num)
+  have h2 := FlockComplete.size_le_length (toString n)
+  omega
+
+theorem domain_size (rep : ℕ) (hrep : rep < 2) : (tz.domain rep).utf8ByteSize ≤ 1004 := by
+  have h1 : tz.domainPrefix.utf8ByteSize ≤ 1000 := by decide +kernel
+  have h2 := repStr_size rep hrep
+  unfold Tags.domain
+  rw [String.utf8ByteSize_append]
+  omega
+
+/-- **The statement's spec text is small**: its `Hello` (`helloLen_le`), its sample, its coin tree, `Σ`, its table's
+name and its two domains weigh far under `2^55`. -/
+theorem specText_x_lt (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
+    FlockComplete.ZkTables.specText (tabAt r).1 < 2 ^ 55 := by
+  have hset := setup_tabAt hn hr
+  have hctree : (tabAt r).1.coinTree = some (Zk.coinSpec (t0.tableNames 1)) := by kernel_rfl'
+  have hunit : (tabAt r).1.unitSample = some sampleJ := by kernel_rfl'
+  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny hset with ⟨-, st, hd, hspec, hsts⟩ | ⟨hc, -⟩
+  · rw [FlockSoundness.Discharge.HiddenExec.setupOne_hidden hidden_tzX] at hd
+    have hsp := FlockSoundness.Discharge.Hidden.setupHidden_spec hd
+    have hrange := (checkInRange_ok _ _ _).1 hsp.inRange
+    have hσ : st.sigma.size = 64 := by rw [hsp.sigma]; exact Sha512.hash_size _
+    have hl := FlockComplete.ZkTables.helloLen_le (tags := tz) (sigma := st.sigma) (mPts := PT_LOCAL + st.nbl)
+      (ct := Zk.coinSpec (t0.tableNames 1)) (names := #[tz.table]) hsp.hello hσ hrange.2.2 (spec := st.spec) rfl
+      (by rw [← hspec]; exact hctree)
+    have hT : st.spec.tables = #[tz.table] := by
+      show #[st.tags.table] = _
+      rw [hsp.tagsEq]
+    have hD : ∀ rep, st.spec.domain tz.table rep = tz.domain rep := fun rep => by
+      show st.tags.domain rep = _
+      rw [hsp.tagsEq]
+    have hG : st.spec.tables.getD 0 "" = tz.table := by rw [hT]; rfl
+    have hS : st.spec.sigma.size = 64 := hσ
+    have c1 : jsz (Json.arr ((#[tz.table]).map Json.str)) ≤ 1000 := by decide +kernel
+    have c2 : jsz ((Zk.coinSpec (t0.tableNames 1)).coins "") ≤ 1000000 := by decide +kernel
+    have c3 : jsz (Zk.coinSpec (t0.tableNames 1)).toJson ≤ 1000000 := by decide +kernel
+    have c4 : jsz sampleJ ≤ 10000 := by decide +kernel
+    have c5 : tz.table.utf8ByteSize ≤ 1000 := by decide +kernel
+    have c6 := domain_size 0 (by decide)
+    have c7 := domain_size 1 (by decide)
+    rw [hspec] at hctree hunit ⊢
+    unfold FlockComplete.ZkTables.specText FlockComplete.ZkTables.coinTreeText
+    rw [hctree, hunit, hG, hD, hD]
+    simp only [Option.getD_some]
+    omega
+  · exact absurd hc (Nat.lt_irrefl 1)
+
+/-- **The statement's honest masked record fits its length word.** -/
+theorem recordFits_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
+    RecordFitsZkAt FlockDeploy.sha512 (x r) (tabAt r).1 (tabAt r).2 :=
+  recordFits_x_of_text hn hr (specText_x_lt hn hr)
 
 end SpotFlock.InstanceStmt
