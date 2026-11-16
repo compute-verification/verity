@@ -129,21 +129,23 @@ def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
 
 
 @pytest.mark.parametrize("fixtures, line", [
-    ("tests/tools/verity/lean/fixtures", None),
-    ("tests/tools/verity/lean/fixtures", 'FIXTURES = HERE.parents[2] / "tests" / "tools" / "verity" / "lean" / "fixtures"')])
+    ("tools/verity/lean/tests/fixtures", 'FIXTURES = HERE / "tests" / "fixtures"'),
+    ("tests/tools/verity/lean/fixtures", None)])
 def test_a_change_to_the_controls_fixtures_touches_every_lean_audit_wherever_they_are(tree, fixtures, line):
     """Every Lean check run builds the controls' packages (`check.FIXTURES`), so a change to one reruns each audit, also once
     they sit under the root's tests/, outside the Lean tool; where they are under it, its cover is what it was."""
     check = tree / "tools" / "verity" / "lean" / "check.py"
     if line:
-        check.write_text(check.read_text().replace('FIXTURES = HERE / "tests" / "fixtures"', line, 1))
+        check.write_text(check.read_text().replace('FIXTURES = HERE.parents[2] / "tests" / "tools" / "verity" / "lean" / "fixtures"',
+                                                   line, 1))
     (tree / fixtures / "control").mkdir(parents=True)
     (tree / fixtures / "control" / "Control.lean").write_text("theorem c : True := trivial\n")
     _git(tree, "add", "-A")
     _git(tree, "commit", "-q", "-m", "fixtures")
     base = _git(tree, "rev-parse", "HEAD").strip()
     paths = next(t["inputs"]["paths"] for t in _graph(tree)[0]["tasks"] if t["id"] == "lean-audit:lean/P")
-    assert paths == ["lean/P", "tools/verity/lean", *([fixtures] if line else []), "tools/check/common.py"], paths
+    outside = not fixtures.startswith("tools/verity/lean/")
+    assert paths == ["lean/P", "tools/verity/lean", *([fixtures] if outside else []), "tools/check/common.py"], paths
     (tree / fixtures / "control" / "Control.lean").write_text("theorem c : 1 = 1 := rfl\n")
     _git(tree, "commit", "-q", "-am", "control")
     assert "lean-audit:lean/P" in {t["id"] for t in _graph(tree, "--changed", base)[0]["tasks"]}

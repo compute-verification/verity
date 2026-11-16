@@ -14,7 +14,7 @@ from verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager import (
 )
 from verity_vllm.observe.fold.resolve_log import resolve_log
 
-LOG = Path(__file__).resolve().parents[2] / "data" / "logs" / "m1.jsonl.gz"
+LOG = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "data" / "logs" / "m1.jsonl.gz"
 
 pytestmark = pytest.mark.skipif(not LOG.exists(), reason=f"M1 log absent: {LOG}")
 

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import served_shares as S  # noqa: E402  (a script beside the suite, importable only once its dir is on the path)
 
 MODEL = "verity-int8/Llama-3.2-1B-INT8"
@@ -93,7 +93,7 @@ def test_refuses_what_it_cannot_count(tmp_path):
 
 def test_cli(tmp_path):
     d = _dir(tmp_path / "s", _prefill(0.0, 0.0274))
-    script = str(HERE.parent / "served_shares.py")
+    script = str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_shares.py")
     out = subprocess.run([sys.executable, script, str(d)], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout)["schema"] == S.SCHEMA
     out = subprocess.run([sys.executable, script, str(d), "--replay", "110", "--replay-cpus", "32"], capture_output=True,

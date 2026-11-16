@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <cuda_runtime.h>
 
-#include "../cuda/sha512.cuh"
+#include "../../../../../../verity/protocols/proofs/flock/prover/cuda/sha512.cuh"
 
 extern "C" int hm96_leaves(const uint8_t* x, const uint8_t* salts, long long n, long long base, int tpb, const uint8_t* prefixes,
                            const uint64_t* tables, uint8_t* out) {
