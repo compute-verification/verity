@@ -515,7 +515,7 @@ def coarse_bins(torch, values):
 
 
 def overflowed(torch, x, lo, n, k, rng):
-    """The pin's cooperative_topk past its candidate cap: every key above the k-th key's coarse bin, then keys of
+    """The pin's cooperative_topk past its limit on candidates: every key above the k-th key's coarse bin, then keys of
     that bin in no order of score."""
     out = torch.full((x.shape[0], k), -1, dtype=torch.int32)
     for r in range(x.shape[0]):
