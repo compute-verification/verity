@@ -27,7 +27,7 @@
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/one_stage/a5_llama1b_h200.sh
 #   or, on a machine of your own, from the tree's root: bash benchmarks/one_stage/a5_llama1b_h200.sh   (its record in ./out)
 # Uses: about 400 GB of memory at its peak (399 GB measured at k=256, 377 GB at k=880), about 3 GB of disk under A5_ROOT
-#   (the row dir and the window, kept) and 0.3 GB for M0's Flock build (A5_FLOCK_WORK), and 13-16 min on one H200 with M0's
+#   while it runs (the row dir and the window, removed at exit) and 0.3 GB for M0's Flock build (A5_FLOCK_WORK, kept), and 13-16 min on one H200 with M0's
 #   build kept (the uv, Lean and M0 builds run behind the GPU stages; a machine's first run builds Flock and Lean cold).
 # Needs, which vllm's one bootstrap makes (refused in one line each before any build, naming it):
 #   (cd adapters/vllm && bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B_INT8)
@@ -38,13 +38,15 @@
 #   cards are others'); on a machine with no gpu-lease it takes card A5_CARD (default 0) directly, and its COINS line says so.
 # The uv venv, Lean's verifiers and M0's flock-circuit build in the background while the GPU stages run (M0 in
 # A5_ROOT/flock-work, or A5_FLOCK_WORK, kept for a rerun; a build killed mid-clone leaves one that 20-gpu-link.sh takes as
-# built, so a rerun after one names another). The row dir and the window stay on the machine under A5_ROOT (default
-# WORK/a5-llama1b); $OUT, published as the run's record, keeps the row's records that
+# built, so a rerun after one names another). The row dir, the window and the audit's private files are under
+# A5_ROOT/RUN (A5_ROOT default WORK/a5-llama1b) while it runs, and removed at exit, success or failure, unless A5_KEEP=1
+# keeps them for a rerun (one copy of the sealed bundle: sealed/ is hard links); the last line says which, where and how
+# large. $OUT, published as the run's record, keeps the row's records that
 # adapters/vllm/tools/served_run/published.sh lists (each with the reason it holds nothing of a request) and verdicts.txt,
 # the window's public files, the audit's out without its private files or the challenger's key ($OUT/a5) and summary.txt,
 # whose A5 line is the audit's verdict, whose REGISTERED line the window's kind, commitment and run root length, and whose
-# COINS line (also summary.json's ``coins``) the coins, the card and which check accepted. Every other file of the row
-# stays on the machine and the run names it: match/spec.json holds the prompts, commit/ the token record, the bundle and
+# COINS line (also summary.json's ``coins``) the coins, the card and which check accepted. No other file of the row is
+# published (with A5_KEEP=1 they stay on the machine): match/spec.json holds the prompts, commit/ the token record, the bundle and
 # the slim keep (the committed store with its salts, the weights key, the opened weights, the requests and served tokens),
 # and stages.txt, row.log and the stages' logs can quote a served token on a FAIL. Under KEPT, beside the row dir: each
 # stage's output, the row dir's sizes and what `row run` writes for a research run (result.json, its evidence/ copies of
@@ -68,6 +70,7 @@ CLEAN_PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/usr/local/sbin:/us
 BOOT="(cd adapters/vllm && WORK=$WORK bash verity_vllm/ops/pod_bootstrap.sh --cases $ROLE)"
 refuse() { echo "a5_llama1b_h200.sh: $1" >&2; exit 2; }
 case $A5_COINS in dev|challenger) ;; *) refuse "A5_COINS=$A5_COINS: dev or challenger";; esac
+case ${A5_KEEP:-} in ''|1) ;; *) refuse "A5_KEEP=$A5_KEEP: 1 keeps the row dir and the window at exit, or unset";; esac
 case $A5_COINS/$A5_PLAIN in */|challenger/1) ;; *) refuse "A5_PLAIN=$A5_PLAIN: 1 with A5_COINS=challenger, or unset";; esac
 [ -x "$VENV/bin/python" ] || refuse "no vLLM Python environment at $VENV/bin/python (VENV): make it with $BOOT"
 CKPT=$(PYTHONPATH=$TREE/adapters/vllm "$VENV/bin/python" -c 'import sys; from verity_vllm.config import checkpoint_dir
@@ -81,6 +84,17 @@ print(checkpoint_dir(*sys.argv[1:]) or "")' "$REPO" "$REV" "$HF_HOME" 2>/dev/nul
 command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: the row serves on one H200 (sm_90), which this machine doesn't show"
 UNGUARDED=(); [ ! -e "$FA3" ] || UNGUARDED=(--hidden-so-fa3 "$FA3")
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
+finish() {  # at exit, success or failure: BASE (the row dir, the window, the audit's private files) removed, or with A5_KEEP=1 kept
+  local rc=$? size
+  size=$(du -sh "$BASE" 2>/dev/null | cut -f1)
+  if [ "${A5_KEEP:-}" = 1 ]; then
+    echo "kept: the row dir $D and the window $WD, under $BASE ($size)"
+  else
+    rm -rf "$BASE" && echo "removed: $BASE ($size: the row dir, the window and the audit's private files; A5_KEEP=1 keeps them)"
+  fi | tee -a "$OUT/summary.txt"
+  exit "$rc"
+}
+trap finish EXIT
 if [ -n "${GPU_LEASE-}" ] || command -v gpu-lease >/dev/null; then
   CARD="card ${A5_CARD:-any} leased by gpu-lease for Match and Commit"
   if [ -n "${A5_CARD:-}" ]; then
@@ -128,7 +142,7 @@ rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "row dir $D"; echo "CUDA_HOME $CUDA_HOME"; nvidia-smi -L
   sha256sum ${UNGUARDED[1]+"${UNGUARDED[1]}"} "$FA3G" "$NT"; echo "HF_HOME $HF_HOME VENV $VENV A5_COINS $A5_COINS${A5_PLAIN:+ A5_PLAIN 1}: $CARD"; } | tee "$OUT/machine.txt"
 rs keep "$ROOT" --owner @vllm --expires 7d --priority normal \
-  --why "A5 over a GPU-served rows-sha512 window (Llama-3.2-1B int8 H200): the row dir, its sealed bundle and window" | tail -2
+  --why "A5 over a GPU-served rows-sha512 window (Llama-3.2-1B int8 H200): M0's Flock build, and a row dir kept by A5_KEEP=1" | tail -2
 
 row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in KEPT/NAME.out; prints its stages' verdict words
   local name=$1; shift
