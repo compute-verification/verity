@@ -9,7 +9,7 @@ import cards
 import figure1 as f1
 import pytest
 import total_cost as t
-from verity.protocols.proofs.spot.device import challenger
+from verity.protocols.proofs.spot.verifier.challenger import challenger
 from verity.protocols.proofs.spot.prover.optimize import Cell
 
 

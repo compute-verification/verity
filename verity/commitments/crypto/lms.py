@@ -1,11 +1,11 @@
 """A stateful hash-based signature: LMS with LM-OTS (RFC 8554) over SHA-512, in plain Python, the scheme of the network
-certifier's certificates and the memory challenger's records, and the reference of their in-proof verifier
+attester's certificates and the memory challenger's records, and the reference of their in-proof verifier
 (`verity.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n64``.
 
 **Use.** One key per device per role. ``keygen(DEPLOYED, seed)`` (seed: N = 64 secret bytes the device keeps), then once
 ``LeafState.create(path, public_key(key), DEPLOYED.H)``; to sign, ``sign(key, state, message)`` with ``state = LeafState(path,
 public_key(key), DEPLOYED.H)``; to check, ``verify(DEPLOYED, public, message, sig)``. The message is a role's digest
-(`certificate_message`, `memory_challenger_message`), never hand-rolled. A network certifier first starts its session on
+(`certificate_message`, `memory_challenger_message`), never hand-rolled. A network attester first starts its session on
 the state (``state.start(session)``), which refuses a session id the key has already started.
 
 **HSS: a device's identity and its parties' keys** (RFC 8554 §6 at two levels; NIST SP 800-208). A device's long-lived

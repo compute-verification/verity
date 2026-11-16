@@ -51,15 +51,15 @@ from typing import Any, NamedTuple
 from verity import config as K
 from verity.config import Component, Workload
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
-from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.policy.inference_only.verifier import parties as IO
-from verity.protocols.accounting.poub.verifier import p2_parties as P2
-from verity.protocols.accounting.pous.device import challenger_session as CS
-from verity.protocols.accounting.pous.device import onsite
-from verity.protocols.accounting.registration.verifier import registration as RL
-from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.pous.verifier import wipe_parties as WP
+from verity.protocols.resource_accounting.network.verifier import parties as NC
+from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
+from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
+from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
+from verity.protocols.resource_accounting.memory.pous.attester import onsite
+from verity.protocols.registration.verifier import registration as RL
+from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
 from verity.channel import Refused
@@ -388,22 +388,22 @@ def _pouw(cfg, params, bound):
 
 #: the wipe (`streamed_wipe`'s parties), before the card's engine loads: its challenger reads the raw monotonic clock its
 #: header names
-WIPE = Session(("verity.protocols.accounting.pous.device.wipe_challenger:PROTOCOL",
-                "verity.protocols.accounting.pous.prover.wipe_prover:PROTOCOL"),
+WIPE = Session(("verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger:PROTOCOL",
+                "verity.protocols.resource_accounting.memory.pous.prover.wipe_prover:PROTOCOL"),
                {MEMORY_CHALLENGER: WP.CHALLENGER, PROVER: WP.PROVER}, {WP.CHALLENGER: (sw.raw_clock_ns, sw.CLOCK)},
                MEMORY_CHALLENGER, before=True)
 #: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the challenger's header names the
 #: monotonic clock
-POUS = Session(("verity.protocols.accounting.pous.device.challenger_party:PROTOCOL",
-                "verity.protocols.accounting.pous.prover.challenger_prover:PROTOCOL"),
+POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.challenger_party:PROTOCOL",
+                "verity.protocols.resource_accounting.memory.pous.prover.challenger_prover:PROTOCOL"),
                {MEMORY_CHALLENGER: CS.CHALLENGER, PROVER: CS.PROVER}, {CS.CHALLENGER: (time.monotonic_ns, MONOTONIC)},
                MEMORY_CHALLENGER)
 #: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
 #: the verifier's monotonic clock; the verifier reads the memory challenger's PoUS key from that party's run beside it
 #: on the auditor's device (``challenger``), checked against the configuration's pin by PoUS's device (`onsite.pin`,
 #: `onsite.signer`), which the table hands its start
-POUB = Session(("verity.protocols.accounting.poub.verifier.p2_parties:PROTOCOLS",
-                "verity.protocols.accounting.poub.prover.p2_party_prover:PROTOCOL"),
+POUB = Session(("verity.protocols.resource_accounting.memory.poub.verifier.p2_parties:PROTOCOLS",
+                "verity.protocols.resource_accounting.memory.poub.prover.p2_party_prover:PROTOCOL"),
                {BANDWIDTH_VERIFIER: P2.VERIFIER, PROVER: P2.PROVER}, {P2.VERIFIER: (time.monotonic_ns, MONOTONIC)},
                BANDWIDTH_VERIFIER, reads={BANDWIDTH_VERIFIER: {"challenger": ("pous", MEMORY_CHALLENGER)}},
                starts=P2.starts(onsite.pin, onsite.signer))
@@ -667,7 +667,7 @@ def registration(cfg: Mapping[str, Any], state: Path) -> str:
     party starts and so before any coin: `live` calls it after it has prepared the parties here and before it starts
     one. The hash is ``state``'s ``run.json``'s ``configuration``, which `verity run` writes first; a ``run.json`` under
     another hash, or none, is refused (``registration``). The item is the registration log's own
-    (`verity.protocols.accounting.registration.verifier.registration.configuration`), whose writer raises
+    (`verity.protocols.registration.verifier.registration.configuration`), whose writer raises
     `NotImplementedError` (``proofs/architecture-on-branch``) while the log has no coin to order it before; once it
     returns, the run's log holding it beside θ and the builder isn't written either (`REGISTRATION_GOAL`). Until then
     the line's ``registration`` is ``None``."""

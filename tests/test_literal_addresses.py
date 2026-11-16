@@ -57,12 +57,6 @@ ALLOWED: dict[str, int] = {
     "tools/research/tests/test_slack.py": 36,
     # addresses and instance ids that benchmarks, examples and their tests record or run against
     "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json": 1,
-    "benchmarks/numerical/tests/bench/data/flock-cells/6d1295ed.json": 3,
-    "benchmarks/numerical/tests/bench/data/flock-cells/d1961ba4.json": 3,
-    "benchmarks/numerical/tests/bench/data/flock-runs/r20260925-233818-a37e/job.json": 1,
-    "benchmarks/numerical/tests/bench/data/flock-runs/r20260925-233831-a064/job.json": 7,
-    "benchmarks/numerical/tests/bench/data/flock-runs/r20260925-233831-a064/result.json": 3,
-    "benchmarks/numerical/tests/bench/test_placement.py": 4,
     "benchmarks/pouw/tests/fixtures/challenger-key.json": 1,
     "benchmarks/tc_probe_fp4/tests/fixtures/tc-sm100-f8-2026-10-19.json": 1,
     "benchmarks/one_stage/interfaces/tests/fixtures/block-record-b71a-w30.json": 7,

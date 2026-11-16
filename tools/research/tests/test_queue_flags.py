@@ -211,8 +211,8 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
                  *(f"tools/research/src/research/{m}.py" for m in ("queue", "landing", "vqueue", "vqueue_loop", "vqueue_slim",
                                                                     "cli", "merge", "carry", "labelauth")),
                  "tools/verity/lean/check.py", "verity/circuits/program.py", "verity/commitments/x.py",
-                 "verity/protocols/accounting/pouw/verifier/audit.py",
-                 "verity/protocols/compose/device/live_challenger/auditor.py"):
+                 "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py",
+                 "verity/protocols/compose/verifier/live_challenger/auditor.py"):
         assert not lowrisk([path, "README.md"], flags.plain_excludes), f"drive.toml's excludes let {path} land on a verdict"
     for path in ("GLOSSARY.md", "benchmarks/census/README.md"):
         assert lowrisk([path], flags.plain_excludes), f"drive.toml's excludes keep {path} on the whole check"
@@ -225,13 +225,13 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
     ("tools/agent-guard/shell_hook.py", "tools/agent-guard/"),
     ("infra/README.md", "infra/"),
     ("benchmarks/one_stage/a5.py", None),
-    ("verity/protocols/accounting/certifier/device/network_certifier_serve.py", None),
+    ("verity/protocols/resource_accounting/network/attester/network_attester_serve.py", None),
     ("benchmarks/remote_session/auditor_line.py", None),
     ("tools/move/restack.py", None),
     ("verity/circuits/program.py", None),
     ("tools/research/src/research/vqueue_loop.py", None),
     ("tools/check/drive.toml", None),
-    ("verity/protocols/accounting/pouw/verifier/__init__.py", None),
+    ("verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", None),
     ("verity/protocols/compose/verifier/lean/pyproject.toml", None),
 ], ids=lambda x: x or "-")
 def test_each_verdict_plain_entry_frees_its_files_for_the_gate_and_the_rest_stay_on_the_whole_check(path, entry):
@@ -304,5 +304,20 @@ def test_an_entry_with_a_slash_before_its_end_keeps_that_one_file_off():
     excludes = ("verity/protocols/__init__.py", "verity/channel.py")
     for f in excludes:
         assert not lowrisk(["README.md", f], excludes), f
-    assert lowrisk(["verity/protocols/accounting/pouw/__init__.py", "verity/protocols/reporting.py", "adapters/vllm/channel.py",
+    assert lowrisk(["verity/protocols/resource_accounting/compute/pouw/__init__.py", "verity/protocols/reporting.py", "adapters/vllm/channel.py",
                     "x/verity/channel.py", "verity/channel.pyc"], excludes)
+
+
+def test_a_directory_entry_holds_its_tests_under_the_roots_tests_and_tests_holds_only_the_repository_suites_own():
+    """An entry `D/` keeps `D`'s tests at `tests/D/` off too, and `tests/` keeps off only the repository suite's own: the
+    files of `tests/` itself and of its own directories (`suite_layout.ROOT_OWN`), not the tests of another directory."""
+    excludes = ("verity/core/", "tests/", "tools/check/", "verity/protocols/__init__.py", "*.lean")
+    for f in ("tests/verity/core/test_claims.py", "tests/verity/core/sub/test_x.py", "tests/tools/check/test_suites.py",
+              "tests/test_boundaries.py", "tests/lint/test_repo_ruff.py", "tests/conftest.py", "tests/verity/X.lean"):
+        assert not lowrisk(["README.md", f], excludes), f
+    assert lowrisk(["tests/verity/circuits/test_ops.py", "tests/verity/protocols/__init__.py", "tests/verity/corex/test_a.py",
+                    "tests/benchmarks/pouw/test_a.py", "tests/tools/research/test_queue.py", "verity/circuits/tests/test_x.py"],
+                   excludes)
+    assert lowrisk(["tests/lint/test_y.py"], ("lint/",)) and not lowrisk(["tests/verity/core/test_claims.py"], ("verity/",))
+    assert not lowrisk(["tests/verity/core/test_claims.py"], ("tests/verity/",))
+    assert not lowrisk(["tests/test_boundaries.py"], ("tests/",)) and lowrisk(["tests/verity/test_a.py"], ("tests/",))
