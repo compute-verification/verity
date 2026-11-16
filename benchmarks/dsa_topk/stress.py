@@ -564,10 +564,10 @@ def definition(args) -> None:
               f"replayed from a CUDA graph, is sorted(topk_set) of the registry's Definition; paths "
               f"{json.dumps(paths)}" + (f"; no failed candidate reached {', '.join(idle)}'s fallback" if idle else ""))
     failed += idle
-    run = Path(os.environ.get("RESEARCH_RUN_DIR") or out)
-    f = run / "result.json"
+    f = Path(args.result) if args.result else out / "result.json"
+    run = f.parent
     doc = json.loads(f.read_text()) if f.is_file() else {
-        "schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", "local"),
+        "schema": "research/result/v0.1", "run_id": run.name,
         "workload_fingerprint": {"benchmark": "dsa_topk", "mode": "definition"},
         "measurements": [], "measurement_files": [], "artifacts": []}
     evidence = os.path.relpath(out / "definition.json", run)
@@ -589,6 +589,8 @@ def main() -> None:
     p.add_argument("--dists", default="randn,bf16,int,relu,signed,edge")
     p.add_argument("--iters", type=int, default=50)
     p.add_argument("--variants", default="default", help="stress.py time: the pass's parameters (`variant`), by comma")
+    p.add_argument("--result", help="stress.py definition: the run's result.json, which takes its validation "
+                                    "(default: OUT/result.json)")
     args = p.parse_args()
     if args.mode in ("check", "time"):
         import vllm._custom_ops  # noqa: F401
