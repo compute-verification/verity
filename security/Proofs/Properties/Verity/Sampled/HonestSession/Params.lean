@@ -72,8 +72,10 @@ namespace Verity.Sampled.Instance.HonestSession.Params
 
 open Flock
 open Lean (Json)
-open FlockSoundness.Discharge.Recursion.FirewallObj (plain_mkObj)
+open FlockSoundness.Discharge.Recursion.FirewallObj
 open FlockSoundness.Discharge.Recursion.FirewallJson renaming norm → jnorm
+open FlockSoundness.Discharge.Recursion.FirewallJson (normObj normObj_eq normList normList_eq)
+open Std.DTreeMap.Internal (Impl)
 
 set_option maxHeartbeats 400000
 set_option maxRecDepth 200000
@@ -148,12 +150,15 @@ parsed value, and the decoders must then read that value's fields as a concrete 
 well-founded-recursive, so the kernel does not reduce it (`canon_norm` only gives `canon (norm j) = canon j`, not
 `norm j = j`, and no `plain j → norm j = j` lemma exists).
 
-Taken as a hypothesis `hN : NormFacts` by `params_full` and the exports that depend on it. It is *true structurally*, not
-merely semantically: `norm` rebuilds each object as the tree of its members re-inserted in ascending key order
-(`normObj`), which reproduces a literal exactly when that literal is `mkObj` of an ascending, duplicate-free key list at
-every level — which `θJ` and `paramsJ` are (every `Data/` object, `programJ` included, is now such a literal). So both
-trees are identical, not just equal under `Json`'s semantic `==`. -/
-def NormFacts : Prop := jnorm θJ = θJ ∧ jnorm paramsJ = paramsJ
+`jnorm θJ = θJ` and `jnorm paramsJ = paramsJ` are *discharged* below (`norm_θJ`, `norm_paramsJ`): `norm` rebuilds each
+object as the tree of its members re-inserted in ascending key order (`normObj`), which reproduces a literal exactly when
+that literal is `mkObj` of an ascending, duplicate-free key list at every level, as every `Data/` object is. The one
+object this piece does not yet descend is `programJ`, whose literal is nested many levels deep: discharging its
+fixpoint the same way needs a per-level tree equality for every one of its ~15 objects (the concrete `kernel_rfl'` over
+the whole literal exhausts memory, so each level's tree equality is proved with its values abstract). Until then
+`norm_θJ`/`norm_paramsJ` take `jnorm programJ = programJ` as a hypothesis, and `NormFacts` is exactly that one
+structural fact. -/
+def NormFacts : Prop := jnorm programJ = programJ
 
 /-- The session's query is plain. -/
 private theorem plain_query : Firewall.plain query = true := by
@@ -448,6 +453,159 @@ private theorem unwindowed_some
         members } = #[] := by
   unfold Spot.Registration.unwindowed; rfl
 
+/-! ## The parser's rebuild (`jnorm`) of `θJ` and `paramsJ` is the literal
+
+`norm (mkObj L)` rebuilds the object's tree by folding `insert` over `L`; this equals `mkObj L`'s own tree
+(`ofList L`) when `L`'s keys ascend without duplicates and every value is itself a `norm`-fixpoint. `norm_mkObj_fix`
+packages that once, taking the tree equality `hofl` as a hypothesis — discharged per call by `kernel_rfl'` over the
+abstract key set (a reusable `*_tree` lemma whose values are universally quantified, so the kernel never carries the
+giant `programJ` value). `nfix` applies it (and `norm_arr_fix`) recursively for the shallow literals. -/
+
+private theorem norm_obj_eq {t : Impl String (fun _ => Json)} :
+    jnorm (.obj ⟨⟨t⟩⟩) = .obj (normObj t ∅) := rfl
+
+private theorem foldl_norm_eq {L : List (String × Json)} (hv : ∀ e ∈ L, jnorm e.2 = e.2)
+    (acc : Std.TreeMap.Raw String Json) :
+    L.foldl (fun a e => a.insert e.1 (jnorm e.2)) acc = L.foldl (fun a e => a.insert e.1 e.2) acc := by
+  induction L generalizing acc with
+  | nil => rfl
+  | cons h t ih =>
+    simp only [List.foldl_cons]
+    rw [hv h List.mem_cons_self, ih (fun e he => hv e (List.mem_cons_of_mem _ he))]
+
+private theorem asc_of {L : List (String × Json)}
+    (h : decide (L.Pairwise fun a b => compare a.1 b.1 = .lt) = true) : Asc Prod.fst L :=
+  (of_decide_eq_true h : L.Pairwise fun a b => compare a.1 b.1 = .lt)
+
+/-- `norm (mkObj L) = mkObj L` given keys ascending (`hasc`), each value a fixpoint (`hv`), and the concrete tree
+equality (`hofl`). `hofl` is general in `L`; callers discharge it by a `*_tree` lemma or `kernel_rfl'`. -/
+private theorem norm_mkObj_fix {L : List (String × Json)} (hasc : Asc Prod.fst L)
+    (hv : ∀ e ∈ L, jnorm e.2 = e.2)
+    (hofl : L.foldl (fun a e => a.insert e.1 e.2) (∅ : Std.TreeMap.Raw String Json)
+      = ⟨⟨Impl.Const.ofList L⟩⟩) :
+    jnorm (Json.mkObj L) = Json.mkObj L := by
+  rw [mkObj_eq, norm_obj_eq]
+  congr 1
+  rw [normObj_eq, toListModel_ofList hasc, List.foldl_map, foldl_norm_eq hv, hofl]
+
+private theorem norm_arr_fix {a : Array Json} (hv : ∀ x ∈ a.toList, jnorm x = x) :
+    jnorm (.arr a) = .arr a := by
+  obtain ⟨l⟩ := a
+  show Json.arr ⟨FlockSoundness.Discharge.Recursion.FirewallJson.normList l⟩ = Json.arr ⟨l⟩
+  rw [normList_eq]
+  refine congrArg (fun z => Json.arr ⟨z⟩) ?_
+  exact (List.map_congr_left (fun x hx => hv x hx)).trans (List.map_id l)
+
+/-- Discharge `jnorm j = j` for a shallow literal built from `mkObj`, array literals and leaves: `List.forall_mem_cons`
+splits each object's/array's membership into a conjunction, `repeat' apply And.intro` breaks it into one goal per member,
+and each is recursed (the empty tail closes by `List.forall_mem_nil`). -/
+syntax "nfix" : tactic
+macro_rules
+  | `(tactic| nfix) =>
+    `(tactic|
+      first
+      | rfl
+      | (refine norm_arr_fix ?_;
+         simp only [List.toList_toArray, List.forall_mem_cons];
+         repeat' apply And.intro) <;> (first | nfix | exact List.forall_mem_nil _)
+      | (refine norm_mkObj_fix (asc_of (by kernel_rfl')) ?_ (by kernel_rfl');
+         simp only [List.forall_mem_cons];
+         repeat' apply And.intro) <;> (first | nfix | exact List.forall_mem_nil _))
+
+private theorem norm_query : jnorm query = query := by unfold query; nfix
+private theorem norm_law : jnorm law = law := by unfold law; nfix
+
+/-- The partition object's `query` member is `build`'s `if` on `keys? query`; `query` is non-empty, so it is `query`,
+whose rebuild is `norm_query`; the other two members are string leaves. -/
+private theorem norm_partition : jnorm partitionObj = partitionObj := by
+  have hq : Spot.keys? query = some #["name", "params", "version"] := by
+    unfold query; rw [keys?_mkObj, sortStrings_eq_sortLt]; kernel_rfl'
+  have hif : (if Spot.keys? query == some #[] then Spot.Partition.defaultQuery else query) = query := by
+    rw [hq]; kernel_rfl'
+  unfold partitionObj Spot.Partition.build
+  rw [hif]
+  refine norm_mkObj_fix (asc_of (by kernel_rfl')) ?_ (by kernel_rfl')
+  intro e he
+  simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
+  rcases he with rfl | rfl | rfl
+  · nfix             -- format
+  · nfix             -- program
+  · exact norm_query -- query
+
+/-- The tree equality for `paramsJ`'s 16-key object, values universally quantified so `kernel_rfl'` never carries the
+giant `programJ` value (which otherwise exhausts memory). Instantiated at `paramsJ`'s values it discharges `hofl`. -/
+private theorem paramsJ_tree (v0 v1 v2 v3 v4 v5 v6 v7 v8 v9 v10 v11 v12 v13 v14 v15 : Json) :
+    ([("anchors", v0), ("challenger", v1), ("delta", v2), ("form", v3), ("law", v4), ("leaf_layer", v5),
+      ("log", v6), ("partition", v7), ("ports", v8), ("program", v9), ("proofs", v10), ("query", v11),
+      ("registered", v12), ("scheme", v13), ("window_root", v14), ("work_table", v15)]
+        : List (String × Json)).foldl (fun a e => a.insert e.1 e.2) (∅ : Std.TreeMap.Raw String Json)
+      = ⟨⟨Impl.Const.ofList
+          [("anchors", v0), ("challenger", v1), ("delta", v2), ("form", v3), ("law", v4), ("leaf_layer", v5),
+           ("log", v6), ("partition", v7), ("ports", v8), ("program", v9), ("proofs", v10), ("query", v11),
+           ("registered", v12), ("scheme", v13), ("window_root", v14), ("work_table", v15)]⟩⟩ := by
+  kernel_rfl'
+
+/-- The tree equality for `θJ`'s inner component object `{id, params}`, values abstract. -/
+private theorem θinner_tree (v0 v1 : Json) :
+    ([("id", v0), ("params", v1)] : List (String × Json)).foldl (fun a e => a.insert e.1 e.2)
+        (∅ : Std.TreeMap.Raw String Json)
+      = ⟨⟨Impl.Const.ofList [("id", v0), ("params", v1)]⟩⟩ := by kernel_rfl'
+
+/-- The tree equality for `θJ`'s top object `{components}`. -/
+private theorem θtop_tree (v0 : Json) :
+    ([("components", v0)] : List (String × Json)).foldl (fun a e => a.insert e.1 e.2)
+        (∅ : Std.TreeMap.Raw String Json)
+      = ⟨⟨Impl.Const.ofList [("components", v0)]⟩⟩ := by kernel_rfl'
+
+/-- `paramsJ`'s rebuild is itself, given the program descriptor's own fixpoint (`hprog`). Every other member is a shallow
+literal (`nfix`), the subset law (`norm_law`), the partition object (`norm_partition`) or the query (`norm_query`). -/
+private theorem norm_paramsJ (hprog : jnorm programJ = programJ) : jnorm paramsJ = paramsJ := by
+  rw [paramsJ]
+  refine norm_mkObj_fix (asc_of (by kernel_rfl')) ?_ (paramsJ_tree _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+  intro e he
+  simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
+  rcases he with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl
+  · nfix                 -- anchors
+  · nfix                 -- challenger
+  · nfix                 -- delta
+  · nfix                 -- form
+  · exact norm_law       -- law
+  · nfix                 -- leaf_layer
+  · nfix                 -- log
+  · exact norm_partition -- partition
+  · nfix                 -- ports
+  · exact hprog          -- program
+  · nfix                 -- proofs
+  · exact norm_query     -- query
+  · nfix                 -- registered
+  · nfix                 -- scheme
+  · nfix                 -- window_root
+  · nfix                 -- work_table
+
+/-- `θJ`'s rebuild is itself, given `paramsJ`'s (`hp`): one component, whose `params` is `paramsJ` and whose `id` is a
+string leaf. -/
+private theorem norm_θJ (hp : jnorm paramsJ = paramsJ) : jnorm θJ = θJ := by
+  rw [θJ]
+  refine norm_mkObj_fix (asc_of (by kernel_rfl')) ?_ (θtop_tree _)
+  intro e he
+  simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
+  rcases he with rfl
+  refine norm_arr_fix ?_
+  intro x hx
+  simp only [List.toList_toArray, List.mem_cons, List.not_mem_nil, or_false] at hx
+  rcases hx with rfl
+  refine norm_mkObj_fix (asc_of (by kernel_rfl')) ?_ (θinner_tree _ _)
+  intro e2 he2
+  simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he2
+  rcases he2 with rfl | rfl
+  · nfix          -- id
+  · exact hp      -- params
+
+/-- From the one structural fact `NormFacts` (the program descriptor's rebuild), both the composite's and the
+component's rebuilds. -/
+private theorem normFacts_derive (hN : NormFacts) : jnorm θJ = θJ ∧ jnorm paramsJ = paramsJ :=
+  ⟨norm_θJ (norm_paramsJ hN), norm_paramsJ hN⟩
+
 set_option maxHeartbeats 4000000 in
 /-- The parameters `θ₀` decodes to, with each field `paramsOfJson` reads. -/
 private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN : NormFacts) :
@@ -467,7 +625,7 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
   have hBp : Flock.canon paramsJ = .ok (Firewall.printJson paramsJ) := hJ.canon_plain (plain_paramsJ hpp)
   have hDp : Flock.canon programJ = .ok (Firewall.printJson programJ) :=
     hJ.canon_plain (show Firewall.plain programJ = true from hpp)
-  obtain ⟨hNθ, hNp⟩ := hN
+  obtain ⟨hNθ, hNp⟩ := normFacts_derive hN
   -- The decode: `θJ` is canon-tainted only through the `paramsJ` constant, which the walk hands whole to `canon`; so
   -- generalize `paramsJ` to a fresh value, detainting the literal, and give the walk `canon`'s equation over it.
   have hdec : (Core.canonicalJson θ₀ >>= Core.Composition.decodeParams) = .ok
