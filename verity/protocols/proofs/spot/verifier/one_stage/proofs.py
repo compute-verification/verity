@@ -44,7 +44,7 @@ statement a sampled member (`OneStageZk.membersEvidenceOf`).
 
 A window of several members has v2's per-member form of ``proofs`` (`members_v2`: every `Member` in the parameters, one
 statement for each member with a session in the evidence), which the audit's check reads beside the one statement's
-and decides by `OneStageZk.checkMembersAt` (`members.check`). `members_parsed` is what its parsers read of a case's
+and decides by `OneStageZk.checkMembersAt` (`members.check`), which refuses what would accept (`MULTI_REFUSED`). `members_parsed` is what its parsers read of a case's
 parameters and evidence, with no check and no verdict.
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `spot-verifier`
@@ -600,7 +600,7 @@ def members_v2(members: Sequence[Member],
     every member's files, sampled or not (`OneStageZk.membersFiles`). The case's blobs hold besides them each pinned
     lookup table a member's circuit looks up, any member's (`own_tables`). Two members of one name, a member of no unit
     or one with several sessions raise: a statement is exactly one session on live coins. `Spot.OneStageZk` checks a
-    case of this form by `checkMembersAt` (`members.check`); `members_parsed` holds these keys to its parsers."""
+    case of this form by `checkMembersAt` (`members.check`), which refuses it after every other check (`MULTI_REFUSED`); `members_parsed` holds these keys to its parsers."""
     if len({m.name for m in members}) != len(members):
         raise ValueError("two members have one name: a member's name is its own")
     for m in members:

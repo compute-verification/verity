@@ -115,8 +115,8 @@ limit, a development host's choice, which its line then says). The executables r
 they check anything (`Core.BlobProtocol`), so a case whose blob files sum past ``CHECK_BLOBS_GB`` (default
 `CHECK_BLOBS_GB`) is not started either. And a v2 case, remote's SPOT case or the bare one, is not asked where
 its proofs are not one statement's sessions (the per-member form, `proofs.statements_v2`): one-stage v2 refuses that
-form when it parses the evidence (`OneStageZk.proofsOf`), after it has read every blob, so its answer is known and the
-check is not run.
+form at the end of its check (`OneStageZk.MULTI_REFUSED`), after it has read every blob and every other check of the
+form has passed, so its answer is a refusal and the check is not run.
 
 This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written (with ``memory``, where its check ran
 under no limit), a ``NOT_STARTED {"protocol", "reason", "blob_bytes", "limit_bytes", "blobs"}`` line per check not
@@ -322,8 +322,8 @@ def window_case(audit: Path) -> dict[str, Any]:
 
 #: why a v2 case in the per-member form is not asked
 PER_MEMBER = ("the case's proofs are not one statement's sessions but the per-member form, which one-stage v2 refuses "
-              "when it parses the evidence (OneStageZk.proofsOf), after reading every blob: its answer is known, so "
-              "the check is not started")
+              "at the end of its check (OneStageZk.MULTI_REFUSED), after reading every blob and every other check of "
+              "the form: its answer is a refusal, so the check is not started")
 
 
 def v2_case(audit: Path, env: Mapping[str, str] | None = None) -> dict[str, Any]:

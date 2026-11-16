@@ -10,7 +10,7 @@
 # MEMBERS may name several sizes ("300 1200"): a window, a case and its rows each, so the rows at one N are the pass
 # against the window's members at a fixed count of members handed. A stand-in window's program does not grow with its
 # members (its root holds the templates' nodes), so these rows do not vary the program's size.
-# v2's check must accept each case. Run from a clone (the builds write the verifiers' .lake):
+# v2's check must refuse each case as the per-member form (MULTI_REFUSED), after every other check passed. Run from a clone (the builds write the verifiers' .lake):
 #   research run --as proofs --project verity --on auto --source . --cwd clone --mem-gb 32 -- \
 #     bash benchmarks/verifier_cost/members_files.sh 1 2 16 150 all
 #   research run --as proofs --project verity --on auto --source . --cwd clone --mem-gb 32 --env "MEMBERS=300 1200" -- \
