@@ -27,13 +27,13 @@ sys.path.insert(0, str(POUW / "harness"))
 
 import arm as A  # noqa: E402
 import baselines as B  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import audit  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape as Unit  # noqa: E402
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
-from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD  # noqa: E402
 from verity_torch.pouw.pearl_c import run_device as PPDR
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
 from verity_torch.pouw.pearl_c import served_y_device as SYD  # noqa: E402
 
 
@@ -97,7 +97,7 @@ def test_the_arms_declared_verdict_is_the_leans(tmp_path, monkeypatch, capsys):
     disagrees with the twin or answers nothing; the control is rejected on the Lean's REJECT alone."""
     import stat
 
-    from verity.protocols.accounting.pouw.verifier import verifier as PV
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
 
     V = _load("pouw_harness_verify", POUW / "harness" / "verify.py")
     T = sys.modules.get("test_pearl_c_vllm") or _load("test_pearl_c_vllm", POUW / "tests" / "test_pearl_c_vllm.py")

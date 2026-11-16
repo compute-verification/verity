@@ -15,7 +15,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler K=verity/protocols/accounting/pouw/prover/kernels/filler
+D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/dfill.XXXXXX); trap 'rm -rf "$B"' EXIT
 export DF_ALONE=${DF_ALONE:-"4:1 4:2 4:4 8:1 8:2 8:4"}
 export DF_ARMS=${DF_ARMS-"split:92:8:4 split:60:8:4 split:44:8:4 split:28:8:4 co:0:4:4 co:0:2:4 co:0:4:4:15"}

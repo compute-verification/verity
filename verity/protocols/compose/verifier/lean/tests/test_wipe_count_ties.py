@@ -13,9 +13,9 @@ import pytest
 import reference as R
 from verity_difftest import canonical
 
-from verity.protocols.accounting.certifier.verifier import span
-from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.pous.verifier import wipe_period as WP
+from verity.protocols.resource_accounting.network.verifier import span
+from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as WP
 
 C, S = R.WIPE_CASES, R.SPAN_CASES
 M, WC = C.M, C.WC

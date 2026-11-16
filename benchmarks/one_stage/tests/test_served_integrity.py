@@ -30,8 +30,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, docket as R
 
 HERE = Path(__file__).resolve().parent

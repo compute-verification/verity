@@ -93,7 +93,7 @@ which takes any carry-in, and refused by `charge_chain.check_chain` (``CH-carry`
 
 **Every advised window is proved**, never sampled: the carry chain binds only proved units (an unproved window's
 carry-out is any the prover likes), and ``en`` is the slice's scan's (the certifier PROTOCOL's A3,
-`verity/protocols/accounting/certifier/verifier/protocol/compile-slice.md`).
+`verity/protocols/resource_accounting/network/verifier/protocol/compile-slice.md`).
 
 **Statics**: ReplayStep_v1's (R, W, A and the engine's M, T, L, B, H, CH, WM, FULL, PC, NB, and IW), the chain's Q, D,
 P, K (`replay_chain.Shape`), and the cache's CN entries, CTW a token id's width and CU the units of each arrival's tokens
@@ -127,7 +127,7 @@ from verity.circuits.boolean.forms import ONE, ZERO, Circuit, and_reduce, const_
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
-from verity.protocols.accounting.certifier.verifier import arith_encode as AE, charge_chain as CC
+from verity.protocols.resource_accounting.network.verifier import arith_encode as AE, charge_chain as CC
 from verity_vllm.compiler import cache_step as CST
 from verity_vllm.compiler import replay_chain as RC, replay_step as RS
 from verity.circuits.boolean import BIT

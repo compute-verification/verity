@@ -15,8 +15,8 @@
 - **Lean**: none. `physical` mirrors the Lean physical model, and no Lake package is here.
 - **Documents**: none. The package writes no file and defines no schema.
 - **Loads from**: `verity.circuits`, `verity.commitments`, `verity_vllm.definitions`, the registration log
-  (`verity.protocols.accounting.registration.verifier`), `verity.protocols.proofs.spot.verifier` and PoUB's `timing`
-  and `codec` (`verity.protocols.accounting.poub.verifier`).
+  (`verity.protocols.registration.verifier`), `verity.protocols.proofs.spot.verifier` and PoUB's `timing`
+  and `codec` (`verity.protocols.resource_accounting.memory.poub.verifier`).
 
 ## Overview
 
@@ -90,7 +90,7 @@ print(account(audit(run(p, {"x": X}, plan), profile), profile))
 section.
 
 The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `DeviceEntry` is
-`Accounting.Device` (the node's constants are its one Python mirror's, `verity.protocols.accounting.poub.verifier.timing`),
+`Accounting.Device` (the node's constants are its one Python mirror's, `verity.protocols.resource_accounting.memory.poub.verifier.timing`),
 `Zone` is `Hardware.SpatialUnit` with `Covered`, `Placed` is `Accounting.Placed` (and
 `Accounting.Requirement.Placement`) at the census's grain, a `StoreEntry` is `Accounting.Requirement.Store`, and an
 `Interval` is `Accounting.Window`.

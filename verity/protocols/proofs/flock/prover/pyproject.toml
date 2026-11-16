@@ -93,7 +93,7 @@ inputs = [
     # its pinned vectors
     "verity/protocols/proofs/spot", "verity/commitments/randomness", "verity/commitments/randomness/tests",
     # the Lean decoder's width refusals against the codec, on the inference-only difftest's mistyped descriptors
-    "verity/protocols/policy/inference_only/verifier/lean/scripts",
+    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
     # tree to RecVStar's
     "verity/protocols/proofs/flock/verifier/Flock/Zk.lean", "verity/protocols/proofs/flock/verifier/Flock/Tags.lean", "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
@@ -102,7 +102,7 @@ inputs = [
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
     # lock, the release side's (its Flock.ZkServer.Honest is Flock's, which the flock-zk-server artifact keys)
     "tools/difftest/python/verity_difftest", "verity/circuits/difftest", "verity/protocols/proofs/recursion/verifier/zk_server",
-          "verity/__init__.py", "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py",
+          "verity/__init__.py", "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/workload_classification/__init__.py",
           # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
           "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
 parallel = true
@@ -163,7 +163,7 @@ paths = [
     "verity/circuits/lean",
     "verity/commitments/lean",
     "verity/commitments/lms/lean",
-    "verity/protocols/compose/device/live_challenger",
+    "verity/protocols/compose/verifier/live_challenger",
     "verity/protocols/interface",
     "verity/protocols/proofs/flock/verifier",
     "verity/protocols/proofs/spot/verifier/lean",
@@ -201,7 +201,7 @@ tests = [
     "tests/test_tmpl_statement.py",
     "tests/test_unit_range.py",
 ]
-paths = ["verity/protocols/accounting/pouw/verifier/tests", "verity/protocols/experimental/pearl_c4/tests"]
+paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/tests", "verity/protocols/experimental/pearl_c4/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_derive.py"]
@@ -260,15 +260,15 @@ tests = [
     "tests/test_rec_outer.py",
     "tests/test_rec_vstar_checks.py",
 ]
-paths = ["verity/protocols/accounting/pouw/verifier/lean/check/models.json"]
+paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_partition_units.py", "tests/test_rec_shape.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
-    "verity/protocols/accounting/certifier",
-    "verity/protocols/accounting/pous",
-    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods",
+    "verity/protocols/resource_accounting/network",
+    "verity/protocols/resource_accounting/memory/pous",
+    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/resource_accounting/compute/pouw/prover", "verity/protocols/resource_accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
 ]
 
 [[tool.verity.tests.reads]]

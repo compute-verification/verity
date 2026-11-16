@@ -25,17 +25,17 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity.circuits.refs import runs
-from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier import credit as CR
-from verity.protocols.accounting.pouw.verifier import salt as PS
-from verity.protocols.accounting.pouw.verifier import verifier
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import HM96, commit_rows, salt_of
-from verity.protocols.accounting.pouw.verifier.coins import Challenger
-from verity.protocols.proofs.spot.device import challenger as LC
-from verity.protocols.proofs.spot.device import remote as R
-from verity.protocols.proofs.spot.device.challenger import CoinError, LiveRecord
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
+from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, commit_rows, salt_of
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
+from verity.protocols.proofs.spot.verifier.challenger import remote as R
+from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveRecord
 
 from tests.protocols import challenger_host as CH
 from verity_vllm import llm as L
@@ -45,12 +45,12 @@ from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 from verity_vllm.protocols.pouw import h1_hooks as PHK
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
-from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 
 K = 64
 ROW = K * PH.I8_BITS
