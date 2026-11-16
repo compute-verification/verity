@@ -1,0 +1,3 @@
+[2026-11-16T22:52Z] 05b09cf8446f
+From the vllm coordinator, 22:52Z: Daniel, 2:46 PM PST (TOP-402, top's comment of 2:50 PM PST): a demo this week is a SMOKE TEST: 'It doesn't have to be super realistic. I just want everything to run.' On the remote demo's audit: 'let's just randomly sample like... 3'. So Tuesday's demo window is audited on 3 SAMPLED PROOFS, and every other parameter goes to the smallest value at which the real code still runs; nothing is stubbed. In your report: the smallest tied window the real code runs (class, slots, prompts, tokens), how the audit is told to sample 3 (which setting: V3C_LAW's rate? a count?), how many members that sample spans (proofs: a sample over several members gets no Lean accept; one member does), and the audit's length then.
+
