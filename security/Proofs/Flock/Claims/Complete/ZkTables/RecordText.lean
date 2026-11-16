@@ -64,10 +64,12 @@ theorem namesLe_one {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) 
   simp only [List.mem_toArray, List.mem_cons, List.not_mem_nil, or_false] at hq
   rcases hq with rfl | rfl
   · show (s!"{t}/rep{(0 : Nat)}").length + (spec.domain spec.tables[0]! 0).length ≤ _
-    rw [length_rep t 0 (by decide), ht0]
+    have := length_rep t 0 (by decide)
+    rw [ht0]
     omega
   · show (s!"{t}/rep{(1 : Nat)}").length + (spec.domain spec.tables[0]! 1).length ≤ _
-    rw [length_rep t 1 (by decide), ht0]
+    have := length_rep t 1 (by decide)
+    rw [ht0]
     omega
 
 theorem toUTF8_size_eq (s : String) : s.toUTF8.size = s.utf8ByteSize := by
