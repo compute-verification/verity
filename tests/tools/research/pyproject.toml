@@ -221,6 +221,11 @@ tests = ["test_nebius_commit_pack_sizes.py"]
 paths = ["tools/research/src/research/pods/nebius/sky"]
 
 [[tool.verity.tests.reads]]
+tests = ["test_nebius_compose_packaging.py"]
+paths = ["benchmarks/one_stage/served_composite.sh", "benchmarks/one_stage/served_cases.py",
+         "benchmarks/one_stage/inference_only_lean.py"]
+
+[[tool.verity.tests.reads]]
 tests = [
     "test_nebius_dispatch_lease_pool.py",
     "test_nebius_dispatch_pin.py",

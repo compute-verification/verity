@@ -74,9 +74,11 @@ tar --create --files-from=private/compose/inputs.txt --file=- | $COMPOSE_GATE co
 
 `COMPOSE_GATE` is the sender's setting: `ssh` with the lane's gate key, as `research` on that address.
 
-At pin time, as `auditor`, infra builds the tree's venv (`uv sync --all-packages --extra torch-cpu`) and the Lean
-packages the compose runs (`verity/protocols/proofs/spot_flock_recursion/verifier/lean`, whose `vstar-recursive` the record runs, and the
-composite's), and records the pin with the branch it is on (`host.py pinned COMMIT BRANCH`). The compose runs as
+At pin time (`vy-compose-pin COMMIT BRANCH [--prepare]`, whose master and the gate wrapper's are
+`tools/research/src/research/pods/nebius/compose/`), as `auditor`, infra builds the tree's venv (`uv sync --all-packages
+--extra torch-cpu`) and the Lean executables the compose builds (`verity/protocols/proofs/spot_flock_recursion/verifier/lean`'s
+`vstar-recursive`, which the record runs, and the cases' and the composite's), and records the pin with the branch it is on
+(`host.py pinned COMMIT BRANCH`). The compose runs as
 `auditor` with `HOME=/var/lib/vy-compose`, so `lake` and `elan` resolve from `/usr/local/bin` or that home's
 `.elan/bin`. The docstring says what the gate refuses and what it answers.
 
