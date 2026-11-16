@@ -16919,6 +16919,11 @@ theorem band_meets_64_d12 (hepf : ChainExPostFactoG) : ChainBandMeets64 12 :=
   band_meets_64 hepf 12 (by norm_num)
 
 
+/-- **And its cliff at `D = 13`**: the gap attack costs `512 − 39 = 473` labels, below the `498` allowed. -/
+theorem band_cliff_d12 (c ℓ : ℕ) :
+    ¬ ChainHard (bandDAG 512 12) Finset.univ c ℓ ((512 - 13 - 1 : ℕ) : ℚ) 13 512 :=
+  fun h => band_gap_attack 512 12 13 c ℓ le_rfl (ChainHard.mono h (by norm_num))
+
 end Pous.BandChain
 
 end
@@ -28345,6 +28350,52 @@ theorem delta_add_lt_one {ε : ℝ≥0∞} (hε : ε ≤ Params.εMax) : ENNReal
     _ < 2⁻¹ + 2⁻¹ := ENNReal.add_lt_add_right (by simp) hδ
     _ = 1 := ENNReal.inv_two_add_inv_two
 
+/-- **`SharedDomainBreaks`, proved.** For zero data, the preprocessor keeps segment 0's `2^28`-bit labels, and the
+responder answers block `v` with the stored label of `v mod 2^9`, with no query. Every audit accepts. -/
+theorem shared_domain_breaks : SharedDomainBreaks := by
+  intro d salt D Q k ε hM
+  obtain ⟨hε, -, -, -, hsec⟩ := hM
+  rw [stateBound_seg_14] at hsec
+  have hLS : 2 ^ 9 * 524288 ≤ 113929658799 := by norm_num
+  let enc0 : (Fin (2 ^ 9) → Bits 524288) → Bits 113929658799 := fun y t =>
+    if h : t.val < 2 ^ 9 * 524288 then codeEquiv (2 ^ 9) 524288 y ⟨t.val, h⟩ else false
+  let dec0 : Bits 113929658799 → Fin (2 ^ 9) → Bits 524288 := fun σ =>
+    (codeEquiv (2 ^ 9) 524288).symm (fun t => σ ⟨t.val, lt_of_lt_of_le t.isLt hLS⟩)
+  have hdec : ∀ y, dec0 (enc0 y) = y := by
+    intro y
+    have : (fun t : Fin (2 ^ 9 * 524288) => enc0 y ⟨t.val, lt_of_lt_of_le t.isLt hLS⟩) =
+        codeEquiv (2 ^ 9) 524288 y := by
+      funext t
+      simp only [enc0, t.isLt, ↓reduceDIte]
+    show (codeEquiv (2 ^ 9) 524288).symm _ = y
+    rw [this, Equiv.symm_apply_apply]
+  let s0 : Fin 448 := ⟨0, by norm_num⟩
+  let sch := chainBandSeg 448 (2 ^ 9) d 524288 512 (sharedDom salt (2 ^ 9))
+  let A₁ : Preprocessor sch 113929658799 := fun _ _ C _ => enc0 fun i => C (gIdx s0 i)
+  let A₂ : SeqResponder sch 113929658799 D Q :=
+    { step := fun _ _ _ σ i => OracleAlgorithm.ret (dec0 σ (locOf (N := 448) (B := 2 ^ 9) i), σ)
+      bounded := fun _ _ _ _ _ _ => ⟨Nat.zero_le _, Nat.zero_le _⟩ }
+  have hacc : ∀ x, seqAccepts sch k (fun _ => false) A₁ A₂ x := by
+    intro x
+    let f : Bits (524288 + (524288 + 512)) → Bits (524288 + (524288 + 512)) := fun y =>
+      (idealPerm (524288 + (524288 + 512))).answer x.1 (.inl y)
+    let C := labelG (bandSegDAG 448 (2 ^ 9) d) f (sharedDom salt (2 ^ 9))
+      (Dense.blocks (448 * 2 ^ 9) 524288 (fun _ => false))
+    show seqAnswers ((idealPerm (524288 + (524288 + 512))).answer x.1)
+        (fun _ σ i => OracleAlgorithm.ret (dec0 σ (locOf (N := 448) (B := 2 ^ 9) i), σ)) 0 (List.ofFn x.2.2)
+        (enc0 fun i => C (gIdx s0 i)) = List.ofFn fun j => C (x.2.2 j)
+    refine (seqAnswers_ret_ofFn _ _ _ x.2.2).trans ?_
+    congr 1
+    funext j
+    show dec0 (enc0 fun i => C (gIdx s0 i)) (locOf (x.2.2 j)) = C (x.2.2 j)
+    rw [hdec]
+    show C (gIdx s0 (locOf (x.2.2 j))) = C (x.2.2 j)
+    exact (sharedDom_label (N := 448) (B := 2 ^ 9) (d := d) f salt (gIdx s0 (locOf (x.2.2 j)))).trans
+      ((congrArg _ (locOf_gIdx s0 _)).trans (sharedDom_label (N := 448) (B := 2 ^ 9) (d := d) f salt _).symm)
+  have h2 := hsec (fun _ => false) A₁ A₂
+  rw [pr_eq_one hacc] at h2
+  exact absurd h2 (not_le.2 (delta_add_lt_one hε))
+
 
 end Pous.BandMulti
 
@@ -28807,6 +28858,17 @@ instance instSubsingletonCoinsChainDense (B ℓ c : ℕ) [NeZero B] (dom : ℕ �
 /-- The trusted `Pous.Dense.denseScheme` is the dense file's `PousDenseChain.denseScheme`, verbatim. -/
 theorem denseScheme_trusted (B ℓ : ℕ) [NeZero B] : PousDenseChain.denseScheme B ℓ = Pous.Dense.denseScheme B ℓ := rfl
 
+theorem dense_pub_meets_64 : Pous.Pinned.DensePubMeets64 := by
+  have h := meets_seq_add _ 5 Pous.DenseReCert.dense_meets_64
+  rw [denseScheme_trusted] at h
+  exact pubMeets_exact _ (denseScheme_encDec _ _) h
+
+theorem seg_pub_meets_14 : SegPubMeets14 :=
+  pubMeets_exact _ (segScheme_encDec _ _ _) (meets_seq_add _ 5 Pous.DenseReCert.seg_meets_14)
+
+theorem chain_pub_meets_64 (hepf : Pous.Sponge.ChainExPostFacto) : ChainPubMeets64 := fun salt =>
+  pubMeets_exact _ (chainDense_encDec _ _ _ _) (PousSpongeChain.chain_meets_64 hepf salt)
+
 
 /-- A check that accepts everything. -/
 def acceptAll {M : IdealModel} (sch : Scheme M) : SetupCheck sch where
@@ -28847,6 +28909,12 @@ theorem acceptAll_hyp_witness : ENNReal.ofReal (Params.δ : ℝ) + (2⁻¹ : ℝ
         ENNReal.add_lt_add_of_lt_of_le (by simp) hδ hε
     _ = 1 := ENNReal.inv_two_add_inv_two
 
+/-- So the deployed dense scheme with an accept-all check fails the public-encoder game. -/
+theorem acceptAll_fails_dense (k : ℕ) :
+    ¬ PubAuditSecure (Pous.Dense.denseScheme (2 ^ 9) 524288) (acceptAll _) .sequential
+      ((Pous.Dense.denseScheme (2 ^ 9) 524288).stateBound Params.ρ) 5 (2 ^ 20) k (ENNReal.ofReal Params.δ)
+      ((2⁻¹ : ℝ≥0∞) ^ 128) :=
+  acceptAll_not_pubAuditSecure _ _ _ _ _ acceptAll_hyp_witness
 
 end PousPub
 
@@ -28931,6 +28999,9 @@ def ChainBandPubMeets64 (d : ℕ) : Prop :=
 theorem band_pub_meets_64 (hepf : ChainExPostFactoG) (d : ℕ) (hd : 5 ≤ d) : ChainBandPubMeets64 d := fun salt =>
   PousPub.pubMeets_exact _ (chainBand_encDec _ _ _ _ _) (band_meets_64 hepf d hd salt)
 
+
+theorem band_pub_meets_64_d12 (hepf : ChainExPostFactoG) : ChainBandPubMeets64 12 :=
+  band_pub_meets_64 hepf 12 (by norm_num)
 
 end Pous.BandChain
 
