@@ -29,9 +29,9 @@ compacted top-k (`mtp/speculator.py:50-54`, `models/deepseek_v32/attention.py:42
 have.
 
 The weights record is the target's (`dsa.Net`) and then the draft layer's, under its checkpoint names `model.layers.NL.*`: its
-`enorm`, `hnorm`, `eh_proj` and `shared_head.norm` (mtp.py:66-68, 81-83), then its decoder layer's in the family's module order,
-each typed and keyed as `generic._mla_weight_field` maps layer NL of a configuration one layer longer whose indexer layers include
-it.
+`enorm`, `hnorm`, `eh_proj` and `shared_head.norm` (mtp.py:66-68, 81-83), then its decoder layer's parameters in the family's
+module order and its buffers, each typed and keyed as `generic._mla_weight_field` maps layer NL of a configuration one layer
+longer whose indexer layers include it.
 
 Premises, each unsettled at the pin and taken here rather than read:
 
@@ -117,7 +117,8 @@ class Net(_TargetNet):
         ]
         longer = {**C, "NL": NL + 1, "INDEXER_LAYERS": (*(C.get("INDEXER_LAYERS") or ()), NL)}
         T, field = analytic.mla_weights_type(longer), _mla_weight_field(hf, longer)
-        for rest in FF.facts_for(hf)["params"]["order"]:
+        params = FF.facts_for(hf)["params"]
+        for rest in (*params["order"], *params["buffers"]):
             name = f"model.layers.{NL}.{rest}"
             path = field(name)
             if path is not None:
@@ -151,6 +152,7 @@ class Draft(_Model):
         """Draft step 0 over the target step's rows at positions pos0..: `ids` its input ids (I32 rows), `sampled` the token it
         sampled after its kept rows, `prev` its final-normed hidden rows, `kept` the rows the prepare kernel keeps (the target's
         rows less its rejected ones), and `left` a `Leftover` for each row past them."""
+        from verity_vllm.definitions.registry.prims import BF16
         M, R = len(ids), int(self.C["QK_ROPE"])
         if not (1 <= kept <= M and len(prev) == M and len(left) == M - kept):
             raise ValueError(f"draft step 0 over {M} rows keeps 1..{M} of them and takes the target's {M} hidden rows and a Leftover "
@@ -159,7 +161,7 @@ class Draft(_Model):
         pos = [self.call(self.k("const", W=64, BITS=pos0 + j)).refs for j in range(kept)] + [o.pos.refs for o in left]
         table = self.w["cos_sin"]
         rope = [o.rope.refs for o in left]
-        self.w["cos_sin"] = Coll(Array(pos0 + M, Array(R, table.type.elem.elem)),
+        self.w["cos_sin"] = Coll(Array(pos0 + M, Array(R, BF16)),
                                  concat([table.refs.slice(0, (pos0 + kept) * R), *rope])) if rope else table
         try:
             x = self._layer(rows, pos, prev, pos0)
