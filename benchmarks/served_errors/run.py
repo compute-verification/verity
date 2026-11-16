@@ -1,6 +1,5 @@
 """`verity bench served_errors [--json]`: error terms of the quoted guarantees that had no value at the sizes we serve,
-evaluated there. It reads the workload card and nothing else, and writes the table's first row, one Flock session's
-knowledge error at one table, as the Metrics tab's number through the harness's kit (modeled).
+evaluated there. Standard library only; it reads the workload card and nothing else.
 
 Each row is one term: the guarantee it sits in, the formula, the parameters, and its value as the log2 of a probability,
 for one window, proof or block, against a prover of `2^80` SHA-512 calls unless the row says otherwise. Each row has a
@@ -28,10 +27,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity_bench import kit
-
 lg = math.log2
-METRIC = "compute-accounting/flock-session-knowledge-error"
 CARD = Path(__file__).resolve().parents[1] / "spot_figures" / "cards" / "workload.glm-5.3.json"
 #: the prover's budget in SHA-512 calls, log2; each row also gives `2^64` where the budget moves it
 T = 80
@@ -261,16 +257,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.json:
         print(json.dumps(rs, indent=1, ensure_ascii=False))
         return 0
-    ks = round(session_ks(T, 1), 2)
-    lines = [f"served_errors: 2^{ks:.2f}, one Flock --zk session's knowledge error at 2^{T} SHA-512 calls and one table "
-             "(modeled)", ""]
     for r in rs:
-        lines.append(f"{r['term']:22s} {str(r['log2']):>34s}  {r['tag']:8s} at {r['at']}")
-        lines.append(f"{'':22s} {r['guarantee']}: {r['formula']}" + (f"  [{r['rests_on']}]" if r["rests_on"] else ""))
-    m = {"name": METRIC, "value": ks, "unit": "log2 probability",
-         "inputs": [f"{rs[0]['formula']} at T = 2^{T} and one table, under {rs[0]['rests_on']}"]}
-    return kit.report("served_errors", "\n".join(lines), {"value": ks, "unit": "log2 probability", "rows": rs}, [m],
-                      mark="modeled")
+        print(f"{r['term']:22s} {str(r['log2']):>34s}  {r['tag']:8s} at {r['at']}")
+        print(f"{'':22s} {r['guarantee']}: {r['formula']}" + (f"  [{r['rests_on']}]" if r["rests_on"] else ""))
+    return 0
 
 
 if __name__ == "__main__":
