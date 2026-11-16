@@ -268,7 +268,7 @@ One line per mechanism; a new one gets its line here and its detail in the docst
   or of the compared texts that does not come back to itself is refused, as are two names of one section that land on
   one (`section_collisions`), a map in which one entry's new name is at, under or over another's old name (a chain or
   a swap: split it into two passes), and a name of the moves file that is not a Lean name (`name_error`: an unescaped
-  component must be an identifier or a number as `String.toName` reads it). The premises (`open`, `domain`,
+  part must be an identifier or a number as `String.toName` reads it). The premises (`open`, `domain`,
   `assumptions`), `four_names_except` and `claims.witnesses` are re-keyed like the guarantees, each entry's fields kept;
   a moved premise's definition is compared in its `reads` record, and one that no record holds is a statement change,
   since its `digest` hashes the new names. A move is held to the locks of the
