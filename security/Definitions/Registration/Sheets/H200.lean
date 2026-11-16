@@ -36,9 +36,9 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The H200's data sheet (generated)
 
-The data-sheet machine (`ResourceAccounting.TS.Sheet.machine`) at the H200 SXM (sm_90a)'s vendor values: each constant with the
-axiom that reads it, its value, its grade and its source, and the census of the machine model's `DS-90` vector, which
-`machine_eq_census` proves the machine is, line for line. Each tensor peak has a lemma that the per-clock peak
+The data-sheet machine (`ResourceAccounting.TS.Sheet.machine`) at the H200 SXM (sm_90a)'s vendor values: each constant
+with the axiom that reads it, its value, its grade and its source, and the census of the machine model's `DS-90` vector,
+which `machine_eq_census` proves the machine is, line for line. Each tensor peak has a lemma that the per-clock peak
 reproduces the document's per-second figure at the clock that figure is quoted at. A3 reads `Run.n` as device totals
 over the SMSPs, so a warpgroup's `wgmma` or a single-thread `tcgen05.mma` counts its MACs once, spread over the SM's
 four SMSPs.

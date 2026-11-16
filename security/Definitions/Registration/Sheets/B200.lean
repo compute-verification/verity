@@ -36,12 +36,12 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The B200's data sheet (generated)
 
-The data-sheet machine (`ResourceAccounting.TS.Sheet.machine`) at the HGX B200 (sm_100a, 180 GB, 1000 W)'s vendor values: each
-constant with the axiom that reads it, its value, its grade and its source, and the census of the machine model's
-`DS-100` vector, which `machine_eq_census` proves the machine is, line for line. Each tensor peak has a lemma that the
-per-clock peak reproduces the document's per-second figure at the clock that figure is quoted at. A3 reads `Run.n` as
-device totals over the SMSPs, so a warpgroup's `wgmma` or a single-thread `tcgen05.mma` counts its MACs once, spread
-over the SM's four SMSPs.
+The data-sheet machine (`ResourceAccounting.TS.Sheet.machine`) at the HGX B200 (sm_100a, 180 GB, 1000 W)'s vendor
+values: each constant with the axiom that reads it, its value, its grade and its source, and the census of the machine
+model's `DS-100` vector, which `machine_eq_census` proves the machine is, line for line. Each tensor peak has a lemma
+that the per-clock peak reproduces the document's per-second figure at the clock that figure is quoted at. A3 reads
+`Run.n` as device totals over the SMSPs, so a warpgroup's `wgmma` or a single-thread `tcgen05.mma` counts its MACs once,
+spread over the SM's four SMSPs.
 
 Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over NVLink or NVSwitch and sends back (whole
 tiles as 64-byte digests) is outside it: the sheet bounds what the credited GPU's SMs compute, not which GPU computed a
