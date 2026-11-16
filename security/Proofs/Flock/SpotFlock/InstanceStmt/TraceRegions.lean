@@ -6,6 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+public import Proofs.Flock.Recursive.InnerRows
 import Flock.HmRow
 import Flock.HmNets
 import Flock.Canon
@@ -269,12 +270,12 @@ theorem satisfies_regions_x
   have hsz' : ∀ g' ≤ 0, (Discharge.Layout.bcChunk st.c st.pub o.val g' p).size = 128 := by
     intro g' hg'
     obtain rfl : g' = 0 := by omega
-    exact (congrArg ByteArray.size (RF.bcChunk_bcP hp2 o.val)).trans (bcP_size p)
+    exact (congrArg ByteArray.size (bcChunk_bcP RF hp2 o.val)).trans (bcP_size p)
   have hbyte : (st.regions[p].bytes o.val).get! (i / 8) = (bcP p).data.toList.getD (i / 8) default := by
     rw [hbytes]
     have := Discharge.Layout.hmBytes_get (c := st.c) (pub := st.pub) (p := p) (b := o.val) (g := 0) (j := i / 8)
       (by rw [RF.g]; omega) (by omega) hsz'
-    rw [Nat.zero_mul, Nat.zero_add, RF.bcChunk_bcP hp2, Discharge.Layout.get!_eq_getD (bcP p)] at this
+    rw [Nat.zero_mul, Nat.zero_add, bcChunk_bcP RF hp2, Discharge.Layout.get!_eq_getD (bcP p)] at this
     exact this
   rw [hcol, hbcVal p hp2 i hi' h22, hbyte]
   rfl
