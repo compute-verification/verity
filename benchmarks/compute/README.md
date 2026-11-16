@@ -205,8 +205,9 @@ a run id. You need neither.
 The record directory is `RUN_DIR`, else the run directory under `research run`, else `./compute-run`. The command
 exits 0 only where both verdicts accept and the number prints. Each step's log is `out/logs/STEP.log`, its status a
 line of `out/steps.txt`, and its seconds are in `out/compute-run.json`'s `steps`. A share it prints is always this
-run's: it refuses a record directory that already holds a record, and a failed step ends it with exit 1, a sentence
-naming the step, `out/compute-run.json` written and no number. `COINS=local`, the default, runs a local challenger:
+run's: it refuses a record directory that already holds a record, a refused earlier try's `out/logs` included (remove
+`./compute-run`, or give `RUN_DIR` a new directory, before you run it again), and a failed step ends it with exit 1,
+a sentence naming the step, `out/compute-run.json` written and no number. `COINS=local`, the default, runs a local challenger:
 infra's gate code on a scratch auditor host with a test key, each session's challenger its own process on 127.0.0.1,
 so the Lean verdict is taken of record. Of record here means only that the Lean verifier took its of-record path
 (`--of-record`) against the local challenger's key, the test key this run made, not the auditor's: the `ran with`
