@@ -30,7 +30,7 @@ def pairs(d):
         yield "words", old, str(new)
     for w in d.get("words_in") or []:
         files = w.get("files") or []
-        scope = "words_in:" + (files[0] if len(files) == 1 else f"{files[0]}+{len(files) - 1}" if files else "")
+        scope = "words_in:" + ";".join(files)
         for old, new in (w.get("words") or {}).items():
             yield scope, old, str(new)
 
