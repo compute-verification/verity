@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, option, row_file
+from verity_vllm.config import CHECKPOINTS, UsageError, checkpoint_entries, option, row_file
 from verity_vllm.pipeline.cli import write
 from verity_vllm.records.schema_ids import REBASELINE_DIGESTS_SCHEMA
 
@@ -94,11 +94,14 @@ def has_role(checkpoint: dict[str, Any], role: str) -> bool:
 
 
 def resolve(row: str) -> tuple[str, str, str, int]:
-    """The row's checkpoint role, repo, revision and TP world (its workload and `manifests/checkpoints.json`)."""
+    """The row's checkpoint role, repo, revision and TP world (its workload and `manifests/checkpoints.json` with its sibling
+    manifests, `config.checkpoint_entries`)."""
     wl = _doc(row_file(row))
     role = wl["case"]
-    cps = _doc(ROOT / "manifests" / "checkpoints.json")["checkpoints"]
-    cp = next((c for c in cps if c.get("role") == role), None) or next(c for c in cps if has_role(c, role) and c.get("local_path"))
+    cps = checkpoint_entries(CHECKPOINTS)
+    cp = next((c for c in cps if c.get("role") == role), None) or next((c for c in cps if has_role(c, role) and c.get("local_path")), None)
+    if cp is None:
+        raise UsageError(f"row {row}: no pin in {CHECKPOINTS.name} or its sibling manifests serves its case {role!r}")
     # a row outside a sweep states `tp` itself, or in its id
     tp = int(_of(wl.get("sweep"), "tp") or wl.get("tp") or (2 if "__tp2__" in row else 1))
     return role, cp["repo"], cp["revision"], tp

@@ -1000,6 +1000,102 @@ def test_integer_metadata_triton_kernel_is_noop():
     assert r.kernels == ("_compute_slot_mappings_kernel",)
 
 
+DRAFT_KERNELS = ("_combine_sampled_and_draft_tokens_kernel", "_get_num_sampled_and_rejected_kernel")
+
+
+def _draft_metadata_launches(step, num_reqs, num_logits, k):
+    """vLLM V2's `_combine_sampled_and_draft_tokens_kernel` and `_get_num_sampled_and_rejected_kernel` (`gpu/input_batch.py`)
+    with the arguments a V2 capture records for them (at k = 0, an engine that drafts none), each a root of phase `other`,
+    at ids past the decode step's."""
+    b = Builder(step)
+    b.next_id = 9000
+    q = i64(A_CU_Q, (num_reqs + 1,), "int32")
+    cu = i64(330, (num_reqs + 1,), "int32")
+    idx = i64(331, (num_reqs,))
+    seq_lens, prefill_len = i64(A_SEQUSED, (num_reqs,), "int32"), i64(332, (8,), "int32")
+    b.triton("vllm.v1.worker.gpu.input_batch._combine_sampled_and_draft_tokens_kernel",
+             {"input_ids_ptr": ViewDesc(A_INPUT_IDS, 0, (16384,), (1,), "int32", CUDA), "idx_mapping_ptr": idx,
+              "last_sampled_tokens_ptr": i64(333, (8, 1)), "query_start_loc_ptr": q, "seq_lens_ptr": seq_lens,
+              "prefill_len_ptr": prefill_len, "draft_tokens_ptr": ViewDesc(334, 0, (8, k), (k or 1, 1), "int64", CUDA),
+              "draft_tokens_stride": k or 1, "cu_num_logits_ptr": cu, "logits_indices_ptr": i64(A_LOGITS_IDX, (num_logits,)),
+              "BLOCK_SIZE": 1 if num_logits == num_reqs else 8, "NUM_NEW_SAMPLED_TOKENS": 1},
+             {"BLOCK_SIZE": 1 if num_logits == num_reqs else 8, "NUM_NEW_SAMPLED_TOKENS": 1}, [num_reqs], 4, 3, phase="other")
+    b.triton("vllm.v1.worker.gpu.input_batch._get_num_sampled_and_rejected_kernel",
+             {"num_sampled_ptr": i64(335, (num_reqs,), "int32"), "num_rejected_ptr": i64(336, (num_reqs,), "int32"),
+              "seq_lens_ptr": seq_lens, "cu_num_logits_ptr": cu, "idx_mapping_ptr": idx, "prefill_len_ptr": prefill_len},
+             {}, [num_reqs], 4, 3, phase="other")
+    return b.events
+
+
+def _with_draft_metadata(events, k):
+    """The decode step with the two launches: the combine before the forward, the counts before `SampleEnd`."""
+    combine, counts = _draft_metadata_launches(events[0].step, 1, 1, k)
+    at = next(i for i, e in enumerate(events) if isinstance(e, SampleEnd))
+    return [events[0], combine, *events[1:at], counts, *events[at:]]
+
+
+def _noop(root_id, name):
+    return Transparent("noop", (root_id,), hint=f"{name}: integer metadata kernel", kernels=(name,), pattern="transparent.triton_metadata")
+
+
+@pytest.mark.parametrize("k", [0, 5])
+def test_a_step_without_drafts_folds_its_integer_launches_as_today(k):
+    """A step that verifies no draft token (one logits row a request), on an engine that drafts none (k = 0) or five: the
+    two draft kernels and the slot mappings are each the integer metadata noop they were before the refusal, and every
+    other root of the step resolves as it does without the two."""
+    events, start = decode_step(metadata_kernel=True)
+    se, se0 = step_events(_with_draft_metadata(events, k)), step_events(events)
+    res, res0 = resolve_step(se, context(start, se.sample)), resolve_step(se0, context(start, se0.sample))
+    meta = {root.id: r for root, r in zip(se.roots, res) if root.id >= 9000}
+    assert meta == {i: _noop(i, n) for i, n in zip(sorted(meta), DRAFT_KERNELS)}
+    assert [r for root, r in zip(se.roots, res) if root.id < 9000] == res0
+    assert res0[0] == _noop(se0.roots[0].id, "_compute_slot_mappings_kernel")
+    assert not [r for r in res if isinstance(r, Unsupported)]
+
+
+def _draft_step(k=5, requests=2):
+    """A step whose `StepStart` verifies k draft tokens for each of `requests` requests: 1 + k logits rows a request."""
+    rows = [(f"r{j}", 32 + i) for j in range(requests) for i in range(1 + k)]
+    n = len(rows)
+    start = StepStart(1, rows, [7] * n, [p for _, p in rows], {r: 38 for r, _ in rows}, {r: 32 for r, _ in rows},
+                      {r: [0, 1, 2] for r, _ in rows}, BS, list(range(n)), rows, list(range(n)), requests, n, n,
+                      ViewDesc(A_INPUT_IDS, 0, (n,), (1,), "int32", CUDA), i64(A_POSITIONS, (n,)), "decode")
+    b = Builder(1)
+    b.triton("vllm.v1.worker.gpu.block_table._compute_slot_mappings_kernel",
+             {"num_tokens": n, "max_num_reqs": 8, "cu_num_tokens": i64(A_CU_Q, (requests + 1,), "int32"),
+              "pos_ptr": i64(A_POSITIONS, (n,)), "block_tables_ptr": ViewDesc(A_BLOCK_TABLE, 0, (8, 256), (256, 1), "int32", CUDA),
+              "slot_mappings_ptr": i64(A_SLOTS, (n,)), "PAD_ID": -1, "BLOCK_SIZE": BS, "NUM_BLOCKS": 1024},
+             {"BLOCK_SIZE": BS, "NUM_BLOCKS": 1024}, [1, 1], 4, 3, phase="other")
+    events = [start, *b.events, *_draft_metadata_launches(1, requests, n, k), StepEnd(1)]
+    se = step_events(events)
+    return se, resolve_step(se, context(start))
+
+
+def test_a_step_with_drafts_refuses_every_integer_launch_by_name():
+    """With draft tokens in the step, no integer-only launch is metadata: the combine (draft ids into the input ids), the
+    counts kernel (the accept test's counts) and the slot mappings alike are each refused, naming the kernel, the step's
+    logits rows and its requests."""
+    se, res = _draft_step()
+    by_kernel = {root.op.rsplit(".", 1)[-1]: r for root, r in zip(se.roots, res)}
+    assert set(by_kernel) == {"_compute_slot_mappings_kernel", *DRAFT_KERNELS}
+    for name, u in by_kernel.items():
+        assert isinstance(u, Unsupported), u
+        assert u.reason == (f"{name}: an integer-only launch in a step that verifies draft tokens, where it may carry draft ids "
+                            "or accepted counts, which are values, and no pattern folds them yet")
+        assert (u.detail["kernel"], u.detail["logits_rows"], u.detail["requests"]) == (name, 12, 2)
+
+
+def test_whether_a_step_has_drafts_is_read_from_its_row_counts_alone():
+    """The refusal reads how many logits rows and requests the step has, never a token: the same step with other input
+    token ids refuses alike, and one request with one draft token is enough."""
+    se, res = _draft_step()
+    other = dataclasses.replace(se.start, input_token_ids=[123456] * len(se.start.rows))
+    res2 = resolve_step(dataclasses.replace(se, start=other), context(other))
+    assert [(type(r), getattr(r, "reason", None)) for r in res2] == [(type(r), getattr(r, "reason", None)) for r in res]
+    se1, res1 = _draft_step(k=1, requests=1)
+    assert sum(isinstance(r, Unsupported) for r in res1) == 3
+
+
 def test_a_mixed_steps_first_prefill_argmax_is_integer_metadata():
     """[GLM-5.3 B8] vLLM's `split_decodes_and_prefills` finds a mixed step's first prefill request as an argmax over the host's
     int32 `is_prefill` (its width the step's requests): integer step metadata (noop) under either sampler, never a TokenSelect."""

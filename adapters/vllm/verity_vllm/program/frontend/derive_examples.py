@@ -1,5 +1,6 @@
 """Source modules for the derivation tests that are vLLM-style, and the plain-PyTorch ones of
-`verity_torch.frontend.derive_examples`, which this module passes on so its importers read every example from one module.
+`verity_torch.frontend.derive_examples`, which this module passes on so its importers read every example from one module,
+but for its sparse MoE (`NegMoE`), whose name is a vLLM layer class's and so no literal here (P8).
 
 * S2/S3 (profile mode): vLLM-style classes — merged QKV / merged gate_up linears, in-place kernel interface
   (`rules/vllm_iface.py`), `unified_attention` with an implicit per-layer KV cache — `DecoderLayer`, `Model`,
@@ -29,7 +30,6 @@ from verity_torch.frontend.derive_examples import (
     NegCustomOp,
     NegHiddenConstant,
     NegInPlace,
-    NegMoE,
     NegReturnsWeight,
     NegUnknownOp,
     TiedMLP,
@@ -376,5 +376,5 @@ class NegStaleAlias(nn.Module):
 __all__ = ["MLP2", "TiedMLP", "RMSNorm", "LinearNoTP", "RotaryEmbedding", "SiluAndMul", "Attention", "DecoderLayer", "SingleLayer", "Model",
            "CausalLM", "GreedyServe", "HFRMSNorm", "HFDecoderLayer", "NegUnknownOp", "NegHiddenConstant", "NegInPlace", "NegDataDependent",
            "NegCustomOp", "NegReturnsWeight", "NegCond", "Conv1D", "GPT2MLPBlock", "GPT2Attention", "GPT2Block", "GPT2TinyLM", "GPT2Greedy",
-           "NegMutatesWeight", "NegStaleAlias", "HFGreedy", "HFRotaryEmbedding", "HFTinyLM", "NegMoE", "hf_apply_rotary_pos_emb",
+           "NegMutatesWeight", "NegStaleAlias", "HFGreedy", "HFRotaryEmbedding", "HFTinyLM", "hf_apply_rotary_pos_emb",
            "hf_rotate_half"]
