@@ -349,7 +349,8 @@ def dangling_constants(files: frozenset[str], read=lambda f: (ROOT / f).read_tex
     for f in sorted(p for p in files if p.endswith(".py") and p.startswith(TOOLING) and "/tests/" not in p):
         here = f.rpartition("/")[0]
         for line, path, how in path_constants(f, read(f), tops):
-            if (f, path) not in EXEMPT and not resolves(path, files) and not resolves(f"{here}/{path}", files):
+            if (f, path) not in EXEMPT and not resolves(path, files) and not resolves(f"{here}/{path}", files) \
+                    and not resolves(f"tests/{path}", files):  # a suite's name is the path its tests mirror
                 found.append((f, line, path, how))
     unignored = set(p for _, _, p, _ in found) - (ignored([p for _, _, p, _ in found]) if files is tracked() else set())
     return [f"{f}:{line}: {path} ({how})" for f, line, path, how in found if path in unignored]
