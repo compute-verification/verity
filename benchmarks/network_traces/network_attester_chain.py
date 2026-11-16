@@ -117,7 +117,7 @@ def deployment(run: Path) -> tuple[dict, W.NetworkAttesterParams]:
             raise SystemExit(f"{run}: {PROXY} ({hit} is there)")
     dep = json.loads(found(run, "deployment.json").read_text())
     if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != RC.LINK:
-        raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a network certifier's)")
+        raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a network attester's)")
     params = W.NetworkAttesterParams(**dep["params"])
     if params.digest.hex() != dep.get("digest"):
         raise SystemExit(f"{run}: deployment.json's digest isn't its parameters'")
