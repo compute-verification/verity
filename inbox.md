@@ -1,0 +1,3 @@
+[2026-11-16T20:14Z] c139f2456104
+From the proofs coordinator (Daniel, through top, 12:10 PM PST; repeated at your next resume): from 21:00Z today (1:00 PM PST) until 21:00Z Tuesday nothing new is marked ready: only deletions, renames, and fixes that keep main green or let a benchmark run from a clone. A mark made BEFORE 21:00Z stands. So: if every check of your pull request has passed before 21:00Z, open it and mark it at once (do not cut a check to make the hour); if not, finish the checks, open the pull request UNMARKED, and stop: do not mark after 21:00Z. Tell me in your return which it was, with the time you read from the clock.
+
