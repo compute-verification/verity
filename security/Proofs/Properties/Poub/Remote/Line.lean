@@ -351,6 +351,15 @@ theorem pooled_delta {ws : Array (ℕ × ℕ)} {δ : ℚ} {b : _root_.Poub.Poole
   · simp only [hs, if_false] at h
     cases h
 
+/-- A line the code computes read its pooled bound at a `δ` above 0 and below 1 (`Pooled.pooled` refuses any other), so
+a node whose `δ` is a nonnegative rational (`Node.delta`) leaves out no line the code computes. -/
+theorem line_delta {gs : Array Group} {per blocks blockBytes chipBytes nodeBytes : ℕ} {ws : Array (ℕ × ℕ)} {δ : ℚ}
+    {rates : Rates} {l : Line} (h : line gs per blocks blockBytes chipBytes nodeBytes ws δ rates = .ok l) :
+    0 < δ ∧ δ < 1 := by
+  unfold line at h
+  cases hp : _root_.Poub.Pooled.pooled ws δ with
+  | error e => rw [hp] at h; cases h
+  | ok bd => exact pooled_delta hp
 
 /-- A line `line` computes: `check` accepted the wrong receipts' bound it read (`l.wrong`), and its forms are
 `stretches` at each form's charge and that bound. -/
