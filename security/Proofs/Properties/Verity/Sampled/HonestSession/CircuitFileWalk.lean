@@ -72,7 +72,7 @@ open Properties.Flock.Nets (built sparseOf)
 open Lean (Json)
 open FlockSoundness.Discharge.Recursion
 
-set_option maxHeartbeats 0
+set_option maxHeartbeats 100000000 -- each `fwd_def` walks the circuit file's parse over its literal lines, minutes apiece
 set_option maxRecDepth 200000
 
 namespace Verity.Sampled.Instance.HonestSession.CircuitFileProof
