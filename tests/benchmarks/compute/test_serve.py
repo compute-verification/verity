@@ -127,8 +127,8 @@ def verdicts(tmp_path, gate: dict | None, run_id: str = "") -> tuple[dict, str]:
 def test_pouws_row_is_the_window_composes_under_the_local_gates_key_pin_and_lane(tmp_path):
     """The row was a fixed `missing` that named no condition of record: it is `served_verdicts.piece`'s on out/pieces,
     with no SPOT window registration (none is made here), the local gate's key pin and lane, and the run's id."""
-    doc, line = verdicts(tmp_path, {"key_sha512": "ab" * 64, "lane": "vllm", "pin": "p"}, "r20261116-000000-abcd")
-    asked = {"key": "work", "pieces": str(tmp_path / "out" / "pieces"), "run": "r20261116-000000-abcd", "spot": None,
+    doc, line = verdicts(tmp_path, {"key_sha512": "ab" * 64, "lane": "vllm", "pin": "p"}, "run-under-test")
+    asked = {"key": "work", "pieces": str(tmp_path / "out" / "pieces"), "run": "run-under-test", "spot": None,
              "key_sha512": "ab" * 64, "lane": "vllm"}
     assert doc["protocols"] == {"work": {"verdict": "missing", "owner": "compute-accounting",
                                          "why": "stub: " + json.dumps(asked, sort_keys=True)}}
@@ -170,7 +170,7 @@ def period(tmp_path, verb: str) -> tuple[list[str], Path]:
     py.chmod(0o755)
     env = {**os.environ, "PY": str(py), "W": str(w), "PIECE": str(tmp_path / "piece"), "REC": str(tmp_path / "rec"),
            "SCHEME": "pearl-c-h100-v1-h3", "PEARLC_CHALLENGER_GATE": "gate cmd", "PEARLC_CHALLENGER_LANE": "vllm",
-           "RESEARCH_RUN_ID": "r20261116-000000-abcd"}
+           "RESEARCH_RUN_ID": "run-under-test"}
     got = subprocess.run(["bash", "-c", f"{fn[0]}\nperiod {verb}"], env=env, capture_output=True, text=True, check=True)
     return got.stdout.splitlines(), w
 
@@ -181,7 +181,7 @@ def test_the_period_opens_on_the_runs_circuit_record_and_closes_once_the_serves_
     as one window's and waits for the gate's ledger to end it, since the gate closes no period a window of which runs."""
     opened, _ = period(tmp_path, "open")
     assert opened == ["benchmarks/one_stage/served_verdicts.py", "pearlplus-period", "open", str(tmp_path / "piece"),
-                      "--gate", "gate cmd", "--name", "pearlplus-r20261116-000000-abcd", "--scheme", "pearl-c-h100-v1-h3",
+                      "--gate", "gate cmd", "--name", "pearlplus-run-under-test", "--scheme", "pearl-c-h100-v1-h3",
                       "--circuit-record", str(tmp_path / "rec" / "circuit-record.json")]
     closed, w = period(tmp_path, "close")
     assert closed == ["benchmarks/one_stage/served_verdicts.py", "pearlplus-period", "close", str(tmp_path / "piece"),
