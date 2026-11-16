@@ -5,21 +5,23 @@ public import Proofs.Flock.Claims.Complete.Zk.RoundBytes
 public import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
 public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
 public import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Proofs.Flock.Claims.Complete.Json.Goals
 import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
 import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
+import Proofs.Flock.Claims.Complete.Replay.ProverOk
 import Proofs.Flock.Claims.Complete.Zk.Count
 import Proofs.Flock.Claims.Complete.Zk.Json.Files
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.Complete.Zk.Level0Honest
 import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
-import Proofs.Flock.Claims.Complete.ZkTables.Trace
 
 /-!
 # The masked prover's rep: its round sizes
 
-* `capBytes_size`, `ybarFlat_size`, `y_padsOf_size`, `padLayout_len_le`: the honest sizes a masked rep absorbs.
-* `zkSchedule_small`: at `25 ≤ m ≤ 35` the `--zk` schedule's `t_pad`, `ext`, `k_0` and every level's cap are small,
+* `Lg.capBytes_size`, `ybarFlat_size`, `y_padsOf_size`, `padLayout_len_le`: the honest sizes a masked rep absorbs.
+* `zkSchedule_sizes`: at `25 ≤ m ≤ 35` the `--zk` schedule's `t_pad`, `ext`, `k_0` and every level's cap are small,
   by the kernel's evaluation at either statement version.
 * `rep_bytes`: every round of a masked rep that returns holds at most `|d| + 2^16` bytes, `d` its stream's domain. The
   rep splits into its PIOP (`ZcZ.tEnd`, `LcZ.tEnd`, `Rs.tEnd`), its Ligerito, which ends at the masked model's
@@ -32,19 +34,10 @@ namespace FlockComplete.Replay
 
 open Flock Transcript FlockComplete
 
-theorem foldl_append_size (w : ℕ) : ∀ (l : List ByteArray) (acc : ByteArray), (∀ x ∈ l, x.size = w) →
-    (l.foldl (· ++ ·) acc).size = acc.size + l.length * w
-  | [], acc, _ => by simp
-  | x :: l, acc, h => by
-    rw [List.foldl_cons, foldl_append_size w l _ fun y hy => h y (List.mem_cons_of_mem _ hy), ByteArray.size_append,
-      h x (by simp), List.length_cons, Nat.add_mul, Nat.one_mul]
-    omega
-
-/-- A cap of `w`-byte digests absorbs `w` bytes per digest. -/
-theorem capBytes_size {c : Array ByteArray} {w : ℕ} (h : ∀ x ∈ c, x.size = w) : (capBytes c).size = c.size * w := by
-  unfold capBytes
-  rw [← Array.foldl_toList, foldl_append_size w c.toList _ fun x hx => h x (Array.mem_toList_iff.1 hx),
-    ByteArray.size_empty, Array.length_toList, Nat.zero_add]
+/-- A cap of `w`-byte digests absorbs `w` bytes per digest (`flat_size_of`). -/
+theorem Lg.capBytes_size {c : Array ByteArray} {w : ℕ} (h : ∀ x ∈ c, x.size = w) :
+    (Lg.capBytes c).size = w * c.size :=
+  flat_size_of h
 
 theorem y_padsOf_size (ω : TapeZk) (i rep : ℕ) (lay : Zk.PadLayout) (cs : InZ.Challenges) :
     (InZ.y (padsOf ω i rep lay) cs).size = lay.len + Zk.K_PAD := by
@@ -80,7 +73,7 @@ theorem ybarFlat_size (ybar : Array F256) : (ybarFlat ybar).size = 2 * ybar.size
   simp
 
 /-- **The `--zk` schedule is small**: `t_pad ≤ 554`, `ext ≤ 8`, `k_0 ≤ 10` and every level's cap at most `8`. -/
-theorem zkSchedule_small {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ}
+theorem zkSchedule_sizes {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ}
     (h : Zk.schedule wideLeaf m = .ok v) :
     v.2 ≤ 554 ∧ v.1.ext ≤ 8 ∧ v.1.k0 ≤ 10 ∧ ∀ i < v.1.levels.size, (v.1.levels.getD i default).cap ≤ 8 := by
   have key : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
@@ -100,17 +93,15 @@ open Flock Transcript FlockComplete FlockDeploy FlockComplete.Replay
 
 variable {H : Claims.Msg → Claims.Msg}
 
-/-- **Every round of a masked rep that returns holds at most `|d| + 2^16` bytes**, `d` its stream's domain. -/
-theorem rep_bytes (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (hT : TableT st tr)
-    (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
+/-- **Every round of a masked rep that returns holds at most `|d| + 2^16` bytes**, `d` its stream's domain, at a
+statement of `25 ≤ m ≤ 35` under `hm96-sha512/v1` with `k_log ≤ m`. -/
+theorem rep_bytes (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35)
+    (hms : st.merkle = MerkleScheme.hm96Sha512) (hkm : st.c.kLog ≤ st.m) (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
     (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)
     (hin : RepIn H st tr ω i v cm pts e rep ic) (hrep : rep < 2) (prior : Array (List F128)) (ws : List ℕ)
     (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Claims.Msg)
     (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l')) :
     RoundsLe (d.size + 65536) t' := by
-  obtain ⟨h25, h35, hms, -, p0, w, hpe, hR0, -⟩ := hT
-  obtain ⟨hf, -⟩ := holds_only hpe hR0
-  have hkm : st.c.kLog ≤ st.m := hf.2.2.2.1.trans_eq hf.1
   have hm14 : 14 ≤ (Setup.ofCircuit st).m := by show 14 ≤ st.m; omega
   have hmerk : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := hms
   set resp : ℕ → Claims.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
@@ -136,7 +127,7 @@ theorem rep_bytes (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (hT : Ta
     have : piopSends (Setup.ofCircuit st) e = 3 + (st.m - 6) + 3 + (st.c.kLog - 6) + (2 + e.size + 1) := rfl
     omega
   have h64' := JsonRT.hOf_size h64
-  obtain ⟨hv2, hext, hk0, hcap8⟩ := L0.zkSchedule_small h25 h35 hin.schedule
+  obtain ⟨hv2, hext, hk0, hcap8⟩ := L0.zkSchedule_sizes h25 h35 hin.schedule
   obtain ⟨-, -, hL, -, -, -, -, -, -, -, hcapd, -⟩ := L0.zkSch_facts h25 h35 hin.schedule
   have hnode : ∀ l r v, (MerkleScheme.hm96Sha512.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).node l r =
       .ok v → v.size = MerkleScheme.hm96Sha512.digestLen := fun _ _ _ e => hm96_node h64' _ _ e
@@ -147,10 +138,10 @@ theorem rep_bytes (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (hT : Ta
         .ok cm := by
     rw [← hmerk]; exact hin.commit
   obtain ⟨-, -, -, -, -, hcs0, hcw0⟩ := L0.commitPZk_shape hnode hleaf (hcapd 0 (by omega)) hcm
-  have hcap0 : (capBytes cm.cap).size ≤ 16384 := by
-    rw [capBytes_size hcw0, hcs0]
-    exact (Nat.mul_le_mul (Nat.pow_le_pow_right (by decide) (hcap8 0 (by omega)))
-      (by decide : MerkleScheme.hm96Sha512.digestLen ≤ 64)).trans (by decide)
+  have hcap0 : (Lg.capBytes cm.cap).size ≤ 16384 := by
+    rw [Lg.capBytes_size hcw0, hcs0]
+    exact (Nat.mul_le_mul (by decide : MerkleScheme.hm96Sha512.digestLen ≤ 64)
+      (Nat.pow_le_pow_right (by decide) (hcap8 0 (by omega)))).trans (by decide)
   rw [hmerk] at hlig
   obtain ⟨ht', -⟩ := L0.honestZ (sch := v.1) (tPad := v.2) resp (Claims.hOf H) MerkleScheme.hm96Sha512 _ cm _ _ lay
     pads.h rep (ω.extra i) (ω.lanePad i) (ω.salt i rep) (ω.nonce i rep)
@@ -165,15 +156,15 @@ theorem rep_bytes (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (hT : Ta
     rec h64' h25 h35 hin.schedule rfl rfl rfl (by simp [packed, hn]; rfl) (by simp [basisVals, hn]; rfl) hcm hlig
   obtain ⟨-, -, hrs, hrcap, -, -, hyr, -⟩ := hlg
   dsimp only at hrs hrcap hyr
-  have hrc : ∀ j : ℕ, (capBytes lg.recursiveCaps[j]!).size ≤ 16384 := by
+  have hrc : ∀ j : ℕ, (Lg.capBytes lg.recursiveCaps[j]!).size ≤ 16384 := by
     intro j
     by_cases hj : j < lg.recursiveCaps.size
     · obtain ⟨hs1, hs2⟩ := hrcap j hj
-      rw [getElem!_pos lg.recursiveCaps j hj, capBytes_size hs2, hs1]
-      exact (Nat.mul_le_mul (Nat.pow_le_pow_right (by decide) (hcap8 (j + 1) (by omega)))
-        (by decide : MerkleScheme.hm96Sha512.digestLen ≤ 64)).trans (by decide)
+      rw [getElem!_pos lg.recursiveCaps j hj, Lg.capBytes_size hs2, hs1]
+      exact (Nat.mul_le_mul (by decide : MerkleScheme.hm96Sha512.digestLen ≤ 64)
+        (Nat.pow_le_pow_right (by decide) (hcap8 (j + 1) (by omega)))).trans (by decide)
     · rw [getElem!_neg lg.recursiveCaps j hj]
-      simp [capBytes]
+      simp [Lg.capBytes]
   have hyr' : lg.finalProof.yr.size ≤ 512 := by
     rw [hyr]
     exact (Nat.pow_le_pow_right (by decide) (by omega : v.1.ext + 1 ≤ 9)).trans (by decide)

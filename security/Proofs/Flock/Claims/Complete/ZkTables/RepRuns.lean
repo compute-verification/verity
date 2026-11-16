@@ -51,7 +51,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Trace
 
 * `zkSchedule_q`: every level of a `--zk` schedule samples queries.
 * `rep_rounds`: given level 0's verifier premise (`Level0.Verifier`), a masked rep that returns records `repRoundsT`
-  rounds. The verifier's masked Ligerito, on the prover's rounds, ends where the prover's did (`Level0.Verifier`),
+  rounds (`rep_rounds_of`: at a statement's facts alone, with no witness). The verifier's masked Ligerito, on the prover's rounds, ends where the prover's did (`Level0.Verifier`),
   which is `k_0 + 7 + 11 R` rounds on (`zkLigeritoWith_pos`), and the inner proof adds four.
 -/
 
@@ -96,17 +96,16 @@ open Flock Transcript FlockComplete FlockDeploy FlockComplete.Replay
 
 variable {H : Claims.Msg → Claims.Msg}
 
-/-- **A masked rep that returns records `repRoundsT` rounds**, given level 0's verifier premise. -/
-theorem rep_rounds (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (hT : TableT st tr)
+/-- **A masked rep that returns records `repRoundsT` rounds**, given level 0's verifier premise, at a statement of
+`25 ≤ m ≤ 35` under `hm96-sha512/v1` with `k_log ≤ m`. -/
+theorem rep_rounds_of (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (h25 : 25 ≤ st.m)
+    (h35 : st.m ≤ 35) (hms : st.merkle = MerkleScheme.hm96Sha512) (hkm : st.c.kLog ≤ st.m)
     (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
     (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)
     (hin : RepIn H st tr ω i v cm pts e rep ic) (hrep : rep < 2) (prior : Array (List F128)) (ws : List ℕ)
     (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Claims.Msg)
     (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l')) :
     t'.rounds.size = repRoundsT st v e := by
-  obtain ⟨h25, h35, hms, -, p0, w, hpe, hR0, -⟩ := hT
-  obtain ⟨hf, -⟩ := holds_only hpe hR0
-  have hkm : st.c.kLog ≤ st.m := hf.2.2.2.1.trans_eq hf.1
   have hm14 : 14 ≤ (Setup.ofCircuit st).m := by show 14 ≤ st.m; omega
   have hmerk : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := hms
   set resp : ℕ → Claims.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
@@ -158,5 +157,18 @@ theorem rep_rounds (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stm
   rw [ht', InZ.tEnd_size, ← htIk, htI, hpk]
   unfold repRoundsT
   omega
+
+/-- **A masked rep that returns records `repRoundsT` rounds**, given level 0's verifier premise. -/
+theorem rep_rounds (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (hT : TableT st tr)
+    (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
+    (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)
+    (hin : RepIn H st tr ω i v cm pts e rep ic) (hrep : rep < 2) (prior : Array (List F128)) (ws : List ℕ)
+    (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Claims.Msg)
+    (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l')) :
+    t'.rounds.size = repRoundsT st v e := by
+  obtain ⟨h25, h35, hms, -, p0, w, hpe, hR0, -⟩ := hT
+  obtain ⟨hf, -⟩ := holds_only hpe hR0
+  exact rep_rounds_of hV h64 st tr h25 h35 hms (hf.2.2.2.1.trans_eq hf.1) ω i d r v cm pts e rep ic hin hrep prior ws
+    l p t' l' hgo
 
 end FlockComplete.ZkTables
