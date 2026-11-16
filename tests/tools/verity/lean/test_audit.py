@@ -3051,6 +3051,66 @@ def test_a_first_nontrivial_witness_states_a_fixed_premise_at_its_term_and_tied_
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_an_honest_witness_bounded_by_an_error_needs_it_below_one_at_its_own_instance_on_a_real_build(tmp_path):
+    """`Facts.lean`'s `targets` on a real build, and `error_failures` on them. `sound` takes `Target pouw`, a bound by the
+    vocabulary's `error`. An honest witness at `top`, whose error is never below 1, is refused; at `exact` with a lemma
+    `∀ θ, ErrorBelowOne exact θ pouw` it passes, its target found through `Ok`, `Target` and a structure's field. A lemma
+    at another vocabulary, at other parameters than the witness's (`paramsB` for a witness at `paramsA`, or `paramsA` for
+    one at every θ) and one concluding only that the error is not top (`ErrorNotTop`) are each refused."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Errors.lean").write_text(
+        "namespace Verity\ninductive Sub where | pouw | wipe\nstructure Params where n : Nat\n"
+        "def paramsA : Params := ⟨1⟩\ndef paramsB : Params := ⟨2⟩\n"
+        "structure Vocab where\n  delta : Params → Sub → Nat → Nat\n  loss : Sub → Params → Nat → Nat\n"
+        "namespace Vocab\n"
+        "def error (V : Vocab) (a : Sub) (θ : Params) (t : Nat) : Nat := V.delta θ a t + V.loss a θ 0\n"
+        "def ErrorBelowOne (V : Vocab) (θ : Params) (a : Sub) : Prop := ∃ t, V.delta θ a t + V.loss a θ 0 < 1\n"
+        "def ErrorNotTop (V : Vocab) (θ : Params) (a : Sub) : Prop := ∃ t, V.delta θ a t + V.loss a θ 0 < 1001\n"
+        "def Target (V : Vocab) (a : Sub) : Prop := ∀ θ t, V.error a θ t ≤ V.error a θ t\n"
+        "def TargetAt (V : Vocab) (θ : Params) (a : Sub) : Prop := ∀ t, V.error a θ t ≤ V.error a θ t\n"
+        "end Vocab\n"
+        "def top : Vocab := ⟨fun _ _ _ => 1000, fun _ _ _ => 0⟩\ndef exact : Vocab := ⟨fun _ _ _ => 0, fun _ _ _ => 0⟩\n"
+        "def Ok (V : Vocab) : Prop := V.Target .pouw\n"
+        "structure Coupled (V : Vocab) : Prop where\n  ok : True\n  bound : ∀ t, V.error .wipe paramsA t ≤ 0\n"
+        "theorem sound (V : Vocab) (h : V.Target .pouw) : Ok V := h\n"
+        "theorem honest_top : top.Target .pouw := fun _ _ => Nat.le_refl _\n"
+        "theorem honest_exact : Ok exact := fun _ _ => Nat.le_refl _\n"
+        "theorem honest_at : exact.TargetAt paramsA .pouw := fun _ => Nat.le_refl _\n"
+        "theorem honest_coupled : Coupled exact := ⟨trivial, fun _ => Nat.le_refl _⟩\n"
+        "theorem below_exact : ∀ θ, exact.ErrorBelowOne θ .pouw := fun _ => ⟨0, Nat.zero_lt_one⟩\n"
+        "theorem below_at_a : exact.ErrorBelowOne paramsA .pouw := ⟨0, Nat.zero_lt_one⟩\n"
+        "theorem below_at_b : exact.ErrorBelowOne paramsB .pouw := ⟨0, Nat.zero_lt_one⟩\n"
+        "theorem below_wipe : exact.ErrorBelowOne paramsA .wipe := ⟨0, Nat.zero_lt_one⟩\n"
+        "theorem not_top : ∀ θ, top.ErrorNotTop θ .pouw := fun _ => ⟨0, Nat.lt_succ_self 1000⟩\n"
+        "end Verity\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Errors\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    names = ["Verity.sound", *(f"Verity.{n}" for n in ("honest_top", "honest_exact", "honest_at", "honest_coupled",
+                                                       "below_exact", "below_at_a", "below_at_b", "below_wipe", "not_top"))]
+
+    def targets(honest: str, *below: str) -> tuple:
+        w = {"honest": [f"Verity.{honest}"]} | ({"below_one": [f"Verity.{n}" for n in below]} if below else {})
+        config = {"roots": ["Control"], "guarantees": dict.fromkeys(names, {}), "witnesses": {"Verity.sound": w}}
+        pin = A.facts_of(pkg, config, tmp_path)["pins"]["Verity.sound"]
+        return ([(t["vocab"], t["params"], t["subprotocol"], t["below_one"]) for t in pin["targets"]],
+                [x.code for x in A.error_failures("Verity.sound", pin, config, None)])
+
+    refused = ["witnesses.honest-error"]
+    assert targets("honest_top") == ([("Verity.top", None, "Verity.Sub.pouw", False)], refused)
+    assert targets("honest_exact", "below_exact") == ([("Verity.exact", None, "Verity.Sub.pouw", True)], [])
+    assert targets("honest_top", "below_exact") == ([("Verity.top", None, "Verity.Sub.pouw", False)], refused)
+    assert targets("honest_top", "not_top") == ([("Verity.top", None, "Verity.Sub.pouw", False)], refused)
+    assert targets("honest_exact", "below_at_a") == ([("Verity.exact", None, "Verity.Sub.pouw", False)], refused)
+    assert targets("honest_at", "below_at_a") == ([("Verity.exact", "Verity.paramsA", "Verity.Sub.pouw", True)], [])
+    assert targets("honest_at", "below_exact") == ([("Verity.exact", "Verity.paramsA", "Verity.Sub.pouw", True)], [])
+    assert targets("honest_at", "below_at_b") == ([("Verity.exact", "Verity.paramsA", "Verity.Sub.pouw", False)], refused)
+    assert targets("honest_coupled", "below_exact") == ([("Verity.exact", "Verity.paramsA", "Verity.Sub.wipe", False)],
+                                                        refused)
+    assert targets("honest_coupled", "below_wipe") == ([("Verity.exact", "Verity.paramsA", "Verity.Sub.wipe", True)], [])
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
     """`Facts.lean`'s one-step unfolding on a real build, without `--moved`: lifts with no binders, with binders whose argument
     the definition's own binder must shift (`Q`), universe-polymorphic (`R`), and with a named assumption kept as a binder

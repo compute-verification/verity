@@ -990,6 +990,15 @@ noncomputable def error (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray)
       ENNReal.ofReal (V.epsForge θ (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a) (V.signatures θ)) +
       V.loss a θ (ENNReal.ofReal ((V.finder a θ F c σ).Pr sha512Msg))) σ
 
+/-- **Subprotocol `a`'s published error is below 1 at the parameters `θ`**: at some count `t` of SHA-512 calls and
+some collision probability `p`, its `δ`, plus `ε_forge` at the forger's budget at `t` calls, plus its loss at `p` (the
+bound `error` states wherever its premises hold) is below 1. A bound of 1 or more on a probability holds of every
+prover, so a witness bounded by `error` shows something of a cheating prover only where this holds. -/
+def ErrorBelowOne (θ : ByteArray) (a : Subprotocol) : Prop :=
+  ∃ (t : ℕ) (p : ℝ≥0∞), p ≤ 1 ∧
+    V.delta θ a t + ENNReal.ofReal (V.epsForge θ (V.callsMul θ a * t + V.callsAdd θ a) (V.signatures θ)) +
+      V.loss a θ p < 1
+
 /-- **Soundness at composite `k` for the acceptance `acc`, in the causal game.** At all parameters `θ`, committed files
 `F` and commitments `c`, and for every strategy, the probability that `acc` holds of what the prover sent for files
 that passed the commit phase's check while the claim of one of `k`'s subprotocols fails is at most their errors at that

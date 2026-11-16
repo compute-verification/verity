@@ -41,6 +41,11 @@ judgement; `check.py` holds the policy.
   unfolded once (`lifted`, `liftOf`), as `shape` reads it. Beside them, the definitions under `recorded` the head unfolds
   through and the bound it ends at, one of `bounds` (`chain`, `headChain`); and each pin's `accept_all`, the verifiers
   accepting everything it applies (`acceptAllOf`).
+- each pin's `targets` (`targetsOf`): each error (one of `errors`) a witness `honest` lists for it is bounded by, found
+  through the definitions its conclusion unfolds to (`errorsOf`), at its vocabulary, parameters and subprotocol, the
+  arguments of the types `below_one_head`'s last three binders take, as printed (`params` null where they are the
+  witness's own binders); and whether a lemma `below_one` lists for the pin concludes `below_one_head` at them
+  (`below_one`).
 - each pin's `premises` (`premisesOf`), an applied one's with its arguments (`args`) and, when a witness `honest` lists
   for the pin concludes, as written or lifted, a conjunct with its head, whether one is it at the arguments it fixes
   (`agree`, `agrees`): each closed one definitionally equal (`sameArg`, `isDefEq`), or a variable of the conjunct's `∀`s.
@@ -1151,10 +1156,105 @@ def inlineOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Opt
           (toJson (!d.type.hasFVar))).setObjVal! "outer" (toJson (cs.length == 1 && i < outer)))
     return acc
 
+/-- The applications of one of `errors` in `e` outside a `fun` or a `∀` (an error under a binder, a sum's, is not stated
+at one instance). -/
+partial def errorApps (errors : Array Name) : Expr → Array Expr
+  | e@(.app ..) =>
+    if (e.getAppFn.constName?.map errors.contains).getD false then #[e]
+    else e.getAppArgs.foldl (fun acc a => acc ++ errorApps errors a) (errorApps errors e.getAppFn)
+  | .mdata _ e => errorApps errors e
+  | _ => #[]
+
+/-- What `visit` makes of each error (an application of one of `errors`) a statement is bounded by: past its `∀` and
+`∃` binders and through `∧`, `∨` and `↔`, read where it stands; a part that applies none, when its head is a definition
+of a module under `meaning` or one this repository builds, outside an assumptions module, read again unfolded, and when
+its head is such a structure, each of its `Prop` fields read; at most `fuel` unfoldings deep and `budget` in all. -/
+partial def errorsOf (env : Environment) (meaning : Array Name) (built : NameSet) (moduleOf : Name → Option Name)
+    (errors : Array Name) (visit : Expr → MetaM (Option Json)) (budget : IO.Ref Nat) (fuel : Nat) (t : Expr) :
+    MetaM (Array Json) :=
+  forallTelescope t fun _ b => do
+    let go := errorsOf env meaning built moduleOf errors visit budget
+    let b := b.consumeMData
+    if b.isAppOfArity ``And 2 || b.isAppOfArity ``Or 2 || b.isAppOfArity ``Iff 2 then
+      return (← go fuel b.appFn!.appArg!) ++ (← go fuel b.appArg!)
+    if b.isAppOfArity ``Exists 2 then
+      let .lam n ty body bi := b.appArg!.consumeMData | return #[]
+      return ← withLocalDecl n bi ty fun x => go fuel (body.instantiate1 x)
+    let here := errorApps errors b
+    if !here.isEmpty then return ← here.filterMapM visit
+    let .const c us := b.getAppFn | return #[]
+    let mine := ((moduleOf c).map fun m =>
+      (under meaning m || built.contains m) && !m.components.contains `Assumptions).getD false
+    if fuel == 0 || !mine || (← budget.get) == 0 then return #[]
+    budget.modify (· - 1)
+    match env.find? c with
+    | some (.defnInfo v) =>
+      if v.levelParams.length != us.length then return #[]
+      go (fuel - 1) ((v.value.instantiateLevelParams v.levelParams us).beta b.getAppArgs)
+    | some (.inductInfo iv) =>
+      let [ctor] := iv.ctors | return #[]
+      if iv.numIndices != 0 || iv.isRec || b.getAppNumArgs != iv.numParams then return #[]
+      let some (.ctorInfo cv) := env.find? ctor | return #[]
+      let ctorType ← instantiateForall (cv.type.instantiateLevelParams cv.levelParams us) b.getAppArgs
+      forallTelescope ctorType fun fs _ => fs.foldlM (init := #[]) fun out f => do
+        let ft ← inferType f
+        unless ← isProp ft do return out
+        return out ++ (← go (fuel - 1) ft)
+    | _ => return #[]
+
+/-- The targets the honest witnesses `honest` are bounded at: each error (one of `errors`, `errorsOf`) one of them
+concludes, at its vocabulary, its parameters and its subprotocol, the arguments whose types have the heads of the last
+three binders of `below` (`ErrorBelowOne V θ a`), the subprotocol in weak head normal form; and whether a conjunct one
+of the lemmas `belowOne` concludes is `below` there (`below_one`): at that vocabulary and subprotocol, each closed and
+the same (`sameArg`) or a variable of the lemma's `∀`s, and at those parameters, or at every one where the witness is
+stated at every one (they mention its binders), by a variable of the lemma's `∀`s. -/
+def targetsOf (env : Environment) (meaning : Array Name) (built : NameSet) (moduleOf : Name → Option Name)
+    (errors : Array Name) (below : Name) (honest belowOne : Array Name) : MetaM (Array Json) := do
+  let some bi := env.find? below | return #[]
+  let heads ← forallTelescope bi.type fun xs _ => xs.mapM fun x => do return (← whnfR (← inferType x)).getAppFn.constName?
+  let some hv := heads[heads.size - 3]? | return #[]
+  let (hθ, ha) := (heads[heads.size - 2]!, heads[heads.size - 1]!)
+  let lemmas ← belowOne.foldlM (init := #[]) fun acc w => do
+    let some wi := env.find? w | return acc
+    return acc ++ ((← conjunctArgs wi.type <|> pure #[]).filter (·.1 == below)).map (·.2)
+  let closed (x : Expr) : Bool := !x.hasFVar && !x.hasMVar
+  let text (x : Expr) : MetaM String := do
+    return " ".intercalate ((((toString (← ppExpr x)).replace "\n" " ").splitOn " ").filter (· ≠ ""))
+  let budget ← IO.mkRef 64
+  let mut out := #[]
+  for w in honest do
+    let some wi := env.find? w | continue
+    let visit (e : Expr) : MetaM (Option Json) := do
+      let pick (h : Option Name) : MetaM (Option Expr) := e.getAppArgs.findM? fun x => do
+        return (← whnfR (← inferType x)).getAppFn.constName? == h
+      let (some v, some θ, some a) := (← pick hv, ← pick hθ, ← pick ha) | return none
+      let a ← whnf a <|> pure a
+      let at_ (x : Expr) : Arg → MetaM Bool
+        | .all => pure true
+        | .closed y => if closed x then sameArg env x y else pure false
+        | .other => pure false
+      let covered ← lemmas.anyM fun ks => do
+        let n := ks.size
+        if n < 3 then return false
+        let k (i : Nat) : Arg := ks[n - i]?.getD .other
+        unless (← at_ v (k 3)) && (← at_ a (k 1)) do return false
+        if closed θ then at_ θ (k 2) else return k 2 matches .all
+      let params ← if closed θ then do pure (toJson (← text θ)) else pure Json.null
+      return some <| Json.mkObj [("witness", toJson w.toString),
+        ("head", toJson ((e.getAppFn.constName?.map toString).getD "")), ("vocab", toJson (← text v)),
+        ("params", params), ("subprotocol", toJson (← text a)), ("below_one", toJson covered)]
+    for t in ← errorsOf env meaning built moduleOf errors visit budget 8 wi.type <|> pure #[] do
+      let key (j : Json) := ["witness", "vocab", "params", "subprotocol"].map fun k => (j.getObjValD k).compress
+      match out.findIdx? (key · == key t) with
+      | some i => if t.getObjValD "below_one" == false then out := out.set! i t
+      | none => out := out.push t
+  return out
+
 def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning recorded bounds premises : Array Name)
     (listed built : NameSet) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name)
-    (honest : Array Name := #[]) (nontrivial : Option Name := none) : MetaM Json := do
+    (honest : Array Name := #[]) (nontrivial : Option Name := none) (errors : Array Name := #[])
+    (below : Name := .anonymous) (belowOne : Array Name := #[]) : MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
   let cover ← honest.foldlM (init := #[]) fun acc w => do
@@ -1214,6 +1314,7 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
         return Json.mkObj (← read (← plain t))) <|> pure Json.null
       return Json.mkObj ((← read ci.type) ++ [("lifted", lifted)])) <|> pure Json.null),
     ("accept_all", toJson (acceptAllOf env ci.type)),
+    ("targets", ← (return toJson (← targetsOf env meaning built moduleOf errors below honest belowOne)) <|> pure Json.null),
     ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
     ("outside", toJson (rs.2.map fun (c, m) => #[c.toString, m.toString]))]
@@ -1410,10 +1511,13 @@ unsafe def main (args : List String) : IO UInt32 := do
   let honest (p : Name) : Array Name := names (cfg.getObjValD "honest") p.toString
   let nontrivial (p : Name) : Option Name :=
     ((cfg.getObjValD "nontrivial").getObjValD p.toString).getStr?.toOption.map String.toName
+  let errors := names cfg "errors"
+  let below := ((cfg.getObjValD "below_one_head").getStr?.toOption.getD "").toName
+  let belowOne (p : Name) : Array Name := names (cfg.getObjValD "below_one") p.toString
   let tasks ← pins.mapM fun p => IO.asTask do
     let (out, _) ← (MetaM.run' do
       return (p.toString, ← pinInfo env table meaning recorded bounds premises listed built axioms ranges
-        (readsOf.getD p (#[], #[])) p (honest p) (nontrivial p))).toIO
+        (readsOf.getD p (#[], #[])) p (honest p) (nontrivial p) errors below (belowOne p))).toIO
         ctx { env }
     return out
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
