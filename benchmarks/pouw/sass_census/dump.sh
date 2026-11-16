@@ -39,11 +39,11 @@ done | sort -u >"$WORK/candidates"
 # One copy of each binary (the same wheel sits in several venvs), and only binaries with device code.
 : >"$OUT/corpus.tsv"
 while read -r f; do
-  [ -z "${MAXBYTES:-}" ] || [ "$(stat -c %s "$f")" -le "$MAXBYTES" ] || continue
+  [ -z "${MAXBYTES:-}" ] || [ "$(stat -L -c %s "$f")" -le "$MAXBYTES" ] || continue
   archs=$("$CUOBJDUMP" -lelf "$f" 2>/dev/null | grep -o 'sm_[0-9]*[a-z]\?' | sort -u | tr '\n' ' ')
   [ -n "$archs" ] || archs=$("$CUOBJDUMP" -sass "$f" 2>/dev/null | grep -m1 -o 'sm_[0-9]*[a-z]\?')
   [ -n "$archs" ] || continue
-  printf '%s\t%s\t%s\t%s\n' "$(sha256sum "$f" | cut -c1-16)" "$(stat -c %s "$f")" "$archs" "$f"
+  printf '%s\t%s\t%s\t%s\n' "$(sha256sum "$f" | cut -c1-16)" "$(stat -L -c %s "$f")" "$archs" "$f"
 done <"$WORK/candidates" | sort -t$'\t' -k1,1 -u >"$OUT/corpus.tsv"
 wc -l <"$OUT/corpus.tsv" >"$OUT/corpus.count"
 
