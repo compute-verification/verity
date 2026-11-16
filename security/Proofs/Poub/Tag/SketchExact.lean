@@ -87,6 +87,15 @@ theorem intTerm_fields {z : ℤ} (h0 : z ≠ 0) (hz : z.natAbs < 2 ^ 24) :
           Nat.mul_lt_mul_of_pos_right h3 (by positivity)
       _ = 2 ^ 24 := by rw [← pow_add]; congr 1; omega
 
+theorem intTerm_mag_eq_zero {z : ℤ} : (intTerm z).mag = 0 ↔ z = 0 := by
+  constructor
+  · intro h
+    by_contra h0
+    simp only [intTerm, ite_eq_right h0] at h
+    have : z.natAbs ≠ 0 := Int.natAbs_ne_zero.2 h0
+    simp_all
+  · rintro rfl
+    rfl
 
 /-- `intTerm z` is `z`. -/
 theorem intTerm_value {z : ℤ} (hz : z.natAbs < 2 ^ 24) : (intTerm z).value = z := by
