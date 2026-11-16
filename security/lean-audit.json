@@ -30642,7 +30642,7 @@
    }
   },
   "Definitions.Certifier.Guarantees": {
-   "digest": "46a0f8a94dc6cc39f4d750c5a7feeece5bfa503aadd9919281e5471d2cc61410",
+   "digest": "134e7577e6192e5be0a70be57caab651a3f8d87d8d9107571cf4fa900be172f1",
    "definitions": {
     "NetTiming.Guarantees.EncardIngressObsDecodableLeContents": "8610085580040505e3d7f8408af73b916138fdb3ff34b6f8ef0ea9b365db7f85"
    }
@@ -30734,7 +30734,7 @@
    }
   },
   "Definitions.Certifier.Guarantees.SampledCharge": {
-   "digest": "0c393b111f7ec5fbdacb6a70bd5fbeac13475526a26627d2379f3792be4b355f",
+   "digest": "1176c682d76e998f82c4b1e7b21ba73ce33633908d90a71d3549ffe1d3d03fbb",
    "definitions": {
     "NetTiming.Guarantees.SampledLeakRegistered": "c5eabac6fcd5b876957bd18f768dfe252e2d6f90a64210ecbc8df6a46f489ecf"
    }
