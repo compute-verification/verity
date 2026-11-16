@@ -1,0 +1,91 @@
+# The network attester's last two programs under `benchmarks/network_traces/`, into the attester's `prover/` beside
+# `block_certifier.py` and `scan_period.py`: what `tools/move/layout.py --map tools/move/network_chain_wipe_map.toml`
+# moves and rewrites. `network_attester_chain.py` is the chain's reader of a network attester's run (its deployment
+# held to the auditor's record, its certificates, its certified I/O, N2's link and the rows audit's case), and
+# `wipe_egress.py` the count of what can leave a node over a memory wipe's session. Each one's test goes to the
+# prover's tests (`tests/verity/protocols/resource_accounting/network/prover/`). No root moves ([roots] old == new). No file is split or deleted. The format is
+# `layout_map.toml`'s.
+#
+# What no map writes, and so follows the move by hand: the chain's test's cases that run `benchmarks/` code
+# (`chain_record`, `leak_guard`), which a test of `verity` can't import, back into a test of `benchmarks/network_traces`;
+# the gate's synthetic run the chain's tests build, which tests of both suites read, as a helper beside the prover's
+# tests; the moved files' own `sys.path` entries for `benchmarks/network_traces`; and the import listing's rows
+# (`tests/import_order.toml`).
+
+[roots]
+old = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", research = "tools/research/src/research", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_landq = "tools/verity/landq/verity_landq", verity_machine_model = "benchmarks/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_torch = "adapters/torch/verity_torch", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", research = "tools/research/src/research", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_landq = "tools/verity/landq/verity_landq", verity_machine_model = "benchmarks/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_torch = "adapters/torch/verity_torch", verity_vllm = "adapters/vllm/verity_vllm" }
+
+[paths]
+"benchmarks/network_traces/network_attester_chain.py" = "verity/protocols/resource_accounting/network/prover/network_attester_chain.py"
+"benchmarks/network_traces/wipe_egress.py" = "verity/protocols/resource_accounting/network/prover/wipe_egress.py"
+"tests/benchmarks/network_traces/test_network_attester_chain.py" = "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_chain.py"
+"tests/benchmarks/network_traces/test_wipe_egress.py" = "tests/verity/protocols/resource_accounting/network/prover/test_wipe_egress.py"
+
+[retired]
+# the paths this map empties
+paths = [
+    "benchmarks/network_traces/network_attester_chain.py",
+    "benchmarks/network_traces/wipe_egress.py",
+    "tests/benchmarks/network_traces/test_network_attester_chain.py",
+    "tests/benchmarks/network_traces/test_wipe_egress.py",
+]
+
+[rewrite]
+# Never rewritten: records of what was, files whose bytes a digest pins, and every Lean input.
+exclude = [
+    "fixtures/**",
+    "**/fixtures/**",
+    "**/*vectors*.json",
+    "**/*vectors*.txt.gz",
+    "**/CHANGELOG.md",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "**/lake-manifest.json.lock",
+    "tools/move/**",
+    "archive/**",
+    "**/numerical/tests/bench/data/**",
+    "**/price_twins.json",
+    "verity/circuits/silicon/captures/**",
+    "verity/circuits/silicon/hawkeye/**",
+    "tools/research/src/research/store/moves.json",
+    "**/network_e2e/tests/data/**",
+    "adapters/vllm/manifests/**",
+    "adapters/vllm/workloads/**",
+    "adapters/vllm/data/**",
+    "adapters/vllm/verity_vllm/pins/**",
+    "adapters/vllm/tools/migrate/superseded_quarantine.py",
+    "**/migrate/test_superseded_quarantine.py",
+    "**/*.lean",
+    "**/lakefile.toml",
+    "tests/tree.toml",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.c",
+    "benchmarks/pouw/pearl_c_sm90/**",
+    "adapters/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
+    "adapters/vllm/verity_vllm/definitions/tests/fixtures/fa2_train_bwd_sm120.npz",
+    "benchmarks/numerical/bench-instances/v1/manifest.json",
+    "benchmarks/numerical/bench-instances/v1/tu-k16.index.json",
+    "benchmarks/numerical/bench-instances/v1/vu-k1536-neg.index.json",
+    "benchmarks/numerical/bench-instances/v1/vu-k1536.index.json",
+    "verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json",
+    "verity/circuits/ops/tests/fixtures/gpu-nan-2026-09-28/fp32_ops.json",
+    "verity/circuits/ops/tests/fixtures/tc-sm120-k32-e2m1-2026-09-30/records.json",
+    "verity/circuits/silicon/discrepancy_log.json",
+    "verity/circuits/silicon/hawkeye/PIN.json",
+]
+include = [
+    "**/fixtures/README.md",
+    "**/fixtures/**/README.md",
+    "tools/move/pyproject.toml",
+]
+
+[modules]
+# the rename [paths] implies (`layout.py --modules`)
+"benchmarks.network_traces.network_attester_chain" = "verity.protocols.resource_accounting.network.prover.network_attester_chain"
+"benchmarks.network_traces.wipe_egress" = "verity.protocols.resource_accounting.network.prover.wipe_egress"
+"tests.benchmarks.network_traces.test_network_attester_chain" = "tests.verity.protocols.resource_accounting.network.prover.test_network_attester_chain"
+"tests.benchmarks.network_traces.test_wipe_egress" = "tests.verity.protocols.resource_accounting.network.prover.test_wipe_egress"
