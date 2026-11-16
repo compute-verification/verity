@@ -37,3 +37,19 @@ RECORD to the training lead, 23:38Z.
   - Records update r20261116-233713-7261 running; I'll check PartitionCovers' record is unchanged. No mark.
 - #10553 (7ef39626a6c5, r20261116-224141-40b7) and #10556 (r20261116-215836-155e) are still running. #10553's research suite passed whole this time. #10556's research suite has the two main-shared treelock reds.
 
+[2026-11-16T23:38Z] 3efb0d704459
+RECORD to the training lead, 23:38Z.
+
+- Compose step #10619: marked at e9fbc9833ba0446f1081d88db87ac379dfa52857 [ran].
+  - r20261116-222008-48f0 done: 12 suites passed fresh at that head, among them benchmarks/one_stage (1697) and benchmarks/inference_only (89) [ran].
+  - The mark's preflight erred collecting tests/benchmarks/one_stage/interfaces/*, files this PR doesn't touch; that nested suite passed on the node in #10556's run [inferred: the preflight's own tree].
+  - The queue says admitted, waiting on a land verdict; no reader yet. GitHub still shows it as a draft (opened with --draft); the queue admits it all the same.
+  - Proofs: it is theirs to read (served_verdicts.sh). The body's "For proofs" asks one thing: the step leaves the compose's exit as it is when assemble.py refuses, and says so in its ASSEMBLE line; say if a refusal should fail the compose. Please pass that to proofs; I post nowhere.
+- #10538 landed on main at 22:17Z as b75bb1ed81b. Its reader was review-82, a land verdict at 20:49Z [ran: the PR head's store labels]. Its two notes, malformed policy or circuit JSON giving a traceback and the count failing after the writes, are #10619's two follow-ups.
+- #10607: `verity lean try` passed on both files [ran]:
+  - Proofs/Slowdown/Cut.lean: r20261116-232921-99fb done, lean exit 0, 73 theorems, no axiom beyond the three;
+  - Proofs/InferenceOnly/PartitionCovers.lean: r20261116-232921-5e99 done, exit 0, 1 theorem, same.
+  - The lock still listed the two deleted guarantees (Slowdown.SecurityProofs.CoveringBound and CoveringBoundTwoCosts), which the update refuses. So I hand-removed them from guarantees, unwitnessed and shape (frozen, inline); their three open premises, which no other guarantee takes (Slowdown.Covering.Covers, Slowdown.Assumptions.ParameterHard and ParameterHardAt); and the four deleted modules' reads records. That is commit 6b73e913a4a on cursor/training-delete-covering-rest-4207, pushed. PartitionCovers' entries are untouched.
+  - Records update r20261116-233713-7261 running; I'll check PartitionCovers' record is unchanged. No mark.
+- #10553 (7ef39626a6c5, r20261116-224141-40b7) and #10556 (r20261116-215836-155e) are still running. #10553's research suite passed whole this time. #10556's research suite has the two main-shared treelock reds.
+
