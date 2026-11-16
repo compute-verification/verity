@@ -1,15 +1,15 @@
-"""The connection rows of a `network_certifier_serve` run: a schedule's lengths rows and content rows as flags, the publisher's
+"""The connection rows of a `network_attester_serve` run: a schedule's lengths rows and content rows as flags, the publisher's
 keep of each execution phase's hand, the offline check of what it kept, and the cost of a close.
 
 **The flags** (`flags`, `schedule`, `flags_of`). `--lengths 1` or `--lengths 2` gives the schedule lengths rows
-of that form (`network_certifier`'s "The lengths rows") and `--content P,O[,ROWS] ...` its content rows' classes, in order
+of that form (`network_attester`'s "The lengths rows") and `--content P,O[,ROWS] ...` its content rows' classes, in order
 (`content_rows`' "The classes"): a class's size of prompt ids, its size of ids released and, under form 1 and only
 there, the rows of each of its three tables. Under form 2 a class is `P,O`: its tables hold a row a release filed in
 it and no other. `--request-words`, with `--lengths 2`, `--content` and the schedule's `--max-tokens-cap`, gives it
 request words (`content_rows`' "A request's words"): a fourth table a class, each released request's `max_tokens`
 and count of prompt ids as the network attester reads them. `--head-offset N --head-wait W`, with `--lengths`, hold
-each execution phase's line to a tick (`network_certifier`'s "The head's tick"): N buckets after the close that hands it, or up
-to W ticks later for one that is late. `network_certifier_serve`'s `serve` and `rehearse` take the flags, and `rehearse` passes
+each execution phase's line to a tick (`network_attester`'s "The head's tick"): N buckets after the close that hands it, or up
+to W ticks later for one that is late. `network_attester_serve`'s `serve` and `rehearse` take the flags, and `rehearse` passes
 them to its `serve`. Without them the schedule, its digest and everything the run writes are what they were.
 
 **The hand** (`hand`, `Keeper`). With lengths rows the network attester hands an execution phase's releases once
@@ -98,7 +98,7 @@ its longest request and most ids: a ceiling, whether or not an execution phase r
 `--request-words` (under `--lengths 2`) the schedule has request words under the greatest response cap it takes, and
 each release's request is the canonical id request of its class's most prompt ids, which the publisher's build
 reads the words of. It then times, over `--phases` execution phases: the device's own hand of it to
-`network_certifier_serve`'s publisher process (`NetworkCertifier._emit_lengths`, what the ticker does at the close: `hand_ms`), the
+`network_attester_serve`'s publisher process (`NetworkCertifier._emit_lengths`, what the ticker does at the close: `hand_ms`), the
 pickling of the queue's items, which the queue's thread does in the ticker's process (`pickle_ms`, and the longest
 item's), and, in the publisher's process, the build, the commit and the signature (`rows.jsonl`'s cost). The result
 is `--out`'s JSON.
@@ -131,7 +131,7 @@ from verity.protocols.resource_accounting.network.verifier import connection_row
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
-from verity.protocols.resource_accounting.network.verifier.network_certifier import LENGTHS_FORMS, Released, NetworkCertifier, NetworkCertifierParams, _Connection
+from verity.protocols.resource_accounting.network.verifier.network_attester import LENGTHS_FORMS, Released, NetworkCertifier, NetworkCertifierParams, _Connection
 from verity.protocols.resource_accounting.network.attester.runner_parts import _class, hand, head_flags
 from verity.protocols.resource_accounting.network.verifier.connection_rows_check import ROWS, _spread
 
@@ -224,7 +224,7 @@ def _device(params: NetworkCertifierParams, releases: Sequence[tuple[int, int]],
 
 def cost(params: NetworkCertifierParams, load: str, phases: int, height: int) -> dict:
     """The module docstring's cost of a close of `params` under `load`, over `phases` execution phases."""
-    from verity.protocols.resource_accounting.network.attester import network_certifier_serve as ws  # at its use: it imports this module
+    from verity.protocols.resource_accounting.network.attester import network_attester_serve as ws  # at its use: it imports this module
 
     releases = loaded(params, load)
     hands, pickles, longest, backs = [], [], [], []

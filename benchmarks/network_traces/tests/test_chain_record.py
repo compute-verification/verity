@@ -97,7 +97,7 @@ def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
             "honest": {"windows": [window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}], "network": {"accepted": False}, "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 1, "rounds": {"honest-0": {"audit": {"window_accepted": True}}}}),
-        job=put("job.json", job), network_certifier_run="g1/network_certifier")
+        job=put("job.json", job), network_certifier_run="g1/network_attester")
 
 
 def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(tmp_path):
@@ -293,13 +293,13 @@ def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negat
         return {"ok": True, "T": 1, "rounds": {"block-0": rnd(block), "honest-0": rnd(True), "chain-0": rnd(False),
                                                "block-1": rnd(True), "honest-1": rnd(True), "stale-2": rnd(False)}}
 
-    got = cr.scan_step(scan(True), "g1/network_certifier")
+    got = cr.scan_step(scan(True), "g1/network_attester")
     assert got["verdict"] == "accepted" and got["negatives"] == {"chain-0": True, "stale-2": True}, got
-    got = cr.scan_step(scan(False), "g1/network_certifier")
+    got = cr.scan_step(scan(False), "g1/network_attester")
     assert (got["verdict"], got["why"]) == ("failed", "block-0: window refused")
     second = scan(True)
     second["rounds"]["honest-1"] = rnd(False)
-    assert cr.scan_step(second, "g1/network_certifier")["verdict"] == "refused"
+    assert cr.scan_step(second, "g1/network_attester")["verdict"] == "refused"
 
 
 def test_leak_counts_the_scans_terms_on_the_network_certifier_run(tmp_path):

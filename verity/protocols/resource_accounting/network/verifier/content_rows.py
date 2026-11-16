@@ -25,7 +25,7 @@ a schedule has only with content rows under the lengths rows' form 2 and a respo
 **A request's words** (`request_words`) are the network attester's own reading of the request's bytes as it cut
 them, and of nothing a server or a prover says. This is the one statement of the rule:
 
-- The request is cut in cells as the device cuts it (`network_certifier.cells`) and each cell is read as the device reads it
+- The request is cut in cells as the device cuts it (`network_attester.cells`) and each cell is read as the device reads it
   before it releases the cell (`io_request.read`, which `NetworkCertifier._ingress` holds every cut cell to in a schedule
   with lengths rows, failing the connection as `malformed` at the first that doesn't read). Bytes that don't read
   so are no released request's, and `request_words` refuses them: a request the rule doesn't read is never
@@ -82,7 +82,7 @@ most ids a response of it releases (`most_released`): the longest request the sc
 class of that P holds, and with more ids than it holds the release would be filed in none.
 
 **The tables** (`tables`) of an execution phase are made from its releases in release order, each with its request's
-bytes and its ids as the network attester cut and released them (`network_certifier.Released`), and from each release's class,
+bytes and its ids as the network attester cut and released them (`network_attester.Released`), and from each release's class,
 which is an argument. Row r of each of class i's tables is the r-th of the execution phase's releases filed in
 class i. A release filed in no class is unfiled: it has no content row, and its slots of the lengths and fails tables are
 the ones it had. A release filed in a class that doesn't hold it, its request longer than `request_room` or its ids
@@ -155,8 +155,8 @@ from verity.circuits.partition_v2 import SIZE_CLASS_MAX
 from verity.protocols.resource_accounting.network.verifier import io_request
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request_max_tokens
-from verity.protocols.resource_accounting.network.verifier.network_certifier import Released, NetworkCertifierParams, cells
-from verity.protocols.resource_accounting.network.verifier.network_certifier_rows import WORD_BITS
+from verity.protocols.resource_accounting.network.verifier.network_attester import Released, NetworkCertifierParams, cells
+from verity.protocols.resource_accounting.network.verifier.network_attester_rows import WORD_BITS
 
 REQUEST, RESPONSE, END, WORDS = "request", "response", "end", "words"
 #: the most classes a schedule without request words lists: the head counts its tables in a u16, three a class after
@@ -488,7 +488,7 @@ def layout(params: NetworkCertifierParams, name: str) -> dict[str, int]:
 
 
 def ids_of(packed: bytes) -> tuple[int, ...]:
-    """The ids a release carries (`network_certifier.Released.ids`, a little-endian u32 each), in order."""
+    """The ids a release carries (`network_attester.Released.ids`, a little-endian u32 each), in order."""
     if len(packed) % U32_BYTES:
         raise ValueError(f"a release's ids are {U32_BYTES} bytes each, not {len(packed)} bytes")
     return struct.unpack(f"<{len(packed) // U32_BYTES}I", packed)
