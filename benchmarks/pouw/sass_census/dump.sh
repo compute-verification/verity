@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# The SASS opcode census of a node's binaries: every file with device code under the given roots (the CUDA toolkit
-# libraries, NCCL, the node's wheel/kernel caches, the repo's own compiled kernels), disassembled once with
+# The SASS opcode census of a node's binaries: every file with device code under the given roots, disassembled once with
 # `cuobjdump -sass` (one pass dumps every embedded architecture), its opcodes counted by `sass_count.py`. CPU only;
 # no GPU. Writes under $OUT:
 #   toolkit.txt    cuobjdump and nvcc --version
@@ -9,9 +8,13 @@
 #   census.json    `sass_count.py merge` of them all, a device family each; summary.txt its totals
 #
 #   research run --on MACHINE --cwd source -- bash benchmarks/pouw/sass_census/dump.sh [ROOT ...]
-# MAXBYTES skips binaries larger than it: a fast first pass that leaves out cuBLASLt (whose one cuobjdump pass is serial
-# and holds the merge until it ends), for a first count while the full dump runs.
+#
+# ROOT: a directory searched for *.so, *.so.*, *.cubin and *.fatbin over 100 kB. Default: the CUDA toolkit of the nvcc
+# it runs, /usr/lib/x86_64-linux-gnu (the driver's and NCCL's libraries) and this checkout. MAXBYTES skips binaries
+# larger than it: a fast first pass that leaves out cuBLASLt (whose one cuobjdump pass is serial and holds the merge
+# until it ends). NVCC (default: the newest /usr/local/cuda-13*), CUOBJDUMP and JOBS (default: nproc) are read too.
 set -uo pipefail
+case "${1:-}" in -h|--help) sed -n '2,/^set /p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;; esac
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "$0")" && pwd)
 NVCC=${NVCC:-$(ls -d /usr/local/cuda-13*/bin/nvcc 2>/dev/null | sort -V | tail -1)}
@@ -25,8 +28,7 @@ mkdir -p "$OUT/counts"
 { "$CUOBJDUMP" --version; "$NVCC" --version; } >"$OUT/toolkit.txt" 2>&1
 
 roots=("$@")
-[ ${#roots[@]} -gt 0 ] || roots=(/usr/local/cuda /usr/lib/x86_64-linux-gnu /workspace/cache /home/research/.cache \
-  /home/research/.triton "$HERE/../../../")
+[ ${#roots[@]} -gt 0 ] || roots=("$(dirname "$BIN")" /usr/lib/x86_64-linux-gnu "$HERE/../../../")
 for r in "${roots[@]}"; do
   [ -e "$r" ] || continue
   find -L "$r" -xdev -type f \( -name '*.so' -o -name '*.so.*' -o -name '*.cubin' -o -name '*.fatbin' \) \
