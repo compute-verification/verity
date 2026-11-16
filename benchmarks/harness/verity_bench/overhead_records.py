@@ -1,5 +1,6 @@
-"""`verity bench overhead`'s store side: it stores a finished sweep's points as a versioned art, labels a timed run of
-record, and renders the table of γ from labelled runs alone.
+"""`verity bench overhead`'s store side: it launches the node side (`overhead_node.sh`, `overhead_node`) as a recorded
+`research run` on one GPU of a node, stores a finished sweep's points as a versioned art, labels a timed run of record, and
+renders the table of γ from labelled runs alone.
 
 A record is named in the store, never in code (`served_table`'s rule): the current points of a card, model and precision
 are the newest art of kind `POINTS_KIND` labelled `run_of_record=overhead-points` and not `superseded_by` a newer one; a run
@@ -9,7 +10,7 @@ of record is a run labelled `run_of_record=overhead`.
 γ stands when its run is labelled, ran the door's node job as the door launches it (`door_why`), passed with exit 0 from a
 clean tree, wrote an `overhead.json` of `RUN_SCHEMA` the
 node side found nothing against, was timed at the points of an art of record that nothing supersedes, ran its arm's cubin
-from the `art:` it was sent (the art's bytes a binary the run's SASS gate passed, `cubin_why`; a cubin
+from the `art:` it was sent (`run --cubin ART`; the art's bytes a binary the run's SASS gate passed, `cubin_why`; a cubin
 built in the run is development only), and its own point passed the door's rules (`overhead.point_whys`: every linear timed, at least 20 paired reps, an
 interval within ±5%, the cross-check, the arm's reference verifier accepting every row). `table` refuses every other
 figure and says why; a reader of γ outside this package (the protocol table, the one-pager, a goal) takes it from
@@ -25,9 +26,10 @@ from __future__ import annotations
 import json
 import shlex
 import shutil
+import subprocess
 import tempfile
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -38,12 +40,16 @@ from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, records
 POINTS_RECORD, RUN_RECORD = "overhead-points", "overhead"
 POINTS_KIND = "verity-bench-overhead-points/v1"
 BY = "benchmarks"
+#: each card's GPU node, where `--on` names none
+NODES = {"h200": "vy-dc-h200"}
 NODE_JOB = "benchmarks/harness/overhead_node.sh"
-#: the options the door gave each node job; the node job set the rest itself
+#: the options the door gives each node job (`launch_points`, `launch_run`); the node job sets the rest itself
 DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
                 "run": {"--card", "--scheme", "--points", "--points-art", "--point", "--cubin", "--cubin-art"}}
-#: the one variable a run of the door set with `--env`: any other could change what the node job runs
+#: the one variable a run of the door sets with `--env` (`launch_argv`): any other could change what the node job runs
 DOOR_ENV = frozenset({"VERITY_BENCH_VENV"})
+#: the run's bound, which its GPU lease enforces too: the sweep's and a timed run's
+MINUTES = {"points": 150, "run": 60}
 CENSUS = Path("benchmarks/census")
 DATACENTER, WORLD = "dc-12500-machines-600s", "world-inference-2027"
 #: the one conversion from FLOP to Boolean gates, with its source and status
@@ -52,6 +58,62 @@ GATES = Path("benchmarks/slowdown/data/hardware.toml")
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
 GAMMA_UNIT = "busy SM-seconds over stock's, less one"
+
+Executor = Callable[[Sequence[str], Path], int]
+
+
+def _execute(argv: Sequence[str], root: Path) -> int:
+    return subprocess.run(list(argv), cwd=root, check=False).returncode
+
+
+def launch_argv(root: Path, node: str, minutes: float, job: Sequence[str], sends: Sequence[Path] = ()) -> list[str]:
+    """The node side as a `research run` on one GPU of `node`, from this checkout."""
+
+    env = [f"VERITY_BENCH_VENV={v}"] if (v := settings.VERITY_BENCH_VENV) else []
+    return ["research", "run", "--on", node, "--project", "verity", "--campaign", "overhead",
+            "--source", str(root), "--cwd", "source", "--timeout", f"{minutes:g}m", "--require-result",
+            *[x for f in sends for x in ("--send", str(f))], *[x for e in env for x in ("--env", e)],
+            "--", *kit.lease(1, minutes), "bash", NODE_JOB, *job]
+
+
+def launch_points(root: Path, node: str, card: str, model: str, precision: str, minutes: float | None = None,
+                  execute: Executor | None = None) -> int:
+    job = ["points", "--card", card, "--model", model, "--precision", precision]
+    return (execute or _execute)(launch_argv(root, node, minutes or MINUTES["points"], job), root)
+
+
+def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point: str, points: str | None = None,
+               minutes: float | None = None, execute: Executor | None = None, cubin: str | None = None) -> int:
+    """A scheme's timed run at the card's points of record (or the art `points`), which it ships to the node with the art
+    `cubin`, the one cubin the scheme's arm loads (without it the run is development only)."""
+
+    if cubin is not None:
+        if O.scheme(scheme).arm is None:
+            raise ValueError(f"--cubin: {scheme} has no arm to load it")
+        try:
+            payload = store.get_manifest(cubin).payload
+        except Exception as ex:
+            raise ValueError(f"--cubin {cubin} isn't in the store ({type(ex).__name__}: {ex})") from ex
+        if getattr(payload, "type", None) != "file":
+            raise ValueError(f"--cubin {cubin} isn't one file: it names the art of the one cubin the arm loads")
+    else:
+        O.scheme(scheme)
+    art = points or current_points(store, card)
+    if art is None:
+        raise ValueError(f"no points of record for the {card}: run `verity bench overhead points --card {card} --on NODE`, "
+                         "then `verity bench overhead points --store RUN`")
+    if store.get_manifest(art).meta.get("card") != card:
+        raise ValueError(f"{art} holds the points of the {store.get_manifest(art).meta.get('card')}, not the {card}")
+    with tempfile.TemporaryDirectory() as tmp:
+        sent = [Path(tmp) / "points.json"]
+        shutil.copyfile(store.fetch(art), sent[0])
+        job = ["run", "--card", card, "--scheme", scheme, "--points", "points.json", "--points-art", art, "--point", point]
+        if cubin is not None:
+            (Path(tmp) / "cubin").mkdir()
+            sent.append(Path(store.fetch(cubin, Path(tmp) / "cubin")))
+            job += ["--cubin", sent[-1].name, "--cubin-art", cubin]
+        return (execute or _execute)(launch_argv(root, node, minutes or MINUTES["run"], job, sent), root)
+
 
 # ---- reading the store -------------------------------------------------------------------------------------------------------
 
@@ -66,7 +128,7 @@ def door_why(attempt: Mapping, run: str, sub: str) -> str | None:
     options = {x.partition("=")[0] for x in cmd[3:] if x.startswith("-")}
     if cmd[:3] != ["bash", NODE_JOB, sub] or options - DOOR_OPTIONS[sub]:
         return (f"{run} isn't a run of the door: it ran `{shlex.join(argv)[:300]}`, not `bash {NODE_JOB} {sub}` with the "
-                f"door's options")
+                f"door's options (launch it with `verity bench overhead {sub}`)")
     if extra := sorted(set((attempt.get("params") or {}).get("env") or {}) - DOOR_ENV):
         return f"{run} set {', '.join(extra)} with --env, which a run of the door doesn't: it sets only {', '.join(sorted(DOOR_ENV))}"
     return None

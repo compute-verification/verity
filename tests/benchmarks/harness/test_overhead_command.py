@@ -1,4 +1,4 @@
-"""`verity bench overhead table`: the table, and under a research run its metrics."""
+"""`verity bench overhead`'s command: each step a research run, and the table under one."""
 
 from __future__ import annotations
 
@@ -8,14 +8,74 @@ import sys
 from pathlib import Path
 
 import pytest
-from overhead_standins import REPO, Store, stored_points, timed
+from overhead_standins import CUBIN, REPO, Store, stored_points, timed
 from overhead_standins import scheme as scheme
 from overhead_standins import stamped as stamped
 from verity_bench import kit
 from verity_bench import overhead as O
 from verity_bench import overhead_records as R
+from verity_bench.cli import main
 
 # ---- the command ------------------------------------------------------------------------------------------------------------------
+
+
+def job(argv: list[str], minutes: str) -> list[str]:
+    """The node job's arguments in a launch: the command after `research run`'s `--` is the node job under a lease of one
+    GPU for the run's bound, which the job takes itself (a node whose GPUs gpu-lease doesn't hand out refuses `--gpus`)."""
+
+    cmd = argv[argv.index("--") + 1:]
+    assert cmd[:7] == ["gpu-lease", "1", "--wait", "--max-min", minutes, "--", "bash"] and cmd[7] == R.NODE_JOB
+    return cmd[8:]
+
+
+def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_the_points(tmp_path, monkeypatch, capsys):
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "producer"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
+    launched = []
+
+    def execute(argv, root):
+        argv = list(argv)
+        sent = [Path(argv[i + 1]) for i, a in enumerate(argv) if a == "--send"]
+        launched.append((argv, [p.read_bytes() for p in sent]))
+        return 0
+
+    monkeypatch.setattr(R, "_execute", execute)
+    assert main(["overhead", "points", "--card", "h200"]) == 0
+    assert main(["overhead", "run", "--scheme", "stock", "--point", "L", "--local-only"]) == 0
+    assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--local-only"]) == 0
+    (points, _), (run, sent), (armed, armed_sent) = launched
+    assert job(armed, "60") == ["run", "--card", "h200", "--scheme", "pearl-plus", "--points", "points.json",
+                                             "--points-art", art, "--point", "all", "--cubin", "arm.cubin",
+                                             "--cubin-art", s.cubin]
+    assert armed_sent == [Path(s.store.fetch(art)).read_bytes(), CUBIN]
+    with pytest.raises(SystemExit):
+        main(["overhead", "run", "--scheme", "stock", "--cubin", s.cubin, "--local-only"])
+    assert "stock has no arm to load it" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", "art:" + "f" * 64, "--local-only"])
+    assert "isn't in the store" in capsys.readouterr().err
+    (tmp_path / "cubins").mkdir()
+    (tmp_path / "cubins" / "a.cubin").write_bytes(CUBIN)
+    tree = s.store.put_artifact("cubin/v1", {}, tree=tmp_path / "cubins")
+    with pytest.raises(SystemExit):
+        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", tree, "--local-only"])
+    assert "isn't one file" in capsys.readouterr().err
+    for argv in (points, run):
+        assert argv[:4] == ["research", "run", "--on", "vy-dc-h200"] and "--require-result" in argv
+        assert argv[argv.index("--cwd") + 1] == "source" and "--gpus" not in argv
+    assert job(points, "150") == ["points", "--card", "h200", "--model", O.KERNEL_MODEL, "--precision", "fp8"]
+    assert job(run, "60") == ["run", "--card", "h200", "--scheme", "stock", "--points", "points.json",
+                              "--points-art", art, "--point", "L"]
+    assert sent == [Path(s.store.fetch(art)).read_bytes()] and run[run.index("--timeout") + 1] == "60m"
+    with pytest.raises(SystemExit):
+        main(["overhead", "points", "--card", "rtx-pro-6000"])
+    assert "has no default node" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        main(["overhead", "run", "--card", "h200", "--local-only"])
+    assert "--scheme S, or --record RUN" in capsys.readouterr().err
 
 
 def test_verity_bench_overhead_is_the_door_s_runner(tmp_path, monkeypatch, capsys):

@@ -2,7 +2,7 @@
 # enforces it.
 
 # `table` reads the labelled runs of record from the evidence store, so any CPU node with a --store-read key runs it; a γ
-# changes only when a new run of record is labelled
+# changes only when a new run of record is labelled (`verity bench overhead run --record RUN`)
 [[metric]]
 id = "benchmarks/pearl-plus-gamma-c-h200"
 title = "Pearl+ overhead, compute-bound point"
