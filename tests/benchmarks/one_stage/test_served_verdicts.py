@@ -3644,8 +3644,10 @@ def test_v3c_runs_no_audit_without_a_line_of_main_for_its_session_to_pin_on(tmp_
 LOCAL_COINS = "a local development challenger session on vy-dc-h200, the served node, not an auditor's (PP_CHALLENGER local)"
 V3C_COINS = f" V3c's audit: {V3C_DEV};"
 LIVE = "gate:research@auditor"
-LIVE_COINS = f"the challenger {LIVE} (peer vy-dc-h200)"
-V3C_LIVE = f"the challenger {LIVE} (peer vy-dc-h200), the window's run root's one session, the sampled-proofs audit of record"
+LIVE_SAID = "gate:research"
+LIVE_COINS = f"the challenger {LIVE_SAID} (peer vy-dc-h200)"
+V3C_LIVE = (f"the challenger {LIVE_SAID} (peer vy-dc-h200), the window's run root's one session, the sampled-proofs audit "
+            "of record")
 STEP3_LOCAL = ("a local development challenger session on vy-dc-h200, the served node, for step 3, a development check, since "
                "V3c's audit's live session takes the window's run root, which the gate opens once, ever")
 NO_V3C = {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}
@@ -3753,9 +3755,9 @@ def _not_development(challenger: str) -> str:
     ({"DEVELOPMENT": "yes"}, "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not yes"),
     ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or "
                                          "gate:USER@HOST, not gate:auditor"),
-    ({"PP_CHALLENGER": LIVE}, f"PREFLIGHT: V3c's audit's session on {LIVE} listens on its peer's 127.0.0.1, and V3C_PEER "
+    ({"PP_CHALLENGER": LIVE}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} listens on its peer's 127.0.0.1, and V3C_PEER "
                               "(default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"),
-    ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, f"PREFLIGHT: V3c's audit's session on {LIVE} is held to the "
+    ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} is held to the "
                                                        "challenger key record PP_CHALLENGER_KEY, which is unset and not a "
                                                        "readable file"),
 ])
@@ -4945,7 +4947,7 @@ def test_a_follow_on_of_a_deferral_of_record_samples_on_the_challenger_it_record
         "V3C_CHALLENGER": LIVE, "DEVELOPMENT": "", "SERVED_PEER": "vy-dc-h200"}
     assert rc == 2 and order == ["gate-ledger", "gate-pins", "audit", "period"], (lines, order)
     assert lines[-1].startswith("HANDOFF"), lines
-    assert lines[0] == (f"COINS V3c's audit: the challenger {LIVE} (peer cpu-6), the window's run root's one session, the "
+    assert lines[0] == (f"COINS V3c's audit: the challenger {LIVE_SAID} (peer cpu-6), the window's run root's one session, the "
                         "sampled-proofs audit of record")
     assert sum(x.startswith("V3C-GATE ready: lane vllm's open period None; root ") for x in lines) == 1, lines
     assert _audited(tmp_path, COIN_FLAGS) == {
@@ -4957,7 +4959,7 @@ def test_a_follow_on_of_a_deferral_of_record_samples_on_the_challenger_it_record
     ({"V3C_PEER": "vy-dc-h200"}, "PREFLIGHT: V3C_PEER (default PP_PEER) is vy-dc-h200, the served node's (SERVED_PEER), "
      "which deferred the audit: its session would listen on that node's 127.0.0.1, not this one's; name this node as the "
      "gate's /etc/vy/peers does"),
-    ({"V3C_PEER": None}, f"PREFLIGHT: V3c's audit's session on {LIVE} listens on its peer's 127.0.0.1, and V3C_PEER "
+    ({"V3C_PEER": None}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} listens on its peer's 127.0.0.1, and V3C_PEER "
      "(default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"),
     ({"DEVELOPMENT": "1"}, f"{CLASH} DEVELOPMENT: unset it"),
     ({"V3C_CHALLENGER": "local"}, f"{CLASH} V3C_CHALLENGER: unset it"),
