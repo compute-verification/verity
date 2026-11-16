@@ -16,8 +16,8 @@ if [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease > /dev/null; then
 fi
 [ -z "${GPU_LEASE_UUID:-}" ] || GPU=${GPU_LEASE_UUID%%,*}
 card=$(nvidia-smi ${GPU:+-i "$GPU"} --query-gpu=index,uuid,compute_cap --format=csv,noheader 2> /dev/null \
-  | while IFS=', ' read -r i uuid cap; do
-      [ "$cap" = 9.0 ] || continue
+  | while IFS=', ' read -r i uuid compute; do
+      [ "$compute" = 9.0 ] || continue
       [ "$(nvidia-smi -i "$i" --query-compute-apps=pid --format=csv,noheader 2> /dev/null | grep -c . || true)" = 0 ] \
         && { echo "$uuid"; break; }
     done) || card=
