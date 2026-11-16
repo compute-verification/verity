@@ -2906,7 +2906,7 @@
     {"file": "verity/protocols/compose/verifier/lean/pyproject.toml", "count": 1},
     {"file": "verity/protocols/compose/verifier/lean/tests/reference.py", "count": 5},
     {"file": "verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py", "count": 40},
-    {"file": "verity/protocols/compose/verifier/lean/tests/test_registration_difftest.py", "count": 11},
+    {"file": "verity/protocols/accounting/registration/verifier/lean/tests/test_registration_difftest.py", "count": 11},
     {"file": "verity/protocols/compose/verifier/lean/tests/test_sampled_two_difftest.py", "count": 6},
     {"file": "verity/protocols/compose/verifier/onsite/CoreOnsite.lean", "count": 12},
     {"file": "verity/protocols/compose/verifier/onsite/CoreRemoteNetwork.lean", "count": 18},

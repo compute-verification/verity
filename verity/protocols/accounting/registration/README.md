@@ -40,4 +40,4 @@ registered compiler and the days' registered circuits, `View.declared?`, at the 
 evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside
 ASCII without DEL as `Core.canonicalJson` does. `verity.protocols.accounting.registration.verifier.registration` is
 its Python, held to it by the composition suite's difftest
-(`../../compose/verifier/lean/tests/test_registration_difftest.py`).
+(`./verifier/lean/tests/test_registration_difftest.py`).
