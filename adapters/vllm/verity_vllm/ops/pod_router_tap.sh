@@ -17,6 +17,7 @@ REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}
 if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
+. "$REPO/verity_vllm/ops/cuda_headers.sh" && cuda_headers "$VENV/bin/python"
 RT=${RT:-/workspace/cp/router_tap}
 PIN=d9105ea8001e0a6d77a96327d17515bb5791fb36
 SRC=$REPO/verity_vllm/acquire/router_tap_src
@@ -28,10 +29,11 @@ command -v verity-vllm >/dev/null || fail "no verity-vllm on PATH ($VENV/bin)"
 command -v ninja >/dev/null || "$VENV/bin/pip" install -q ninja || fail "ninja"
 mkdir -p "$RT/build" "$RT/logs"
 
-# (1) the pinned sources
+# (1) the pinned sources, fetched only when absent. GitHub answers 429 when many pods fetch from one address: curl retries
+# each file up to 5 times, backing off 1 s doubling or as long as Retry-After says.
 for f in $FILES; do
   mkdir -p "$RT/vllm/$(dirname "$f")"
-  [ -s "$RT/vllm/$f" ] || curl -fsSL "https://raw.githubusercontent.com/vllm-project/vllm/$PIN/$f" -o "$RT/vllm/$f" || fail "fetch $f"
+  [ -s "$RT/vllm/$f" ] || curl -fsSL --retry 5 --retry-all-errors "https://raw.githubusercontent.com/vllm-project/vllm/$PIN/$f" -o "$RT/vllm/$f" || fail "fetch $f"
 done
 
 # (2) build when the inputs changed

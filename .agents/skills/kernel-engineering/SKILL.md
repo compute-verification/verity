@@ -3,13 +3,13 @@ name: kernel-engineering
 description: >
   How to design, evaluate, record and land PoUW GPU kernels in Verity: Pearl-C (FP8 E4M3) and Pearl-C4 (NVFP4) on the
   RTX PRO 6000 (sm_120), or any kernel whose output a verifier recomputes bit for bit. Covers checking what's been tried
-  before starting, the evaluation ladder (CPU conformance, a one-GPU screen, the timed whole-node panel row, served vLLM),
+  before starting, the evaluation ladder (CPU conformance, a one-GPU screen, the timed whole-node benchmark result on the panel, served vLLM),
   what a timed run must pass (the SASS gate, 0xA5 poisoning and a no-write control, the reference verifier on the run's
   own transcript, interleaved cuBLASLt and CUTLASS baselines, ε at both FP32 prices), recording every attempt with its
   hypothesis and reason, hooking a variant into vLLM (KernelVariant, GateRecord), sharing node 2 (gpu-lease, the fill
   queue) with other kernel lanes, and leaving the tooling better. Use when writing or tuning a CUDA or PTX kernel, a
   mainloop, forming or an epilogue, running benchmarks/pouw/harness (bench.py, verify.py) or the SASS gate
-  (verity/protocols/accounting/pouw/prover/sass_gate.py), adding a panel row (panel.py), timing against a baseline,
+  (verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py), adding a benchmark result to the panel (panel.py), timing against a baseline,
   installing a kernel in vLLM, or starting or taking over a kernel lane.
 ---
 
@@ -52,14 +52,14 @@ message, never an edit in their tree.
 
 - **Exact semantics:** `verity.circuits.silicon`. A newly captured step lands there as a model with a sampled fixture
   and an `instructions` entry (`benchmarks/tc_probe`, `tc_probe_fp4`), never as a kernel directory's own copy.
-- **The scheme and its verifier:** `verity/protocols/accounting/pouw/verifier` (stdlib only; its README, and each scheme's module
+- **The scheme and its verifier:** `verity/protocols/resource_accounting/compute/pouw/verifier` (stdlib only; its README, and each scheme's module
   docstring).
 - **The kernel:** a directory under `benchmarks/pouw/` like `pearl_c_sm120/` (`run.py` with `Dev` and `Pipeline`,
   `fixture.py`, `build.sh`, its sources, a harness arm against `arm.py`'s contract). Where serving kernels finally live is
   compute-accounting's call; the loader keys on digests, so a later move is cheap.
 - **The vLLM executor:** `adapters/vllm`.
 - **Shared tables** (scheme names, hashing formats, schedules, step groups, kernel variants) are defined once, in
-  `verity.protocols.accounting.pouw.verifier.serving`. Never keep a local copy (tree hashes, keys, arm tables); replace one you find.
+  `verity.protocols.resource_accounting.compute.pouw.verifier.serving`. Never keep a local copy (tree hashes, keys, arm tables); replace one you find.
 
 ## One attempt
 
@@ -71,7 +71,7 @@ Its parent (`KernelVariant.id`, `<family>-<device>/<source digest>`), mechanism 
 `epilogue:wide-stores`; the catalog's where one fits, so a search finds every attempt at it), a one-line hypothesis (the
 expected effect and why) and the tier that will decide it, usually 2a. In a harness arm they go in its build record
 (`variant`, whose `prices` names the priced path the kernel runs: `cast-8.72`, `cast-32.06`, `lut256`; `lineage`) and
-`verify.py --hypothesis "..." --parent ART`; outside it, in your status file and the panel row's `--description`.
+`verify.py --hypothesis "..." --parent ART`; outside it, in your status file and the panel result's `--description`.
 Commit a tuned knob's winner, so the digest changes with it; a knob that picks code at run time (`PEARLC_A_FORMS`) goes in
 the variant's `config`, or two forms share one id. Serving never tunes.
 
@@ -81,10 +81,10 @@ Stop at the lowest tier that decides the attempt. Only a candidate that beats it
 
 | Tier | Runs on | Establishes | How |
 |---|---|---|---|
-| 1 conformance | CPU | the build; the SASS gate on each binary; no spills; the twin against `verity.circuits.silicon` on small tiles; the executor's step order on `RecordingDev` | `uv run tools/check/suites.py benchmarks/pouw`; `python3 verity/protocols/accounting/pouw/prover/sass_gate.py K.cubin --json gate.json` |
+| 1 conformance | CPU | the build; the SASS gate on each binary; no spills; the twin against `verity.circuits.silicon` on small tiles; the executor's step order on `RecordingDev` | `uv run tools/check/suites.py benchmarks/pouw`; `python3 verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py K.cubin --json gate.json` |
 | 2a screen | one leased GPU, untimed | the device gates at the served shapes; a poisoned transcript accepted and a no-write control rejected; a diagnostic interleaved time; the time split; ncu, compute-sanitizer, sweeps | `research run ... -- gpu-lease 1 --wait -- ...`, or fill chunks of at most 8 minutes |
-| 2b timed | the whole node, locked-2100 | the measured panel row | `bench.py` under `research run --no-sampler` and `gpu-lease 8 --wait --timed`, then `verify.py --tier 2b` after the lease, in the same run |
-| 3 served | vLLM on the card | the served arms, the time split, the verify job, the served row | [Hooking a kernel into vLLM](#hooking-a-kernel-into-vllm) |
+| 2b timed | the whole node, locked-2100 | the measured panel result | `bench.py` under `research run --no-sampler` and `gpu-lease 8 --wait --timed`, then `verify.py --tier 2b` after the lease, in the same run |
+| 3 served | vLLM on the card | the served arms, the time split, the verify job, the served benchmark result | [Hooking a kernel into vLLM](#hooking-a-kernel-into-vllm) |
 
 Every GPU tier holds to these:
 
@@ -118,14 +118,14 @@ Every GPU tier holds to these:
   run, named from the kernel your forming step launches at the run's commit, not the one you plan to reach (64-bit
   stores at a 160-byte stride cost that cast's 8.72 per code; a block scale priced on `lut256`, 8.55, means forming runs
   `lut256`). Moving the priced path (cast, store width, scale
-  path) moves ε: re-derive it and say so in the row. Changing a price is a statement change.
+  path) moves ε: re-derive it and say so in the result. Changing a price is a statement change.
 
 ### 3. Record it, whatever happened
 
 Every attempt that ran is recorded, screens, failures and drops included. A harness run records itself (`verify.py`'s
 `kernel-attempt/v1` records, published as its README says); a 2a screen is logged, never plotted. Your judgment is a
 label, `ledger.py outcome ART <outcome> --reason "..." --ref <run> --by <you> --push`: numbers in records, judgments in
-labels. Anything priced or timed outside the harness is a panel row: `panel.py append` with every
+labels. Anything priced or timed outside the harness is a panel result: `panel.py append` with every
 field `kb/sm120/panel-add-a-row.md` describes, `--noisy` when anything shared the GPU or the node; after a store
 `EAGAIN`, run `panel.py render`, never append again. Hand appends stop once 90% of tier-2 runs record themselves. The
 keep-or-drop line, with its reason and run id, goes in your status file.

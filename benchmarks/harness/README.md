@@ -29,8 +29,8 @@ verity-bench prove --system S --workload W  # a proof system's prover on a workl
                                             # labelled records (`verity bench prove`, benchmarks/prove/README.md)
 verity-bench lean-verify --lean F --proof TREE  # Flock's Lean verifier timed on one kept proof, as the record `prove`
                                                 # reads (`verity bench prove lean-verify`, the same README)
-verity-bench prove-layers --flock R --zk R --sampling R --recursion R  # the proof system by layer, a row each read from
-                                                # its run's out/ or run id (`verity bench prove layers`, the same README)
+verity-bench prove-layers --flock R --zk R --sampling R --recursion R  # the proof benchmark by layer, the benchmark result
+                                                # for each layer read from its run's out/ or run id (`verity bench prove layers`, the same README)
 ~~~
 
 ## Specs
@@ -397,7 +397,7 @@ the audit's cost (the marks are in the spans arms' time). Then each spans arm's 
 
 ## The kit
 
-`verity_bench.kit` holds what benchmarks' runners share, whatever they measure: five calls, each written once, on the
+`verity_bench.kit` holds what benchmarks' runners share, whatever they measure: eight calls, each written once, on the
 standard library and `verity_bench.settings` alone, so a runner imports it without vLLM or torch.
 
 - **`kit.lease(gpus, minutes)`:** the `gpu-lease` argv a job's command follows: the wait for its GPUs, held for its bound.
@@ -427,16 +427,36 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   to the result's directory and named once, in `measurement_files` or `artifacts`. The first writes all three keys; a
   result that uses none holds none. **`kit.writer(out, kind)`** writes a result of that `kind` (`NAME/vN`), the artifact
   kind `research` stores it as (`bench-result/v1` where a result has none), and refuses a result of another kind.
-- **`kit.report(name, text, doc, measured=(), *, document=True, mark="measured", out=None)`:** a command's last step,
+- **`kit.report(name, text, doc, measured=(), *, document=True, mark=None, out=None, ran_with=..., accepted=None, why=None, made_up=False, withdrawn=())`:** a command's last step,
   the one way `verity bench compute`, `verity bench memory` and `verity bench inference_only` print and write their
   number. It prints `text`, then `doc` as one line of JSON, whose first keys are `value`, `unit`, `commit` and `run`.
   Where it has a place to write (`out` where the caller names one, its `--out`; else `$RESEARCH_RUN_DIR/out` under a
   research run, else `$OUT` where set; an empty variable is no place) it writes that line to `<name>.json` there
   (unless `document` is false) and each of `measured`, the keyword arguments of one measurement, to the run's result
-  through the writer, so under a research run the result is `$RESEARCH_RUN_DIR/result.json` and outside one
-  `result.json` beside the line. With no place it writes nothing. It returns the place, or None.
-  `tests/test_report.py` holds the three commands to it: compute and memory on their own suites' fixtures,
-  inference_only on its stated policy.
+  through the writer at `mark` (`"measured"` where None), so under a research run the result is
+  `$RESEARCH_RUN_DIR/result.json` and outside one `result.json` beside the line. With no place it writes nothing.
+  `ran_with`, `accepted`, `why`, `made_up` and `withdrawn` are the core benchmarks' interface (`benchmarks/README.md`):
+  the `ran with` line after the text's first, with `a measurement, not an audit` below it unless the coins are the
+  deployed challenger's, verified, at deployed parameters, and the document's `ran_with` and `audit`; with `made_up`,
+  `a made-up record, not a run's` below those, `made_up: true` in the document, and each measurement marked `modeled`
+  with `made_up: true`; with `accepted` false, `NAME: no number: WHY` in place of the text's headline (a first line opening with `NAME:`),
+  `value` null beside `no_number` and each
+  measurement with no value and its why; `withdrawn` printed last and the document's `withdrawn`. Given none of them it
+  prints and writes as before. It returns the exit code: 1 with no number, else 0. `tests/test_report.py` holds
+  compute, memory and inference_only to it (compute and memory on their own suites' fixtures, inference_only on its
+  stated policy), and `tests/test_interface.py` the interface's arguments.
+- **`kit.record_dir(arg, *, paths=None)`:** the directory of the run's record `arg` names: a directory as given, with
+  nothing of research's imported; a run id fetched through research's store client where it is installed, refused where
+  it was withdrawn whole or in a part holding a file read, as `benchmarks/compute/run.py`'s `EvidenceStore.files`
+  refuses it. Anything else is refused in one line naming the fix (`kit.NoRecord`, a `ValueError`).
+  **`kit.record(arg, *, paths=None)`** is the same read as a `kit.Record`, its `path` and its `withdrawn`, a withdrawal
+  of only other files of the record, which the command passes to `kit.report(..., withdrawn=...)`.
+- **`kit.ran_with(coins, parameters, detail=None, *, verified=False)`:** the line `ran with: coins COINS; parameters
+  PARAMETERS (DETAIL)` and its object, in the fixed words (`kit.COINS`, `kit.PARAMETERS`); other words are refused.
+  `verified=True` is passed only where the command checked the challenger's signature against a pinned key itself;
+  `deployed challenger` without it is the record's own word (`verified: false`), which `kit.report` states under the
+  audit line (`coins by the record's own word, not checked`) and never takes for an audit. These are in
+  `verity_bench/kit_report.py`, which `kit` re-exports.
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
 verdict of record or a seal, so the writer refuses a value that isn't a number, a missing or unknown mark, an unknown

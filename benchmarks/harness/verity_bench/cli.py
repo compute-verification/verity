@@ -267,7 +267,27 @@ def _overhead_parser(commands: Any) -> None:
     table.set_defaults(run=_overhead_table, command_parser=table)
 
 
+def _store_missing(local_only: bool) -> str | None:
+    """Why `prove` can't read the store's records here: no evidence store client, or (unless `local_only`) no remote it
+    can read. None where it can."""
+
+    try:
+        from research.store.local import LocalStore
+    except ImportError as e:
+        return f"the evidence store's client isn't installed ({e})"
+    if local_only:
+        return None
+    store = LocalStore()
+    if store.remote is None:
+        return f"the evidence store has no remote here ({getattr(store, 'remote_error', None) or 'none is configured'})"
+    return None
+
+
 def _prove(args: Any) -> int:
+    if why := _store_missing(args.local_only):
+        print(f"verity bench prove: needs the evidence store's client (`research`, in `uv sync`'s dev group) and a read "
+              f"key for its remote (R2_ENDPOINT, R2_BUCKET and their key, or RESEARCH_STORE_CONFIG): {why}", file=sys.stderr)
+        return 2
     doc = prove_records.build(args.system, args.workload, sampling=args.sampling, provers=args.provers,
                               cores=args.cores, local_only=args.local_only)
     if getattr(args, "metrics", None) and settings.is_set("RESEARCH_RUN_DIR"):
@@ -314,8 +334,9 @@ def _prove_parser(commands: Any) -> None:
     lean_verify.add_arguments(timed)
     timed.set_defaults(run=lean_verify.run, command_parser=timed)
 
-    layers = commands.add_parser("prove-layers", help="the proof system by layer (Flock, with zero knowledge, with "
-                                                      "sampling, with recursion), a row each read from its run's output")
+    layers = commands.add_parser("prove-layers", prog="verity bench prove layers",
+                                 help="the proof benchmark by layer (Flock, with zero knowledge, with sampling, with "
+                                      "recursion), the benchmark result for each layer read from its run's output")
     proof_layers.add_arguments(layers)
     layers.set_defaults(run=proof_layers.run, command_parser=layers)
 
@@ -390,7 +411,8 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
     """`metrics`: a runner's metric ids, each for what its command's table names, which the command records in a
     research run's result: for `prove` a total of its table (`prove_records.FIGURES`), for `overhead table` the γ of a
-    row (`overhead_records.measurements`), for `served-table` a row's ``SPEC/POINT`` (`served_render.measurements`)."""
+    row (`overhead_records.measurements`), for `served-table` a row's ``SPEC/POINT`` (`served_render.measurements`), for
+    `prove-layers` a figure a proof block (`proof_layers.FIGURES`)."""
 
     args = _parser().parse_args(argv)
     args.metrics = dict(metrics or {})

@@ -33,7 +33,7 @@ row to the output row the record wires it to. The statement reads the wiring on 
 * **a wire holds** (`Vocab.SameRow`): every opening the row-leaf verifier accepts of the reader's leaf and every one
   it accepts of the writer's leaf hold the same bits.
 
-A unit is then held (`Properties.Spot.WiredCorrect`) when the transcript binds it (`Accounting.unbound`) and no wire
+A unit is then held (`Properties.Spot.WiredCorrect`) when the transcript binds it (`ResourceAccounting.unbound`) and no wire
 into it fails (`Properties.Spot.miswired`), and the claim (`Vocab.WiresHold`) is SPOT's at twice its share:
 at most a `2ε` share of the units not held. The target is the claim at twice SPOT's error.
 
@@ -48,7 +48,7 @@ row's root under its member's name (`memberRow`). That the policy's record names
 
 namespace Verity
 
-open Accounting
+open ResourceAccounting
 open scoped ENNReal
 
 /-- **The record names the wiring `W`**: the record's `window.circuit` is the SHA-512 of a text, the circuit
@@ -131,7 +131,7 @@ def SameRow (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (record : Lea
 open Classical in
 /-- **The units the wiring `W` doesn't hold** in the transcript `X`: those that are not correct in the wired
 population (`Properties.Spot.WiredCorrect`), a unit being correct on its own rows when `X` binds it
-(`Accounting.unbound` under the commitment's openings) and a wire holding as `SameRow` compares its two rows. A
+(`ResourceAccounting.unbound` under the commitment's openings) and a wire holding as `SameRow` compares its two rows. A
 wiring's unit `u` of any template is the committed circuit's unit `u`. -/
 noncomputable def unheld (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (record : Lean.Json)
     (W : Spot.Wires.Wiring) (X : (V.circuitOf θ F).Trace) : Finset (Fin (V.units θ F)) :=
@@ -199,7 +199,7 @@ def MemberSameRow (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (record
 
 open Classical in
 /-- **The population's units the wiring `W` doesn't hold** in the transcript `X`, at the ranges `rs` and members `ms`:
-those `X` doesn't bind (`Accounting.unbound` under the commitment's openings), and those that are some template's
+those `X` doesn't bind (`ResourceAccounting.unbound` under the commitment's openings), and those that are some template's
 unit (`popUnit`) mis-wired in it (`Properties.Spot.miswired`, a wire holding as `MemberSameRow` compares its two
 rows): the units not correct in the wired population (`Properties.Spot.WiredCorrect`), each read at its population
 unit. The population's unit `g` is the committed circuit's unit `g`: the members' units side by side in the

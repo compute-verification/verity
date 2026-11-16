@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity_flock import rec_compose as RC
 
 POD = Path(__file__).resolve().parents[1] / "pod"

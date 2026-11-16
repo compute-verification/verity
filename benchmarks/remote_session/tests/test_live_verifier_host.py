@@ -1,4 +1,4 @@
-"""This directory's scripts held to PoUB's verifier host (`verity/protocols/accounting/poub/device/live_verifier/`): the
+"""This directory's scripts held to PoUB's verifier host (`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/`): the
 prover's tunnel client (`run.sh`'s `ssh -T`) asks no pty while the challenger's forces one, `auditor_line.py` runs on the
 host's own python with no site-packages from the pinned tree, and the out/ a host run leaves (the stub verifier's, a real
 paced session) is the one `auditor_line.py` reads."""
@@ -14,7 +14,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[3]
-LIVE = ROOT / "verity/protocols/accounting/poub/device/live_verifier/host.py"
+LIVE = ROOT / "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py"
 sys.path.insert(0, str(HERE.parent))
 
 import auditor_line  # noqa: E402
@@ -26,7 +26,7 @@ def test_the_provers_tunnel_client_asks_no_pty_and_the_challengers_forces_one():
     forces one; infra's packaging test holds the keys `setup.sh` writes to the same."""
     verifier_host = (HERE.parent / "run.sh").read_text().split('[ -n "${VERIFIER_SSH:-}" ]; then')[1].split("\nelif ")[0]
     assert re.search(r"\bssh -T\b", verifier_host) and "-tt" not in verifier_host
-    serve = (ROOT / "verity/protocols/compose/device/live_challenger/serve.py").read_text()
+    serve = (ROOT / "verity/protocols/compose/verifier/live_challenger/serve.py").read_text()
     assert re.search(r'^SSH = \["ssh", "-tt"', serve, re.M), (
         "serve.py no longer forces a pty: drop `pty` from the challenger's tunnel key in verifier/setup.sh, and this check")
 

@@ -22,8 +22,8 @@ from verity_bench import exfiltration as E
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output where no run carries the stop class's record, the calculator's rows as with no record read. A change
 #: elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "d2d310b06c95cd51c053b853e04ccfecba77fa510f104759a903b78a2c15bb07",
-               "json": "a4b52d174f80ad02cc077faa1f713682ff0c7c39e52643e29b0c23de324e980c"}
+NO_VERDICTS = {"text": "87bc0f9d2951ca7a865dac476dc53dabf31af2772d78b7c3f03dc02fdc73eb23",
+               "json": "de4c6afba30833cee80fc37b4da7b749dd5284dfab301cc8b993b87054162b71"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
@@ -64,7 +64,7 @@ def digests(doc: dict) -> dict:
 def test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte(tmp_path):
     """With nothing in the store carrying the stop class's record, the print and the document are byte for byte those
     pinned (`NO_VERDICTS`): the stop verdicts' reader is not asked and the calculator's rows are as with no record
-    read, the design as the design before its stop block and the network certifier's figure in the headline the
+    read, the design as the design before its stop block and the network attester's figure in the headline the
     `scan` row's. The output count is assumed as it was, and no sum takes it at 0, so the inputs list none."""
 
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
@@ -90,7 +90,7 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
     The output count's 0 would carry that mark, printed "run (Python verifier, not proved)" with each verdict's run
     and verifier and counted apart from measured, only where the stop verdicts' reader's answer holds an execution
     phase. It holds none: the run of record holds a class's four verdicts in the reader's own format beside these
-    (`held_phase`), the reader asks the network certifier's rule without a schedule, and the rule charges no class
+    (`held_phase`), the reader asks the network attester's rule without a schedule, and the rule charges no class
     below a schedule it was not handed. So no sum takes the count at 0, no input carries the mark and no figure
     moves: the periods and the inputs are those of the store with no verdict. The same verdicts in a run that holds
     nothing the reader reads say the same of the class."""

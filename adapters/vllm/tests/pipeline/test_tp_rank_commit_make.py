@@ -200,7 +200,7 @@ def test_the_committer_is_made_over_the_ranks_own_model_under_the_ranks_run_id()
     assert com.run_id == "run/rank1" and rank._tp2_commit["eng"] is eng
     assert eng.runner is rank.model_runner and eng.model is model
     assert (eng.cp, eng.kwargs, eng.env_flags, eng.build_s, eng.case) == ({"repo": "org/other"}, {"seed": 7}, {}, 0.0, "tp-case")
-    assert sorted(vars(eng)) == ["build_s", "case", "cp", "env_flags", "kwargs", "llm", "model", "runner"]
+    assert sorted(vars(eng)) == ["build_s", "case", "cp", "env_flags", "kwargs", "llm", "model", "runner", "vllm_config"]
     # the engine's LLM is the rank alone: a probe that asks every rank asks this one
     assert eng.llm.llm_engine.vllm_config is rank.vllm_config
     assert eng.llm.collective_rpc(lambda worker: worker) == [rank]

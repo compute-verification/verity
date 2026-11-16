@@ -36,16 +36,16 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The served layer is sound through its Flock sessions (the statement)
 
-`Accounting.Guarantees.TS.SessionSoundAt`, the bridge `Flock.SoundAtBridge` on the proof layer `pf` itself, with the
+`ResourceAccounting.Guarantees.TS.SessionSoundAt`, the bridge `Flock.SoundAtBridge` on the proof layer `pf` itself, with the
 bridge's `AcceptedLive`, `ExecutionPhaseDesign`, `RelOfRows` and `OpenedPlurAt` taken from named premises
-(`Accounting.Assumptions.TS`). Its conclusion is `pf.SoundAt`, so `BindingAt`, `Of` and `RightFixed` keep reading `pf`'s
+(`ResourceAccounting.Assumptions.TS`). Its conclusion is `pf.SoundAt`, so `BindingAt`, `Of` and `RightFixed` keep reading `pf`'s
 served openings. It sits in the proofs package because the sessions do (`reads_exempt`). -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees.TS
+namespace ResourceAccounting.Guarantees.TS
 
-open Accounting.TS Flock.SoundAtBridge
+open ResourceAccounting.TS Flock.SoundAtBridge
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
@@ -54,7 +54,7 @@ open scoped ENNReal
 (a `RowsSession`) with outcome `out x w i`, and a reading `rows s` of a session's value layer as a layer value:
 given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's opening
 (`RowsSession.CR`; the rows link itself is `Flock.SecurityProofs.EndToEndRegisteredRows`), the proof system's
-acceptance rule (`Accounting.Assumptions.TS.AcceptedLive`), the window's sampling design (`ExecutionPhaseDesign`), `pf`'s relation at the
+acceptance rule (`ResourceAccounting.Assumptions.TS.AcceptedLive`), the window's sampling design (`ExecutionPhaseDesign`), `pf`'s relation at the
 value layer of an accepted session whose sampled proof blocks are right (`ServedChecksHold`), that value layer being `pf`'s
 opening outside `δs` (`ServedRootsLinked`), and `δ ≥ 0` with
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta$$
@@ -74,11 +74,11 @@ def SessionSoundAt : Prop :=
     (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (δs δ : ℝ),
     (∀ x w i, (sess x w i).CR) →
-    Accounting.Assumptions.TS.AcceptedLive pf sess out →
-    Accounting.Assumptions.TS.ExecutionPhaseDesign sess out →
-    Accounting.Assumptions.TS.ServedChecksHold pf sess out rows →
-    Accounting.Assumptions.TS.ServedRootsLinked pf sess out rows δs →
+    ResourceAccounting.Assumptions.TS.AcceptedLive pf sess out →
+    ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign sess out →
+    ResourceAccounting.Assumptions.TS.ServedChecksHold pf sess out rows →
+    ResourceAccounting.Assumptions.TS.ServedRootsLinked pf sess out rows δs →
     (∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     pf.SoundAt (δs + δ)
 
-end Accounting.Guarantees.TS
+end ResourceAccounting.Guarantees.TS

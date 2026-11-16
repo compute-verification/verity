@@ -1,5 +1,5 @@
 """The development challenger on this machine (`challenger_session`'s ``local`` session): the auditor device's own
-service, `verity/protocols/compose/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no
+service, `verity/protocols/compose/verifier/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no
 tunnel, run in this process. It is compose's service, which no SPOT file the deployed challenger runs loads: the trusted
 `challenger_session.start` and `challenger_party.Host` take `Local` from their caller (``local``), and a development
 command passes it from here.
@@ -17,7 +17,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 from verity.commitments.crypto import lms
-from verity.protocols.proofs.spot.device import challenger as Ch, challenger_session as AC
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, challenger_session as AC
 
 TREE = Path(__file__).resolve().parents[6]
 
@@ -39,7 +39,7 @@ class Local:
 
     def __init__(self, root: Path, main: list[str], by: str = "circuits", params: tuple[int, int] = AC.LOCAL_PARAMS,
                  workers: int = 1) -> None:
-        A = _module("a5_auditor", TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+        A = _module("a5_auditor", TREE / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "auditor.py")
         self.A, self.by = A, by
         self.host = A.Host(root=root / "var", peers=root / "peers", name=AC.LOCAL_HOST, pins=root / "pins.jsonl")
         (root / "var" / "sessions").mkdir(parents=True, exist_ok=True)

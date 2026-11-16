@@ -148,7 +148,7 @@ theorem before_sameUntil {E : Prop} {r r' : Fin K → FlockDeploy.Coin} (i : ℕ
 
 end Before
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The coin map's plays at two runs' coins have one log before round `i`**, where the coins agree at every round
 below `i` a release of the first play's log is put on. -/
@@ -170,7 +170,7 @@ namespace Verity.SampledTwo.Messages
 
 open Claims
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The play's log before round `i` is fixed by the coins the history before round `i` shows.** At the coin map's
 play with the run's coins `r`, accepted (`Acc`) and with the check's log the device's (`Good`), any coins `r'` that

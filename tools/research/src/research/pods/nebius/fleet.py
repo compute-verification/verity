@@ -115,8 +115,9 @@ def registry() -> dict[str, dict]:
     for f in sorted(MACHINES_D.glob("*.toml")) if MACHINES_D.is_dir() else []:
         try:
             out[f.stem] = tomllib.loads(f.read_text())
-        except (OSError, tomllib.TOMLDecodeError):
-            continue
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            print(f"fleet.py: {f.name} unread, so {f.stem} has no registry entry ({type(e).__name__}: {e})", file=sys.stderr,
+                  flush=True)
     return out
 
 
@@ -153,6 +154,7 @@ def probe(host: str, user: str) -> dict | None:
     try:
         p = subprocess.run([*ssh, f"{user}@{host}", PROBE], capture_output=True, text=True, timeout=60)
     except subprocess.TimeoutExpired:
+        print(f"fleet.py: ssh as {user} gave no answer in 60 s, so its machine is unread this sample", file=sys.stderr, flush=True)
         return None
     return parse_probe(p.stdout) if p.returncode == 0 and "cores=" in p.stdout else None
 
