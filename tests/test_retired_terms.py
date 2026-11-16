@@ -1,7 +1,7 @@
 """No retired term in the tree's prose (AGENTS.md "Working principles": a decision rolls out in the change that records it).
 A semantically meaningful part of the registered or actual circuit is a block, always named with a prefix
-(`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty or wrong unit an incorrect
-proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
+(`GLOSSARY.md`, "Block"): a proof unit is a proof block, and a faulty or wrong unit an incorrect
+proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`GLOSSARY.md`, "Proof system").
 
 Scanned: every tracked text file but the Lean packages' `lakefile.toml` and their locks' reasons (`lean-audit.json`), the
 lints that name the terms (``LINTS``: `tests/lint/test_repo_retired_terms.py` holds every term the table retires, in the
@@ -242,7 +242,7 @@ ALLOWED: dict[str, str] = {
         "`period_case.py`, which mirrors `NetworkCheck.Period`'s Lean message word for word; renamed with the Lean",
     "K charges a tied audit no faulty term": "the refusal `test_network_period_protocol.py` expects from Lean "
                                              "(`NetworkCheck.Period`); renamed with the Lean",
-    "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
+    "an *active warden* in network steganography's sense": "network steganography's own term, which `GLOSSARY.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
     "Verity's two composite protocols": "`verity/protocols/compose/verifier/lean/README.md`, in a Lake package's "
@@ -351,7 +351,7 @@ def test_no_retired_term_in_prose():
     bad = [o for o in found if not o[0].endswith(".lean")]
     say = ("say " + " and ".join(f'"{new}" for "{old}"' for old, new in TERMS.items())
            + f" (in {', '.join(INCORRECT)}, also " + " and ".join(f'"{new}" for "{old}"' for old, new in INCORRECT_TERMS.items())
-           + ")" + f' (ARCHITECTURE.md, Glossary, "Block"; {GLOSSARY})')
+           + ")" + f' ({GLOSSARY}, "Block")')
     assert not bad, (
         f"a retired term: {say}; a spelling baked into a record or a digest goes in ALLOWED with its reason:\n"
         + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
@@ -367,7 +367,7 @@ def test_no_retired_term_in_the_maintained_docs():
     bad, _ = doc_offenders(_tracked())
     assert not bad, (
         "a retired term in a maintained doc: say " + "; ".join(f'{new} for "{old}"' for old, new in DOC_TERMS.items())
-        + f" (ARCHITECTURE.md's Glossary, {GLOSSARY}). A path or a record key that keeps it goes in backticks, and a word"
+        + f" ({GLOSSARY}). A path or a record key that keeps it goes in backticks, and a word"
         + " in another sense goes in ALLOWED with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
 
 
@@ -809,7 +809,7 @@ def test_the_doc_scan_reads_the_party_terms():
 
 
 def test_the_doc_scan_reads_the_protocol_terms():
-    """The protocol's vocabulary (`ARCHITECTURE.md`, Glossary), on toy files: hm96 rows keep their name in the commitments' own docs."""
+    """The protocol's vocabulary (`GLOSSARY.md`), on toy files: hm96 rows keep their name in the commitments' own docs."""
     docs = {
         "NETWORK.md": "The warden, a network warden's cells, two Wardens.\n"
                       "`warden.py`, `--warden-run`, WardenParams and warden_rows stay.\n",
