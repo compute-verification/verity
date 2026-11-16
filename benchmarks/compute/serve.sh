@@ -39,7 +39,7 @@
 # pearlplus-lean.json, pearlplus-lean-check.json, verify.json, served.json and coin.json; inference-only-policy.json;
 # record/circuit-record.json, record/window-record.json and record/verdicts.json; registered/; auditor/ (the local gate's ledger,
 # pins, public key and sessions' public files); compute-run.json and coins.txt. The record writes no Program: the tied
-# path's window record W stands in its place. The passes (about 2 GB) stay outside OUT, as they hold the run's activations
+# path's window record W stands in its place. The passes stay outside OUT, as they hold the run's activations
 # and salt key: in a directory under the run's own scratch under research run, else under SCRATCH or $TMPDIR, removed
 # on exit with the local gate's key; PASSES names a directory to keep them in instead.
 # Env: WORK (where the bootstrap installs and env.sh searches, default ~/verity-work), VERITY_BENCH_VENV (the
@@ -60,8 +60,7 @@ TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}
 OUT=$RUN/out
 COINS=${COINS:-local} GPU=${GPU-0} DRAWS=${DRAWS:-459} DELTA=${DELTA:-1/100} FAST=${FAST-1} JOBS=${JOBS:-$(nproc)}
-# the Lean verdict runs on every core it may: 1,917 s on 96, 3,451 s on 36, and more than 3,600 s on 20, so its limit grows
-# as the cores fall
+# the Lean verdict runs on every core it may, so its limit grows as the cores fall
 CORES=$(nproc) && LEAN_TIMEOUT=${LEAN_TIMEOUT:-$(( CORES >= 96 ? 3600 : 3600 * 96 / CORES ))}
 # under a caller's gpu-lease (which exports GPU_LEASE_UUID, the cards it holds) the card is the lease's, and serve.sh takes
 # no lease of its own: gpu-lease isn't re-entrant, so a second lease of the held card would wait forever

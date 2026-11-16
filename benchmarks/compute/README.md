@@ -242,33 +242,16 @@ It needs:
   one's among them, and serve.sh checks it after the bootstrap, before the cubin;
 - Lean v4.34.0, through [elan](https://github.com/leanprover/elan), to build the Lean verifier: `lake` on `PATH` or
   in `~/.elan/bin`, which serve.sh also checks first;
-- about 2 GB of disk for the run's passes, besides the checkpoint and the vLLM environment; the record itself is about
-  200 MB;
-- memory for the Python verdict's workers, one a core unless `JOBS` says otherwise: on a 96-core H200 machine the
-  run's processes peaked at 400 GB resident, summed over the workers. It grows with `JOBS`: a smaller `JOBS` holds
-  less and makes `python-verify` slower.
+- disk under `WORK` for what the bootstrap installs, and under `SCRATCH` or `TMPDIR` (the run's scratch under
+  `research run`) for the run's passes, which are removed on exit;
+- memory for the Python verdict's workers, one a core unless `JOBS` says otherwise. It grows with `JOBS`: a smaller
+  `JOBS` holds less and makes `python-verify` slower.
 
-A run takes one to one and a half hours: our measured runs took 59 minutes on one H200 of a 96-core machine with
-`COINS=local`, and 92 minutes on a 36-core machine. On the 96-core run the steps took:
-
-| step | seconds |
-|---|---|
-| the kernel's cubin (`cubin`) | 136 |
-| the local challenger's gate, its Lean spot-verifier built (`gate`) | 293 |
-| serving the load (`serve`) | 60 |
-| the Python verdict (`python-verify`) | 868 |
-| the Lean verdict, `pouw-pearlplus` built (`lean`) | 1,917 |
-| the policy (`policy`) | 126 |
-| the class's circuit (`circuit`) | 118 |
-| the rest (`retain`, `publish`, `piece`, `verdicts`, `registered`, `share`) | 5 |
-
-The `gate` and `lean` times include building their Lean programs from a fresh clone. The run was alone on its card,
-but for the first few minutes of `python-verify` another run's Lean verdict was also running on the same machine.
-
-On fewer cores the two verdicts take longer. On 36 cores `python-verify` took 1,355 s and `lean` 3,451 s, and the
-whole run 92 minutes; on 20 cores `python-verify` took 2,368 s, and `lean` took more than 3,600 s. The Lean verdict has
-`LEAN_TIMEOUT` seconds: 3,600 on 96 or more cores, and 3,600 × 96 over the cores serve.sh may run on (`nproc`) on
-fewer, 17,280 on 20. Give `research run` a `--timeout` to match: the `2h` above is for 96 cores.
+The two verdicts run on every core serve.sh may run on (`nproc`), so a run takes longer on fewer cores. The Lean
+verdict has `LEAN_TIMEOUT` seconds: 3,600 on 96 or more cores, and 3,600 × 96 over `nproc` on fewer, 17,280 on 20.
+Give `research run` a `--timeout` past the bootstrap, `LEAN_TIMEOUT` and the other steps together. For each step's
+seconds on one H200, read the published run that `metrics.toml`'s rows read: its record's `out/compute-run.json`
+holds them under `steps`.
 
 ## A record directory
 
