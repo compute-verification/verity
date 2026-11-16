@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Complete.ZkTables.RecordSetup
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
+import Proofs.Flock.Soundness.ExecTemplate
 import Proofs.Flock.Soundness.Discharge.Exec.Setup
 import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 import Proofs.Flock.Soundness.ExecSetup
@@ -15,14 +16,12 @@ import Proofs.Flock.Soundness.Refine.Walk
 `RecordSetup` proves the facts the length bound reads at one table under tags with hidden outputs. Here the other
 branch: under tags with public outputs (`Stmt.setupH`), the verifier's public inputs are refused (`setupTables_own_none`),
 so the setup is `setupTables_ok`'s; its table has `25 ≤ m ≤ 35` (`Zk.shapeOk`), the `hm96` leaf (`setupH_hm96`),
-`k_log ≤ m`, at most `2^10` regions and `m_pts ≤ 64` (`setupH_spec`), a keyed coin tree (`setupH_coinTree`) and a `Hello`
-that reads back (`setupOne_stmt`). `setup_facts` is the two together, and `recordZk_size_le`,
+`k_log ≤ m`, at most `2^10` regions and `m_pts ≤ 64` (`setupH_m`, `setupH_inRange`), a keyed coin tree and a `Hello`
+that reads back (`JsonRT.setupOne_stmt`). `setup_facts` is the two together, and `recordZk_size_le`,
 `recordFitsZkAt_of_text` take `hs`, `h1` and the text alone.
 -/
 
 @[expose] public section
-
-open private setupOne_stmt from Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
 open _root_.Flock
 
@@ -31,11 +30,6 @@ namespace FlockComplete.ZkTables
 open Flock Transcript FlockDeploy With FlockComplete JsonRT FlockSoundness.Discharge FlockComplete.Replay
 open Lean (Json)
 
-/-- **No statement with public outputs and the hm96 rows is typed.** -/
-theorem tags_public_untyped : ∀ t ∈ Tags.all ++ Tags.templated, t.hm96Rows = true → t.hiddenOutputs = false →
-    t.typed = false := by
-  decide +kernel
-
 /-- Under `--zk` a statement `Zk.shapeOk` passes is of `25 ≤ m ≤ 35` (`queries0`). -/
 theorem m_range_of_shapeOk {st : Flock.Stmt} (h : Zk.shapeOk st = .ok ()) : 25 ≤ st.m ∧ st.m ≤ 35 := by
   refine ⟨Readable.m25_of_shapeOk h, ?_⟩
@@ -43,14 +37,18 @@ theorem m_range_of_shapeOk {st : Flock.Stmt} (h : Zk.shapeOk st = .ok ()) : 25 �
   obtain ⟨_, hq, -⟩ := FlockSoundness.except_bind_ok h
   unfold Zk.queries0 at hq
   by_contra hm
-  split at hq <;> first | (cases hq; done) | (simp at *; omega)
+  have hb : ∀ n : ℕ, st.m ≠ n → (st.m == n) = false := fun n hn => by simpa using hn
+  simp only [show ¬ st.m ≤ 24 by omega, hb 25 (by omega), hb 26 (by omega), hb 27 (by omega),
+    show ¬ st.m ≤ 31 by omega, show ¬ st.m ≤ 35 by omega, Bool.false_eq_true, ↓reduceIte] at hq
+  all_goals cases hq
 
 open _root_.Flock FlockSoundness.Refine in
 set_option maxHeartbeats 4000000 in
-/-- **A statement `Stmt.setupH` returns keeps the coin tree its setup was given.** -/
-theorem setupH_coinTree {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+/-- **A statement `Stmt.setupH` returns passed `checkInRange`.** -/
+theorem setupH_inRange {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt}
-    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : st.coinTree = coins.tree? := by
+    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
+    checkInRange st.c.kLog st.regions.size st.mPts = .ok () := by
   unfold Stmt.setupH at h
   dsimp only at h
   simp only [throw_bind', pure_bind] at h
@@ -58,7 +56,15 @@ theorem setupH_coinTree {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    rfl
+    assumption
+
+/-- `m = k_log + nbl` at a statement `Stmt.setupH` returns, typed or not. -/
+theorem setupH_m {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt}
+    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : st.m = st.c.kLog + st.nbl := by
+  cases ht : tags.typed
+  · exact (FlockSoundness.setupH_spec ht h).2.2.2.2.1
+  · exact (FlockSoundness.setupH_spec_typed ht h).2.2.2.2.1
 
 open _root_.Flock FlockSoundness.Refine in
 set_option maxHeartbeats 4000000 in
@@ -108,19 +114,11 @@ theorem setup_facts_public {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts 
     simp [Readable.Read.tags, ZkExec.zkTags, Zk.tags, hzk]
   have e2 : s.read.tags.merkleLeaf = s.read.I.tags.merkleLeaf := by
     simp [Readable.Read.tags, ZkExec.zkTags, Zk.tags, hzk]
-  have e3 : s.read.tags.hiddenOutputs = s.read.I.tags.hiddenOutputs := by
-    simp [Readable.Read.tags, ZkExec.zkTags, Zk.tags, hzk]
-  have e4 : s.read.tags.typed = s.read.I.tags.typed := by
-    simp [Readable.Read.tags, ZkExec.zkTags, Zk.tags, hzk]
   obtain ⟨w, hw, hwz, hwi⟩ := insOf_ins hi
   obtain ⟨t, hbn, hIt⟩ := Raw.ins_tags hwi
   have hl : s.read.tags.merkleLeaf = "hm96-sha512/v1" := by
     rw [e2, hIt]
     exact byName_hm96 hbn (Raw.ins_plain hwi hbn hwz) (by rw [← hIt, ← e1]; exact hm96)
-  have hty : s.read.tags.typed = false := by
-    rw [e4, hIt]
-    exact tags_public_untyped t (mem_of_byName hbn) (by rw [← hIt, ← e1]; exact hm96)
-      (by rw [← hIt, ← e3]; exact hh)
   have hco : s.read.coins = .tree (Zk.coinSpec (s.read.I.tags.tableNames s.read.I.count)) := by
     simp [Readable.Read.coins, ZkExec.zkCoins, hzk]
   have hshape := Claims.Bridge.Custody.setup_shapeOk hset hzk
@@ -133,15 +131,13 @@ theorem setup_facts_public {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts 
   subst hspec
   subst hsts
   have hms := Exec.setupH_hm96 hl hd
-  have hct := setupH_coinTree hd
-  rw [hco] at hct
-  obtain ⟨-, -, -, -, hm, -, hrange⟩ := FlockSoundness.setupH_spec hty hd
-  have hrange' := (checkInRange_ok _ _ _).1 hrange
+  have hm := setupH_m hd
+  have hrange' := (checkInRange_ok _ _ _).1 (setupH_inRange hd)
   have hsh := Readable.array_forM_ok hshape 0 (by simp)
   obtain ⟨h25, h35⟩ := m_range_of_shapeOk hsh
   have hd' := (HiddenExec.setupOne_public hh).trans hd
-  obtain ⟨-, -, -, hhello⟩ := setupOne_stmt hd'
-  rw [hco] at hhello
+  obtain ⟨-, -, -, hhello, hct⟩ := JsonRT.setupOne_stmt hd'
+  rw [hco] at hhello hct
   obtain ⟨m, kvs, hown', -, -, -, hg⟩ := hello_ok hhello
   obtain ⟨hz, hc, -⟩ := FlockComplete.JsonRT.canon_ok _ hg
   exact ⟨st, st.tags.table, _, .obj m, hz, rfl, rfl, hct, hown', hc, h25, h35, hms, by omega, hrange'.2.1, rfl,
