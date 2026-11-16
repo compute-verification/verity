@@ -236,7 +236,9 @@ prints.
 The command prints and writes through the harness kit's report (`kit.report`, `benchmarks/harness/README.md`), as
 `verity bench compute` does: under `research run` it writes the printed document to
 `$RESEARCH_RUN_DIR/out/memory.json`, outside one where `OUT` names a directory to `$OUT/memory.json`, and with
-neither nothing. Where it writes, an accepted session of a node run or of `--from` also writes the run's result,
+neither nothing, but `--local` outside a research run also leaves it as `out/memory.json` beside its records, where
+`--from` reads it; the loopback, a node run and `--from` leave nothing with neither. Where the kit writes, an
+accepted session of a node run or of `--from` also writes the run's result,
 `$RESEARCH_RUN_DIR/result.json` (where `research` reads a run's result) or `$OUT/result.json`, through the kit's
 writer, in the five fields every resource's benchmark reports. Each is read from
 the verifier's record alone, and its `inputs` name the recorded run and the record's keys it came from: `metric` (the

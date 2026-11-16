@@ -30,7 +30,7 @@ row's end.  The unit hashes nothing beyond the decode's keys: which row of W and
 its P bytes by a multiplexer tree over the row's n slots, one AND a bit a merge, (n − 1)·8P in all; then one AND tree
 over the 8P bits' agreement with the payload, ok and slot < n (at most 8P + 1 ANDs), the bound itself at most 15
 more over the slot's 16 bits.  Its counts at P2's payload are pinned in
-`verity/protocols/resource_accounting/memory/pous/verifier/tests/test_pous_setup_circuit.py`.
+`tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_setup_circuit.py`.
 """
 from __future__ import annotations
 
