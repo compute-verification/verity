@@ -34,5 +34,3 @@ Each reaches the nodes, so it needs the team's keys and the nodes' addresses.
 
 The agent VM's secret guard and shell hook are [`tools/agent-guard/`](../tools/agent-guard/README.md), and the run
 recorder, the evidence store's client and `research` itself are [`tools/research/`](../tools/research/README.md).
-
-[`DESIGN.md`](DESIGN.md) maps each machine and loop to its code.

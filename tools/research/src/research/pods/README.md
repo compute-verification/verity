@@ -38,6 +38,3 @@ research pods drain TARGET                  terminate it only when nothing on it
 `create` needs `--max-hours` and a budget line that covers the name, and makes at most one live pod per `--name`, so a
 retry loop can't duplicate pods: exit 4 when one exists (`--allow-duplicate` overrides), 5 for RunPod's explicit
 no-stock reply, the one failure to answer with another spec, 6 when no budget line lets it, and 2 for any other failure.
-
-[`DESIGN.md`](DESIGN.md) holds what bounds a pod (its lease, the budget file and the guard), what each module holds and
-what code outside `research` loads from it, and what each file under `nebius/` is.

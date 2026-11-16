@@ -32,6 +32,3 @@ It needs nothing beyond `uv sync`. `uv run cluster --help` lists every other com
 The rules the planner keeps (no GPU, CPU or lock in two allocations, owner before guest, only a strictly higher rank
 evicts, and the rest) are in `plan.py`'s docstring, and random workloads are checked against every one of them on every
 tick.
-
-[`DESIGN.md`](DESIGN.md) holds how the agent runs on each node, how a job is submitted, the rules in full, every
-command's arguments, and how policy is read, overridden and applied.

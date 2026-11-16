@@ -2,7 +2,7 @@
 
 The site's live console (`/admin/live` and `/console` on website-docs) shows the team's machines and the store as panels:
 each node's GPUs and queues, the pools' hours, the last day's checks. `verity_console.py` builds Verity's panels and PUTs
-them with the `panels:write` key, from two places: node 1 builds the machines' panels, and the control pod the store's.
+them with the `panels:write` key.
 This directory is the master copy. The hosts run copies of it, so deploy from here rather than editing on a host.
 
 `status_export.py`, beside it, writes the docs site's status document, `verity/status/v0`: every guarantee the tree's

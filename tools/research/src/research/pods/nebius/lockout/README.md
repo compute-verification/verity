@@ -7,10 +7,10 @@ no longer be changed. The steps run once on each node, as `vy-admin`, each with 
 ## Try it
 
 ~~~sh
-python3 tools/research/src/research/pods/nebius/lockout/lockout.py plan vy-nebius-1
+python3 tools/research/src/research/pods/nebius/lockout/lockout.py plan vy-nebius-cpu-3
 ~~~
 
-This prints node 1's steps in order, each with what it runs and its rollback. It changes nothing and runs anywhere.
+This prints that machine's steps in order, each with what it runs and its rollback. It changes nothing and runs anywhere.
 
 ## What it does
 
