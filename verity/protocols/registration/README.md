@@ -1,20 +1,14 @@
 # Registration
 
-The accounting protocol that runs once, before any challenge: a deployment's registration log and its check.
-Its Lean check is `verifier/lean/` (the Lake package `core_registration`: `RegistrationLog.lean`, and the
-`core-registration` executable, `RegistrationLog/Main.lean`), on the interface every core protocol implements
-(`../interface/`), and its Python verifier, until the Lean replaces it, is `verifier/registration.py`. The package
-also holds registration's check on the Site (`RegistrationLog/SiteCheck.lean`: each site entry's checks and refusal,
-the inventory a log is held to, the log's head and its check, over the interface's Site, `../interface/CoreProtocol/Site.lean`),
-with their guards (`RegistrationLog/SiteV2Guards.lean`), and serves the Site's port (`site-difftest`, `RegistrationLog/SiteDifftest.lean`), which its suite
-(`verifier/lean/tests/test_site_difftest.py`) holds to `verity.device`.
+Before an audit can check anything, the developer says what is being audited: the hardware at the site, the
+registered information θ (each registered value, by its committed root), the registered compiler `B`, and each day's
+circuit, declared before that day's first coin. Registration is that record and its check, and every other protocol
+reads what it accepted.
 
-## The registration log (`verifier/lean/RegistrationLog.lean`)
+Think of it as a ledger that only grows. Each entry names the head of the log before it, so the head names the whole
+log. The check reads the entries in order and refuses the first one that fails, by name.
 
-`Core.Registration` is a deployment's one registration log, which every subprotocol and both composites read. It is
-append-only: each entry names the head of the log before it (`previous`), the digest of its last entry or of its
-composite's genesis, so the head names the whole log. An entry is one of three kinds, each with its own versioned
-format:
+A log holds three kinds of entry:
 
 | format | what it registers |
 | --- | --- |
@@ -22,21 +16,8 @@ format:
 | `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the registered compiler `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
 | `verity/registration/declaration/v1` | a day's circuit (`day`, the day's index among the monitoring period's days; `program`, its program's SHA-512; `blocks`, its block Definitions by descriptor key); one a day, before the day's first coin |
 
-Registration registers the site, θ, `B` and each day's registered circuit, not the circuit `B` builds. A subprotocol's
-Program and parameters, and the proof system, are that protocol's public verifier parameters, not entries of the log;
-each window's program is held to its day's registered one (the SPOT registration record's R2, `day` and
-`declarations`). A window's day is the UTC day of its open's `started_utc`, which the auditor's challenger signs
-(`challenger.declared_day`): a window that opens before UTC midnight and closes after is a window of its open's day.
+A day's circuit is registered, not the circuit `B` builds from it. A protocol's own Program and parameters are that
+protocol's public parameters, not entries of the log.
 
-An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, and the genesis is the Site's, so a log of site entries alone
-has the Site's head. `check` holds each entry to the log before it and refuses the first that fails by name: a site
-entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), an information entry by
-`previous` and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`, a second
-declaration of a day. A subprotocol reads its view of an accepted log by projection (`View`: the Site, θ's values, the
-registered compiler and the days' registered circuits, `View.declared?`, at the head). As a core protocol, `protocol`
-(`verity/registration/log/v1`, the
-`core-registration` executable) takes the auditor's parameters (`{"auditor", "composite"}`, the auditor the Site's
-`Core.Site.Registration.Auditor`), the log as commitment (`{"composite", "entries"}`, its head the digest) and `{}` as
-evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside
-ASCII without DEL as `Core.canonicalJson` does. `verity.protocols.registration.verifier.registration` is
-its Python, held to it by its difftest (`../../../tests/verity/protocols/registration/verifier/lean/test_registration_difftest.py`).
+The check is Lean (`verifier/lean/`), with a Python verifier in `verifier/registration.py` until the Lean replaces it.
+[`DESIGN.md`](DESIGN.md) has the digests, each refusal, and what the check makes public.
