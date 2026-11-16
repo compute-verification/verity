@@ -59,17 +59,25 @@ K=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["window"])'
 # Flock (plain sessions, a stratified sample of every unit of layer 0's SiluMul_v2 at step 1)
 OUT=$RESEARCH_RUN_DIR/flock/out PP_SERVE_RUN=$D PP_WINDOW=$K PP_SERVE_ROWS=$D/windows/w$K PP_PLAIN=1 \
   PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json \
-  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24_stratified.json \
+  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json \
   env -u PYTHONPATH bash benchmarks/prove_path/run.sh
 # zero knowledge (--zk behind the Lean ZK server, every unit sampled, audited from the window's records alone)
 OUT=$RESEARCH_RUN_DIR/zk/out PP_SERVE_RUN=$D PP_WINDOW=$K PP_SERVE_ROWS=$D/windows/w$K PP_RECORDS=1 \
   PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json \
+  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json \
   env -u PYTHONPATH bash benchmarks/prove_path/run.sh
 ~~~
 
 `PP_PLAIN=1` goes without `PP_RECORDS=1`: `records_audit.py` runs `--zk` sessions only, so a plain run is audited by
 `prove_path.py audit --plain`, whose partition's rule must be a stratified rate. Each run writes `$OUT/ran_with.txt`, the
 line naming its coins and parameters (`prove_path.py ran-with`).
+
+The forged run commits its own window with one unit's value flipped (`--forge`, default member 0's unit 0), so its
+partition needs that unit in the window and sampled, not units other than the honest run's. A served window of steps 1 to
+2 has no unit at step 24, so the forged partition above is the honest one's steps with every unit sampled, which is also
+what the served arm derives when `PP_FORGED_PARTITION` is unset (`prove_path.py forged-partition`, kept as
+`$OUT/forged-partition.json`). One naming steps outside the honest partition's is refused before any build. A run with
+`PP_ONLY=honest` prints `PROVE-PATH {"name": "…-forged", "ran": false, "why": "PP_ONLY=honest: no forged run"}`.
 
 ## What changes when Programs come from advice
 
