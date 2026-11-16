@@ -78,7 +78,9 @@ verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] 
 The report goes to the job's `out/prod_repro.txt` and `out/prod_repro.json`. Under `research run` the run's
 `result.json` names the report's two files and the replay's record among its artifacts, so a reader finds them as the
 run's files; the rest of `out/` is in the run's record whole. A job with no result of the benchmark's cost (one that
-served ours alone) gets one whose validation is the tokens line. For GLM-5.3 at the recipe's settings (`prod-record`
+served ours alone) gets one whose validation is the tokens line. Either way the validation carries the cost's verdict
+against its target as a field of its own (`target`, with `misses`), and its detail says a miss; its status stays
+what the run's own gates say. For GLM-5.3 at the recipe's settings (`prod-record`
 over `prod`) the result also holds the cost line's figure as the measurement `vllm/prod-serving-cost-glm53`, in
 percent of stock's serving time, the number `benchmarks/prod_repro/metrics.toml` holds the goal to: only where it stands as the
 benchmark's own measurement (a sessions load, a value, the same work on both sides; `serve_tax.result_of`) and the
@@ -185,7 +187,9 @@ replay that differs, the first token that does and the first step.
   client it is `serve_tax.tax` and is a cost only where stock did not keep up with the arrivals; where it kept up,
   the line is not measured. By vLLM's client it is `serve_tax.serving_cost`, the paired ratio at the rung where
   stock serves most, which needs six reps for an interval; its noise floor is stock served a second time, measured
-  the same way.
+  the same way. Last, what the figure is (`prod_repro.scope`): serving time, saturated or not, on one node, at one
+  load, never compute. Stock is the arm sent no seeds (`prod`); where the job served the seeded arm beside it
+  (`prod-seeded`), ours over it follows, named seeded and in no verdict, by the cost's own method.
 - **advice**: the bits a request that the replayed pass's schedule costs as advice, charged: the arrivals (the
   residual advice of when each request arrived, decoded back to the pass's steps; a serve under the certified tick
   sends none, and no arm here is under it) and the kept count, the drafts each row kept, at the bits of a code

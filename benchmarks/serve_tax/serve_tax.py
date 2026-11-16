@@ -1396,7 +1396,8 @@ def sends_seed(arm: Arm) -> bool:
     whose replay samples each request again under the request's own seed. A stock arm is sent none, as a served
     request carries none, so vLLM samples its requests as it samples any without a seed; what a seed changes in
     vLLM's sampling is then on our side of a cost, as a change of ours. An arm that says so is sent them with no
-    record kept (`Arm.seeds`): stock's server under the recording arm's client, which reads that change apart."""
+    record kept (`Arm.seeds`): stock's server under the recording arm's client, which reads that change apart. That
+    arm is the seeded arm, never stock: a cost is over stock, and ours over the seeded arm is printed beside it."""
     return "record" in arm.plugin or arm.seeds
 
 
@@ -2605,6 +2606,9 @@ def tax(ref: dict, arm: dict) -> dict | None:
 #: the arm the serving cost is of (the two-stage serve's launch line) and the arm it is over
 OURS, REFERENCE = "two-stage", "compiled"
 UNIT = "percent of stock's serving compute"
+#: a sessions load's cost (`session_cost`) is a pass's wall time at a few users on one node, which no rung shows
+#: saturated: serving time, not compute
+SESSION_UNIT = "percent of stock's serving time"
 #: what a served engine of ours can change that the two-stage serve leaves off and no arm here turns on, so no cost
 #: here counts it
 NO_ARM = (
@@ -3194,7 +3198,7 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
         "meets" if hi < target / 100 else "misses" if lo > target / 100 else "cannot tell"
     floor = noise and (noise.get("ci95") or (None, None))
     of = {n: by[n]["of"][load] for n in (reference, arm)}
-    return {"value": _pct(over["value"]), "unit": UNIT, "commit": of[arm]["commit"], "run": of[arm]["run"],
+    return {"value": _pct(over["value"]), "unit": SESSION_UNIT, "commit": of[arm]["commit"], "run": of[arm]["run"],
             "metric": SESSION_COST, "better": "lower", "target": target, "target_basis": "given",
             "ci95": _cost(over)["ci95"], "verdict": told,
             "same_work": same, "model": MODELS[by[arm]["model_id"]].served, "arm": arm, "reference": reference,
@@ -3262,7 +3266,7 @@ def session_text(r: dict) -> str:
         return "not measured" if x is None else f"{x:.2f} points"
 
     lines = [
-        f"serving cost on load {r['load']}: {r['arm']} over {r['reference']}: {_c(r)} of stock's serving compute over "
+        f"serving cost on load {r['load']}: {r['arm']} over {r['reference']}: {_c(r)} of stock's serving time over "
         f"{_lifetimes(r['lifetimes'])} an arm, {r['users']} users; target {r['target']:g}%: {r['verdict']}",
         f"  the load: {r['what']}; {plan['requests']:,} requests of {plan['prompt_tokens']:,} prompt tokens, "
         f"{plan['repeated_share']:.2f}% of them planned to repeat"
