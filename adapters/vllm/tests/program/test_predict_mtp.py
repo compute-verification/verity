@@ -7,6 +7,7 @@ from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
 
+import re
 from bisect import bisect_right
 from itertools import accumulate
 
@@ -76,7 +77,8 @@ class Run:
 
 
 def _family(i: str) -> str:
-    return i.split("{", 1)[0]
+    """A call's Definition family: its id before its statics (`{...}`) or a const's word (`Const64[0x...]_v1`)."""
+    return re.split(r"[{\[]", i, maxsplit=1)[0]
 
 
 def _layer_reference(phi: Phi, rows: int) -> list[str]:
@@ -128,7 +130,8 @@ def test_draft_step0_emits_the_pins_launches_in_order(phi):
     assert take(len(layer)) == layer and any(_family(i) == "DsaTopKShortRow_v1" for i in layer)
     # at the sampled row (speculator.py:467-482; nvidia/mtp.py:233-243): the head GEMM, the logits all-gather and the greedy select
     head = take(3)
-    assert [_family(i) for i in head[1:]] == ["AllGather_v1", "TokenSelect_v1"] and _family(head[0]) in {"Gemm_v2", "CublasSplitKGemm_v1"}
+    assert _family(head[0]) in {"Gemm_v2", "CublasSplitKGemm_v1"} and _family(head[1]) == "AllGather_v1"
+    assert _family(head[2]).startswith("TokenSelect_")
     # compact_topk_indices (nvidia/mtp.py:195-202): wires
     assert at == n and run.s0.topk is None
 
@@ -154,7 +157,7 @@ def test_rows_past_kept_are_leftover_inputs(phi):
     assert [n.args[0].refs[0][:2] for n in zero[3:]] == [("p", 3)] * 3 and all(n.args[0].refs[0][0] == "n" for n in zero[:3])
     ropes = [n for n in run.nodes if _family(n.fn.id) == "RoPEHeadGptJ_v2"]
     assert {n.args[1].refs[0][:2] for n in ropes[3:6]} == {("p", 4)}
-    sel = next(n for n in run.nodes if _family(n.fn.id) == "TokenSelect_v1")
+    sel = next(n for n in run.nodes if _family(n.fn.id).startswith("TokenSelect_"))
     assert sel is run.nodes[-1] and run.s0.hidden is not None
 
 
