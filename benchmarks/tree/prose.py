@@ -54,6 +54,7 @@ class Item:
     body: list[str]
     exempt: bool = False
     reads: bool = False
+    help: bool = False
 
 
 def trim(lines: list[str]) -> list[str]:
@@ -67,6 +68,8 @@ def trim(lines: list[str]) -> list[str]:
 def over_length(item: Item) -> bool:
     if item.exempt:
         return False
+    if item.help:
+        return "" in (s.strip() for s in item.body)
     if item.kind == "file":
         return len(SENTENCE.findall(ABBR.sub(r"\1", " ".join(s.strip() for s in item.body)))) > 1
     return len(item.body) > (3 if item.kind == "declaration" else 2)
@@ -84,12 +87,12 @@ def python_prose(src: str) -> tuple[int, set[int], list[Item]]:
             prose.update(range(doc.lineno, doc.end_lineno + 1))
             body = trim(inspect.cleandoc(doc.value.value).splitlines())
             module = isinstance(node, ast.Module)
-            items.append(Item("file" if module else "declaration", doc.lineno, body,
-                              exempt=module and reads_doc and "" not in (s.strip() for s in body)))
+            items.append(Item("file" if module else "declaration", doc.lineno, body, help=module and reads_doc))
     run: list[tokenize.TokenInfo] = []
     for tok in [*(t for t in tokenize.generate_tokens(io.StringIO(src).readline) if t.type == tokenize.COMMENT), None]:
         whole = tok is not None and not lines[tok.start[0] - 1][:tok.start[1]].strip()
-        if run and not (whole and tok.start[0] == run[-1].start[0] + 1 and not DIRECTIVE.search(tok.string)):
+        if run and not (whole and tok.start == (run[-1].start[0] + 1, run[-1].start[1])
+                        and not DIRECTIVE.search(tok.string)):
             items.append(Item("comment", run[0].start[0], trim([t.string[1:].removeprefix(" ") for t in run])))
             run = []
         if tok is None or DIRECTIVE.search(tok.string):
@@ -193,17 +196,20 @@ def lean_prose(src: str, audit: tuple[set[str], set[str]], reads: tuple[set[str]
     for ln in lines:
         starts.append(starts[-1] + len(ln) + 1)
     prose = {k + 1 for k, (s, c) in enumerate(zip(lines, code.split("\n"))) if s.strip() and not c.strip()}
+    for kind, a, b in spans:
+        if kind != "line":
+            prose.update(range(bisect.bisect_right(starts, a) + 1, bisect.bisect_right(starts, b - 1)))
     scopes, stack, items, run, first = list(SCOPE.finditer(code)), [], [], [], True
     for kind, a, b in [*spans, ("end", len(src), len(src))]:
         la = bisect.bisect_right(starts, a)
         whole = kind == "line" and not code[starts[la - 1]:a].strip()
-        if run and not (whole and la == run[-1] + 1):
-            items.append(Item("comment", run[0], trim([lines[k - 1].strip()[2:].removeprefix(" ") for k in run])))
+        if run and not (whole and (la, a - starts[la - 1]) == (run[-1][0] + 1, run[-1][1])):
+            items.append(Item("comment", run[0][0], trim([lines[k - 1].strip()[2:].removeprefix(" ") for k, _ in run])))
             run = []
         if kind == "end":
             break
         if kind == "line" and whole:
-            run.append(la)
+            run.append((la, a - starts[la - 1]))
             continue
         if kind == "line":
             items.append(Item("trailing", la, [src[a + 2:b].strip()]))

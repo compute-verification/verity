@@ -89,6 +89,19 @@ def test_a_module_docstring_that_is_help_text_counts_only_past_one_paragraph() -
     two = '"""First.\n\nSecond."""\nprint(__doc__)\n'
     assert [P.over_length(it) for it in P.python_prose(one)[2]] == [False]
     assert [P.over_length(it) for it in P.python_prose(two)[2]] == [True]
+    usage = '"""What it does\n\n    prog ARGS\n"""\nprint(__doc__)\n'
+    assert [P.over_length(it) for it in P.python_prose(usage)[2]] == [True]
+
+
+def test_a_run_of_comments_ends_where_its_column_changes() -> None:
+    src = "if x:\n    # a\n    # b\n# c\n# d\n    pass\n"
+    assert [(it.line, it.body) for it in P.python_prose(src)[2]] == [(2, ["a", "b"]), (4, ["c", "d"])]
+    lean = "-- a\n-- b\n  -- c\n"
+    assert [(it.line, it.body) for it in P.lean_prose(lean, NONE, NONE)[2]] == [(1, ["a", "b"]), (3, ["c"])]
+
+
+def test_a_lean_blocks_blank_lines_are_its_lines() -> None:
+    assert P.lean_prose("/-! One.\n\nTwo. -/\ndef x := 1\n", NONE, NONE)[1] == {1, 2, 3}
 
 
 def test_lean_spans_know_nesting_strings_chars_and_names() -> None:
