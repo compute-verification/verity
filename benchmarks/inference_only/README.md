@@ -15,8 +15,7 @@ uv run verity bench inference_only --stated-only --from DIR
 ~~~
 
 `DIR` is a served run's record: its directory, or its `out/`, on your disk, read with nothing else, no store, host or
-key; or a run id, fetched first where `research` is installed (`kit.record_dir`). `--served` is its old name, which
-goes. The command runs the policy's record check on the run's files. Its first lines are the interface's:
+key; or a run id, fetched first where `research` is installed (`kit.record_dir`). The command runs the policy's record check on the run's files. Its first lines are the interface's:
 
 ~~~text
 Inference-only: the least slowdown of training run inside the policy's inference blocks
@@ -80,11 +79,11 @@ calculator's β (`benchmarks/slowdown/data/premises.toml`), the rule that only P
 fleets and periods, and that a number is given only where the record holds a PoUW accept of record and both rules
 comply.
 
-## How a cheating change is refused
+## How a malicious developer's record is refused
 
 A record with a weight left unregistered is refused by the count rule, and by the rate rule, and gives no number. So
-does a record whose PoUW row is a development accept or no accept, and one with no Program, which the check can't
-run on. A prover who gives up credit raises the uncredited share `s`, which limits the number to `1 / (s +
+does a record whose PoUW verdict is a development accept or no accept, and one with no Program, which the check can't
+run on. A malicious developer who gives up credit raises the uncredited share `s`, which limits the number to `1 / (s +
 1/slowdown)`. A verdict crediting below 0, above the blocks' work or above the MACs it counts, or counting other MACs
 than the class's linears, is refused; so are a verdict tied to another record than the check's, a record holding
 counts of two classes with no `--served-class`, and a record missing a file, which is named. The coins line never
@@ -234,7 +233,7 @@ The number is a block's ratio under two assumptions, on a check that Lean does n
   (`min_cut.HARDNESS` and `min_cut.EXPORTS` are their Lean names). The values of (H)'s β by `k` are the slowdown calculator's
   (`benchmarks/slowdown/data/premises.toml`).
 - **No class passes the check.** The Lean count is given the session Program with no θ and no dataflow, so it counts
-  every row a unit reads as fresh and refuses the policy on `k`. A built policy's `c` and `k` are the Python count of
+  every row a block reads as fresh and refuses the policy on `k`. A built policy's `c` and `k` are the Python count of
   the record's description, which the Lean check does not establish; a stated policy's are not checked here at all.
 - **A block, not a deployment.** The periods table multiplies one block's ratio through the blocks a fleet holds at its
   data sheet's rate. What a deployment registers, what it leaves free and what its proofs miss are the slowdown
