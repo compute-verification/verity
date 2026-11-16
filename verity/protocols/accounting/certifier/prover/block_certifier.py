@@ -1,7 +1,7 @@
 """block-certifier: certifier/v0's period answer as the block record's certifier entry (``legs.certifier`` of
 ``verity/block-record/v2``).
 
-* `block_leg`: a period's accepted answer as the block record's certifier entry: K
+* `block_subprotocol`: a period's accepted answer as the block record's certifier entry: K
   in bits, its error the answer's exact ``eps``, and the certificate at δ = 1/100 and 10⁻⁶ wherever ``eps`` is at most
   δ (`BLOCK_DELTAS`).
 """
@@ -20,7 +20,7 @@ BLOCK_DELTAS = DELTAS
 BLOCK_ERROR_FROM = "quantity.eps"
 
 
-def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real",
+def block_subprotocol(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real",
               owner: str | None = None) -> dict[str, Any]:
     """The block record's certifier leg (``legs.certifier`` of ``verity/block-record/v2``) of one period's
     ``network-period check`` answer: the answer's verdict, reason, commitment and
@@ -47,4 +47,4 @@ def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], so
             "error": str(eps), "error_from": BLOCK_ERROR_FROM, "at": at, "runs": list(runs)}
 
 
-__all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "PROTOCOL", "block_leg"]
+__all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "PROTOCOL", "block_subprotocol"]
