@@ -1212,17 +1212,21 @@ def test_a_withdrawn_development_piece_is_read_as_absent_and_a_withdrawn_require
     assert "was withdrawn" in capsys.readouterr().err
 
 
-def test_every_metric_row_reads_the_run_of_record_its_header_names():
-    """`metrics.toml` names the served run its rows read once, in its ``RUN OF RECORD`` line, with the commit it ran
-    at: every row's ``--from`` is the placeholder ``RUN_OF_RECORD`` its owner fills in from that line, so moving the rows
-    to another run is one edit, and the weekly rerun loop, which launches no command that takes a placeholder, never
-    records the stored run's old number as a new reading; every metric `run.py` writes has a row."""
+def test_each_metric_row_is_the_run_that_measures_it_and_no_reprint_is_rerun():
+    """`metrics.toml`: every metric `run.py` writes has a row whose command is the served run (`serve.sh`), which
+    writes them under its own run, and never `run.py --from`, a reprint of a stored run that the weekly rerun loop
+    would record as a new reading. A row that reads a stored run (the h200 row) takes it as the placeholder
+    ``RUN_OF_RECORD``, which keeps it off that loop, and the header's ``RUN OF RECORD`` line names the run and its
+    commit."""
     import re
     import tomllib
     text = (HERE.parents[2] / "benchmarks" / "compute" / "metrics.toml").read_text()
     named = re.search(r"^# RUN OF RECORD: (r\d{8}-\d{6}-[0-9a-f]{4}), commit [0-9a-f]{7,40}", text, re.M)
     assert named, "metrics.toml's header names no run of record and the commit it ran at"
-    rows = tomllib.loads(text)["metric"]
-    assert {m["id"]: re.search(r"--from (\S+)", m["command"]).group(1) for m in rows} == dict.fromkeys(
-        (m["id"] for m in rows), "RUN_OF_RECORD")
-    assert {C.METRIC, C.CREDITABLE, C.OF_CREDITABLE} <= {m["id"] for m in rows}
+    rows = {m["id"]: m["command"] for m in tomllib.loads(text)["metric"]}
+    served = {C.METRIC, C.CREDITABLE, C.OF_CREDITABLE}
+    assert served <= set(rows)
+    for i in served:
+        assert rows[i].endswith(" -- bash benchmarks/compute/serve.sh") and "--from" not in rows[i], i
+    assert {i: re.search(r"--from (\S+)", c).group(1) for i, c in rows.items() if i not in served} == dict.fromkeys(
+        set(rows) - served, "RUN_OF_RECORD")
