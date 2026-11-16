@@ -1512,7 +1512,7 @@ E       OSError: could not create numbered dir with prefix host in /workspace/tm
 
 ../../../../tools/verity/check/guard/verity_suite_guard.py:232: OSError
 =========================== short test summary info ============================
-ERROR tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]
+ERROR tests/test_network_attester_compile_slice_v6.py::test_random_chains[synth]
 """
 
 
@@ -1520,7 +1520,7 @@ def test_a_suite_whose_tests_pytest_could_give_no_temporary_directory_is_failed_
     """A full disk reaches a suite's tests as pytest's own error, which drops the errno: `mktemp` could not create its numbered
     directory under the basetemp after its tries.  That is the machine's (or its shared scratch's) fault, never the change's."""
     row = _row("verity/protocols/resource_accounting/network/verifier", "verity/protocols/resource_accounting/network/verifier",
-               "tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]", step="lean-suites")
+               "tests/test_network_attester_compile_slice_v6.py::test_random_chains[synth]", step="lean-suites")
     assert suite_kind(row, NUMBERED_DIR_LOG) == "infra"
     assert suite_kind(row, NUMBERED_DIR_LOG.replace("could not create numbered dir", "could not parse its config")) == "own"
 
