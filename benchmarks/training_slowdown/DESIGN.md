@@ -22,7 +22,7 @@ The reference shapes are the lf model's (`tests/adapters/torch/tests/frontend/tr
 ## The one entry point
 
 `calculator.slowdown(policy, step, run=None)` is the one place the benchmark computes a slowdown: the grade (through
-`formalism.bound`) and the library's table call it, and `tests/test_one_calculator.py` fails on a second one. `policy`
+`formalism.bound`) and the library's table call it, and `tests/benchmarks/training_slowdown/test_one_calculator.py` fails on a second one. `policy`
 is a block's `c_gates` and `k_bits`; `step` is a step's record, a job's trace (`run.trace_step`'s) or the products
 stated from one (`work.products_of_trace`'s); `run` adds the run's `gates` (|C|; else the trace's own circuit's),
 `tau_bits` and `code_bits`. The work and the circuit it is divided by have one price: a trace's products are priced
@@ -48,7 +48,7 @@ python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DI
 The library is the configs of `attacks/`. An entry is a route and its dials at a start, with the policy it is read
 under: there is one kind of entry, whatever its route computes. A new entry is a config of a route
 `routes/` has, or a new route (the route contract, `routes/__init__.py`) and a config of it; its config's first
-comment says what it trains. Each entry is held to a reference in plain torch (`tests/test_entries.py`): its own
+comment says what it trains. Each entry is held to a reference in plain torch (`tests/benchmarks/training_slowdown/test_entries.py`): its own
 dials, a few steps at a small shape, and the same output model as torch's own optimizer and its own average of the
 weights give, or the published rule where torch has none. An entry without a reference fails the suite.
 
@@ -252,19 +252,19 @@ kernel as the ops the math kernel computes attention by, which are the ones a tr
 two products, and in the backward the products and scalings of the gradients the step asks for. The card's fused
 backward computes the scores again, a fifth product: this count, and the library's table with it, holds six of the
 kernel's seven products, and a circuit of the kernel as it runs holds seven. A job's record is the same under either
-kernel in its ops, their shapes and their MACs (`tests/test_run.py`). Each row of a record's op log names the dtype its
+kernel in its ops, their shapes and their MACs (`tests/benchmarks/training_slowdown/test_run.py`). Each row of a record's op log names the dtype its
 op computed in (`flops.dtype_of`, whose docstring has the cases: an op that returns nothing, `_scaled_mm`, an
 in-place form). The op's gates are priced in that dtype, never by its phase or its class (`gates.kind_of`). A job on a GPU
 runs attention under a fused kernel, in its operands' dtype, bf16 under the routes' autocast, and its rows name that;
 a job under the math kernel, as every job on a CPU is (`run.cpu_attention`), which casts half-width operands to
 float32, names float32. The trace's circuit prices each node by the same rule, and the ops of an attention call in the
 dtype the call computes in (below), so a counted step on a GPU is its trace's circuit in gates, to the last digit
-(`tests/test_run.py`), and one on a CPU is above it by attention's ops at float32's price over bf16's, outside M. A
+(`tests/benchmarks/training_slowdown/test_run.py`), and one on a CPU is above it by attention's ops at float32's price over bf16's, outside M. A
 dtype no Definition prices has no price and none is assumed for it:
 float64, an integer product, a list op over tensors of two dtypes. The grade refuses a record that holds such an op and
 the capture a step that does (`unpriced_dtype`), each naming the op and the dtype. A fused optimizer kernel is one op,
 priced at a constant per parameter (`opnames.FUSED_OPTIMIZER_MACS`, which the counter and the trace both read). Choosing
-a fused kernel never lowers a step's count, at any setting of the optimizer's options (`tests/test_flops.py`,
+a fused kernel never lowers a step's count, at any setting of the optimizer's options (`tests/benchmarks/training_slowdown/test_flops.py`,
 `opnames.FUSED_OPTIMIZER_MACS`' comment has the counts). A route that names anything of `training_slowdown` but
 the codecs and the model, or a route around the dispatcher (`screen.FORBIDDEN`), is refused, and one that uses an op the
 counter can't price, reads token data out of torch, starts a thread or a process, or imports a module the screen refuses
@@ -436,7 +436,7 @@ of M named `tf32` is priced apart from its trace, and the record's slowdown is r
 - The products count leaves out the positions a step's batch repeats by its tokens: a prefix shared with another
   row, or a row's leading run of one token (`work.batch_count`). A step reading its batch otherwise counts none.
   Without a count (`work.P_BATCH`), those break it, and so, on a model with no rotation, do two positions of one
-  token whose tokens up to it are in the same proportions (`tests/test_batch_premise.py` holds each on the model's
+  token whose tokens up to it are in the same proportions (`tests/benchmarks/training_slowdown/test_batch_premise.py` holds each on the model's
   forward).
 - Bit-for-bit rebuilds need the run's kernels: families are checked on the run's device, right after it trains.
 
