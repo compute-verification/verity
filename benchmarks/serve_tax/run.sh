@@ -19,7 +19,7 @@
 #                                        # committed under PRIVATE/two-stage/boundary
 #   bash benchmarks/serve_tax/run.sh --model glm53 [--arms "ARM ..."|all] [--loads NAME[=RUNG+RUNG...],...]
 #     [--dataset NAME=FILE] [--reps 6] [--target PERCENT] [--json]   # the serving cost, by vLLM's own client
-# The last form is the serving cost (README.md): each flag sets the variable of its name (MODEL_ID, ARMS, LOADS, DATASETS,
+# The last form is the serving cost (DESIGN.md): each flag sets the variable of its name (MODEL_ID, ARMS, LOADS, DATASETS,
 # REPS, TARGET, JSON) and any of them makes vLLM's own client the default (CLIENT=vllm-bench: `vllm bench serve`, no C4
 # shard and no plan). Its arms are by default stock, stock again and two-stage, with --arms all one arm for each change
 # in between and the canonical top-k's own; its loads chat and long. Chat's dataset file is the node's copy of the pinned
