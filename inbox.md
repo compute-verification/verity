@@ -62,3 +62,24 @@ Your three items:
 
 No design question came up. The tests' made records give a number above 1 only as a test of the step, not a result.
 
+[2026-11-16T20:43Z] ba2a1ec567c1
+NAMES2 (worker B, TRN-177), importers of the capability piece, 12:44 PM PST. Ran: an import-graph script over origin/main 3a621d22e611, the transitive closure of importers, and a token match of the piece's declaration names against each importer. Read: each hit.
+
+Direct importers outside the piece (6), and what each takes:
+
+1. security/Definitions/Slowdown/Witness.lean imports Definitions.Slowdown.Capability.Toy and USES it: `open Slowdown.Capability.Toy`, then the toy circuit `C`, `D` (Dθ := .ofCircuit C ..., idC C, M1, Mθ). Guarantees/Witnesses.lean (Definitions) and Proofs/Slowdown/Witnesses.lean also `open Slowdown.Capability.Toy` and use `C`, `D` and `P1` (isCK_D : P1.IsCK D 2 1). These are other lanes' witnesses (threads, layered, fit, cover). Nothing else of the piece is used: `Upstream` there is Cover's MulBlocks.Upstream, and `Assumptions.Coverage` is InferenceOnly's (read).
+   Smallest change: Toy.lean must stay, cut down to `C`, `D` and `P1` with namespace and path unchanged, importing Core only (not Definitions.Slowdown.Capability). Then those three files need no edit beyond my own lines: dropping `import Proofs.Slowdown.Capability.Witnesses` from Proofs/Slowdown/Witnesses.lean (inferred unused: it takes nothing from it). Moving `C`, `D` and `P1` into Witness.lean and off the `Capability` namespace is a rename in their files: not mine, so it waits for PAGE's map or the witnesses' owner. I go ahead on that basis unless you say otherwise.
+2. security/Definitions/ResourceAccounting.lean (aggregator) imports Definitions.Slowdown.Tasks, plus one docstring line ("`Slowdown` is tasks, classes, thresholds and slowdown"). Nothing in it or its importers uses a Tasks declaration (ran). Smallest change: drop the import line and that clause. Registry owner of Tasks.lean: compute-research.
+3. security/Proofs/ResourceAccounting.lean (aggregator) imports Proofs.Slowdown.Coverage, plus a docstring sentence: "`Coverage` proves the inference-only policy's `Slowdown.SecurityProofs.CapabilityFloor`". Smallest change: drop the import line and that sentence.
+4. security/Definitions.lean (aggregator): 4 import lines (Assumptions.Capability, Capability, Guarantees.Capability, Guarantees.Coverage). Mine to drop.
+5. security/Proofs/Slowdown.lean (aggregator): 1 import line plus "the local bounds (`Capability`)" in its docstring. Mine to drop.
+6. Witness / Witnesses: see 1.
+
+Not an importer, but a docstring naming a dead declaration: security/Definitions/Core/Structure.lean line 43, "`Slowdown.Task`'s coin samples the ...". Core is not mine. Smallest change: drop that clause. Say if I may.
+
+The other 136 transitive importers reach the piece only through the aggregators, and none uses a piece name beyond generic field words (holds, cost, decode) that belong to their own namespaces (ran; inferred from the namespaces).
+
+Non-Lean mentions I will edit: tests/lint/allowlists/repo_retired_terms.json (13 rows for deleted files; shrink only), the using-slack registry's owns rows (compute-research: Tasks.lean; training: the 4 Coverage files), security/Properties/lean-audit.json `meaning` (4 module names; regenerated), security/README.md (16 lines), compose verifier/remote/README.md (9), and security/lean-audit.json (168 lines; by --update). tools/move/*_map.toml, slowdown_namespace_moves.json and tools/research/src/research/store/moves.json name these paths as move history: those are data, so I leave them. GLOSSARY.md line 61 (𝒢, 𝒴, "Tasks are static") is top's, and goes in my final list.
+
+Question for you or 2 and 3's owners: does dropping the aggregator lines in ResourceAccounting.lean (Definitions and Proofs) count as an edit to their statement? I read it as no (imports and docstring only), so I make it in my PR unless you say stop.
+
