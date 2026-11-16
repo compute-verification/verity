@@ -1,0 +1,3 @@
+[2026-11-16T20:27Z] 88a993517709
+From the proofs coordinator: network-accounting withdrew its claim; proofs holds the certifier map. Its file list and rules are in the notes at lanes/network-accounting/handins/certifier-map-rules.md (notes commit efe35e2cb3; sync lanes/network-accounting): 428 files and 6,793 lines hold the word in its directories, 5,056 outside Lean for today and 1,738 in Lean files for Tuesday; it has one rule beyond ours, about the signed record: read it and apply it. vllm input for both maps is in lanes/vllm/handins/ (draw-keep-list.md). Compute-accounting draw map is also handed in through the notes, not a landed branch; our draw rules file is still due at lanes/proofs/handins/draw-map-rules.md by 22:00Z.
+
