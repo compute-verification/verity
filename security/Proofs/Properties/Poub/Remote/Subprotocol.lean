@@ -109,30 +109,32 @@ theorem constantTerms_le {params : Poub.Session.Params} {g : ℕ} {reg : Poub.Re
     have hu : Poub.Protocol.sampleReceipts params g reg n =
         some (max g 1 * pace.k * Poub.Protocol.mostBlocks reg n) := by
       simp [Poub.Protocol.sampleReceipts, hp]
-    simp only [Poub.Protocol.refusal, hp, hu, Poub.Protocol.PASSES_MAX, Poub.Protocol.BINDING_SQ_MAX,
-      Poub.Protocol.REJECTION_MAX] at h
+    simp only [Poub.Protocol.refusal, hp, hu] at h
     have h1 : ¬ (!(reg.receipt == .sketch && reg.rows == 64)) = true := by
-      intro hc; rw [if_pos hc] at h; exact absurd h (Option.some_ne_none _)
-    rw [if_neg h1] at h
+      intro hc; rw [ite_cond_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
+    rw [ite_cond_eq_false _ _ (eq_false h1)] at h
     have h2 : ¬ Poub.Protocol.mostBlocks reg n > 2 ^ 64 := by
-      intro hc; rw [if_pos hc] at h; exact absurd h (Option.some_ne_none _)
-    rw [if_neg h2] at h
-    have h3 : ¬ params.windows * pace.k > 2 ^ 30 := by
-      intro hc; rw [if_pos hc] at h; exact absurd h (Option.some_ne_none _)
-    rw [if_neg h3] at h
+      intro hc; rw [ite_cond_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
+    rw [ite_cond_eq_false _ _ (eq_false h2)] at h
+    have h3 : ¬ params.windows * pace.k > Poub.Protocol.PASSES_MAX := by
+      intro hc; rw [ite_cond_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
+    rw [ite_cond_eq_false _ _ (eq_false h3)] at h
     have h4 : ¬ Poub.Protocol.openingsCoins params g * Poub.Protocol.openingsCoins params g *
-        (max g 1 * pace.k * Poub.Protocol.mostBlocks reg n) * params.samples > 2 ^ 92 := by
-      intro hc; rw [if_pos hc] at h; exact absurd h (Option.some_ne_none _)
-    rw [if_neg h4] at h
-    have h5 : ¬ Poub.Protocol.openingsCoins params g * params.samples > 2 ^ 40 := by
-      intro hc; rw [if_pos hc] at h; exact absurd h (Option.some_ne_none _)
+        (max g 1 * pace.k * Poub.Protocol.mostBlocks reg n) * params.samples > Poub.Protocol.BINDING_SQ_MAX := by
+      intro hc; rw [ite_cond_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
+    rw [ite_cond_eq_false _ _ (eq_false h4)] at h
+    have h5 : ¬ Poub.Protocol.openingsCoins params g * params.samples > Poub.Protocol.REJECTION_MAX := by
+      intro hc; rw [ite_cond_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
     simp only [constantTerms, hp, hu]
     set G := Poub.Protocol.openingsCoins params g
     set U := max g 1 * pace.k * Poub.Protocol.mostBlocks reg n
-    have hP : (params.windows : ℝ) * pace.k ≤ 2 ^ 30 := by exact_mod_cast not_lt.mp h3
+    have hP : (params.windows : ℝ) * pace.k ≤ 2 ^ 30 := by
+      have := not_lt.mp h3; unfold Poub.Protocol.PASSES_MAX at this; exact_mod_cast this
     have hN : (Poub.Protocol.mostBlocks reg n : ℝ) ≤ 2 ^ 64 := by exact_mod_cast not_lt.mp h2
-    have hB : (G : ℝ) * G * U * params.samples ≤ 2 ^ 92 := by exact_mod_cast not_lt.mp h4
-    have hGs : (G : ℝ) * params.samples ≤ 2 ^ 40 := by exact_mod_cast not_lt.mp h5
+    have hB : (G : ℝ) * G * U * params.samples ≤ 2 ^ 92 := by
+      have := not_lt.mp h4; unfold Poub.Protocol.BINDING_SQ_MAX at this; exact_mod_cast this
+    have hGs : (G : ℝ) * params.samples ≤ 2 ^ 40 := by
+      have := not_lt.mp h5; unfold Poub.Protocol.REJECTION_MAX at this; exact_mod_cast this
     have hx : 0 ≤ (G : ℝ) * Real.sqrt (U * params.samples) := by positivity
     have hsq : (G : ℝ) * Real.sqrt (U * params.samples) ≤ 2 ^ 46 := by
       have : ((G : ℝ) * Real.sqrt (U * params.samples)) ^ 2 ≤ (2 ^ 46) ^ 2 := by
