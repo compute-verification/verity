@@ -676,8 +676,8 @@ def render(results: Sequence[Result]) -> str:
     benchmark result without a number has none. With no number in any benchmark result its first line says so (`run` exits 1)."""
 
     lines = [] if has_number(results) else ["prove layers: no number: " + "; ".join(f"{r.layer}: {r.why}" for r in results)]
-    lines += ["The proof benchmark by layer: the benchmark result for each layer, read from its own run's output "
-              "(`verity bench prove layers`)."]
+    lines.append("The proof benchmark by layer: the benchmark result for each layer, read from its own run's output "
+                 "(`verity bench prove layers`).")
     if not all(r.ran_with.startswith("ran with: coins deployed challenger; parameters deployed") for r in results):
         lines.append(NOT_AN_AUDIT)
     lines += [f"- {LAYERS[r.layer]}: {r.ran_with}" for r in results]
