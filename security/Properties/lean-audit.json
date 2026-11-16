@@ -1611,6 +1611,10 @@
    "honest": ["Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol_honest"],
    "nontrivial": "Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol_nontrivial"
   },
+  "Properties.Poub.Subprotocol.acceptIsVerified": {
+   "honest": ["Properties.Poub.Subprotocol.acceptIsVerified_accepts"],
+   "nontrivial": "Properties.Poub.Subprotocol.acceptIsVerified_acceptAll"
+  },
   "Properties.Poub.Subprotocol.publishedEps": {
    "honest": ["Properties.Poub.Subprotocol.publishedEps_honest"],
    "nontrivial": "Properties.Poub.Subprotocol.publishedEps_acceptAll"
@@ -1928,10 +1932,6 @@
   "Properties.Poub.Shared.sampleIsSubset": {
    "type_hash": "68ed2d04b7a869f22f673dcb09fab4ad4ec3766222a70bd1bf246bc65254dc02",
    "unfolded_hash": "1c1e3adddee695c2e1b8e434613c06b070bc9ac75e3910569730f3bde58767ef"
-  },
-  "Properties.Poub.Subprotocol.acceptIsVerified": {
-   "type_hash": "24966b9a2a442fc1bfd14ea399cf06b60c45246e014d93fe2eccf7789454dc6d",
-   "unfolded_hash": "64ed7c7948d4c6808e470ef89624c5e6f6782bb446f567a6e6fd751dd4aa954f"
   },
   "Properties.Poub.acceptChecksOpenings": {
    "type_hash": "4fbeddbfd8ebc3764ce443b7a3bd3accf8712775a2ea153e91dd73497ffabba3",
@@ -2307,7 +2307,7 @@
   }
  },
  "witnesses_assumed": {
-  "Properties.Poub.Subprotocol.HonestLogAccepted": "not an assumption about the world but an unproved fact about code: the compiled check (`poub-protocol`) and the Python verifier both accept the honest one-window log `HonestLog.Case` holds (`test_honest_log.py`), and the kernel doesn't evaluate it, since `Flock.unhex` is quadratic on a list-backed array and `Session.close`'s `receiptSample` fails `decide +kernel` for a cause not yet found; until Lean proves it, the honest witnesses of `lineHeldAtSubprotocol` and `publishedEps` take it."
+  "Properties.Poub.Subprotocol.HonestLogAccepted": "not an assumption about the world but an unproved fact about code: the compiled check (`poub-protocol`) and the Python verifier both accept the honest one-window log `HonestLog.Case` holds (`test_honest_log.py`), and the kernel doesn't evaluate it, since `Flock.unhex` is quadratic on a list-backed array and `Session.close`'s `receiptSample` fails `decide +kernel` for a cause not yet found; until Lean proves it, the honest witnesses of `lineHeldAtSubprotocol`, `publishedEps` and `acceptIsVerified` take it."
  },
  "layers": {
   "Properties.Pouw": {
@@ -7253,6 +7253,12 @@
    },
    "type_hash": "24966b9a2a442fc1bfd14ea399cf06b60c45246e014d93fe2eccf7789454dc6d",
    "unfolded_hash": "64ed7c7948d4c6808e470ef89624c5e6f6782bb446f567a6e6fd751dd4aa954f"
+  },
+  "Properties.Poub.Subprotocol.acceptIsVerified_acceptAll": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.Subprotocol.acceptIsVerified_accepts": {
+   "owner": "@memory-accounting"
   },
   "Properties.Poub.Subprotocol.acceptIsVerified_complete": {
    "owner": "@memory-accounting",
