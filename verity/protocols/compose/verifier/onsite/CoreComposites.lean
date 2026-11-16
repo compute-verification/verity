@@ -68,7 +68,7 @@ def ofIds (ids : List String) : Except String BlobProtocol :=
 open Lean (Json)
 open Flock (V)
 
-/-- A network certifier's entry as the auditor pins it: the link it is pinned for, its LMS key, its session and the
+/-- A network attester's entry as the auditor pins it: the link it is pinned for, its LMS key, its session and the
 start of the stretch of the link's execution phases it signs, as a period's parameters list an entry
 (`NetworkCheck.Period.Entry`). A link's pinned entries, in their order, are the list its periods list. -/
 structure CertifierPin where
@@ -85,7 +85,7 @@ structure MemoryPin where
 /-- **The auditor's pins**, as the composite reads them: its challenger's key (none: no challenger is pinned), the
 window roots of SPOT's sessions it designated for the challenger and, apart from them, the PoUW sessions it
 designated for the challenger, each as the bytes of its text, so one protocol's session is never taken for the other's;
-its memory challengers and the sessions it designated for them; and its network certifiers' entries. -/
+its memory challengers and the sessions it designated for them; and its network attesters' entries. -/
 structure Pins where
   challenger : Option Spot.Challenger.ChallengerKey := none
   sessions : List ByteArray := []
@@ -103,7 +103,7 @@ def pinKeys (j : Json) (ks : Array String) (what : String) : V Unit := do
 def pinHexes (j : Json) (k ctx : String) : V (List ByteArray) := do
   (← Flock.J.arr j k ctx).toList.mapM fun s => do Flock.unhex (← Flock.J.asStr s s!"{ctx}.{k}")
 
-/-- A network certifier's pinned entry,
+/-- A network attester's pinned entry,
 `{"H": h, "N": n, "W": w, "link": name, "public": hex, "session": hex, "start": a}`. -/
 def certifierOfJson (j : Json) : V CertifierPin := do
   let ctx := "a certifier's entry"
@@ -170,7 +170,7 @@ def pousAt (n : Named) : Option PousCheck.RunProtocol.Params := paramsAt PousChe
 /-- A wipe component's parameters (`MemoryChallenger.WipeProtocol.protocol`'s decoder). -/
 def wipeAt (n : Named) : Option MemoryChallenger.WipeProtocol.Params := paramsAt MemoryChallenger.WipeProtocol.protocol n
 
-/-- A network certifier component's parameters (`NetworkCheck.Period.protocol`'s decoder). -/
+/-- A network attester component's parameters (`NetworkCheck.Period.protocol`'s decoder). -/
 def networkAt (n : Named) : Option NetworkCheck.Period.Params := paramsAt NetworkCheck.Period.protocol n
 
 /-- `k` is the LMS key `q`: the same public key under the same parameters. -/
@@ -222,14 +222,14 @@ def entriesHeld (lms : Lms.Params) : List CertifierPin → List NetworkCheck.Per
   | c :: cs, e :: es => entryHeld lms c e && entriesHeld lms cs es
   | _, _ => false
 
-/-- A network certifier period's entries, read by its own decoder (`NetworkCheck.Period.certifierEntries`'s), are the
+/-- A network attester period's entries, read by its own decoder (`NetworkCheck.Period.certifierEntries`'s), are the
 entries pinned for its link, one for one: each window's entry (`NetworkCheck.Period.entryAt`) is then the pinned
 entry whose stretch holds it, and a link with no pinned entry is refused, since a period lists at least one. -/
 def networkPinned (P : Pins) (p : NetworkCheck.Period.Params) : Bool :=
   entriesHeld p.lms (P.certifiers.filter (·.link == p.link)) p.entries.toList
 
 /-- The composite's parameters `j` name only what `P` pins, in every component that reads a device's key or session:
-SPOT's, PoUW's, PoUS's, the wipe's and the network certifier's. A sampled component whose parameters read as the
+SPOT's, PoUW's, PoUS's, the wipe's and the network attester's. A sampled component whose parameters read as the
 two-stage form fails it, since the pins cover none of its keys or windows (`sampledTwoStage`). Parameters that don't
 read as a composite's pass, since the composite refuses them itself. -/
 def paramsPinned (P : Pins) (j : Json) : Bool :=

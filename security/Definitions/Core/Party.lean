@@ -6,7 +6,7 @@ public import Definitions.Core.Hash
 # The auditor's devices as parties of a play
 
 An audit's coins and signed logs come from the auditor's own devices at the datacenter or beside it: SPOT's live
-challenger, the memory challengers and the network certifiers (`Role`). Each holds a registered LMS key (`AuditorPin`),
+challenger, the memory challengers and the network attesters (`Role`). Each holds a registered LMS key (`AuditorPin`),
 and the deployment pins, before the monitoring period, every device's key and the sessions it designated for each role
 (`AuditorPins`): a check trusts a signature only under a pinned key and coins only from a designated session, never a
 key or a session the prover's parameters name.
@@ -14,7 +14,7 @@ key or a session the prover's parameters name.
 In a play, a device is a party (`AuditorParty L`, over the type `L` of its log): its pin, the coin families it releases
 from, the bits it samples at the close, what it signs before any coin (`first`) and at the close (`last`), and its
 signature on its `i`-th message (`sign`). `signs` lists what it signs in a play, `signatures` pairs each with its
-signature. A memory challenger's pin names the network certifier whose marks it reads (`AuditorPin.marks`), the auditor's
+signature. A memory challenger's pin names the network attester whose marks it reads (`AuditorPin.marks`), the auditor's
 wiring, which the deployment pins with the keys (`AuditorPins.Wired`).
 -/
 
@@ -28,13 +28,13 @@ inductive Role where
   | challenger
   /-- the memory challenger: PoUS's challenges, PoUB's samples, the wipe's labels and reads -/
   | memoryChallenger
-  /-- a network certifier: the rows it stamps -/
-  | networkCertifier
+  /-- a network attester: the rows it stamps -/
+  | networkAttester
   deriving DecidableEq, Repr
 
 /-- **An auditor device's pin**: its role, its registered public key, the LMS parameters `(N, W, H)` it is under; for
-a memory challenger the key of the network certifier whose marks it reads and the servers whose memory it is pinned to
-challenge; and for a network certifier the link it is pinned for, its key's session and the start of the stretch of
+a memory challenger the key of the network attester whose marks it reads and the servers whose memory it is pinned to
+challenge; and for a network attester the link it is pinned for, its key's session and the start of the stretch of
 that link's execution phases its key signs in that session, which runs up to the next pin's start for the link. A link's
 entries, one pin each, are its certifier pins in their order. -/
 structure AuditorPin where
@@ -62,10 +62,10 @@ namespace AuditorPins
 def keysOf (P : AuditorPins) (r : Role) : List Hash.Msg := (P.keys.filter (·.role = r)).map (·.key)
 
 /-- **The pins are wired**: only a memory challenger names a mark source, each memory challenger names one, and it is
-a pinned network certifier's key. -/
+a pinned network attester's key. -/
 def Wired (P : AuditorPins) : Prop :=
   ∀ p ∈ P.keys, match p.marks with
-    | some k => p.role = .memoryChallenger ∧ k ∈ P.keysOf .networkCertifier
+    | some k => p.role = .memoryChallenger ∧ k ∈ P.keysOf .networkAttester
     | none => p.role ≠ .memoryChallenger
 
 end AuditorPins
