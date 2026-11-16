@@ -3,7 +3,7 @@ module
 /-!
 # The schedule check: each pass's plan is a fixed function of the published schedule
 
-`schedule.py`'s check, of record here (`ScheduleDeterministic` in `security/Definitions/Accounting/Schedule.lean` is
+`schedule.py`'s check, of record here (`ScheduleDeterministic` in `security/Definitions/ResourceAccounting/Schedule.lean` is
 what it is for). The prover publishes the session's schedule: when each block it holds beside the registered store is
 written and freed, which registered blocks it frees and when, and the step of each pass. The check holds each pass's
 plan to the schedule's plan at the pass's step (`Schedule.plan`, the blocks resident then, in store order) and the

@@ -67,13 +67,13 @@ that accepts everything (`*_nontrivial`).
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Remote.DrawMeets
+namespace ResourceAccounting.SecurityProofs.Remote.DrawMeets
 
-open Finset Accounting.Rate.Pooled
+open Finset ResourceAccounting.Rate.Pooled
 open Pous (pr)
 open scoped ENNReal
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
-  Accounting.Remote.Sample.Assumptions Accounting.Remote.Instances Accounting.SecurityProofs.Remote.Meets
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sample
+  ResourceAccounting.Remote.Sample.Assumptions ResourceAccounting.Remote.Instances ResourceAccounting.SecurityProofs.Remote.Meets
 
 /-! ## The honest session -/
 
@@ -252,11 +252,11 @@ theorem fill_nonpos {Ω : Type} (K : Pace Ω) (ω : Ω) (N : ℕ) {W : ℝ} (hW 
   show ∑ g ∈ range (K.credited + 1), K.rate ω g * x g ≤ 0
   exact (sum_eq_zero fun g hg => by rw [h0 g hg, mul_zero]).le
 
-theorem wordIndex_one_isSome {w : ℕ} (u : Pous.Bits w) : (Accounting.Actual.wordIndex 1 u).isSome = true := by
+theorem wordIndex_one_isSome {w : ℕ} (u : Pous.Bits w) : (ResourceAccounting.Actual.wordIndex 1 u).isSome = true := by
   have h : Pous.bitsVal u < 2 ^ w - 2 ^ w % 1 := by
     rw [Nat.mod_one, Nat.sub_zero]
     exact (Pous.bitsEquiv w u).isLt
-  unfold Accounting.Actual.wordIndex
+  unfold ResourceAccounting.Actual.wordIndex
   rw [dite_eq_left h]
   rfl
 
@@ -409,7 +409,7 @@ theorem heldOverTimeLinksSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blo
   norm_num at h
   linarith
 
-end Accounting.SecurityProofs.Remote.DrawMeets
+end ResourceAccounting.SecurityProofs.Remote.DrawMeets
 
 /-! ## The witnesses
 
@@ -418,12 +418,12 @@ hypothesis of `G` holds at W2's session (`w2Session` over `w2Sample`, at W2's ra
 `G_nontrivial`: `G`'s conclusion is false at the toy on the audit that accepts everything, at `δ = δc = 2^-40` and
 `δs = 0`, the last conjunct of `G`'s `*_nontrivial` lemma. -/
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
-open Finset Accounting.Rate.Pooled
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
-  Accounting.Remote.Sample.Assumptions Accounting.Remote.Instances Accounting.SecurityProofs.Remote.Meets
-  Accounting.SecurityProofs.Remote.DrawMeets
+open Finset ResourceAccounting.Rate.Pooled
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sample
+  ResourceAccounting.Remote.Sample.Assumptions ResourceAccounting.Remote.Instances ResourceAccounting.SecurityProofs.Remote.Meets
+  ResourceAccounting.SecurityProofs.Remote.DrawMeets
 
 /-- **`PooledSample`'s hypotheses hold** at W2's session, at `δ = 2^-40`. -/
 theorem PooledSample_honest :
@@ -560,4 +560,4 @@ theorem HeldOverTimeLinksSampled_nontrivial :
       (by norm_num)
   exact h
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

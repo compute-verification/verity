@@ -228,7 +228,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
       proof blocks, each charged its own blocks' committed bits, so a wholly incorrect request is charged every bit it
       commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, each of
       its tokens as the token select's 32-bit output word, the `design` card's `token_bytes` (`served_bits`): at most
-      the response cap of the model's `certifier` card, the network attester's schedule (`NetworkCertifierParams`), whose cap
+      the response cap of the model's `certifier` card, the network attester's schedule (`NetworkAttesterParams`), whose cap
       ingress refuses a request past and `NetTiming.Guarantees.ResponseCapped` holds each response to, else every one
       of its tokens (`--served request` takes every token under a cap too), in
       `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`), which still counts which of a request's proof

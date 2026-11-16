@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pous.Model.StreamedWipe
-public import Definitions.Accounting.Actual.Sampler
+public import Definitions.ResourceAccounting.Actual.Sampler
 public import Definitions.Pouw.TS.Sampled
 public import Definitions.Hash.RowLeaf
 import Mathlib.Algebra.Order.Floor.Extended
@@ -106,7 +106,7 @@ at least 4 for `N < 2^64`.
   have, and on uniform blocks each lands with probability at most its bound given the windows before.
 * `cont t ω ζ`: **window `t`'s continuation** of coins `ω` on `ζ`, the run that shares `ω`'s cut (its other coins,
   the prover's, the world's and every salt, and its openings coins before window `t`'s) and continues on `ζ`'s openings
-  coins from window `t`'s on. It has `Accounting.TS.spliceAt`'s two identities, so the sampled window's forking lemma
+  coins from window `t`'s on. It has `ResourceAccounting.TS.spliceAt`'s two identities, so the sampled window's forking lemma
   reads it.
 * `Receipts`: **the receipts as the window's roots hold them.** Window `t` registers its receipts as
   `hm96-sha512/row/v2` leaves, 16 receipts a leaf, in frame-v3-sha512 trees, and sends their roots before its coin is
@@ -114,9 +114,9 @@ at least 4 for `N < 2^64`.
   window opens it. `Shows D prf rest t p ω v`: the window opens `p` at `ω` and the verifier accepts the presented
   opening, of row `v`, at the receipt's root and rank as that run has them. `held D prf rest t ω p` is **the row the
   root holds for it**, a definition, not the prover's: the plurality of the rows `p` shows over window `t`'s
-  continuations of `ω` (`Accounting.TS.plural` at `cont t`, ties broken by `Classical.epsilon`), as
-  `Accounting.TS.SampledLayer.committed` is a position's. It reads only `ω`'s cut, and no row is shown on more of the
-  cut's continuations (`Accounting.SecurityProofs.Remote.Binding.held_cont`, `tally_le_held`). A root alone fixes no
+  continuations of `ω` (`ResourceAccounting.TS.plural` at `cont t`, ties broken by `Classical.epsilon`), as
+  `ResourceAccounting.TS.SampledLayer.committed` is a position's. It reads only `ω`'s cut, and no row is shown on more of the
+  cut's continuations (`ResourceAccounting.SecurityProofs.Remote.Binding.held_cont`, `tally_le_held`). A root alone fixes no
   row: the prover may present another one. `Moved D prf rest t ω p` is the verifier accepting the presented opening at
   the receipt's root and rank with a row other than the held one. `binding D prf rest` is **the receipts' binding
   term**: the probability that some window's opened receipt moved. Its bound is the fork form (`Remote.Fork`,
@@ -132,7 +132,7 @@ at least 4 for `N < 2^64`.
 
 @[expose] public section
 
-namespace Accounting.Remote.Sample
+namespace ResourceAccounting.Remote.Sample
 
 open Finset
 open scoped ENNReal
@@ -316,13 +316,13 @@ def Shows {m : ℕ} {s : Fin n → ℕ} (D : Run n m s κ X) (prf : Fin n → Po
     (R.opened t ω p).row = v
 
 /-- **The row receipt `p`'s root holds** at window `t` and coins `ω`: the plurality of the rows it shows over window
-`t`'s continuations of `ω`, a row that the most of them show (`Accounting.TS.plural` at `cont t`, ties broken by
+`t`'s continuations of `ω`, a row that the most of them show (`ResourceAccounting.TS.plural` at `cont t`, ties broken by
 `Classical.epsilon`). -/
 noncomputable def held [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Run n m s κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
     (ω : SampleCoins n κ X)
     (p : ℕ) : Hash.Row :=
-  Accounting.TS.plural (cont t) (R.Shows D prf rest t p) ω
+  ResourceAccounting.TS.plural (cont t) (R.Shows D prf rest t p) ω
 
 /-- **Receipt `p` of window `t` moved**: the verifier accepts the opening presented, at the receipt's root and rank,
 with a row other than the one its root holds. -/
@@ -338,4 +338,4 @@ noncomputable def binding [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Run n m
 
 end Receipts
 
-end Accounting.Remote.Sample
+end ResourceAccounting.Remote.Sample

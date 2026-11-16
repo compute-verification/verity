@@ -8,17 +8,17 @@ public import Proofs.Pouw.Game
 /-!
 # PoUW's guarantee per run, by truncation
 
-PoUW's adversary class is closed under budget-abort when its cost model truncates (`Accounting.BudgetAbort`): the
+PoUW's adversary class is closed under budget-abort when its cost model truncates (`ResourceAccounting.BudgetAbort`): the
 adversary that keeps `A`'s preprocessing and activation input and runs the cost model's aborted program in place of
 `A`'s online program is within `(b, q)` whenever `A` makes at most `q` oracle calls, and commits `A`'s trace
-wherever `A` costs at most `b` (`Accounting.Adversary.abort`). Truncation (`Accounting.pr_lt_of_abort`) then turns
+wherever `A` costs at most `b` (`ResourceAccounting.Adversary.abort`). Truncation (`ResourceAccounting.pr_lt_of_abort`) then turns
 `Pouw.SecurityProofs.EndToEnd` into its per-run form, and a run that realizes PoUW's game has the compute audit's
 per-run guarantee, because the compute account's work covers the adversary's cost at every coin.
 -/
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Pouw
 
@@ -38,7 +38,7 @@ theorem Adversary.abort {CM : CostModel Q R S} (hCM : BudgetAbort CM) (A : Adver
 
 namespace SecurityProofs
 
-theorem PouwEndToEndPerRun : Accounting.Guarantees.PouwEndToEndPerRun := by
+theorem PouwEndToEndPerRun : ResourceAccounting.Guarantees.PouwEndToEndPerRun := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ hΩ hWref hTT hCM U hU q hq A hA t εs hεs
   refine le_trans (pr_mono fun x hx => ⟨⟨hx.1, hx.2.2⟩, hx.2.1⟩) (pr_lt_of_abort
     (fun (A' : Adversary CM) (x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N)) =>
@@ -57,7 +57,7 @@ theorem PouwEndToEndPerRun : Accounting.Guarantees.PouwEndToEndPerRun := by
   rw [h2]
   exact hacc.2
 
-theorem ComputeOfPouwPerRun : Accounting.Guarantees.ComputeOfPouwPerRun := by
+theorem ComputeOfPouwPerRun : ResourceAccounting.Guarantees.ComputeOfPouwPerRun := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ hΩ hWref hTT hCM U hU t εs hεs hne ι α ΩQ ΩS _ _ _ d r p hq real o
   obtain ⟨⟨_, _, tix⟩⟩ := hne
   have hA : CallsWithin (real.adv o) U (d.rate .oracle * (r.win .compute).len) := fun H s =>
@@ -68,4 +68,4 @@ theorem ComputeOfPouwPerRun : Accounting.Guarantees.ComputeOfPouwPerRun := by
 
 end SecurityProofs
 
-end Accounting
+end ResourceAccounting

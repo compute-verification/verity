@@ -133,7 +133,7 @@ from verity.protocols.resource_accounting.network.verifier import io_tie as IT  
 from verity.protocols.resource_accounting.network.verifier import release as REL  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, NetworkCertifierParams, read_cell  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, NetworkAttesterParams, read_cell  # noqa: E402
 
 #: the classes in the order they are tried: the control first, and the one with the longest try last
 CLASSES = ("honest", "tokens", "length", "fail", "extra", "bucket")
@@ -359,7 +359,7 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
     connection also has the stand-in endpoint's own ids of its request (`network_attester_serve.fake_ids`). `watermark` is
     what the network attester logged of its watermark (`watermark_log`)."""
     dep = json.loads((run / "deployment.json").read_text())
-    params = NetworkCertifierParams(**dep["params"])
+    params = NetworkAttesterParams(**dep["params"])
     B, blank = params.cell_bytes, IT.pad_cell(params.cell_bytes)
     check = json.loads((run / "check.json").read_text())
     traffic = json.loads((run / "traffic.json").read_text())
@@ -459,7 +459,7 @@ def cell_of(entry: Sequence, cell_bytes: int) -> bytes:
 
 # --- the receiver ------------------------------------------------------------------------------------------------------
 
-def reading(cls: str, conn: dict, params: NetworkCertifierParams) -> list:
+def reading(cls: str, conn: dict, params: NetworkAttesterParams) -> list:
     """The receiver's reading of one connection (`keep`'s entry) for class `cls`, a symbol a planted bit, in the
     order the deviating process plants them."""
     ids, rest, kinds = conn["ids"], bytes.fromhex(conn["rest"]), conn["kinds"]
@@ -476,7 +476,7 @@ def reading(cls: str, conn: dict, params: NetworkCertifierParams) -> list:
     return [chr(c) for c in after[:EXTRA_BITS]] if cls == "extra" else []
 
 
-def first_bucket(conn: dict, params: NetworkCertifierParams) -> int:
+def first_bucket(conn: dict, params: NetworkAttesterParams) -> int:
     """The bucket of the first cell a connection's client got that isn't padding, counted from its first cell."""
     kinds = conn["kinds"]
     return next((i for i, k in enumerate(kinds) if k != RC.KIND_CHARS[PAD]), len(kinds)) // params.slots
@@ -550,7 +550,7 @@ def tie(kept: dict, committed: Mapping[int, Sequence[int]] | None) -> dict:
     the cells that are no id-form cell."""
     if committed is None:
         return {"verdict": NOT_RUN, "codes": [], "failing": {}, "words": "the Commit's ids weren't given (--ids)"}
-    params = NetworkCertifierParams(**kept["params"])
+    params = NetworkAttesterParams(**kept["params"])
     B = params.cell_bytes
     placed: dict[int, int] = defaultdict(int)
     failing: dict[int, list[str]] = {}
@@ -599,7 +599,7 @@ def tie(kept: dict, committed: Mapping[int, Sequence[int]] | None) -> dict:
 
 # --- a try and its row -------------------------------------------------------------------------------------------------
 
-def charged(cls: str, connections: int, params: NetworkCertifierParams) -> str:
+def charged(cls: str, connections: int, params: NetworkAttesterParams) -> str:
     """What the leak bound charges the class's way out over the try's connections (`leak_bounds.terms`)."""
     t = LB.terms(connections, 1, cells=params.egress_cells, steps=params.window)
     if cls == "length":
@@ -637,7 +637,7 @@ def row(kept: dict, committed: Mapping[int, Sequence[int]] | None) -> dict:
     docstring's "A refusal counts only where it is the deviation's"; None: the tie it aims at wasn't run, or the
     deviation changed no response)."""
     cls, check, conns = kept["class"], kept["check"], kept["connections"]
-    params = NetworkCertifierParams(**kept["params"])
+    params = NetworkAttesterParams(**kept["params"])
     result = score(cls, [[int(b) for b in c["planted"]] for c in conns], [reading(cls, c, params) for c in conns])
     tied = tie(kept, committed)
     accepted, relay_words = check["accepted"], check["words"].split(";")[0]
@@ -726,7 +726,7 @@ def one_try(cls: str, run: Path, args, clock=time.monotonic) -> float:
     asked, the deviating process before the front, and `network_attester_serve.py rehearse` through it; the seconds it took end
     to end. `NoCheck` when it wrote no check."""
     run.mkdir(parents=True, exist_ok=True)
-    payload = NetworkCertifierParams(cell_bytes=args.cell_bytes).payload
+    payload = NetworkAttesterParams(cell_bytes=args.cell_bytes).payload
     requests = args.bucket_requests if cls == "bucket" else args.requests
     start, procs, env, name = clock(), [], dict(os.environ), args.front_env
     me = [sys.executable, str(HERE / "deviations.py")]
@@ -865,7 +865,7 @@ def parser() -> argparse.ArgumentParser:
     t.add_argument("--rate", type=float, default=2.0, help="Poisson arrivals a second")
     t.add_argument("--max-tokens", type=int, default=16, help="the most max_tokens a request samples")
     t.add_argument("--tail", type=float, default=8.0, help="seconds a try's run lasts past its last request's time")
-    t.add_argument("--cell-bytes", type=int, default=NetworkCertifierParams().cell_bytes, help="the network certifier's B")
+    t.add_argument("--cell-bytes", type=int, default=NetworkAttesterParams().cell_bytes, help="the network certifier's B")
     t.add_argument("--first-ms", type=float, default=100.0, help="the stand-in's milliseconds to its response")
     t.add_argument("--scratch", type=Path, help="where each try's run directory goes, and stays (default: a temporary "
                                                 "directory, removed when the command ends)")

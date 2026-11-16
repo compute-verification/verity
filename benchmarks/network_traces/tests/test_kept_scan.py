@@ -88,7 +88,7 @@ def _served(users: Sequence[str] = USERS) -> ST.Served:
     """`PROMPTS`' id requests (of ``users``, `USERS` unless given) arriving at `ARRIVALS` and answered `RESPONSES`,
     served through the network attester over 2 execution phases at `CLASS`'s scan schedule."""
     scan = CLASS.scan
-    params = W.NetworkCertifierParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
+    params = W.NetworkAttesterParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
                             queue=scan.lanes, window=CLASS.buckets, ingress_cells=scan.C, ingress_buckets=scan.WITHIN,
                             egress_cells=scan.KO + 1, every=scan.EVERY)
     reqs = [id_request(model="org/m", user=u, prompt=list(p), max_tokens=4, seed=i, temperature=0.0, top_p=1.0,

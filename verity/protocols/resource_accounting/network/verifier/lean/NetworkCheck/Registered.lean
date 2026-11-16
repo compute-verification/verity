@@ -4,11 +4,11 @@ public import CoreProtocol.Site
 meta import CoreProtocol.Site
 
 /-!
-# The network certifier's link and key, read from the registered hardware
+# The network attester's link and key, read from the registered hardware
 
-A check of the network certifier's certificates is handed a link's name and the certifier's key. `registered` reads both
+A check of the network attester's certificates is handed a link's name and the certifier's key. `registered` reads both
 off the registered hardware (`Core.Site`, the site of an accepted registration log's view): the link is one that joins
-a network certifier and a host, the half of an uplink the certifier splits that is the host's boundary
+a network attester and a host, the half of an uplink the certifier splits that is the host's boundary
 (`Core.Site.Boundary`, `Core.Site.Certified`), and the key is the one that certifier registered. It returns what the
 registration states of them (`Registered`): the link's id, its host end, the certifier's id and registered key, the
 link's capacity `β` in bits a second each way, and the head of the log the site was read at, which it carries and
@@ -17,15 +17,15 @@ doesn't read.
 It refuses, by name:
 
 * a link that is no link of the site;
-* a link that doesn't join a network certifier and a host: the certifier's other half, to the outside, a host's bare
+* a link that doesn't join a network attester and a host: the certifier's other half, to the outside, a host's bare
   uplink, a link between two hosts, a memory challenger's link;
 * a certifier whose registered key is not lower-case hex, and a key that is not the certifier's registered key
   (`keyRefusal`);
-* a network certifier's link that states no capacity (`β` none): there is no line rate to read for it. The
+* a network attester's link that states no capacity (`β` none): there is no line rate to read for it. The
   registration's check does not rule one out, since it asks of a link that states no capacity only that it carry
   `unmediated` (`Core.Site.Entry.Kinds`), so the reading refuses it with or without one.
 
-**The registered key.** The registered key of a network certifier (`Core.Site.Loc.key`) is the string the checks' `key`
+**The registered key.** The registered key of a network attester (`Core.Site.Loc.key`) is the string the checks' `key`
 parameter is: its LMS public key, I ‖ T[1], in lower-case hex. `keyRefusal` is the one function that reads it.
 
 `siteOf` reads the site as the log's view writes it (`Core.Site.toJson`: `{"links", "locs", "sheets"}`), each location
@@ -42,7 +42,7 @@ namespace NetworkCheck
 open Lean (Json)
 open Flock (V)
 
-/-- What the registered hardware states of a network certifier's link: the link's id, its host end, the certifier's id
+/-- What the registered hardware states of a network attester's link: the link's id, its host end, the certifier's id
 and registered key, the link's capacity `β` in bits a second each way, and the head of the log it was read at. -/
 structure Registered where
   head : String
@@ -64,10 +64,10 @@ def siteOf (j : Json) : V Core.Site := do
   let links ← (← Flock.J.arr j "links" "the site").toList.mapM Core.Site.Link.ofJson
   pure ⟨[], locs, links⟩
 
-/-- The network certifiers' links of `S`, by id, in the Site's order: those that join a network certifier and a host. -/
+/-- The network attesters' links of `S`, by id, in the Site's order: those that join a network attester and a host. -/
 def certifierLinks (S : Core.Site) : List String := (S.links.filter fun k => S.Joins k .certifier .host).map (·.id)
 
-/-- What a refusal of a link says a right one is: the network certifiers' links of `S`. -/
+/-- What a refusal of a link says a right one is: the network attesters' links of `S`. -/
 def rightLinks (S : Core.Site) : String :=
   s!"the network certifiers' links there are [{", ".intercalate (certifierLinks S)}]"
 
@@ -82,7 +82,7 @@ def endName (S : Core.Site) (i : String) : String :=
 def lowerHex (s : String) : Bool :=
   !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
 
-/-- Why `key` is not the key of the network certifier `c`, or `none` when it is: `c`'s registered key is its LMS public
+/-- Why `key` is not the key of the network attester `c`, or `none` when it is: `c`'s registered key is its LMS public
 key in lower-case hex, and `key` is that string. The one reading of a certifier's registered key. -/
 def keyRefusal (c : Core.Site.Loc) (key : String) : Option String :=
   if !lowerHex c.key then
@@ -92,11 +92,11 @@ def keyRefusal (c : Core.Site.Loc) (key : String) : Option String :=
     some s!"the key {key} is not network certifier {c.id}'s registered key, {c.key}"
   else none
 
-/-- **The network certifier's link and key, as registered.** `link` names a link of `S` that joins a network certifier
+/-- **The network attester's link and key, as registered.** `link` names a link of `S` that joins a network attester
 and a host, and `key` is that certifier's registered key (`keyRefusal`): the link's id, its host end, the certifier's id
 and key and the link's `β`, with `head`, the head of the log `S` was read at, carried unread. A link that is no link of
-`S`, one that doesn't join a network certifier and a host, a key that is not the certifier's and a link that states no
-capacity are each refused, the first three naming the network certifiers' links of `S` or the certifier's registered
+`S`, one that doesn't join a network attester and a host, a key that is not the certifier's and a link that states no
+capacity are each refused, the first three naming the network attesters' links of `S` or the certifier's registered
 key. -/
 def registered (S : Core.Site) (head link key : String) : V Registered := do
   let some k := S.links.find? (·.id == link)
@@ -123,11 +123,11 @@ open Core.Site (Loc Link outside)
 /-- A key in the registered form: 48 bytes in lower-case hex. -/
 private def key0 : String := String.ofList (List.replicate 96 'a')
 
-/-- Another network certifier's. -/
+/-- Another network attester's. -/
 private def key1 : String := String.ofList (List.replicate 96 'b')
 
 /-- The example's locations, its certifier registering `key`: a host with a device and its memory, behind a network
-certifier, and a memory challenger. -/
+attester, and a memory challenger. -/
 private def exampleLocs (key : String) : List Loc :=
   [{ id := "site0", kind := .site }, { id := "node0", kind := .host, parent := some "site0" },
    { id := "gpu0", kind := .accelerator, parent := some "node0", sheet := "sheet0" },
@@ -142,7 +142,7 @@ private def exampleLinks : List Link :=
    { id := "mc0", ends := ("chal0", "node0"), β := some 10, latency := 1 }]
 
 /-- The example's site with its certifier's key in the registered form, and beside it a second host behind a second
-network certifier, a link between the two hosts and the second host's bare uplink. -/
+network attester, a link between the two hosts and the second host's bare uplink. -/
 private def site : Core.Site :=
   ⟨[],
    exampleLocs key0 ++
@@ -175,7 +175,7 @@ private def links : String := "the network certifiers' links there are [up0, up2
   some s!"link hh0: it joins host node0 and host node1, not a network certifier and a host; {links}"
 #guard refusal site "mc0" key0 ==
   some s!"link mc0: it joins challenger chal0 and host node0, not a network certifier and a host; {links}"
--- a network certifier's link that states no capacity, with or without a reason no certifier splits it; a key that is
+-- a network attester's link that states no capacity, with or without a reason no certifier splits it; a key that is
 -- not the certifier's is refused first
 #guard [none, some "no line rate"].all fun why =>
   refusal { site with links := [{ id := "up0", ends := ("node0", "cert0"), β := none, latency := 1,

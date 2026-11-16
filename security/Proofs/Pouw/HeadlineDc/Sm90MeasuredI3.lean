@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Pouw.HeadlineDc.Sm90Measured
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # The H200's headline on its measured vector under (I3) at 3/5
@@ -26,10 +26,10 @@ public import Proofs.Accounting.Lemmas.TS
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.HeadlineDc
+namespace ResourceAccounting.SecurityProofs.TS.HeadlineDc
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Accounting.SecurityProofs.TS
-  Accounting.SecurityProofs.TS.Headline
+open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity ResourceAccounting.SecurityProofs.TS
+  ResourceAccounting.SecurityProofs.TS.Headline
 
 /-- π*'s weights, as `Sm90MeasuredI3.lamStar` lists them. -/
 def lamv90I : Sparse := [(5, 12809871, 15625000), (6, 16889149, 500000000), (10, 73194979, 500000000)]
@@ -271,12 +271,12 @@ theorem sm90i_unfolded :
   rw [sm90i_Nw, sm90i_bnd, div_mul_eq_mul_div, le_div_iff₀ hB]
   linarith
 
-end Accounting.SecurityProofs.TS.HeadlineDc
+end ResourceAccounting.SecurityProofs.TS.HeadlineDc
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
-  Accounting.SecurityProofs.TS.Headline Accounting.SecurityProofs.TS.HeadlineDc
+open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
+  ResourceAccounting.SecurityProofs.TS.Headline ResourceAccounting.SecurityProofs.TS.HeadlineDc
 
 /-- The H200's headline on DC-90-ri under (I3) at 3/5: `Whole.dIdealFloor_whole` at π* (`Sm90MeasuredI3.lamStar`, on
 JI90_0, JI90_1 and JPA90_0), `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and `δ = 2^-40`,
@@ -284,7 +284,7 @@ JI90_0, JI90_1 and JPA90_0), `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ +
 (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`, binding at `√δ_fork` by
 `Whole.moved_le_sqrt`), (I5) `SideUnits` and FILL-OPT from the data, and the terms bounded by
 `Whole.headline_of_branches`: the folded branch by `sm90i_folded`, the unfolded one by `sm90i_unfolded`. -/
-theorem Sm90MeasuredI3Headline : Accounting.Guarantees.TS.Sm90MeasuredI3Headline := by
+theorem Sm90MeasuredI3Headline : ResourceAccounting.Guarantees.TS.Sm90MeasuredI3Headline := by
   intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 hW hSR hN hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
   set δbind := Real.sqrt δfork
   have hL := luck_of_receipt_half Pl.game G hG hPinG hOp hRL
@@ -312,4 +312,4 @@ theorem Sm90MeasuredI3Headline : Accounting.Guarantees.TS.Sm90MeasuredI3Headline
     Sm90MeasuredI3.lamStar sm90i_isCert sm90i_wf Sm90.checks sm90_S _ hδlo _
     (sm90i_folded _ hδlo) sm90i_unfolded)⟩
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

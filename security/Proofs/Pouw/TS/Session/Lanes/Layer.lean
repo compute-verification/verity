@@ -61,8 +61,8 @@ This file states, on words, what the 33 statements check and what one unit's ser
 * `CombineView`, `CombineOk`: what the combine reads, and its `ok = 1`: the XOR, in lane order, of the 32 rows is the
   receipt word by word (`xorAll`);
 * `PortRow`, `portRead`: a wire assignment at every bit of every unit's port rows, registered or not, which the
-  circuits' premise reads (`Accounting.Assumptions.TS.LeafChecks`);
-* `UnitServed`: the leaf's served checks, `Accounting.Served`'s `ProductOf` and `DequantOf` at every cell (`CellOk`,
+  circuits' premise reads (`ResourceAccounting.Assumptions.TS.LeafChecks`);
+* `UnitServed`: the leaf's served checks, `ResourceAccounting.Served`'s `ProductOf` and `DequantOf` at every cell (`CellOk`,
   with `dq` the Program's dequant on its words, `PouwZyDequant_v2` today) and its receipt the XOR of its lanes' honest
   partials (in the order `lane_partials` splits the tile unit's receipt);
 * `SameTree`, `RowsAgree`, `LeafColl`: the 33 sessions' registrants' rows (`RowsSession.rdU`, each the commit-time
@@ -70,12 +70,12 @@ This file states, on words, what the 33 statements check and what one unit's ser
   domain and schema, under any port name) at one position; or two of the
   registrants' records clash (`ReadsX.Clash`: their openings, or hm96's leaves over their rows, are two different
   SHA-512 inputs with one digest, both in hand). Each opening opens its root there (`ReadsX.committed`), so one of the
-  two holds (`Accounting.TS.Lanes.rowsAgree_or_leafColl`);
+  two holds (`ResourceAccounting.TS.Lanes.rowsAgree_or_leafColl`);
 * `KnownHeld`, `LeafKnownColl`: the known-content tie (at every port the verifier registers at known content:
   each lane's `admit` and `pub`, every statement's `o0`). Where verity-verify-proof's known-content check
   (`Registered.checkKnownAll`) accepts a session's `own` at its known content, the registrant's row at every read of
   such a port is the bytes of the known row at its position (`KnownHeld`), or the registrant's openings exhibit a
-  SHA-512 collision (`Accounting.TS.Held.OkColl` at that port's name and rows; `LeafKnownColl` at one of the 33);
+  SHA-512 collision (`ResourceAccounting.TS.Held.OkColl` at that port's name and rows; `LeafKnownColl` at one of the 33);
 * `leafLayer`: the unit's proof layer. Proof `i` of round `w` is accepted where verity-verify-proof `--zk --registered`
   accepts every one of its 33 sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the combine's), its
   known-content check (`known x w i k`, the session's registered file's known content), its complete check
@@ -87,16 +87,16 @@ This file states, on words, what the 33 statements check and what one unit's ser
   `UnitServed` at the path's public inputs and receipt, which are no leaves of the round (`ProofLayer`), or `LeafColl`
   or `LeafKnownColl` at the proof's sessions.
 
-Words are integers as `Accounting.Served` reads them (codes s8, z s32, scales and y their encodings); partial and
+Words are integers as `ResourceAccounting.Served` reads them (codes s8, z s32, scales and y their encodings); partial and
 receipt words are `BitVec 32`. These definitions sit beside the checked layer's, under `reads_exempt`'s
 `Proofs.Pouw.TS.Session`.
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open Accounting.TS Accounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS ResourceAccounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 
 /-- Lane `l`'s row at row slot `s < 4`: `g + 8s` with `g = ⌊l/4⌋`. -/
@@ -231,9 +231,9 @@ def KnownHeld (s : RowsSession) (known : Known) : Prop :=
 
 /-- **A leaf's known-content tie collides**: at one of its sessions `k`, at a port `nm` its known content names with
 rows `ks`, the known-content extractor outputs two different SHA-512 inputs with one digest
-(`Accounting.TS.Held.OkColl` at `nm`, the `ok` tie at any known port). -/
+(`ResourceAccounting.TS.Held.OkColl` at `nm`, the `ok` tie at any known port). -/
 def LeafKnownColl {ι : Type} (sess : ι → RowsSession) (known : ι → Known) : Prop :=
-  ∃ k nm ks, (nm, ks) ∈ known k ∧ Accounting.TS.Held.OkColl (sess k) nm ks
+  ∃ k nm ks, (nm, ks) ∈ known k ∧ ResourceAccounting.TS.Held.OkColl (sess k) nm ks
 
 /-- **The leaf's proof layer through its 33 sessions**: proof `i` of round `w` is accepted where verity-verify-proof
 `--zk --registered` accepts every one of its sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the
@@ -279,4 +279,4 @@ noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     LeafKnownColl (sess x w i) (known x w i)
   right := right
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

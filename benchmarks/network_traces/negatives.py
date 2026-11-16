@@ -150,7 +150,7 @@ def network_attester_frame(run: Path, at: int | None = None) -> dict:
         raise NotApplicable(f"{run}: no {' or '.join(missing)}: the run kept none of its witness, so no unit can "
                             "open its cells")
     dep = json.loads((run / "deployment.json").read_text())
-    params = WS.NetworkCertifierParams(**dep["params"])
+    params = WS.NetworkAttesterParams(**dep["params"])
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
     records = {r.window: r for r in RC.read_records(run, params)[RC.EGRESS]}
     regs = {r["window"]: (r, salts, wiring_salt) for d, salts, wiring_salt in RC.read_cells(run)
@@ -650,7 +650,7 @@ def certified_ingress(Q, requests: list[bytes], received: list[int], *, T: int, 
         arrivals.append(w * T + k[w] % (T - 1))
         k[w], at = k[w] + 1, at + c
     lanes = max([1, *(sum(a <= t <= a + 1 for a in arrivals) for t in range(len(received) * T))])
-    params = W.NetworkCertifierParams(cell_bytes=frame_bytes, slots=max([1, *cells]), lanes=lanes, window=T, delay=1)
+    params = W.NetworkAttesterParams(cell_bytes=frame_bytes, slots=max([1, *cells]), lanes=lanes, window=T, delay=1)
     link = Q.serve(params, requests, arrivals, [len(r) for r in requests], buckets=len(received) * T)
     return Ingress(Q.Shape(frame_bytes, lanes, params.slots), tuple(tuple(r) for r in link.rows),
                    tuple(link.releases), T)

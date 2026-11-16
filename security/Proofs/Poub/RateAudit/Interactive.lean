@@ -21,13 +21,13 @@ what its sources hold: a source addressed by everything sent may be as large as 
 
 The class is not vacuous: a `Prover` is an interactive prover that never sends (`Prover.toInteractive`), with the same
 tags, ingress, footprint and compute, so every run that realizes `RateAudit`'s game realizes this one
-(`RealizesRate.toInteractive`), with side sources that ignore the oracle; `Proofs/Accounting/Sanity.lean` applies it to
+(`RealizesRate.toInteractive`), with side sources that ignore the oracle; `Proofs/ResourceAccounting/Sanity.lean` applies it to
 its honest rate run.
 -/
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -303,11 +303,11 @@ theorem toInteractive_accepts {s : ℕ} (A : Prover N b h ρ S L q) (E : Store N
 
 end Prover
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting
+namespace ResourceAccounting
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 
 /-- A run that realizes `RateAudit`'s game realizes the game with interactive side sources, by devices that never send
 and whose side sources ignore the oracle. -/
@@ -326,17 +326,17 @@ theorem RealizesRate.toInteractive_side {p : Price} {cTag cEnc N b h ρ s : ℕ}
       (real.toInteractive.dev (x, s')).side E R O' :=
   fun _ _ _ _ _ _ => rfl
 
-end Accounting
+end ResourceAccounting
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate Accounting.Rate.InteractiveProver
+open ResourceAccounting.Rate ResourceAccounting.Rate.InteractiveProver
 open Pous (Bits pr)
 open scoped ENNReal
 
 /-- **The rate audit with interactive side sources that ignore the oracle**
-(`Accounting.Guarantees.RateAuditInteractiveRO`). -/
-theorem RateAuditInteractiveRO : Accounting.Guarantees.RateAuditInteractiveRO := by
+(`ResourceAccounting.Guarantees.RateAuditInteractiveRO`). -/
+theorem RateAuditInteractiveRO : ResourceAccounting.Guarantees.RateAuditInteractiveRO := by
   intro N b h ρ S L q s k F cTag cEnc lam A hA
   rw [Bandwidth.pr_coins_flat]
   dsimp only
@@ -351,8 +351,8 @@ theorem RateAuditInteractiveRO : Accounting.Guarantees.RateAuditInteractiveRO :=
   exact A.toRelay.audit (toRelay_side A hA) s k F cTag cEnc lam
 
 /-- **The rate audit with interactive side sources, in the random-oracle model**
-(`Accounting.Guarantees.RateAuditInteractive`). -/
-theorem RateAuditInteractive : Accounting.Guarantees.RateAuditInteractive := by
+(`ResourceAccounting.Guarantees.RateAuditInteractive`). -/
+theorem RateAuditInteractive : ResourceAccounting.Guarantees.RateAuditInteractive := by
   intro N b h ρ S L q s k m F cTag cEnc lam A
   rw [Bandwidth.pr_coins_flat]
   dsimp only
@@ -367,8 +367,8 @@ theorem RateAuditInteractive : Accounting.Guarantees.RateAuditInteractive := by
   exact A.toRelay.auditRelay s k m F cTag cEnc lam
 
 /-- **The rate audit with interactive side sources as a joint run's bandwidth guarantee**
-(`Accounting.Guarantees.RateOfAuditInteractive`). -/
-theorem RateOfAuditInteractive : Accounting.Guarantees.RateOfAuditInteractive := by
+(`ResourceAccounting.Guarantees.RateOfAuditInteractive`). -/
+theorem RateOfAuditInteractive : ResourceAccounting.Guarantees.RateOfAuditInteractive := by
   intro N b h ρ s k m cTag cEnc lam W p ι α ΩW ΩS _ _ _ d r real x s'
   refine (Bandwidth.pr_mono (fun y hy => ?_)).trans
     (RateAuditInteractive N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len)
@@ -384,8 +384,8 @@ theorem RateOfAuditInteractive : Accounting.Guarantees.RateOfAuditInteractive :=
     exact lt_of_le_of_lt h3 hread
 
 /-- **The rate audit with interactive side sources that ignore the oracle, as a joint run's bandwidth guarantee**
-(`Accounting.Guarantees.RateOfAuditInteractiveRO`). -/
-theorem RateOfAuditInteractiveRO : Accounting.Guarantees.RateOfAuditInteractiveRO := by
+(`ResourceAccounting.Guarantees.RateOfAuditInteractiveRO`). -/
+theorem RateOfAuditInteractiveRO : ResourceAccounting.Guarantees.RateOfAuditInteractiveRO := by
   intro N b h ρ s k cTag cEnc lam W p ι α ΩW ΩS _ _ _ d r real hA x s'
   refine (Bandwidth.pr_mono (fun y hy => ?_)).trans
     (RateAuditInteractiveRO N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len)
@@ -400,4 +400,4 @@ theorem RateOfAuditInteractiveRO : Accounting.Guarantees.RateOfAuditInteractiveR
       Nat.mul_le_mul_right _ (((real.dev (x, s')).footprint_le_ingress _ _ _).trans (real.ingress_le x y s'))
     exact lt_of_le_of_lt h3 hread
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs
