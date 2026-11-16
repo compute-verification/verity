@@ -218,8 +218,8 @@ def test_h200_session_runs_the_tables_shapes():
     assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --model "$MODEL" --out "$O/timing-h3" --m 2048 8192' in sh
     assert sh.index('"$D/glm53_passes.py" full --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
     lease, volunteer = sh.index('echo "lease rc $?"'), sh.index('"$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)"')
-    verify = sh.index('"$D/glm53_passes.py" verify --out "$O/passes" --fast --draws "${DRAWS:-459}"')
-    assert lease < volunteer < verify and _served_passes().DRAWS == 459
+    verify = sh.index('"$D/glm53_passes.py" verify --out "$O/passes" --fast --draws "${SAMPLES:-459}"')
+    assert lease < volunteer < verify and _served_passes().SAMPLES == 459
     assert sh.index('"$D/glm53_passes.py" capture') < sh.index('[ "$TIMING" = 1 ] || exit 0') < sh.index('"$D/glm53_timing.py"')
     lock, trap = sh.index('sudo -n nvidia-smi -i "$U" -lgc "$LOCK_MHZ,$LOCK_MHZ"'), sh.index('trap "sudo -n nvidia-smi -i $U -rgc')
     assert trap < lock < sh.index('"$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs')

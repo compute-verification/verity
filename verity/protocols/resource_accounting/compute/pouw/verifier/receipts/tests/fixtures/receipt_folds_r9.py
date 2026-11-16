@@ -73,6 +73,6 @@ if __name__ == "__main__":
             assert np.array_equal(y.astype(np.uint64), ref), kind
             print(f"[PASS] {kind} twin = fullfloor_r9.chain over 4096 x 6 steps")
     rej = sum(not key_ok_r9(int(a)) for a in rng.integers(0, 1 << 32, 4096, dtype=np.uint64) if key_ok(int(a)))
-    print(f"[PASS] key_ok_r9 rejects {rej} of the key_ok keys among 4096 draws (expected ~2^-13 of them)")
+    print(f"[PASS] key_ok_r9 rejects {rej} of the key_ok keys among 4096 samples (expected ~2^-13 of them)")
     assert int8_ratio(1) and int8_ratio((-128) & M32) and not int8_ratio(1 << 13) and not int8_ratio(1 << 19)
     print("[PASS] int8_ratio: ±1 and ±128 are int8 ratios, 2^13 and 2^19 are not")

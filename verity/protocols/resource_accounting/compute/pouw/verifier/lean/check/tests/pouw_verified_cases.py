@@ -133,17 +133,17 @@ def verified_instance(rng: random.Random, name: str = "honest") -> dict:
     steps = rng.choice([s for s in (1, 2, 3) if len(lay["calls"]) % s == 0])
     sizes, starts = _starts(lay)
     units = sorted(rng.sample(range(sum(sizes)), rng.randint(1, min(6, sum(sizes)))))
-    drawn = sorted({bisect.bisect_right(starts, u) - 1 for u in units})
-    reads = {v for c in drawn for v in _reads(lay, prefix, steps, c)}
+    sampled = sorted({bisect.bisect_right(starts, u) - 1 for u in units})
+    reads = {v for c in sampled for v in _reads(lay, prefix, steps, c)}
     entries = [{"value": v, "root": C._hex(rng)} for v in sorted(reads)]
     rng.shuffle(entries)
     statements = [{"call": c, "circuit": f"/w/c{c}/circuit.bin", "public": f"/w/c{c}/public.bin",
-                   "sessions": [f"/w/c{c}/s{j}" for j in range(rng.randint(1, 3))]} for c in drawn]
+                   "sessions": [f"/w/c{c}/s{j}" for j in range(rng.randint(1, 3))]} for c in sampled]
     rng.shuffle(statements)
     files = {f"k{k}": C._hex(rng) for k in sorted({k for _lin, k, _n in lay["linears"]})}
     case = {"statements": statements, "files": files, "descriptor": C.descriptor(rng, lay, prefix), "entries": entries,
             "window": C._hex(rng), "units": units, "steps": steps, "salt": C._hex(rng),
-            "draw": {"root": C._hex(rng), "coin": C._draw_coin(rng)}, "runs": None}
+            "draw": {"root": C._hex(rng), "coin": C._sample_coin(rng)}, "runs": None}
     s = rng.choice(statements)
     match name:
         case "honest" | "error" | "refused" | "rejected" | "pub-other" | "ok-other" | "ok-none" | "unit-other":
@@ -161,7 +161,7 @@ def verified_instance(rng: random.Random, name: str = "honest") -> dict:
         case "twice":
             statements.insert(rng.randrange(len(statements) + 1), {**s, "sessions": ["/w/again"]})
         case "undrawn":
-            idle = [c for c in range(len(lay["calls"])) if c not in drawn]
+            idle = [c for c in range(len(lay["calls"])) if c not in sampled]
             if idle:
                 statements.insert(rng.randrange(len(statements) + 1), {**s, "call": rng.choice(idle)})
             else:
@@ -249,23 +249,23 @@ def lanes_instance(rng: random.Random, name: str = "lanes-honest") -> dict:
     leaves = sorted(rng.sample(at_lk, min(len(at_lk), rng.randint(1, 2))))
     tiled = sorted(rng.sample(at_tk, min(len(at_tk), rng.randint(0, 2))))
     units = sorted(leaves + tiled)
-    drawn = sorted({bisect.bisect_right(starts, u) - 1 for u in tiled})
-    reads = {v for call in drawn for v in _reads(lay, prefix, steps, call)}
+    sampled = sorted({bisect.bisect_right(starts, u) - 1 for u in tiled})
+    reads = {v for call in sampled for v in _reads(lay, prefix, steps, call)}
     for u in leaves:
         reads |= {table for v, (table, _row) in Cr.leaf_place(layout, shape, u, steps).items() if v != LL.PARTIALS}
     entries = [{"value": v, "root": C._hex(rng)} for v in sorted(reads)]
     rng.shuffle(entries)
-    draw = {"root": C._hex(rng), "coin": C._draw_coin(rng)}
+    sample = {"root": C._hex(rng), "coin": C._sample_coin(rng)}
     lanes = (r // LL.LANE_ROWS) * (c // LL.LANE_COLS)
     produced, openings = [], {}
     for u in leaves:
         v = LL.served(prefix, LL.PARTIALS, u)
         produced.append({"value": v, "root": C._hex(rng),
-                         **{x: y for x, y in PR.entry(program, v, lanes, 2 * LL.words(lk), draw["root"]).items()
+                         **{x: y for x, y in PR.entry(program, v, lanes, 2 * LL.words(lk), sample["root"]).items()
                             if x != "word_bits"}})
         openings[v] = [(row, _bc(rng)) for row in range(lanes)]
     statements = [{"call": call, "circuit": f"/w/c{call}/circuit.bin", "public": f"/w/c{call}/public.bin",
-                   "sessions": [f"/w/c{call}/s{j}" for j in range(rng.randint(1, 2))]} for call in drawn]
+                   "sessions": [f"/w/c{call}/s{j}" for j in range(rng.randint(1, 2))]} for call in sampled]
     for u in leaves:
         for kind, ln in LL.statements(r, c) if not shape_off else [(LL.LANE, 0), (LL.COMBINE, None)]:
             d = f"/w/u{u}/{kind}{'' if ln is None else ln}"
@@ -279,10 +279,10 @@ def lanes_instance(rng: random.Random, name: str = "lanes-honest") -> dict:
     if rng.random() < 0.5:
         files[Cr.LIVE] = C._hex(rng)
     evidence = {"leaf_programs": {x: b.hex() for x, b in progs.items()},
-                "produced": PR.record(draw["root"], draw["coin"]["coin"], produced, openings),
+                "produced": PR.record(sample["root"], sample["coin"]["coin"], produced, openings),
                 "statements": statements}
     case = {"statements": evidence, "files": files, "descriptor": descriptor, "entries": entries,
-            "window": C._hex(rng), "units": units, "steps": steps, "salt": C._hex(rng), "draw": draw, "runs": None}
+            "window": C._hex(rng), "units": units, "steps": steps, "salt": C._hex(rng), "draw": sample, "runs": None}
     leaf_at = [i for i, s in enumerate(statements) if "unit" in s]
     s = statements[rng.choice(leaf_at)]
     match name:
@@ -326,9 +326,9 @@ def lanes_instance(rng: random.Random, name: str = "lanes-honest") -> dict:
             case["entries"] = [e for e in entries if e["value"] != v] if rng.random() < 0.5 else [
                 *entries, {"value": v, "root": C._hex(rng)}]
         case "lanes-draw":
-            case["draw"] = rng.choice([None, {"coin": draw["coin"]}, {**draw, "root": draw["root"][:-2]},
-                                       {**draw, "coin": {x: y for x, y in draw["coin"].items() if x != "path"}},
-                                       {**draw, "coin": None}])
+            case["draw"] = rng.choice([None, {"coin": sample["coin"]}, {**sample, "root": sample["root"][:-2]},
+                                       {**sample, "coin": {x: y for x, y in sample["coin"].items() if x != "path"}},
+                                       {**sample, "coin": None}])
         case "lanes-form":
             bad = rng.choice([{**s, "unit": sum(sizes)}, {**s, "statement": []}, {**s, "statement": [1]},
                               {**s, "statement": [LL.LANE, -1]}, {**s, "sessions": []}, {**s, "extra": 1}])

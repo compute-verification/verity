@@ -30,7 +30,7 @@ def test_the_lean_spec_reproduces_the_pinned_vectors():
 
 def test_python_matches_every_lean_vector():
     """`derive`, `Key.stream`, `Key.uniform` and `Key.subset` return what the spec does on its own inputs: PoUW's
-    closure-draw domain, and `plan.draw`'s `("call", forward, position, "stratum", name)` contexts, whose swap `i` reads
+    closure-draw domain, and `plan.sample`'s `("call", forward, position, "stratum", name)` contexts, whose swap `i` reads
     the stream at `("s", *context, i)`."""
     assert len(FIXTURE["extra"]) == 3
     for v in FIXTURE["extra"]:
@@ -45,9 +45,9 @@ def test_python_matches_every_lean_vector():
 
 
 def test_the_window_sample_is_plan_sample_per_call_under_one_key():
-    """`PlanDraw.executionPhase`: each call's `plan.draw` loop (each stratum's `Key.subset(k, len(units), context)` mapped through
+    """`PlanDraw.executionPhase`: each call's `plan.sample` loop (each stratum's `Key.subset(k, len(units), context)` mapped through
     its units), the calls in order under the one key, and a window with a repeated call index refused. Restated here from
-    `plan.draw`; the test against `verity.protocols.resource_accounting.compute.pouw.prover.circuit.plan` itself lands with `plan.draw`'s admission fix."""
+    `plan.sample`; the test against `verity.protocols.resource_accounting.compute.pouw.prover.circuit.plan` itself lands with `plan.sample`'s admission fix."""
     for w in FIXTURE["window"]:
         key, seen, drawn = _key(w), set(), []
         for c in w["calls"]:

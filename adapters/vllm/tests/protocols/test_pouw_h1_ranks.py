@@ -98,7 +98,7 @@ def _rounds():
 
 
 def _draw():
-    return LiveRecord(Wd.draw_challenger(0, random.Random(1).randbytes), Wd.DRAW)
+    return LiveRecord(Wd.sample_challenger(0, random.Random(1).randbytes), Wd.SAMPLE)
 
 
 def _so(*new, running=None):
@@ -123,7 +123,7 @@ def _whole(salt=SALT, modules=MODULES):
     """One process serving every linear (PP = 1): `pouw_h1_hooks.wire` on the runner and the layers."""
     layers, runner, h = _layers(), Runner(), Hooks(tag="pp1")
     run = PH.H1Run("t", salt, modules, SHAPES, 32, 4, rounds=_rounds(), key=KEY, admission=RQ.PER_ROUND)
-    run.draw = _draw()
+    run.sample = _draw()
     PHK.wire(run, h, layers, runner, 32)
     for i, so in enumerate(STEPS):
         runner.execute_model(so)
@@ -148,7 +148,7 @@ def _staged(rows_of=None):
         hooks.append((layers[lo:hi], h))
     executor = Executor(workers)
     run = PH.H1Run("t", SALT, MODULES, SHAPES, 32, 4, rounds=_rounds(), key=KEY, admission=RQ.PER_ROUND)
-    run.draw = _draw()
+    run.sample = _draw()
     holder = PHR.Holder(run, executor, [{"decode_query_len": 1}], Hooks(tag="holder"))
     holder._push()
     holder.hooks.wrap(executor, "execute_model", holder.admitting)

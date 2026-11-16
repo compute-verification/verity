@@ -50,10 +50,10 @@ def test_an_honest_window_is_accepted_round_by_round():
 
 def test_a_round_coin_opened_twice_is_refused():
     ch, roots, ops = window()
-    with pytest.raises(Ch.CoinError, match="pouw/round coin 1 is already open: a retry never redraws"):
+    with pytest.raises(Ch.CoinError, match="pouw/round coin 1 is already open: a retry never resamples"):
         ch.open(Wd.ROUND, 1, roots[1])
     assert Wd.rounds_reason(ch.commitment, roots, [ops[0], ops[1], ops[1], ops[2]]) == \
-        "the epoch's pouw/round coin 1 is opened twice: a retry never redraws"
+        "the epoch's pouw/round coin 1 is opened twice: a retry never resamples"
 
 
 def test_a_round_coin_opened_before_its_rounds_root_was_recorded_is_refused():
@@ -77,23 +77,23 @@ def test_only_a_live_epochs_coins_carry_a_window():
     vllm = Ch.LiveChallenger("verity/vllm/commit-coins/v1", 7, Wd.live_families(2), entropy("v"))
     assert Wd.rounds_reason(vllm.commitment, [], []) == \
         f"the coin commitment's scheme is verity/vllm/commit-coins/v1, not {Wd.LIVE_SCHEME}"
-    for layout in (((Wd.ROUND, 2), (Wd.SALT, 1)), ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 2))):
+    for layout in (((Wd.ROUND, 2), (Wd.SALT, 1)), ((Wd.SALT, 1), (Wd.SAMPLE, 1), (Wd.ROUND, 2))):
         other = Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, layout, entropy("s"))
         assert Wd.rounds_reason(other.commitment, [], []) == \
             "the coin commitment's coins are not a live epoch's: one salt, then the rounds'"
 
 
 def test_a_windows_sampling_session_is_its_sampling_coin_alone():
-    """`draw_epoch_reason`: `LIVE_SCHEME` over `DRAW_FAMILIES` alone, the session the gate opens withheld on the
+    """`sample_epoch_reason`: `LIVE_SCHEME` over `SAMPLE_FAMILIES` alone, the session the gate opens withheld on the
     execution phase's sample root. The execution phase's own layout, a sample beside the rounds, and another scheme are refused."""
-    sampling = Wd.draw_challenger(7, entropy("d")).commitment
-    assert sampling.families == ((Wd.DRAW, 1),) and Wd.draw_epoch_reason(sampling) is None
+    sampling = Wd.sample_challenger(7, entropy("d")).commitment
+    assert sampling.families == ((Wd.SAMPLE, 1),) and Wd.sample_epoch_reason(sampling) is None
     assert Wd.live_epoch_reason(sampling) is not None
-    for layout in (Wd.live_families(1), ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 1)), ((Wd.DRAW, 2),)):
-        assert Wd.draw_epoch_reason(Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, layout, entropy("o")).commitment) == \
-            "the coin commitment's coins are not a live window's draw session's: its draw coin alone"
-    other = Ch.LiveChallenger("verity/vllm/commit-coins/v1", 7, Wd.DRAW_FAMILIES, entropy("v")).commitment
-    assert Wd.draw_epoch_reason(other) == f"the coin commitment's scheme is verity/vllm/commit-coins/v1, not {Wd.LIVE_SCHEME}"
+    for layout in (Wd.live_families(1), ((Wd.SALT, 1), (Wd.SAMPLE, 1), (Wd.ROUND, 1)), ((Wd.SAMPLE, 2),)):
+        assert Wd.sample_epoch_reason(Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, layout, entropy("o")).commitment) == \
+            "the coin commitment's coins are not a live window's sample session's: its sampling coin alone"
+    other = Ch.LiveChallenger("verity/vllm/commit-coins/v1", 7, Wd.SAMPLE_FAMILIES, entropy("v")).commitment
+    assert Wd.sample_epoch_reason(other) == f"the coin commitment's scheme is verity/vllm/commit-coins/v1, not {Wd.LIVE_SCHEME}"
 
 
 def test_a_pearl_c_salt_session_is_its_salt_coin_alone():
@@ -171,7 +171,7 @@ def test_the_check_item_names_the_windows_coin_mode():
 
 
 def test_a_seeded_window_is_as_it_was():
-    assert (Co.SCHEME, Co.LABELS) == ("verity/pouw/epoch-coins/v1", ("salt", "draw"))
+    assert (Co.SCHEME, Co.LABELS) == ("verity/pouw/epoch-coins/v1", ("salt", "sample"))
     seeded = Co.Challenger(7, entropy("s"))
     assert Co.coin_reason(seeded.commitment, seeded.open("draw", b"t"), "draw", b"t") is None
     assert "coins" not in CC.expected_items(CC.params(_params({})), 0, Wd.Work.at(0, 2), 1, None)["check"]

@@ -461,9 +461,9 @@ class Host:
     def open_draw(self, session: str, root: str, withhold: bool = True) -> dict:
         """The gate's open of the window's sample session `session` on its sample root `root`, withheld unless not
         `withhold`: reserved in this host's ledger, served by a `Host` of its own (`draw`) over a sample session's coins
-        (`window.draw_challenger`), and reached at `DRAW_PORT` (the answer's ``port``)."""
+        (`window.sample_challenger`), and reached at `DRAW_PORT` (the answer's ``port``)."""
         host = self.draw = Host(self.directory.parent / f"{self.directory.name}-draw",
-                                Wd.draw_challenger(0, entropy(self.seed + 0x100)), self.seed, session, self.leaves,
+                                Wd.sample_challenger(0, entropy(self.seed + 0x100)), self.seed, session, self.leaves,
                                 self.ledger, gated=True, withhold=withhold)
         return {**host.open(session, root), "port": DRAW_PORT}
 

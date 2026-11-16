@@ -1,12 +1,12 @@
 """The credit difftest's cases: the arguments of `credit.window` and `credit.period_credit`, the entries, and of the
-steps they run or will, each held to the Lean on its own: `credit._credited`, `credit.drawn`, `credit._outcome`,
+steps they run or will, each held to the Lean on its own: `credit._credited`, `credit.sampled`, `credit._outcome`,
 `credit._a_link` and `credit._weights`.
 
 A `credited` case is an honest served execution phase read through its challenger's session (`pouw_rounds_cases.Session`): its
 manifest rows (the serving process's call rows, each with its credit bit, a credited one with its z table's root), the
 round log (each round's root the challenger received, over its inner root and its A segments, `_a_log`, and its coin),
 the execution phase's registered entries (each K's A and B values, their domains one-stage's registration's under the execution phase's
-open root and its circuit, `registered.domain`), and the sample: `credit.draw_root` over them, recorded by the
+open root and its circuit, `registered.domain`), and the sample: `credit.sample_root` over them, recorded by the
 challenger, then its sampling coin opened after it; the auditor's ledger opens and ends the session for the execution phase, its
 open pinned to a commit the host's pins log (``pins``) records on the verifier's copy of main's first-parent history
 (``main``, `pouw_rounds_cases.PINS` and `MAIN`). Then one mutation (`CREDIT_NAMES`) aimed at one refusal: a credit bit
@@ -15,19 +15,19 @@ likewise, a missing or malformed bit, a credited row with no z root, the sample 
 another family, a session pinned to a commit the log doesn't record (``unpinned``) or to a logged one off main's
 first-parent line (``branch-pin``), and the forms.
 
-A `drawn` case is a sampling coin, the sample's stream, registration and receipt, an execution phase's layout
+A `sampled` case is a sampling coin, the sample's stream, registration and receipt, an execution phase's layout
 (`circuit.h1window.program`'s arguments, `layout`): linears at one or two K, called step by step in a shuffled order, so
 each K's stratum has ranges apart, and the committed K the sample is sized at (one to the execution phase's units). Its mutations
 break each rule `credit.strata` mirrors from `h1window.program`, the coin's, the arguments' and K's forms, give a K past
 the execution phase's units, and ``budget`` samples at K = `PLAN_K` from a population larger than it (each stratum's k_s rounded
 up, so a unit or two past K).
 
-An `outcome` case is a `drawn` case's arguments and one accepted proof outcome for each unit the coin selects; its
+An `outcome` case is a `sampled` case's arguments and one accepted proof outcome for each unit the coin selects; its
 mutations drop one (``missing``), reject one (``failed``), repeat one, add an unsampled unit, prove the units of another
 coin the prover chose (``chosen``), and break the forms.
 
-A `window-drawn` case is what `credit._window_drawn` reads of an execution phase, the sample `Credit.descriptorDrawn` gives the
-J10-R credit period's statement (`Properties.Pouw.MonitoringPeriodJ10R.creditDrawn`): the execution phase's open root, its sample (its coin's live
+A `window-sampled` case is what `credit._window_sampled` reads of an execution phase, the sample `Credit.descriptorSampled` gives the
+J10-R credit period's statement (`Properties.Pouw.MonitoringPeriodJ10R.creditSampled`): the execution phase's open root, its sample (its coin's live
 opening, its root and its receipts), its circuit's descriptor (today's units or J10-R's) and a committed K. Its
 mutations break the coin's opening, the root and receipts the sample is keyed by, the descriptor's hex and K's form, and
 give a K past the execution phase's units.
@@ -165,11 +165,11 @@ def _row(rng: random.Random, i: int) -> dict:
             "tables": tables, "bound": {"m": rng.randint(1, 1 << 16), "ok": True}, Cr.CREDIT: bit}
 
 
-def _draw_root(d: dict) -> str:
+def _sample_root(d: dict) -> str:
     salt, served, commit = bytes.fromhex(d["salt"]), d["served"], Cr.commit_of(d["commit"])[0]
     calls = Cr.calls_root(salt, d["calls"], None if served is None else bytes.fromhex(served),
                           None if commit is None else commit[0])
-    return Cr.draw_root(calls, bytes.fromhex(d["draw"]["receipts"]), d["rounds"]).hex()
+    return Cr.sample_root(calls, bytes.fromhex(d["draw"]["receipts"]), d["rounds"]).hex()
 
 
 #: each way an execution phase's A tables or input-ids tables are not the served Commit's, made before its sample: one round's A
@@ -396,7 +396,7 @@ def served_rows(rng: random.Random, t: int, calls: int, steps: int, name: str = 
 
 
 def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = None, sid: str = "s-1",
-                  leaf: int = rc.RECORD_LEAF, draw_leaf: int = rc.DRAW_LEAF, ks: list[int] | None = None,
+                  leaf: int = rc.RECORD_LEAF, sample_leaf: int = rc.SAMPLE_LEAF, ks: list[int] | None = None,
                   program: str | None = None,
                   other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
                   weights: list[dict] | None = None, off: str | None = None, rounds: int | None = None, m: int = 1,
@@ -404,9 +404,9 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
                   commit: Callable[[dict, int, str, str], str] | None = None) -> tuple[dict, rc.Session]:
     """An honest served execution phase of `rows` manifest rows (one to five when None), each call's served rows ``served[i]``
     (`credit.SERVED_ROWS`; `MISSING` drops it) when given, whose sampling coin opened after its sample root
-    (none for ``no-draw``) in its own sampling session (`window.DRAW_FAMILIES`, ``draw``'s ``session``, the execution phase
-    session's `rc.Session.drawn`), which the ledger opens withheld on the sample root and which signs its record at
-    `draw_leaf`, its execution phase session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
+    (none for ``no-sample``) in its own sampling session (`window.SAMPLE_FAMILIES`, ``sample``'s ``session``, the execution phase
+    session's `rc.Session.sampled`), which the ledger opens withheld on the sample root and which signs its record at
+    `sample_leaf`, its execution phase session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
     the contractions `ks` (and `calls`, a round count dividing theirs) under the circuit `program` (random ones when
     None), `other`, `prefix`, `weights`, `off` and the A slot `m`, and its Commit record `commit_record`'s over their
     true tables (``commit(true, rounds, circuit, open root)``'s when given), bound under its sample root, over `rounds`
@@ -451,22 +451,22 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     if name == "never-received":
         received = [rng.randbytes(64) for _ in log]
 
-    def draw_after(rec) -> bytes:
+    def sample_after(rec) -> bytes:
         opened = rec.openings if name != "never-received" else [
             dataclasses.replace(o, after=bytes.fromhex(x["root"])) for o, x in zip(rec.openings, log)]
         d["rounds"] = [{**x, "coin": o.to_json()} for x, o in zip(log, opened)]
-        d["draw"]["root"] = _draw_root(d)
+        d["draw"]["root"] = _sample_root(d)
         return bytes.fromhex(d["draw"]["root"])
 
     s = rc.Session(rng, ch, received, salt=None, sid=sid, leaf=leaf)
-    root = draw_after(s.rounds)
-    dch = Wd.draw_challenger(ch.commitment.epoch, rng.randbytes)
-    ds = rc.Session(rng, dch, [], salt=None, sid=rc.session_id(rng), leaf=draw_leaf,
-                    draw=None if name == "no-draw" else (lambda _: rng.randbytes(64)) if name == "draw-after-other"
+    root = sample_after(s.rounds)
+    dch = Wd.sample_challenger(ch.commitment.epoch, rng.randbytes)
+    ds = rc.Session(rng, dch, [], salt=None, sid=rc.session_id(rng), leaf=sample_leaf,
+                    sample=None if name == "no-draw" else (lambda _: rng.randbytes(64)) if name == "draw-after-other"
                     else lambda _: root)
-    d["draw"]["coin"] = (dch.open(Wd.DRAW, 0, root) if name == "no-draw" else ds.draw[0]).to_json()
+    d["draw"]["coin"] = (dch.open(Wd.SAMPLE, 0, root) if name == "no-draw" else ds.sample[0]).to_json()
     d["draw"]["session"] = ds.files()
-    s.drawn, ds.on = ds, root.hex()
+    s.sampled, ds.on = ds, root.hex()
     return {"key": s.key(), "pins": list(rc.PINS), "main": list(rc.MAIN), "window": window, "session": s.files(), **d}, s
 
 
@@ -505,13 +505,13 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
     match name:
         case "changed":
             _flip_bit(d, rng)
-            d["draw"]["root"] = _draw_root(d)
+            d["draw"]["root"] = _sample_root(d)
         case "withdrawn":
             _flip_bit(d, rng, to=not any(r[Cr.CREDIT] for r in calls))
-            d["draw"]["root"] = _draw_root(d)
+            d["draw"]["root"] = _sample_root(d)
         case "row-changed":
             calls[j]["tables"]["a"] = _hex(rng)
-            d["draw"]["root"] = _draw_root(d)
+            d["draw"]["root"] = _sample_root(d)
         case "stale-root":
             _flip_bit(d, rng)
         case "no-bit":
@@ -555,18 +555,18 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
             pass
         case "draw-coin":
             coin = d["draw"]["coin"]
-            other = Wd.draw_challenger(s.ch.commitment.epoch, rng.randbytes)
+            other = Wd.sample_challenger(s.ch.commitment.epoch, rng.randbytes)
             d["draw"]["coin"] = rng.choice([{**coin, "salt": rc._flip(coin["salt"])}, None, {**coin, "index": 1},
                                             {**coin, "after": rc._flip(coin["after"])},
-                                            other.open(Wd.DRAW, 0, bytes.fromhex(d["draw"]["root"])).to_json()])
+                                            other.open(Wd.SAMPLE, 0, bytes.fromhex(d["draw"]["root"])).to_json()])
         case "key-form":
             d["key"] = rng.choice([None, {**d["key"], "public": "00"}, {**d["key"], "H": 0}])
         case "forged-ledger":
             d["ledger"] = rc.ledger_lines(rc.ledger_events(rng, d["window"], s), rc._key(1))
         case "unwithheld":
-            s.drawn.withheld = False
+            s.sampled.withheld = False
         case "draw-elsewhere":
-            s.drawn.on = _hex(rng)
+            s.sampled.on = _hex(rng)
         case "draw-session":
             files = d["draw"]["session"]
             d["draw"]["session"] = rng.choice([None, d["session"], {**files, "log": files["log"][:-1]}])
@@ -580,7 +580,7 @@ CREDIT_NAMES = ["changed", "withdrawn", "row-changed", "stale-root", "no-bit", "
                 "calls-form", "salt-form", "served-form", "commit-form", "rounds-form", "draw-form", "no-draw",
                 "draw-coin", "key-form", "forged-ledger", "unpinned", "branch-pin", "unwithheld", "draw-elsewhere",
                 "draw-session", "draw-after-other"]
-CREDIT_KEYS = ("key", "ledger", "pins", "main", "salt", "calls", "served", "commit", "rounds", "draw")
+CREDIT_KEYS = ("key", "ledger", "pins", "main", "salt", "calls", "served", "commit", "rounds", "sample")
 
 
 def credit_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -988,7 +988,7 @@ def _bad_k(rng: random.Random) -> object:
     return rng.choice([0, -1, True, "3", None, [2], Cr.MAX_K + 1])
 
 
-def _draw_args(rng: random.Random) -> dict:
+def _sample_args(rng: random.Random) -> dict:
     stream = rng.choice([_hex(rng), "h1/w-3", ""])
     receipt = rng.choice([{"receipts": _hex(rng)}, {}, {"a": "b", "pass": "x y~"}])
     return {"coin": _hex(rng), "stream": stream, "registration": _hex(rng), "receipt": receipt}
@@ -1027,9 +1027,9 @@ def _off_k(lay: dict, rng: random.Random) -> dict:
     return {**lay, "linears": [[lin[0][0], k, lin[0][2]]] + lin[1:]}
 
 
-def drawn_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `drawn` case: a sampling coin's arguments and an execution phase's layout, then mutation `name`."""
-    d = {**_draw_args(rng), "layout": layout(rng, big=name == "budget")}
+def sampled_instance(rng: random.Random, name: str = "honest") -> dict:
+    """One `sampled` case: a sampling coin's arguments and an execution phase's layout, then mutation `name`."""
+    d = {**_sample_args(rng), "layout": layout(rng, big=name == "budget")}
     d["k"] = PLAN_K if name == "budget" else _k(rng, d["layout"])
     match name:
         case "honest" | "budget":
@@ -1053,26 +1053,26 @@ def drawn_instance(rng: random.Random, name: str = "honest") -> dict:
 
 #: `circuit.plan.RECORD_K`, the K a credit period commits for ε = 0.1% at δ = 2⁻⁴⁰
 PLAN_K = 27_713
-DRAWN_NAMES = ["budget", "coin-form", "args-form", "layout-form", "named-twice", "unknown-linear", "uncalled", "slot", "kn",
+SAMPLED_NAMES = ["budget", "coin-form", "args-form", "layout-form", "named-twice", "unknown-linear", "uncalled", "slot", "kn",
                "blocks", "k-form", "k-past-units"]
-DRAWN_KEYS = ("coin", "stream", "registration", "receipt", "layout", "k")
+SAMPLED_KEYS = ("coin", "stream", "registration", "receipt", "layout", "k")
 
 
-def _draw_coin(rng: random.Random) -> dict:
+def _sample_coin(rng: random.Random) -> dict:
     """A live opening of an execution phase's sampling coin as the challenger gives it (`challenger.LiveOpening`), at random bytes:
-    `credit._window_drawn` reads only its coin."""
-    return Ch.LiveOpening(rng.randrange(1 << 20), Wd.DRAW, 0, bytes.fromhex(_hex(rng)), bytes.fromhex(_hex(rng)),
+    `credit._window_sampled` reads only its coin."""
+    return Ch.LiveOpening(rng.randrange(1 << 20), Wd.SAMPLE, 0, bytes.fromhex(_hex(rng)), bytes.fromhex(_hex(rng)),
                           bytes.fromhex(_hex(rng))[:32],
                           tuple(bytes.fromhex(_hex(rng)) for _ in range(rng.randint(0, 3)))).to_json()
 
 
-def window_drawn_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `window-drawn` case: an execution phase's open root, its sample (its coin's live opening, its root and its receipts), its
+def window_sampled_instance(rng: random.Random, name: str = "honest") -> dict:
+    """One `window-sampled` case: an execution phase's open root, its sample (its coin's live opening, its root and its receipts), its
     circuit's descriptor (`descriptor`, today's units or J10-R's) and a committed K, then mutation `name`."""
     lay, j10r = layout(rng), rng.random() < 0.5
     if j10r:
         lay["m"] = 2 * lay["tile"][0]
-    d = {"window": {"root": _hex(rng)}, "draw": {"coin": _draw_coin(rng), "root": _hex(rng), "receipts": _hex(rng)},
+    d = {"window": {"root": _hex(rng)}, "draw": {"coin": _sample_coin(rng), "root": _hex(rng), "receipts": _hex(rng)},
          "descriptor": descriptor(rng, lay, j10r=j10r), "k": _k(rng, lay)}
     match name:
         case "honest":
@@ -1104,8 +1104,8 @@ def window_drawn_instance(rng: random.Random, name: str = "honest") -> dict:
     return d
 
 
-WINDOW_DRAWN_NAMES = ["coin-form", "args-form", "descriptor-hex", "k-form", "k-past-units"]
-WINDOW_DRAWN_KEYS = ("window", "draw", "descriptor", "k")
+WINDOW_SAMPLED_NAMES = ["coin-form", "args-form", "descriptor-hex", "k-form", "k-past-units"]
+WINDOW_SAMPLED_KEYS = ("window", "draw", "descriptor", "k")
 
 
 def _proofs(rng: random.Random, units: list[int]) -> list[dict]:
@@ -1191,9 +1191,9 @@ def _mutate_proofs(proofs: list[dict], rng: random.Random, name: str, units: lis
 def _partial(rng: random.Random) -> tuple[dict, list[int]]:
     """A sample whose coin leaves some of the execution phase's units unsampled, and its units."""
     while True:
-        d = {**_draw_args(rng), "layout": layout(rng)}
+        d = {**_sample_args(rng), "layout": layout(rng)}
         d["k"] = _k(rng, d["layout"])
-        units, _ = Cr.drawn_twin(*(d[k] for k in DRAWN_KEYS))
+        units, _ = Cr.sampled_twin(*(d[k] for k in SAMPLED_KEYS))
         if len(units) < sum(hi - lo for s in Cr.strata(d["layout"])[0] for lo, hi in s["units"]):
             return d, units
 
@@ -1203,24 +1203,24 @@ def outcome_instance(rng: random.Random, name: str = "honest") -> dict:
     if name == "chosen":
         d, units = _partial(rng)
         other = {**d, "coin": _hex(rng)}
-        chosen, _ = Cr.drawn_twin(*(other[k] for k in DRAWN_KEYS))
+        chosen, _ = Cr.sampled_twin(*(other[k] for k in SAMPLED_KEYS))
         return {**d, "proofs": _proofs(rng, chosen if chosen != units else units[1:] + [max(units) + 1])}
-    d = {**_draw_args(rng), "layout": layout(rng)}
+    d = {**_sample_args(rng), "layout": layout(rng)}
     d["k"] = _k(rng, d["layout"])
-    units, _ = Cr.drawn_twin(*(d[k] for k in DRAWN_KEYS))
+    units, _ = Cr.sampled_twin(*(d[k] for k in SAMPLED_KEYS))
     proofs = _proofs(rng, units)
     return {**d, "proofs": proofs if name == "honest" else _mutate_proofs(proofs, rng, name, units)}
 
 
 OUTCOME_NAMES = ["missing", "failed", "twice", "undrawn", "chosen", "proofs-form"]
-OUTCOME_KEYS = (*DRAWN_KEYS, "proofs")
+OUTCOME_KEYS = (*SAMPLED_KEYS, "proofs")
 
 
 def _served_units(d: dict, stream: str | None = None, k: int | None = None) -> list[int]:
     """The units `d`'s sampling coin selects at its K (or `k`) under the served execution phase's arguments (`credit.window`'s), or
     under `stream`."""
     coin = d["draw"]["coin"]["coin"]
-    got, why = Cr.drawn_twin(coin, d["window"]["root"] if stream is None else stream, d["draw"]["root"],
+    got, why = Cr.sampled_twin(coin, d["window"]["root"] if stream is None else stream, d["draw"]["root"],
                         {"receipts": d["draw"]["receipts"]}, d["layout"], d["k"] if k is None else k)
     assert why is None, why
     return got
@@ -1540,7 +1540,7 @@ def _mutate_live(rng: random.Random, d: dict, name: str) -> None:
 
 
 def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", leaf: int = rc.RECORD_LEAF,
-                  draw_leaf: int = rc.DRAW_LEAF, lay: dict | None = None, desc: str | None = None, prefix: str | None = None,
+                  sample_leaf: int = rc.SAMPLE_LEAF, lay: dict | None = None, desc: str | None = None, prefix: str | None = None,
                   weights: list[dict] | None = None, t: int | None = None, length: list[int] | None = None,
                   j10r: bool = False, commit: Callable[[dict, int, str, str], str] | None = None
                   ) -> tuple[dict, rc.Session]:
@@ -1574,7 +1574,7 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     if length is None:
         length = fixed_length(rng, t, steps, aim)
     d, s = honest_credit(rng, name if name in [*CREDIT_NAMES, "never-received"] else "honest", rows=len(lay["calls"]),
-                         sid=sid, leaf=leaf, draw_leaf=draw_leaf, ks=sorted(set(k_of.values())), program=program,
+                         sid=sid, leaf=leaf, sample_leaf=sample_leaf, ks=sorted(set(k_of.values())), program=program,
                          other=other,
                          calls=[k_of[lin] for lin, _blk in lay["calls"]], prefix=prefix, weights=weights,
                          off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, *LIVE_TABLE_NAMES] else None,
@@ -1800,10 +1800,10 @@ def _evidence(d: dict) -> dict:
     return {k: d[k] for k in Cr.PROVED_KEYS}
 
 
-def _drawn(s: rc.Session, o: dict) -> list[tuple[str, str | None, dict]]:
+def _sampled(s: rc.Session, o: dict) -> list[tuple[str, str | None, dict]]:
     """Execution phase session `s`'s sample session opened withheld on its sample root, pinned as the execution phase's open `o` is, then
     ended closed."""
-    ds = s.drawn
+    ds = s.sampled
     return [("open", ds.sid, {**o, "window": {"root": ds.on}, "withheld": True}), ("end", ds.sid, rc._end(ds))]
 
 
@@ -1848,11 +1848,11 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
         odd_weights = [registered_b(program, v, other) if e["value"] == v else e for e in weights]
     length = fixed_length(rng, t, min(round_choices(lay)))
     wins = [honest_window(rng, "never-received" if i == bad and name == "never-received" else "honest", sid=f"s-{i + 1}",
-                          leaf=8 * i + 2, draw_leaf=8 * i + 6, lay=lay, desc=odd if i == bad else desc,
+                          leaf=8 * i + 2, sample_leaf=8 * i + 6, lay=lay, desc=odd if i == bad else desc,
                           prefix=odd_prefix if i == bad else prefix, weights=odd_weights if i == bad else weights, t=t,
                           length=length, commit=commit)
             for i in range(n)]
-    foreign = honest_window(rng, sid="o-1", leaf=8 * n + 3, draw_leaf=8 * n + 7, lay=lay, desc=desc, prefix=prefix,
+    foreign = honest_window(rng, sid="o-1", leaf=8 * n + 3, sample_leaf=8 * n + 7, lay=lay, desc=desc, prefix=prefix,
                             weights=weights, t=t, length=length)
     pub = wins[0][1].pub
     descriptor_ = bytes.fromhex(desc)
@@ -1919,15 +1919,15 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
             o.update(pinned=rc.BRANCH, pins=Ch.pins_seal(pins))
         if i == stale:
             o.update(pinned=rc.MAIN[4], pins=Ch.pins_seal(pins))
-        events += [("open", s.sid, o), ("end", s.sid, rc._end(s, **end)), *_drawn(s, o)]
+        events += [("open", s.sid, o), ("end", s.sid, rc._end(s, **end)), *_sampled(s, o)]
     outcomes = [x for (d, s), end in zip(wins, ends)
                 for x in ({"root": d["window"]["root"], "session": s.sid, "complete": end.get("complete", True)},
-                          {"root": s.drawn.on, "session": s.drawn.sid, "complete": True})]
+                          {"root": s.sampled.on, "session": s.sampled.sid, "complete": True})]
     events.append(("period-close", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, "windows": outcomes,
                                           "complete": all(w["complete"] for w in outcomes)}))
     fd, fs = foreign
     fo = rc._open(rng, fd["window"], pub)
-    events += [("open", fs.sid, fo), ("end", fs.sid, rc._end(fs)), *_drawn(fs, fo)]
+    events += [("open", fs.sid, fo), ("end", fs.sid, rc._end(fs)), *_sampled(fs, fo)]
     leaves = ([0] + [x for i in range(n) for x in (8 * i + 1, 8 * i + 4, 8 * i + 5, 8 * i + 8)]
               + [8 * n + 1, 8 * n + 2, 8 * n + 5, 8 * n + 6, 8 * n + 9])
     key = rc._key(1) if name == "forged-ledger" else rc._key(0)

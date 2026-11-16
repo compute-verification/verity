@@ -19,8 +19,8 @@ verifier's check that a served window's coins are that challenger's.
   shows in order. A window whose coins came from a challenger the prover holds (the in-process ``coins`` and ``rounds``
   of tests, or a host of the prover's), whose log no one signed, or whose ledger is signed under another key, is cut
   before the session's end or opens a second session for the window, is refused. The window's sampling coin comes from a
-  sample session of its own (`window.DRAW_FAMILIES`, `pouw_h1_draw.draw_session_reason`), the one the ledger opens on
-  `pouw_h1_requests.draw_root` over its manifest, last receipts and every round's root and coin, opened withheld
+  sample session of its own (`window.SAMPLE_FAMILIES`, `pouw_h1_sample.sample_session_reason`), the one the ledger opens on
+  `pouw_h1_requests.sample_root` over its manifest, last receipts and every round's root and coin, opened withheld
   (`challenger.withheld_on`): its challenger released its coin root only after that root, the prover's commitment.
   Its coin must have been opened once, after that root: a sample opened early, from another session or family,
   from a session the ledger didn't open withheld, or never, is refused.
@@ -61,8 +61,8 @@ verifier's check that a served window's coins are that challenger's.
   after its coins).
 * **Credit** is core's rules of record (`verity.protocols.resource_accounting.compute.pouw.verifier.credit`), called through its one composed
   entry, never copied or run step by step. A period's open commits its circuit, the SHA-512 of the declared window
-  Program's descriptor (`pouw_h1_served.descriptor`), its sample size K (``draw_k``, `draw_k`: the proof system's selection
-  at `DRAW_EPS` for the credited share `EXPECTED_CREDIT`), each K's circuit file (``circuit_files``) and its
+  Program's descriptor (`pouw_h1_served.descriptor`), its sample size K (``sample_k``, `sample_k`: the proof system's selection
+  at `SAMPLE_EPS` for the credited share `EXPECTED_CREDIT`), each K's circuit file (``circuit_files``) and its
   registered weights' root (`credit.WEIGHTS_FIELD`, the gate's ``--weights-root``) before sampling. A window's credit
   (`credit_reason`) is core's `credit.window` on its evidence (`window_evidence`: its registered ``entries``, and each
   sampled call's `statement`, proof files that credit verifies with the verifier itself, never a verdict) and
@@ -112,10 +112,10 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sample import (
-    NO_DRAW_SESSION,
-    draw_files,
-    draw_reason,
-    draw_session_reason,
+    NO_SAMPLE_SESSION,
+    sample_files,
+    sample_reason,
+    sample_session_reason,
 )
 
 SCHEME = Wd.LIVE_SCHEME
@@ -125,21 +125,21 @@ SESSION_FIELDS = ("session", "seq", "root", "commitment")
 REPLY_FIELDS = ("host", "port", "peer", "by", "for", "reserve", "opened_by", "secret")
 _ROOT = re.compile(r"^[0-9a-f]{128}$")
 _SECRET = re.compile(r"^[0-9a-f]{64}$")
-#: the ε the proof system sets its committed sample size K for (`draw_k`), at core's δ = 2^-40 (`credit.DELTA`), and the
+#: the ε the proof system sets its committed sample size K for (`sample_k`), at core's δ = 2^-40 (`credit.DELTA`), and the
 #: share of a window's work it expects credited; the verifier reports the ε a window's sample established, not this one
-DRAW_EPS = Fraction(1, 1000)
+SAMPLE_EPS = Fraction(1, 1000)
 EXPECTED_CREDIT = Fraction(8, 9)
 
 
 def families(steps: int) -> str:
     """The challenger's ``FAMILIES`` for a window of `steps` rounds: a live epoch's salt and round coins. Its sampling coin
-    is a session of its own (`draw_families`)."""
+    is a session of its own (`sample_families`)."""
     return json.dumps([list(f) for f in Wd.live_families(steps)])
 
 
-def draw_families() -> str:
-    """The challenger's ``FAMILIES`` for a window's sample session: its sampling coin alone (`window.DRAW_FAMILIES`)."""
-    return json.dumps([list(f) for f in Wd.DRAW_FAMILIES])
+def sample_families() -> str:
+    """The challenger's ``FAMILIES`` for a window's sample session: its sampling coin alone (`window.SAMPLE_FAMILIES`)."""
+    return json.dumps([list(f) for f in Wd.SAMPLE_FAMILIES])
 
 
 def address(raw: Any) -> str | None:
@@ -204,15 +204,15 @@ def pinned_key(path: str | Path, public_sha512: str) -> ChallengerKey:
 
 def _window_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: list[str], pins: Any, main: Any,
                    window: Mapping[str, Any], files: Mapping[str, Any], trusted: LiveCommitment,
-                   session: str, verify: Any, draw_files: Any) -> str | None:
+                   session: str, verify: Any, sample_files: Any) -> str | None:
     """Why the window's coins (its H1 commitment `commits`) aren't those of the session `session`, the one the auditor's
     ledger `lines` (core's check of it under `key`) opened for `window` (``{root}``), whose files are `files` and whose
     signed coin commitment is `trusted`: its salt coin opened after the window's own open root
     (`core_check.salt_of_record`, S from the ledger's reserve and R from its open), its round log held to
     `core_check.rounds`, each reading the session only
     when the host's pins log `pins` records its open's pin and the verifier's first-parent history of main `main` holds
-    it (`challenger.pinned_session`), and its sampling coin its sample session's, whose files are `draw_files`
-    (`draw_session_reason`); None when they are."""
+    it (`challenger.pinned_session`), and its sampling coin its sample session's, whose files are `sample_files`
+    (`sample_session_reason`); None when they are."""
     for name in ("round_coins", "coins"):
         try:
             c = LiveCommitment.from_json(commits.get(name))
@@ -240,7 +240,7 @@ def _window_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: list[s
                         [x.get("coin") for x in log], verify)
     if refused is not None:
         return f"the window's rounds: {refused[1]}"
-    return draw_session_reason(commits, key, lines, pins, main, draw_files, verify)
+    return sample_session_reason(commits, key, lines, pins, main, sample_files, verify)
 
 
 def pins_of(heads: Any) -> list[str] | None:
@@ -273,10 +273,10 @@ def pins_head(paths: Sequence[str | Path] | None) -> list[str] | None:
 def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, heads: Sequence[str | Path],
                           window: Mapping[str, Any], key: ChallengerKey, verify: Any = lms_verify, *,
                           pins: Sequence[str | Path] | None, main: Sequence[str] | None,
-                          draw_directory: str | Path | None = None) -> str | None:
+                          sample_directory: str | Path | None = None) -> str | None:
     """Why the window's coins (its H1 commitment `commits`: ``coins``, ``round_coins``, ``salt_opening``, ``weights_root``,
-    ``requests_root``, ``session``, ``steps``, the round log ``rounds`` and the ``draw``) aren't the verifier's own
-    challenger's, read from `directory` (its sampling coin from `draw_directory`, its sample session's, `draw_session_reason`;
+    ``requests_root``, ``session``, ``steps``, the round log ``rounds`` and the ``sample``) aren't the verifier's own
+    challenger's, read from `directory` (its sampling coin from `sample_directory`, its sample session's, `sample_session_reason`;
     None names none, and the sample is refused), the session the auditor's signed ledger opens and ends for `window` (``{root}``,
     the window's open root), under `key`, the challenger key the deployment pins, the ledger the longest of the heads
     infra published at `heads` (each a ``windows.jsonl``), any two extending one another, and run from a commit the
@@ -290,12 +290,12 @@ def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, hea
         trusted, _received = remote.trusted_session(directory, heads, window, key, verify)
         lines = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
         files = remote.session_files(directory)
-        draw_files = None if draw_directory is None else remote.session_files(draw_directory)
+        sample_files = None if sample_directory is None else remote.session_files(sample_directory)
         log, main = pins_head(pins), _listed(main)
         sid = pinned_session(lines, window, key, log, main, verify).session
     except CoinError as e:
         return f"the challenger's session is not trusted: {e}"
-    return _window_reason(commits, key, lines, log, main, window, files, trusted, sid, verify, draw_files)
+    return _window_reason(commits, key, lines, log, main, window, files, trusted, sid, verify, sample_files)
 
 
 @dataclass(frozen=True)
@@ -426,7 +426,7 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     holds it, which the window's must be. A Pearl-C pass's (``scheme`` one of `pouw_pearl_c_device.SCHEMES`) session
     is held to its salt session instead (`salt_session_reason`). Fails closed."""
     if commits.get("coin_source") != "challenger":
-        return ("the window's coins were held in the serving process, not drawn by the auditor device's challenger (the pouw "
+        return ("the window's coins were held in the serving process, not sampled by the auditor device's challenger (the pouw "
                 "setting 'challenger'), so no session binds them")
     if commits.get("scheme") in PPD.SCHEMES:
         return salt_session_reason(commits, ledger, fetch, registered, commit, verify)
@@ -441,7 +441,7 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     except CoinError as e:
         return f"session {sid} is not trusted: {e}"
     return _window_reason(commits, ledger.key, list(ledger.lines), _listed(ledger.pins), _listed(ledger.main),
-                          {"root": root}, files, trusted, sid, verify, draw_files(commits, ledger, fetch, verify))
+                          {"root": root}, files, trusted, sid, verify, sample_files(commits, ledger, fetch, verify))
 
 
 def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, registered: bytes | None = None,
@@ -525,7 +525,7 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str], presente
     a window of it with no accepted window, which ended complete, so released every coin: a window abandoned after its
     coins, which a prover keeps only when it liked them. With `presented`, the window roots the verifier is shown, in
     order, also core's rules of record: `credit.period` (exactly the close's windows, in its order, the close complete)
-    and `credit.committed_k` (the open committed ``draw_k``), each refusal as ``code: why``; a period's credit itself is
+    and `credit.committed_k` (the open committed ``sample_k``), each refusal as ``code: why``; a period's credit itself is
     `period_credit`'s."""
     p = ledger.periods.get(period)
     if p is None:
@@ -611,8 +611,8 @@ def program_salt_of(c: Mapping[str, Any]) -> bytes:
                                    bytes.fromhex(c["weights_root"])))
 
 
-def draw_k(layout: Any, eps: Fraction = DRAW_EPS, credited: Fraction = EXPECTED_CREDIT) -> int:
-    """The K the proof system commits as ``draw_k`` in a period's open, before sampling, for windows of `layout` (the
+def sample_k(layout: Any, eps: Fraction = SAMPLE_EPS, credited: Fraction = EXPECTED_CREDIT) -> int:
+    """The K the proof system commits as ``sample_k`` in a period's open, before sampling, for windows of `layout` (the
     period's declared Program's, `pouw_h1_served.declared_layout`, what `credit.layout_of` reads from its descriptor):
     `window.k_prime` at `eps` and core's δ (`credit.DELTA`) over the window's work W, the credited work the share
     `credited` of it (⌊credited·W⌋, the fraction the service expects credited, unknown at the open), at most the
@@ -634,23 +634,23 @@ def _layout(descriptor: Any) -> tuple[dict | None, Any]:
     return CR.layout_of(bytes(descriptor))
 
 
-def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descriptor: bytes | None
+def sampled_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descriptor: bytes | None
              ) -> tuple[list[int] | None, Any]:
     """The proof blocks core samples from the window `record` (`pouw_h1.CALLS_FILE`) at K = `k`, and None; or None and core's
-    refusal: `credit.drawn` of its sampling coin over the layout of `descriptor` (`credit.layout_of`, the bytes of the
+    refusal: `credit.sampled` of its sampling coin over the layout of `descriptor` (`credit.layout_of`, the bytes of the
     circuit its period committed, `pouw_h1_served.descriptor`), on the served window's arguments (stream the window's
-    root, ``window.root``, registration its `draw_root`, receipt ``{"receipts": draw.receipts}``), as `credit.window`
+    root, ``window.root``, registration its `sample_root`, receipt ``{"receipts": sample.receipts}``), as `credit.window`
     samples it. The coin is read, not checked: `credit_reason` checks it."""
     layout, why = _layout(descriptor)
     if why is not None:
         return None, why
     try:
         given = _commitment(record).get("draw")
-        draw: Mapping[str, Any] = given if isinstance(given, Mapping) else {}
-        coin = LiveOpening.from_json(draw.get("coin")).coin.hex()
+        sample: Mapping[str, Any] = given if isinstance(given, Mapping) else {}
+        coin = LiveOpening.from_json(sample.get("coin")).coin.hex()
     except CoinError as e:
-        return None, ("draw", f"the window's draw coin is malformed ({e})")
-    return CR.drawn(coin, window.get("root"), draw.get("root"), {"receipts": draw.get("receipts")}, layout, k)
+        return None, ("draw", f"the window's sampling coin is malformed ({e})")
+    return CR.sampled(coin, window.get("root"), sample.get("root"), {"receipts": sample.get("receipts")}, layout, k)
 
 
 def statement(call: int, circuit: str | Path, public: str | Path, sessions: Sequence[str | Path]) -> dict[str, Any]:
@@ -667,10 +667,10 @@ def statement(call: int, circuit: str | Path, public: str | Path, sessions: Sequ
 def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Sequence[str | Path], window: Mapping[str, Any],
                   key: ChallengerKey, descriptor: bytes | None, statements: Any = (), k: int | None = None,
                   verify: Any = lms_verify, run: Any = None, *, pins: Sequence[str | Path] | None,
-                  main: Sequence[str] | None, live: Any = None, draw_directory: str | Path | None = None
+                  main: Sequence[str] | None, live: Any = None, sample_directory: str | Path | None = None
                   ) -> dict[str, Any]:
     """One window's credit by core's one composed entry (`credit.window`) on its evidence (`window_evidence`:
-    its record `pouw_h1.CALLS_FILE`, its session `directory`, its sample's session `draw_directory`, `window` ``{root}``,
+    its record `pouw_h1.CALLS_FILE`, its session `directory`, its sample's session `sample_directory`, `window` ``{root}``,
     `descriptor`, the bytes of the circuit
     its period committed, its sampled calls' `statements` and its `live` evidence), under the ledger at `heads` and `key`,
     its session run from a commit the pins log at `pins` records (`pins_head`) on the verifier's own first-parent history
@@ -682,8 +682,8 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
     challenger's, every A table the tree its round root commits, each K's ``b/<K>`` the weights its period's open
     signed (``weights``), the proof blocks the sampling coin samples at K, each verified from its statement's proof files, and the
     window's registration, each sampled session opening its A and its K's ``b/<K>``, and each round's live@<s> proving its
-    step's served rows, ``live``); ``k``; ``drawn``, the proof blocks core
-    samples (`drawn_of`); ``calls``, the credited calls (a call whose step served no rows is none); ``eps``, what the
+    step's served rows, ``live``); ``k``; ``sampled``, the proof blocks core
+    samples (`sampled_of`); ``calls``, the credited calls (a call whose step served no rows is none); ``eps``, what the
     sample established at δ over their served rows' work (`credit.established`); and ``credit``, the calls only when every refusal is None. A period's credit is
     `period_credit`'s."""
     out: dict[str, Any] = {"manifest": manifest_reason(record), "window": None, "calls": None, "k": k, "drawn": None,
@@ -692,20 +692,20 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
         lines = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
         log, main = pins_head(pins), _listed(main)
         audited = pinned_session(lines, window, key, log, main, verify)
-        ev = window_evidence(record, directory, window, statements, descriptor or b"", live, draw_directory)
+        ev = window_evidence(record, directory, window, statements, descriptor or b"", live, sample_directory)
     except (CoinError, ValueError) as e:
         out["window"] = ("coin", f"the window's coins, session or salt can't be read ({e})")
     else:
         why = None if audited.period is not None else (
             "budget", (f"the window is in no period of the auditor's ledger, so no period-open committed the K it is "
-                       f"drawn with ({CR.K_FIELD}): reserve its session inside a period"))
+                       f"sampled with ({CR.K_FIELD}): reserve its session inside a period"))
         files = rows = None
         if why is None and out["k"] is None:
             out["k"], why = CR.committed_k(lines, audited.period)
         if why is None:
             rows, why = CR.committed_rows(lines, audited.period)
         if why is None:
-            out["drawn"] = drawn_of(record, window, out["k"], descriptor)[0]
+            out["drawn"] = sampled_of(record, window, out["k"], descriptor)[0]
             files, why = CR.committed_files(lines, audited.period)
         if why is None:
             out["calls"], why = CR.window(key.to_json(), lines, log, main, ev["window"], ev["session"],
@@ -722,11 +722,11 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
 
 
 def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Mapping[str, Any], statements: Any,
-                    descriptor: bytes, live: Any = None, draw_directory: str | Path | None = None) -> dict[str, Any]:
+                    descriptor: bytes, live: Any = None, sample_directory: str | Path | None = None) -> dict[str, Any]:
     """One window's evidence as core's `credit.window` and `credit.period_credit` read it (`credit.WINDOW_KEYS`), from its
     record (`pouw_h1.CALLS_FILE`: its manifest, salt, round log, sample, its served Commit's record ``commit`` and
     registered ``entries``, every call table and the period's ``b/<K>``), its session's ``out/`` `directory`, its sample
-    session's ``out/`` `draw_directory`, the sample's ``session`` (None: none, which credit refuses), its sampled
+    session's ``out/`` `sample_directory`, the sample's ``session`` (None: none, which credit refuses), its sampled
     calls' `statements` (`statement`: proof files, never verdicts), `descriptor`, the bytes of the circuit its period
     committed (`pouw_h1_served.descriptor`), and `live`, its live Program's evidence (`credit.LIVE_STATEMENTS`: the live
     descriptor in hex and each round's live@<s> proof files), which credit refuses when absent.
@@ -740,11 +740,11 @@ def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Ma
         salt = program_salt_of(c).hex()
     except (CoinError, KeyError, TypeError) as e:
         raise ValueError(f"the window's served trees or salt can't be read ({e})") from e
-    draw = c.get("draw")
-    if isinstance(draw, Mapping) and draw_directory is not None:
-        draw = {**draw, "session": remote.session_files(draw_directory)}
+    sample = c.get("draw")
+    if isinstance(sample, Mapping) and sample_directory is not None:
+        sample = {**sample, "session": remote.session_files(sample_directory)}
     return {"calls": list(record.get("calls") or ()), "commit": c.get("commit"), "descriptor": bytes(descriptor).hex(),
-            "draw": draw,
+            "draw": sample,
             "entries": list((served or {}).get("entries") or ()), "live": live, "rounds": c.get("rounds"), "salt": salt,
             "served": digest, "session": remote.session_files(directory), "statements": list(statements),
             "window": dict(window)}
@@ -754,7 +754,7 @@ def period_credit(ledger: Ledger, period: str, windows: Sequence[Mapping[str, An
                   run: Any = None) -> tuple[dict | None, Any]:
     """Period `period`'s credit and None, or None and the refusal: core's `credit.period_credit` over the auditor's
     `ledger` and each window's evidence (`window_evidence`), which must be exactly the windows the period's close lists,
-    in its order, the close complete, its open's ``draw_k``, circuit files and weights' root committed, and every window
+    in its order, the close complete, its open's ``sample_k``, circuit files and weights' root committed, and every window
     credited at that K, its ``b/<K>`` the period's weights, each window's session run from a commit the ledger's pins
     log records on its `main` (core's `challenger.credited_session`, ``circuit``), and each sampled proof block verified from its
     statement's proof files by `run` (default credit's verifier). The credit is ``{windows, work, k, delta,
@@ -763,8 +763,8 @@ def period_credit(ledger: Ledger, period: str, windows: Sequence[Mapping[str, An
                             period, [dict(w) for w in windows], verify, **({} if run is None else {"run": run}))
 
 
-__all__ = ["DRAW_EPS", "EXPECTED_CREDIT", "Fetch", "Ledger", "NO_DRAW_SESSION", "REPLY_FIELDS", "SCHEME", "SESSION_FIELDS",
-           "address", "carried", "credit_reason", "draw_families", "draw_files", "draw_k", "draw_reason",
-           "draw_session_reason", "drawn_of", "evidence", "families", "held", "lms_verify",
+__all__ = ["SAMPLE_EPS", "EXPECTED_CREDIT", "Fetch", "Ledger", "NO_SAMPLE_SESSION", "REPLY_FIELDS", "SCHEME", "SESSION_FIELDS",
+           "address", "carried", "credit_reason", "sample_families", "sample_files", "sample_k", "sample_reason",
+           "sample_session_reason", "sampled_of", "evidence", "families", "held", "lms_verify",
            "manifest_reason", "period_credit", "period_reason", "pinned_key", "pins_head", "pins_of", "program_salt_of",
            "salt_session_reason", "session_of", "session_reason", "statement", "trusted_rounds_reason", "window_evidence"]

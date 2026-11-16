@@ -41,7 +41,7 @@ from tests.protocols.test_pouw_h1_commit import ROWS, STEPS, K, Model
 from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import sampled as DRAWN
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import sampled as SAMPLED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import sampled_rows as DR
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
@@ -231,7 +231,7 @@ def served(tmp_path, monkeypatch):
     PC.build(d / "h1", tmp_path / "circuits", only=(K,),
              lower=lambda k, tile, bind, path, j10r=False: PC._lower(k, tile[0], tile[1], bind, path, j10r))
     _inputs(arm, tmp_path)
-    DR = DRAWN
+    DR = SAMPLED
     if not REAL:
         monkeypatch.setattr(DR, "reference_check", lambda *a: None)
         monkeypatch.setattr(DR, "call_receipts", _stand_in_receipts)
@@ -271,7 +271,7 @@ def lanes_served(tmp_path, monkeypatch):
     assert sorted(doc["files"]) == sorted([CR.LEAF_PROGRAMS, f"{LL.COMBINE}{LK}", f"{LL.LANE}{LK}"])
     assert CR.lanes_files(doc["files"]) is None
     _inputs(arm, tmp_path)
-    return DRAWN, d, tmp_path
+    return SAMPLED, d, tmp_path
 
 
 def _stage(DR, d, tmp, weights_key=None, recompose=False):
@@ -458,7 +458,7 @@ def test_a_windows_calls_are_staged_only_on_the_circuit_files_its_period_committ
     v1 = {**win, "shape": {**win["shape"], "tiles": {**tiles, K: {**tiles[K], "j10r": False}}}}
     assert refusal(window=v1) == (f"REFUSED: K = {K}'s template is not J10-R's: drawn stages J10-R units on a k<K> "
                                   f"file, and a v1 unit as its lanes (pouw_h1_circuits --lanes {K})\n")
-    call = min(DR.drawn_calls(win, _PeriodAuditor.K))
+    call = min(DR.sampled_calls(win, _PeriodAuditor.K))
     _file, why = CR.registered_file(win["program"], win["layout"], win["shape"], call, {}, win["root"], win["steps"],
                                     win["salt"])
     assert why is not None
@@ -469,18 +469,18 @@ def test_a_call_statements_port_that_is_no_registered_read_is_refused_by_name():
     """`drawn.complete` is the Lean verifier's ``registered reads (complete)``: every port of the statement's circuit is
     a port of credit's ``--registered`` file. o0, the receipt, is refused with the serving flag that registers it."""
     ports = ["a_k64_0", "b_k64_0", "zy", "pub", "o0", "o1"]
-    DRAWN.complete(ports, {"ports": dict.fromkeys(ports, {})}, 3)
-    with pytest.raises(DRAWN.Refused, match=r"call 3's statement's port o0 is no port of credit's registered reads.*"
+    SAMPLED.complete(ports, {"ports": dict.fromkeys(ports, {})}, 3)
+    with pytest.raises(SAMPLED.Refused, match=r"call 3's statement's port o0 is no port of credit's registered reads.*"
                                             r"receipt@3.*--h1-receipts"):
-        DRAWN.complete(ports, {"ports": dict.fromkeys([p for p in ports if p != "o0"], {})}, 3)
-    with pytest.raises(DRAWN.Refused, match="port zy is no port of credit's registered reads") as e:
-        DRAWN.complete(ports, {"ports": dict.fromkeys(["a_k64_0", "b_k64_0", "pub", "o1"], {})}, 3)
+        SAMPLED.complete(ports, {"ports": dict.fromkeys([p for p in ports if p != "o0"], {})}, 3)
+    with pytest.raises(SAMPLED.Refused, match="port zy is no port of credit's registered reads") as e:
+        SAMPLED.complete(ports, {"ports": dict.fromkeys(["a_k64_0", "b_k64_0", "pub", "o1"], {})}, 3)
     assert "--h1-receipts" not in str(e.value)
     z = {"units": np.array([5, 6]), "r_o0": np.array([0, 1]), "v_o0": np.array(["receipt@0"] * 2),
          "w_o0": np.array([[1, 2], [3, 4]], np.uint16)}
-    DRAWN.outputs_held(z, {"o0": z["w_o0"]})
-    with pytest.raises(DRAWN.Refused, match="unit 6: its o0 is not row 1 of receipt@0, which the window registered"):
-        DRAWN.outputs_held(z, {"o0": np.array([[1, 2], [3, 5]], np.uint16)})
+    SAMPLED.outputs_held(z, {"o0": z["w_o0"]})
+    with pytest.raises(SAMPLED.Refused, match="unit 6: its o0 is not row 1 of receipt@0, which the window registered"):
+        SAMPLED.outputs_held(z, {"o0": np.array([[1, 2], [3, 5]], np.uint16)})
 
 
 @pytest.mark.slow
@@ -517,7 +517,7 @@ def test_a_lanes_form_ks_sampled_proof_blocks_are_staged_as_their_lanes_and_comb
     it."""
     DR, d, tmp = lanes_served
     win = DR.window_of(d, 0)
-    drawn = sorted(u for us in DR.drawn_calls(win, _PeriodAuditor.K).values() for u in us)
+    drawn = sorted(u for us in DR.sampled_calls(win, _PeriodAuditor.K).values() for u in us)
     assert _stage(DR, d, tmp, weights_key=tmp / "wkey") == 0, capsys.readouterr().err
     plan = json.loads((tmp / "work" / DR.PLAN).read_text())
     assert plan["calls"] == [] and sorted({x["unit"] for x in plan["leaves"]}) == drawn

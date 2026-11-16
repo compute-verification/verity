@@ -43,34 +43,34 @@ cases, rc, h1 = (sys.modules[n] for n in ("pouw_credit_cases", "pouw_rounds_case
 
 SEEDS = range(3)
 #: a sample root no withheld session opened on: its sampling coin was never sampled after it
-NO_DRAW_SESSION = "the draw's session is not trusted: the auditor's ledger opens no challenger session for this window"
+NO_SAMPLE_SESSION = "the sample's session is not trusted: the auditor's ledger opens no challenger session for this window"
 
 #: each `_credited` mutation's refusal: its code and its reason's start
 CREDIT_EXPECT = {
-    "changed": ("coin", NO_DRAW_SESSION), "withdrawn": ("coin", NO_DRAW_SESSION), "row-changed": ("coin", NO_DRAW_SESSION),
-    "stale-root": ("draw", Cr.DRAW_ROOT), "no-bit": ("credit", "manifest row "), "bit-form": ("credit", "manifest row "),
+    "changed": ("coin", NO_SAMPLE_SESSION), "withdrawn": ("coin", NO_SAMPLE_SESSION), "row-changed": ("coin", NO_SAMPLE_SESSION),
+    "stale-root": ("draw", Cr.SAMPLE_ROOT), "no-bit": ("credit", "manifest row "), "bit-form": ("credit", "manifest row "),
     "no-z": ("credit", "call "), "index": ("manifest", "manifest row "), "row-form": ("manifest", "manifest row "),
     "calls-form": ("manifest", Cr.CALLS_FORM), "salt-form": ("manifest", Cr.SALT_FORM),
     "served-form": ("manifest", Cr.SERVED_FORM), "commit-form": ("commit", Cr.COMMIT_FORM), "rounds-form": ("rounds", ""),
-    "draw-form": ("draw", Cr.DRAW_FORM),
-    "no-draw": ("draw", Cr.NO_DRAW), "draw-coin": ("coin", "the draw coin: "),
+    "draw-form": ("draw", Cr.SAMPLE_FORM),
+    "no-draw": ("draw", Cr.NO_SAMPLE), "draw-coin": ("coin", "the sampling coin: "),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
-    "forged-ledger": ("coin", "the draw's session is not trusted: "),
-    "unpinned": ("coin", "the draw's session is not trusted: session "),
-    "branch-pin": ("coin", "the draw's session is not trusted: session "),
-    "unwithheld": ("coin", Ch.WITHHELD), "draw-elsewhere": ("coin", NO_DRAW_SESSION),
-    "draw-session": ("coin", "the draw's session is not trusted: "), "draw-after-other": ("draw", Cr.CHANGED),
+    "forged-ledger": ("coin", "the sample's session is not trusted: "),
+    "unpinned": ("coin", "the sample's session is not trusted: session "),
+    "branch-pin": ("coin", "the sample's session is not trusted: session "),
+    "unwithheld": ("coin", Ch.WITHHELD), "draw-elsewhere": ("coin", NO_SAMPLE_SESSION),
+    "draw-session": ("coin", "the sample's session is not trusted: "), "draw-after-other": ("draw", Cr.CHANGED),
 }
 #: a session pinned to a logged commit off main's first-parent line
 OFF_MAIN = "which the host's pins log records but which is not on main's first-parent line"
-NOT_DRAWN = "has a proof outcome and was not drawn"
+NOT_SAMPLED = "has a proof outcome and was not drawn"
 NO_SERVED = "states no served rows m_s at most the period's T = "
 OTHER_SERVED = "every dense call of a step serves the step's m_s rows"
 UNTIED = "whose rows each round's root committed"
 NOT_COMMITS = "is not the Commit's "
 NOT_RECEIVED = "the round roots are not the roots the challenger's log shows it received, in order"
 FEWER = "units are fewer than K = "
-NO_K = "commits no draw K (draw_k"
+NO_K = "commits no sample K (sample_k"
 OTHER_REGISTRATION = "'s domain is not the one the window's registration gives it"
 OTHER_ROOT = "against another root than the one the window registered for"
 OTHER_PERIOD_WEIGHTS = "open signed: a B row's codes or s_w differ from the ones the period registered"
@@ -82,32 +82,32 @@ LIVE_FINDING = "proof opened other ports, values or roots than its statement rea
 TILE_K = "is outside the K its proof covers, multiples of 32 below 131072 (the K its GemmAccumulatorS8 binds): "
 SPLIT = ("split its linears' k range into linears of at most K = 131040 each, each padded with zero codes to a "
          "multiple of 32")
-DRAWN_EXPECT = {
-    "coin-form": ("draw", Cr.COIN_FORM), "args-form": ("draw", Cr.DRAW_ARGS), "layout-form": ("layout", Cr.LAYOUT_FORM),
+SAMPLED_EXPECT = {
+    "coin-form": ("draw", Cr.COIN_FORM), "args-form": ("draw", Cr.SAMPLE_ARGS), "layout-form": ("layout", Cr.LAYOUT_FORM),
     "named-twice": ("layout", "is named twice"), "unknown-linear": ("layout", "which is no linear of the window"),
     "uncalled": ("layout", "is never called"), "slot": ("layout", "(h1window.slot)"),
     "kn": ("layout", "n whole blocks of the tile's"), "blocks": ("layout", "is read by some call of K"),
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
-WINDOW_DRAWN_EXPECT = {
-    "coin-form": ("coin", "the draw coin: " + Ch.OPENING_FORM), "args-form": ("draw", Cr.DRAW_ARGS),
+WINDOW_SAMPLED_EXPECT = {
+    "coin-form": ("coin", "the sampling coin: " + Ch.OPENING_FORM), "args-form": ("draw", Cr.SAMPLE_ARGS),
     "descriptor-hex": ("layout", Cr.DESCRIPTOR_HEX), "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
 OUTCOME_EXPECT = {
     "missing": ("missing", "Prove and verify every drawn unit"), "failed": ("failed", "refuses the whole window"),
-    "twice": ("outcome", "a retry never reproves it"), "undrawn": ("outcome", NOT_DRAWN), "chosen": ("outcome", NOT_DRAWN),
+    "twice": ("outcome", "a retry never reproves it"), "undrawn": ("outcome", NOT_SAMPLED), "chosen": ("outcome", NOT_SAMPLED),
     "proofs-form": ("outcome", Cr.PROOFS_FORM),
 }
 WINDOW_EXPECT = {
     "manifest-count": ("manifest", "each call of the window's Program is one manifest row"),
-    "chosen": ("outcome", NOT_DRAWN), "failed": ("failed", "no partial credit"), "missing": ("missing", "no partial credit"),
+    "chosen": ("outcome", NOT_SAMPLED), "failed": ("failed", "no partial credit"), "missing": ("missing", "no partial credit"),
     "descriptor-hex": ("layout", Cr.DESCRIPTOR_HEX), "descriptor-form": ("layout", Cr.DESCRIPTOR_FORM),
     "not-window": ("layout", Cr.NOT_WINDOW), "template": ("layout", "is not h1window's"),
     "tile-ks": ("layout", "h1window binds one template per K"), "body": ("layout", Cr.BODY),
     "layout-form": ("layout", Cr.LAYOUT_FORM), "record-layout": ("layout", "which is no linear of the window"),
     "alt-layout": ("layout", Cr.BODY), "reinterpret": ("layout", Cr.DESCRIPTOR_FORM), "tile-k": ("tile-k", TILE_K),
-    "credit-changed": ("coin", NO_DRAW_SESSION), "credit-no-draw": ("draw", Cr.NO_DRAW),
-    "credit-forged-ledger": ("coin", "the draw's session is not trusted"),
+    "credit-changed": ("coin", NO_SAMPLE_SESSION), "credit-no-draw": ("draw", Cr.NO_SAMPLE),
+    "credit-forged-ledger": ("coin", "the sample's session is not trusted"),
     "credit-branch-pin": ("coin", OFF_MAIN),
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
     "never-received": ("rounds", NOT_RECEIVED), "round-coin": ("coin", "coin was not opened after"),
@@ -138,7 +138,7 @@ WINDOW_EXPECT = {
     "req0-other-session": ("registration", "requests@0" + OTHER_REGISTRATION),
     "req0-window": ("registration", "requests@0" + OTHER_REGISTRATION),
     "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("a-link", "the window's layout gives it"),
-    "commit-unbound": ("draw", Cr.DRAW_ROOT), "credit-commit-form": ("commit", Cr.COMMIT_FORM),
+    "commit-unbound": ("draw", Cr.SAMPLE_ROOT), "credit-commit-form": ("commit", Cr.COMMIT_FORM),
     "rows-past": ("manifest", NO_SERVED), "rows-form": ("manifest", NO_SERVED), "rows-other": ("manifest", OTHER_SERVED),
     "length-none": ("length", "no-fixed-length"), "length-eos": ("length", "eos-keyed-row"),
     "length-form": ("length", "is not {max_tokens, stop}"), "length-past": ("length", "ran past its public max_tokens"),
@@ -179,7 +179,7 @@ PERIOD_EXPECT = {
     "bad-circuit": ("window", "so the period earns nothing: layout: "),
     "tile-k": ("window", "so the period earns nothing: tile-k: the window's tile at K = "),
     "never-received": ("window", "so the period earns nothing: rounds: " + NOT_RECEIVED),
-    "proof-other-registration": ("window", "so the period earns nothing: registration: drawn unit "),
+    "proof-other-registration": ("window", "so the period earns nothing: registration: sampled proof block "),
     "branch-pin": ("circuit", "doesn't count toward it, so the period earns nothing: session s-"),
     "no-weights": ("weights", UNSIGNED), "weights-form": ("weights", UNSIGNED),
     "no-model": ("weights", "open signs a weights' root but no model (model, {name, checkpoint_sha512})"),
@@ -223,8 +223,8 @@ def _credited(name: str, seed: int):
 
 def test_every_mutation_is_aimed():
     assert set(CREDIT_EXPECT) == set(cases.CREDIT_NAMES)
-    assert set(DRAWN_EXPECT) == set(cases.DRAWN_NAMES) - {"budget"}
-    assert set(WINDOW_DRAWN_EXPECT) == set(cases.WINDOW_DRAWN_NAMES)
+    assert set(SAMPLED_EXPECT) == set(cases.SAMPLED_NAMES) - {"budget"}
+    assert set(WINDOW_SAMPLED_EXPECT) == set(cases.WINDOW_SAMPLED_NAMES)
     assert set(OUTCOME_EXPECT) == set(cases.OUTCOME_NAMES)
     assert set(WINDOW_EXPECT) == set(cases.WINDOW_NAMES) - {"j10r"}
     assert set(PERIOD_EXPECT) == set(cases.PERIOD_NAMES)
@@ -297,13 +297,13 @@ def test_honest_window_credits_its_bits(seed):
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_credit_bit_changed_after_draw_is_refused(seed):
+def test_credit_bit_changed_after_sample_is_refused(seed):
     """A verdict withdrawn (or granted) after the sampling coin, the sample root recomputed over the new bits, is no root the
     ledger opened a withheld sample session on; a sampling coin opened after another root than the sample root is not the one
     the challenger's log shows the sample followed."""
     for name in ("withdrawn", "changed"):
         _, (got, refused) = _credited(name, seed)
-        assert got is None and refused == ("coin", NO_DRAW_SESSION)
+        assert got is None and refused == ("coin", NO_SAMPLE_SESSION)
     _, (got, refused) = _credited("draw-after-other", seed)
     assert got is None and refused == ("draw", Cr.CHANGED)
     assert "Commit every call's credit bit in its manifest row, and the Commit record, before the draw root" in refused[1]
@@ -317,7 +317,7 @@ def test_credited_call_needs_a_bit_and_a_z_root(seed):
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_failed_or_missing_drawn_unit_refuses_the_window(seed):
+def test_failed_or_missing_sampled_unit_refuses_the_window(seed):
     """No partial credit."""
     assert _outcome("honest", seed) is None
     missing, failed = _outcome("missing", seed), _outcome("failed", seed)
@@ -351,11 +351,11 @@ def test_outcome_mutation(name):
         assert refused[0] == code and part in refused[1], (seed, refused)
 
 
-@pytest.mark.parametrize("name", sorted(DRAWN_EXPECT))
-def test_drawn_mutation(name):
-    code, part = DRAWN_EXPECT[name]
+@pytest.mark.parametrize("name", sorted(SAMPLED_EXPECT))
+def test_sampled_mutation(name):
+    code, part = SAMPLED_EXPECT[name]
     for seed in range(5):
-        got, refused = _drawn(name, seed)
+        got, refused = _sampled(name, seed)
         assert got is None and refused[0] == code and part in refused[1], (seed, refused)
 
 
@@ -380,37 +380,37 @@ def _served(d: dict) -> list[int]:
     return [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT] and row[Cr.SERVED_ROWS] > 0]
 
 
-def _drawn(name: str, seed: int):
-    d = cases.drawn_instance(random.Random(f"{name}/{seed}"), name)
-    return Cr.drawn_twin(*(d[k] for k in cases.DRAWN_KEYS))
+def _sampled(name: str, seed: int):
+    d = cases.sampled_instance(random.Random(f"{name}/{seed}"), name)
+    return Cr.sampled_twin(*(d[k] for k in cases.SAMPLED_KEYS))
 
 
-def _window_drawn(name: str, seed: int):
-    d = cases.window_drawn_instance(random.Random(f"{name}/{seed}"), name)
+def _window_sampled(name: str, seed: int):
+    d = cases.window_sampled_instance(random.Random(f"{name}/{seed}"), name)
     if not (type(d["descriptor"]) is str and Cr._HEX.fullmatch(d["descriptor"])):
         return d, (None, ("layout", Cr.DESCRIPTOR_HEX))
     lay, why = Cr.layout_of(bytes.fromhex(d["descriptor"]))
     assert why is None, why
     ss, why = Cr.strata(lay)
     assert why is None, why
-    return d, Cr._window_drawn(d["window"], d["draw"], ss, d["k"])
+    return d, Cr._window_sampled(d["window"], d["draw"], ss, d["k"])
 
 
-@pytest.mark.parametrize("name", sorted(WINDOW_DRAWN_EXPECT))
-def test_window_drawn_mutation(name):
-    code, part = WINDOW_DRAWN_EXPECT[name]
+@pytest.mark.parametrize("name", sorted(WINDOW_SAMPLED_EXPECT))
+def test_window_sampled_mutation(name):
+    code, part = WINDOW_SAMPLED_EXPECT[name]
     for seed in range(5):
-        _d, (got, refused) = _window_drawn(name, seed)
+        _d, (got, refused) = _window_sampled(name, seed)
         assert got is None and refused[0] == code and part in refused[1], (seed, refused)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_the_window_draw_is_its_coins(seed):
-    """`credit._window_drawn` samples the units `credit.drawn` does at the sampling coin it opens, the window's root as the
+def test_the_window_sample_is_its_coins(seed):
+    """`credit._window_sampled` samples the units `credit.sampled` does at the sampling coin it opens, the window's root as the
     stream, the sample's root as the registration and its receipts, over the strata of the descriptor's layout."""
-    d, (got, refused) = _window_drawn("honest", seed)
+    d, (got, refused) = _window_sampled("honest", seed)
     lay, _ = Cr.layout_of(bytes.fromhex(d["descriptor"]))
-    want, why = Cr.drawn_twin(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
+    want, why = Cr.sampled_twin(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
                          {"receipts": d["draw"]["receipts"]}, lay, d["k"])
     assert refused is None and why is None and got == want
 
@@ -439,33 +439,33 @@ def _period(name: str, seed: int):
     return Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
 
 
-def test_a_draw_at_the_record_k():
+def test_a_sample_at_the_record_k():
     """At a committed K = `plan.RECORD_K` (the least K with (1 − ε)^K ≤ δ at ε = 0.1% and δ = 2⁻⁴⁰) over a larger
     population, the work sampling design samples K units, each stratum's k_s rounded up, so at most one more a stratum."""
     assert cases.PLAN_K == plan.RECORD_K == plan.record_k(plan.Fraction(1, 1000), plan.Fraction(1, 2 ** 40))
     for seed in range(2):
-        got, refused = _drawn("budget", seed)
-        ss, _ = Cr.strata(cases.drawn_instance(random.Random(f"budget/{seed}"), "budget")["layout"])
+        got, refused = _sampled("budget", seed)
+        ss, _ = Cr.strata(cases.sampled_instance(random.Random(f"budget/{seed}"), "budget")["layout"])
         assert refused is None and sum(hi - lo for s in ss for lo, hi in s["units"]) > plan.RECORD_K
         assert plan.RECORD_K <= len(got) < plan.RECORD_K + len(ss) and got == sorted(set(got))
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_the_drawn_units_are_the_draw_coins(seed):
-    """`credit.drawn` derives the sampled proof blocks from the sampling coin: each stratum's units are its own, its count the work
+def test_the_sampled_units_are_the_sample_coins(seed):
+    """`credit.sampled` derives the sampled proof blocks from the sampling coin: each stratum's units are its own, its count the work
     sampling design's k_s, and another coin, stream, registration or receipt samples another set; never a list handed in."""
-    d = cases.drawn_instance(random.Random(f"honest/{seed}"))
-    args = [d[k] for k in cases.DRAWN_KEYS]
-    got, refused = Cr.drawn_twin(*args)
+    d = cases.sampled_instance(random.Random(f"honest/{seed}"))
+    args = [d[k] for k in cases.SAMPLED_KEYS]
+    got, refused = Cr.sampled_twin(*args)
     ss, _ = Cr.strata(d["layout"])
     assert Cr.sampling_design(ss, d["k"]) is None
     assert refused is None and got == sorted(set(got))
     for s in ss:
         assert sum(any(lo <= u < hi for lo, hi in s["units"]) for u in got) == s["k"]
     big = {**d, "layout": cases.layout(random.Random(f"wide/{seed}"), big=True), "k": 100}
-    base, _ = Cr.drawn_twin(*(big[k] for k in cases.DRAWN_KEYS))
+    base, _ = Cr.sampled_twin(*(big[k] for k in cases.SAMPLED_KEYS))
     for k, v in (("coin", "ab" * 64), ("stream", "another"), ("registration", "cd" * 64), ("receipt", {"receipts": "x"})):
-        assert Cr.drawn_twin(*({**big, k: v}[x] for x in cases.DRAWN_KEYS))[0] != base, k
+        assert Cr.sampled_twin(*({**big, k: v}[x] for x in cases.SAMPLED_KEYS))[0] != base, k
 
 
 def test_the_strata_are_the_compiled_programs():
@@ -935,7 +935,7 @@ def test_a_proof_verified_against_another_registration_refuses(seed):
     got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert got is None and refused[0] == "registration" and OTHER_ROOT in refused[1]
     got, refused = _period("proof-other-registration", seed)
-    assert got is None and refused[0] == "window" and "registration: drawn unit " in refused[1]
+    assert got is None and refused[0] == "window" and "registration: sampled proof block " in refused[1]
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -981,7 +981,7 @@ def test_a_refused_outcome_credits_nothing_though_credited_would():
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_a_window_is_credited_only_with_every_drawn_unit_accepted(seed):
+def test_a_window_is_credited_only_with_every_sampled_unit_accepted(seed):
     d = cases.window_instance(random.Random(f"honest/{seed}"))
     got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert refused is None and got == _served(d)
@@ -1212,14 +1212,14 @@ def test_the_eps_holds_at_the_work_sampling_designs_cap():
     ss, why = Cr.strata(lay)
     assert why is None and Cr.sampling_design(ss, 2000) is None
     total = sum(s["work"] * (s["units"][0][1] - s["units"][0][0]) for s in ss)
-    drawn = [(s["units"][0][1] - s["units"][0][0], s["work"], s["k"]) for s in ss]
-    assert total == 1_001_000 and drawn == [(1000, 1, 2), (1000, 1000, 1000)]
+    sampled = [(s["units"][0][1] - s["units"][0][0], s["work"], s["k"]) for s in ss]
+    assert total == 1_001_000 and sampled == [(1000, 1, 2), (1000, 1000, 1000)]
     eps = Cr.established(lay, [0, 1], [1, 1], 2000)
     assert eps == Wd.eps_at(2000, Cr.DELTA, total, total, 1) and Fraction(137, 10_000) < eps < Fraction(138, 10_000)
-    assert _worst_miss(drawn, eps, total) <= Cr.DELTA
+    assert _worst_miss(sampled, eps, total) <= Cr.DELTA
     by_units = Wd.eps_at(2000, Cr.DELTA, total, 2000, 1000)
     assert by_units == Fraction(1, 1 << Wd.EPS_BITS)
-    assert _worst_miss(drawn, Fraction(500, total), total) > Fraction(1, 5) > Cr.DELTA
+    assert _worst_miss(sampled, Fraction(500, total), total) > Fraction(1, 5) > Cr.DELTA
 
 
 @pytest.mark.parametrize("light, heavy", [((1000, 1), (1000, 1000)), ((400, 1), (100, 100)), ((600, 2), (200, 300)),
@@ -1228,19 +1228,19 @@ def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
     """The ε of `eps_at(K, δ, C, n, w_max)`, the unit count n in place of the work W, is refuted wherever the work sampling design
     samples a stratum of light work only in part at K = n: there it reports 2^-32, and a set of light units holding that
     share of the work is missed with probability above 9/10. At the same sample the work form (C, W, 1) holds, every set
-    of its share missed with probability at most δ (`Properties.Pouw.Credit.WorkDrawMisses`)."""
+    of its share missed with probability at most δ (`Properties.Pouw.Credit.WorkSampleMisses`)."""
     (n_a, w_a), (n_b, w_b) = light, heavy
     lay = {"calls": [["a", 0], ["b", 0]], "linears": [["a", w_a, n_a], ["b", w_b, n_b]], "m": 1, "tile": [1, 1]}
     n = n_a + n_b
     ss, why = Cr.strata(lay)
     assert why is None and Cr.sampling_design(ss, n) is None
-    drawn = [(s["units"][0][1] - s["units"][0][0], s["work"], s["k"]) for s in ss]
-    total = sum(size * w for size, w, _k in drawn)
-    assert drawn[0][0] == n_a and drawn[0][2] < n_a and drawn[1][2] == n_b
+    sampled = [(s["units"][0][1] - s["units"][0][0], s["work"], s["k"]) for s in ss]
+    total = sum(size * w for size, w, _k in sampled)
+    assert sampled[0][0] == n_a and sampled[0][2] < n_a and sampled[1][2] == n_b
     by_units = Wd.eps_at(n, Cr.DELTA, total, n, w_b)
-    assert by_units == Fraction(1, 1 << Wd.EPS_BITS) and _worst_miss(drawn, by_units, total) > Fraction(9, 10)
+    assert by_units == Fraction(1, 1 << Wd.EPS_BITS) and _worst_miss(sampled, by_units, total) > Fraction(9, 10)
     eps = Cr.established(lay, [0, 1], [1, 1], n)
-    assert eps == Wd.eps_at(n, Cr.DELTA, total, total, 1) and _worst_miss(drawn, eps, total) <= Cr.DELTA
+    assert eps == Wd.eps_at(n, Cr.DELTA, total, total, 1) and _worst_miss(sampled, eps, total) <= Cr.DELTA
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -1249,11 +1249,11 @@ def test_a_period_open_with_no_k_refuses(seed):
     none, or a malformed one, earns nothing."""
     for name in ("no-k", "k-form"):
         got, refused = _period(name, seed)
-        assert got is None and refused[0] == "budget" and NO_K in refused[1] and "before any draw" in refused[1]
+        assert got is None and refused[0] == "budget" and NO_K in refused[1] and "before any sample" in refused[1]
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_a_drawn_count_other_than_k_refuses(seed):
+def test_a_sampled_count_other_than_k_refuses(seed):
     """A window is sampled at its period's committed K: one with fewer units than K (its sample would be sized at N, not
     K) is refused, and so is one whose proofs are of a sample at another K."""
     got, refused = _window("k-past-units", seed)

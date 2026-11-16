@@ -714,7 +714,7 @@ def test_the_split_call_is_the_hiding_call_with_each_tiles_inert_bound(dev):
     assert caps == [1] * tiles
 
 
-def test_a_drawn_tile_proves_its_strip_every_word_and_its_tally():
+def test_a_sampled_tile_proves_its_strip_every_word_and_its_tally():
     """`plan.tile_layout` under ``cap``: a tile's closure is itself, its TM `RowA` units, its strip, its TM·TN word units
     row by row, its TM rows' digests and sums and its tally, so a sample proves every cap word of each sampled tile
     (`Plan.proved`), never sampling one; the tile stratum alone carries W_ref.  With the cap off the layout is pc8's."""
@@ -734,10 +734,10 @@ def test_a_drawn_tile_proves_its_strip_every_word_and_its_tally():
     assert [(s.role, s.work) for s in lay.strata] == [("row_a", 0), ("strip", 0), ("word", 0), ("row_digest", 0),
                                                        ("row_tally", 0), ("tile", 4 * 1000), ("tally", 0)]
     for sampling_design in (plan.CountSamplingDesign(2), plan.WorkSamplingDesign(2)):
-        p = plan.draw(derive(bytes(32), plan.DRAW_DOMAIN, {"test": "cap"}), lay, sampling_design)
-        drawn = [u for u in p.drawn if us[u].role == "tile"]
-        assert drawn and set(p.proved) == set(p.drawn) | {i for t in drawn for i in lay.closure[t]}
-        for t in drawn:
+        p = plan.sample(derive(bytes(32), plan.SAMPLE_DOMAIN, {"test": "cap"}), lay, sampling_design)
+        sampled = [u for u in p.sampled if us[u].role == "tile"]
+        assert sampled and set(p.proved) == set(p.sampled) | {i for t in sampled for i in lay.closure[t]}
+        for t in sampled:
             assert sum(us[i].role == "word" for i in lay.closure[t]) == tm * tn
     off = plan.tile_layout(replace(SPLIT, cap=False), 1000)
     assert all(len(c) == 1 + tm for c in off.closure.values())

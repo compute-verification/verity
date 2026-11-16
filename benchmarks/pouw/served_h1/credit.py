@@ -190,7 +190,7 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
     """What every window proves, beside the uniform sample over its units."""
     admit_units = n_calls * (t // WORD)
     return {"population": population,
-            "draw": "uniform over every unit position of the window, live or dead, by the window's draw coin: public "
+            "draw": "uniform over every unit position of the window, live or dead, by the window's sampling coin: public "
                     "structure, never weighted by an annotation",
             "always_proved": {"admit": admit_units},
             "admit_unit": "PouwQueueAdmit on the step, 16 slots' queue entries (the slot map's leaf and each slot's "

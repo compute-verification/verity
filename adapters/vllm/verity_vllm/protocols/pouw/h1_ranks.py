@@ -42,7 +42,7 @@ from typing import Any
 import numpy as np
 from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveRecord
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-    COIN_DRAW,
+    COIN_SAMPLE,
     H1_CHALLENGER,
     H1_SCHEME,
     H1_TILE,
@@ -56,7 +56,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     Workload,
     commit_committed,
     commit_site,
-    draw_challenger,
+    sample_challenger,
     numpy_of,
     program_salt,
     to_host,
@@ -372,7 +372,7 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     installed, the window's salt from ``coins`` (an in-process `pouw.coins.Challenger`, as `pouw._install_h1` without a
     challenger) over every rank's weight roots, or opened by ``opener`` at round 0 (the challenger's), and the executor's
     ``execute_model`` wrapped (`Holder.admitting`). ``rounds`` is the round coins' `LiveRecord`; when ``coins`` are
-    given, the window's sampling coin is an in-process sample session's of ``rounds``' epoch (`window.draw_challenger`). A module is named by its rank at TP > 1 (``…qkv_proj@tp1``). ``served``
+    given, the window's sampling coin is an in-process sample session's of ``rounds``' epoch (`window.sample_challenger`). A module is named by its rank at TP > 1 (``…qkv_proj@tp1``). ``served``
     (`pouw_h1_served.Served`, without the period's `Weights` or a registry) registers the window's tables from the rows
     the ranks ship; ``commit`` (with ``served``, at PP 1, the engine's ``worker_extension_cls`` `COMMIT_EXTENSION`)
     puts the Commit on every rank, its keywords `acquire.h1_commit.RankCommit.h1rank_commit`'s, and ``served``'s tap is the
@@ -414,7 +414,7 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     if coins is not None:
         commitment, opening = coins.commitment, coins.open("salt", weights_root(roots))
         salt = program_salt(Epoch.start(declared, roots, commitment, opening).salt)
-        draw = (LiveRecord(draw_challenger(rounds.challenger.commitment.epoch, verifier_coins), COIN_DRAW)
+        draw = (LiveRecord(sample_challenger(rounds.challenger.commitment.epoch, verifier_coins), COIN_SAMPLE)
                 if rounds is not None else None)
         commits = {"coins": commitment.to_json(), "salt_opening": opening.to_json(),
                    **({"round_coins": rounds.challenger.commitment.to_json()} if rounds is not None else {})}

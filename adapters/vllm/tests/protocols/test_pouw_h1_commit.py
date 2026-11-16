@@ -997,7 +997,7 @@ class _Gate:
     """The challenger gate for a run of several windows (`pouw_h1_gpu.window_sessions`): each ``reserve`` is a challenge phase of its own
     on a challenger host of its own (`challenger_host.Host`, gated), all under one auditor key and one ledger, which
     reserves, opens and ends them in turn; a reserve of no `steps` is a window's sample's challenge phase, whose host, over
-    the sample's coins (`window.draw_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
+    the sample's coins (`window.sample_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
     window's open is signed at a leaf held from its reserve. Calling it is the gate's open (`pouw_h1_window.Gate`), the
     serving side reaches the challenge phase opened last, and ``ended`` is the challenge phase's ``status`` once its end
     is in the ledger."""
@@ -1030,7 +1030,7 @@ class _Gate:
         host = self.hosts[session]
         assert isinstance(host, int) == withhold, "a sampling session is opened withheld, a window's session never"
         if withhold:
-            host = self.hosts[session] = CH.Host(self.dir / session, Wd.draw_challenger(0, CH.entropy(host)), 1, session,
+            host = self.hosts[session] = CH.Host(self.dir / session, Wd.sample_challenger(0, CH.entropy(host)), 1, session,
                                                  self.leaves, self.ledger, gated=True, withhold=True)
         self.opened = host
         return host.open(session, root)
@@ -1102,13 +1102,13 @@ def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path,
         assert row["draw_session"]["ok"] and row["draw_session"]["end"]["complete"]
         assert PHC.trusted_rounds_reason(c, host.directory, [gate.ledger.path], host.window, host.key,
                                          pins=[gate.ledger.pins_path], main=CH.MAIN,
-                                         draw_directory=drawn.directory) is None
+                                         sample_directory=drawn.directory) is None
         received = R.released_roots(host.directory / R.RELEASES, host.challenger.commitment)
         assert received[Wd.SALT] == (bytes.fromhex(c["session"]["root"]),)
         assert received[Wd.ROUND] == tuple(bytes.fromhex(r["root"]) for r in c["rounds"]) and len(c["rounds"]) == STEPS
-        assert Wd.DRAW not in received
+        assert Wd.SAMPLE not in received
         draws = R.released_roots(drawn.directory / R.RELEASES, drawn.challenger.commitment)
-        assert draws[Wd.DRAW] == (bytes.fromhex(c["draw"]["root"]),) and c["draw"]["coin"]
+        assert draws[Wd.SAMPLE] == (bytes.fromhex(c["draw"]["root"]),) and c["draw"]["coin"]
     honest, zero = runs["commit"][2]["gate"], runs["commit-a-zero"][2]["gate"]
     served = sum(len(runs["commit"][1].owners[s]) for s in range(STEPS)) * 2
     assert honest["refused"]["calls"] == 0 and honest["gate_passed"]["rows"] == served and honest["coins"] == PH.CHALLENGER

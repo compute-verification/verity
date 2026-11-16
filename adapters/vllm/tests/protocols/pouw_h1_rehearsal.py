@@ -17,7 +17,7 @@ open's ``draw_k``, FILES ``{"k<K>": SHA-512}``, each stratum's file's, which cor
 against, `credit.committed_files`, and LENGTH `FILL`'s fixed length, `fill_length`, which core's credit holds the
 window's served rows to, `credit.committed_length`; cap 2, the window's challenge phase and its sample's), reserves the
 window's challenge phase (``reserve --peer PEER --scheme S --families F``) and its sample's (``--families`` the sampling
-coin alone, `pouw_h1_challenger.draw_families`), and serves
+coin alone, `pouw_h1_challenger.sample_families`), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
 --model MODEL --circuit DIGEST --challenger AT --session RESERVE --draw-session DRAW --gate GATE`` (the window's
 b/<K> salted with the key the
@@ -179,7 +179,7 @@ def declaration(layers: int = 32) -> tuple[list[tuple[int, int]], dict[int, str]
 
 def declared_draw_k(layers: int = 32) -> int:
     """The sample K the period's open commits (``--draw-k``, ``draw_k``) for the declared window: the proof system's
-    selection, `pouw_h1_challenger.draw_k` over `pouw_h1_served.declared_layout`, which `credit.strata` reads."""
+    selection, `pouw_h1_challenger.sample_k` over `pouw_h1_served.declared_layout`, which `credit.strata` reads."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
         h1 as PH,
     )
@@ -190,7 +190,7 @@ def declared_draw_k(layers: int = 32) -> int:
         served as SV,
     )
     shapes, modules = declaration(layers)
-    return PHC.draw_k(SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps))
+    return PHC.sample_k(SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps))
 
 
 def fill_length() -> dict:
@@ -417,7 +417,7 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
                     "--minutes", "30")
     if "refused" in reserved:
         raise ValueError(f"reserve: {reserved['refused']}")
-    drawn = gate("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(), "--minutes", "30",
+    drawn = gate("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.sample_families(), "--minutes", "30",
                  "--withhold")
     if "refused" in drawn:
         raise ValueError(f"reserve of the draw session: {drawn['refused']}")
@@ -429,11 +429,11 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     client = PHW.connect(PHW.at_port(at, answer.get("port")), answer)
     salt = client.open(Wd.SALT, 0, opened_on)
     log = [{**r, "coin": client.open(Wd.ROUND, s, bytes.fromhex(r["root"])).to_json()} for s, r in enumerate(honest["rounds"])]
-    root = RQ.draw_root(bytes.fromhex(honest["calls_root"]), bytes.fromhex(honest["draw"]["receipts"]), log)
+    root = RQ.sample_root(bytes.fromhex(honest["calls_root"]), bytes.fromhex(honest["draw"]["receipts"]), log)
     client.close()
     coins = client.commitment.to_json()
     fields = ("session", *PHW.RESERVE_FIELDS)
-    ds = PHW.DrawSession("forge", at, PHW.reserved_of({k: v for k, v in drawn.items() if k in fields}, "draw_session"),
+    ds = PHW.SampleSession("forge", at, PHW.reserved_of({k: v for k, v in drawn.items() if k in fields}, "draw_session"),
                          PHW.gate_of(gate))
     draw = ds.record(root)
     return ({**honest, "coins": coins, "round_coins": coins, "salt_opening": salt.to_json(), "rounds": log,
@@ -595,7 +595,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     if "refused" in reserved:
         doc["gate_log"] = gate.log
         return doc
-    drawn = gate("reserve", "--peer", a.peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(),
+    drawn = gate("reserve", "--peer", a.peer, "--scheme", PHC.SCHEME, "--families", PHC.sample_families(),
                  "--minutes", str(a.minutes), "--withhold")
     doc["draw_reserved"] = drawn
     if "refused" in drawn:

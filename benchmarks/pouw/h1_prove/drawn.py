@@ -1,14 +1,14 @@
-"""drawn.py: the CLI of a served H1 window's sampled proof blocks staged as Flock statements and checked as credit does
+"""sampled.py: the CLI of a served H1 window's sampled proof blocks staged as Flock statements and checked as credit does
 (`verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled`, whose docstring is the method), with ``--checkpoint``'s safetensors read by the
 live challenger's model registry (`live_challenger.models`) and ``check`` credit's own verification (`credit._verified`
 with the Lean ``verity-verify-proof`` at ``--lean``, then `credit._proved`), each Lean run answered as credit asks for it
 (`verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.answers`), one ``LEAN-ANSWER`` line a verdict, and ``stage``'s
 stagers on Flock's Python (`prover.lowering.stagers`).
 
-    python drawn.py stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
+    python sampled.py stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
                           [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
-    python drawn.py statements --work W --out FILE
-    python drawn.py check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY
+    python sampled.py statements --work W --out FILE
+    python sampled.py check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY
 """
 from __future__ import annotations
 

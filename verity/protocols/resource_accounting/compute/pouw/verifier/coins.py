@@ -6,7 +6,7 @@ from its entropy (a served one's: the Lean verifier's, `verifier.coins`) and pub
 
     x_l     = SHA-512("verity/pouw/epoch-coin/v1\\0" || coin_l)                      the coin's unsalted digest
     value_l = hm96-sha512 tree_leaf(key, commit_string(key, x_l, salt_l))           salt_l: 192 fresh bytes, key pinned
-    root    = frame-v3-sha512 tree over (value_salt, value_draw) at positions 0, 1,
+    root    = frame-v3-sha512 tree over (value_salt, value_sample) at positions 0, 1,
               domain binding tagged("verity/pouw/epoch-coins/v1", e), owner -1, leaf schema "verity/pouw/epoch-coins/v1"
 
 The hm96 leaves keep every unopened coin statistically hidden (``hm96/PROTOCOL.md``); binding rests on SHA-512's collision
@@ -37,7 +37,7 @@ from .protocol import DomainError, tagged
 
 SCHEME = domains.POUW_EPOCH_COINS
 COIN_TAG = domains.POUW_EPOCH_COIN.encode() + b"\0"
-LABELS = ("salt", "draw")
+LABELS = ("salt", "sample")
 COIN_BYTES = 32
 HM96 = hm96.SHA512
 KEY = HM96.default_key
@@ -151,7 +151,7 @@ class Challenger:
         if label not in LABELS:
             raise DomainError(f"an epoch's coins are {LABELS}")
         if label in self._opened:
-            raise DomainError(f"epoch {self.epoch}'s {label!r} coin is already open: a retry never redraws")
+            raise DomainError(f"epoch {self.epoch}'s {label!r} coin is already open: a retry never resamples")
         self._opened.add(label)
         coin, salt = self._coins[label]
         return CoinOpening(self.epoch, label, bytes(after), coin, salt, self._tree.open(LABELS.index(label)).path)

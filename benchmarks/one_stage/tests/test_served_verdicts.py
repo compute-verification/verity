@@ -1746,15 +1746,15 @@ DSID = "s20261104T090000Z-dr01"
 
 
 def _draw(after: str = "c1" * 64, seed: int = 7) -> dict:
-    """A challenger sample as the coin record carries it (`bench_arm.LiveDraw`): a real sample session's commitment and its
+    """A challenger sample as the coin record carries it (`bench_arm.LiveSample`): a real sample session's commitment and its
     coin ``pouw/draw`` 0 opened after ``after``, reserved as `DSID`."""
     import random
 
     from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 
-    ch = Wd.draw_challenger(0, random.Random(seed).randbytes)
-    opening = ch.open(Wd.DRAW, 0, bytes.fromhex(after))
-    return {"from": "challenger", "label": Wd.DRAW, "index": 0,
+    ch = Wd.sample_challenger(0, random.Random(seed).randbytes)
+    opening = ch.open(Wd.SAMPLE, 0, bytes.fromhex(after))
+    return {"from": "challenger", "label": Wd.SAMPLE, "index": 0,
             "reserved": {"session": DSID, "seq": 9, "by": "vllm", "period": None},
             "session": {"session": DSID, "seq": 10, "root": after}, "commitment": ch.commitment.to_json(),
             "opening": opening.to_json()}
@@ -2420,7 +2420,7 @@ def test_the_pearlplus_piece_holds_the_verifiers_sample_to_its_sample_session(tm
         seen.append((window, key.public, pins, main))
         if case == "untrusted":
             raise Ch.CoinError("the auditor's ledger opens no challenger session for this window")
-        return Ch.LiveCommitment.from_json(signed), {Wd.DRAW: (root,)}
+        return Ch.LiveCommitment.from_json(signed), {Wd.SAMPLE: (root,)}
     monkeypatch.setattr(Ch, "trusted_session_of", trusted)
 
     def withheld_on(ledger, window):
@@ -6683,10 +6683,10 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     monkeypatch.setattr(S, "_gate_out", gate_out)
     d, c, layout = _declared(tmp_path)
     doc = S.period_open(d, GATE, "served-r1", c, slots=4, max_tokens=8)
-    assert doc["missing"] == [64] and doc["weights"] == [] and doc["draw_k"] == PHC.draw_k(layout)
+    assert doc["missing"] == [64] and doc["weights"] == [] and doc["draw_k"] == PHC.sample_k(layout)
     assert "--weights-root" not in sent[0] and "--model" not in sent[0]
     ledger = (host.root / "windows.jsonl").read_text().splitlines()
-    assert CR.committed_k(ledger, "served-r1") == (PHC.draw_k(layout), None)
+    assert CR.committed_k(ledger, "served-r1") == (PHC.sample_k(layout), None)
     assert CR.committed_rows(ledger, "served-r1") == (32, None)
     assert CR.committed_files(ledger, "served-r1") == ({"live": "11" * 64, "k32": "22" * 64}, None)
     assert CR.committed_length(ledger, "served-r1") == ([8] * 4, None)

@@ -156,11 +156,11 @@ def row_words(T: int, x, b, j: int, raws):
 class StubRng:
     """Returns the given arrays to `h1t_ref`'s samples, in its order: real signs, tag signs, tag mantissas."""
 
-    def __init__(self, draws):
-        self.draws = list(draws)
+    def __init__(self, samples):
+        self.samples = list(samples)
 
     def _next(self, size):
-        a = self.draws.pop(0)
+        a = self.samples.pop(0)
         assert a.shape == tuple(size), (a.shape, size)
         return a
 

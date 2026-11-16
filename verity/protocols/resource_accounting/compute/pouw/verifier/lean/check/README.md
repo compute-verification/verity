@@ -162,7 +162,7 @@ execution phases and one mutation per refusal, the case's own framing among them
 undecided. The same suite puts `pouw-check-difftest`'s `opening` against `core_check.opening` as a `Port`, comparing
 reasons, over `tests/pouw_opening_cases.py`: honest openings and one mutation per refusal (or per reading both sides
 share: hex as `bytes.fromhex` reads it, the header's keys sorted), every mutation also replayed over a few seeds, and
-every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch_twin` and `core_check.draw_twin` the same way, over
+every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch_twin` and `core_check.sample_twin` the same way, over
 `tests/pouw_pass_cases.py`: honest passes of each coin version and a recorded beacon's, honest samples, and one mutation
 per refusal. Its `rounds` goes against `core_check.rounds` over `tests/pouw_rounds_cases.py`: an honest live execution phase's
 round roots and coins, read through the challenger's session (its record and close signed under the execution phase's pinned key,
@@ -174,7 +174,7 @@ layout's). `verity/protocols/resource_accounting/compute/pouw/verifier/tests/tes
 aims at. Its `window` and `period` go against `credit._window_outcomes` and `credit._period_outcomes` (`credit.window`
 and `credit.period_credit` on proof outcomes, which they derive from an execution phase's proof files by running the
 verifier; `test_pouw_credit_statements.py` holds that step), and its `credit`, `drawn`,
-`outcome` and `a-link` against the steps they run, `credit._credited`, `credit.drawn`, `credit._outcome` and
+`outcome` and `a-link` against the steps they run, `credit._credited`, `credit.sampled`, `credit._outcome` and
 `credit._a_link`, over
 `tests/pouw_credit_cases.py` (a credit bit flipped after the sampling coin, proof blocks the prover chose, a sampled proof block failed or
 missing, a credit period unclosed or an execution phase of it missing or out of order, an A tree the round roots didn't commit, a

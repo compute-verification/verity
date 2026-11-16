@@ -124,19 +124,19 @@ def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: 
              "gate": PHW.gate_of(session.gate.call), "period": session.period}, session.reserved)
 
 
-class LiveDraw:
-    """`verify_run.verify_passes`' ``draw`` from a sample session of its own on the auditor device's challenger, through
+class LiveSample:
+    """`verify_run.verify_passes`' ``sample`` from a sample session of its own on the auditor device's challenger, through
     infra's gate (``gate``, ``peer`` and ``lane`` as `_LiveSession`'s; `run` its gate's subprocess in tests): called on
     the run's commitment C, it reserves a session withheld with the sampling coin alone (``reserve --withhold``,
-    `window.DRAW_FAMILIES`, `pouw_h1_window.reserve_draw` as H1's window samples), opens it on C and takes its
-    ``pouw/draw`` coin after C (`pouw_h1_window.DrawSession`), whose full opening and commitment the session releases at
+    `window.SAMPLE_FAMILIES`, `pouw_h1_window.reserve_sample` as H1's window samples), opens it on C and takes its
+    ``pouw/draw`` coin after C (`pouw_h1_window.SampleSession`), whose full opening and commitment the session releases at
     its close.
     Refused (`CoinError`) before reserving while ``lane`` has a period open in the auditor's ledger, and before its open
     when the reserve joined one, so the sample counts toward no period's sessions; and when the gate reserves it plain.
     With ``period``, the Pearl-C period the run's salt session joined, the sample must be the lane's first reserve after
     that period closed (`pouw_h1_window.after_close`, the compose's rule): refused before reserving unless the ledger
     closes it with no reserve of the lane since, and before its coin is asked unless the reserve is that first one.
-    Returns (the coin's 64 bytes, the coin record's ``draw``: `verify_run`'s module docstring, "The coin record")."""
+    Returns (the coin's 64 bytes, the coin record's ``sample``: `verify_run`'s module docstring, "The coin record")."""
 
     def __init__(self, gate: str, peer: str, lane: str, run: Any = None, at: str = "127.0.0.1:0",
                  period: str | None = None) -> None:
@@ -152,45 +152,45 @@ class LiveDraw:
         lines = self.gate.ledger()
         period = PHW.open_period(lines, self.lane)
         if period is not None:
-            raise CoinError(f"refused before reserving the run's draw session: lane {self.lane}'s period "
-                            f"{period['period']} is open, and the draw joins no period (close it first)")
+            raise CoinError(f"refused before reserving the run's sample session: lane {self.lane}'s period "
+                            f"{period['period']} is open, and the sample joins no period (close it first)")
         if self.period is not None:
             closed, after = PHW.after_close(lines, self.lane, self.period)
             if not closed:
-                raise CoinError(f"refused before reserving the run's draw session: the auditor's ledger doesn't close "
-                                f"the run's Pearl-C period {self.period}, which the draw must follow")
+                raise CoinError(f"refused before reserving the run's sample session: the auditor's ledger doesn't close "
+                                f"the run's Pearl-C period {self.period}, which the sample must follow")
             if after is not None:
-                raise CoinError(f"refused before reserving the run's draw session: lane {self.lane} reserved session "
-                                f"{after.get('session')} after its Pearl-C period {self.period} closed, so no draw now "
-                                "is the lane's first reserve after it, the one draw a compose takes")
-        reserved = PHW.reserve_draw(self.gate.call, self.peer)
+                raise CoinError(f"refused before reserving the run's sample session: lane {self.lane} reserved session "
+                                f"{after.get('session')} after its Pearl-C period {self.period} closed, so no sample now "
+                                "is the lane's first reserve after it, the one sample a compose takes")
+        reserved = PHW.reserve_sample(self.gate.call, self.peer)
         if reserved.get("period") is not None:
-            raise CoinError(f"draw session {reserved['session']} joined period {reserved['period']}: refused before its "
-                            "open, since the draw joins no period")
+            raise CoinError(f"sample session {reserved['session']} joined period {reserved['period']}: refused before its "
+                            "open, since the sample joins no period")
         if self.period is not None:
             _, after = PHW.after_close(self.gate.ledger(), self.lane, self.period)
             if after is None or after.get("session") != reserved["session"]:
-                raise CoinError(f"draw session {reserved['session']} is not lane {self.lane}'s first reserve after its "
+                raise CoinError(f"sample session {reserved['session']} is not lane {self.lane}'s first reserve after its "
                                 f"Pearl-C period {self.period} closed (that is "
                                 f"{None if after is None else after.get('session')}): refused before its coin is asked")
         asking({"reserved": reserved})
-        session = PHW.DrawSession("pearl-plus verify", self.at, reserved, PHW.gate_of(self.gate.call))
+        session = PHW.SampleSession("pearl-plus verify", self.at, reserved, PHW.gate_of(self.gate.call))
         opening = session.record(root)
-        return opening.coin, {"from": "challenger", "label": Wd.DRAW, "index": 0, "reserved": reserved,
+        return opening.coin, {"from": "challenger", "label": Wd.SAMPLE, "index": 0, "reserved": reserved,
                               "session": session.session, "commitment": session.commitment.to_json(),
                               "opening": opening.to_json()}
 
 
-def live_draw(gate: str | None, peer: str | None, lane: str, run: Any = None,
-              period: str | None = None) -> LiveDraw | None:
-    """`LiveDraw` under ``gate`` and ``peer`` after the run's Pearl-C period ``period``, None when neither is given (the
+def live_sample(gate: str | None, peer: str | None, lane: str, run: Any = None,
+              period: str | None = None) -> LiveSample | None:
+    """`LiveSample` under ``gate`` and ``peer`` after the run's Pearl-C period ``period``, None when neither is given (the
     node's sample); ValueError for one alone."""
     if (gate, peer) == (None, None):
         return None
     if gate is None or peer is None:
-        raise ValueError("the live draw takes PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER "
+        raise ValueError("the live sample takes PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER "
                          "(this node's name in the challenger host's peers) together")
-    return LiveDraw(gate, peer, lane, run, period=period)
+    return LiveSample(gate, peer, lane, run, period=period)
 
 
 class PearlCArm:

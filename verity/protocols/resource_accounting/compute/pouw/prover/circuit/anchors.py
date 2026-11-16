@@ -30,7 +30,7 @@ name.
 
 An execution phase's `Receipt` lists every call of the execution phase, each with its anchors, shape and commitment, complete and immutable
 before any key exists. `Ledger.open` derives the execution phase's key from it alone, a fresh source under the receipt's digest,
-and admits only the calls it lists; `Traced.draw` samples only under that key. So the key comes after every call's
+and admits only the calls it lists; `Traced.sample` samples only under that key. So the key comes after every call's
 commitment (the execution phase pin's order and root's C1), and each execution phase's source is fresh and used once (C2).
 """
 from __future__ import annotations
@@ -51,7 +51,7 @@ from verity.commitments.randomness import Key, derive
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, DomainError, PoUWScheme
 
 from .ncp2 import Shape
-from .plan import DRAW_DOMAIN
+from .plan import SAMPLE_DOMAIN
 
 M32 = (1 << 32) - 1
 M64 = (1 << 64) - 1
@@ -380,7 +380,7 @@ class Ledger:
     """An execution phase's calls, as the verifier admits them: a repeated call index is refused.
 
     An execution phase's ledger comes from `Ledger.open(receipt)`, the only place its receipt, key and source are set: callers
-    set no attribute of a ledger, before or after (`__setattr__` refuses), and `Traced.draw` takes the key from the
+    set no attribute of a ledger, before or after (`__setattr__` refuses), and `Traced.sample` takes the key from the
     ledger. A ledger built as `Ledger()` has none of them; it only refuses repeats (an execution phase's input builders use
     that) and samples nothing. Once the execution phase's sample is sent (`sent`), the ledger samples nothing more, and `record`
     gives the audit record its source and receipt digest."""
@@ -404,7 +404,7 @@ class Ledger:
 
     @classmethod
     def open(cls, receipt: Receipt) -> Ledger:
-        """The execution phase's ledger: its key derived from a fresh source (`_fresh_source`) under `plan.DRAW_DOMAIN` with
+        """The execution phase's ledger: its key derived from a fresh source (`_fresh_source`) under `plan.SAMPLE_DOMAIN` with
         ``{"receipt": receipt.digest()}`` as its context, and only the receipt's calls admitted. No source is taken
         from the caller, so an execution phase's secret is fresh and used once (C2)."""
         if not isinstance(receipt, Receipt):
@@ -412,7 +412,7 @@ class Ledger:
         ledger, source = cls(), _fresh_source()
         object.__setattr__(ledger, "_receipt", receipt)
         object.__setattr__(ledger, "_source", source)
-        object.__setattr__(ledger, "_key", derive(source, DRAW_DOMAIN, {"receipt": receipt.digest()}))
+        object.__setattr__(ledger, "_key", derive(source, SAMPLE_DOMAIN, {"receipt": receipt.digest()}))
         return ledger
 
     def admit(self, anchors: Anchors, shape: Shape) -> None:
@@ -423,7 +423,7 @@ class Ledger:
             raise DomainError(f"call index (forward, position) = {anchors.call_index} is repeated in the window")
         self.seen.add(anchors.call_index)
 
-    def check_draw(self) -> None:
+    def check_sample(self) -> None:
         """Refuse a sample from a ledger not opened from a receipt, or once the execution phase's sample has been sent."""
         if self._receipt is None or self._key is None:
             raise DomainError("a window samples only from a ledger opened from its complete receipt (Ledger.open)")
@@ -442,7 +442,7 @@ class Ledger:
 
     def sent(self) -> None:
         """Mark the execution phase's sample as sent to the prover: after this the ledger samples nothing, and its record is given."""
-        self.check_draw()
+        self.check_sample()
         object.__setattr__(self, "_sent", True)
 
     def record(self) -> dict[str, str]:
@@ -453,8 +453,8 @@ class Ledger:
         whose sample misses. That is the designated verifier's trust; a beacon or a commit-and-reveal would be needed for
         a third party to check it."""
         if not self._sent:
-            raise DomainError("a window's source is recorded only once its draw is sent")
-        return {"domain": DRAW_DOMAIN, "receipt": self._receipt.digest().hex(), "source": self._source.hex()}
+            raise DomainError("a window's source is recorded only once its sample is sent")
+        return {"domain": SAMPLE_DOMAIN, "receipt": self._receipt.digest().hex(), "source": self._source.hex()}
 
 
 class SaltWindows:
@@ -490,10 +490,10 @@ class SaltWindows:
 
 
 def replay_key(record: dict[str, str]) -> Key:
-    """The execution phase's key from its audit record: `derive(source, DRAW_DOMAIN, {"receipt": digest})`."""
-    if record.get("domain") != DRAW_DOMAIN:
-        raise DomainError(f"the record's domain is not {DRAW_DOMAIN!r}")
-    return derive(bytes.fromhex(record["source"]), DRAW_DOMAIN, {"receipt": bytes.fromhex(record["receipt"])})
+    """The execution phase's key from its audit record: `derive(source, SAMPLE_DOMAIN, {"receipt": digest})`."""
+    if record.get("domain") != SAMPLE_DOMAIN:
+        raise DomainError(f"the record's domain is not {SAMPLE_DOMAIN!r}")
+    return derive(bytes.fromhex(record["source"]), SAMPLE_DOMAIN, {"receipt": bytes.fromhex(record["receipt"])})
 
 
 __all__ = ["ANCHORED", "ANCHOR_RULE", "Anchors", "Derivation", "Ledger", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS",

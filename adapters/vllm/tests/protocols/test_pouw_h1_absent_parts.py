@@ -20,7 +20,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import 
     registered,
 )
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.challenger import (
-    drawn_of,
+    sampled_of,
 )
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.commit import (
     ROOT_BYTES,
@@ -240,7 +240,7 @@ def _descriptor() -> bytes:
 
 def _sampled(record: dict[str, Any]) -> tuple[Any, Any]:
     """What core samples from the window's `record` at K = 1 over that descriptor, or its refusal."""
-    return drawn_of(record, {"root": "00"}, 1, _descriptor())
+    return sampled_of(record, {"root": "00"}, 1, _descriptor())
 
 
 def _refusal(why: str) -> tuple[None, tuple[str, str]]:

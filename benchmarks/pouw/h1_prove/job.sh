@@ -89,7 +89,7 @@ fi
   && "$LPY" "$H/layer.py" "$MODEL" "$W/L2.npz" --tokens "$TOKENS" --layer "$LAYER" --seed-tokens "$("$PY" -c 'import os; print(os.urandom(16).hex())')" "${QUANT[@]}" \
     > "$OUT/layer2.json" 2> "$OUT/layer2.err" || { log "layer.py FAILED: $(tail -2 "$OUT"/layer*.err)"; kill $STAGER; exit 1; }
 log "window: $(cut -c1-400 "$OUT/layer1.json")"
-args=(--work "$WK" --stage "$SW" --lean "$LEAN" --layer "$W/L1.npz" --layer2 "$W/L2.npz" --draw "$DRAW" --stager-pid "$STAGER"
+args=(--work "$WK" --stage "$SW" --lean "$LEAN" --layer "$W/L1.npz" --layer2 "$W/L2.npz" --sample "$DRAW" --stager-pid "$STAGER"
       --name "h1-${RESEARCH_RUN_ID:-local}")
 [ "$K" != 4096 ] && args+=(--k "$K")
 [ "$COLS" != 0 ] && args+=(--cols "$COLS")

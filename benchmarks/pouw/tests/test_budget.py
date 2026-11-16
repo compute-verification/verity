@@ -35,7 +35,7 @@ def test_today_on_sm_120_is_notations_terms_and_b_its_parts():
     assert round(100 * t.eps_skip, 3) == 0.362
     assert round(100 * t.eps_machine, 3) == 0.125
     assert t.eps_served == 0
-    assert t.draws == pytest.approx(B.TODAY_SAMPLES, rel=1e-6)
+    assert t.samples == pytest.approx(B.TODAY_SAMPLES, rel=1e-6)
     assert t.eps_sample == pytest.approx(B.LN_INV_DELTA / B.TODAY_SAMPLES, rel=0.02)
     assert t.B == pytest.approx(t.B_transform + t.B_hash + t.B_sample)
     assert t.B_transform == pytest.approx(GAMMA["sm_120"] - 1, abs=1e-4)
@@ -67,7 +67,7 @@ def test_spend_and_samples_interpolate_through_the_points():
     xs, es, ds, _, _ = B.curve("plain")
     for x, e, d in list(zip(xs, es, ds))[5:-5]:
         s = B.sample(FAM["sm_120"], x)
-        assert s.eps == pytest.approx(e) and s.draws == pytest.approx(d)
+        assert s.eps == pytest.approx(e) and s.samples == pytest.approx(d)
         assert B.spend_for(d) == pytest.approx(x)
     assert B.sample(FAM["sm_120"], xs[0] / 2) is None
 

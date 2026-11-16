@@ -542,7 +542,7 @@ def test_a_short_tile_is_proved_with_its_rows_in_its_own_stratum():
     tile's W_ref.  That is two tile strata, which the work sampling design refuses (`check_work_strata`, the window pin's `hone`) and
     the count sampling design samples; a W_ref with no whole quarter is refused.  At m = 32, one tile row, the work
     sampling design samples, and `unsound_work_bound` reads the short tile's W_ref."""
-    key = derive(bytes(32), plan.DRAW_DOMAIN, {"test": "pc8-short"})
+    key = derive(bytes(32), plan.SAMPLE_DOMAIN, {"test": "pc8-short"})
     lay = plan.tile_layout(replace(SHORT, hidden=True), 64)
     lay.check()
     us = lay.units
@@ -552,17 +552,17 @@ def test_a_short_tile_is_proved_with_its_rows_in_its_own_stratum():
         rows = range(64) if rs == 0 else range(64, 80)
         assert [(us[i].role, us[i].where) for i in lay.closure[t.index][1:]] == [("row_a", (i,)) for i in rows]
         assert lay.b_rows[t.index] == (cs,)
-    for refused in (lambda: plan.WorkSamplingDesign().sizes(lay.strata), lambda: plan.work_table(lay), lambda: plan.draw(key, lay, plan.WorkSamplingDesign())):
+    for refused in (lambda: plan.WorkSamplingDesign().sizes(lay.strata), lambda: plan.work_table(lay), lambda: plan.sample(key, lay, plan.WorkSamplingDesign())):
         with pytest.raises(ValueError, match="one stratum"):
             refused()
-    p = plan.draw(key, lay, plan.CountSamplingDesign(4))
-    assert set(p.proved) == set(p.drawn) | {i for t in p.drawn if us[t].role == "tile" for i in lay.closure[t]}
+    p = plan.sample(key, lay, plan.CountSamplingDesign(4))
+    assert set(p.proved) == set(p.sampled) | {i for t in p.sampled if us[t].role == "tile" for i in lay.closure[t]}
     with pytest.raises(DomainError):
         plan.tile_layout(SHORT, 2)
     decode = plan.tile_layout(pc8.Shape(32, K, 2, tile=(64, 1), hidden=True), 64)
     tile = next(s for s in decode.strata if s.role == "tile")
     assert [(s.role, s.work) for s in decode.strata] == [("row_a", 0), ("tile", 2 * 32)]
-    p = plan.draw(key, decode, plan.WorkSamplingDesign(2))
+    p = plan.sample(key, decode, plan.WorkSamplingDesign(2))
     assert set(p.proved) == set(range(34)) and p.proved_b == (0, 1)
     assert 32 <= plan.unsound_work_bound(decode, {tile.name: 1}, 0.25) < 64
 

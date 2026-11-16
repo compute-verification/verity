@@ -1,4 +1,4 @@
-"""Pearl+'s -h3 tile check as one unit whose one output ``ok`` the verifier holds to 1: a drawn tile's rows formed against
+"""Pearl+'s -h3 tile check as one unit whose one output ``ok`` the verifier holds to 1: a sampled tile's rows formed against
 noise from the live salt, their admission, the tile's caps, its leaf under the transcript root and its served y, so that an
 auditor reads only the verifier's own registered rows and the proof, never a row's values, the salt key or the tile.
 
@@ -39,7 +39,7 @@ one-tile measurement takes, ``verity-verify-proof --zk --registered`` a statemen
 
   - **the formed rows** ``a``, ``b`` and ``y``, each a registered read opening the serve's own root at the position the
     Program fixes (`statement_rows`: one row a port).  Their roots are registered values reused from the serve's record
-    (R7, `Spot/Docket.lean`), not inputs here; that the roots are the serve's and were committed before the draw coin
+    (R7, `Spot/Docket.lean`), not inputs here; that the roots are the serve's and were committed before the sampling coin
     is Pearl+'s own Lean protocol's, outside this measurement.
   - **``pub``, a supplied row of known content** (`PUBLIC`): the salt, B's root, the unit, the rows' indices, the column
     tile, the public noise (E_B's lines, F_A, F_B and G, which anyone derives from seed_B = s512("seed-B", salt ‖ root):
@@ -247,7 +247,7 @@ PearlPlusTileCore = CompositeDefinition(
     "PearlPlusTileCore", 1, ("K", "TM", "TN", "N", "RHO", "RHOR", "DEV"), lambda S: (_core_params(S), Tuple(BYTES64, BIT)),
     _core_body, refuse=_refuse_k, conformance="protocol-defined; equal to `pearl_plus_tile.reference` on its fixture tiles "
                                               "(verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_circuit_pearl_plus_tile.py)",
-    doc="A drawn -h3 tile on words: its rows formed against the salt's noise (`PearlCRowA`, `PearlCRowB`), and (the "
+    doc="A sampled -h3 tile on words: its rows formed against the salt's noise (`PearlCRowA`, `PearlCRowB`), and (the "
         "sha512/row-seg/v1 digest of its C̃ and U, ok: every row admitted, the tile's and each row's cap, and each row's "
         "served y its committed y at column tile col).")
 PearlPlusTileCoreV2 = _on_bits(PearlPlusTileCore, 2)

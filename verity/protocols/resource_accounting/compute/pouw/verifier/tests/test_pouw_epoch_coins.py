@@ -98,8 +98,8 @@ def test_the_sample_refuses_bare_bytes_and_a_foreign_coin_on_an_epoch_with_coins
     epoch = Epoch.start(work, roots, E.COINS, E.challenger().open("salt", weights_root(roots)))
     tr = prover.prove(epoch, acts)
     v = Verifier(s, epoch)
-    for source, reason in ((b"verifier secret", "draws from its draw coin, not from bare bytes"),
-                           (E.challenger(b"a foreign challenger"), "the draw's coin does not open"),
+    for source, reason in ((b"verifier secret", "samples from its sampling coin, not from bare bytes"),
+                           (E.challenger(b"a foreign challenger"), "the sample's coin does not open"),
                            (E.Answering(E.challenger().open("draw", b"before the transcript")), "not opened after")):
         audit = v.audit(prover, tr, Sampled(4), source)
         assert not audit.accepted and audit.selected == () and reason in audit.verdicts[0].reason
@@ -159,7 +159,7 @@ def test_a_served_window_flips_every_coin_from_its_entropy_and_none_from_the_os(
     for label, after in (("salt", b"w" * 64), ("draw", b"t" * 64)):
         assert EC.coin_reason(epoch.commitment, epoch.open(label, after), label, after) is None
     live = Wd.live_challenger(0, 2, Ch.named(verifier.CLAIM, random.Random(4).randbytes))
-    sampling = Wd.draw_challenger(0, Ch.named(verifier.CLAIM, random.Random(5).randbytes))
+    sampling = Wd.sample_challenger(0, Ch.named(verifier.CLAIM, random.Random(5).randbytes))
     for ch in (live, sampling):
         for label, count in ch.commitment.families:
             rec = Ch.LiveRecord(ch, label, clock=lambda: 0.0)
@@ -182,7 +182,7 @@ OS_RANDOMNESS = {
     "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/rows_bench.py": "the bench's hiding salts, no coin",
     "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": "the commit's hiding salts, and its own pick "
                                                                            "of the calls it measures (recorded as "
-                                                                           "``call_draw``), which credits nothing",
+                                                                           "``call_sample``), which credits nothing",
     "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/stage_tile.py": "the staged tile's hiding key, no coin",
     "protocols/resource_accounting/compute/pouw/prover/lowering/live.py": "the staged unit's hiding key, no coin",
     "protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py": "the prover's hm96 salt keys (`WEIGHT_KEY`, a run's "

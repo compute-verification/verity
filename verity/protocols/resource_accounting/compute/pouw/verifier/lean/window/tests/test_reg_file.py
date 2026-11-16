@@ -199,26 +199,26 @@ def test_the_check_refuses_a_port_of_two_reads(ln: int | None, known: bool, serv
 FULL = D.Port(EXE, "full_draw", reference=lambda x: None, inputs=st.nothing(), package=LEAN)
 
 
-def _record(draw: dict | None) -> str:
-    return json.dumps({"format": "flock-session/v1"} | ({} if draw is None else {"unit_draw": draw}))
+def _record(sample: dict | None) -> str:
+    return json.dumps({"format": "flock-session/v1"} | ({} if sample is None else {"unit_draw": sample}))
 
 
 @pytest.mark.parametrize("n", [1, 3])
-def test_the_full_draw_passes(n: int, server) -> None:
+def test_the_full_sample_passes(n: int, server) -> None:
     """A session that samples every unit of its population, `subset` of all of them, passes the sample policy."""
-    draw = {"law": "subset", "population": n, "k": n, "units": list(range(n))}
-    assert FULL.lean(server, {"record": _record(draw)}) == ("output", "true")
+    sample = {"law": "subset", "population": n, "k": n, "units": list(range(n))}
+    assert FULL.lean(server, {"record": _record(sample)}) == ("output", "true")
 
 
 @pytest.mark.parametrize(("draw", "why"), [
-    (None, "has no draw"),
+    (None, "has no sample"),
     ({"law": "subset", "population": 3, "k": 2, "units": [0, 2]}, "not every unit"),
     ({"law": "subset", "population": 0, "k": 0, "units": []}, "not every unit"),
     ({"law": "bernoulli", "population": 2, "p": "1/1", "units": [0, 1]}, "law is not subset"),
-    ({"law": "subset", "population": 2, "k": 2, "units": [1, 0]}, "the session's draw: U2"),
+    ({"law": "subset", "population": 2, "k": 2, "units": [1, 0]}, "the session's sample: U2"),
 ])
-def test_the_draw_policy_refuses_a_partial_draw(draw: dict | None, why: str, server) -> None:
+def test_the_sample_policy_refuses_a_partial_sample(sample: dict | None, why: str, server) -> None:
     """A session record with no sample, a sample that leaves a unit out, an empty population, another sampling design, or a sample
     verity-verify-proof's format refuses, is refused by name."""
-    kind, got = FULL.lean(server, {"record": _record(draw)})
+    kind, got = FULL.lean(server, {"record": _record(sample)})
     assert kind == "reject" and why in got

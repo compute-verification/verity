@@ -1,6 +1,6 @@
 """recorded.py: one recorded H1 execution phase's sampled tile units through SPOT, the challenger's and the verifier's side.
 
-    python recorded.py prepare --work W --stage SW --lean FLOCK_VERIFY --layer L1.npz --layer2 L2.npz [--draw 8] [--k K] [--cols N]
+    python recorded.py prepare --work W --stage SW --lean FLOCK_VERIFY --layer L1.npz --layer2 L2.npz [--sample 8] [--k K] [--cols N]
     python recorded.py summarize --work W --out OUT
 
 ``prepare`` runs one execution phase of the execution phase and plans its proofs, the prover's steps by `window.py` (a subprocess: the
@@ -19,7 +19,7 @@ challenger and the verifier never hold a row, a salt or a served value):
    ``--partition``), holds the commitment's registration to them (`check_registration`), and the stager builds its
    statement bound to them;
 3. the verifier registers the execution phase's ok rows itself (`ok_registration`: value ``ok``, row u the one word 1 under unit
-   u's public salt), samples ``--draw`` units of the execution phase's tiles by Lean ``verity-verify-proof draw`` on the coin's stream,
+   u's public salt), samples ``--sample`` units of the execution phase's tiles by Lean ``verity-verify-proof draw`` on the coin's stream,
    groups them by call (a registered port reads one value, and a call's units read its own tables, so a statement holds
    one call's units), and writes each call's ``--registered`` file (`registered_file`: `h1unit.registered_reads` from
    its own Program under the execution phase's roots and its own ``ok``, the ok port o1 beside the A, B and record ports,
@@ -387,13 +387,13 @@ def _layout_of(descriptor: bytes) -> tuple:
     return CR.layout_of(descriptor)
 
 
-def credit_registration(descriptor: bytes, drawn: list[int], entries: list, findings: dict[int, dict], window_root: str,
+def credit_registration(descriptor: bytes, sampled: list[int], entries: list, findings: dict[int, dict], window_root: str,
                         ok: dict) -> list | None:
     """Execution phase credit's last two steps (`credit.window`'s 5 and 6) on h1_prove's evidence, ``[code, why]`` of the first
     that refuses, or None: the layout of ``descriptor`` (`credit.layout_of`, `credit.strata`), each session's ok rows
     held to the verifier's own (`credit._ok_held`, step 5's rule: each sampled proof block's finding opened ``o1`` at ``ok``,
     the value and root of the verifier's ``ok``, `ok_registration`), one accepted outcome per sampled proof block
-    (`credit._proved`, ``drawn`` h1_prove's own sample, not that of credit's work sampling design), and the registration
+    (`credit._proved`, ``sampled`` h1_prove's own sample, not that of credit's work sampling design), and the registration
     (`credit._registration`): the execution phase's registered ``entries`` (the commitment's: no entry registers ``ok``), each
     proof's ``registered`` the finding of the session that proved the unit (``findings``, unit -> `findings_of`), under
     the open root ``window_root``, each call a step of its own (`h1unit.steps`). Each proof's ``program`` is the
@@ -410,7 +410,7 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
     if why is None:
         program = hashlib.sha512(descriptor).hexdigest()
         proofs = [{"program": program, "registered": f, "unit": int(u), "verdict": "accept"} for u, f in sorted(findings.items())]
-        why = CR._proved(sorted(drawn), proofs) or CR._registration(
+        why = CR._proved(sorted(sampled), proofs) or CR._registration(
             window_root, program, CR._prefix(descriptor), entries, ss, layout, len(layout["calls"]), proofs)
     return None if why is None else list(why)
 
@@ -494,7 +494,7 @@ def registration(com: dict, served: dict) -> bytes:
 
 def lean_sample(lean: str, n: int, k: int, src: bytes) -> list[int]:
     p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(k), "--stream", src.hex()], capture_output=True, text=True)
-    lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
+    lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("SAMPLE ")]
     if p.returncode != 0 or len(lines) != 1:
         raise SystemExit(f"verity-verify-proof draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
     return [int(u) for u in json.loads(lines[0])["units"]]
@@ -511,7 +511,7 @@ def cmd_prepare(a: argparse.Namespace) -> int:
     work, sw = Path(a.work), Path(a.stage)
     work.mkdir(parents=True, exist_ok=True)
     (sw / "requests").mkdir(parents=True, exist_ok=True)
-    record: dict = {"schema": "verity/pouw/h1-prove/record/v1", "draw_k": a.draw}
+    record: dict = {"schema": "verity/pouw/h1-prove/record/v1", "draw_k": a.sample}
     w1, w2 = f"{a.name}-w1", f"{a.name}-w2"
     com1, served1, salt1, ch1 = epoch(work, w1, a.layer, 1, a, record)
     # the execution phase's public Program and partition: the verifier's own copies, and the shape the stager binds its statement to
@@ -543,7 +543,7 @@ def cmd_prepare(a: argparse.Namespace) -> int:
     do = ch1.open("draw", reg)
     assert coin_reason(ch1.commitment, do, "draw", reg) is None
     T = com1["tiles"]
-    units = sample_units(a.lean, do.coin, w1, reg.hex(), T, a.draw)
+    units = sample_units(a.lean, do.coin, w1, reg.hex(), T, a.sample)
     u0 = units[0]
     by_call: dict[int, list[int]] = {}
     for u in units:
@@ -553,7 +553,7 @@ def cmd_prepare(a: argparse.Namespace) -> int:
     # one statement a sampled call: "honest" the first sampled proof block's (the negatives'), "honest-c<c>" each other's
     honest = {c: "honest" if c == c0 else f"honest-c{c}" for c in by_call}
     record["windows"][w1].update(registration=reg.hex(), draw_opening=do.to_json())
-    record["draw"] = {"population": T, "k": a.draw, "units": units, "by": "verity-verify-proof draw (Lean)",
+    record["draw"] = {"population": T, "k": a.sample, "units": units, "by": "verity-verify-proof draw (Lean)",
                       "calls": {honest[c]: {"call": c, "units": us} for c, us in by_call.items()},
                       "reads": {str(u): U.unit_reads(win.program, win.tp, u) for u in units}}
     log(f"drew {units} of {T}: {record['draw']['calls']}")
@@ -1000,7 +1000,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--layer", required=True)
     p.add_argument("--layer2", required=True)
     p.add_argument("--name", default="h1")
-    p.add_argument("--draw", type=int, default=8)
+    p.add_argument("--sample", type=int, default=8)
     p.add_argument("--k", type=int, default=0)
     p.add_argument("--cols", type=int, default=0)
     p.add_argument("--workers", type=int, default=os.cpu_count())

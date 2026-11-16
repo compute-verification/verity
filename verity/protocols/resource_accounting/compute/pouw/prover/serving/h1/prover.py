@@ -1,4 +1,4 @@
-"""An H1 window's private prover state (DRAWN1): what opening a sampled proof block's committed values needs after the
+"""An H1 window's private prover state (SAMPLED1): what opening a sampled proof block's committed values needs after the
 window's close, kept in a directory of the prover's own (`pouw_h1.H1Run`'s ``prover``), owner-only (0700, each file 0600),
 never under a run's ``$OUT`` or any published path. The serving node keeps it (`research keep`), and its holder alone reads it.
 

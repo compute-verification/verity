@@ -97,7 +97,7 @@ def _delta(rng: random.Random) -> Fraction:
                        Fraction(1, 10 ** rng.randint(1, 12)), Fraction(rng.randint(1, 999), 1000)))
 
 
-def _draw_params(rng: random.Random) -> tuple[Fraction, Fraction, int, int, int]:
+def _sample_params(rng: random.Random) -> tuple[Fraction, Fraction, int, int, int]:
     eps, delta = _eps(rng), _delta(rng)
     r = rng.random()
     if r < 0.35:
@@ -132,7 +132,7 @@ def _draw_params(rng: random.Random) -> tuple[Fraction, Fraction, int, int, int]
 
 
 def k_prime_in(rng: random.Random) -> dict:
-    eps, delta, credited, n, w = _draw_params(rng)
+    eps, delta, credited, n, w = _sample_params(rng)
     return {"eps": _frac(eps), "delta": _frac(delta), "credited": credited, "n": n, "w_max": w}
 
 
@@ -548,16 +548,16 @@ def sessions_in(rng: random.Random) -> dict:
 def _registration(rng: random.Random) -> tuple[dict, list[int]]:
     n = rng.choice((rng.randint(1, 200), 1 << 40))
     k = rng.randint(1, min(n, 12))
-    drawn = sorted(rng.sample(range(n), k)) if n < 1 << 20 else sorted(set(rng.randrange(n) for _ in range(k)))
-    k = len(drawn)
+    sampled = sorted(rng.sample(range(n), k)) if n < 1 << 20 else sorted(set(rng.randrange(n) for _ in range(k)))
+    k = len(sampled)
     roots = [{"port": "entries", "root": rng.randbytes(64).hex(), "leaves": 4, "domain": rng.randbytes(64).hex()}]
     if rng.random() < 0.3:
         roots.append({"port": "h3", "root": rng.randbytes(64).hex(), "domain": rng.randbytes(64).hex()})
-    return {"population": n, "law": {"law": "subset", "k": k}, "roots": roots}, drawn
+    return {"population": n, "law": {"law": "subset", "k": k}, "roots": roots}, sampled
 
 
 def instance_ts_in(rng: random.Random) -> dict:
-    reg, drawn = _registration(rng)
+    reg, sampled = _registration(rng)
     k = reg["law"]["k"]
     cap = rng.choice((1, 2, 3, 8, rng.randint(1, 16)))
     sigma: Any = rng.randint(0, -(-k // cap) - 1)
@@ -571,22 +571,22 @@ def instance_ts_in(rng: random.Random) -> dict:
     elif bad == "drawn":
         how = rng.choice(("short", "unsorted", "dup", "range", "bool", "neg"))
         if how == "short":
-            drawn = drawn[:-1]
+            sampled = sampled[:-1]
         elif how == "unsorted" and k > 1:
-            drawn = drawn[::-1]
+            sampled = sampled[::-1]
         elif how == "dup" and k > 1:
-            drawn[1] = drawn[0]
+            sampled[1] = sampled[0]
         elif how == "range":
-            drawn[-1] = reg["population"] if isinstance(reg["population"], int) else 10 ** 6
+            sampled[-1] = reg["population"] if isinstance(reg["population"], int) else 10 ** 6
         elif how == "bool":
-            drawn[0] = True
+            sampled[0] = True
         elif how == "neg":
-            drawn[0] = -1
+            sampled[0] = -1
     elif bad == "sigma":
         sigma = rng.choice((-1, -(-k // cap), True, False, "0", None))
     elif bad == "cap":
         cap = rng.choice((0, -2))
-    return {"registration": reg, "drawn": drawn, "sigma": sigma, "cap": cap}
+    return {"registration": reg, "drawn": sampled, "sigma": sigma, "cap": cap}
 
 
 def public_inputs_in(rng: random.Random) -> dict:
@@ -724,10 +724,10 @@ def public_inputs(v: dict) -> str:
 
 
 #: layouts a live execution phase's coin commitment may have, PoUW's and ones it isn't
-_LIVE_LAYOUTS = [None, None, None, Wd.DRAW_FAMILIES, Wd.DRAW_FAMILIES, ((Wd.ROUND, 2), (Wd.SALT, 1)),
-                 ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 3)), ((Wd.SALT, 1), ("pouw/rounds", 2)),
-                 ((Wd.SALT, 2), (Wd.ROUND, 2)), ((Wd.SALT, 1), (Wd.ROUND, 2), ("x", 1)), ((Wd.DRAW, 2),),
-                 ((Wd.DRAW, 1), (Wd.SALT, 1)), Wd.SALT_FAMILIES]
+_LIVE_LAYOUTS = [None, None, None, Wd.SAMPLE_FAMILIES, Wd.SAMPLE_FAMILIES, ((Wd.ROUND, 2), (Wd.SALT, 1)),
+                 ((Wd.SALT, 1), (Wd.SAMPLE, 1), (Wd.ROUND, 3)), ((Wd.SALT, 1), ("pouw/rounds", 2)),
+                 ((Wd.SALT, 2), (Wd.ROUND, 2)), ((Wd.SALT, 1), (Wd.ROUND, 2), ("x", 1)), ((Wd.SAMPLE, 2),),
+                 ((Wd.SAMPLE, 1), (Wd.SALT, 1)), Wd.SALT_FAMILIES]
 
 
 def live_commitment_in(rng: random.Random) -> dict:
@@ -745,8 +745,8 @@ def live_epoch_reason(v: dict) -> str | None:
     return why
 
 
-def draw_epoch_reason(v: dict) -> str | None:
-    why = Wd.draw_epoch_reason(Ch.LiveCommitment.from_json(v["commitment"]))
+def sample_epoch_reason(v: dict) -> str | None:
+    why = Wd.sample_epoch_reason(Ch.LiveCommitment.from_json(v["commitment"]))
     SEEN["draw_epoch_reason"].add("accept" if why is None else "scheme" if "scheme" in why else "coins")
     return why
 
@@ -865,7 +865,7 @@ PORTS = {
                           instance_ts_in), 1000),
     "public_inputs": (_port("public_inputs", public_inputs, public_inputs_in), 500),
     "live_epoch_reason": (_port("live_epoch_reason", live_epoch_reason, live_commitment_in), 300),
-    "draw_epoch_reason": (_port("draw_epoch_reason", draw_epoch_reason, live_commitment_in), 300),
+    "draw_epoch_reason": (_port("draw_epoch_reason", sample_epoch_reason, live_commitment_in), 300),
     "round_key": (_port("round_key", round_key, round_key_in, rejects=(ValueError, TypeError)), 300),
     "layout_constants": (D.Port(EXE, "layout_constants", reference=layout_constants, inputs=st.just({}), package=LEAN,
                                 need_rejects=False, of_record=V.RECORD_VERDICT), 1),

@@ -12,14 +12,14 @@ generates (honest openings of a call's tile or the filler's, unsalted or a salte
 mutation each aimed at every refusal or at a reading both sides share), compared output for output: null, or the same
 reason.
 
-Its `pass` and `draw` against `core_check.pass_epoch_twin` and `core_check.draw_twin`: one `Port` each, over the cases
+Its `pass` and `sample` against `core_check.pass_epoch_twin` and `core_check.sample_twin`: one `Port` each, over the cases
 `pouw_pass_cases` generates (honest passes of each coin version, a recorded beacon's, a certified window's and a live
 Pearl-C pass's, and honest samples, then one mutation each aimed at every refusal), compared output for output: how the
 salt was had, or the same refusal.
 
 Its `window` and `period` against `credit.window` and `credit.period_credit`, the only entries, and its `credit`,
-`drawn`, `window-drawn`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`,
-`credit.drawn`, `credit._window_drawn` (at the strata of the descriptor's layout, `Credit.descriptorDrawn`, the sample the
+`sampled`, `window-sampled`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`,
+`credit.sampled`, `credit._window_sampled` (at the strata of the descriptor's layout, `Credit.descriptorSampled`, the sample the
 J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s):
 one `Port` each, over the cases
 `pouw_credit_cases` generates (a served window whose sampling coin opened after its sample root over the manifest's credit bits,
@@ -124,7 +124,7 @@ def _template(why: str) -> str:
 
 #: `core_check.opening_twin`'s reasons
 REASONS = {_template(r) for r in (
-    "unit # is not drawn", "the registered window domain is not the window's served domain",
+    "unit # is not sampled", "the registered window domain is not the window's served domain",
     "the registered window root is not a SHA-512 digest", "the opening names no entry",
     "the opening's salt is not # bytes, or a path or a side's index is not one (paths of SHA-512 digests)",
     "entry # is not the registered window's entry", "entry #: index # is not in the entry's range",
@@ -219,44 +219,44 @@ def pass_epoch(case: dict) -> dict:
     return {"how": how} if refused is None else {"refused": list(refused)}
 
 
-def draw(case: dict) -> dict | None:
-    refused = CC.draw_twin(*passes.draw_args(case))
-    PASSED["draw " + (f"{refused[0]}: {_template(refused[1])}" if refused else "accept")] += 1
+def sample(case: dict) -> dict | None:
+    refused = CC.sample_twin(*passes.sample_args(case))
+    PASSED["sample " + (f"{refused[0]}: {_template(refused[1])}" if refused else "accept")] += 1
     return None if refused is None else {"refused": list(refused)}
 
 
 PASS = D.Port("pouw-check-difftest", "pass", pass_epoch, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
               inputs=st.builds(passes.pass_instance, st.randoms(use_true_random=False),
                                st.sampled_from(["honest"] * (len(passes.PASS_NAMES) // 6) + passes.PASS_NAMES)))
-DRAW = D.Port("pouw-check-difftest", "draw", draw, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
-              inputs=st.builds(passes.draw_instance, st.randoms(use_true_random=False),
-                               st.sampled_from(["honest"] * (len(passes.DRAW_NAMES) // 4) + passes.DRAW_NAMES)))
+SAMPLE = D.Port("pouw-check-difftest", "draw", sample, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+              inputs=st.builds(passes.sample_instance, st.randoms(use_true_random=False),
+                               st.sampled_from(["honest"] * (len(passes.SAMPLE_NAMES) // 4) + passes.SAMPLE_NAMES)))
 pass_server = D.server_fixture(PASS)
 
 
-def test_pass_and_draw(pass_server):
+def test_pass_and_sample(pass_server):
     """Generated passes (a certified window's among them) and samples, then each mutation over a few seeds (`replay`), so
     every refusal is reached whatever the sample."""
     PASSED.clear()
-    stats = {"pass": D.run(PASS, examples=1500, server=pass_server), "draw": D.run(DRAW, examples=1000, server=pass_server)}
+    stats = {"pass": D.run(PASS, examples=1500, server=pass_server), "draw": D.run(SAMPLE, examples=1000, server=pass_server)}
     swept = Counter(D.replay(PASS, passes.pass_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
                     for name in ["honest", *passes.PASS_NAMES] for seed in range(3))
-    swept += Counter(D.replay(DRAW, passes.draw_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
-                     for name in ["honest", *passes.DRAW_NAMES] for seed in range(3))
-    print(f"pouw-check-difftest pass: {stats['pass']}; draw: {stats['draw']}; and {sum(swept.values())} swept "
+    swept += Counter(D.replay(SAMPLE, passes.sample_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
+                     for name in ["honest", *passes.SAMPLE_NAMES] for seed in range(3))
+    print(f"pouw-check-difftest pass: {stats['pass']}; sample: {stats['draw']}; and {sum(swept.values())} swept "
           f"({dict(swept)}); by outcome: {dict(sorted(PASSED.items()))}")
-    assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon", "certifier", "live coin"}
+    assert {k for k in PASSED if not k.startswith("sample ")} >= {"coin", "recorded beacon", "certifier", "live coin"}
     for part in (CC.LIVE_UNHELD, CC.LIVE_FORM, CC.LIVE_NOT_SIGNED, CC.LIVE_SESSION, CC.INCOMPLETE, CC.PASS_FORM,
                  "the pass's salt coin opens against the epoch's published coin commitment",
                  "the coin commitment's coins are not a Pearl-C salt session's",
                  "the auditor's ledger opens no challenger session for this window"):
         assert any(_template(part) in k for k in PASSED), part
-    assert "draw accept" in PASSED and len(PASSED) > 40
+    assert "sample accept" in PASSED and len(PASSED) > 40
     for seed in range(4):   # `COIN_EARLY`'s samples: accepted only as a replay of a recorded run, by both sides
-        early, _ = passes.honest_draw(random.Random(f"early/{seed}"), CC.COIN_EARLY, early=True)
+        early, _ = passes.honest_sample(random.Random(f"early/{seed}"), CC.COIN_EARLY, early=True)
         live = {**early, "recorded": False}
-        assert (draw(early), draw(live)["refused"][0]) == (None, "coin")
-        D.replay(DRAW, early, pass_server), D.replay(DRAW, live, pass_server)
+        assert (sample(early), sample(live)["refused"][0]) == (None, "coin")
+        D.replay(SAMPLE, early, pass_server), D.replay(SAMPLE, live, pass_server)
 
 
 CREDITED: Counter[str] = Counter()
@@ -272,14 +272,14 @@ def credit(case: dict) -> dict:
     return {"credited": got} if refused is None else {"refused": list(refused)}
 
 
-def drawn(case: dict) -> dict:
-    got, refused = Cr.drawn_twin(*(case[k] for k in credit_cases.DRAWN_KEYS))
+def sampled(case: dict) -> dict:
+    got, refused = Cr.sampled_twin(*(case[k] for k in credit_cases.SAMPLED_KEYS))
     _counted(refused, "drawn")
     return {"drawn": got} if refused is None else {"refused": list(refused)}
 
 
-def window_drawn(case: dict) -> dict:
-    """`credit._window_drawn` over the strata of the descriptor's layout, as `Credit.descriptorDrawn` reads them."""
+def window_sampled(case: dict) -> dict:
+    """`credit._window_sampled` over the strata of the descriptor's layout, as `Credit.descriptorSampled` reads them."""
     got, refused = None, ("layout", Cr.DESCRIPTOR_HEX)
     if type(case["descriptor"]) is str and Cr._HEX.fullmatch(case["descriptor"]):
         lay, refused = Cr.layout_of(bytes.fromhex(case["descriptor"]))
@@ -287,7 +287,7 @@ def window_drawn(case: dict) -> dict:
         if refused is None:
             ss, refused = Cr.strata(lay)
         if refused is None:
-            got, refused = Cr._window_drawn(case["window"], case["draw"], ss, case["k"])
+            got, refused = Cr._window_sampled(case["window"], case["draw"], ss, case["k"])
     _counted(refused, "window-drawn")
     return {"drawn": got} if refused is None else {"refused": list(refused)}
 
@@ -345,8 +345,8 @@ def _port(name: str, fn, instance, names: list[str]) -> D.Port:
 
 
 CREDIT = _port("credit", credit, credit_cases.credit_instance, credit_cases.CREDIT_NAMES)
-DRAWN = _port("drawn", drawn, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES)
-WINDOW_DRAWN = _port("window-drawn", window_drawn, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES)
+SAMPLED = _port("drawn", sampled, credit_cases.sampled_instance, credit_cases.SAMPLED_NAMES)
+WINDOW_SAMPLED = _port("window-drawn", window_sampled, credit_cases.window_sampled_instance, credit_cases.WINDOW_SAMPLED_NAMES)
 OUTCOME = _port("outcome", outcome, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES)
 WINDOW = _port("window", window, credit_cases.window_instance, credit_cases.WINDOW_NAMES)
 PERIOD = _port("period", period, credit_cases.period_instance, credit_cases.PERIOD_NAMES)
@@ -378,14 +378,14 @@ def test_credit(pass_server):
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
-             for p, n in ((CREDIT, 300), (DRAWN, 300), (WINDOW_DRAWN, 100), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
+             for p, n in ((CREDIT, 300), (SAMPLED, 300), (WINDOW_SAMPLED, 100), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
                              (WEIGHTS, 300), (REGISTERED_FILE, 150))}
     swept = Counter()
     for port, instance, names in ((CREDIT, credit_cases.credit_instance, credit_cases.CREDIT_NAMES),
                                   (REGISTERED_FILE, credit_cases.registered_file_instance,
                                    credit_cases.REGISTERED_FILE_NAMES),
-                                  (DRAWN, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES),
-                                  (WINDOW_DRAWN, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES),
+                                  (SAMPLED, credit_cases.sampled_instance, credit_cases.SAMPLED_NAMES),
+                                  (WINDOW_SAMPLED, credit_cases.window_sampled_instance, credit_cases.WINDOW_SAMPLED_NAMES),
                                   (OUTCOME, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES),
                                   (WINDOW, credit_cases.window_instance, credit_cases.WINDOW_NAMES),
                                   (PERIOD, credit_cases.period_instance, credit_cases.PERIOD_NAMES),
@@ -395,18 +395,18 @@ def test_credit(pass_server):
                          for name in ["honest", *names] for seed in range(3))
     print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
-    assert {"credit accept", "drawn accept", "window-drawn accept", "outcome accept", "window accept", "period accept",
+    assert {"credit accept", "sampled accept", "window-sampled accept", "outcome accept", "window accept", "period accept",
             "a-link accept", "weights accept", "registered-file accept", "registered-file accept j10r",
             "registered-file accept j10r chunked"} <= set(CREDITED)
-    for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
-                 "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
-                 "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
-                 "credit coin: the draw's session is not trusted",
+    for part in ("credit sample: the sample root over the manifest", "credit sample: the window's sample root is not",
+                 "credit sample: the challenger's session closed with no sampling coin", "credit credit: manifest row # has no",
+                 "credit credit: call # is credited with no z", "credit coin: the sampling coin: ",
+                 "credit coin: the sample's session is not trusted",
                  "credit coin: the session the auditor's ledger opens on the window does not withhold",
                  "outcome missing: ", "outcome failed: ",
                  "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
-                 "drawn layout: linear ", "drawn layout: the A slot #", "drawn layout: the A blocks of K = #",
-                 "drawn layout: a call of lm_head", "drawn draw: the draw coin is not", "drawn draw: the draw's stream",
+                 "sampled layout: linear ", "sampled layout: the A slot #", "sampled layout: the A blocks of K = #",
+                 "sampled layout: a call of lm_head", "sampled sample: the sampling coin is not", "sampled sample: the sample's stream",
                  "window tile-k: the window's tile at K = # is outside the K its proof covers, multiples of # below #",
                  "so the period earns nothing: tile-k: the window's tile at K = #",
                  "pad its linears' A and B rows with zero codes to K = #",
@@ -421,8 +421,8 @@ def test_credit(pass_server):
                  "period period: period ", "period missing: session #", "period order: session #",
                  "period period: the sessions presented run past", "period period: session ", "period window: window #",
                  "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
-                 "drawn budget: the draw's K is not",
-                 "drawn budget: the window's # units are fewer than K", "period budget: period ",
+                 "sampled budget: the sample's K is not",
+                 "sampled budget: the window's # units are fewer than K", "period budget: period ",
                  "the one period", "commits no cap or circuit", "the window's descriptor is not the bytes",
                  "window layout: the window's circuit's units are not its record's tiles",
                  "window layout: the window's circuit is not an H# window",
@@ -441,15 +441,15 @@ def test_credit(pass_server):
                  "window coin: pouw/round coin #: coin was not opened after", "window a-link: registered A value ",
                  "window a-link: the window registers no A value",
                  "so the period earns nothing: rounds: the round roots are not",
-                 "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}",
+                 "the sampled proof blocks' proof outcomes are not a list of {program, registered, unit, verdict}",
                  "domain is not the one the window's registration gives it (the registered domain of h#/w#/a/#",
-                 "window registration: drawn unit #'s proof opened port ",
+                 "window registration: sampled proof block #'s proof opened port ",
                  "against another root than the one the window registered for",
-                 "window registration: drawn unit #'s proof was verified against another circuit",
+                 "window registration: sampled proof block #'s proof was verified against another circuit",
                  "opened no A value …/a/# or …/a/#@# (its call's round's) of the window", "'s proof opened no weights ",
                  "which the window registers not",
                  "which the window registers twice", "'s entry is not one-stage's {value, root, leaves, words, domain}",
-                 "so the period earns nothing: registration: drawn unit #",
+                 "so the period earns nothing: registration: sampled proof block #",
                  "window weights: the window's registered weights' root ",
                  "open signed: a B row's codes or s_w differ from the ones the period registered",
                  "'s open signs no weights' root (weights_root, a SHA# digest",
@@ -466,7 +466,7 @@ def test_credit(pass_server):
                  "which the window registers twice: register",
                  "credit commit: the window's Commit record is not the bytes in lowercase hex",
                  "window commit: the window's Commit record is not the bytes in lowercase hex",
-                 "window draw: the window's draw root is not over its manifest (each call's credit bit among it), its "
+                 "window sample: the window's draw root is not over its manifest (each call's credit bit among it), its "
                  "Commit record", "window arow: round #'s A table of K = # ", "is not the Commit's row-table/#/k#",
                  "the window's layout gives it (credit.table_rows", "(the verifier hashes its pads)",
                  "window arow: round #'s input-ids table ", "is not the Commit's input-ids/#",

@@ -68,9 +68,9 @@ def test_credit_is_per_row_on_kept_cells_at_leans_accounting():
     assert wref == cell * 19 * 32 and credit == (1 - S.cap) * CW.cell_credit(S, r) * 19 * 32
     assert CW.work(S, [record(excluded_a=(3,), excluded_b=(20,))]) == (0, 0)  # B row 20's block of 64 holds all 32 columns
     assert CW.work(S, [record(kept=64)])[0] == Fraction(S.wref(Shape(20, 64, 32)))
-    picks = CW.draw(S, [r], CW.draw_key(b"a coin", bytes(32), bytes(32), bytes(32)), 200)
+    picks = CW.sample(S, [r], CW.sample_key(b"a coin", bytes(32), bytes(32), bytes(32)), 200)
     assert {(t.rows[0], t.cols[0]) for _, t in picks} == set(tiles) and all(r.credited(t)[0] for _, t in picks)
-    assert CW.draw(S, [r], CW.draw_key(b"another coin", bytes(32), bytes(32), bytes(32)), 200) != picks
+    assert CW.sample(S, [r], CW.sample_key(b"another coin", bytes(32), bytes(32), bytes(32)), 200) != picks
 
 
 def test_the_band_rule_a_voluntary_row_zeroes_its_band():
@@ -86,7 +86,7 @@ def test_the_band_rule_a_voluntary_row_zeroes_its_band():
     assert W.UnitRecord(u, 192, K, voluntary_a=(63, 64)).credited(S.tiles(u.shape)[-1])[0] == list(range(176, 192))
 
 
-def test_the_band_rule_holds_in_the_draw_a_tile_of_a_voluntary_rows_band_has_no_ticket():
+def test_the_band_rule_holds_in_the_sample_a_tile_of_a_voluntary_rows_band_has_no_ticket():
     """Proofs' counterexample to a band rule in the cap alone: a 64 × K × 64 record with 64 real rows and voluntary A row 5
     is one 64 × 64 tile, which a per-row rule credits 63 rows of and so samples, and the band rule credits none.  The band
     rule is in `UnitRecord.credited`, which the ticket weight reads, so the tile has no ticket and is never sampled: every
@@ -96,9 +96,9 @@ def test_the_band_rule_holds_in_the_draw_a_tile_of_a_voluntary_rows_band_has_no_
     clean = W.UnitRecord(Matmul(1, Shape(64, K, 64), 1), 64, K)
     (tile,) = s.tiles(r.matmul.shape)
     assert r.credited(tile) == ([], list(range(64))) and CW.tile_weight(s, r, tile) == 0
-    key = CW.draw_key(b"a coin", bytes(32), bytes(32), bytes(32))
-    assert [(p, w) for p, _, w in CW.tickets(s, [r, clean])][0] == (0, 0) and CW.draw(s, [r], key, 50) == []
-    picks = CW.draw(s, [r, clean], key, 200)
+    key = CW.sample_key(b"a coin", bytes(32), bytes(32), bytes(32))
+    assert [(p, w) for p, _, w in CW.tickets(s, [r, clean])][0] == (0, 0) and CW.sample(s, [r], key, 50) == []
+    picks = CW.sample(s, [r, clean], key, 200)
     assert len(picks) == 200 and {p for p, _ in picks} == {1}
 
 
@@ -118,10 +118,10 @@ def test_the_band_rule_a_padding_row_zeroes_its_block():
     assert all(e.credited(t)[1] == [j for j in t.cols if j >= 64] for t in S.tiles(u.shape))
 
 
-def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
+def test_the_served_sample_weighs_mixed_linears_by_the_cited_statements_wref():
     """On sm_120 at its cap the tickets are `pearlCTilesDevRev1K`'s weights at `Prices.sm120Loop` and
     c = 218/25 − 8953/1000, Lean's definitions restated here in exact fractions, on both served models' four linears at
-    once.  By the scheme's own `wref` they are not proportional (down is under-drawn); off sm_120 the sample is unchanged."""
+    once.  By the scheme's own `wref` they are not proportional (down is under-sampled); off sm_120 the sample is unchanged."""
     add, bf16, fs, qa, g, r, c = Fraction(1047, 125), 2, 40, 2, 4, 32, Fraction(218, 25) - Fraction(8953, 1000)
 
     def lean(m: int, n: int, k: int) -> Fraction:
@@ -129,7 +129,7 @@ def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
         return credit + qa * m * k + c * m * k
 
     s = C.PearlC(forming="v1", device=SM120, hashing="h0")
-    assert CW.draw_wref(s) is CW.SM120_LOOP_CAST_8P72 and CW.draw_wref(S) is None
+    assert CW.sample_wref(s) is CW.SM120_LOOP_CAST_8P72 and CW.sample_wref(S) is None
     linears = {"llama": [(6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336)],
                "qwen": [(6144, 4096), (4096, 4096), (24576, 4096), (4096, 12288)]}
     for nks in linears.values():
@@ -292,7 +292,7 @@ def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
 
 
 @pytest.mark.slow
-def test_a_padded_weights_last_tile_is_neither_drawn_nor_credited():
+def test_a_padded_weights_last_tile_is_neither_sampled_nor_credited():
     """GLM-5.3's lm_head is 19360 rows a TP8 rank, not whole 64-column tiles; padded with zero rows to 19392 it is in
     Pearl-C's domain.  Its last tile holds real columns and zero rows, and a zero row fails the noise floor, so no tile
     check may see it (L3's `TileCheck.Accepts` asks `fixedOK` of every column): the padded tile's rows are voluntary,
@@ -318,8 +318,8 @@ def test_a_padded_weights_last_tile_is_neither_drawn_nor_credited():
     records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, SPLITS, padded_b={9: padded})
     assert records == [W.UnitRecord(work.matmuls[0], 16, K, (), (), (), padded)]
     assert [t.cols for _, t, w in CW.tickets(s, records) if w == 0] == [tuple(range(c, c + 8)) for c in range(448, 504, 8)]
-    key = CW.draw_key(b"coin", b"root", b"records", epoch.salt)
-    assert all(t.cols[0] < 448 for _, t in CW.draw(s, records, key, 4096)) and CW.exclusion_tiles(s, records) == []
+    key = CW.sample_key(b"coin", b"root", b"records", epoch.salt)
+    assert all(t.cols[0] < 448 for _, t in CW.sample(s, records, key, 4096)) and CW.exclusion_tiles(s, records) == []
     out = CW.audit(s, epoch, prover, tr, SPLITS, records, E.challenger(), 16)
     assert out.audit.accepted
     assert out.credit == (1 - s.cap) * CW.cell_credit(s, records[0]) * 16 * 448
@@ -520,18 +520,18 @@ def test_census_row_inert_share_leaves_k_from_k_min_unchanged():
         "credit)")
 
 
-def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitment():
+def test_the_sample_coin_must_open_against_the_epochs_commitment_after_the_commitment():
     """The sampling coin is the execution phase's, asked of the challenger once the verifier recorded the transcript and records roots
-    (`draw_after`): a foreign challenger's coin, a coin not under the commitment, the execution phase's salt coin, a coin opened
+    (`sample_after`): a foreign challenger's coin, a coin not under the commitment, the execution phase's salt coin, a coin opened
     before the commitment, another execution phase's coin and an execution phase with no coin commitment are each refused before any tile
-    is opened; the honest challenger's coin selects the tiles `draw_key` gives."""
+    is opened; the honest challenger's coin selects the tiles `sample_key` gives."""
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     digest = W.records_root(epoch.salt, epoch.weights_root, SPLITS, records)
-    after = CW.draw_after(tr.commitment.root, digest)
+    after = CW.sample_after(tr.commitment.root, digest)
     honest = E.challenger().open("draw", after)
     out = CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
-    want = CW.draw(S, records, CW.draw_key(honest.coin, tr.commitment.root, digest, epoch.salt), 8)
+    want = CW.sample(S, records, CW.sample_key(honest.coin, tr.commitment.root, digest, epoch.salt), 8)
     assert out.audit.accepted and out.audit.selected[:8] == tuple(
         next(r.id for r in CW.Verifier(S, epoch).refs if (r.matmul, r.tile) == (p, t)) for p, t in want)
     refused = (
@@ -543,7 +543,7 @@ def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitm
     )
     for reason, challenger in refused:
         out = CW.audit(S, epoch, prover, tr, SPLITS, records, challenger, 8)
-        assert not out.audit.accepted and out.audit.verdicts == (CW.Verdict(-1, False, "the draw's " + reason),)
+        assert not out.audit.accepted and out.audit.verdicts == (CW.Verdict(-1, False, "the sample's " + reason),)
     bare = Epoch.unverified(epoch.workload, epoch.weight_roots, b"beacon")
     out = CW.audit(S, bare, prover, tr, SPLITS, records, E.challenger(), 8)
     assert not out.audit.accepted and "no coin commitment" in out.audit.verdicts[0].reason

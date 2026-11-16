@@ -49,11 +49,11 @@ _RECORDED = {"twice", "early-root", "never", "after", "root", "foreign-epoch", "
              "openings-form", "swapped", "rewritten", "tampered-log"}
 _LEFT = {"early"}
 #: a small LMS parameter set: the ledger's entries up to the session's open from leaf 0, the record at `RECORD_LEAF`, the
-#: close at the next leaf, the ledger's later entries from the one after; a credit case's sample session (`Session.drawn`)
-#: signs its record at `DRAW_LEAF` and its close at the next, and the ledger's entries after its open from the one after
+#: close at the next leaf, the ledger's later entries from the one after; a credit case's sample session (`Session.sampled`)
+#: signs its record at `SAMPLE_LEAF` and its close at the next, and the ledger's entries after its open from the one after
 PARAMS = lms.Params(64, 4, 6)
 RECORD_LEAF = 8
-DRAW_LEAF = 40
+SAMPLE_LEAF = 40
 HOST = "challenger-test"
 LANE = "pouw"
 #: the verifier's copy of main's first-parent history, newest first
@@ -88,16 +88,16 @@ def _record(ch: Ch.LiveChallenger, roots: list[bytes]) -> list[dict]:
 class Session:
     """A challenger's session over `ch`'s coins as its host leaves it, its record and close signed under key `seed`: its
     salt coin opened after root `salt` (none when None), then round coins after `roots`, then its sampling coin after the
-    root `draw` makes of the round coins' record (none when None); its record signed at leaf `leaf` and its close at the
+    root `sample` makes of the round coins' record (none when None); its record signed at leaf `leaf` and its close at the
     next."""
 
     def __init__(self, rng: random.Random, ch: Ch.LiveChallenger, roots: list[bytes], salt: bytes | None, seed: int = 0,
-                 sid: str = "s-1", draw: Callable[[Ch.LiveRecord | None], bytes] | None = None,
+                 sid: str = "s-1", sample: Callable[[Ch.LiveRecord | None], bytes] | None = None,
                  leaf: int = RECORD_LEAF) -> None:
         self.ch, self.k, self.sid, self.leaf = ch, _key(seed), sid, leaf
         #: a credit case's execution phase session's sample session (`ledger_events` opens it after this one's end), and as a sample
         #: session, the root its ledger open names (``on``) and whether that open marks it withheld (``withheld``)
-        self.drawn: Session | None = None
+        self.sampled: Session | None = None
         self.on, self.withheld = "", True
         self.pub = lms.public_key(self.k)
         ch.sign_record(HOST, self.pub, lambda m: lms.sign_at(self.k, leaf, m).encode())
@@ -109,9 +109,9 @@ class Session:
         for r in roots:
             self.rounds.record(r)
         records += [] if self.rounds is None else [self.rounds]
-        draws = [] if draw is None else [Ch.LiveRecord(ch, Wd.DRAW, clock)]
-        self.draw = [rec.record(draw(self.rounds)) for rec in draws]
-        records += draws
+        samples = [] if sample is None else [Ch.LiveRecord(ch, Wd.SAMPLE, clock)]
+        self.sample = [rec.record(sample(self.rounds)) for rec in samples]
+        records += samples
         self.lines += [canonical_json_text(e) for rec in records for e in rec.log]
         self.sealed, self.hellos, self.sealed_hellos = self.lines, [], []
         self.close = self.signed()
@@ -149,8 +149,8 @@ def _open(rng: random.Random, window: dict, public: bytes) -> dict:
 def leaves_of(events: list[tuple[str, str | None, dict]], sid: str = "s-1") -> list[int]:
     """The leaves `ledger_lines` signs `events` at: 0, 1, … up to session `sid`'s open, then `RECORD_LEAF` + 2 on, so the
     session's record and close (at `RECORD_LEAF` and the next) fall between its open and its end; likewise from a sample
-    session's open (one whose end names `DRAW_LEAF`), `DRAW_LEAF` + 2 on."""
-    records = {sid: RECORD_LEAF, **{t: DRAW_LEAF for k, t, b in events if k == "end" and b.get("record_leaf") == DRAW_LEAF}}
+    session's open (one whose end names `SAMPLE_LEAF`), `SAMPLE_LEAF` + 2 on."""
+    records = {sid: RECORD_LEAF, **{t: SAMPLE_LEAF for k, t, b in events if k == "end" and b.get("record_leaf") == SAMPLE_LEAF}}
     out, q = [], 0
     for kind, t, _ in events:
         out.append(q)
@@ -208,7 +208,7 @@ def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: boo
     other: the period counts its execution phases at their reserves."""
     o = {k: v for k, v in {**_open(rng, window, s.pub), **(opened or {})}.items() if v is not None}
     named = (_reserved(rng, s.sid, o) if reserved else [("open", s.sid, o)]) + [("end", s.sid, _end(s, **end))]
-    if (ds := s.drawn) is not None:
+    if (ds := s.sampled) is not None:
         o = {k: v for k, v in {**_open(rng, {"root": ds.on}, s.pub), **({"withheld": True} if ds.withheld else {}),
                                **(opened or {})}.items() if v is not None}
         named += (_reserved(rng, ds.sid, o) if reserved else [("open", ds.sid, o)]) + [("end", ds.sid, _end(ds))]
@@ -318,8 +318,8 @@ def _mutate(d: dict, s: Session, name: str, rng: random.Random) -> None:
         case "not-live":
             scheme, layout = rng.choice([
                 ("verity/vllm/commit-coins/v1", Wd.live_families(len(roots) + 1)),
-                (Wd.LIVE_SCHEME, ((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, len(roots) + 1))),
-                (Wd.LIVE_SCHEME, ((Wd.SALT, 1), (Wd.ROUND, len(roots) + 1), (Wd.DRAW, 1))),
+                (Wd.LIVE_SCHEME, ((Wd.SAMPLE, 1), (Wd.SALT, 1), (Wd.ROUND, len(roots) + 1))),
+                (Wd.LIVE_SCHEME, ((Wd.SALT, 1), (Wd.ROUND, len(roots) + 1), (Wd.SAMPLE, 1))),
                 (Wd.LIVE_SCHEME, ((Wd.SALT, 1), ("pouw/rounds", len(roots) + 1)))])
             other = Session(rng, Ch.LiveChallenger(scheme, c.epoch, layout, rng.randbytes), [], salt=None)
             d["session"], s.sealed, s.ch = other.files(), other.lines, other.ch
@@ -524,7 +524,7 @@ def _mutate_salt(d: dict, s: Session, name: str, rng: random.Random) -> Session:
             files["close"] = s.signed(sid=session_id(rng))
         case "not-live":
             scheme, layout = rng.choice([("verity/vllm/commit-coins/v1", Wd.live_families(1)),
-                                         (Wd.LIVE_SCHEME, ((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 1)))])
+                                         (Wd.LIVE_SCHEME, ((Wd.SAMPLE, 1), (Wd.SALT, 1), (Wd.ROUND, 1)))])
             other = Session(rng, Ch.LiveChallenger(scheme, c.epoch, layout, rng.randbytes), [], salt=None, sid=s.sid)
             d["session"], s.sealed, s.ch = other.files(), other.lines, other.ch
         case "no-reserve":

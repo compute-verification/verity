@@ -13,7 +13,7 @@ package's as `verity.protocols.resource_accounting.compute.pouw.prover.clear.cle
   - A credited row must pass the rules.
 * **Credit.**
   - A cell's sample weight is its row's share of `W_ref` at |K|, with no weight side (F2), so padding to `k_unit` and
-    filler earn nothing. `W_ref` is the one the sample's Lean statement weighs by (`draw_wref`): on sm_120 at its inert-work bound
+    filler earn nothing. `W_ref` is the one the sample's Lean statement weighs by (`sample_wref`): on sm_120 at its inert-work bound
     1/1,000, `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72 (`SM120_LOOP_CAST_8P72`), so that a served
     step's mixed linears are sampled in proportion to it; elsewhere the scheme's own `wref`, Lean's
     `wrefDevRev1` at its record.  W, the profile's work, stays the scheme's own `wref`.
@@ -47,9 +47,9 @@ package's as `verity.protocols.resource_accounting.compute.pouw.prover.clear.cle
   claimed.
 * **The samples (F8)** are keyed by the epoch's sampling coin, through `verity.commitments.randomness.derive`.
   - `audit` asks the challenger for the coin once the verifier has recorded the prover's commitment (the transcript root
-    and the records root, `draw_after`), and checks it against the epoch's coin commitment (`verity.protocols.resource_accounting.compute.pouw.verifier.coins`).
+    and the records root, `sample_after`), and checks it against the epoch's coin commitment (`verity.protocols.resource_accounting.compute.pouw.verifier.coins`).
     A coin that doesn't open against it, or that was opened after anything else, is refused.
-  - `audit_replay` keeps the unverified sample of a recorded run (`RecordedDraw`), for replays whose samples are Fiat–Shamir
+  - `audit_replay` keeps the unverified sample of a recorded run (`RecordedSample`), for replays whose samples are Fiat–Shamir
     on the commitment. It supports no claim about the sample.
   - `audit` checks the splits through `split_check`, the pinned rule that computes S (`split_channels`, with its
     tie-break and budget), which lives with the model integration.
@@ -71,10 +71,10 @@ from math import floor, lcm
 
 if __package__:
     from .clear_audit import (Audit, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash,
-                              draw_coin)
+                              sample_coin)
 else:
     from clear_audit import (Audit, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash,
-                             draw_coin)
+                             sample_coin)
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, opened_value
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
@@ -88,8 +88,8 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.serving import H
 from verity.commitments.domains import POUW_PEARL_C_SAMPLING, POUW_PEARL_C_SAMPLING_AFTER
 from verity.commitments.randomness import Key, derive
 
-DRAW_DOMAIN = POUW_PEARL_C_SAMPLING
-DRAW_AFTER_TAG = POUW_PEARL_C_SAMPLING_AFTER
+SAMPLE_DOMAIN = POUW_PEARL_C_SAMPLING
+SAMPLE_AFTER_TAG = POUW_PEARL_C_SAMPLING_AFTER
 
 
 #: V-EX's count limits: at most ⌈m/64⌉ voluntary A rows per unit and ⌈n/64⌉ voluntary B rows per weight.
@@ -135,7 +135,7 @@ def cell_credit(scheme: C.PearlC, record: UnitRecord) -> Fraction:
 
 
 @dataclass(frozen=True)
-class DrawWref:
+class SampleWref:
     """The `W_ref` a Lean statement's sample weighs by: `wrefDevRev1K (devAt d prices) c`, the scheme's rev1 `wref` at the
     statement's prices plus `c` per activation element (the honest kernel's forming beyond the record's).  `GGapSampled`,
     `HonestTileInertBoundRate` and `CompleteSampled` take tickets proportional to a tile's `Wref`, over all of its rows and
@@ -155,22 +155,22 @@ class DrawWref:
 #: The statement Pearl-C v1's served gap and ε cite on sm_120 at its inert-work bound 1/1,000 (`ServedMixedRev1Gap`, `Completeness`'s
 #: `HonestTileInertBoundRate`): `Prices.sm120Loop` ⟨1047/125, 2, ⟨40, 2⟩⟩ and the honest cast at 218/25 against the record's
 #: 8953/1000 (the credited cast 8 and the A-only forming's measured 1.047, rounded up to qa = 2).
-SM120_LOOP_CAST_8P72 = DrawWref("pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000", SM120.name, SM120.cap,
+SM120_LOOP_CAST_8P72 = SampleWref("pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000", SM120.name, SM120.cap,
                                 replace(SM120.prices, fadd=Fraction(1047, 125), forming_a_only=2),
                                 Fraction(218, 25) - Fraction(8953, 1000))
-DRAW_WREF = {(SM120.name, SM120.prices, SM120.cap): SM120_LOOP_CAST_8P72}
+SAMPLE_WREF = {(SM120.name, SM120.prices, SM120.cap): SM120_LOOP_CAST_8P72}
 
 
-def draw_wref(scheme: C.PearlC) -> DrawWref | None:
+def sample_wref(scheme: C.PearlC) -> SampleWref | None:
     """The statement the scheme's sample weighs by, or None for the scheme's own `wref` (Lean's at its record, c = 0)."""
     if type(scheme) is not C.PearlC or scheme.forming != "v1":
         return None
-    return DRAW_WREF.get((scheme.device.name, scheme.prices, scheme.cap))
+    return SAMPLE_WREF.get((scheme.device.name, scheme.prices, scheme.cap))
 
 
 def ticket_cell(scheme: C.PearlC, record: UnitRecord) -> Fraction:
-    """A credited cell's sample weight: its row's share of the sampled statement's `W_ref` at |K| (`draw_wref`)."""
-    at = draw_wref(scheme)
+    """A credited cell's sample weight: its row's share of the sampled statement's `W_ref` at |K| (`sample_wref`)."""
+    at = sample_wref(scheme)
     if at is None:
         return cell_wref(scheme, record)
     priced = copy.copy(scheme)
@@ -186,7 +186,7 @@ def tile_weight(scheme: C.PearlC, record: UnitRecord, tile: Tile) -> Fraction:
 
 def tickets(scheme: C.PearlC, records: Sequence[UnitRecord]) -> list[tuple[int, Tile, int]]:
     """(record position, tile, integer ticket) for every tile of every record, by its credited cells' `W_ref` at the
-    statement the sample cites (`draw_wref`)."""
+    statement the sample cites (`sample_wref`)."""
     weights = [(p, t, tile_weight(scheme, r, t)) for p, r in enumerate(records) for t in scheme.tiles(r.matmul.shape)]
     den = lcm(*(w.denominator for _, _, w in weights)) if weights else 1
     return [(p, t, int(w * den)) for p, t, w in weights]
@@ -351,31 +351,31 @@ class _TileRuleView:
 # ---- the audit --------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class RecordedDraw:
+class RecordedSample:
     """A recorded run's sample source: its round and value, for `audit_replay` alone."""
 
     round: int
     value: bytes
 
 
-def draw_after(transcript_root: bytes, records_digest: bytes) -> bytes:
+def sample_after(transcript_root: bytes, records_digest: bytes) -> bytes:
     """What the verifier records before the challenger opens the sampling coin: the transcript root and the records root."""
-    return tagged(DRAW_AFTER_TAG, transcript_root, records_digest)
+    return tagged(SAMPLE_AFTER_TAG, transcript_root, records_digest)
 
 
-def draw_key(coin: bytes, transcript_root: bytes, records_digest: bytes, salt: bytes) -> Key:
+def sample_key(coin: bytes, transcript_root: bytes, records_digest: bytes, salt: bytes) -> Key:
     """The samples' key from the epoch's sampling coin and the commitment it was opened after."""
-    return derive(coin, DRAW_DOMAIN, {"transcript": transcript_root, "records": records_digest, "salt": salt})
+    return derive(coin, SAMPLE_DOMAIN, {"transcript": transcript_root, "records": records_digest, "salt": salt})
 
 
-def replay_key(recorded: RecordedDraw, transcript_root: bytes, records_digest: bytes, salt: bytes) -> Key:
+def replay_key(recorded: RecordedSample, transcript_root: bytes, records_digest: bytes, salt: bytes) -> Key:
     """A recorded run's samples' key, byte for byte as the run drew them."""
-    return derive(recorded.value, DRAW_DOMAIN, {"round": recorded.round, "transcript": transcript_root,
+    return derive(recorded.value, SAMPLE_DOMAIN, {"round": recorded.round, "transcript": transcript_root,
                                                 "records": records_digest, "salt": salt})
 
 
-def draw(scheme: C.PearlC, records: Sequence[UnitRecord], key: Key, t: int) -> list[tuple[int, Tile]]:
-    """t work-weighted samples with replacement over the tiles with credited cells, under `key` (`draw_key`)."""
+def sample(scheme: C.PearlC, records: Sequence[UnitRecord], key: Key, t: int) -> list[tuple[int, Tile]]:
+    """t work-weighted samples with replacement over the tiles with credited cells, under `key` (`sample_key`)."""
     tk = [x for x in tickets(scheme, records) if x[2] > 0]
     if not tk:
         return []
@@ -413,7 +413,7 @@ class WorkAudit:
     job: int
 
 
-def check_drawn(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: Sequence[UnitRecord],
+def check_sampled(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: Sequence[UnitRecord],
                 pick: tuple[int, Tile, TileOpening]) -> Verdict:
     """One opened tile, (record position, tile, opening): `Verifier.check_tile`, then `check_opened`."""
     pos, tile, opening = pick
@@ -432,29 +432,29 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
           records: Sequence[UnitRecord], challenger: Challenger, t: int,
           split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
     """Check the splits and the records, sample t tiles by the records' credit with the epoch's sampling coin, open one tile
-    per excluded row, and accept iff every opened tile passes `check_drawn`.
-    - The verifier asks `challenger` for the sampling coin only once it has recorded the commitment (`draw_after`), and the
-      coin must open against the epoch's coin commitment (`clear_audit.draw_coin`).
+    per excluded row, and accept iff every opened tile passes `check_sampled`.
+    - The verifier asks `challenger` for the sampling coin only once it has recorded the commitment (`sample_after`), and the
+      coin must open against the epoch's coin commitment (`clear_audit.sample_coin`).
     - `split_check(weight, split)` recomputes S from the calibration data by the pinned rule, and is required when any S
       is nonempty.
-    - `tile_map(f, picks)` applies `check_drawn` to the opened tiles in order (a process pool's map checks them in
+    - `tile_map(f, picks)` applies `check_sampled` to the opened tiles in order (a process pool's map checks them in
       parallel)."""
     def key_of(digest: bytes) -> tuple[Key | None, str | None]:
         root = transcript.commitment.root
-        coin, reason = draw_coin(epoch, challenger, draw_after(root, digest))
-        return (None, reason) if reason is not None else (draw_key(coin, root, digest, epoch.salt), None)
+        coin, reason = sample_coin(epoch, challenger, sample_after(root, digest))
+        return (None, reason) if reason is not None else (sample_key(coin, root, digest, epoch.salt), None)
 
     return _audit(scheme, epoch, prover, transcript, splits, records, t, split_check, tile_map, key_of)
 
 
 def audit_replay(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
-                 records: Sequence[UnitRecord], committed_round: int, recorded: RecordedDraw, t: int,
+                 records: Sequence[UnitRecord], committed_round: int, recorded: RecordedSample, t: int,
                  split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
     """`audit` with a recorded run's unverified sample, for replays whose samples are Fiat–Shamir on the commitment
     (`pearl_c4_replay`): the recorded round must only exceed `committed_round`.  It supports no claim about the sample."""
     def key_of(digest: bytes) -> tuple[Key | None, str | None]:
         if recorded.round <= committed_round:
-            return None, "the draws' recorded round is not after the commitment"
+            return None, "the samples' recorded round is not after the commitment"
         return replay_key(recorded, transcript.commitment.root, digest, epoch.salt), None
 
     return _audit(scheme, epoch, prover, transcript, splits, records, t, split_check, tile_map, key_of)
@@ -490,9 +490,9 @@ def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcrip
     if reason is not None:
         return reject(reason)
     ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
-    picks = draw(scheme, records, key, t) + exclusion_tiles(scheme, records)
+    picks = sample(scheme, records, key, t) + exclusion_tiles(scheme, records)
     opened = [(pos, tile, prover.open(epoch, ids[(pos, tile.rows[0], tile.cols[0])])) for pos, tile in picks]
-    verdicts = list(tile_map(partial(check_drawn, scheme, epoch, transcript, records), opened))
+    verdicts = list(tile_map(partial(check_sampled, scheme, epoch, transcript, records), opened))
     ok = all(v.ok for v in verdicts)
     profile = WorkProfile(scheme.name, int(w_ref), t, True, scheme.certificate) if ok else None
     return WorkAudit(Audit(ok, tuple(v.tile for v in verdicts), tuple(verdicts), profile), w_ref, credit, job)

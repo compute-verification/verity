@@ -29,7 +29,7 @@ TILE_FORM = ("refused: rows that are neither all sha512/row/v1 rows of 16 · wor
              "16 · words bits whose segments end in their last block, one output port per output row: a "
              "statement form the soundness proof does not cover")
 #: a session's verdict, once every check has passed, when it has no sample
-NO_SAMPLE = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
+NO_SAMPLE = "refused: a session without a sample: every soundness claim is about a sampled session (D12)"
 #: a sampled session's verdict, once every check has passed, without the verifier's program (`ProvedScope.NO_PROGRAM`)
 NO_PROGRAM = ("refused: a session without the verifier's program (--program): a verifier that cannot read the Program "
               "cannot know what the statement computes, nor which of its values are registered")

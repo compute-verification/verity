@@ -328,7 +328,7 @@ def replay(sides: Sides, runs: list[Path]) -> dict:
          "compared": sides.compared, "lean_same": sides.same}
     t["line"] = (f"{t['windows']} windows of {t['runs']} runs ({t['entry_rows']} of entry rows, {t['older']} older: "
                  f"registered items only; {t['unmapped']} unmapped): {t['checks_ok']}/{t['checks']} checks the recorded "
-                 f"value ({t['draws']} draws against their openings), {t['controls_refused']}/{t['controls']} negative "
+                 f"value ({t['draws']} samples against their openings), {t['controls_refused']}/{t['controls']} negative "
                  f"controls refused; Lean = Python on {t['lean_same']}/{t['compared']} inputs")
     report["totals"] = t
     report["apart"] = sides.apart

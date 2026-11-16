@@ -33,7 +33,7 @@
   so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
   table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
   root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
-  root also commits round s's receipt roots (`receipts_digest`), and the sampling coin opens after `credit.draw_root`, over
+  root also commits round s's receipt roots (`receipts_digest`), and the sampling coin opens after `credit.sample_root`, over
   the manifest, the last round's receipts and every round's root and coin, so sampling follows every round coin by hash.
 * **The A rows under the round roots** (`credit.a_link`): the root round s's coin follows is over the round's
   ``inner`` root (all of the above, `round_root`) and its ``a`` segments: step s's A table ``a/<K>@<s>`` of each K, the
@@ -75,7 +75,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     ROW_SCHEMA,
     rows_domain,
 )
-from verity.protocols.resource_accounting.compute.pouw.verifier.credit import CREDIT, draw_root
+from verity.protocols.resource_accounting.compute.pouw.verifier.credit import CREDIT, sample_root
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.challenger.challenger import (
     CoinError,
@@ -255,7 +255,7 @@ def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes,
 def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes:
     """Step s's calls: SHA-512 over their manifest rows (`pouw_h1.H1Run.manifest`), in order, with what each call's listeners
     bound (root(A) among it, once AROW binds it), each without its credit bit (`credit.CREDIT`): the step's last verdict
-    comes after its round closes, and calls_root commits the bits before `draw_root`."""
+    comes after its round closes, and calls_root commits the bits before `sample_root`."""
     return tagged(STEP_TAG, salt, s, *(json.dumps({k: v for k, v in row.items() if k != CREDIT}, sort_keys=True)
                                        for row in rows))
 
@@ -339,7 +339,7 @@ def round_reason(salt: bytes, row: Mapping[str, Any]) -> str | None:
 
 def receipts_digest(salt: bytes, r: int, roots: Sequence[tuple[int, bytes | None]]) -> bytes:
     """Round r's receipts: each of its calls' (index, receipt root), in call order, an empty root where none was handed
-    over; committed under round r + 1's root, or for the last round in `draw_root`."""
+    over; committed under round r + 1's root, or for the last round in `sample_root`."""
     return tagged(RECEIPTS_TAG, salt, r, *(p for i, root in roots for p in (i, root or b"")))
 
 
@@ -476,7 +476,7 @@ def rounds_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment) 
 
 __all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "HidingTable", "NO_RECEIPTS", "OPEN_REQUESTS_TAG",
            "PER_ROUND", "REQUESTS_NONCE", "ROUND0", "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "TABLE_NONCES",
-           "TABLE_TAGS", "UNENTERED", "draw_root", "first_ids", "hiding_rows", "late_admission",
+           "TABLE_TAGS", "UNENTERED", "sample_root", "first_ids", "hiding_rows", "late_admission",
            "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
            "round_row", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots", "slots_binding",
            "step_digest", "table_leaves", "table_root", "tables_reason"]

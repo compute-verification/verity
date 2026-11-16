@@ -573,7 +573,7 @@ def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_comp
     assert over(closed=False) == f"session {SID} ended without its client closing it (serve.py exited 1): a refused window"
     assert over(complete=False, released={Wd.SALT: 0}) == (
         f"session {SID} ended without releasing every coin of its families (released {{'pouw/salt': 0}}): a refused window")
-    assert over(released={Wd.SALT: 1, Wd.DRAW: 0}) == (
+    assert over(released={Wd.SALT: 1, Wd.SAMPLE: 0}) == (
         f"session {SID} released {{'pouw/draw': 0, 'pouw/salt': 1}}, not its one salt coin: a refused pass")
 
 

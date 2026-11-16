@@ -193,7 +193,7 @@ def of_options(args: Any, runs: int, gate_run: Run | None = None) -> ChallengePh
 def draw(session: ChallengePhase | None, rc: Any) -> dict[str, Any]:
     """Run `rc`'s coins after its root (``rc.extra["coins"]``): `session`'s, or this process's own bytes without one."""
     if session is not None:
-        rec = session.draw(bytes(rc.run_root))
+        rec = session.sample(bytes(rc.run_root))
     else:
         rec = {"source": IN_PROCESS, "root": bytes(rc.run_root).hex(), "keys": {f: secrets.token_hex(64) for f in FAMILIES}}
     rc.extra["coins"] = rec

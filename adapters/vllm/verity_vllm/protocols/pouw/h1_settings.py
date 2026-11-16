@@ -11,7 +11,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     ADMISSIONS,
     COIN_ROUND,
     H1_SCHEME,
-    NO_DRAW_SESSION,
+    NO_SAMPLE_SESSION,
     PEARL_C_SCHEMES,
     Challenger,
     challenger_address,
@@ -165,7 +165,7 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
         out.append(f"the pouw setting 'draw_session' is the draw session of H1's window ({H1_SCHEME}) on the "
                    "challenger at 'challenger'")
     elif scheme == H1_SCHEME and settings.challenger is not None and stage != "capture" and settings.draw_session is None:
-        out.append(NO_DRAW_SESSION)
+        out.append(NO_SAMPLE_SESSION)
     if scheme in PEARL_C_SCHEMES and settings.challenger is not None and settings.session is not None:
         why = period_reason(settings.period, settings.session)
         out += [] if why is None else [why]

@@ -1,4 +1,4 @@
-"""The closure-draw plan (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.plan`): closures, the sampling design seam, openings and the profile."""
+"""The closure-sample plan (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.plan`): closures, the sampling design seam, openings and the profile."""
 from __future__ import annotations
 
 import dataclasses
@@ -28,7 +28,7 @@ from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 
 
 def _key(tag: bytes = b"r"):
-    return derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": tag})
+    return derive(b"verifier-secret", PL.SAMPLE_DOMAIN, {"receipt": tag})
 
 
 def test_a_tiles_closure_is_its_strips_digest_path_and_key():
@@ -99,15 +99,15 @@ def test_the_record_budget_is_27713():
     assert PL.record_k(Fraction(1, 1000), Fraction(1, 100)) == 4_603
 
 
-def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
+def test_a_plan_proves_each_sampled_tile_with_its_closure_once():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
-    plan = PL.draw(_key(), lay, PL.WorkSamplingDesign(2))
-    assert plan == PL.draw(_key(), lay, PL.WorkSamplingDesign(2))                    # the verifier's key fixes it
-    tiles = [u for u in plan.drawn if lay.units[u].role == "tile"]
-    want = set(plan.drawn).union(*(lay.closure[t] for t in tiles))
+    plan = PL.sample(_key(), lay, PL.WorkSamplingDesign(2))
+    assert plan == PL.sample(_key(), lay, PL.WorkSamplingDesign(2))                    # the verifier's key fixes it
+    tiles = [u for u in plan.sampled if lay.units[u].role == "tile"]
+    want = set(plan.sampled).union(*(lay.closure[t] for t in tiles))
     assert plan.proved_y == tuple(sorted({lay.y_strip[t] for t in tiles}))
     assert set(plan.proved) == want and len(plan.proved) == len(want)
-    assert len(tiles) == 2 and len(plan.drawn) == 2 + len(lay.strata) - 1   # each other stratum at its floor of one
+    assert len(tiles) == 2 and len(plan.sampled) == 2 + len(lay.strata) - 1   # each other stratum at its floor of one
 
 
 def test_the_work_table_and_design_object_are_362s():
@@ -172,7 +172,7 @@ def test_the_default_work_sampling_design_samples_a_calls_share_of_the_windows_b
 
 
 
-def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
+def test_y_is_sampled_at_root_s_option_b_floors_over_the_window():
     """y's floors over the execution phase: each call's dequantization stratum has floor f_c = ⌈K_y·n_c/N⌉ in its own work table, N
     the execution phase's y cells and K_y = K = 27,713, so k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c or proves the stratum, and the
     execution phase samples at most K_y + C y cells. The other zero-work templates keep floor 1, and the tiles' K_c don't move. A call
@@ -221,7 +221,7 @@ def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
     two = dataclasses.replace(lay, strata=tuple(dataclasses.replace(s, work=len(s.units)) if s is deq else s
                                                  for s in lay.strata))
     for refused in (lambda: PL.work_table(two), lambda: PL.WorkSamplingDesign().sizes(two.strata), lambda: PL.window_sampling_designs([lay, two]),
-                    lambda: PL.design_object(two, PL.WorkSamplingDesign()), lambda: PL.draw(_key(), two, PL.WorkSamplingDesign())):
+                    lambda: PL.design_object(two, PL.WorkSamplingDesign()), lambda: PL.sample(_key(), two, PL.WorkSamplingDesign())):
         with pytest.raises(ValueError, match="one stratum"):
             refused()
     a, b = PL.StratumSpec("a", "tile", (0, 1, 2, 3), 2 * 4), PL.StratumSpec("b", "tile", (4, 5), 5 * 2)
@@ -334,8 +334,8 @@ def test_a_tiles_closure_contains_the_tile_itself():
         tiles = {u.index for u in lay.units if u.role == "tile"}
         assert set(lay.closure) == tiles
         assert all(lay.closure[t][0] == t for t in tiles)
-        plan = PL.draw(_key(), lay, PL.WorkSamplingDesign(len(tiles)))                 # every tile sampled
-        assert tiles <= set(plan.drawn) <= set(plan.proved)
+        plan = PL.sample(_key(), lay, PL.WorkSamplingDesign(len(tiles)))                 # every tile sampled
+        assert tiles <= set(plan.sampled) <= set(plan.proved)
         assert all(set(lay.closure[t]) <= set(plan.proved) for t in tiles)
 
 
@@ -343,7 +343,7 @@ def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
     """The Layout theorems hold only for the execution phase's own layout, so the verifier derives each tile's own unit and its
     closure from the shape (`Traced.layout`) and never takes a prover's. A layout mapping a tile to its X strip, C1 again,
     is refused, as a closure headed by the X strip or as the X strip in the tile stratum: by the verifier's comparison
-    (`Traced.check_layout`) and by `draw`'s own check."""
+    (`Traced.check_layout`) and by `sample`'s own check."""
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
     lay = t.layout()
     t.check_layout(lay)
@@ -358,7 +358,7 @@ def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
         with pytest.raises(DomainError):
             t.check_layout(bad)
         with pytest.raises(DomainError):
-            PL.draw(_key(), bad, PL.WorkSamplingDesign())
+            PL.sample(_key(), bad, PL.WorkSamplingDesign())
 
 
 def _anchors(call, **kw):
@@ -376,7 +376,7 @@ def _window(t, anchors, source=bytes(range(32)), commitments=None):
         return receipt, A.Ledger.open(receipt)
 
 
-def test_equal_calls_under_one_key_draw_different_tiles():
+def test_equal_calls_under_one_key_sample_different_tiles():
     """Each stratum's subset is keyed by the call's index, (forward, position), with its template: equal calls of
     an execution phase, under its one key, sample different tiles, and one call samples the same tiles under that key every time. The
     strata stay one per template of the call's partition; only the randomness is per call."""
@@ -384,28 +384,28 @@ def test_equal_calls_under_one_key_draw_different_tiles():
     t, sampling_design = traced_as("ncp-v2-shift24", 64, 64, 64), PL.WorkSamplingDesign(4)
     ans = [_anchors(call)] + [_anchors(call, **kw) for kw in ({"forward": 4}, {"site": 3}, {"layer": 6})]
     _receipt, window = _window(t, ans)
-    tiles = lambda plan: [u for u in plan.drawn if t.layout().units[u].role == "tile"]  # noqa: E731
-    drawn = [tiles(t.draw(sampling_design, an, window)) for an in ans]
-    assert drawn[0] == tiles(PL.draw(window.key, t.layout(), sampling_design, ans[0].call_index))
-    assert all(d != drawn[0] for d in drawn[1:])
+    tiles = lambda plan: [u for u in plan.sampled if t.layout().units[u].role == "tile"]  # noqa: E731
+    sampled = [tiles(t.sample(sampling_design, an, window)) for an in ans]
+    assert sampled[0] == tiles(PL.sample(window.key, t.layout(), sampling_design, ans[0].call_index))
+    assert all(d != sampled[0] for d in sampled[1:])
     assert [s.name for s in t.layout().strata] == list(dict.fromkeys(u.template for u in t.layout().units))
 
 
-def test_the_verifier_draws_over_its_own_layout():
-    """`Traced.draw(sampling_design, anchors, ledger)` takes no layout and no key: it is `plan.draw` over `Traced.layout()`
+def test_the_verifier_samples_over_its_own_layout():
+    """`Traced.sample(sampling_design, anchors, ledger)` takes no layout and no key: it is `plan.sample` over `Traced.layout()`
     under the ledger's key."""
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
-    assert list(inspect.signature(Traced.draw).parameters) == ["self", "sampling_design", "anchors", "ledger"]
+    assert list(inspect.signature(Traced.sample).parameters) == ["self", "sampling_design", "anchors", "ledger"]
     an = _anchors(call)
     _receipt, window = _window(t, [an])
-    assert t.draw(PL.WorkSamplingDesign(2), an, window) == PL.draw(window.key, t.layout(), PL.WorkSamplingDesign(2), an.call_index)
+    assert t.sample(PL.WorkSamplingDesign(2), an, window) == PL.sample(window.key, t.layout(), PL.WorkSamplingDesign(2), an.call_index)
 
 
-def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
+def test_a_repeated_call_index_is_refused_before_any_sample(monkeypatch):
     """The execution phase pin takes an execution phase's per-call samples as independent (M1), and each call's subsets are keyed by its index
-    under the one execution phase key. A receipt lists each call index once, and `Traced.draw` admits the call to the execution phase's
-    `Ledger` before it samples: a call index already sampled, even with another weight id, is refused before `plan.draw`
+    under the one execution phase key. A receipt lists each call index once, and `Traced.sample` admits the call to the execution phase's
+    `Ledger` before it samples: a call index already sampled, even with another weight id, is refused before `plan.sample`
     runs. A sample without a ledger is refused."""
     call = F.call(32, 64, 32)
     t, sampling_design = traced_as("ncp-v2-shift24", 32, 64, 32), PL.WorkSamplingDesign(2)
@@ -415,48 +415,48 @@ def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
     with pytest.raises(DomainError, match="repeated"):
         Receipt(((first, t.shape, hashlib.sha512(b"1").digest()), (twin, t.shape, hashlib.sha512(b"2").digest())))
     _receipt, window = _window(t, [first, _anchors(call, forward=call.forward + 1)])
-    drawn, real = [], plan_module.draw
-    monkeypatch.setattr(plan_module, "draw", lambda key, lay, sampling_design, index: drawn.append(index) or real(key, lay, sampling_design, index))
-    t.draw(sampling_design, first, window)
+    sampled, real = [], plan_module.sample
+    monkeypatch.setattr(plan_module, "sample", lambda key, lay, sampling_design, index: sampled.append(index) or real(key, lay, sampling_design, index))
+    t.sample(sampling_design, first, window)
     for again in (first, twin):
         with pytest.raises(DomainError, match="repeated|not on the window's receipt"):
-            t.draw(sampling_design, again, window)
-    assert drawn == [first.call_index] and window.seen == {first.call_index}
-    t.draw(sampling_design, _anchors(call, forward=call.forward + 1), window)
-    assert len(drawn) == 2
+            t.sample(sampling_design, again, window)
+    assert sampled == [first.call_index] and window.seen == {first.call_index}
+    t.sample(sampling_design, _anchors(call, forward=call.forward + 1), window)
+    assert len(sampled) == 2
     for no_ledger in (None, set()):
         with pytest.raises(TypeError):
-            t.draw(sampling_design, first, no_ledger)
-    assert len(drawn) == 2
+            t.sample(sampling_design, first, no_ledger)
+    assert len(sampled) == 2
 
 
 def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
     """Root's C1: the execution phase's key comes after every call's commitment. A `Receipt` lists every call of the execution phase with its
-    shape and commitment, and is immutable; `Ledger.open` derives the key from it alone, under `DRAW_DOMAIN` with
-    {"receipt": digest}, and `Traced.draw` refuses a ledger not opened from a receipt and a call the receipt doesn't list
-    (another index, the same index with other anchors, or another shape), before `plan.draw` runs. The digest binds each
+    shape and commitment, and is immutable; `Ledger.open` derives the key from it alone, under `SAMPLE_DOMAIN` with
+    {"receipt": digest}, and `Traced.sample` refuses a ledger not opened from a receipt and a call the receipt doesn't list
+    (another index, the same index with other anchors, or another shape), before `plan.sample` runs. The digest binds each
     call's full anchors (salt, weight id, rows and columns), shape and commitment, and not the order they are listed in."""
     call = F.call(32, 64, 32)
     t, sampling_design = traced_as("ncp-v2-shift24", 32, 64, 32), PL.WorkSamplingDesign(2)
     a, b, unlisted = (_anchors(call, forward=f) for f in (1, 2, 3))
     source = bytes(range(32))
     receipt, window = _window(t, [a, b], source)
-    assert window.key == derive(source, PL.DRAW_DOMAIN, {"receipt": receipt.digest()})
-    drawn, real = [], plan_module.draw
-    monkeypatch.setattr(plan_module, "draw", lambda key, lay, sampling_design, index: drawn.append(index) or real(key, lay, sampling_design, index))
+    assert window.key == derive(source, PL.SAMPLE_DOMAIN, {"receipt": receipt.digest()})
+    sampled, real = [], plan_module.sample
+    monkeypatch.setattr(plan_module, "sample", lambda key, lay, sampling_design, index: sampled.append(index) or real(key, lay, sampling_design, index))
     other_shape = ncp2.Shape(32, 128, 32)
     twin = dataclasses.replace(a, weight=a.weight + 1)
-    refusals = [(lambda: t.draw(sampling_design, a, A.Ledger()), "opened from its complete receipt"),
-                (lambda: t.draw(sampling_design, unlisted, window), "not on the window's receipt"),
-                (lambda: t.draw(sampling_design, twin, window), "not on the window's receipt"),
+    refusals = [(lambda: t.sample(sampling_design, a, A.Ledger()), "opened from its complete receipt"),
+                (lambda: t.sample(sampling_design, unlisted, window), "not on the window's receipt"),
+                (lambda: t.sample(sampling_design, twin, window), "not on the window's receipt"),
                 (lambda: window.admit(a, other_shape), "not on the window's receipt")]
     for refused, match in refusals:
         with pytest.raises(DomainError, match=match):
             refused()
-    assert drawn == []
-    t.draw(sampling_design, a, window)
-    t.draw(sampling_design, b, window)
-    assert drawn == [a.call_index, b.call_index]
+    assert sampled == []
+    t.sample(sampling_design, a, window)
+    t.sample(sampling_design, b, window)
+    assert sampled == [a.call_index, b.call_index]
     ca, cb = (c for _an, _s, c in receipt.calls)
     assert A.Receipt(((b, t.shape, cb), (a, t.shape, ca))).digest() == receipt.digest()
     changed = [((a, t.shape, ca), (b, t.shape, hashlib.sha512(b"b'").digest())), ((a, t.shape, ca), (b, other_shape, cb))]
@@ -479,7 +479,7 @@ def test_a_caller_built_ledger_has_no_key():
     call = F.call(32, 64, 32)
     t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
     receipt, _window_ = _window(t, [an])
-    chosen = derive(b"caller-chosen", PL.DRAW_DOMAIN, {"receipt": receipt.digest()})
+    chosen = derive(b"caller-chosen", PL.SAMPLE_DOMAIN, {"receipt": receipt.digest()})
     for built in (lambda: Ledger(receipt=receipt, key=chosen), lambda: Ledger(receipt, chosen)):
         with pytest.raises(TypeError):
             built()
@@ -488,20 +488,20 @@ def test_a_caller_built_ledger_has_no_key():
         with pytest.raises(AttributeError):
             setattr(bare, name, value)
     with pytest.raises(DomainError, match="opened from its complete receipt"):
-        t.draw(PL.WorkSamplingDesign(2), an, bare)
+        t.sample(PL.WorkSamplingDesign(2), an, bare)
 
 
 def test_an_opened_ledger_s_key_cannot_be_reassigned():
     """An opened ledger whose key is reassigned. The key is set once, in `Ledger.open`, and
-    `Traced.draw` reads it from the ledger, so a caller's key never reaches a sample."""
+    `Traced.sample` reads it from the ledger, so a caller's key never reaches a sample."""
     call = F.call(32, 64, 32)
     t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
     receipt, window = _window(t, [an])
-    derived, chosen = window.key, derive(b"caller-chosen", PL.DRAW_DOMAIN, {"receipt": receipt.digest()})
+    derived, chosen = window.key, derive(b"caller-chosen", PL.SAMPLE_DOMAIN, {"receipt": receipt.digest()})
     for name in ("key", "_key"):
         with pytest.raises(AttributeError):
             setattr(window, name, chosen)
-    assert window.key == derived and t.draw(PL.WorkSamplingDesign(2), an, window) == PL.draw(derived, t.layout(), PL.WorkSamplingDesign(2),
+    assert window.key == derived and t.sample(PL.WorkSamplingDesign(2), an, window) == PL.sample(derived, t.layout(), PL.WorkSamplingDesign(2),
                                                                                   an.call_index)
 
 
@@ -518,7 +518,7 @@ def test_an_opened_ledger_s_receipt_cannot_be_swapped():
             setattr(window, name, larger)
     assert window.receipt is receipt
     with pytest.raises(DomainError, match="not on the window's receipt"):
-        t.draw(PL.WorkSamplingDesign(2), late, window)
+        t.sample(PL.WorkSamplingDesign(2), late, window)
 
 
 def test_openings_are_checked_against_the_receipt_s_commitment():
@@ -535,7 +535,7 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
     other = audit.commit_rows(binding, 7, [bytes(len(r)) for r in rows], salt_key=bytes(32), nonce=7)
     _receipt, window = _window(t, [an], commitments=[tree.commitment.root])
     assert window.commitment(an) == tree.commitment.root
-    plan = t.draw(PL.WorkSamplingDesign(2), an, window)
+    plan = t.sample(PL.WorkSamplingDesign(2), an, window)
     opened = sorted(r for kind, r in plan.openings if kind == "a")
     t.check_openings(plan, an, window, domain, [tree.open(r) for r in opened])
     for bad in ([other.open(r) for r in opened], [tree.open(r) for r in opened[1:]],
@@ -549,7 +549,7 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
         window.commitment(_anchors(call, forward=call.forward + 9))
 
 
-def test_the_record_keeps_the_source_once_the_draw_is_sent():
+def test_the_record_keeps_the_source_once_the_sample_is_sent():
     """The audit record keeps the execution phase's source and receipt digest once its sample
     is sent, so a third party re-derives the key (`replay_key`) and so the sample. Before it is sent the record is refused,
     and after it the execution phase samples nothing more. What the record can't show is that the source was fresh."""
@@ -557,16 +557,16 @@ def test_the_record_keeps_the_source_once_the_draw_is_sent():
     t, a, b = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call, forward=1), _anchors(call, forward=2)
     source = bytes(range(32))
     receipt, window = _window(t, [a, b], source)
-    plan = t.draw(PL.WorkSamplingDesign(2), a, window)
-    with pytest.raises(DomainError, match="once its draw is sent"):
+    plan = t.sample(PL.WorkSamplingDesign(2), a, window)
+    with pytest.raises(DomainError, match="once its sample is sent"):
         window.record()
     window.sent()
     with pytest.raises(DomainError, match="sent"):
-        t.draw(PL.WorkSamplingDesign(2), b, window)
+        t.sample(PL.WorkSamplingDesign(2), b, window)
     record = window.record()
-    assert record == {"domain": PL.DRAW_DOMAIN, "receipt": receipt.digest().hex(), "source": source.hex()}
+    assert record == {"domain": PL.SAMPLE_DOMAIN, "receipt": receipt.digest().hex(), "source": source.hex()}
     assert replay_key(record) == window.key
-    assert PL.draw(replay_key(record), t.layout(), PL.WorkSamplingDesign(2), a.call_index) == plan
+    assert PL.sample(replay_key(record), t.layout(), PL.WorkSamplingDesign(2), a.call_index) == plan
     with pytest.raises(DomainError):
         replay_key({**record, "domain": "verity/pouw/other/v1"})
 
@@ -591,7 +591,7 @@ def test_the_call_s_y_is_linked_to_the_weight_program():
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
     _receipt, window = _window(t, [_anchors(call)])
-    plan = t.draw(PL.WorkSamplingDesign(2), _anchors(call), window)
+    plan = t.sample(PL.WorkSamplingDesign(2), _anchors(call), window)
     assert {cs for role, cs in plan.openings if role == "y"} == set(plan.proved_y) != set()
     weight_out = list(evaluate(ncp2.weight(call.shape), *call.weight_args()))
     args = call.args()

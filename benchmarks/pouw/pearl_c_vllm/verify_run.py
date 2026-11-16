@@ -14,12 +14,12 @@
   are the manifest's (`records_of`).  Their root must be the one the pass published before any sample.
 - **The samples' source** is 32 bytes of the Lean verifier's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
   `uniform/io-getrandombytes`), the verifier's own, sampled here after the transcript is fixed: a
-  `clear_work.RecordedDraw` of round 1, after the commitment's 0.
+  `clear_work.RecordedSample` of round 1, after the commitment's 0.
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,
   B's rows and tree levels per fixed operand, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
   (-h3's) a node is 64 bytes and each value is followed by its salt, `audit.hm96_salt` under the manifest's
   ``hm96_salt_key`` (the prover's, retained for this replay), and the scheme reads the value less its salt.
-- **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`) and one tile per excluded row
+- **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`sample`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
   forms, with the first tile and every ``--cross-check``-th after it, in the sample's order, replayed on the scalar reference
@@ -65,15 +65,15 @@ document's ``uncredited``): excluded, voluntary and side-channel cells, and the 
 the inert-work bound, and ρ). It is a property of the committed records, which the answer never states, and changes
 nothing the verdict accepts.
 
-**The run's sample** (`verify_passes`' ``draw``) is one source S, and the samples' key is
-``derive(S, RUN_DRAW_DOMAIN, {"run": C})`` over the run's commitment C (`run_commitment`, 64 bytes).  S comes from one of:
-- ``challenger`` (`bench_arm.LiveDraw`, `served_passes.py verify` under ``PEARLC_CHALLENGER_GATE``): a sample session of
-  its own on the auditor device's challenger (`window.DRAW_FAMILIES`, its one coin ``pouw/draw`` 0), reserved withheld
+**The run's sample** (`verify_passes`' ``sample``) is one source S, and the samples' key is
+``derive(S, RUN_SAMPLE_DOMAIN, {"run": C})`` over the run's commitment C (`run_commitment`, 64 bytes).  S comes from one of:
+- ``challenger`` (`bench_arm.LiveSample`, `served_passes.py verify` under ``PEARLC_CHALLENGER_GATE``): a sample session of
+  its own on the auditor device's challenger (`window.SAMPLE_FAMILIES`, its one coin ``pouw/draw`` 0), reserved withheld
   through the lane's gate once the lane has no period open (so it joins none, and the Pearl-C period's close lists the
   salt sessions alone) and, given the period the salt session joined, as the lane's first reserve after that period
   closed (`pouw_h1_window.after_close`, held before its coin is asked), opened on C, its coin released only after C and
   its commitment, salt and path only at its close. S is that coin's 64 bytes.
-- ``node`` (`node_draw`, the default): 32 bytes of the Lean verifier's coins on this node (``uniform/io-getrandombytes``),
+- ``node`` (`node_sample`, the default): 32 bytes of the Lean verifier's coins on this node (``uniform/io-getrandombytes``),
   a development sample no verdict of record takes.
 
 **The coin record** (``record``, `COIN_SCHEMA`) is what every reader of the sample reads, the Lean `PouwCheck.PearlPlus`
@@ -94,7 +94,7 @@ among them; it is written before any replay, and once asked for a sample is neve
 
 A reader holds a challenger sample to: ``opening`` is coin ``pouw/draw`` 0 of ``commitment`` opened after C
 (`challenger.live_reason`) and its coin is S; ``commitment`` is the one the session's challenger signed, of a sample
-session's layout (`window.draw_epoch_reason`); the auditor's ledger, under the pinned key, opens that session alone on C,
+session's layout (`window.sample_epoch_reason`); the auditor's ledger, under the pinned key, opens that session alone on C,
 withheld (`challenger.withheld_on`); and that session is its lane's first reserve after the lane's Pearl-C period closed
 (`served_verdicts.pearlplus_live_sample`, over `pouw_h1_window.after_close`), so a prover who tries again under another
 session holds a sample no reader takes.
@@ -160,11 +160,11 @@ import clear_work as CW
 from clear_audit import TileOpening, Transcript, Verifier
 
 settings = of(__file__)
-DRAWS = 3
+SAMPLES = 3
 #: a served run's verdict over all its passes (`verify_passes`)
 PROTOCOL = "verity/pouw/pearl-plus/v1"
 RUN_TAG = "verity/pouw/pearl-plus/run/v1"
-RUN_DRAW_DOMAIN = "verity/pouw/pearl-plus-run-draw/v1"
+RUN_SAMPLE_DOMAIN = "verity/pouw/pearl-plus-run-draw/v1"
 #: the named assumption an accepted run's credit is at, TT_OUT(1/400) per audit tile, rev1, at the scheme's device record
 #: (`security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean`): the scheme credits (1 − ρ)·`creditDevRev1`
 #: (`pearl_c.PearlC.credit_of`). At the H100's record it is its own named Prop.
@@ -444,7 +444,7 @@ def replay(passes: list[Pass], todo: list[tuple[int, int, int]], jobs: int, fast
             _JOB.pop("undo")()
 
 
-def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None = None, fast: bool = False,
+def verify(path: Path, samples: int, jobs: int, commit: str, source: bytes | None = None, fast: bool = False,
            cross_check: int = 0, coins: CoinCommitment | LiveCommitment | None = None) -> dict:
     """The pass's verdict, its execution phase re-started under `coins`, the execution phase's published coin commitment
     (`pouw_pearl_c_device.manifest_epoch`).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
@@ -452,15 +452,15 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
     it in the sample's order (`check`) on the scalar reference too: any verdict that differs is ``cross_check_failed``, and the
     pass is not accepted."""
     man, digest, named = read(path)
-    out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": draws,
+    out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": samples,
            "replay": "batch" if fast else "scalar"}
     try:
         p = load(path, coins, man)
         scheme, records, c, out["salt"] = p.scheme, p.records, man["commitment"], p.salt
         source = PV.coins(32) if source is None else source
-        key = CW.replay_key(CW.RecordedDraw(1, source), p.transcript.commitment.root, bytes.fromhex(man["records_root"]), p.epoch.salt)
-        drawn, excluded = CW.draw(scheme, records, key, draws), CW.exclusion_tiles(scheme, records)
-        todo = [(0, pos, tid) for pos, tid in p.tile_ids(drawn + excluded)]
+        key = CW.replay_key(CW.RecordedSample(1, source), p.transcript.commitment.root, bytes.fromhex(man["records_root"]), p.epoch.salt)
+        sampled, excluded = CW.sample(scheme, records, key, samples), CW.exclusion_tiles(scheme, records)
+        todo = [(0, pos, tid) for pos, tid in p.tile_ids(sampled + excluded)]
         verdicts, fast = replay([p], todo, jobs, fast, cross_check)
         out["replay"] = "batch" if fast else "scalar"
         differ = [t for _, t, _, _, _, same in verdicts if same is False]
@@ -472,12 +472,12 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
             out["cross_check_failed"] = differ
         if fast:
             out["cross_checked"] = [t for _, t, _, _, _, same in verdicts if same is not None]
-        at = CW.draw_wref(scheme)
+        at = CW.sample_wref(scheme)
         out.update(accepted=ok, scheme=scheme.name, source=source.hex(), tiles=[t for _, t, *_ in verdicts],
                    draw_wref=at.statement if at else "wref",
-                   drawn=len(drawn), exclusion_tiles=len(excluded),
+                   drawn=len(sampled), exclusion_tiles=len(excluded),
                    verdicts=[{"tile": t, "ok": g, "reason": r} for _, t, g, r, *_ in verdicts], w_ref=str(w_ref), credit=str(credit))
-        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({len(drawn)} drawn, "
+        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({len(sampled)} sampled, "
                        f"{len(excluded)} for excluded rows) of {c['count']} over {len(records)} matmuls"
                        f"{'' if ok else ' (' + bad + ')'}; transcript root {c['root'][:16]}, records {man['records_root'][:16]}, "
                        f"source {source.hex()[:16]}; transcript {named}; verifier {commit}"
@@ -515,25 +515,25 @@ WEIGHTS_UNTIED = "weights untied (W v1)"
 V1_WEIGHTS = "W states no version (version 1), whose values are the calls' alone, and registers"
 #: the coin record's schema (module docstring, "The coin record")
 COIN_SCHEMA = "verity-pouw/pearl-plus-coin/v2"
-#: the coin record's ``draw.from``: a sample session's coin on the auditor device's challenger, or this node's coins
-DRAW_CHALLENGER, DRAW_NODE = "challenger", "node"
+#: the coin record's ``sample.from``: a sample session's coin on the auditor device's challenger, or this node's coins
+SAMPLE_CHALLENGER, SAMPLE_NODE = "challenger", "node"
 #: the claim instance the node's sample source rests on (`pouw.verifier.coins`)
 NODE_CLAIM = "uniform/io-getrandombytes"
 #: beside the coin record, the mark written just before a sample is asked for: a sample asked and never recorded is not
 #: asked again
 ASKED = ".asked"
 #: why `verify_passes` refuses passes other than those its recorded coin was flipped on
-AFTER_COIN = ("after-coin", "the retained passes or their records are not those the verifier's coin was drawn on: a "
-              "retention change or a give-up after the coin is refused, and a retry never redraws")
+AFTER_COIN = ("after-coin", "the retained passes or their records are not those the verifier's coin was flipped on: a "
+              "retention change or a give-up after the coin is refused, and a retry never resamples")
 #: why `verify_passes` refuses a run whose sample was asked for and never recorded
-ASKED_ONCE = ("asked-once", "the verifier's draw was asked for and never recorded (a draw that failed or was cut short), "
-              "and a retry never redraws")
+ASKED_ONCE = ("asked-once", "the verifier's sample was asked for and never recorded (a sample that failed or was cut short), "
+              "and a retry never resamples")
 
 
-def node_draw(root: bytes, asking: Any) -> tuple[bytes, dict]:
-    """The development sample (`DRAW_NODE`): 32 bytes of the Lean verifier's coins on this node, after `asking` marks it."""
+def node_sample(root: bytes, asking: Any) -> tuple[bytes, dict]:
+    """The development sample (`SAMPLE_NODE`): 32 bytes of the Lean verifier's coins on this node, after `asking` marks it."""
     asking({})
-    return PV.coins(32), {"from": DRAW_NODE, "claim": NODE_CLAIM}
+    return PV.coins(32), {"from": SAMPLE_NODE, "claim": NODE_CLAIM}
 
 
 def tie_entries(passes: list[Pass], rounds: list[int] | None = None, weights: bool = True) -> dict[str, dict]:
@@ -826,16 +826,16 @@ def rejected(reason: str, commit: str) -> dict:
                        "profile": None}, "line": f"REJECT {PROTOCOL}: {reason}; verifier {commit}"}
 
 
-def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: CoinCommitment | LiveCommitment,
+def verify_passes(paths: list[Path], samples: int, jobs: int, commit: str, coins: CoinCommitment | LiveCommitment,
                   source: bytes | None = None,
                   fast: bool = False, cross_check: int = 0, delta: Fraction = DELTA, window: dict | None = None,
                   rounds: list[int] | None = None, dropped: tuple[int, ...] = (), record: Path | None = None,
-                  draw: Any = node_draw, over_cap: str = UNCREDITED, test_instance: bool = False,
+                  sample: Any = node_sample, over_cap: str = UNCREDITED, test_instance: bool = False,
                   window_class: tuple[int, int, int] | None = None) -> dict:
     """One served run's verdict over all its passes, in core's answer form (`core_check.answer_of`): every pass is read
     and held to what it published, and to the execution phase record `window` where there is one (`tie`), then one source of the
-    verifier's coins (`pouw.verifier.coins`), sampled after, keys `draws` work-weighted tiles over every pass's tickets
-    together (`clear_work.draw` on their records in order), and each pass opens one tile per excluded row.  It accepts iff
+    verifier's coins (`pouw.verifier.coins`), sampled after, keys `samples` work-weighted tiles over every pass's tickets
+    together (`clear_work.sample` on their records in order), and each pass opens one tile per excluded row.  It accepts iff
     every opened tile passes the tile rule, and credits the run at its scheme's assumption (`credit_at_assumption`) at δ.
 
     ``over_cap`` is the rule on an opened tile that passes every check but its inert-work bound (`clear_work.inert_bound_failure`):
@@ -868,10 +868,10 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
     verifier's record of its coin: the first verdict writes the run's commitment and the source there before any replay,
     and a later one over passes whose commitment is another (a retention or a give-up changed after the coin) is refused
-    (`AFTER_COIN`) while one over the same takes the same source, so a retry never resamples.  ``draw(C, asking)`` is the
+    (`AFTER_COIN`) while one over the same takes the same source, so a retry never resamples.  ``sample(C, asking)`` is the
     source's sample on the run's commitment C (module docstring, "The run's sample"): it calls ``asking(info)`` just before it
     asks, which marks the record (`ASKED`) so a sample that fails or is cut short is never asked again (`ASKED_ONCE`), and
-    returns (S, the record's ``draw``).  A given ``source`` (a test's) is recorded as the node's."""
+    returns (S, the record's ``sample``).  A given ``source`` (a test's) is recorded as the node's."""
     if over_cap not in OVER_INERT_BOUND:
         raise ValueError(f"over_cap {over_cap!r} is none of {', '.join(OVER_INERT_BOUND)}")
     cls = None if window_class is None else load_class(window_class)
@@ -879,7 +879,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         if window is None:
             raise ValueError("a class's fixed load is held with the window record the passes are tied to: no window")
     named = [read(x)[2] for x in paths]
-    out = {"passes": named, "verifier_commit": commit, "draws": draws, "delta": str(delta), "over_cap": over_cap,
+    out = {"passes": named, "verifier_commit": commit, "draws": samples, "delta": str(delta), "over_cap": over_cap,
            **({"test_instance": True} if test_instance else {}),
            **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {})}
 
@@ -932,12 +932,12 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                 asked.write_text(json.dumps({"commitment": root.hex(), **info}) + "\n")
 
         if source is not None:
-            drew = {"from": DRAW_NODE, "claim": NODE_CLAIM}
+            drew = {"from": SAMPLE_NODE, "claim": NODE_CLAIM}
         else:
             try:
-                source, drew = draw(root, asking)
-            except Exception as ex:  # noqa: BLE001 - a sample that fails is a visible rejection, never redrawn
-                return reject(f"the verifier's draw: {type(ex).__name__}: {ex}")
+                source, drew = sample(root, asking)
+            except Exception as ex:  # noqa: BLE001 - a sample that fails is a visible rejection, never resampled
+                return reject(f"the verifier's sample: {type(ex).__name__}: {ex}")
         if record is not None:
             record.parent.mkdir(parents=True, exist_ok=True)
             tmp = record.with_name(record.name + ".tmp")
@@ -946,28 +946,28 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                                        "draw": drew}, indent=1) + "\n")
             os.replace(tmp, record)
     out["draw"] = (drew or {}).get("from")
-    key = derive(source, RUN_DRAW_DOMAIN, {"run": root})
+    key = derive(source, RUN_SAMPLE_DOMAIN, {"run": root})
     at = [0]
     for p in passes:
         at.append(at[-1] + len(p.records))
     records = [r for p in passes for r in p.records]
-    drawn: dict[int, list] = {}
-    for pos, tile in CW.draw(scheme, records, key, draws):
+    sampled: dict[int, list] = {}
+    for pos, tile in CW.sample(scheme, records, key, samples):
         i = bisect.bisect_right(at, pos) - 1
-        drawn.setdefault(i, []).append((pos - at[i], tile))
+        sampled.setdefault(i, []).append((pos - at[i], tile))
     todo, picked = [], []
     for i, p in enumerate(passes):
-        mine, ex = p.tile_ids(drawn.get(i, [])), p.tile_ids(CW.exclusion_tiles(p.scheme, p.records))
+        mine, ex = p.tile_ids(sampled.get(i, [])), p.tile_ids(CW.exclusion_tiles(p.scheme, p.records))
         todo += [(i, pos, tid) for pos, tid in mine + ex]
         picked += [True] * len(mine) + [False] * len(ex)
-    excluded = len(todo) - sum(map(len, drawn.values()))
+    excluded = len(todo) - sum(map(len, sampled.values()))
     verdicts, fast = replay(passes, todo, jobs, fast, cross_check)
     uncredited = over_cap == UNCREDITED
     bad = [f"pass {i} tile {t}: {r}" for i, t, good, r, over, _ in verdicts if not good and not (over and uncredited)]
     bad += [f"pass {i} tile {t}: the batch replay's verdict is not the scalar one's" for i, t, *_, same in verdicts if same is False]
-    over_draws = sum(1 for v, d in zip(verdicts, picked, strict=True) if d and v[4])
-    exact = credit_at_assumption(passes, draws, delta, over_draws)
-    credit = exact if cls is None else grid_work(structural_credit(passes, draws, delta, over_draws), exact)
+    over_samples = sum(1 for v, d in zip(verdicts, picked, strict=True) if d and v[4])
+    exact = credit_at_assumption(passes, samples, delta, over_samples)
+    credit = exact if cls is None else grid_work(structural_credit(passes, samples, delta, over_samples), exact)
     if test_instance:
         credit["credited"] = exact["credited"] = 0
     out.update(scheme=scheme.name, source=source.hex(), commitment=root.hex(), replay="batch" if fast else "scalar",
@@ -980,7 +980,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                           "activations": [u["root_a"] for u in p.man["matmuls"]], "y": y_roots(p)} for p in passes],
               **({"tie": tied} if tied is not None else {}),
               **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {})}
-    profile = {"delta": str(delta), "draws": draws, "draw": "work-weighted, with replacement", "source": source.hex(),
+    profile = {"delta": str(delta), "draws": samples, "draw": "work-weighted, with replacement", "source": source.hex(),
                "source_from": out["draw"], "over_cap": over_cap, **({"test_instance": True} if test_instance else {}),
                "exclusion_tiles": excluded, "tiles": [[i, t] for i, t, *_ in verdicts],
                **({} if cls is None else {"exact_work": {k: exact[k] for k in EXACT_WORK}})}
@@ -990,18 +990,18 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                                           + (f", at its class's fixed load ({', '.join(map(str, cls))})" if cls else ""))
     if dropped:
         tie_clause += f", {len(dropped)} passes dropped before the coin (rounds {', '.join(map(str, dropped))})"
-    if over_draws:
-        tie_clause += f", {over_draws} draws on tiles over their inert-work bound credited nothing"
+    if over_samples:
+        tie_clause += f", {over_samples} samples on tiles over their inert-work bound credited nothing"
     if test_instance:
         tie_clause += ", a test instance's, credited nothing"
     else:
-        out["uncredited"] = uncredited_calls(passes, draws, delta, over_draws)
+        out["uncredited"] = uncredited_calls(passes, samples, delta, over_samples)
     out.update(answer={"protocol": PROTOCOL, "verdict": "accept", "reason": None, "commitment": root.hex(), "public": public,
                        "profile": profile},
                # the line names the credit, the protocol's output (in the grid form where a class is held), and the
                # sample; not how many exclusion tiles the passes' given-up rows made, nor the MACs the passes declare,
                # which the retained values decide (`profile`)
-               line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} drawn tiles and the exclusion tiles over "
+               line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} sampled tiles and the exclusion tiles over "
                      f"{len(passes)} passes, y committed and checked on {sum(r is not None for r in ys)} of {len(ys)} calls"
                      f"{tie_clause}; "
                      f"{credit['credited']:,} MACs credited at ε {float(Fraction(credit['epsilon'])):.4g}, "
@@ -1012,13 +1012,13 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("manifest", type=Path)
-    p.add_argument("--draws", type=int, default=DRAWS)
+    p.add_argument("--draws", type=int, default=SAMPLES)
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--commit", default=settings.RESEARCH_SOURCE_SHA or "unknown")
     p.add_argument("--expect-reject", action="store_true", help="the pass is a negative control: exit 0 only if it is rejected")
     p.add_argument("--fast", action="store_true", help="replay the tiles on fast_tile's batch forms (the scalar reference's verdicts)")
     p.add_argument("--cross-check", type=int, default=64, metavar="N",
-                   help="with --fast, replay the first tile and every N-th after it, in the draw's order, on the scalar "
+                   help="with --fast, replay the first tile and every N-th after it, in the sample's order, on the scalar "
                         "reference too; any verdict that differs rejects the pass and exits 2 (0: none)")
     p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (e2e.py's coins.json)")
     a = p.parse_args(argv)

@@ -5,7 +5,7 @@ epoch (`test_pearl_c_vllm.proved_pass`) in a serve dir, verified at 3 samples on
 The step runs the executable on the passes that run's document names, the epoch's coins, its sample count, its coin
 record, the W ``verify --tie`` held the passes to and, on a live session's coins, ``--of-record`` (`lean_argv`), and
 writes the Lean's answer, W at ``tie``, only where the Lean's printout is the Python's on every field the Lean's
-difftest holds (`LEAN_HELD`), its ``drawn`` the sample count and its W the Python's (or none on both).
+difftest holds (`LEAN_HELD`), its ``sampled`` the sample count and its W the Python's (or none on both).
 Anything else (a field that differs, an exit code that isn't its verdict's, a printout that isn't one, no coin record,
 passes other than those the verdict read, no executable) writes none and removes one there, and both verdicts go to the
 check document either way. The real executable's run is `benchmarks/one_stage`'s ``test_served_pearlplus_lean``.
@@ -117,7 +117,7 @@ def test_each_check_records_its_wall_seconds_and_the_node_it_ran_on(run, tmp_pat
 
 
 def test_a_lean_verdict_that_differs_on_any_held_field_writes_no_answer_and_removes_one_there(run, tmp_path):
-    """Each field the difftest holds, ``drawn`` and the W the Lean names: one differing leaves no answer (a stale one
+    """Each field the difftest holds, ``sampled`` and the W the Lean names: one differing leaves no answer (a stale one
     removed), exit 2, and the check document names the fields beside both verdicts."""
     d, verify, doc = run
     work = doc["answer"]["public"]["work"]
@@ -282,7 +282,7 @@ def test_case_writes_nothing_without_the_lean_answer_its_coin_record_or_its_pass
 
 def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch):
     """``verify.sh`` on a window's passes (an honest prefill and decode and a control whose weight rows are flipped, each
-    `test_pearl_c_vllm.proved_pass`'s, of one epoch, as a test instance, ``TEST_INSTANCE=1``), their coin records drawn
+    `test_pearl_c_vllm.proved_pass`'s, of one epoch, as a test instance, ``TEST_INSTANCE=1``), their coin records sampled
     first on a fixed source, which the script's twin reads as a retry does, and a ``pouw-pearlplus`` that gives each pass
     the twin's verdict but those ``REFUSE`` names, where it answers nothing: the script exits 0 where the Lean accepts
     prefill and decode and rejects the control, and 1 where the Lean answers nothing on the prefill, which the twin

@@ -121,13 +121,13 @@ difftest only.
 | The salt | `core_check.salt_of_record` | `saltCheck` (`salt`) | `salt_twin` |
 | A live pass's salt | `core_check.live_salt` | `liveSaltCheck` (`live-salt`) | `live_salt_twin` |
 | The round coins | `core_check.rounds` | `roundsCheck` (`rounds`) | `rounds_twin` |
-| The sample | `credit.drawn` | `Credit.drawn` (`drawn`) | `drawn_twin` |
+| The sample | `credit.sampled` | `Credit.drawn` (`drawn`) | `sampled_twin` |
 | A period's presented roots | `credit.period` | `Credit.periodRoots`, a stub that refuses everything | `period_twin` |
 | A Pearl-C period's credit | `credit.pearl_c_period_credit` | `Credit.pearlCMonitoringPeriodCredit`, a stub that refuses everything | `pearl_c_period_credit_twin` |
 | Passes credited together | `credit.passes_distinct` | Pearl+'s `PearlPlus.passesDistinct` (`passes-distinct`) | `passes_distinct_twin` |
 
 Several functions are twins only, because the Lean decides their verdict inside a whole case's (`registered_twin`,
-`opening_twin`, `pass_epoch_twin`, `draw_twin`). Others are guards a device runs before a coin opens: `window`'s
+`opening_twin`, `pass_epoch_twin`, `sample_twin`). Others are guards a device runs before a coin opens: `window`'s
 `*_epoch_reason` and `rounds_reason`, `coins.coin_reason`, `salt.unit_reason` and `core_check.recorded_reason`. They
 only refuse to go on, never credit, and the verdict of record checks the same rules again in Lean.
 
