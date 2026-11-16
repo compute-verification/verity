@@ -284,7 +284,8 @@ def measure(files: dict[str, bytes], handles: list[dict], audit, reads) -> tuple
     for path, raw in sorted(files.items()):
         try:
             src = raw.decode("utf-8")
-            if GENERATED.search("\n".join(src.splitlines()[:5])):
+            doc = src.find("/-!") if path.endswith(".lean") else -1
+            if GENERATED.search(src[doc:src.find("-/", doc)] if doc >= 0 else "\n".join(src.splitlines()[:5])):
                 continue
             c = count(path, src, audit, reads)
         except (UnicodeDecodeError, SyntaxError, ValueError, tokenize.TokenError) as e:
