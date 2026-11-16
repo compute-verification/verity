@@ -28,8 +28,8 @@ prose (comments, docstrings, Markdown's text), so its move moves no path and lea
 A map lives only as long as its move. `move_check.py` reads the word maps in this directory at a move's base, so a word map
 lands just before its move and is deleted once the move has landed; git keeps it in the commits that ran it. Each concept
 has one map: two maps here that rename one word must reach one name whichever of their moves runs first, and
-`tests/test_maps.py` fails the map that would give a word a second name, when that map's PR runs. The toy tests
-keep two past word maps as fixtures (`tests/fixtures/`). `layout_map.toml` stays as `layout.py`'s default map, which
+`tests/tools/move/test_maps.py` fails the map that would give a word a second name, when that map's PR runs. The toy tests
+keep two past word maps as fixtures (`tests/tools/move/fixtures/`). `layout_map.toml` stays as `layout.py`'s default map, which
 `restack.py` reruns for a layout move whose move line names no other.
 
 ## Staging a move
