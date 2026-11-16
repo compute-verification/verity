@@ -376,6 +376,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "(research/pipefail.py)")
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
+    from . import launcher
+
+    if why := launcher.refusal(ns.source):
+        print(why, file=sys.stderr)
+        return 2
     if not ns.claimed and not ns.allow_pipe and (why := pipefail.refusal(command)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 2
@@ -1317,10 +1322,11 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
     sync, as suites.py does). Fills `ns` and `harness_opts` in place; a reason when it can't."""
     if ns.queue or ns.pool:
         return "it takes no --queue or --pool: it is the queue itself"
+    from . import launcher
     from .auto import AUTO_NODE, AUTO_PROJECT
 
     if not ns.source:
-        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+        top = subprocess.run(launcher.git("rev-parse", "--show-toplevel"), capture_output=True, text=True, env=launcher.git_env())
         if top.returncode != 0:
             return "--source GITDIR: no git checkout here to ship"
         ns.source = top.stdout.strip()
@@ -1515,8 +1521,11 @@ def lean_records_urls(source: Path | None, command: list[str]) -> Path | None:
     """For a Lean records run from the tree ``source``, that tree's `lean-deps-urls.json` (`url_file`), written in a temporary
     directory: the presigned URLs of the newest recorded checks', mark audits' and records runs' artifact bundles
     (`shared_bundles`) and of the pinned dependency bundles. None for any other run, a tree without `LEAN_AUDIT`, or a store
-    that signs nothing; a failure sends none, and the run then builds what its node lacks."""
-    if source is None or not LEAN_RECORDS.search(" ".join(command)) or not (source / LEAN_AUDIT).is_file():
+    that signs nothing; a failure sends none, and the run then builds what its node lacks. Under a trusted launcher tree
+    (research.launcher) it is that tree's `LEAN_AUDIT`, whose URLs are of that tree's pins and the heads it holds."""
+    from . import launcher
+
+    if source is None or not LEAN_RECORDS.search(" ".join(command)) or not ((source := launcher.code(source)) / LEAN_AUDIT).is_file():
         return None
     try:
         spec = importlib.util.spec_from_file_location("research_lean_audit_urls", source / LEAN_AUDIT)

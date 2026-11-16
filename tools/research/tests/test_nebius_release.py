@@ -230,3 +230,17 @@ def test_a_sudo_that_refuses_the_bundle_reads_stops_the_pacer_rather_than_readin
     monkeypatch.setenv("PATH", str(tmp_path / "bin"), prepend=os.pathsep)
     with pytest.raises(SystemExit, match="sudo refuses /usr/bin/find to this login.*nothing released"):
         mod.bundles_gb()
+
+
+def test_the_pacer_probes_by_path_exactly_the_programs_its_bundle_reads_run_as_root(tmp_path, monkeypatch):
+    """`sudo -n -l /usr/bin/find` says nothing of a bare `sudo find`, which sudo resolves on PATH: the reads run what was probed."""
+    monkeypatch.setenv("VY_PACER_DIR", str(tmp_path / "pacer"))
+    mod = load("release", NEBIUS / "sky" / "release.py", monkeypatch)
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "sudo").write_text(f'#!/bin/sh\n[ "$1" = -n ] && shift\nif [ "$1" = -l ]; then echo "$2" >> {tmp_path}/probed; '
+                                           f'exit 0; fi\necho "$1" >> {tmp_path}/ran\nexec "$@"\n')
+    (tmp_path / "bin" / "sudo").chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path / "bin"), prepend=os.pathsep)
+    assert mod.bundles_gb() == 0.0 and mod.written_gb({"sweep": str(tmp_path), "row": "r"}) == 0.0
+    probed, ran = ((tmp_path / f).read_text().split() for f in ("probed", "ran"))
+    assert set(ran) == {"/usr/bin/find", "/usr/bin/xargs", "/usr/bin/du"} <= set(probed), (probed, ran)

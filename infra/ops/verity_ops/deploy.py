@@ -4,7 +4,7 @@ pods/nebius/deploy.toml lists every file that infra's loops, timers and services
 comes from, who owns it (a Slack handle), and the patterns (`managed`) under which nothing else should live.
 
   research deploy drift [--on N ...] [--ref origin/main] [--json] [--no-fetch]
-  research deploy install NODE --by WHO [--ref REF] [PATH ...] [--apply] [--allow-shrink] [--no-fetch] [--login USER]
+  research deploy install NODE --by WHO [--ref REF] [PATH ... | --only STEP] [--apply] [--allow-shrink] [--no-fetch] [--login USER]
   research deploy roll PATH --by WHO [--on N ...] [--ref REF] [--keys-only] [--apply] [--allow-shrink] [--no-fetch] [--login USER]
   research deploy attic NODE --by WHO [PATH ...] [--backups] [--ref REF] [--apply] [--no-fetch] [--login USER]
 
@@ -19,7 +19,8 @@ yet only when named with --on; `install` takes it as any other), and gives each 
   unknown   no commit we know has it: edited in place, or a copy nobody committed
   missing   not there
   absent    the manifest lists it and REF lacks its source (a checkout's manifest ahead of REF)
-  held      the entry's `hold` says why it isn't deployed yet (its owner's yes is pending); install skips it
+  held      the entry's `hold` says why it isn't deployed yet (its owner's yes is pending), or its node's in its step's `held`;
+            install skips it. A step's file is `held` too while no file of that step is on the node
 and `restart` when a process running the file started before it was installed: it still runs the old code. An entry's
 `no_restart` says why such a process is left to end instead (a run's own process, which nothing restarts): drift and install
 then say nothing of it. A file that a `managed` pattern matches and no entry lists is a `stray`: a backup (`*.bak-*`,
@@ -40,6 +41,11 @@ Daniel and infra's lead hold, never the research key the relays use), so drift r
 `install` and `attic` write as root, so on a node whose lock-out took root from `research` (pods/nebius/lockout) they take
 `--login vy-admin`: the same node, reached as that user instead of the one its registry entry names. A root step that sudo refuses
 to the login stops the command (exit 3) naming that flag.
+
+A file whose entry names a `step` (deploy.toml's [step.NAME]: the lock-out's is `lockout`) is one a node takes only on its own
+word: an install of the whole node leaves it out (`apart`), and `install NODE --only NAME` installs the step's files alone, or
+without `--apply` says what it would write. Either way it prints the step's `shows` file as REF has it, and refuses (exit 3)
+while a check slot or a waiter's ticket under one of the step's `locks` is held (BUSY, read as slot.py reads its holders).
 
 `install` takes files only from a commit that an origin branch holds (a branch, a PR's head, `main`; never the working tree), so
 every installed byte is in a pushed commit, and refuses a commit whose deploy.toml copies as it is a file this code makes from
@@ -625,6 +631,52 @@ if out.pop("wrote", False):
                    "by": req["by"]}])
 print(json.dumps(out))
 '''
+# What holds a check slot under each of `locks` (a step's [step.NAME].locks), as tools/check/slot.py's `holder` reads it: a
+# slot's lock (`*.lock`) or a waiter's ticket in a line directory beside it (`*line*/`) that a FLOCK in /proc/locks holds,
+# with what the holder recorded (`X.who`). Read-only, as the login: prints {held: [{path, pid, run, by[, who_error]}],
+# missing: [a lock directory the node lacks], vanished: [a path gone between its listing and its stat]}. A held lock whose
+# `.who` can't be read stays held, with the error's class.
+BUSY = r'''
+import json, os, sys
+held = {}
+for line in open("/proc/locks").read().splitlines():
+    f = line.split()
+    if len(f) > 5 and f[1] == "FLOCK" and f[5].count(":") == 2:
+        maj, mn, ino = f[5].split(":")
+        held[(int(maj, 16), int(mn, 16), int(ino))] = int(f[4])
+out = {"held": [], "missing": [], "vanished": []}
+for d in json.load(sys.stdin)["locks"]:
+    if not os.path.isdir(d):
+        out["missing"].append(d)
+        continue
+    names = sorted(os.listdir(d))
+    paths = [os.path.join(d, n) for n in names if n.endswith(".lock")]
+    for n in names:
+        if "line" in n and os.path.isdir(os.path.join(d, n)):
+            paths += [os.path.join(d, n, t) for t in sorted(os.listdir(os.path.join(d, n)))]
+    for p in paths:
+        try:
+            st = os.stat(p)
+        except FileNotFoundError:
+            out["vanished"].append(p)
+            continue
+        pid = held.get((os.major(st.st_dev), os.minor(st.st_dev), st.st_ino))
+        if pid is None:
+            continue
+        entry = {"path": p, "pid": pid, "run": None, "by": None}
+        if p.endswith(".lock"):
+            who, err = {}, None
+            try:
+                who = json.load(open(p[:-len(".lock")] + ".who"))
+            except (OSError, ValueError) as e:
+                err = type(e).__name__
+            if err:
+                entry["who_error"] = err
+            elif isinstance(who, dict) and who.get("pid") == pid:
+                entry.update(run=who.get("run"), by=who.get("by"))
+        out["held"].append(entry)
+print(json.dumps(out))
+'''
 BACKUP = re.compile(r"\.(bak|prev|orig)([-.\d_]|$)")       # a hand deploy's copy: x.py.bak-20261001T0611Z, x.sh.prev, x.orig
 SUFFIX = re.compile(r"\.(service|timer|socket|path|target|mount|slice|scope)$")
 
@@ -672,6 +724,18 @@ class Entry:
     whole: bool = False                # (a tree) installed as one new directory its link is renamed onto, never file by file
     register: bool = False             # (a file) `src` is a template the register of machines fills at each install (deploy.toml's `template`)
     accept: str | None = None          # (a register-made file) the public key, on the node, its machines are taken with
+    step: str | None = None            # (a file) the step it belongs to: only `--only STEP` or its own path installs it
+
+
+@dataclass
+class Step:
+    """Files a whole-node install leaves out (deploy.toml's [step.NAME]): `install NODE --only NAME` installs them, and only
+    while no check slot under `locks` is held or waited for, and while the node has every one of `locks` but `optional`."""
+    name: str
+    shows: str | None = None           # an installed path whose lines (comments and blanks apart) an install of the step prints
+    locks: list[str] = field(default_factory=list)       # slot directories (tools/check/slot.py's SLOTS and LINE beside it)
+    held: dict[str, str] = field(default_factory=dict)   # node -> why its files of the step aren't installed yet
+    optional: list[str] = field(default_factory=list)    # those of `locks` a node may lack; any other a node lacks refuses
 
 
 @dataclass
@@ -683,6 +747,7 @@ class Node:
     quiet: str | None = None           # a shell test on the node: install restarts services only while it succeeds
     admin: bool = False                # reached only by an admin login: drift reads it only when --on names it
     staged: str | None = None          # why the machine doesn't exist yet: `drift` of every node passes it by
+    steps: dict[str, Step] = field(default_factory=dict)
 
 
 def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
@@ -691,8 +756,24 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
              for n, c in m.get("nodes", {}).items()}
     if bad := [n for n, nd in nodes.items() if not isinstance(nd.admin, bool)]:
         raise ValueError(f"deploy.toml: node {bad[0]!r}: `admin` is true or false")
+    steps = {}
+    for s, c in m.get("step", {}).items():
+        held, locks, optional = c.get("held", {}), c.get("locks", []), c.get("optional", [])
+        if (set(c) - {"shows", "locks", "optional", "held"} or not isinstance(held, dict) or not isinstance(locks, list)
+                or not isinstance(optional, list) or not all(isinstance(w, str) and w.strip() for w in held.values())):
+            raise ValueError(f"deploy.toml: [step.{s}] takes `shows` (a path), `locks` (directories), `optional` (those of "
+                             f"`locks` a node may lack) and `held` (node = why)")
+        if bad := [d for d in optional if d not in locks]:
+            raise ValueError(f"deploy.toml: [step.{s}].optional names {bad[0]!r}, which its `locks` don't")
+        if bad := [n for n in held if n not in nodes]:
+            raise ValueError(f"deploy.toml: [step.{s}] holds node {bad[0]!r}, which has no [nodes.{bad[0]}]")
+        steps[s] = Step(s, c.get("shows"), list(locks), dict(held), list(optional))
+    for nd in nodes.values():
+        nd.steps = steps
     for kind in ("file", "tree"):
         for e in m.get(kind, []):
+            if "step" in e and (kind != "file" or not e.get("src") or e["step"] not in steps):
+                raise ValueError(f"deploy.toml: {e.get('path')!r}: `step` names a [step.NAME], for a file install copies (src)")
             if "template" in e and (kind != "file" or e.get("register") is not True or "src" in e or "hold" in e
                                     or not isinstance(e["template"], str) or not isinstance(e.get("by"), str)
                                     or not e["by"].strip()):
@@ -724,10 +805,14 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
                     raise ValueError(f"deploy.toml: {e['path']!r} names node {n!r}, which has no [nodes.{n}]")
                 mode = int(e["mode"], 8) if e.get("mode") else None
                 made = "template" in e
+                hold = e.get("hold") or (steps[e["step"]].held.get(n) if e.get("step") else None)
                 nodes[n].entries.append(Entry(e["path"], e["template"] if made else e.get("src"), None if made else e.get("by"),
                                               list(e.get("run", [])), kind == "tree", mode,
-                                              e.get("owner"), e.get("hold"), e.get("required", False), e.get("no_restart"),
-                                              e.get("whole", False), e.get("register", False), e.get("accept")))
+                                              e.get("owner"), hold, e.get("required", False), e.get("no_restart"),
+                                              e.get("whole", False), e.get("register", False), e.get("accept"), e.get("step")))
+    for s in steps.values():
+        if s.shows and not any(e.path == s.shows and e.step == s.name for nd in nodes.values() for e in nd.entries):
+            raise ValueError(f"deploy.toml: [step.{s.name}] shows {s.shows}, which no entry of the step installs")
     for node in nodes.values():
         seen = set()
         for e in node.entries:
@@ -1031,6 +1116,7 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
     old = versions(srcs, commit, limit=HISTORY, repo=repo) if srcs else {}
     recent: dict | None = None
     entries = []
+    on = {v[3].step for p, v in want.items() if v[3].step and seen["files"].get(p)}      # the steps installed here
 
     def of(e: Entry) -> dict:
         copy = os.path.basename(seen.get("links", {}).get(e.path, ""))      # the directory the link names: one per install
@@ -1093,6 +1179,9 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
                 state, detail = "unknown", "no commit holds it: edited in place or never committed"
         restart = None
         started = seen["procs"].get(path)
+        if e.step and got is None and e.step not in on:
+            state, detail = "held", (f"step {e.step}, not installed: `research deploy install {node.name} --only {e.step}` says "
+                                     "what it would write, and `--apply` writes it")
         if e.hold:
             state, detail = "held", f"{e.hold} ({'not installed' if got is None else 'installed: ' + state})"
         elif not e.no_restart and got and "mtime" in got and started is not None and started < got["mtime"] - 1:
@@ -1294,8 +1383,18 @@ def copied(node: Node, own: dict[str, Node], only: list[str]) -> None:
                       "over the node's list. Nothing changed; install from a commit that has the change (origin/main)")
 
 
+def busy(node: Node, locks: list[str], run: Runner) -> dict:
+    """The check slots and line tickets under `locks` that a process holds on `node`, the directories of `locks` it lacks, and
+    the paths gone between their listing and their stat (BUSY), read as its login."""
+    r = run(node.name, ["python3", "-c", BUSY], json.dumps({"locks": locks}).encode())
+    if r.returncode != 0:
+        raise RuntimeError(f"{node.name}: reading its check slots failed (exit {r.returncode}): "
+                           f"{r.stderr.decode(errors='replace').strip()[-400:]}")
+    return json.loads(r.stdout)
+
+
 def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: bool = False, repo: Path = REPO,
-            allow_shrink: bool = False, part: str = "all") -> dict:
+            allow_shrink: bool = False, part: str = "all", step: str | None = None) -> dict:
     """Install `node`'s entries (or those whose path or repo path is in `only`) from `ref` and restart what they name (the
     docstring's rule); without `apply`, only say what would change. {"commit", "files": [{path, src, changed, run}], "restarts":
     [{unit, why, state}]}: a file's `run` is what still runs its old version, and a path a whole tree's directory holds that
@@ -1303,11 +1402,22 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
     `machines` too (`listed`'s) and, when its entry names a key, `accept` (`accept`'s); `part` "accept" stops once each such
     key is taken, before any file is written and so whatever a file would lose, and "list" writes the files and leaves the
     keys (`roll`'s two passes). An install of the whole node (no `only`) leaves a register-made file that was written by
-    hand, or that it would take a machine out of, as it is: `changed` "left", with `why`."""
+    hand, or that it would take a machine out of, as it is: `changed` "left", with `why`. An install of the whole node leaves
+    out every entry of a step (`changed` "apart"); `step` installs that step's entries alone, as `only` would, and like a path
+    of the step it is refused while one of the step's `locks` is held (`busy`). Its result then has `shows`: the lines of the
+    step's `shows` file as `ref` has it."""
     commit = git("rev-parse", f"{ref}^{{commit}}", repo=repo).strip()
     if not origin_branches(commit, repo, most=1):
         raise Refused(f"{ref} ({commit[:12]}) is on no origin branch: push it first, so what runs is in a pushed commit")
     want = expected(node, commit, repo)
+    if step:
+        if only:
+            raise Refused(f"name paths or a step (--only {step}), not both")
+        if step not in node.steps:
+            raise Refused(f"deploy.toml has no [step.{step}]")
+        only = sorted({e.path for e in node.entries if e.step == step})
+        if not only:
+            raise Refused(f"deploy.toml lists no file of step {step} for {node.name}")
     skipped = [] if only else [{"path": e.path, "src": e.src, "changed": "absent", "run": []} for e in absent(node, want)]
     gone = [o for o in only for e in absent(node, want) if o in (e.path, e.src)]
     if gone:
@@ -1323,7 +1433,26 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
         want = {p: v for p, v in want.items() if p in picked or v[3].path in whole}
     else:
         skipped += [{"path": p, "src": v[0], "changed": "held", "run": [], "hold": v[3].hold} for p, v in sorted(want.items()) if v[3].hold]
-        want = {p: v for p, v in want.items() if not v[3].hold}
+        skipped += [{"path": p, "src": v[0], "changed": "apart", "run": [], "step": v[3].step}
+                    for p, v in sorted(want.items()) if v[3].step and not v[3].hold]
+        want = {p: v for p, v in want.items() if not v[3].hold and not v[3].step}
+    shown, vanished = {}, []
+    for s in sorted({v[3].step for v in want.values() if v[3].step}):
+        st = node.steps[s]
+        b = busy(node, st.locks, run) if st.locks else {"held": [], "missing": [], "vanished": []}
+        if missing := [d for d in b["missing"] if d not in st.optional]:
+            raise Refused(f"{node.name} lacks {', '.join(missing)}, which step {s}'s locks name, so whether it runs a check "
+                          f"can't be read. Nothing changed; a directory a node may lack is named in [step.{s}].optional")
+        if b["held"]:
+            raise Refused(f"{node.name} runs a check: " + "; ".join(
+                f"{h['path']} held by pid {h['pid']}" + "".join(f", {k} {h[k]}" for k in ("run", "by") if h.get(k))
+                + (f", its .who unreadable ({h['who_error']})" if h.get("who_error") else "") for h in b["held"])
+                + f". Nothing changed; step {s} waits until no check slot under {', '.join(st.locks)} is held or waited for")
+        vanished += b["vanished"]
+        if st.shows in want:
+            text = git("cat-file", "blob", want[st.shows][1], repo=repo)
+            shown[st.shows] = [ln for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    shown = ({"shows": shown} if shown else {}) | ({"vanished": vanished} if vanished else {})
     reg = register() if any(v[3].register for v in want.values()) else None
     gen = {p: made(e, sha, reg, repo) for p, (_, sha, _, e) in sorted(want.items()) if e.register}
     files = [{"path": p, "blob": gen[p].blob if p in gen else sha, "mode": e.mode, "git_mode": mode,
@@ -1365,7 +1494,7 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
         same = {f["path"] for f in files if (seen["files"].get(f["path"]) or {}).get("blob") == f["blob"] and f["mode"] is None}
         would = {p: want[p][3] for p in want if p not in same}
         plan = restarts(node, would, {p: [u for _, u in seen["running"].get(p, [])] for p in would})
-        return {"commit": commit, "restarts": restart(node, plan, run, apply=False),
+        return {"commit": commit, "restarts": restart(node, plan, run, apply=False), **shown,
                 "files": [{"path": f["path"], "src": want[f["path"]][0], "run": [], "changed": False if f["path"] in same else None,
                            **made_of.get(f["path"], {})}
                           for f in files] + lost([p for p in seen["found"] if p not in want], "would drop") + skipped}
@@ -1406,7 +1535,7 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
         named = set(filter(None, map(unit_name, want[p][3].run)))
         return sorted({u if u in named else p for u in still.get(p, [])})
 
-    return {"commit": commit, "restarts": done,
+    return {"commit": commit, "restarts": done, **shown,
             "files": [{"path": f["path"], "src": want[f["path"]][0], "changed": c, "run": stale(f["path"]) if c else [],
                        **made_of.get(f["path"], {})}
                       for f, c in zip(files, changed)] + lost(dropped, "dropped") + skipped}
@@ -1562,6 +1691,8 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     i.add_argument("--ref", default="origin/main")
     i.add_argument("--by", required=True, help="who installs (a lane, an agent's URL): goes into the node's record")
     i.add_argument("--apply", action="store_true", help="install and restart (else only say what would change)")
+    i.add_argument("--only", dest="step", metavar="STEP", help="install a step's files alone (deploy.toml's [step.STEP]), which "
+                   "an install of the whole node leaves out; refused while the node holds a check slot")
     o = sub.add_parser("roll", help="put one file made from the register on every node that lists it, one node at a time")
     o.add_argument("path", help="the installed path (/etc/vy/peers)")
     o.add_argument("--on", dest="only", nargs="+", action="extend", metavar="NODE",
@@ -1662,7 +1793,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
             print("nothing moved: --apply moves them")
         return 0
     try:
-        done = install(nodes[ns.node], ns.ref, ns.by, ns.paths, run, ns.apply, repo, ns.allow_shrink)
+        done = install(nodes[ns.node], ns.ref, ns.by, ns.paths, run, ns.apply, repo, ns.allow_shrink, step=ns.step)
     except Refused as e:
         print(f"research deploy: {e}", file=sys.stderr)
         return 3
@@ -1672,10 +1803,16 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     for f in done["files"]:
         mark = {None: "would install", True: "installed", False: "unchanged", "absent": f"skipped ({ns.ref} lacks it)",
                 "held": "held", "dropped": f"dropped ({ns.ref} lacks it)", "would drop": f"would drop ({ns.ref} lacks it)",
-                "left": "left as it is"}[f["changed"]]
-        print(f"{mark:13} {f['path']}  <- {f['src']}" + "".join(f"  ({f[k]})" for k in ("hold", "why") if f.get(k)))
+                "left": "left as it is", "apart": "apart"}[f["changed"]]
+        print(f"{mark:13} {f['path']}  <- {f['src']}" + "".join(f"  ({f[k]})" for k in ("hold", "why") if f.get(k))
+              + (f"  (step {f['step']}: `--only {f['step']}` installs it)" if f.get("step") else ""))
         for ln in told(f):
             print(f"{'':13} {ln}")
+    for p, lines in done.get("shows", {}).items():
+        print(f"{p} {'holds' if ns.apply else 'would hold'}:")
+        print("".join(f"{'':13} {ln}\n" for ln in lines), end="")
+    for p in done.get("vanished", []):
+        print(f"vanished     {p}  (gone between its listing and its stat: read as not held)")
     hint = {"not running": "; it stays stopped", "not quiet": f"; the node isn't quiet (`{nodes[ns.node].quiet}`): restart it once it is"}
     for d in done["restarts"]:
         failed = d["state"].startswith("failed")

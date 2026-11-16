@@ -528,12 +528,72 @@ def test_run_max_counts_from_the_slot_taken_through_the_runs_timeout_control(tmp
     monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
     monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(argv)))
     with pytest.raises(Exec):
-        SLOT.main(["--by", "infra", "--wait-max", "21600", "--run-max", "10800", "--", "true"], now=lambda: NOW)
-    assert "slot: the run's timeout is now" in capsys.readouterr().err
-    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] >= 10800
+        SLOT.main(["--by", "infra", "--wait-max", "21600", "--run-max", "10800", "--", "true"], now=lambda: NOW,
+                  mono=lambda: 60.0)
+    assert "slot: the run's timeout is now 10860 s from its start" in capsys.readouterr().err
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 10860.0
     for bad in (["--wait-max", "0"], ["--run-max", "soon"], ["--wait-max"]):
         with pytest.raises(SystemExit):
             SLOT.main([*bad, "--", "true"])
+
+
+def test_run_max_never_moves_the_run_s_end_later_than_its_stated_timeout(tmp_path):
+    """--run-max from the slot is the earlier of it and the run's own end: a run launched with --timeout 12000 s that takes its
+    slot 600 s in ends 11400 s from its start, and one that takes it 1800 s in keeps its 12000 s."""
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "status.json").write_text(json.dumps({"started_mono": 1000.0, "timeout_s": 12000}))
+    assert SLOT.limit_run(10800, "d", str(run), mono=lambda: 1000.0 + 600) == \
+        "slot: the run's timeout is now 11400 s from its start: 10800 s from taking slot d"
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 11400.0
+    (run / SLOT.RUN_TIMEOUT).unlink()
+    assert SLOT.limit_run(10800, "d", str(run), mono=lambda: 1000.0 + 1800) == \
+        "slot: the run's timeout stays 12000 s from its start, before 10800 s from taking slot d"
+    assert not (run / SLOT.RUN_TIMEOUT).exists()
+    (run / SLOT.RUN_TIMEOUT).write_text("9000\n")                                # the control file's timeout is the run's now
+    assert SLOT.run_left(str(run), mono=lambda: 1000.0 + 1800) == 7200.0
+    assert SLOT.short_of(7200, str(run), mono=lambda: 1000.0 + 1800) is None
+    assert SLOT.short_of(7201, str(run), mono=lambda: 1000.0 + 1800) == (
+        "the run ends in 7200 s (its timeout 9000 s from its start), less than --run-max 7201 s, so CMD could not finish "
+        "before the run's end")
+    assert SLOT.run_left(None) is None and SLOT.short_of(60, None) is None
+    (run / SLOT.RUN_TIMEOUT).unlink()
+    (run / "status.json").write_text(json.dumps({"started_mono": 1000.0}))      # a run with no timeout: nothing binds it
+    assert SLOT.short_of(10**9, str(run), mono=lambda: 10**9) is None
+
+
+def test_a_waiter_whose_run_ends_before_its_run_max_is_not_started(tmp_path, monkeypatch, capsys):
+    """A point that took its slot 31 minutes into a 90-minute run with --run-max 90 minutes could not finish before the
+    run's end: it isn't started, on a free slot or after waiting in the line, and its run's timeout is left as it was. A twin
+    leaves before claiming its pair, so a twin whose run can finish still runs."""
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    run = tmp_path / "run"
+    run.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    (run / "status.json").write_text(json.dumps({"started_mono": 0.0, "timeout_s": 5400}))
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran though its run ends first"))
+    assert SLOT.main(["--run-max", "5400", "--", "true"], now=lambda: NOW, mono=lambda: 1860.0) == SLOT.NOT_STARTED
+    assert ("slot: not started: the run ends in 3540 s (its timeout 5400 s from its start), less than --run-max 5400 s, so "
+            "CMD could not finish before the run's end; exit 75") in capsys.readouterr().err
+    assert not (run / SLOT.RUN_TIMEOUT).exists() and list((tmp_path / SLOT.LINE).iterdir()) == []
+    assert json.loads((run / SLOT.RUN_SLOT).read_text())["state"] == "left"
+    assert not SLOT.locked(tmp_path / "check-a.lock")                            # the slot it found free is free again
+
+    (run / "status.json").write_text(json.dumps({"started_mono": 0.0, "timeout_s": 5400 + 2 * SLOT.POLL_S + 1}))
+    held = _hold(tmp_path / "check-a.lock")
+    t = [0.0]
+    rc = SLOT.main(["--run-max", "5400", "--", "true"], now=lambda: NOW + timedelta(seconds=t[0]), mono=lambda: t[0],
+                   sleep=lambda s: t.__setitem__(0, t[0] + s))
+    assert rc == SLOT.NOT_STARTED and t[0] == 3 * SLOT.POLL_S
+    assert "less than --run-max 5400 s, so CMD could not finish before the run's end (every check slot is taken (a: busy))" \
+        in capsys.readouterr().err
+    os.close(held)
+
+    (run / "status.json").write_text(json.dumps({"started_mono": 0.0, "timeout_s": 5400}))
+    assert SLOT.main(["--twin", "p4", "--run-max", "5400", "--", "true"], now=lambda: NOW, mono=lambda: 1860.0,
+                     sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED
+    assert not (tmp_path / SLOT.TWINS / "p4").exists()                           # its pair is left for a twin that can finish
 
 
 def test_a_wait_with_no_limit_moves_the_run_s_timeout_from_where_it_stands(tmp_path):

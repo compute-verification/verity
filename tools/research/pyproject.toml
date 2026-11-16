@@ -56,7 +56,7 @@ untraced = [
     "tests/test_holds.py",
     "tests/test_jobs_dispatch.py",
     "tests/test_jobuser.py",
-    "tests/test_labelauth.py", "tests/test_lean_prune.py", "tests/test_landing.py",
+    "tests/test_labelauth.py", "tests/test_lean_prune.py", "tests/test_landing.py", "tests/test_launcher_tree.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_merge_shards.py",
@@ -188,7 +188,8 @@ timeout_workers = 3
 # guard until it is listed.
 exports = ["tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py", "tools/research/src/research/cli.py",
            "tools/research/src/research/clone.py", "tools/research/src/research/compare.py", "tools/research/src/research/env.py",
-           "tools/research/src/research/gates.py", "tools/research/src/research/linear.py", "tools/research/src/research/mem.py",
+           "tools/research/src/research/gates.py", "tools/research/src/research/launcher.py", "tools/research/src/research/linear.py",
+           "tools/research/src/research/mem.py",
            "tools/research/src/research/merge.py", "tools/research/src/research/policy.py",
            "tools/research/src/research/pipefail.py",
            "tools/research/src/research/pythonpath.py", "tools/research/src/research/queue.py",

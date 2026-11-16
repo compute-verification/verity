@@ -70,6 +70,7 @@ DECLARED: dict[str, str] = {
     "RESEARCH_RUNS": "the local run registry's directory",
     "RESEARCH_MACHINES": "the machines file (default ~/.research/machines.toml)",
     "RESEARCH_SHIP": "stream: a run's source ships as an archive stream instead of through git",
+    "RESEARCH_LAUNCHER_TREE": "a trusted checkout whose programs a launcher runs in place of its --source tree's (research.launcher)",
     "RESEARCH_BIN_DIRS": "the directories binprov looks for recorded binaries in, os.pathsep-separated",
     "RESEARCH_TOOL_SNAPSHOT": "the shipped snapshot research runs from, where it isn't a git checkout",
     "RESEARCH_DIGEST_STATE": "the digest's state file (default ~/.research/digest/LANE.json)",
