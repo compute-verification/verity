@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <utility>
 
-#include "../sha512.cuh"
+#include "../../../../verity/commitments/cuda/sha512.cuh"
 
 namespace {
 

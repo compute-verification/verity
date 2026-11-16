@@ -409,8 +409,8 @@ printer's flag. Each from the tree's root:
    environment, the int8 checkpoint and the sm_90 taps under `WORK`), three partition files, and three runs of
    `benchmarks/one_stage/a5_llama1b_h200.sh`. Give their three `OUT` directories to `--flock`, `--zk` and `--sampling`.
 2. **The recursion layer**, on 32 CPU cores with 128 GB (`run.py`'s memory behind the ZK server), about an hour at
-   K = 4096:
-   `taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=DIR`. Give its `$OUT` to
+   K = 2048 with N = 2:
+   `taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=2048 N=2 GPU=0 FLOCK_WORK=DIR`. Give its `$OUT` to
    `--recursion`.
 
 Then `verity bench prove layers --flock A --zk B --sampling C --recursion E`, which reads only those directories.

@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_changed_allow", HERE.parent / "lean_changed.py")
+spec = importlib.util.spec_from_file_location("lean_changed_allow", HERE.parents[3] / "tools" / "verity" / "lean" / "lean_changed.py")
 LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
 AUDIT = LC.AUDIT
@@ -374,7 +374,7 @@ def test_an_allowance_names_a_failure_by_its_code_and_entry_never_its_text(lane,
 def test_the_allowable_codes_are_a_closed_list_of_failures_check_makes_about_one_entry():
     assert LC.ALLOWABLE == {"trees.reads", "witnesses.unwitnessed-changed"}
     assert not LC.ALLOWABLE & AUDIT.RECORD_DIFFERENCE, "a record difference is --update's to settle, never allowed"
-    source = (HERE.parent / "check.py").read_text()
+    source = (HERE.parents[3] / "tools" / "verity" / "lean" / "check.py").read_text()
     for code in LC.ALLOWABLE:
         made = re.findall(rf'Failure\(\s*"{re.escape(code)}",\s*(\w+)', source)
         assert made and "None" not in made, f"check.py makes {code} about one entry, which an allowance names"
@@ -382,7 +382,7 @@ def test_the_allowable_codes_are_a_closed_list_of_failures_check_makes_about_one
 
 def codes() -> list[str]:
     """Every failure code check.py's source makes."""
-    return sorted(set(re.findall(r'Failure\(\s*"([a-z0-9.-]+)"', (HERE.parent / "check.py").read_text())))
+    return sorted(set(re.findall(r'Failure\(\s*"([a-z0-9.-]+)"', (HERE.parents[3] / "tools" / "verity" / "lean" / "check.py").read_text())))
 
 
 def test_every_other_code_is_refused_before_anything_runs():

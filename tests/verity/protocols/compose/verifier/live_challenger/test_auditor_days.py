@@ -17,7 +17,7 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[5] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger"))
 import auditor as A  # noqa: E402
 
 P = lms.Params(64, 4, 5)

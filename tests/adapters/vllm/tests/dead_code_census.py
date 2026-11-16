@@ -52,8 +52,9 @@ from collections import defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[0]  # adapters/vllm
+ROOT = HERE.parents[3] / "adapters" / "vllm"  # adapters/vllm
 REPO = ROOT.parents[1]
+TESTS = HERE.parent  # tests/adapters/vllm: the adapter's `tests` package, whose paths keep their names from adapters/vllm
 ROOTS_FILE = HERE / "census_roots.txt"
 KEEP_FILE = HERE / "dead_code_keep.json"
 
@@ -86,7 +87,7 @@ SHELL_IMPORT_RE = re.compile(rf"\b(?:from|import)\s+((?:{'|'.join(PACKAGES)})(?:
 # ---------------------------------------------------------------------------------------------------------------------------- files
 def py_files() -> list[Path]:
     out: list[Path] = []
-    for top in [ROOT / t for t in PACKAGES + ("tests",)]:
+    for top in [ROOT / t for t in PACKAGES] + [HERE]:
         for p in sorted(top.rglob("*.py")):
             if "__pycache__" in p.parts or p.resolve() == Path(__file__).resolve():
                 continue                                             # this tool names modules in string literals; it is not a consumer
@@ -97,12 +98,12 @@ def py_files() -> list[Path]:
 
 
 def relpath(p: Path) -> str:
-    """``p`` from ``adapters/vllm``."""
-    return p.relative_to(ROOT).as_posix()
+    """``p`` from ``adapters/vllm`` (a test from ``tests/adapters/vllm``)."""
+    return p.relative_to(TESTS if p.is_relative_to(HERE) else ROOT).as_posix()
 
 
 def path_of(rel: str) -> Path:
-    return ROOT / rel
+    return (TESTS if rel.split("/", 1)[0] == "tests" else ROOT) / rel
 
 
 def in_census(rel: str) -> bool:
@@ -131,7 +132,7 @@ def protected(rel: str) -> str | None:
 
 
 def shell_files() -> list[str]:
-    return sorted(p.relative_to(ROOT).as_posix() for p in ROOT.rglob("*.sh") if "__pycache__" not in p.parts)
+    return sorted(relpath(p) for top in (ROOT, HERE) for p in top.rglob("*.sh") if "__pycache__" not in p.parts)
 
 
 def load_keep() -> dict[str, str]:
@@ -351,7 +352,7 @@ def resolve_roots(g: Graph) -> tuple[dict[str, set[str]], dict[str, set[str]], l
         sh = todo.pop()
         if sh in by_shell:
             continue
-        text = (ROOT / sh).read_text(errors="replace")
+        text = path_of(sh).read_text(errors="replace")
         by_shell[sh] = shell_modules(g, text)
         for m in by_shell[sh]:
             by_mod[m].add(sh)
@@ -381,7 +382,7 @@ def all_shell_refs(g: Graph) -> dict[str, set[str]]:
     """module -> every .sh under the integration that names it (root or not)."""
     out: dict[str, set[str]] = defaultdict(set)
     for rel in shell_files():
-        for m in shell_modules(g, (ROOT / rel).read_text(errors="replace")):
+        for m in shell_modules(g, path_of(rel).read_text(errors="replace")):
             out[m].add(rel)
     return out
 
