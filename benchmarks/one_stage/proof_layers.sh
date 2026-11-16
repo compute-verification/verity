@@ -79,7 +79,7 @@ done
 
 q() { printf '%q' "$1"; }
 PART=benchmarks/one_stage/llama32_1b_rope_d64_l0.json
-if [ -n "$LEASE" ]; then ON="gpu-lease 1 --wait --on $A5_CARD --cores $(q "$A5_CORES") --max-min 120 --"; else ON="taskset -c $(q "$A5_CORES")"; fi
+if [ -n "$LEASE" ]; then ON="gpu-lease 1 --wait --on $A5_CARD --cores $(q "$A5_CORES") --"; else ON="taskset -c $(q "$A5_CORES")"; fi
 part() {  # LAW NAME: the tree's partition file with its sampling design (its law key) set to LAW
   echo "python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); p[\"law\"] = sys.argv[2]; json.dump(p, open(sys.argv[3], \"w\"))' $PART $1 $(q "$WORK/partition-$2.json")"
 }
