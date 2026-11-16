@@ -798,11 +798,17 @@ def test_a_lean_that_does_not_answer_as_the_python_leaves_the_window_undecided(s
     assert not (served.private / SP.STORE).exists() and not (served.private / SP.HELD).exists()
 
 
+#: each checkpoint form `registered` takes: its fixture, its model, and the bytes of a linear's element
+FORMS = {"int8": ("served", REPO, REV, 1), "bf16": ("served_bf16", PLAIN_REPO, PLAIN_REV, 2)}
+
+
 @pytest.fixture
-def registered(served, monkeypatch) -> Served:
-    """`served` at PoUS's registered point, the one a P2 registration names (2,056-byte blocks, 4 a segment: the two
-    layers' 8 linears in 2 segments, 2 units), with each segment's encode kept across the module's tests, so ``C*``,
-    whose salt `_bandwidth`'s challenger samples from a fixed source, is encoded once."""
+def registered(request, monkeypatch) -> Served:
+    """`served` (or, with the parameter ``bf16``, `served_bf16`) at PoUS's registered point, the one a P2 registration
+    names (2,056-byte blocks, 4 a segment: either form's 8 linears in 2 segments, 2 units), with each segment's
+    encode kept across the module's tests, so ``C*``, whose salt `_bandwidth`'s challenger samples from a fixed source,
+    is encoded once."""
+    served = request.getfixturevalue(FORMS[getattr(request, "param", "int8")][0])
     monkeypatch.setattr(ws, "geometry", lambda scheme: REGISTERED)
     S = ws.p2_module("store")
     encode = S.CpuEncoder.encode
@@ -859,9 +865,11 @@ def _jsonl(path: Path) -> list:
 
 
 @pytest.mark.slow
-def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_the_leans(registered, tmp_path,
+@pytest.mark.parametrize("registered, form", [(f, FORMS[f]) for f in FORMS], ids=list(FORMS), indirect=["registered"])
+def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_the_leans(registered, form, tmp_path,
                                                                                          monkeypatch, case_exe):
-    """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, the bandwidth party's
+    """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, of the int8 checkpoint or of
+    the BF16 one, the bandwidth party's
     registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
     PoUS's store (`p2_case.same_store` against the run's case), and answered as the session did (`p2_case.answer`, by
     the stand-in `BW_JUDGE`), which with no Lean is undecided (`p2_case.unjudged`); `poub-p2-protocol` refuses
@@ -869,8 +877,10 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     piece's, names none of the store. It encodes ``C*`` at the registered point (about 25 s on the CPU), the only point
     a P2 registration names."""
     s = registered
+    _, repo, rev, width = form
     answer, calls = _run(s, tmp_path, monkeypatch, **_bandwidth(tmp_path, bw_case_exe=_bandwidth_judge(monkeypatch)))
     assert answer["verdict"] == "accept", answer["reason"]
+    assert answer["profile"]["weights"]["bytes"] == width * sum(n * k for n, k in SHAPES.values()) * LAYERS
     public = s.out.parent / "bandwidth"
     bw = json.loads((public / "answer.json").read_text())
     assert bw["verdict"] == "accept", bw["reason"]
@@ -912,7 +922,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert opening["row"] == own["commitment"] and opening["root"] == bw["commitment"]
     op = advice.Opening(opening["index"], bytes.fromhex(opening["row"]), bytes.fromhex(opening["salt"]),
                         tuple(bytes.fromhex(p) for p in opening["path"]))
-    assert advice.verify(bytes.fromhex(bw["commitment"]), 1, 512, SP.HB.binding(REPO, REV, 3), op)
+    assert advice.verify(bytes.fromhex(bw["commitment"]), 1, 512, SP.HB.binding(repo, rev, 3), op)
     row = SV.piece_row("bandwidth", s.out.parent)
     assert row["verdict"] == "accept" and row["protocol"] == p2_case.PROTOCOL
     assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": bw["public"]["q_bytes"], "unit": "bytes"}

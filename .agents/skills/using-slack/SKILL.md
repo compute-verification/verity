@@ -103,7 +103,8 @@ id is missing).
 
 - **Subscribe to your inbox thread**, never to `#agent-coordination`'s top level, and to no Linear events: every handle
   writes through one bot and one Linear app, so they wake you for your own writes. Another handle's ask rings your inbox,
-  and a person's new issue that nobody answers rings you through the sweep's audit (`unheard`).
+  and any other issue filed in your team (Linear's app, the connector, `linear create` from another handle) rings it
+  within 10 minutes (the Slack events service's reconciliation); the sweep's audit (`unheard`) is the backstop.
 - **Subscribe to a thread only where a human may answer** (your `#ask-daniel` card, a thread a named human posted
   in), and unsubscribe when it's done; your inbox already carries every reply addressed to you. `@infra`
   also subscribes to `#agent-alerts` and `#ask-daniel`, `topLevelOnly: true`.
