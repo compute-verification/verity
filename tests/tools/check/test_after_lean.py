@@ -29,11 +29,12 @@ READS_ONLY = {"verity/commitments/randomness": "holds Randomness's Lake package,
 
 def lake_builds(suite) -> list[str]:
     """What in a suite's metadata says its tests build or run a Lake package: its directory is one (a lakefile in it), it lists
-    one's lakefile under `[tool.verity.tests] inputs`, or it lists a path in a `.lake` directory under `inputs` or `artifacts`.
+    one's lakefile under `[tool.verity.tests] inputs`, or it lists a path in a `.lake` directory under `inputs` or `artifacts`;
+    a suite at `tests/X` holds what `X` holds (`suites.LAYOUT.tested`).
     Reading a package's sources, its manifest or a directory that holds one is not building it. Whether a suite's directory
     holds a lakefile is a stat, which the guard doesn't record: a lakefile added beside an unchanged pyproject is the nightly
     uncached check's to catch."""
-    why = [f"{suite.path}/{f}" for f in LAKEFILES if (S.ROOT / suite.path / f).is_file()]
+    why = [f"{d}/{f}" for d in (suite.path, *S.LAYOUT.tested(suite.path)) for f in LAKEFILES if (S.ROOT / d / f).is_file()]
     why += [p for p in suite.inputs if Path(p).name in LAKEFILES]
     return why + [p for p in (*suite.inputs, *suite.artifacts) if ".lake" in Path(p).parts]
 
