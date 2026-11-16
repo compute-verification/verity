@@ -13,7 +13,7 @@ have = m.allowed(); where = collections.defaultdict(list)
 for f, l, w in m.scan(): where[f].append((l, w))
 over = {f: v for f, v in where.items() if len(v) > have[f] and not f.startswith('tools/sweepgap/')}
 pr_of = {}
-FIRST = git("rev-list", "--first-parent", "origin/main").split()
+FIRST = git("rev-list", "--first-parent", "c41a7b5a6d5c59bb95363a01770633933a83c7c5").split()
 def pr(commit):
     """The first-parent commit of origin/main that first holds ``commit`` (binary search: what an ancestor test says is
     monotone along the first-parent line), named by its queue number."""
