@@ -9,10 +9,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.circuits import Program, bind
-from verity_vllm.definitions.numerics import derived_rows as D
-from verity_vllm.definitions.registry import fp8 as F
 
 from tests.program.test_fp8 import _evaluate_returns
+from verity_vllm.definitions.numerics import derived_rows as D
+from verity_vllm.definitions.registry import fp8 as F
 
 DATA = Path(__file__).parent / "data"
 

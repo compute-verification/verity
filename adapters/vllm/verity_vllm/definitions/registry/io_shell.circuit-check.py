@@ -16,6 +16,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     record's (64 outputs, 1,024 prompt ids); `SelectCollect_v2` at TINY's select and at Llama-3.2-1B's 4 outputs, at a
     later round."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import io_shell as X
 
     return [("TokenFeed_v1:4:1", lambda: bind(X.TokenFeed, NP=4, FIRST=True)),

@@ -23,6 +23,7 @@ from verity.circuits.boolean.gather import gather
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import dsv4_decode_indices as X
 
 #: the length's lives are 1-bit elements, so that TOPK of them are TOPK 1-bit words (`BL.word_type`), not one TOPK-bit word (as

@@ -26,14 +26,15 @@ is over circuit-check's cost target (``partition_max_gates``).
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
-from verity.circuits.census import silicon_step
-from verity.circuits.refs import Coll, concat
-from verity.circuits.types import Array
-from verity.circuits.ops.boolean import elementwise as EW
-from verity.circuits.ops.boolean import gemm as BG
-from verity.circuits.silicon import fp as FP
 from verity.circuits.boolean.forms import OR, add, and_reduce, mux, or_reduce
 from verity.circuits.boolean.trace import definition
+from verity.circuits.census import silicon_step
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.refs import Coll, concat
+from verity.circuits.silicon import fp as FP
+from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import boolean_dsa as BD
 from verity_vllm.definitions.registry import boolean_moe as BMOE
 from verity_vllm.definitions.registry import mhc as M

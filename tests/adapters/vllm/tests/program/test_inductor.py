@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
+
 from verity_vllm.definitions.numerics import inductor_rows as TW
 from verity_vllm.definitions.registry import hopper
 from verity_vllm.definitions.registry import inductor as I

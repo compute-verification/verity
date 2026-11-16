@@ -10,6 +10,7 @@ def _boolean_roots() -> list[Any]:
     clamped SwiGLU row at I = 4, limit 10 (its element `SiluMulClampBf16_v1{LIMIT=10.0}` with it); the word views of
     `boolean_dsv4_moe`'s.  `MufuLg2Mantissa_v1`, `Ex2Approx_v1`, `Dsv4HashWeight_v1` and `Dsv4SqrtSoftplus_v1` are static-free."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsv4_moe as D
 
     return [

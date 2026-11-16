@@ -5,7 +5,17 @@ from __future__ import annotations
 from typing import Any
 
 from verity.circuits.defs import Body, Builder
-from verity.circuits.refs import Affine, Coll, Concat, PartLog, Refs, Strided, concat, prefix_runs, runs
+from verity.circuits.refs import (
+    Affine,
+    Coll,
+    Concat,
+    PartLog,
+    Refs,
+    Strided,
+    concat,
+    prefix_runs,
+    runs,
+)
 
 
 def _scattered(p: Refs) -> bool:

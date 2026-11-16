@@ -50,6 +50,7 @@ from typing import Any
 
 from verity.circuits.codec import canonical_json, descriptor_size
 from verity.circuits.types import RecordType
+from verity_torch.correspondence.runtime import correspondence_digest
 
 from verity_vllm.check.weights_of_record import PARAM as WEIGHTS
 from verity_vllm.config import (
@@ -60,7 +61,6 @@ from verity_vllm.config import (
     row_file,
     workload_file,
 )
-from verity_torch.correspondence.runtime import correspondence_digest
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 from verity_vllm.pipeline import epoch
 from verity_vllm.program import prefix_plan as PP

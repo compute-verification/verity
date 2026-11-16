@@ -10,15 +10,15 @@ from dataclasses import replace
 
 import pytest
 from verity.circuits.defs import Builder, bind
+from verity.circuits.ops import gemm as G
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array
-from verity.circuits.ops import gemm as G
+from verity_torch import prune as P
+
+from tests.program.predict.test_steps import _mixed, _registered
 from verity_vllm.definitions.registry import b1_tp2 as TP
 from verity_vllm.definitions.registry import dead_free as DF
 from verity_vllm.definitions.registry.prims import BF16
-
-from tests.program.predict.test_steps import _mixed, _registered
-from verity_torch import prune as P
 from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.steps import compile_steps

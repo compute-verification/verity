@@ -9,19 +9,25 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity.commitments.periods import interface as IF
 from verity.circuits.ops.boolean.versions import boolean_version
+from verity.commitments.periods import interface as IF
+
+from tests.program.test_dsa_norm import (
+    OVERFLOW,
+    _bf16_row,
+    _edge_rows,
+    _w,
+    ptx_block_model,
+)
 from verity_vllm.definitions.numerics import dsa_norm_rows as NR
 from verity_vllm.definitions.registry import boolean_mtp_draft as BM
 from verity_vllm.definitions.registry import dsa_norm as DN
 from verity_vllm.definitions.registry import mtp_draft as MD
-from tests.program.test_dsa_norm import OVERFLOW, _bf16_row, _edge_rows, _w, ptx_block_model
 
 H, BLOCK, WARPS, EPS = 6144, 8192, 4, 1e-5
 

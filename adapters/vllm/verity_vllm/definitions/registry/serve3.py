@@ -37,6 +37,7 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll as _Coll
 from verity.circuits.refs import concat, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import ZERO16, const, kv_type, weights_type

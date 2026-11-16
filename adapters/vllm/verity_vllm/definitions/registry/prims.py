@@ -22,24 +22,90 @@ from __future__ import annotations
 import math
 
 import numpy as np
-
 from verity.circuits.defs import PrimitiveDefinition, primitive
-from verity.circuits.types import Array, Value
+
 # Re-exported: this package reaches the FP32/BF16 primitives and helpers through this module.
-from verity.circuits.ops.fp32 import (BF16_NAN_F2FP, BF16_NAN_TORCH, F32_NAN, Bf16Add, Bf16AddF2fp, Bf16MulBf16, Bf16MulF32, F32Add,
-                            F32AddFtz, F32Div, F32Fma, F32FmaFtz, F32FmaSubFtz, F32Max, F32Mul, F32MulFtz, F32SubFtz,
-                            F32AddV2, F32AddFtzV2, F32DivV2, F32FmaV2, F32FmaFtzV2, F32FmaSubFtzV2, F32MulV2, F32MulFtzV2,
-                            F32SubFtzV2, GuardNegInfZero, bf16_to_f32_bits, bits_of, f32_add_bits, f32_div_bits,
-                            f32_fma_bits, f32_gpu_nan, f32_is_nan, f32_max_bits, f32_mul_bits, f32_of, f32_sub_bits,
-                            f32_to_bf16_rn_bits, ftz_bits)
-from verity.circuits.ops.fp32 import f32_decode as _decode, f32_round as _round_f32
+from verity.circuits.ops.fp32 import (
+    BF16_NAN_F2FP,
+    BF16_NAN_TORCH,
+    F32_NAN,
+    Bf16Add,
+    Bf16AddF2fp,
+    Bf16MulBf16,
+    Bf16MulF32,
+    F32Add,
+    F32AddFtz,
+    F32AddFtzV2,
+    F32AddV2,
+    F32Div,
+    F32DivV2,
+    F32Fma,
+    F32FmaFtz,
+    F32FmaFtzV2,
+    F32FmaSubFtz,
+    F32FmaSubFtzV2,
+    F32FmaV2,
+    F32Max,
+    F32Mul,
+    F32MulFtz,
+    F32MulFtzV2,
+    F32MulV2,
+    F32SubFtz,
+    F32SubFtzV2,
+    GuardNegInfZero,
+    bf16_to_f32_bits,
+    bits_of,
+    f32_add_bits,
+    f32_div_bits,
+    f32_fma_bits,
+    f32_gpu_nan,
+    f32_is_nan,
+    f32_max_bits,
+    f32_mul_bits,
+    f32_of,
+    f32_sub_bits,
+    f32_to_bf16_rn_bits,
+    ftz_bits,
+)
+from verity.circuits.ops.fp32 import f32_decode as _decode
+from verity.circuits.ops.fp32 import f32_round as _round_f32
+
 # Re-exported: the MUFU primitives and their tables are core's.
-from verity.circuits.ops.mufu import (MUFU_TANH_RULES, MUFU_TANH_SHARD_FORMAT, MUFU_TANH_TABLE_DIR, MUFU_TANH_TABLE_FORMAT,
-                            MUFU_TANH_TABLE_MANIFEST, MUFU_TANH_TABLE_MANIFEST_SHA512, DivFullRcp, DivFullScaleA, Fa2InvSum,
-                            MufuEx2Ftz, MufuRcpFtz, MufuSqrtFtz, MufuTanh, MufuTanhUnmeasured, RsqrtApprox, mufu_tanh_coverage,
-                            mufu_tanh_table_manifest)
-from verity.circuits.ops.prims import AmpereBF16TcDot16, Bf16ToF32, F2fpBf16, F32ToBf16Rn   # the k16 tensor-core step: core's `_v2` (same function as the retired `_v1`)
-from verity.circuits.ops.scalar import Bf16GtStrict, I32Add, I32Eq, I32Le, SelectBf16, SelectF32, SelectI32
+from verity.circuits.ops.mufu import (
+    MUFU_TANH_RULES,
+    MUFU_TANH_SHARD_FORMAT,
+    MUFU_TANH_TABLE_DIR,
+    MUFU_TANH_TABLE_FORMAT,
+    MUFU_TANH_TABLE_MANIFEST,
+    MUFU_TANH_TABLE_MANIFEST_SHA512,
+    DivFullRcp,
+    DivFullScaleA,
+    Fa2InvSum,
+    MufuEx2Ftz,
+    MufuRcpFtz,
+    MufuSqrtFtz,
+    MufuTanh,
+    MufuTanhUnmeasured,
+    RsqrtApprox,
+    mufu_tanh_coverage,
+    mufu_tanh_table_manifest,
+)
+from verity.circuits.ops.prims import (  # the k16 tensor-core step: core's `_v2` (same function as the retired `_v1`)
+    AmpereBF16TcDot16,
+    Bf16ToF32,
+    F2fpBf16,
+    F32ToBf16Rn,
+)
+from verity.circuits.ops.scalar import (
+    Bf16GtStrict,
+    I32Add,
+    I32Eq,
+    I32Le,
+    SelectBf16,
+    SelectF32,
+    SelectI32,
+)
+from verity.circuits.types import Array, Value
 
 BF16, F32, I32, BIT = Value(16), Value(32), Value(32), Value(1)
 

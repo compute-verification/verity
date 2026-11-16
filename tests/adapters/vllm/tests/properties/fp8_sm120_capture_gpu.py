@@ -60,6 +60,10 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops import fp32, prims
+
+from tests.properties import fa2_target_capture_gpu as C
+from tests.properties import fa_tap_exactness_gpu as G
+from tests.properties import glm53_block_fp8_capture_gpu as H
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics.derived_rows import (
     add_rn,
@@ -68,10 +72,6 @@ from verity_vllm.definitions.numerics.derived_rows import (
     mul_rn,
 )
 from verity_vllm.definitions.registry import fp8 as F
-
-from tests.properties import fa2_target_capture_gpu as C
-from tests.properties import fa_tap_exactness_gpu as G
-from tests.properties import glm53_block_fp8_capture_gpu as H
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/blackwell-fp8-capture/v1"

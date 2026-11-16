@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import torch
 from verity.circuits.refs import Coll
-from verity_vllm.definitions.registry import cuda_rmsnorm as C
-
 from verity_torch.frontend.derive import Alloc
 from verity_torch.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_torch.frontend.rules.common import (
@@ -15,6 +13,8 @@ from verity_torch.frontend.rules.common import (
     rows_of,
     shape,
 )
+
+from verity_vllm.definitions.registry import cuda_rmsnorm as C
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_tokens_of,

@@ -21,6 +21,7 @@ from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.silicon import fp
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import boolean_dense as BD
 from verity_vllm.definitions.registry import dense as D

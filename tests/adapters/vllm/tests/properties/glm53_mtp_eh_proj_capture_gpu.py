@@ -61,7 +61,8 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_bf16_gemm_capture_gpu as BG
-from verity_vllm.records.property_record import REGISTRY, digest_of, seal as seal_record
+from verity_vllm.records.property_record import REGISTRY, digest_of
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = REGISTRY["glm53_mtp_eh_proj_capture"].schema
 RECORD = "glm53_mtp_eh_proj_capture.json"
@@ -166,6 +167,7 @@ def bind_check(splits: list[int]) -> dict[str, Any]:
     from verity.circuits.evaluation.batch import type_shape
     from verity.circuits.ops import gemm as CG
     from verity.circuits.ops.boolean import gemm as BGO
+
     from verity_vllm.definitions.registry import cublas_bf16 as CB
 
     hop = word_of(BGO.HopperBF16WgmmaDot16)
@@ -209,6 +211,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
     from vllm.model_executor.layers.utils import dispatch_unquantized_gemm
+
     from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     doc["switch"] = BG.switch(True)

@@ -32,10 +32,11 @@ needs the whole table on a rank (tensor parallel size 1).
 from __future__ import annotations
 
 from verity.circuits.defs import bind, composite
-from verity.circuits.refs import Coll, concat
-from verity.circuits.types import Array
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import BitAnd, SelectBf16
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import dsa_norm as DN
 from verity_vllm.definitions.registry.prims import BF16, F32

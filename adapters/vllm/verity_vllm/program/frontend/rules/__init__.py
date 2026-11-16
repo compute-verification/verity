@@ -38,6 +38,7 @@ from verity_torch.frontend.rules.base import (
     StateRule,
     ViewRule,
 )
+
 from verity_vllm.program.frontend.rules.vocab import (
     PROFILE_B1_EAGER,
     REFERENCE_CPU_F32,
@@ -52,12 +53,19 @@ _cache: dict[str, object] = {}
 def _load() -> None:
     if _cache:
         return
-    from verity_vllm.program.frontend.rules.family import DEFAULT_FAMILIES
-    from verity_vllm.program.frontend.rules.padding import PADDING_RULES, PADDING_VLLM_RULES
-    from verity_vllm.program.frontend.rules.profile import PROFILE_RULES, PROFILE_VLLM_RULES
     from verity_torch.frontend import rules as _torch_rules
     from verity_torch.frontend.rules.reference import REFERENCE_RULES
     from verity_torch.frontend.rules.views import VIEW_RULES
+
+    from verity_vllm.program.frontend.rules.family import DEFAULT_FAMILIES
+    from verity_vllm.program.frontend.rules.padding import (
+        PADDING_RULES,
+        PADDING_VLLM_RULES,
+    )
+    from verity_vllm.program.frontend.rules.profile import (
+        PROFILE_RULES,
+        PROFILE_VLLM_RULES,
+    )
     _cache.update(VIEW_RULES=VIEW_RULES, REFERENCE_RULES=REFERENCE_RULES, PROFILE_RULES=PROFILE_RULES, PADDING_RULES=PADDING_RULES,
                   DEFAULT_FAMILIES=DEFAULT_FAMILIES,
                   TORCH_RULES=_torch_rules.TORCH_RULES,

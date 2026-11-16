@@ -60,8 +60,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, runs
 from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.registry import b1_tp2 as B1T
 
+from verity_vllm.definitions.registry import b1_tp2 as B1T
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base, spec_statics
 

@@ -9,6 +9,7 @@ import pytest
 from verity.circuits.codec import canonical_json, definition_entry, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.registry import b1, serve3
 from verity_vllm.definitions.registry import boolean_silu as BS
 from verity_vllm.definitions.registry import prims as P

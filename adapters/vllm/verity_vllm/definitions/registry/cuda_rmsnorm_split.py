@@ -14,6 +14,7 @@ from __future__ import annotations
 from verity.circuits.defs import composite
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import boolean_norms as BN
 from verity_vllm.definitions.registry import cuda_rmsnorm as C
 from verity_vllm.definitions.registry import prims as P

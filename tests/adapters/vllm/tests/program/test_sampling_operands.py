@@ -6,13 +6,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from verity.circuits.defs import bind
+
+from verity_vllm.check.replay.stoch_recompute import evaluate_spec
 from verity_vllm.definitions.registry import sampling as S
 from verity_vllm.definitions.registry.sampling import (
     GumbelArgmaxBf16,
     GumbelArgmaxTempBf16,
 )
-
-from verity_vllm.check.replay.stoch_recompute import evaluate_spec
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 

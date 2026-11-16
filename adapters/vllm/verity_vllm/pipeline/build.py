@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.ops.boolean.versions import write_word
+from verity_torch.frontend.boolean import derived
+from verity_torch.prune import BATCHED, registered_form
 
 from verity_vllm.config import RowConfig, option, workload_arg
 from verity_vllm.engine import env as engine_env
@@ -51,9 +53,7 @@ from verity_vllm.pipeline.tp.links import (  # noqa: F401 (read through here)
     same_module_path,
     write_tp_links,
 )
-from verity_torch.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
-from verity_torch.prune import BATCHED, registered_form
 from verity_vllm.records import schema_ids as SID
 
 __all__ = ["Options", "main", "read_tp_links", "same_module_path", "sampler_geometry", "sampling_policy", "write_instances"]
@@ -448,7 +448,6 @@ def _tp_bus(cfg, rank: int, tp: int, res: dict, stack: contextlib.ExitStack):
     """Rank ``rank`` of ``tp``: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation,
     export and derive, entered on ``stack``; the group's settings and what serving must match into ``res["tp"]``. The bus."""
     from verity_vllm.definitions.registry.tp_allreduce import settings_of
-
     from verity_vllm.program.frontend.export_ops import CollectiveBus, tp_group_override
     from verity_vllm.program.frontend.rules.vllm_bindings import (
         observe_allreduce_settings,
@@ -484,12 +483,12 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
                    model_root: str | None) -> None:
     """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
     from verity.circuits.codec import canonical_json, encode_program
-
     from verity_torch.correspondence.runtime import NAMESPACE as CORR_NS
     from verity_torch.correspondence.runtime import correspondence_digest
+
+    from verity_vllm.program.frontend.artifact import ArtifactIdentity
     from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
     from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
-    from verity_vllm.program.frontend.artifact import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     supplied |= {"ir": ir} if (ir := rep.provenance.get("ir")) else {}   # ir=boolean: the word root and digest the bits were lifted from
     desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest

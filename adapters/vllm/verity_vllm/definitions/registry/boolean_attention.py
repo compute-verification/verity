@@ -26,27 +26,63 @@ alone. They are ``opt_in``: `boolean_version` never picks one, and they serve on
 """
 from __future__ import annotations
 
-from verity.circuits import boolean as BL
 from collections.abc import Callable
 
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import const_bits
+from verity.circuits.boolean.trace import definition, word_of
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.circuits.refs import Coll, Explicit, array_of, broadcast, concat, strided_view, tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.boolean import attention as BA
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import mufu as BM
-from verity.circuits.boolean.forms import const_bits
-from verity.circuits.boolean.trace import definition, word_of
+from verity.circuits.refs import (
+    Coll,
+    Explicit,
+    array_of,
+    broadcast,
+    concat,
+    strided_view,
+    tuple_of,
+)
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import hopper
-from verity_vllm.definitions.registry.b1 import (AttentionHeadV2, AttentionHeadV3, AttentionV2, AttentionV3, AttnBlockV2, AttnBlockV3,
-                                             _lane, scale_log2_bits)
+from verity_vllm.definitions.registry.b1 import (
+    AttentionHeadV2,
+    AttentionHeadV3,
+    AttentionV2,
+    AttentionV3,
+    AttnBlockV2,
+    AttnBlockV3,
+    _lane,
+    scale_log2_bits,
+)
 from verity_vllm.definitions.registry.dead_free import AttnBlockFirstV1, AttnHeadEndV1
-from verity_vllm.definitions.registry.fa2_check_inf import (AttentionHeadV5, AttentionHeadV11, AttentionV5, AttentionV11, AttnBlockV5,
-                                                        AttnBlockV11)
-from verity_vllm.definitions.registry.fa3_check_inf import AttentionHeadV4, AttentionV4, AttnBlockV4
-from verity_vllm.definitions.registry.value_inputs import (AttentionHeadV10, AttentionHeadV12, AttentionHeadV13, AttentionV10,
-                                                       AttentionV12, AttentionV13, AttnBlockV10, AttnBlockV12, AttnBlockV13)
+from verity_vllm.definitions.registry.fa2_check_inf import (
+    AttentionHeadV5,
+    AttentionHeadV11,
+    AttentionV5,
+    AttentionV11,
+    AttnBlockV5,
+    AttnBlockV11,
+)
+from verity_vllm.definitions.registry.fa3_check_inf import (
+    AttentionHeadV4,
+    AttentionV4,
+    AttnBlockV4,
+)
+from verity_vllm.definitions.registry.value_inputs import (
+    AttentionHeadV10,
+    AttentionHeadV12,
+    AttentionHeadV13,
+    AttentionV10,
+    AttentionV12,
+    AttentionV13,
+    AttnBlockV10,
+    AttnBlockV12,
+    AttnBlockV13,
+)
 
 BF16 = Array(16, BL.BIT)
 F32 = Array(32, BL.BIT)

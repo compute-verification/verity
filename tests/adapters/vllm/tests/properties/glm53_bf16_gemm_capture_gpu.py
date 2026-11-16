@@ -117,11 +117,11 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.ops import gemm as CG
 from verity.circuits.ops.boolean import gemm as BG
-from verity_vllm.definitions.registry import cublas_bf16 as CB
-from verity_vllm.definitions.registry import ll_bf16 as LL
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import ll_bf16 as LL
 from verity_vllm.engine.env import served_defaults
 from verity_vllm.records.property_record import seal as seal_record
 
@@ -701,6 +701,7 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
     crafted count probe atop a clone of W with an all-ones x row 0 (never for bmm), the fit's operand words, and the serial
     chain's words on the kept window."""
     import torch
+
     from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     m, top = MODELS[model], SCAN_M[-1]
@@ -1328,8 +1329,9 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     work = Path(tmp.name)
     env, cleared = environment(a.served_default, work / "triton_cache")
     import torch
-    from verity_vllm.definitions.registry import bf16_gemm_check as BC
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
+
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     tag = "GLM53-BF16-GEMM" + (" (served default)" if a.served_default else "")
     todo = cases(a.quick, only, models)

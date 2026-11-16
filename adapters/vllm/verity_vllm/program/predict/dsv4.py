@@ -50,7 +50,6 @@ class Net:
         from verity_vllm.definitions.registry.dsa_norm import check_block
         from verity_vllm.definitions.registry.dsv4_moe import TOPK as ROUTER_SLOTS
         from verity_vllm.definitions.registry.tp_allreduce import settings_of
-
         from verity_vllm.observe.fold.profiles.generic import rank_hf_config
         from verity_vllm.program import model as analytic
         from verity_vllm.program.frontend import targets as TG
@@ -243,7 +242,6 @@ class _Model(_Calls):
         """The all-reduce of a sublayer's partials, its post into the streams and the pre of layer L's `side` sublayer: the FMA path at
         most `SMALL_FMA_TOKENS` rows, the TF32 pre above (`MhcFusedPostPreRule`) -> (streams, layer input, (post, comb)) per row."""
         from verity_vllm.definitions.numerics.mhc_twin import tf32_num_split
-
         from verity_vllm.program.frontend.rules.vllm_mhc import (
             MHC_GEOMETRY,
             SMALL_FMA_TOKENS,
@@ -380,7 +378,6 @@ class _Model(_Calls):
         clamped SwiGLU and the weighted w2 GEMM; each row's sum of its TOPK rows, plus the shared expert's."""
         from verity_vllm.definitions.numerics.marlin_moe_rows import moe_block
         from verity_vllm.definitions.registry import marlin_moe as MM
-
         from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config
         C, M, H = self.C, len(x), self.H
         E, TOPK, INTER, SCALE = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"]), float(C["ROUTED_SCALING_FACTOR"])

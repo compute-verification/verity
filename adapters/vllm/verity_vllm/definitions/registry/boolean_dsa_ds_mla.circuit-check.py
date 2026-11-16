@@ -9,6 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`DsMlaFp8Tile_v2` at one warp's tile (32) and GLM-5.3's (128); `DsaLatentRowDsMla_v2` at the small row (256 in four tiles of
     64, 8 rotary values) and at GLM-5.3's (512 in four tiles of 128, 64 rotary values)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsa_ds_mla
 
     return [

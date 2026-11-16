@@ -5,15 +5,15 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+
 from verity_vllm.definitions.numerics import rows as RK
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.act import SiluMul, SiluMulBf16
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
-
-from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate
 
 V1 = P.SiluMulBf16.evaluate
 V2 = SiluMulBf16.evaluate

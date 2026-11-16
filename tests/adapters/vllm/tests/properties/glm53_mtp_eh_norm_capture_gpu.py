@@ -59,7 +59,8 @@ from tests.properties import glm53_dsa_capture_gpu as DS
 from tests.properties import glm53_fused_rmsnorm_capture_gpu as FR
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import dsa_norm_rows as NR
-from verity_vllm.records.property_record import REGISTRY, seal as seal_record
+from verity_vllm.records.property_record import REGISTRY
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = REGISTRY["glm53_mtp_eh_norm_capture"].schema
 RECORD = "glm53_mtp_eh_norm_capture.json"
@@ -331,6 +332,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_norm as DN
     from verity_vllm.definitions.registry import mtp_draft as MD
 
@@ -353,6 +355,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     words counted where they differ from the kernel's, and the position alternatives on the e half."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
+
     from verity_vllm.definitions.registry import mtp_draft as MD
 
     r0, r1 = job["span"]

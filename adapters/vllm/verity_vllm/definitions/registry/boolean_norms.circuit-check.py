@@ -11,6 +11,7 @@ def _boolean_roots() -> list[Any]:
     Definitions of its constant steps; then the same norms and steps with eps an input."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import mufu as BM
+
     from verity_vllm.definitions.registry import boolean_norms as BN
 
     return [

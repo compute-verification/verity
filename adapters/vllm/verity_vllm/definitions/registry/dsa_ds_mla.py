@@ -51,6 +51,7 @@ from __future__ import annotations
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import dsa_norm as DN
 from verity_vllm.definitions.registry import prims as P

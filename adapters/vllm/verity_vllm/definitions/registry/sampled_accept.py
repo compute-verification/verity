@@ -94,20 +94,34 @@ from dataclasses import dataclass, field
 from functools import cache
 
 import numpy as np
-
 from verity.circuits.defs import SpecializedDefinition, bind, composite
-from verity.circuits.refs import array_of, coll_concat, tuple_of
-from verity.circuits.types import Array, Tuple
-from verity_vllm.definitions.evidence import EVIDENCE
 from verity.circuits.ops.fp32 import F32Add, F32AddFtz, F32Fma, F32Mul
 from verity.circuits.ops.mufu import mufu_ex2_words, table
 from verity.circuits.ops.prims import const
-from verity.circuits.ops.scalar import BitAnd, BitNot, F32, F32Eq, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
-from verity_vllm.definitions.registry import dead_free as DF, sampling as SA, topp_stages as TS
+from verity.circuits.ops.scalar import (
+    F32,
+    I32,
+    BitAnd,
+    BitNot,
+    F32Eq,
+    I32Add,
+    I32Eq,
+    I32Le,
+    SelectF32,
+    SelectI32,
+)
+from verity.circuits.refs import array_of, coll_concat, tuple_of
+from verity.circuits.types import Array, Tuple
+
+from verity_vllm.definitions.evidence import EVIDENCE
+from verity_vllm.definitions.registry import dead_free as DF
+from verity_vllm.definitions.registry import sampling as SA
+from verity_vllm.definitions.registry import topp_stages as TS
 from verity_vllm.definitions.registry.dsa import I32Sub
 from verity_vllm.definitions.registry.dsv4_moe import Ex2Approx
 from verity_vllm.definitions.registry.ref_prims import F32GtStrict, F32Sub
-from verity_vllm.definitions.registry.topp_word_gates import I32ToF32, LOG2E, U32Xor
+from verity_vllm.definitions.registry.topp_word_gates import LOG2E, I32ToF32, U32Xor
+
 I64, U32 = SA.I64, SA.U32
 #: the stats kernel's `BLOCK_SIZE` at the pin (`VOCAB_BLOCK_SIZE`)
 STATS_TILE = 8192

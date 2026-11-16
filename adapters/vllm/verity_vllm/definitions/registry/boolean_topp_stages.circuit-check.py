@@ -14,6 +14,7 @@ def _boolean_roots() -> list[Any]:
     (`BitXor_v2`, `U32Xor_v2`, `SelectBit_v2`, `TopPNumkeep_v2`) are static-free, catalog roots already, and these bodies
     Call them."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_topp_stages as BT
     from verity_vllm.definitions.registry import topp_stages as T
 

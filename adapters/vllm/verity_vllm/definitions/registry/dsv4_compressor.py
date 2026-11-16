@@ -77,9 +77,10 @@ from types import SimpleNamespace
 from verity.circuits.defs import bind, composite, primitive
 from verity.circuits.ops.fp32 import F32DivV2
 from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import F32Neg
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.circuits.ops.scalar import F32Neg
+
 from verity_vllm.definitions.numerics import dsv4_compressor_twin
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import dsv4_indexer as I

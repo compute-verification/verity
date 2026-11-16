@@ -25,11 +25,6 @@ from types import SimpleNamespace
 import torch
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array
-from verity_vllm.definitions.numerics import marlin_moe_rows as MR
-from verity_vllm.definitions.registry import marlin_moe as MM
-from verity_vllm.definitions.registry.prims import F32 as F32_WORD
-from verity_vllm.definitions.registry.prims import I32 as I32_WORD
-
 from verity_torch.frontend.rules.base import OpRule, RuleInfo
 from verity_torch.frontend.rules.common import (
     call_args,
@@ -38,6 +33,11 @@ from verity_torch.frontend.rules.common import (
     rows_of,
     shape,
 )
+
+from verity_vllm.definitions.numerics import marlin_moe_rows as MR
+from verity_vllm.definitions.registry import marlin_moe as MM
+from verity_vllm.definitions.registry.prims import F32 as F32_WORD
+from verity_vllm.definitions.registry.prims import I32 as I32_WORD
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_tokens_of,

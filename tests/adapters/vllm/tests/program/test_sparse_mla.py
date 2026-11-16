@@ -14,12 +14,12 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.ops.boolean import versions as SW
+
+from tests.program.test_boolean_fp8 import _flat, _inputs
 from verity_vllm.definitions.registry import b1, hopper
 from verity_vllm.definitions.registry import boolean_sparse_mla as BM
 from verity_vllm.definitions.registry import fa3_check_inf as F3
 from verity_vllm.definitions.registry import sparse_mla as M
-
-from tests.program.test_boolean_fp8 import _flat, _inputs
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 GLM = M.SPARSE_MLA_GLM53

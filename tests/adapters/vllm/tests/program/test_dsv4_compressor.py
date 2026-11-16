@@ -24,8 +24,9 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.circuits.silicon import fp as FP
 from verity.circuits.ops.boolean import versions as SW
+from verity.circuits.silicon import fp as FP
+
 from verity_vllm.definitions.numerics import dsv4_compressor_twin as T
 from verity_vllm.definitions.numerics import flashmla_twin as FT
 from verity_vllm.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat

@@ -12,10 +12,10 @@ import os
 import numpy as np
 import pytest
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import sampling as SM
-from verity_vllm.definitions.registry import topp_split as TS
 
 from tests.program.test_topp_splits_operand import _bits, _eval, _u32, _u32s
+from verity_vllm.definitions.registry import sampling as SM
+from verity_vllm.definitions.registry import topp_split as TS
 
 f32 = np.float32
 RECORD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "topp_split_fixture", "fstoch01_rows.npz")

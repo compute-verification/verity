@@ -11,17 +11,17 @@ import re
 from typing import Any
 
 import pytest
-from verity_vllm.pipeline.tp import grain as GR
-from verity_vllm.program.predict import node_window as NW
-from verity_vllm.program.predict import node_window_dense as ND
-from verity_vllm.program.predict import node_window_multimem as NM
-
-from tests.program.predict.test_node_window import glm_request
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.refs import runs
 from verity.commitments.periods import interface as IF
+
+from tests.program.predict.test_node_window import glm_request
 from verity_vllm.definitions.registry import b1_tp2 as B1T
+from verity_vllm.pipeline.tp import grain as GR
+from verity_vllm.program.predict import node_window as NW
+from verity_vllm.program.predict import node_window_dense as ND
+from verity_vllm.program.predict import node_window_multimem as NM
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NM.FAMILIES}
 LP, WORLD, WIDTH, COLS = 43, 8, 6144, 192

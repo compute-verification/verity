@@ -10,6 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     of which it sees 5 keys, and all; a key through its first query block and through a later one; a key after the loop; and a
     row's dQ from five parts in two buffers."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import fa2_train_bwd as W
 
     return [
@@ -27,6 +28,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 def _by_calls_roots() -> list[Any]:
     """At D = 32, BM = 16 and BN = 32, checked by its calls: a head of 64 rows, two key blocks, its dQ in two buffers."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import fa2_train_bwd as W
 
     return [bind(W.Fa2TrainBwdHead, T=64, D=32, BM=16, BN=32, NS=2)]

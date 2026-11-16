@@ -16,12 +16,12 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
 from verity.circuits.program import Program
+
+from tests.program import sampled_accept_vectors as SV
 from verity_vllm.definitions.registry import sampled_accept as A
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import spec
 from verity_vllm.definitions.registry.sampling_rows import gumbel_select_row
-
-from tests.program import sampled_accept_vectors as SV
 
 F = np.float32
 M32 = 0xFFFFFFFF
@@ -394,7 +394,8 @@ def test_a_pass_is_each_rows_top_p_mask_then_the_sampled_accept():
     row, and refused by the second row's test.  It is the one test of the masked rows' wires from the mask chunks into the
     accept's units; about two minutes, most of it the twin and 771 mask chunks evaluated one by one."""
     from verity_vllm.definitions.numerics import topp_stage_twins as TW
-    from verity_vllm.definitions.registry import sampling_rows as SR, topp_stages as TS
+    from verity_vllm.definitions.registry import sampling_rows as SR
+    from verity_vllm.definitions.registry import topp_stages as TS
 
     rng = np.random.default_rng(273)
     S, temp, top_p, seed, pos = 8, int(F(0.8).view(np.uint32)), int(F(0.999).view(np.uint32)), 0x5EED_0273, [90, 91, 92]

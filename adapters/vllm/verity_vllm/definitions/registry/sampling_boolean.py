@@ -29,12 +29,19 @@ The same tree over f32 words (`F32GtStrict_v1`'s order, `scalar.f32_key`: 33-bit
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops.boolean.scalar import (
+    bf16_gt_strict,
+    bf16_key,
+    f32_key,
+    gt_u,
+    select,
+)
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
-from verity.circuits.boolean import trace as TR
-from verity.circuits.boolean.forms import ONE, OR, ZERO, NOT, add
-from verity.circuits.ops.boolean.scalar import bf16_gt_strict, bf16_key, f32_key, gt_u, select
+
 from verity_vllm.definitions.registry import b1
 
 __all__ = ["ArgmaxLeaf", "ArgmaxMerge", "ArgmaxStep", "F32ArgmaxLeaf", "F32ArgmaxMerge", "F32ArgmaxStage", "G", "GB", "TokenSelect",

@@ -83,14 +83,14 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions.numerics import dsv4_decode_metadata_twin as T
-from verity_vllm.definitions.registry import dsv4_decode_metadata as R
 
 from tests.properties import dsv4_compressor_capture_gpu as CX
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import dsv4_indices_capture_gpu as IX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.definitions.numerics import dsv4_decode_metadata_twin as T
+from verity_vllm.definitions.registry import dsv4_decode_metadata as R
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-decode-metadata-capture/v1"

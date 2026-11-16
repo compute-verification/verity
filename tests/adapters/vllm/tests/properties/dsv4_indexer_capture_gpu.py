@@ -82,13 +82,17 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions.numerics.dsv4_indexer_twin import OPS, heads_twin, score_twin
-from verity_vllm.definitions.registry import dsa
-from verity_vllm.definitions.registry import dsv4_indexer as I
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as X
+from verity_vllm.definitions.numerics.dsv4_indexer_twin import (
+    OPS,
+    heads_twin,
+    score_twin,
+)
+from verity_vllm.definitions.registry import dsa
+from verity_vllm.definitions.registry import dsv4_indexer as I
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-indexer-capture/v1"
@@ -647,6 +651,7 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any] | None) -> dict[str, Any]:
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
+
     from verity_vllm.definitions.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}

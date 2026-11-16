@@ -27,11 +27,6 @@ from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import mufu as MU
 from verity.circuits.ops.boolean.versions import boolean_version
-from verity_vllm.definitions.registry import boolean_dense as BD
-from verity_vllm.definitions.registry import boolean_dense_norm as DN
-from verity_vllm.definitions.registry import boolean_norms as BN
-from verity_vllm.definitions.registry import dense as D
-from verity_vllm.definitions.registry import prims as P
 
 from tests.program.test_boolean_norms import (
     BF16_SPECIALS,
@@ -46,6 +41,11 @@ from tests.program.test_boolean_norms import (
     _w,
     _words,
 )
+from verity_vllm.definitions.registry import boolean_dense as BD
+from verity_vllm.definitions.registry import boolean_dense_norm as DN
+from verity_vllm.definitions.registry import boolean_norms as BN
+from verity_vllm.definitions.registry import dense as D
+from verity_vllm.definitions.registry import prims as P
 
 FULL = os.environ.get("VERITY_VLLM_BOOLEAN_NORMS_FULL")
 

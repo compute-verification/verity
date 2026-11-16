@@ -13,10 +13,10 @@ from functools import partial
 from typing import Any, Callable, Sequence
 
 import numpy as np
-
 from verity.circuits.evaluation.batch import type_dtype
-from verity.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
 from verity.circuits.kernels.tc import group_sum_total_batch
+from verity.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
+
 from verity_vllm.definitions.numerics.derived_rows import add_rn, f2fp_bf16, mul_rn
 from verity_vllm.definitions.numerics.kernel_registry import Declined, prim_static
 from verity_vllm.definitions.registry import marlin_moe as MM

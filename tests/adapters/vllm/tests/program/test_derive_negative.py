@@ -13,16 +13,16 @@ import pytest
 pytest.importorskip("torch")
 
 import torch
-from verity_torch.frontend.provenance import registry_version
-from verity_vllm.definitions.registry import b1
-from verity_vllm.definitions.registry.prims import BF16, I32
-from verity_vllm.program.frontend import vllm_derive as _D
-
-from tests.program.capture_check import LazyTranscript, Segments, check_call
 from verity.circuits import Program, bind, program_digest
 from verity.circuits.evaluation import evaluate_region
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
+from verity_torch.frontend.provenance import registry_version
+
+from tests.program.capture_check import LazyTranscript, Segments, check_call
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.prims import BF16, I32
+from verity_vllm.program.frontend import vllm_derive as _D
 
 
 def _input_gate_ranges(P: Program) -> list[tuple[int, int]]:
@@ -103,6 +103,8 @@ def _miswired_serve(kind: str):
     """A Serve-shaped program whose decode attention reads K/V rows from the wrong owner: `layer` (rows of layer
     L+1), `future` (the row this position itself produces is replaced by the next step's row), `stale` (a
     position is dropped)."""
+    from verity.circuits.defs import CompositeDefinition
+
     from verity_vllm.definitions.registry.b1 import (
         Embedding,
         Final,
@@ -110,8 +112,6 @@ def _miswired_serve(kind: str):
         LayerPre,
         kv_type,
     )
-
-    from verity.circuits.defs import CompositeDefinition
     C, LP = TINY, 2
 
     def body(B, S, prompt, weights):

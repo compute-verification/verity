@@ -24,6 +24,14 @@ refused, never adapted to).
 
 from __future__ import annotations
 
+from verity_torch.frontend.rules.bindings.layer_norm import (
+    LayerNormAtenRule,
+)
+from verity_torch.frontend.rules.bindings.views import (
+    AllocViewRule,
+    IntIdWidenRule,
+)
+
 from verity_vllm.program.frontend.rules.profile import (
     FusedAddRmsNormRule as _FusedAddRmsNormRule,
 )
@@ -72,9 +80,6 @@ from verity_vllm.program.frontend.rules.vllm_bindings.int8 import (
     Int8UnifiedAttentionRule,
 )
 from verity_vllm.program.frontend.rules.vllm_bindings.kv_prefix import KvPrefixRule
-from verity_torch.frontend.rules.bindings.layer_norm import (
-    LayerNormAtenRule,
-)
 from verity_vllm.program.frontend.rules.vllm_bindings.norm_chain import (
     AddScalarRule,
     AddWidenedRule,
@@ -113,10 +118,6 @@ from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import (
     TritonGemmRule,
     TritonRmsNormRule,
 )
-from verity_torch.frontend.rules.bindings.views import (
-    AllocViewRule,
-    IntIdWidenRule,
-)
 
 VLLM_BINDING_RULES = [TritonRmsNormRule(), FusedQKvRmsNormRule(), TritonGemmRule(), CublasLinearRule(), LlBf16GemmRule(), CublasRouterRule(),
                       KvCacheUpdateRule(), UnifiedAttentionWithOutputRule(), AllocViewRule(), IntIdWidenRule(),
@@ -139,8 +140,9 @@ def vllm_ruleset():
     """`DEFAULT_RULES` + the bindings above (the default rules already bind `_C.rotary_embedding`, `_C.silu_and_mul`, `aten.embedding`,
     `aten.argmax`, views/allocs). The default `FusedAddRmsNorm[vllm]` is REPLACED by `FusedAddRmsNorm[vllm-bi]`, which derives the
     kernel dispatch from the export instead of assuming it."""
-    from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_torch.frontend.rules.base import RuleSet
+
+    from verity_vllm.program.frontend.rules import DEFAULT_RULES
     base = [r for r in DEFAULT_RULES.rules if type(r) is not _FusedAddRmsNormRule]
     from verity_vllm.program.frontend.rules.vllm_dsa import (
         VLLM_DSA_RULES,  # DeepSeek sparse attention's leaves (dsa_leaves.dsa_leaves)

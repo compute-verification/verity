@@ -7,6 +7,15 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from verity.circuits import boolean as BL
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import evaluate
+from verity.circuits.ops.boolean import versions as SW
+
+from tests.program.test_boolean_attention import _inputs
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import fa3_model
 from verity_vllm.definitions.numerics import fa3_split_twins as TW
@@ -20,15 +29,6 @@ from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.rules import vllm_dsa_dense
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as VOCAB
 from verity_vllm.program.frontend.target_profile import TargetProfile
-
-from tests.program.test_boolean_attention import _inputs
-from verity.circuits import boolean as BL
-from verity.circuits import evaluation as E
-from verity.circuits.boolean import trace as TR
-from verity.circuits.defs import bind
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import evaluate
-from verity.circuits.ops.boolean import versions as SW
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")

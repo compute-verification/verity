@@ -60,19 +60,19 @@ from functools import cache
 from typing import Callable
 
 import numpy as np
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits import boolean as BL
-from verity.circuits.defs import CompositeDefinition, bind, composite
-from verity.circuits.refs import Coll, Explicit, array_of, coll_concat, tuple_of
-from verity.circuits.types import Array, Tuple, Value
-from verity.circuits.ops import fp32 as W
-from verity.circuits.ops.boolean import elementwise as EW
-from verity.circuits.silicon import fp
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import NOT, ONE, ZERO
 from verity.circuits.boolean.trace import word_of
+from verity.circuits.defs import CompositeDefinition, bind, composite
+from verity.circuits.evaluation import evaluate
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.prims import const
+from verity.circuits.refs import Coll, Explicit, array_of, coll_concat, tuple_of
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import value_inputs as VI

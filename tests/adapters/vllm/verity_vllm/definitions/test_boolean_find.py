@@ -4,14 +4,14 @@ names for one word are refused as ambiguous in either order."""
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT
 from verity.circuits.boolean.trace import definition
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
-from verity.circuits.types import Value
 from verity.circuits.ops.boolean import versions as B
+from verity.circuits.types import Value
+
 import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
 WORD = PrimitiveDefinition("BooleanFindTestWord", 1, (("x", Value(4)),), Value(4), lambda x: x ^ 15, register=False)

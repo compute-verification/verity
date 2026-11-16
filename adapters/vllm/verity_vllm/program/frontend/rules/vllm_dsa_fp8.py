@@ -25,13 +25,13 @@ __models__ = ("zai-org/GLM-5.3",)
 
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
-from verity_vllm.definitions.numerics import flashmla_twin
-from verity_vllm.definitions.registry import dsa, dsa_ds_mla, flashmla
-from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
-
 from verity_torch.frontend.derive import refuse
 from verity_torch.frontend.rules.base import RuleInfo, StateRule
 from verity_torch.frontend.rules.common import known, refuse_cached_prefix, shape
+
+from verity_vllm.definitions.numerics import flashmla_twin
+from verity_vllm.definitions.registry import dsa, dsa_ds_mla, flashmla
+from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
     active_target_profile,

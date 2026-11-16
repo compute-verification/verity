@@ -38,11 +38,10 @@ against `aten.native_layer_norm` on the GPU, whose record the quarantine admissi
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.defs import composite
 from verity.circuits.refs import Coll, concat
-
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import ZERO32, f32c
 from verity_vllm.definitions.registry.prims import BF16, F32

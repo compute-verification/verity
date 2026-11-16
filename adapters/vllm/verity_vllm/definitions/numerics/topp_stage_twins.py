@@ -8,9 +8,9 @@ The select chunks' carries (positions, tie counts, best and index) are read off 
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.evaluation import evaluate_batch, kernels
+
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import sampling_rows as SR
 from verity_vllm.definitions.registry import topp_keep_builder as K

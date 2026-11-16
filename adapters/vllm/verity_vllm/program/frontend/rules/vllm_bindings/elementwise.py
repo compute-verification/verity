@@ -5,9 +5,8 @@ from __future__ import annotations
 import torch
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Value
-from verity_vllm.definitions.registry.dsv4_moe import limit_bits
-
 from verity_torch.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
+from verity_torch.frontend.rules.bindings.operands import BF16, aten
 from verity_torch.frontend.rules.common import (
     and_mul_operands,
     call_args,
@@ -19,7 +18,8 @@ from verity_torch.frontend.rules.common import (
     scalar_kind,
     shape,
 )
-from verity_torch.frontend.rules.bindings.operands import BF16, aten
+
+from verity_vllm.definitions.registry.dsv4_moe import limit_bits
 from verity_vllm.program.frontend.rules.vllm_iface import real_C, targets_for
 
 # -- generic elementwise / activation bindings (dense2 vocabulary; none names a model) ----------------------------------------

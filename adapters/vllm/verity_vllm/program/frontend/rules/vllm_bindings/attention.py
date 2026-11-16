@@ -7,9 +7,6 @@ from types import SimpleNamespace
 import torch
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
-
-from verity_vllm.log import init_logger
-from verity_vllm.program.frontend import targets as TG
 from verity_torch.frontend.derive import Alloc, refuse
 from verity_torch.frontend.rules.base import RuleInfo, StateRule
 from verity_torch.frontend.rules.common import (
@@ -19,6 +16,11 @@ from verity_torch.frontend.rules.common import (
     row_value,
     shape,
 )
+from verity_torch.frontend.strided_views import _tensor_type
+from verity_torch.frontend.value_types import shape_of
+
+from verity_vllm.log import init_logger
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
@@ -29,8 +31,6 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     attn_kind_for,
     attn_lookup_key,
 )
-from verity_torch.frontend.strided_views import _tensor_type
-from verity_torch.frontend.value_types import shape_of
 
 # -- KV cache write + attention read (two ops) -----------------------------------------------------------------------------
 

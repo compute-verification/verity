@@ -8,6 +8,7 @@ from typing import Any, Callable
 def _boolean_roots() -> list[Any]:
     """The standalone top-p select over V = 16, which reaches its mask and keep word."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import topp_standalone_words as TSW
 
     return [bind(TSW.GumbelTopPStandaloneSelect, V=16)]
@@ -18,6 +19,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     (V = 154,880).  It is over `targets.MAX_GATES`, so ``--all`` builds it without checking it: a build that fails only at the
     served V fails here."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import topp_standalone_words as TSW
 
     return [("GumbelTopPStandaloneSelect_v1-glm53", lambda: bind(TSW.GumbelTopPStandaloneSelect, V=154880))]

@@ -10,6 +10,7 @@ import struct
 
 import numpy as np
 import pytest
+
 from verity_vllm.definitions.registry import sampling as SP
 from verity_vllm.definitions.registry import sampling_rows as SR
 from verity_vllm.definitions.registry import sampling_twins
@@ -334,9 +335,8 @@ def _cases(V: int, n: int, seed: int):
 @needs_tables
 @pytest.mark.slow
 def test_the_whole_row_equals_the_lane_walk_evaluate_spec_over_temps_top_p_split_counts_ties_masks_and_nan():
-    from verity_vllm.definitions.registry import sampling_topp_difftest as D
-
     from verity_vllm.check.replay.stoch_recompute import evaluate_spec
+    from verity_vllm.definitions.registry import sampling_topp_difftest as D
     V = 1024
     for bf, temp, p, S, seed, pos in _cases(V, 30, 11):
         words = [bf.astype(np.uint64), np.array([f32b(p)], dtype=np.uint64), np.array([seed], dtype=np.uint64),

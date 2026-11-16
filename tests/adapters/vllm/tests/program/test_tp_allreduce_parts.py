@@ -15,6 +15,7 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
 from verity.circuits.ops.boolean import versions as BB
+
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.definitions.registry import tp_allreduce_check as K
 

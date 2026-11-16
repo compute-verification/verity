@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from verity_vllm.definitions.registry.bf16_gemm_check import device_pin
 
 from verity_vllm.config import UsageError
+from verity_vllm.definitions.registry.bf16_gemm_check import device_pin
 from verity_vllm.program.predict import compiled as PC
 
 RTX = "NVIDIA RTX PRO 6000 Blackwell Server Edition"

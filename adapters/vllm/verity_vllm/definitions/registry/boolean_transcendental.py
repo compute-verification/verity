@@ -62,9 +62,21 @@ from fractions import Fraction
 from functools import cache
 
 import numpy as np
-
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, compress_columns, const_bits, lzc, mux, or_reduce, shr, sub
+from verity.circuits.boolean.forms import (
+    NOT,
+    ONE,
+    OR,
+    ZERO,
+    add,
+    compress_columns,
+    const_bits,
+    lzc,
+    mux,
+    or_reduce,
+    shr,
+    sub,
+)
 from verity.circuits.boolean.trace import definition
 from verity.circuits.silicon import fp
 from verity.circuits.types import Array

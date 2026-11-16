@@ -28,6 +28,7 @@ from typing import Any
 
 from verity.circuits.codec import descriptor_id
 from verity.commitments.periods import interface as IF
+
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base
 

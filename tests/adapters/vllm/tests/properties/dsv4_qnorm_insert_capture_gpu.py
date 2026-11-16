@@ -70,16 +70,16 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
+from tests.properties import dsv4_flashmla_capture_gpu as M
+from tests.properties import fa2_target_capture_gpu as C
+from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.definitions.numerics import derived_rows as DW
 from verity_vllm.definitions.numerics import dsv4_qnorm_insert_twin as W
 from verity_vllm.definitions.numerics import flashmla_twin as FT
 from verity_vllm.definitions.registry import dsa as Dsa
 from verity_vllm.definitions.registry import dsv4_qnorm_insert as R
 from verity_vllm.definitions.registry import flashmla as F
-
-from tests.properties import dsv4_flashmla_capture_gpu as M
-from tests.properties import fa2_target_capture_gpu as C
-from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-qnorm-insert-capture/v1"
@@ -475,14 +475,13 @@ def selection() -> dict[str, Any]:
     dispatch and the sources."""
     import torch
     import vllm
+    import vllm._C_stable_libtorch  # registers torch.ops._C's stable ops
     from vllm.config import get_current_vllm_config
     from vllm.models.deepseek_v4 import attention as A
     from vllm.models.deepseek_v4.common.ops import fused_indexer_q as FQ
     from vllm.models.deepseek_v4.nvidia.flashmla import DeepseekV4FlashMLAAttention
     from vllm.models.deepseek_v4.nvidia.model import _select_dsv4_attn_cls
     from vllm.v1.attention.backends.mla.indexer import dsa_indexer_uses_fp4
-
-    import vllm._C_stable_libtorch  # registers torch.ops._C's stable ops
 
     cfg = get_current_vllm_config()
     cls = _select_dsv4_attn_cls(cfg)
@@ -557,10 +556,9 @@ def _dev(a: np.ndarray, dtype=None):
 def launch_sumsq_probe() -> dict[str, Any]:
     """Run the non-served-eps query head and compare every word with the fused Definition and the unfused mutant."""
     import torch
+    import vllm._C_stable_libtorch  # noqa: F401
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
-
-    import vllm._C_stable_libtorch  # noqa: F401
 
     o = sumsq_probe_operands()
     q, kv = _dev(o["q"].view(np.int16), torch.bfloat16), _dev(o["kv"].view(np.int16), torch.bfloat16)

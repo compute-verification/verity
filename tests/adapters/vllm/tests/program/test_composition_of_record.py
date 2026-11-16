@@ -23,11 +23,11 @@ import numpy as np
 import pytest
 from verity.circuits import bind
 from verity.circuits.evaluation import evaluate_call
+
+from tests.program.crosscheck import _standalone
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import hopper as H
 from verity_vllm.definitions.registry import prims as P
-
-from tests.program.crosscheck import _standalone
 
 REPO = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")
 FIX = REPO / "fixtures"

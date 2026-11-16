@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
-
 from verity_torch.frontend.derive import Alloc, StaticIndex, refuse
 from verity_torch.frontend.rules.base import InPlaceRule, RuleInfo, StateRule
 from verity_torch.frontend.rules.common import (
@@ -24,12 +23,15 @@ from verity_torch.frontend.rules.common import (
     rows_of,
     shape,
 )
-from verity_torch.frontend.rules.profile import PROFILE_TORCH_RULES, _without_batch_invariance
+from verity_torch.frontend.rules.profile import (
+    PROFILE_TORCH_RULES,
+    _without_batch_invariance,
+)
 from verity_torch.frontend.strided_views import _tensor_type
 from verity_torch.frontend.value_types import shape_of
+
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.targets import UnregisteredTarget
-
 
 # -- in-place kernel interface --------------------------------------------------------------------------------
 
