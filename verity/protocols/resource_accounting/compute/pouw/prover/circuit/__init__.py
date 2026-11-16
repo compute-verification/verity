@@ -29,8 +29,8 @@
 * `seeds`: the seed and the noise blocks a unit derives (`PouwSeed`, `PouwNoiseBlock`, on words and on bits), and its two
   seeds where its receipt folds take keys (`PouwUnitSeeds`: seed_j and σ_R).
 * `h1tile`: `eps1-sm120-h1fx1` as a compile-pass scheme, H1 + fx1 on a warp's tile under CP-W.
-* `h1device`: H1's device records, one an architecture (sm_120, and sm_90 for the H200): the s8 step and its binding, the
-  contractions its kernels serve, and its data-sheet facts.
+* `h1device`: H1's device records, one an architecture (sm_120, and sm_90 for the H200): the s8 step and its binding, and the
+  contractions its kernels serve.
 * `h1zy`: the H1 tile with its served z/y record checked (`PouwH1TileZy`): the record an input, committed
   before its round's coin, its z the tile's A Bᵀ and its y the served dequant (`PouwZyDequant`, the activation scale
   first, no bias).
