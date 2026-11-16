@@ -547,7 +547,7 @@
   },
   "Proofs.Properties.Verity.Sampled.HonestSession.Params": {
    "why": "plstr, a local macro that closes Firewall.plain j = true for a literal Json j (this module's plainness lemmas) by a single simp over Firewall.plain, plainList and plainStr with the def-named strings unfolded so their literals reduce; and nfix, a macro that closes jnorm j = j for a shallow literal Json j (norm_query, norm_law and the module's other norm facts) by first over rfl, refine of norm_arr_fix and norm_mkObj_fix (with kernel_rfl' for the keys' order) with simp only, repeat' apply And.intro and itself. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "5f2574ce96b0e674dc1561fd9c863257a5183fde454074680c941d9466a8b6c7"
+   "digest": "89be8180d928b8a61aca2de19f50710765d50124dbcdf3102dce7e264e0e191f"
   },
   "Proofs.Properties.Verity.Sampled.HonestSession.PortsFacts": {
    "why": "kernel_rfl', a local copy of Fwd's tactic of that name (an elab): it closes a = b by assigning Eq.refl a to the goal, leaving the kernel to check a ≡ b, in the module's equations on the parameters' ports and rest. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
