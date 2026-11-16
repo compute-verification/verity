@@ -21,9 +21,18 @@ are read, and `_short` gives one key for both. Its key is
               and ``Rev1InertShare1000`` are 1/1,000); a lookup reads the statement's cap (`INERT_SHARES`), and the others are history
 
 Rounded twins (a record's own cast under the loop price, an upper bound) and U-only messages have no priced path and are
-left out. Each twin keeps its pin's name, type hash and source, and is ``pinned`` when the Lean store's lean-audit.json
+left out. Each twin keeps its pin's type hash and source, and is ``pinned`` when the Lean store's lean-audit.json
 or the repository's own (`REPO_AUDIT`, read after the store's files) holds that pin with that type hash, or when it is a
 statement of the repository's Pearl-C lemmas at device records (`REPO_LEMMAS`, read last), ``staged`` otherwise.
+
+A row's ``pin`` names the declaration as the repository names it today whenever the repository's Lean declares one
+with the row's key (`_short`), whatever the row's source (`repository_names`, `renamed`); its source, type hash, status
+and every other field stay as read. Where the repository declares the key more than once (a theorem `Pouw.PearlC.pearlCX`
+and its lift `Pouw.SecurityProofs.PearlC.X`), the row takes the declaration in its own pin's namespace: a store pin
+`Pouw.PearlC.pearlCGamma…` the `Pouw.PearlC.` theorem, a pin under `Pouw.SecurityProofs.PearlC.` the lift. The store's
+spelling stays only on a row with no such declaration, on one for which the namespace singles out none, and on one whose
+name another row would take. `build` and `refresh` both end in `renamed`, so a full build and ``--repository-only`` name
+a row alike.
 
 A twin lifted to a guarantee is pinned as `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G`, whose signature
 states no gap. Its statement is the body of the definition `G`, read from the Lean source of `Pouw/Guarantees/` in the
@@ -50,13 +59,15 @@ import hashlib
 import json
 import re
 import sys
+from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 
 #: what `ledger.py` and the tests read
 __all__ = [
     "CAST_VALUES", "LEAN_STORE", "REPO_AUDIT", "REPO_SOURCE", "SCHEMA", "STAGED", "TABLE", "TwinError", "build",
-    "extract", "guarantees", "lifted_definitions", "load", "lookup", "parse", "refresh", "statement",
+    "extract", "guarantees", "lifted_definitions", "load", "lookup", "parse", "refresh", "renamed", "repository_names",
+    "statement",
 ]
 
 HERE = Path(__file__).resolve().parent
@@ -185,6 +196,55 @@ def _short(name: str) -> str:
     short = re.sub(r"^Pouw\.SecurityProofs\.PearlC\.(?=Gap|Gamma|Sampled)", "pearlC", name).removeprefix("Pouw.PearlC.")
     short = re.sub(r"^pearlCGamma", "pearlCGap", re.sub(r"^gamma(?=Hot|Fp4)", "gap", short))
     return re.sub(r"Cap1000(?=_)", "InertShare1000", short)
+
+
+_SCOPE = re.compile(r"(?:@\[[^\]]*\]\s*)?(?:(?:public|noncomputable)\s+)*(namespace|section)\b\s*(\S*)")
+_END = re.compile(r"end(?:\s+\S+)?\s*")
+_DECL = re.compile(r"(?:@\[[^\]]*\]\s*)*((?:(?:private|protected|noncomputable|nonrec|public|unsafe|partial)\s+)*)"
+                   r"(?:theorem|lemma|def|abbrev)\s+(\S+)")
+
+
+def repository_names(audit: dict, lean: Path) -> dict[str, tuple[str, ...]]:
+    """{each twin key (`_short`) a non-private declaration of the repository's Lean has: the full names of every such
+    declaration, sorted}, from the Lean source of `Pouw/` in the audit's definitions and proofs trees (`trees`) under
+    `lean`, each name in the namespaces its file opens around it (or `_root_.`)."""
+    found: dict[str, set[str]] = {}
+    roots = sorted({r for tree in ("definitions", "proofs") for r in audit["trees"].get(tree, [])})
+    for d in (lean / root.replace(".", "/") / "Pouw" for root in roots):
+        for path in sorted(d.rglob("*.lean")) if d.is_dir() else []:
+            scopes: list[tuple[str, str]] = []
+            for line in path.read_text().split("\n"):
+                if m := _SCOPE.fullmatch(line):
+                    scopes.append((m[1], m[2]))
+                elif _END.fullmatch(line):
+                    if scopes:
+                        scopes.pop()
+                elif (m := _DECL.match(line)) and "private" not in m[1]:
+                    name = m[2].removeprefix("_root_.") if m[2].startswith("_root_.") else \
+                        ".".join([*(n for kind, n in scopes if kind == "namespace"), m[2]])
+                    key = _short(name)
+                    if any(r.fullmatch(key) for r in (_FP8, _HOT, _FP4)):
+                        found.setdefault(key, set()).add(name)
+    return {k: tuple(sorted(v)) for k, v in found.items()}
+
+
+def renamed(twins: list[dict], names: dict[str, tuple[str, ...]]) -> list[dict]:
+    """``twins`` with each row's pin the repository's name of its key (`repository_names`), every other field as is: the
+    one declaration of that key, or of several the one in the namespace of the row's pin (`_namespace`). A row for which
+    that singles out none, or whose new name another row has or would take, keeps its pin."""
+    def one(pin: str) -> str | None:
+        found = names.get(_short(pin), ())
+        found = found if len(found) == 1 else tuple(n for n in found if _namespace(n) == _namespace(pin))
+        return found[0] if len(found) == 1 else None
+    to = {i: one(t["pin"]) for i, t in enumerate(twins)}
+    to = {i: n for i, n in to.items() if n is not None and n != twins[i]["pin"]}
+    taken = Counter([t["pin"] for i, t in enumerate(twins) if i not in to] + list(to.values()))
+    return [t | {"pin": to[i]} if i in to and taken[to[i]] == 1 else t for i, t in enumerate(twins)]
+
+
+def _namespace(name: str) -> str:
+    """A full name's namespace: `Pouw.PearlC` of `Pouw.PearlC.pearlCGapX`."""
+    return name.rpartition(".")[0]
 
 
 def parse(name: str, pin: dict, defs: dict[str, str] | None = None) -> dict | None:
@@ -316,7 +376,7 @@ def build(root: Path, repo_audit: Path = REPO_AUDIT) -> dict:
         if _short(r["pin"]) not in seen:
             seen.add(_short(r["pin"]))
             twins.append(_jsonable(r))
-    return _table(sources, twins)
+    return _table(sources, renamed(twins, repository_names(json.loads(repo_audit.read_text()), repo_audit.parent)))
 
 
 def refresh(doc: dict, repo_audit: Path = REPO_AUDIT) -> dict:
@@ -337,7 +397,7 @@ def refresh(doc: dict, repo_audit: Path = REPO_AUDIT) -> dict:
             if _short(r["pin"]) not in seen:
                 seen.add(_short(r["pin"]))
                 twins.append(_jsonable(r))
-    return _table(sources, twins)
+    return _table(sources, renamed(twins, repository_names(json.loads(repo_audit.read_text()), repo_audit.parent)))
 
 
 def _table(sources: list[dict], twins: list[dict]) -> dict:

@@ -18,6 +18,8 @@ import pytest
 
 from verity_ops import deploy
 
+ROOT = Path(__file__).resolve().parents[3]
+
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
 FUTURE = 4102444800    # 2100-01-01: an mtime after any process here started
 
@@ -243,6 +245,185 @@ def test_a_root_step_sudo_refuses_stops_the_command_naming_the_admin_login(world
         err = capsys.readouterr().err
         assert "sudo refused `python3 -c` to its registry login" in err and "--login vy-admin" in err, err
     assert (node / "bin" / "a.py").read_text() == "a1\n" and (node / "bin" / "x.prev").exists()
+
+
+@pytest.fixture
+def stepped(world, tmp_path):
+    """The world with step `lock` (an allowlist it shows, and a tool) on n and on m, which the step holds, and n's slot locks."""
+    node, repo, locks = world["node"], world["repo"], tmp_path / "locks"
+    _commit(repo, {"src/allow": "# what research keeps\nresearch ALL=(root) NOPASSWD: /usr/bin/true \"\"\n", "src/tool.py": "t1\n"},
+            "a step")
+    _git(repo, "push", "-q", "origin", "main")
+    (locks / "check-line").mkdir(parents=True)
+    world["manifest"].write_text(world["manifest"].read_text() + f"""
+[nodes.m]
+record = "{node}/research/deploy/record.jsonl"
+managed = ["{node}/bin/*"]
+
+[step.lock]
+shows = "{node}/bin/allow"
+locks = ["{locks}"]
+
+[step.lock.held]
+m = "its loop's install comes first"
+
+[[file]]
+path = "{node}/bin/allow"
+src = "src/allow"
+nodes = ["n", "m"]
+step = "lock"
+
+[[file]]
+path = "{node}/bin/tool"
+src = "src/tool.py"
+nodes = ["n", "m"]
+step = "lock"
+""")
+    return {**world, "locks": locks}
+
+
+def hold(path: Path) -> int:
+    """A descriptor holding `path`'s flock, as a check holds its slot."""
+    import fcntl
+    fd = os.open(path, os.O_RDWR | os.O_CREAT)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
+
+def test_a_step_is_installed_only_on_its_own_word_and_never_while_the_node_holds_a_check_slot(stepped, capsys):
+    node, repo, locks = stepped["node"], stepped["repo"], stepped["locks"]
+
+    def deploy_(*argv: str) -> int:
+        return deploy.main([*argv, "--by", "lane-x", "--no-fetch"], run=local, manifest=stepped["manifest"], repo=repo)
+
+    assert deploy_("install", "n", "--apply") == 0
+    out = capsys.readouterr().out
+    assert f"apart         {node}/bin/allow  <- src/allow  (step lock: `--only lock` installs it)" in out
+    assert not (node / "bin" / "allow").exists() and not (node / "bin" / "tool").exists() and (node / "bin" / "a.py").exists()
+    rep = deploy.drift(deploy.load(stepped["manifest"])["n"], "origin/main", local, repo)
+    held = {Path(e["path"]).name: e for e in rep["entries"] if e["state"] == "held"}
+    assert set(held) == {"allow", "tool"} and "`research deploy install n --only lock`" in held["tool"]["detail"]
+
+    assert deploy_("install", "n", "--only", "lock") == 0
+    out = capsys.readouterr().out
+    assert f"would install {node}/bin/tool  <- src/tool.py" in out
+    assert f"{node}/bin/allow would hold:\n              research ALL=(root) NOPASSWD: /usr/bin/true \"\"\n" in out
+    assert "what research keeps" not in out and not (node / "bin" / "tool").exists()
+
+    for lock in (locks / "check-b.lock", locks / "check-line" / "0123-4567"):
+        fd = hold(lock)
+        try:
+            for argv in (["--only", "lock"], ["--only", "lock", "--apply"], [str(node / "bin" / "tool"), "--apply"]):
+                assert deploy_("install", "n", *argv) == 3
+                assert f"n runs a check: {lock} held by pid {os.getpid()}" in capsys.readouterr().err
+        finally:
+            os.close(fd)
+    assert not (node / "bin" / "tool").exists()
+
+    assert deploy_("install", "n", "--only", "lock", "--apply") == 0
+    assert (node / "bin" / "tool").read_text() == "t1\n" and f"{node}/bin/allow holds:" in capsys.readouterr().out
+    rep = deploy.drift(deploy.load(stepped["manifest"])["n"], "origin/main", local, repo)
+    assert {_states(rep)[k] for k in ("allow", "tool")} == {"ok"}
+    assert deploy_("install", "m", "--only", "lock") == 3
+    assert "held in deploy.toml" in capsys.readouterr().err
+
+
+def test_a_lock_directory_the_node_lacks_refuses_unless_the_step_names_it_optional(stepped, capsys):
+    """A mistyped or absent directory of `locks` can't say whether the node runs a check, so it never reads as not busy."""
+    node, locks, gone = stepped["node"], stepped["locks"], stepped["locks"].parent / "gone"
+    text = stepped["manifest"].read_text().replace(f'locks = ["{locks}"]', f'locks = ["{locks}", "{gone}"]')
+    stepped["manifest"].write_text(text)
+
+    def deploy_(*argv: str) -> int:
+        return deploy.main([*argv, "--by", "lane-x", "--no-fetch"], run=local, manifest=stepped["manifest"], repo=stepped["repo"])
+
+    for argv in (["--only", "lock"], ["--only", "lock", "--apply"]):
+        assert deploy_("install", "n", *argv) == 3
+        assert f"n lacks {gone}, which step lock's locks name" in capsys.readouterr().err
+    assert not (node / "bin" / "tool").exists()
+    stepped["manifest"].write_text(text.replace(f'locks = ["{locks}", "{gone}"]', f'locks = ["{locks}", "{gone}"]\noptional = ["{gone}"]'))
+    assert deploy_("install", "n", "--only", "lock") == 0 and "would install" in capsys.readouterr().out
+    with pytest.raises(ValueError, match="optional names '/elsewhere', which its `locks` don't"):
+        deploy.load(text=text.replace(f'locks = ["{locks}", "{gone}"]', f'locks = ["{locks}"]\noptional = ["/elsewhere"]'))
+
+
+def test_a_held_slot_whose_who_cant_be_read_stays_held_and_says_why(stepped, capsys):
+    locks = stepped["locks"]
+    (locks / "check-b.who").write_text('{"pid": ')
+    fd = hold(locks / "check-b.lock")
+    try:
+        assert deploy.main(["install", "n", "--only", "lock", "--by", "lane-x", "--no-fetch"], run=local,
+                           manifest=stepped["manifest"], repo=stepped["repo"]) == 3
+    finally:
+        os.close(fd)
+    assert (f"n runs a check: {locks / 'check-b.lock'} held by pid {os.getpid()}, its .who unreadable (JSONDecodeError)"
+            in capsys.readouterr().err)
+
+
+def test_a_slot_gone_between_its_listing_and_its_stat_is_recorded_as_vanished(stepped, monkeypatch, capsys):
+    import io
+    locks = stepped["locks"]
+    (locks / "check-a.lock").write_text("")
+    gone, real_stat = str(locks / "check-a.lock"), os.stat
+
+    def raced(p, *a, **k):
+        if os.fspath(p) == gone:
+            raise FileNotFoundError(2, "No such file or directory", gone)
+        return real_stat(p, *a, **k)
+
+    monkeypatch.setattr(os, "stat", raced)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"locks": [str(locks)]})))
+    exec(compile(deploy.BUSY, "BUSY", "exec"), {})  # noqa: S102  (the node's program, verbatim, in-process so its stat can race)
+    assert json.loads(capsys.readouterr().out) == {"held": [], "missing": [], "vanished": [gone]}
+    monkeypatch.setattr(os, "stat", real_stat)
+
+    monkeypatch.setattr(deploy, "busy", lambda node, locks, run: {"held": [], "missing": [], "vanished": [gone]})
+    assert deploy.main(["install", "n", "--only", "lock", "--by", "lane-x", "--no-fetch"], run=local,
+                       manifest=stepped["manifest"], repo=stepped["repo"]) == 0
+    assert f"vanished     {gone}  (gone between its listing and its stat: read as not held)" in capsys.readouterr().out
+
+
+def test_no_handler_of_the_slot_reader_swallows_what_it_caught():
+    """BUSY runs as a string, inside which the silent-excepts lint (tests/lint/test_repo_silent_excepts.py) can't see: held
+    here to the lint's own definition, every handler of it records what it caught."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("silent_excepts", ROOT / "tests" / "lint" / "test_repo_silent_excepts.py")
+    lint = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lint)
+    assert "except" in deploy.BUSY and lint.handlers(deploy.BUSY) == []
+
+
+def test_a_step_names_a_step_the_manifest_has_and_holds_only_its_nodes(stepped):
+    text = stepped["manifest"].read_text()
+    for bad, why in ((text.replace('step = "lock"', 'step = "nope"', 1), "names a \\[step.NAME\\]"),
+                     (text.replace('m = "its loop', 'q = "its loop'), "holds node 'q'"),
+                     (text.replace(f'shows = "{stepped["node"]}/bin/allow"', 'shows = "/elsewhere"'), "no entry of the step installs")):
+        with pytest.raises(ValueError, match=why):
+            deploy.load(text=bad)
+
+
+LOCKOUT_ORDER = ["vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-14", "vy-nebius-cpu-8", "vy-nebius-cpu-3", "vy-nebius-cpu-6",
+                 "vy-nebius-cpu-12", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-1", "vy-nebius-cpu-5", "vy-nebius-cpu-4",
+                 "vy-nebius-cpu-2", "vy-nebius-cpu-10", "vy-nebius-cpu-17", "vy-nebius-cpu-13", "vy-nebius-cpu-7"]
+
+
+def test_every_cpu_machine_takes_the_lock_out_only_as_step_lockout_in_the_order_it_goes():
+    """A whole install of a CPU machine (a deploy round) stages none of the lock-out, which changes how `--job-user` asks for
+    root; cpu-13 and cpu-7 are listed and held, each with its reason; the step reads the check slots slot.py keeps."""
+    m = tomllib.loads(deploy.MANIFEST.read_text())
+    lockout = [f for f in m["file"] if f.get("step") == "lockout"]
+    assert len(lockout) == 11 and all(f["nodes"] == LOCKOUT_ORDER for f in lockout)
+    assert set(m["step"]["lockout"]["held"]) == {"vy-nebius-cpu-13", "vy-nebius-cpu-7"}
+    assert "/workspace/research/locks" in m["step"]["lockout"]["locks"]
+    nodes = deploy.load()
+    assert {n for n in nodes if re.fullmatch(r"vy-nebius-cpu-\d+", n)} == set(LOCKOUT_ORDER)
+    lock_srcs = {f["src"] for f in lockout}
+    for n in LOCKOUT_ORDER:
+        mine = [e for e in nodes[n].entries if e.src in lock_srcs]
+        assert len(mine) == 11 and all(e.step == "lockout" for e in mine), n
+        assert all(bool(e.hold) == (n in ("vy-nebius-cpu-13", "vy-nebius-cpu-7")) for e in mine), n
+    assert nodes["vy-nebius-cpu-15"].steps["lockout"].shows == "/usr/local/lib/vy-lockout/50-vy-research"
 
 
 def test_a_dry_run_says_what_would_change_and_an_install_names_only_what_still_runs_old_code(world, capsys):
@@ -950,11 +1131,13 @@ UNPRESERVED_DROPIN = "/etc/systemd/system/vy-retention-gc.service.d/20-unpreserv
 def test_the_uk_south2_train_nodes_get_exactly_what_their_live_twin_gets():
     """vy-nebius-cpu-14 to -17 get what a live node of their kind runs, so a staged one's first install, the hour it exists, is
     one cpu-12 has already run: cpu-12's entries, its managed patterns and its record. A staged one goes without the collector's
-    unpreserved-runs drop-in, which deletes runs only on vy-nebius-2 and cpu-1 to cpu-15."""
+    unpreserved-runs drop-in, which deletes runs only on vy-nebius-2 and cpu-1 to cpu-16. Only cpu-17 is staged: cpu-16 runs, and
+    drift and the security findings' machine checks pass a staged node by."""
     nodes = deploy.load()
     twin = nodes["vy-nebius-cpu-12"]
     want = sorted(twin.entries, key=lambda e: e.path)
     assert want and UNPRESERVED_DROPIN in {e.path for e in want}
+    assert {n.name for n in nodes.values() if n.staged} == {"vy-nebius-cpu-17"}
     for n in range(14, 18):
         node = nodes[f"vy-nebius-cpu-{n}"]
         expect = want if node.staged is None else [e for e in want if e.path != UNPRESERVED_DROPIN]

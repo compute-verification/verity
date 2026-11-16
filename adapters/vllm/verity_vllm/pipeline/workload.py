@@ -1,8 +1,13 @@
 """sweep/workload.py — the ONE deterministic heterogeneous workload generator of the sweep.
 
+    verity-vllm workload <row-id> [--tokenizer <snapshot dir or tokenizer.json>]      (a row `workloads/generation.toml` lists)
     verity-vllm workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
         [--sampling greedy|stoch-t0.8-p0.95|stoch-t0.8-p1] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
         [--shared-prefix N] [--lengths-only] [--check] --out workloads/<row-id>.json
+
+A row `generation.toml` lists needs only its id: the table states what the id doesn't give (the checkpoint, the tokenizer's
+sha256, the target, the reasons, the note's prefix, the arrival rule), the output is byte for byte the file `SHA256SUMS` names,
+and a flag that disagrees with the table or the id is refused by name.
 
 Output = the existing request-list workload format (a row file, `config.RowConfig`, see `workloads/workload_cov_*.json`) that
 `verity_vllm.engine.vllm_adapter.load_workload` / `bench/commit_delta.py` / `zk/bench/e2e_commit_run.py` / the eager capture consume unchanged,
@@ -35,6 +40,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import tomllib
 import uuid
 from dataclasses import dataclass
 from importlib import resources
@@ -50,6 +56,8 @@ from verity_vllm.config import (
     WORKLOAD_SCHEMA,
     WORKLOADS,
     RowConfig,
+    RowId,
+    UsageError,
     option,
     row_execution,
     row_world,
@@ -76,6 +84,9 @@ SAMPLING = {
 NOMINAL_STEP_S = 0.010          # a decode step of the 1–2B models on L40S (7.5–10.9 ms); converts arrival seconds -> arrive_step
 ARRIVE_STEP_RULE = ("realized_arrive_steps of round(offset_s / nominal_step_s): an arrival after every earlier request has finished "
                     "is declared at the forward after the last of them, where the serving loop admits it")
+#: the arrive_step rules by name: "round" is the rule before realized_arrive_steps, which stored rows made under it still state
+ARRIVE_STEP_RULES = {"realized": ARRIVE_STEP_RULE, "round": "round(offset_s / nominal_step_s)"}
+GENERATION = WORKLOADS / "generation.toml"
 MIN_CAP = 2                     # the "very short" output cap (prefill + one decode step)
 #: the row file's reason for the switch a target with the int8 attention in scope sets (`TargetProfile.engine_args`)
 INT8_ATTENTION_REASON = ("TargetProfile.int8_exact serves the exact-int8 attention (engine.int8_attention_vllm.Int8AttentionImpl), "
@@ -165,9 +176,11 @@ def plan_values(n: int, lo: int, hi: int, rng: np.random.Generator, *, anchor_ne
     return out
 
 
-def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: str, arrivals: str, shared_prefix: int = 0) -> dict:
+def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: str, arrivals: str, shared_prefix: int = 0,
+         arrival_rule: str = "realized") -> dict:
     """The model-independent shape plan of one row: lengths, caps, sampling seeds, arrival offsets (all deterministic in the row id),
-    and the shared prefix every prompt longer than it starts with (`--shared-prefix`; 0 = none)."""
+    and the shared prefix every prompt longer than it starts with (`--shared-prefix`; 0 = none).  ``arrival_rule`` names the
+    `ARRIVE_STEP_RULES` rule the arrive steps follow."""
     seed = row_seed(row_id)
     lo = 8 if max_input >= 32 else 1
     lengths = plan_values(batch, lo, max_input, rng_for(seed, "lengths"), anchor_near_lo=True)
@@ -183,8 +196,9 @@ def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: 
         horizon_s = max(0.1, 0.6 * max_output * NOMINAL_STEP_S)            # arrivals over the first ~60 % of a full-length run
         offs = sorted(round(float(x), 3) for x in r.uniform(0.05, horizon_s, size=batch - 1))
         offsets_s = [0.0] + offs
-        drawn = [0] + [max(1, int(round(o / NOMINAL_STEP_S))) for o in offs]
-        steps = realized_arrive_steps([{"max_tokens": c, "arrive_step": a} for c, a in zip(caps, drawn)])
+        rounded = [0] + [max(1, int(round(o / NOMINAL_STEP_S))) for o in offs]
+        steps = (rounded if arrival_rule == "round" else
+                 realized_arrive_steps([{"max_tokens": c, "arrive_step": a} for c, a in zip(caps, rounded)]))
     else:
         offsets_s = [0.0] * batch
         steps = [0] * batch
@@ -193,7 +207,7 @@ def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: 
             "min_input": lo, "min_output": MIN_CAP if max_output >= MIN_CAP else max_output,
             "sampling": sampling, "sampling_params": SAMPLING[sampling], "arrivals": arrivals,
             "input_lengths": lengths, "output_caps": caps, "sampling_seeds": seeds, "arrival_offsets_s": offsets_s, "arrive_steps": steps,
-            "arrival_rule": {"nominal_step_s": NOMINAL_STEP_S, "arrive_step": ARRIVE_STEP_RULE,
+            "arrival_rule": {"nominal_step_s": NOMINAL_STEP_S, "arrive_step": ARRIVE_STEP_RULES[arrival_rule],
                              "schedule": "0 | sorted U[0.05, 0.6*O*nominal_step_s] s (staggered); all 0 (none)"},
             "length_rule": {"input": "anchors I, lo+{0..3}, one awkward per quartile (Q2,Q3,Q1,Q4), then stratified log-uniform over [lo, I] "
                                      "nudged off powers of two; seeded permutation", "output": "same over [2, O]; paired by seeded permutation",
@@ -349,7 +363,7 @@ def build_requests(tok: Tok, p: dict) -> list[dict]:
     return reqs
 
 
-def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok: Tok | None) -> dict:
+def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok: Tok | None, note_prefix: str = "") -> dict:
     B, max_in, max_out = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
     n, sharers = int(p["shared_prefix"]), prefix_sharers(p)
     reqs: list[dict[str, Any]] = build_requests(tok, p) if tok is not None else [
@@ -384,7 +398,7 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
         "sweep": {k: p[k] for k in ("schema", "row_id", "seed", "batch", "max_input", "max_output", "min_input", "min_output", "sampling",
                                     "sampling_params", "arrivals", "input_lengths", "output_caps", "sampling_seeds", "arrival_offsets_s",
                                     "arrive_steps", "arrival_rule", "length_rule", "seed_rule")},
-        "note": (f"sweep {p['row_id']}: B={B} I<={max_in} O<={max_out} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
+        "note": (f"{note_prefix}sweep {p['row_id']}: B={B} I<={max_in} O<={max_out} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
                  f"{p['output_caps']}, arrive steps {p['arrive_steps']}; every request to max_tokens => {horizon} engine steps; "
                  f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  "
                  + ("A row of record: sampling.ignore_eos, every request done only at its public cap." if of_record else "EOS untouched.")),
@@ -427,14 +441,16 @@ def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
 # ---------------------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    row_id: str = option("--row-id")
-    hf_repo: str = option("--hf-repo")
-    revision: str = option("--revision")
-    batch: int = option("--batch", type=int)
-    max_input: int = option("--max-input", type=int)
-    max_output: int = option("--max-output", type=int)
-    sampling: str = option("--sampling", default="greedy", choices=sorted(SAMPLING))
-    arrivals: str = option("--arrivals", default="none", choices=["none", "staggered"])
+    row: str | None = option("row", nargs="?", default=None, metavar="ROW",
+                             help="the row id (or --row-id); a row workloads/generation.toml lists needs no other flag")
+    row_id: str | None = option("--row-id", default=None)
+    hf_repo: str | None = option("--hf-repo", default=None)
+    revision: str | None = option("--revision", default=None)
+    batch: int | None = option("--batch", type=int, default=None)
+    max_input: int | None = option("--max-input", type=int, default=None)
+    max_output: int | None = option("--max-output", type=int, default=None)
+    sampling: str | None = option("--sampling", default=None, choices=sorted(SAMPLING), help="default greedy")
+    arrivals: str | None = option("--arrivals", default=None, choices=["none", "staggered"], help="default none")
     case: str | None = option("--case", default=None,
                               help="checkpoint registry role written to `case` (default: looked up by repo in checkpoints.json)")
     tokenizer: str | None = option("--tokenizer", default=None,
@@ -443,7 +459,7 @@ class Options:
                                 help="emit the shape plan without text / token ids (no tokenizer needed)")
     check: bool = option("--check", default=False, action="store_true",
                          help="run the §12 self-check on the plan; exit 1 on a violation")
-    shared_prefix: int = option("--shared-prefix", type=int, default=0,
+    shared_prefix: int | None = option("--shared-prefix", type=int, default=None,
                                 help="every prompt longer than N tokens starts with the same N tokens (one seeded corpus passage) and the row "
                                 "runs with enable_prefix_caching (vLLM reuses whole KV blocks: N a multiple of the block size reuses all of it)")
     out: str | None = option("--out", default=None, help="default workloads/<row-id>.json (relative to the repo)")
@@ -456,11 +472,97 @@ class Options:
                                     "`engine.reasons`; repeatable.  A served Commit refuses a switch away from the default without one")
 
 
+#: Options field -> its flag, for the fields `generation.toml` or the row id state
+FLAGS = {"hf_repo": "--hf-repo", "revision": "--revision", "case": "--case", "batch": "--batch", "max_input": "--max-input",
+         "max_output": "--max-output", "sampling": "--sampling", "arrivals": "--arrivals", "shared_prefix": "--shared-prefix",
+         "target": "--target", "reason": "--reason"}
+#: what a [row."<row id>"] of generation.toml may state
+ROW_KEYS = frozenset({"note_prefix", "arrival_rule", "arrivals", "shared_prefix", "target", "reasons"})
+
+
+def generation(row_id: str, path: Path = GENERATION) -> dict | None:
+    """What regenerating ``row_id`` reads, by Options field, from ``path`` (``generation.toml``) and the row id, with
+    ``note_prefix``, ``arrival_rule`` and ``tokenizer_sha256``; None for a row the table doesn't list."""
+    table = tomllib.loads(path.read_text()) if path.is_file() else {}
+    own = table.get("row", {}).get(row_id)
+    if own is None:
+        return None
+    if unknown := sorted(set(own) - ROW_KEYS):
+        raise UsageError(f"{path.name}: row {row_id} states {unknown}, none of {sorted(ROW_KEYS)}")
+    rid = RowId.parse(row_id)
+    checkpoints = table.get("checkpoint", {})
+    ck = checkpoints.get(f"{rid.model}__{rid.dtype}")
+    if ck is None:
+        raise UsageError(f"{path.name}: row {row_id} has no [checkpoint.\"{rid.model}__{rid.dtype}\"]")
+    tk = checkpoints[ck["tokenizer_of"]] if "tokenizer_of" in ck else ck
+    return {"hf_repo": ck["repo"], "revision": ck["revision"], "case": ck["case"], "batch": rid.batch, "max_input": rid.max_input,
+            "max_output": rid.max_output, "sampling": rid.sampling,
+            "arrivals": own.get("arrivals", "staggered" if rid.arrivals.endswith("-arrivals") else "none"),
+            "shared_prefix": int(own.get("shared_prefix", 0)), "target": own.get("target"), "reason": dict(own.get("reasons", {})),
+            "note_prefix": own.get("note_prefix", ""), "arrival_rule": own.get("arrival_rule", "realized"),
+            "tokenizer_sha256": tk["tokenizer"], "tokenizer_at": (tk["repo"], tk["revision"])}
+
+
+def row_tokenizer(hf_repo: str, revision: str, tokenizer_at: tuple[str, str] | None = None) -> Path | None:
+    """The tokenizer.json of the checkpoint's snapshot under `hf_home`, else of ``tokenizer_at``'s (the checkpoint whose
+    tokenizer the table says a row reads); None without either."""
+    return find_tokenizer(hf_repo, revision) or (find_tokenizer(*tokenizer_at) if tokenizer_at else None)
+
+
+@dataclass(frozen=True, kw_only=True)
+class Spec:
+    """What one row is generated from, every input decided (`resolve`); ``reason`` is ``engine.reasons`` as given, before a
+    target's own."""
+    row_id: str
+    hf_repo: str
+    revision: str
+    case: str | None
+    batch: int
+    max_input: int
+    max_output: int
+    sampling: str
+    arrivals: str
+    shared_prefix: int
+    target: dict | None
+    reason: dict[str, str]
+    note_prefix: str = ""
+    arrival_rule: str = "realized"
+    tokenizer_sha256: str | None = None
+    tokenizer_at: tuple[str, str] | None = None
+
+
+def resolve(a: Options, path: Path = GENERATION) -> Spec:
+    """``a``'s row's `Spec`: its `generation` for a row ``path`` lists, else ``a``'s flags.  Refuses, naming the flag, a flag that
+    disagrees with the table or the row id, and a row the table doesn't list without the flags it needs."""
+    if a.row and a.row_id and a.row != a.row_id:
+        raise UsageError(f"ROW {a.row} and --row-id {a.row_id} name different rows")
+    row = a.row or a.row_id
+    if not row:
+        raise UsageError("give the row id: ROW or --row-id")
+    given = {k: getattr(a, k) for k in FLAGS}
+    given["target"] = json.loads(a.target) if a.target else None
+    given["reason"] = dict(r.partition("=")[::2] for r in a.reason) or None
+    g = generation(row, path)
+    if g is None:
+        if a.hf_repo is None or a.revision is None or a.batch is None or a.max_input is None or a.max_output is None:
+            missing = [FLAGS[k] for k in ("hf_repo", "revision", "batch", "max_input", "max_output") if getattr(a, k) is None]
+            raise UsageError(f"{', '.join(missing)} required: {path.name} doesn't list row {row}")
+        return Spec(row_id=row, hf_repo=a.hf_repo, revision=a.revision, case=a.case, batch=a.batch, max_input=a.max_input,
+                    max_output=a.max_output, sampling=a.sampling or "greedy", arrivals=a.arrivals or "none",
+                    shared_prefix=a.shared_prefix or 0, target=given["target"], reason=given["reason"] or {})
+    for k, v in given.items():
+        if v is not None and v != g[k]:
+            raise UsageError(f"{FLAGS[k]} {v!r} disagrees with {g[k]!r}, which {path.name} and the row id state for {row}")
+    return Spec(row_id=row, **g)
+
+
 def main(a: Options) -> int:
-    p = plan(a.row_id, a.batch, a.max_input, a.max_output, sampling=a.sampling, arrivals=a.arrivals, shared_prefix=a.shared_prefix)
+    s = resolve(a)
+    p = plan(s.row_id, s.batch, s.max_input, s.max_output, sampling=s.sampling, arrivals=s.arrivals, shared_prefix=s.shared_prefix,
+             arrival_rule=s.arrival_rule)
     bad = check_plan(p)
     if a.check:
-        logger.info("[check] %s: B=%s lens=%s caps=%s steps=%s -> %s", a.row_id, a.batch, p["input_lengths"], p["output_caps"],
+        logger.info("[check] %s: B=%s lens=%s caps=%s steps=%s -> %s", s.row_id, s.batch, p["input_lengths"], p["output_caps"],
                     p["arrive_steps"], "PASS" if not bad else "FAIL: " + "; ".join(bad))
         if bad:
             return 1
@@ -469,27 +571,30 @@ def main(a: Options) -> int:
 
     tok = None
     if not a.lengths_only:
-        tp = Path(a.tokenizer) if a.tokenizer else find_tokenizer(a.hf_repo, a.revision)
+        tp = Path(a.tokenizer) if a.tokenizer else row_tokenizer(s.hf_repo, s.revision, s.tokenizer_at)
         if tp is None:
-            logger.error("tokenizer.json for %s@%s not found under %s — pass --tokenizer or use --lengths-only", a.hf_repo, a.revision, hf_home())
+            logger.error("tokenizer.json for %s@%s not found under %s — pass --tokenizer or use --lengths-only", s.hf_repo, s.revision, hf_home())
             return 2
         tok = Tok(tp)
-    doc = workload_doc(p, hf_repo=a.hf_repo, revision=a.revision, case=case_for(a.hf_repo, a.revision, a.case), tok=tok)
-    reasons = dict(r.partition("=")[::2] for r in a.reason)
+        if s.tokenizer_sha256 and tok.sha256 != s.tokenizer_sha256:
+            raise UsageError(f"{'--tokenizer' if a.tokenizer else 'the tokenizer'} {tok.path}: sha256 {tok.sha256}, not the "
+                             f"{s.tokenizer_sha256} {GENERATION.name} states for {s.row_id}")
+    doc = workload_doc(p, hf_repo=s.hf_repo, revision=s.revision, case=case_for(s.hf_repo, s.revision, s.case), tok=tok,
+                       note_prefix=s.note_prefix)
+    reasons = dict(s.reason)
     if unknown := sorted(set(reasons) - set(served.DEFAULTS)) or [k for k, v in reasons.items() if not v]:
         logger.error("--reason %s: a reason is SWITCH=TEXT for a switch of %s", unknown, sorted(served.DEFAULTS))
         return 2
-    if a.target:
+    if t := s.target:
         from verity_vllm.program.frontend.target_profile import TargetProfile
-        t = json.loads(a.target)
         profile = TargetProfile.from_json({**TargetProfile.default().to_json(), **t})   # validates the fields; cc / SMs come from the host at run time
         doc["engine"]["target"] = t
         doc["engine"]["args"].update(profile.engine_args())
         if "env" in doc["engine"]:
             doc["engine"]["env"].update(profile.env())
         doc["sweep"]["execution"] = profile.execution_label
-        label = row_execution(a.row_id)
-        exec_suffix = a.row_id if label is None else label
+        label = row_execution(s.row_id)
+        exec_suffix = s.row_id if label is None else label
         if exec_suffix != profile.execution_label:
             logger.error("row id execution suffix %r != the target's execution label %r", exec_suffix, profile.execution_label)
             return 3
@@ -502,7 +607,7 @@ def main(a: Options) -> int:
             assert len(r["prompt_token_ids"]) == r["prompt_len"], (r["index"], len(r["prompt_token_ids"]), r["prompt_len"])
         texts = [tuple(r["prompt_token_ids"]) for r in doc["requests"]]
         assert len(set(texts)) == len(texts), "duplicate prompt token sequences"
-    out = Path(a.out) if a.out else WORKLOADS / f"{a.row_id}.json"
+    out = Path(a.out) if a.out else WORKLOADS / f"{s.row_id}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(RowConfig.of(doc).to_json(), indent=1, ensure_ascii=False) + "\n")
     logger.info("%s: %s", out, doc["note"][:220])

@@ -9,7 +9,8 @@ fetched through the evidence store where `research` is installed. A layer not gi
 reader a directory takes is decided by what it holds (`detect`):
 
 - ``recursion_e2e.json``: `benchmarks/recursion_e2e`'s job (`read_recursion`);
-- an arm's ``audit.log`` with its ``PROVE-PATH`` line: `benchmarks/prove_path/run.sh` (`read_prove_path`);
+- an arm's ``audit.log`` with its ``PROVE-PATH`` line, or its ``RECORDS`` line under ``PP_RECORDS=1``:
+  `benchmarks/prove_path/run.sh` (`read_prove_path`);
 - ``summary.txt``, ``a5.log`` or the audit's ``summary.json``: `benchmarks/one_stage/a5_llama1b_h200.sh`, or `a5.sh`'s
   out (`read_a5`).
 
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -35,9 +37,15 @@ from verity_bench import kit
 SCHEMA = "verity-bench/proof-layers/v1"
 #: each layer's flag and its row's title, in the table's order
 LAYERS = {"flock": "Flock", "zk": "Flock with zero knowledge", "sampling": "with sampling", "recursion": "with recursion"}
-RECURSION, PROVE_PATH, A5 = "recursion_e2e", "prove_path", "a5"
+RECURSION, PROVE_PATH, A5, LAYERS_SH = "recursion_e2e", "prove_path", "a5", "layers.sh"
 #: the outputs a layer's row may be read from
-ACCEPTS = {"flock": (PROVE_PATH,), "zk": (PROVE_PATH, A5), "sampling": (A5, PROVE_PATH), "recursion": (RECURSION,)}
+ACCEPTS = {"flock": (PROVE_PATH, A5, LAYERS_SH), "zk": (PROVE_PATH, A5, LAYERS_SH), "sampling": (A5, PROVE_PATH, LAYERS_SH),
+           "recursion": (RECURSION,)}
+#: the directory of a run each layer's output is in, where the run's root holds none itself: a layers.sh run's
+#: (`benchmarks/one_stage/layers.sh all`), or a prove_path served-arm run's (``flock/out``, ``zk/out``)
+LAYERS_SH_DIRS = {"flock": "flock", "zk": "zk", "sampling": "sampled"}
+#: the words a layers.sh output states its values are stand-ins in, which its row's workload opens with
+STAND_IN = "stand-in values, never served"
 #: the proof a row of the layer must state it ran, whichever command wrote it: the sampling layer is Flock with zero
 #: knowledge at the sampling plan
 PROOF = {"flock": "plain", "zk": "zk", "sampling": "zk"}
@@ -52,8 +60,12 @@ MEMBERS = {"flock": "flock", "zk": "zero knowledge", "sampling": None}
 RUN_ID = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 #: the files of a run's record the readers read, fetched from the store by these globs
 FETCH = ("out/recursion_e2e.json", "out/*audit.log", "out/*summary.json", "out/summary.txt", "out/verdicts.txt",
-         "out/machine.txt", "out/*a5.log")
+         "out/machine.txt", "out/*a5.log", "*/out/layers.txt", "*/out/job.log", "*/out/a6/summary.json",
+         "*/out/a6/session-*/lean-verify.log", "*/gpu-lease-usage.jsonl", "*/out/machine.txt", "*/out/ran-with.txt",
+         "*/out/*audit.log", "*/out/*summary.json", "*/out/*-forged/commit.log")
 NOT_STATED = "not stated"
+#: what a row's workload opens with where its output states neither stand-in nor served values
+VALUES_NOT_STATED = "values not stated"
 #: what a run id that can't be fetched here takes instead
 FIX = "give the run's out/ as a directory instead (where the store's read key is: `research fetch RUN`, then ~/.research/runs/RUN)"
 #: the line a table prints unless every row ran on a deployed challenger's coins at deployed parameters, which this
@@ -97,9 +109,15 @@ class Row:
     proof: str | None = None
     why: str | None = None
     notes: list[str] = field(default_factory=list)
+    #: the commit its output states it ran at, and which of its files states it
+    commit: str | None = None
+    commit_from: str | None = None
+    #: a layers.sh row's figures, one a statement (its name, units, Flock's and Lean's seconds, its proof's bytes)
+    statements: list[dict[str, Any]] = field(default_factory=list)
 
     def withhold(self, why: str) -> None:
         self.prover_s = self.lean_s = self.proof_bytes = None
+        self.statements = []
         self.why = self.why or why
 
     def said(self, coins: str | None, parameters: str | None, detail: str | None) -> None:
@@ -154,6 +172,8 @@ def detect(d: Path) -> str | None:
         return RECURSION
     if (d / "audit.log").is_file() or any(d.glob("*/audit.log")):
         return PROVE_PATH
+    if (d / "layers.txt").is_file() and (d / "a6" / "summary.json").is_file():
+        return LAYERS_SH
     if any((d / f).is_file() for f in ("summary.txt", "a5.log", "a5/a5.log", "a5/a5/summary.json", "a5/summary.json")):
         return A5
     return None
@@ -167,7 +187,8 @@ def locate(given: str, fetcher: Callable[[str], Path]) -> Path:
     if p.is_dir():
         return p / "out" if detect(p) is None and (p / "out").is_dir() else p
     if RUN_ID.fullmatch(given):
-        return fetcher(given) / "out"
+        root = fetcher(given)
+        return root / "out" if (root / "out").is_dir() else root
     raise Unreadable(f"{given} is neither a directory nor a run id")
 
 
@@ -200,20 +221,22 @@ def _number(x: Any) -> float | None:
 
 def per_unit(timing: Mapping[str, Any], counts: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     """An a5 summary's ``timing`` per sampled proof block of each type, in the form prove_path's ``per_unit`` prints: the
-    blocks drawn (``draw_counts``), Flock's ``prove_total_s`` and Lean's verify seconds over them, and the proof's bytes
-    over its reps."""
+    blocks drawn (``draw_counts``), Flock's ``prove_total_s`` and Lean's verify seconds over them, and one rep's proof's
+    bytes where every rep's are the same (a timed repeat of the one proof), else none."""
 
     out = {}
     for key, t in timing.items():
         tm, n = (t or {}).get("timing") or {}, counts.get(key) or 0
         pb = tm.get("proof_bytes")
-        out[key] = {"units": n, "proof_bytes": sum(pb) if isinstance(pb, list) else pb,
+        one = pb[0] if isinstance(pb, list) and pb and len(set(pb)) == 1 else pb if isinstance(pb, int) else None
+        out[key] = {"units": n, "proof_bytes": one,
                     **{f"{x}_per_unit": v / n if n and (v := _number(raw)) is not None else None
                        for x, raw in (("prove_s", tm.get("prove_total_s")), ("lean_verify_s", (t or {}).get("lean_verify_s")))}}
     return out
 
 
-def _per_block(row: Row, units: Iterable[Mapping[str, Mapping[str, Any]]]) -> None:
+def _per_block(row: Row, units: Iterable[Mapping[str, Mapping[str, Any]]],
+               bytes_what: str = "one rep's proof over its drawn blocks") -> None:
     """The row's prover and Lean seconds and proof bytes a block, over every drawn block of `units` (prove_path's
     ``per_unit`` maps, one a rank): the seconds' means weighted by each type's blocks, and the bytes' sum over the blocks."""
 
@@ -241,7 +264,7 @@ def _per_block(row: Row, units: Iterable[Mapping[str, Mapping[str, Any]]]) -> No
     row.lean_s = None if "lean" in missing else figures["lean"] / n
     row.lean_what = f"Lean's verify, the mean over {n}"
     row.proof_bytes = None if "bytes" in missing else figures["bytes"] / n
-    row.bytes_what = "its session's proof files over its drawn blocks"
+    row.bytes_what = bytes_what
 
 
 def _device(timings: Iterable[Mapping[str, Any]]) -> str:
@@ -254,6 +277,32 @@ def _device(timings: Iterable[Mapping[str, Any]]) -> str:
     if said and all(isinstance(g, int) and g >= 1 for g, _ in said):
         return "GPU " + ", ".join(sorted({str(d) for _, d in said})) + " (timing device)"
     return NOT_STATED
+
+
+def _wrong_units(w: Any) -> str | None:
+    """The audit's ``wrong_units`` bound as the row's ε at δ, where it states its bound, population and δ."""
+
+    w = w if isinstance(w, dict) else {}
+    if not all(_number(w.get(x)) is not None for x in ("bound", "of", "delta")):
+        return None
+    return f"at most {w['bound']:,} of {w['of']:,} units wrong except with probability {_delta(w['delta'])}"
+
+
+def _epsilon(e: Any) -> str | None:
+    """An a5 summary's ``epsilon`` table as the row's ε at δ: its first pair (the audit's δ) and its last (the smallest
+    δ), each the wrong units it allows of the population."""
+
+    e = e if isinstance(e, dict) else {}
+    pairs = [x for x in e.get("table") or [] if isinstance(x, dict) and _number(x.get("wrong_units")) is not None
+             and _number(x.get("delta")) is not None]
+    if not pairs or _number(e.get("population")) is None:
+        return None
+    first, last = pairs[0], pairs[-1]
+    out = f"at most {first['wrong_units']:,} of {e['population']:,} units wrong except with probability {_delta(first['delta'])}"
+    if len(pairs) == 1:
+        return out + " (summary.json epsilon)"
+    return (out + f"; at most {last['wrong_units']:,} except with probability {_delta(last['delta'])}"
+            f" (summary.json epsilon, the first and last of its {len(pairs)} pairs)")
 
 
 def _eps_delta(delta: Any) -> str:
@@ -305,6 +354,8 @@ def read_recursion(d: Path, row: Row) -> None:
         row.prover_what = "one recursive run's path without Lean's step: " + " + ".join(prover)
     row.lean_s = _number(pipeline.get("Lean step_s"))
     row.lean_what = "the lean step whole: every V* release and the inner statement"
+    if isinstance(p.get("commit"), str) and re.fullmatch(r"[0-9a-f]{40}", p["commit"]):
+        row.commit, row.commit_from = p["commit"], "params.commit"
     found = re.search(r"\(([^)]*)\)", str(h.get("outer_mode") or ""))
     outer = (h.get("outer") or {}).get(found.group(1) if found else "") or {}
     row.proof_bytes = _number(outer.get("proof_bytes"))
@@ -315,54 +366,118 @@ def read_recursion(d: Path, row: Row) -> None:
 
 
 def read_prove_path(d: Path, row: Row) -> None:
-    """An arm's audit.log: its honest PROVE-PATH line (``forged`` false), each rank's A5 line's Lean verify verdicts, and
-    the arm's summary.json for which challenger's coins."""
+    """An arm's audit.log: its honest PROVE-PATH line (``forged`` false), or under ``PP_RECORDS=1`` its RECORDS line (an
+    arm not named ``*-forged``), and each rank's A5 line's Lean verify verdicts; the arm's rank or window summary.json for
+    its timing (one rep's proof bytes, where prove_path's ``per_unit`` sums the reps); ``ran-with.txt`` beside the
+    output for the ran-with line and whether the values were served; and a ``*-forged`` arm with no audit.log as no
+    forged run."""
 
     arms = [d] if (d / "audit.log").is_file() else sorted(p.parent for p in d.glob("*/audit.log"))
-    honest = []
+    honest: list[tuple[Path, dict[str, Any] | None, dict[str, Any] | None]] = []
     for arm in arms:
-        lines = _tagged(_text(arm / "audit.log"), "PROVE-PATH", row.notes)
-        if lines and lines[-1].get("forged") is False:
-            honest.append((arm, lines[-1]))
+        text = _text(arm / "audit.log")
+        if lines := _tagged(text, "PROVE-PATH", row.notes):
+            if lines[-1].get("forged") is False:
+                honest.append((arm, lines[-1], None))
+        elif not arm.name.endswith("-forged") and (records := _tagged(text, "RECORDS", row.notes)):
+            honest.append((arm, None, records[-1]))
     if not honest:
-        raise Unreadable(f"{d} holds no arm's audit.log with an honest PROVE-PATH line (prove_path.py audit's)")
+        raise Unreadable(f"{d} holds no arm's audit.log with an honest PROVE-PATH line or a RECORDS line (prove_path.py "
+                         "audit's)")
     if len(honest) > 1:
-        raise Unreadable(f"{d} holds {len(honest)} honest arms ({', '.join(a.name for a, _ in honest)}): give one arm's "
+        raise Unreadable(f"{d} holds {len(honest)} honest arms ({', '.join(a.name for a, _, _ in honest)}): give one arm's "
                          "directory")
-    arm, pp = honest[0]
-    ranks = pp.get("ranks") or {}
+    arm, pp, rec = honest[0]
     audits = [x for x in _tagged(_text(arm / "audit.log"), "A5", row.notes) if "audit" in x]
     per_rank = [_lean_verdicts([x]) for x in audits]
     lean = [v for vs in per_rank for v in vs]
-    each = len(audits) == len(ranks) and all(per_rank)
-    if not each:
-        row.notes.append(f"{len(audits)} A5 result line(s) for {len(ranks)} rank(s), "
-                         f"{sum(1 for vs in per_rank if not vs)} without a Lean verify verdict: not one verdict a rank")
-    row.accepted = (pp.get("ok") is True and bool(ranks) and all(r.get("accepted") is True for r in ranks.values())
-                    and each and all(v is True for _, v in lean))
-    if row.accepted:
-        row.lean = f"accepted: Lean's {', '.join(sorted({k for k, _ in lean}))} true on every rank ({len(ranks)})"
-    else:
-        held = [f"PROVE-PATH ok {pp.get('ok')}"] + [f"rank {r} accepted {x.get('accepted')}" for r, x in sorted(ranks.items())
-                                                   if x.get("accepted") is not True]
-        held += [f"{k} {v}" for k, v in lean if v is not True] or ([] if each else ["not every rank has a Lean verify verdict"])
-        row.lean = "not accepted: " + "; ".join(held)
-    counts: dict[str, int] = {}
-    for r in ranks.values():
-        for t, n in (r.get("draw_counts") or {}).items():
-            counts[t] = counts.get(t, 0) + int(n)
-    population = sum(int(r.get("population") or 0) for r in ranks.values()) or None
-    row.workload = f"arm {arm.name}: " + _drawn(counts, population, len(ranks))
-    _per_block(row, [r.get("per_unit") or {} for r in ranks.values()])
     summary = json.loads(_text(arm / "summary.json") or "{}")
-    challenger = (summary.get("coins") or {}).get("challenger")
-    said = ([f"PROVE-PATH coins {pp['coins']}"] if pp.get("coins") else []) + (
-        [f"summary.json coins.challenger {challenger}"] if challenger else [])
-    row.proof = pp.get("proof")
-    row.said(_challenger(pp.get("coins"), challenger), None, "; ".join(said))
-    timings = [t for f in sorted(arm.glob("rank*/summary.json"))
-               for t in (json.loads(f.read_text()).get("timing") or {}).values()]
-    row.device, row.eps_delta = _device(timings), _eps_delta(pp.get("delta"))
+    files = sorted(arm.glob("rank*/summary.json")) or [f for f in [arm / "window" / "summary.json"] if f.is_file()]
+    summaries = [json.loads(f.read_text()) for f in files]
+    counts: dict[str, int] = {}
+    if pp is not None:
+        ranks = pp.get("ranks") or {}
+        each = len(audits) == len(ranks) and all(per_rank)
+        if not each:
+            row.notes.append(f"{len(audits)} A5 result line(s) for {len(ranks)} rank(s), "
+                             f"{sum(1 for vs in per_rank if not vs)} without a Lean verify verdict: not one verdict a rank")
+        row.accepted = (pp.get("ok") is True and bool(ranks) and all(r.get("accepted") is True for r in ranks.values())
+                        and each and all(v is True for _, v in lean))
+        if row.accepted:
+            row.lean = f"accepted: Lean's {', '.join(sorted({k for k, _ in lean}))} true on every rank ({len(ranks)})"
+        else:
+            held = [f"PROVE-PATH ok {pp.get('ok')}"] + [f"rank {r} accepted {x.get('accepted')}"
+                                                       for r, x in sorted(ranks.items()) if x.get("accepted") is not True]
+            held += [f"{k} {v}" for k, v in lean if v is not True] or ([] if each else ["not every rank has a Lean verify verdict"])
+            row.lean = "not accepted: " + "; ".join(held)
+        for r in ranks.values():
+            for t, n in (r.get("draw_counts") or {}).items():
+                counts[t] = counts.get(t, 0) + int(n)
+        population, n_ranks = sum(int(r.get("population") or 0) for r in ranks.values()) or None, len(ranks)
+        row.proof = pp.get("proof")
+    else:
+        rec = rec or {}
+        each = len(audits) == 1 and bool(lean)
+        held = [f"RECORDS {k} {rec.get(k)}" for k in ("ok", "accepted", "negatives_refused") if rec.get(k) is not True]
+        held += [f"{k} {v}" for k, v in lean if v is not True]
+        held += [] if each else [f"{len(audits)} A5 result lines with {len(lean)} Lean verify verdicts"]
+        held += [] if not audits or (audits[-1].get("audit") or {}).get("accepted") is True else ["a5's checks not accepted"]
+        row.accepted = not held
+        row.lean = (f"accepted: Lean's {', '.join(sorted({k for k, _ in lean}))} true, with RECORDS ok, accepted and its "
+                    "negatives refused" if row.accepted else "not accepted: " + "; ".join(held))
+        counts = {t: int(n) for t, n in (rec.get("draw_counts") or {}).items()}
+        population, n_ranks = rec.get("population"), 1
+        row.proof = "plain" if summary.get("plain") else "zk" if summary else None
+    row.commit, row.commit_from = _commit(arm / "machine.txt", arm.parent / "machine.txt"), "machine.txt's git HEAD"
+    ran_with = _text(arm.parent / "ran-with.txt").splitlines()
+    served = next((x for x in ran_with if x.startswith("served")), None)
+    source = {x.get("source") for x in summaries} - {None}
+    place = served.split("not main: ", 1)[-1] if served else ""
+    row.workload = ((f"the output disagrees on its values: ran-with.txt says served ({place}), the audit's source field "
+                     f"says {', '.join(sorted(source))}: " if served and source - {"served"} else
+                     f"served per ran-with.txt ({place}): " if served else "")
+                    + f"arm {arm.name}: " + _drawn(counts, population, n_ranks))
+    for forged in sorted(arm.parent.glob(f"{arm.name}-forged")):
+        if not (forged / "audit.log").is_file():
+            err = next((x for x in reversed(_text(forged / "commit.log").splitlines()) if re.match(r"\w+(Error|Exception): ", x)),
+                       "it wrote no audit.log")
+            row.workload += "; no forged run"
+            row.notes.append(f"no forged run: {forged.name}/commit.log: {err.split('; ')[0][:240]}")
+    timed = [x for x in summaries if x.get("timing")]
+    if timed and len(timed) == len(summaries):
+        reps = sorted({len(pb) for x in timed for t in x["timing"].values()
+                       if isinstance(pb := ((t or {}).get("timing") or {}).get("proof_bytes"), list)})
+        _per_block(row, [per_unit(x["timing"], x.get("draw_counts") or {}) for x in timed],
+                   f"one rep's proof over its drawn blocks, of {' or '.join(map(str, reps)) or '?'} reps in summary.json's "
+                   "timing; prove_path's per_unit sums them")
+    elif pp is not None:
+        _per_block(row, [r.get("per_unit") or {} for r in (pp.get("ranks") or {}).values()],
+                   "every rep's proof files over its drawn blocks, as prove_path's per_unit sums them: no summary.json "
+                   "states its reps")
+    m = re.fullmatch(r"ran with: coins (.+?); parameters (\S+) \((.*)\)", ran_with[0] if ran_with else "")
+    if m and m.group(1) in COINS and m.group(2) in PARAMETERS:
+        row.said(m.group(1), m.group(2), "ran-with.txt: " + m.group(3))
+    else:
+        challenger = (summary.get("coins") or {}).get("challenger")
+        coins = (pp or {}).get("coins")
+        said = ([f"PROVE-PATH coins {coins}"] if coins else []) + (
+            [f"summary.json coins.challenger {challenger}"] if challenger else [])
+        row.said(_challenger(coins, challenger), None, "; ".join(said))
+    row.device = _device(t for x in summaries for t in (x.get("timing") or {}).values())
+    row.eps_delta = (_wrong_units((audits[0].get("audit") or {}).get("wrong_units")) if len(audits) == 1 else None) or (
+        _eps_delta((pp or {}).get("delta")))
+
+
+def _commit(*paths: Path, after: str = "") -> str | None:
+    """The commit the first of `paths` that exists states: its first whole git sha that follows `after` (prove_path's
+    run.sh's ``git rev-parse HEAD`` in machine.txt; layers.sh's job.log, after ``source ``, so no sha printed before it
+    stands in), never a part of a longer digest."""
+
+    for path in paths:
+        if path.is_file():
+            found = re.search(re.escape(after) + r"(?<![0-9a-f])([0-9a-f]{40})(?![0-9a-f])", _text(path))
+            return found.group(1) if found else None
+    return None
 
 
 def read_a5(d: Path, row: Row) -> None:
@@ -394,25 +509,106 @@ def read_a5(d: Path, row: Row) -> None:
     registered = next((x for x in text if x.startswith("REGISTERED ")), "")
     window = " ".join(w for w in registered.split() if w.startswith(("kind=", "commitment=")))
     counts = summary.get("draw_counts") or (a5 or {}).get("draw_counts") or {}
-    row.workload = ((f"row {Path(machine[len('row dir '):]).name}: " if machine else
-                     f"source {summary['source']}: " if summary.get("source") else "")
+    served = summary.get("source") == "served" and "kind=served" in window
+    stand_in = summary.get("source") == "stand-in" and "kind=served" not in window
+    row.workload = (("served values: " if served else "stand-in values (summary.json source stand-in): " if stand_in else
+                     f"{VALUES_NOT_STATED}: ")
+                    + (f"row {Path(machine[len('row dir '):]).name}: " if machine else
+                       f"source {summary['source']}: " if summary.get("source") else "")
                     + _drawn(counts, summary.get("population")) + (f" ({window})" if window else ""))
     if summary.get("timing"):
         _per_block(row, [per_unit(summary["timing"], counts)])
     verdicts = ((a5 or {}).get("audit") or {}).get("verdicts") or {}
     challengers = sorted(k for k in verdicts if k.startswith("challenger/"))
     coins = summary.get("coins") or {}
-    said = (f"summary.json coins {json.dumps(coins, sort_keys=True)}" if coins else
+    said = (f"summary.json coins.challenger {coins['challenger']}" if coins.get("challenger") else
             f"A5 line's verdicts {', '.join(challengers)}, a challenger per drawn member" if challengers else "")
-    row.said(_challenger(coins.get("source"), coins.get("challenger")), None, said)
+    drew = next((x[len("COINS "):] for x in text if x.startswith("COINS ")), None)
+    if drew and drew.startswith("draw: one local challenger session"):
+        clauses = drew.split("; ")
+        row.said("local challenger", None,
+                 "summary.txt COINS " + "; ".join(clauses[:1] + [c for c in clauses[1:2] if c.startswith("sessions: ")]))
+    else:
+        row.said(_challenger(coins.get("source"), coins.get("challenger")), None, said)
+    row.commit, row.commit_from = _commit(d / "machine.txt"), "machine.txt's git HEAD"
     row.proof = "plain" if summary.get("plain") else "zk" if summary else None
     row.device = _device((summary.get("timing") or {}).values())
-    row.eps_delta = _eps_delta(summary.get("delta"))
+    row.eps_delta = (_epsilon(summary.get("epsilon")) or _wrong_units((summary.get("audit") or {}).get("wrong_units"))
+                     or _wrong_units(((a5 or {}).get("audit") or {}).get("wrong_units")) or _eps_delta(summary.get("delta")))
     if summary.get("arm"):
         row.notes.append(f"arm {summary['arm']}")
 
 
-READERS: dict[str, Callable[[Path, Row], None]] = {RECURSION: read_recursion, PROVE_PATH: read_prove_path, A5: read_a5}
+def _delta(x: float) -> str:
+    e = math.log2(x) if x > 0 else 0.0
+    return f"2^{e:.0f}" if e == round(e) and e < -3 else re.sub(r"e-0*(\d)", r"e-\1", f"{x:g}")
+
+
+def read_layers_sh(d: Path, row: Row) -> None:
+    """A layers.sh layer's out (`benchmarks/one_stage/layers.sh`): layers.txt's ``ran with:`` line and whether its
+    values are stand-ins (`STAND_IN`); a6/summary.json's statements, each with Flock's ``prove_total_s``, Lean's verify
+    seconds and its proof's bytes, a statement's and not a proof block's; its verdicts (the plain run's every statement's,
+    or the audit's, every Lean verdict and every negative case); the sample's ``wrong_units`` bound as its ε at δ; each
+    session's lean-verify.log for the proof (``--zk``); and gpu-lease's usage record for the cards Flock proved on."""
+
+    said = _text(d / "layers.txt").splitlines()
+    m = re.fullmatch(r"ran with: coins (.+?); parameters (\S+) \((.*)\)", said[0] if said else "")
+    if m and m.group(1) in COINS and m.group(2) in PARAMETERS:
+        row.said(m.group(1), m.group(2), m.group(3))
+    s = json.loads(_text(d / "a6" / "summary.json"))
+    if s.get("windows"):
+        stmts = [{"name": w.get("name"), "units": w.get("units"),
+                  "template": next((x.get("template") for x in ((w.get("lean_verify") or {}).get("unit_draw") or {}).get("strata") or []), None),
+                  "prove_s": _number((w.get("live") or {}).get("prove_total_s")), "lean_s": _number((w.get("lean_verify") or {}).get("verify_s")),
+                  "proof_bytes": (w.get("live") or {}).get("proof_bytes"),
+                  "accepted": (w.get("live") or {}).get("accepted") is True and (w.get("lean_verify") or {}).get("accepted") is True}
+                 for w in s["windows"]]
+        row.accepted = s.get("accepted") is True and all(x["accepted"] for x in stmts)
+        n = sum(x["accepted"] for x in stmts)
+        row.lean = (f"accepted: Lean's verify true on every statement ({n} of {len(stmts)})" if row.accepted else
+                    f"not accepted: {n} of {len(stmts)} statements accepted, summary accepted {s.get('accepted')}")
+        drawn = ""
+    else:
+        audit, negs = s.get("audit") or {}, s.get("negatives") or {}
+        stmts = [{"name": x.get("name"), "template": x.get("template"), "units": (s.get("draw_counts") or {}).get(x.get("name")),
+                  "prove_s": _number(((s.get("timing") or {}).get(x.get("name")) or {}).get("timing", {}).get("prove_total_s")),
+                  "lean_s": _number(((s.get("timing") or {}).get(x.get("name")) or {}).get("lean_verify_s")),
+                  "proof_bytes": (((s.get("timing") or {}).get(x.get("name")) or {}).get("timing") or {}).get("proof_bytes")}
+                 for x in s.get("members") or []]
+        verdicts, before = audit.get("verdicts") or {}, s.get("checks_before_draw") or {}
+        row.accepted = (audit.get("accepted") is True and audit.get("complete") is True and bool(verdicts)
+                        and all(v is True for v in (*verdicts.values(), *before.values(), *negs.values())) and bool(negs))
+        held = [f"{k} {v}" for k, v in (*verdicts.items(), *before.items()) if v is not True]
+        held += [f"negative {k} not refused" for k, v in negs.items() if v is not True]
+        row.lean = (f"accepted: every Lean verdict true ({', '.join(sorted({k.split('/')[0] for k in verdicts}))} on each "
+                    f"of {len(stmts)} statements), {len(negs)} of {len(negs)} negative cases refused" if row.accepted else
+                    "not accepted: " + ("; ".join(held) or f"audit accepted {audit.get('accepted')}"))
+        drawn = f", {s.get('k')} of them drawn" if s.get("k") != s.get("population") else ", every unit drawn"
+        row.eps_delta = _wrong_units(audit.get("wrong_units")) or NOT_STATED
+    population = s.get("population") or sum(int(x.get("units") or 0) for x in stmts)
+    row.workload = ((f"{STAND_IN}: " if any(STAND_IN in x for x in said) else f"{VALUES_NOT_STATED}: ")
+                    + f"{len(stmts)} statements of {population:,} units{drawn}: "
+                    + "; ".join(f"{x['name']}, {x['units']:,} units" + (f" of {x['template']}" if x.get("template") else "")
+                                for x in stmts))
+    row.commit, row.commit_from = _commit(d / "job.log", after="source "), "job.log's source"
+    for x in stmts:
+        pb = x.pop("proof_bytes")
+        x["proof_bytes"] = pb[0] if isinstance(pb, list) and pb and len(set(pb)) == 1 else pb if isinstance(pb, int) else None
+        if isinstance(pb, list) and len(set(pb)) > 1:
+            row.notes.append(f"{x['name']}'s reps' proofs differ in bytes ({pb}): no bytes figure")
+        x.pop("accepted", None)
+    row.statements = stmts
+    zk = [" --zk" in _text(d / "a6" / f"session-{x['name']}" / "lean-verify.log") for x in stmts]
+    row.proof = "zk" if zk and all(zk) else "plain" if s.get("plain") is True and not any(zk) else None
+    leases = [json.loads(x) for x in _text(d.parent / "gpu-lease-usage.jsonl").splitlines() if x.strip()]
+    cards = sorted({g.get("index") for x in leases if "flock-circuit prove" in str(x.get("cmd")) for g in x.get("gpus") or []},
+                   key=str)
+    if cards:
+        row.device = "GPU " + ", ".join(map(str, cards)) + " (gpu-lease's record of each flock-circuit prove)"
+
+
+READERS: dict[str, Callable[[Path, Row], None]] = {RECURSION: read_recursion, PROVE_PATH: read_prove_path, A5: read_a5,
+                                                   LAYERS_SH: read_layers_sh}
 
 
 def read(layer: str, given: str | None, fetcher: Callable[[str], Path] = fetch) -> Row:
@@ -425,10 +621,12 @@ def read(layer: str, given: str | None, fetcher: Callable[[str], Path] = fetch) 
     row.given, row.status = given, "read"
     try:
         d = locate(given, fetcher)
+        if detect(d) is None and layer in LAYERS_SH_DIRS and detect(own := d / LAYERS_SH_DIRS[layer] / "out"):
+            d = own
         row.format = detect(d)
         if row.format is None:
             raise Unreadable(f"{d} holds none of the outputs this reads (recursion_e2e.json, an arm's audit.log, "
-                             "summary.txt or a5.log)")
+                             "summary.txt or a5.log, layers.sh's layers.txt)")
         if row.format not in ACCEPTS[layer]:
             raise Unreadable(f"--{layer} takes {' or '.join(ACCEPTS[layer])}'s output, and {d} holds {row.format}'s")
         READERS[row.format](d, row)
@@ -458,8 +656,17 @@ def _cell(x: float | None, unit: str, per: str, what: str) -> str:
     return f"{figure} {per}{wall}" + (f" ({what})" if what else "")
 
 
+def _statements(r: Row, key: str, what: str) -> str:
+    """A layers.sh row's cell: each statement's figure, its unit first and a statement's, never a proof block's."""
+
+    cells = [(f"{x[key]:,.0f} bytes" if key == "proof_bytes" else f"{x[key]:.3g} s") + f" a statement of {x['units']:,} units"
+             for x in r.statements if x.get(key) is not None]
+    return "; ".join(cells) + f" ({what})" if cells else "—"
+
+
 def has_number(rows: Sequence[Row]) -> bool:
-    return any(x is not None for r in rows for x in (r.prover_s, r.lean_s, r.proof_bytes))
+    return any(x is not None for r in rows for x in (r.prover_s, r.lean_s, r.proof_bytes)) or any(
+        x.get(k) is not None for r in rows for x in r.statements for k in ("prove_s", "lean_s", "proof_bytes"))
 
 
 def render(rows: Sequence[Row]) -> str:
@@ -472,14 +679,21 @@ def render(rows: Sequence[Row]) -> str:
     if not all(r.ran_with.startswith("ran with: coins deployed challenger; parameters deployed") for r in rows):
         lines.append(NOT_AN_AUDIT)
     lines += [f"- {LAYERS[r.layer]}: {r.ran_with}" for r in rows]
+    lines.append("- commits: " + "; ".join(f"{LAYERS[r.layer]} " + (f"{r.commit[:11]} ({r.commit_from})" if r.commit else
+                                                                     NOT_STATED if r.status == "read" else "—")
+                                           for r in rows)
+                 + "; a row reruns from main only where its commit is on main (`git merge-base --is-ancestor COMMIT origin/main`)")
     lines += ["", "| layer | workload | proof | device | ε at δ | prover | Lean verifier | Lean | proof bytes |",
               "|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         read = r.status == "read"
         proof = r.proof or (NOT_STATED if read else "—")
+        cells = ((_statements(r, "prove_s", "Flock's prove_total_s"), _statements(r, "lean_s", "Lean's verify"),
+                  _statements(r, "proof_bytes", "one rep's proof")) if r.statements else
+                 (_cell(r.prover_s, 's', r.per, r.prover_what), _cell(r.lean_s, 's', r.per, r.lean_what),
+                  _cell(r.proof_bytes, 'bytes', r.per, r.bytes_what)))
         lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {proof} | {r.device if read else '—'} | "
-                     f"{r.eps_delta if read else '—'} | {_cell(r.prover_s, 's', r.per, r.prover_what)} | {r.lean} | "
-                     f"{_cell(r.lean_s, 's', r.per, r.lean_what)} | {_cell(r.proof_bytes, 'bytes', r.per, r.bytes_what)} |")
+                     f"{r.eps_delta if read else '—'} | {cells[0]} | {r.lean} | {cells[1]} | {cells[2]} |")
     lines += ["", *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in rows if r.why)]
     lines += [f"- {LAYERS[r.layer]}: {n}" for r in rows for n in r.notes]
     return "\n".join(lines).rstrip()
@@ -505,6 +719,7 @@ def measured(rows: Sequence[Row], metrics: Mapping[str, str]) -> list[dict[str, 
             r = by_layer[layer]
             value = getattr(r, figure) if r.accepted and r.per_block else None
             why = None if value is not None else r.why or (
+                f"{r.workload.split(':')[0]}: its figures are a statement's, not a proof block's" if r.statements else
                 f"its output gives no {figure} a proof block" if r.per_block else "its output gives no per-block figure")
             out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": member, "why": why,
                         "inputs": [r.given] if r.given else [],

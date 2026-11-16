@@ -289,16 +289,50 @@ verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] 
 
 | layer | reads | prover seconds | Lean verifier |
 |---|---|---|---|
-| `--flock` | `benchmarks/prove_path` with `PP_PLAIN=1`: an arm's `audit.log` (its `PROVE-PATH` and `A5` lines) and `summary.json` | Flock's prover a drawn block, the mean over every rank's drawn blocks | every rank accepted, each rank's own audited `A5` line with `lean-verify/m0` true |
+| `--flock` | `benchmarks/prove_path` with `PP_PLAIN=1`: an arm's `audit.log` (its `PROVE-PATH` and `A5` lines, or under `PP_RECORDS=1` its `RECORDS` line), its `summary.json` and its rank or window `summary.json`, and `ran-with.txt` beside the output; or `a5_llama1b_h200.sh`'s plain out | Flock's prover a drawn block, the mean over every rank's drawn blocks | every rank accepted, each rank's own audited `A5` line with `lean-verify/m0` true |
 | `--zk` | `prove_path`'s zk arm, or `benchmarks/one_stage/a5_llama1b_h200.sh`'s out | as above | as above |
 | `--sampling` | `a5_llama1b_h200.sh`'s out (`summary.txt`, `verdicts.txt`, `machine.txt`, a5.sh's `a5/a5.log` and `a5/a5/summary.json`), or a `prove_path` arm | as above, from the audit's `summary.json` timing | the audit accepted, with `lean-verify/m0` true |
 | `--recursion` | `benchmarks/recursion_e2e`'s `recursion_e2e.json` | wall, one recursive run's path without Lean's step | the headline's `ok` and `composed` both true |
+| `--flock`, `--zk`, `--sampling` | `benchmarks/one_stage/layers.sh`'s layer: its `out/layers.txt`, `out/job.log`, `out/a6/summary.json`, each session's `lean-verify.log` and `gpu-lease-usage.jsonl` beside `out/`; the run's directory gives each layer its own (`flock/`, `zk/`, `sampled/`) | Flock's `prove_total_s` a statement | the plain run's every statement accepted, or the audit accepted and complete with every Lean verdict, every check before the draw and every negative case true |
 
 The directory's files decide its reader, and a flag refuses another command's output. A `prove_path` directory holding
 more than one honest arm is refused: give the arm's directory. A `--flock` row must state the plain proof, and a `--zk`
 or `--sampling` row the zk proof (the sampling layer is Flock with zero knowledge at the sampling plan): one whose output
 states another proof, or none, prints no number and writes null with why, whichever command wrote it. Each printed row states its proof (`plain`, `zk`, or "not
 stated"), so a plain run's numbers in the sampling row say plain.
+
+A `layers.sh` run (`benchmarks/one_stage/layers.sh all`) proves stand-in values, never served. Its row's workload
+opens with `stand-in values, never served:` where `layers.txt` says so, else `values not stated:`, then its statements, each with its units and
+template, and the source commit `job.log` states. Its figures are a statement's, not a proof block's: each cell gives
+one figure a statement, `3.0 s a statement of 1,000 units`, and none is divided into a figure a block, since a
+statement's seconds don't grow with its units (a statement of 20 drawn units can take most of one of 1,000's). Under the
+three metric ids it writes null, with why. Its proof is `zk` only where every session's Lean `verify` line has `--zk`,
+and `plain` where the summary says `plain` and none has it. Its device is the cards gpu-lease's usage record names for
+each `flock-circuit prove`. Its ε at δ is the audit's `wrong_units`: `at most 100 of 1,000 units wrong except with
+probability 2^-20`. Its `ran with:` line is `layers.txt`'s first line, where that names its coins and parameters in
+these words.
+
+Each row keeps the commit its output states it ran at, and the line `- commits:` under the `ran with:` lines names
+each: a prove_path or a5 row's from its `machine.txt` (`git rev-parse HEAD`, for example `0123456789a (machine.txt's
+git HEAD)`), a `layers.sh` row's from `job.log`'s `source`, recursion's from its `params.commit`. No output states a
+branch. The printer can't know `main` offline, so the line ends with how to check: a row reruns from `main` only where
+`git merge-base --is-ancestor COMMIT origin/main` holds.
+
+An a5 row's workload opens with `served values:` where its summary's `source` is `served` and its `REGISTERED` line's
+`kind=served`, `stand-in values (summary.json source stand-in):` where its source is `stand-in` and nothing says served,
+and `values not stated:` otherwise. Its `ran with:` line is its `COINS` line's draw and sessions clauses where that says `one local challenger
+session`: coins `local challenger`, and parameters "not stated", since the line says the key is made at the deployed LMS
+parameters but the challenger is a development stand-in for the auditor's. A run made before the `COINS` line has
+`ran with: not stated`.
+
+A prove_path served-arm run (`flock/out` or `zk/out` under the run's directory) takes its `ran with:` line from
+`ran-with.txt`, which names its coins and parameters in these words. Its workload opens `served per ran-with.txt (...)`
+from that file's `served` line. Where the audit's own `source` field says otherwise (prove_path writes `stand-in` for a
+sealed served window), the two statements disagree, and the workload says so and prints both: `the output disagrees on
+its values: ran-with.txt says served (...), the audit's source field says stand-in:`. Under `PP_RECORDS=1` the arm has a `RECORDS` line and no `PROVE-PATH` line: its row is accepted
+where `RECORDS` is ok and accepted with its negatives refused, and the A5 line's Lean verdicts are true. A `*-forged` arm
+with no `audit.log` is no forged run: the workload says `no forged run`, and the note under the table gives its
+`commit.log`'s error.
 
 A row prints its numbers only when its Lean verdict is an accept. Any other row prints none, and says why under the
 table. When no row prints a number, the first line is `prove layers: no number: WHY` (each layer's why) and the command
@@ -308,22 +342,25 @@ Under the table's title, each row's coins and parameters are a line of their own
 parameters PARAMETERS (DETAIL)`: COINS is `deployed challenger`, `local challenger` or `in-process` and PARAMETERS
 `deployed` or `development`, each only where the output says so outright, "not stated" for a half it doesn't say, and
 `ran with: not stated` where it says neither. DETAIL, the output's own words, is also the JSON's `detail`. No output yet
-states development or deployed parameters. Unless every row ran with a deployed challenger at deployed parameters, the
+states deployed parameters; `layers.txt` and prove_path's `ran-with.txt` state development ones. Unless every row ran with a deployed challenger at deployed parameters, the
 line under the title is `a measurement, not an audit`. The JSON's `audit` is always false, even then: this command
 checks no challenger's signature, so nothing it prints is an audit.
 
 The table's columns, after the layer and its workload:
 
 - **proof:** `plain`, `zk`, or "not stated", the proof the output says it holds.
-- **device:** what the output states it ran on, else "not stated", never a guess. Recursion's is CPU where its params
+- **device:** what the output states it ran on, else "not stated", never a guess. A `layers.sh` row's is gpu-lease's
+  record (above). Recursion's is CPU where its params
   say `GPU=0` and `OPROVE_GPU=0` (job.sh's CPU prover); a prove_path or a5 row's is read from its timing's `gpus` and
-  `device` (a5's `proving_of`), which prove_path's runs leave unset, so theirs is "not stated".
-- **ε at δ:** what the output states. No output states ε: a5's `summary.json` and prove_path's `PROVE-PATH` line hold
-  only `delta`, so the cell is `ε not stated at δ 0.5`. For a number, a5.py's summary and prove_path.py's `PROVE-PATH`
-  line would have to write the sample's ε.
+  `device` (a5's `proving_of`): `CPU (timing gpus 0)` where every member's `gpus` is 0.
+- **ε at δ:** what the output states. An a5 summary's `epsilon` table gives its first pair (the audit's δ) and its
+  last (the smallest δ): `at most 3 of 500 units wrong except with probability 0.5; at most 40 except with probability
+  1e-9 (summary.json epsilon, the first and last of its 6 pairs)`. Without one, the audit's `wrong_units` (a
+  `layers.sh` summary, an a5 summary, or an arm's one `A5` line) gives one pair. A prove_path arm with neither prints
+  `ε not stated at δ 0.5` from its `PROVE-PATH` line's `delta`.
 - **prover, Lean, proof bytes:** each cell starts with its figure's unit and what it is per, so no figure is read as
-  another's: `2.345 s a drawn block (Flock's prove_total_s, the mean over 8)`, `430,501 bytes a drawn block (...)`, and
-  recursion's `1699 s a run, wall (one recursive run's path without Lean's step: ...)`. The four rows stay one table:
+  another's: `2.5 s a drawn block (Flock's prove_total_s, the mean over 8)`, `400,000 bytes a drawn block (...)`, and
+  recursion's `1500 s a run, wall (one recursive run's path without Lean's step: ...)`. The four rows stay one table:
   the three rows a drawn block compare cell for cell, and recursion's figures are a whole run's.
 
 The table is followed by its JSON line, and under a research run, or with `$OUT` set, it writes `proof-layers.json`.
@@ -335,7 +372,7 @@ kit's writer, each a figure a drawn proof block:
 |---|---|
 | `benchmarks/proof-layer-prover-seconds` | Flock's `prove_total_s`, the mean over the drawn blocks |
 | `benchmarks/proof-layer-lean-seconds` | Lean's verify seconds, the mean over the drawn blocks |
-| `benchmarks/proof-layer-proof-bytes` | the session's proof files' bytes, over its drawn blocks |
+| `benchmarks/proof-layer-proof-bytes` | one proof's bytes over its drawn blocks: an a5, `layers.sh` or prove_path row's one rep's (its reps are timed repeats of one proof, and differing reps give none). prove_path's own `per_unit` sums the reps, so its row reads them from the arm's rank or window `summary.json`, and prints `every rep's` only where no such file states them |
 
 Under each id it writes three measurements, in this order:
 
@@ -366,13 +403,11 @@ directory to the printer's flag. In order, each from the tree's root:
    `PP_LLAMA=D LROW=ROW PP_PLAIN=1 PP_PARTITION=FILE PP_FORGED_PARTITION=FILE bash benchmarks/prove_path/run.sh`, where
    `LROW` is the row's name, `PP_PARTITION` the honest partition (`..._step1_all_stratified.json`, plain's sample is
    stratified) and `PP_FORGED_PARTITION` the forged arm's. `benchmarks/prove_path/README.md` says what each variable
-   is; [#10357](https://github.com/compute-verification/verity/pull/10357)'s body holds these lines' current form, with
-   the files' names, and network-accounting's change to `run.sh` is changing them. Give the honest arm's directory to
-   `--flock`.
+   is, and `run.sh`'s usage line their current form. Give the honest arm's directory to `--flock`.
 3. **The zero-knowledge layer**, the same without `PP_PLAIN=1` and `PP_FORGED_PARTITION` (the forged arm then takes
    `run.sh`'s default), with `PP_PARTITION` the unstratified `..._step1_all.json`. Give its honest arm to `--zk`.
 4. **The recursion layer**, on 32 CPU cores with 128 GB (`run.py`'s memory behind the ZK server), about an hour at
-   K = 4096 (r20261115-183449-c6f6 took 54 minutes):
+   K = 4096:
    `taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=DIR`. Give its `$OUT` to
    `--recursion`.
 

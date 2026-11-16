@@ -133,7 +133,7 @@ def test_the_printed_row_states_its_proof(tmp_path):
             PL.read("flock", None)]
     text = PL.render(rows)
     line = table_lines(text)
-    assert line["with sampling"].startswith("| with sampling | row llama32-1b__int8__h200__tp1__b4: ")
+    assert line["with sampling"].startswith("| with sampling | values not stated: row llama32-1b__int8__h200__tp1__b4: ")
     assert "| plain | not stated | not stated | — |" in line["with sampling"]
     assert "| zk | not stated | ε not stated at δ 0.5 | 3 s a drawn block (Flock's prove_total_s" in line["Flock with zero knowledge"]
     assert line["Flock"].startswith("| Flock | not run | — | — | — | — |")
@@ -155,8 +155,8 @@ def test_a_plain_sampling_row_writes_null_with_why_under_every_id(tmp_path):
 def test_an_a5_run_reads_its_audit_its_timing_and_states_no_more_of_its_coins_than_it_says(tmp_path):
     row = PL.read("sampling", str(a5_out(tmp_path)))
     assert row.accepted and row.format == PL.A5
-    assert (row.prover_s, row.lean_s, row.proof_bytes) == (5.0, 2.0, 250.0)
-    assert row.workload == ("row llama32-1b__int8__h200__tp1__b4: RoPEHead_v1{D=64} x 4 drawn of 112 units "
+    assert (row.prover_s, row.lean_s, row.proof_bytes) == (5.0, 2.0, 125.0)
+    assert row.workload == ("values not stated: row llama32-1b__int8__h200__tp1__b4: RoPEHead_v1{D=64} x 4 drawn of 112 units "
                             "(kind=served commitment=rows-sha512)")
     assert row.ran_with == "ran with: not stated"
     assert row.detail == "A5 line's verdicts challenger/m0, a challenger per drawn member"
@@ -173,8 +173,7 @@ def test_an_a5_row_is_checked_against_the_proof_of_the_layer_it_is_given_as(tmp_
     coins = {"source": "challenger", "challenger": "local"}
     zk = PL.read("zk", str(a5_out(tmp_path / "zk", coins=coins)))
     assert zk.accepted and zk.prover_s == 5.0
-    assert zk.ran_with == ('ran with: coins local challenger; parameters not stated '
-                           '(summary.json coins {"challenger": "local", "source": "challenger"})')
+    assert zk.ran_with == "ran with: coins local challenger; parameters not stated (summary.json coins.challenger local)"
 
 
 def test_a_stopped_a5_run_says_where_it_stopped(tmp_path):
@@ -220,7 +219,7 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
         (name, member) for name in IDS for member in ("flock", "zero knowledge", None)]
     values = {(m["name"], m.get("member")): m for m in written}
     assert [values[name, "zero knowledge"]["value"] for name in IDS] == [3.0, 1.0, 850000.0]
-    assert [values[name, None]["value"] for name in IDS] == [5.0, 2.0, 250.0]
+    assert [values[name, None]["value"] for name in IDS] == [5.0, 2.0, 125.0]
     assert all(values[name, "flock"]["value"] is None and values[name, "flock"]["why"].startswith("not run") for name in IDS)
     assert {m["unit"] for m in written} == {"s a proof block", "bytes a proof block"} and all(m["mark"] == "measured"
                                                                                            for m in written)
@@ -235,7 +234,7 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert "| 1202 s a run, wall (one recursive run's path" in line["with recursion"]
     assert "| 90 s a run, wall (the lean step whole" in line["with recursion"]
     assert "| 18,000,000 bytes a run (V*'s 10 releases" in line["with recursion"]
-    assert "| 850,000 bytes a drawn block (its session's" in line["Flock with zero knowledge"]
+    assert "| 850,000 bytes a drawn block (every rep's proof files" in line["Flock with zero knowledge"]
 
 
 def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_any_id(tmp_path):
@@ -262,7 +261,7 @@ def test_an_empty_out_or_run_dir_is_no_place_to_write(tmp_path, monkeypatch, cap
         monkeypatch.delenv("OUT", raising=False)
     else:
         monkeypatch.setenv("OUT", out)
-    assert kit.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS)) is None
+    kit.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS))
     assert capsys.readouterr().out == 'text\n{"rows": []}\n' and not any(tmp_path.iterdir())
 
 
@@ -312,3 +311,194 @@ def test_prove_without_the_store_refuses_in_one_line(monkeypatch, capsys):
     monkeypatch.setitem(sys.modules, "research.store.local", local)
     assert main(["prove", "--system", "flock", "--workload", "glm53"]) == 2
     assert capsys.readouterr().err.strip().endswith("the evidence store has no remote here (no remote is configured)")
+
+
+SHA = "85b64d2c451637c4ac5b6bd0e2f6a934baea69ac"
+STMTS = (("s8-coord-k2048-c0", "ScaledMmS8Coordinate_v1{K=2048}", 2048), ("s8-coord-k8192-c0", "ScaledMmS8Coordinate_v1{K=8192}", 512))
+
+
+def layers_sh(root: Path, layer: str, *, k: int = 2560, zk_flag: bool | None = None, negative: bool = True) -> Path:
+    """One layer of a `benchmarks/one_stage/layers.sh all` run under `root` (its flock/, zk/ or sampled/), in the shapes
+    its stand-in run wrote."""
+
+    d = root / layer / "out"
+    (d / "a6").mkdir(parents=True)
+    (d / "layers.txt").write_text("ran with: coins local challenger; parameters development (a development challenger, "
+                                  f"local to each session; δ=2^-20; k={k})\na measurement, not an audit: stand-in values, never served\n")
+    (d / "job.log").write_text(f"21:36:07Z hidden-zk: source {SHA}, 96 CPUs\n{'7b' * 32}  flock-circuit\n")
+    (root / layer / "gpu-lease-usage.jsonl").write_text(json.dumps(
+        {"cmd": "flock-circuit prove --zk --gpu --verifier 127.0.0.1:7561", "gpus": [{"index": 4}]}) + "\n")
+    for name, _, _ in STMTS:
+        (d / "a6" / f"session-{name}").mkdir()
+        (d / "a6" / f"session-{name}" / "lean-verify.log").write_text(
+            "$ verity-verify-proof verify --statement verity/flock-circuit"
+            + (" --zk" if (layer != "flock" if zk_flag is None else zk_flag) else "") + " --coins tree\n")
+    if layer == "flock":
+        summary = {"accepted": True, "plain": True, "windows": [
+            {"name": name, "units": n, "live": {"accepted": True, "prove_total_s": 2.0 + i, "proof_bytes": [900 + i, 900 + i]},
+             "lean_verify": {"accepted": True, "verify_s": 5.0 + i, "unit_draw": {"strata": [{"template": t}]}}}
+            for i, (name, t, n) in enumerate(STMTS)]}
+    else:
+        counts = {"s8-coord-k2048-c0": 2048, "s8-coord-k8192-c0": 512} if k == 2560 else {"s8-coord-k2048-c0": 26, "s8-coord-k8192-c0": 6}
+        summary = {"audit": {"accepted": True, "complete": True, "verdicts": {f"lean-verify/{n}": True for n, _, _ in STMTS},
+                             "wrong_units": {"bound": 0 if k == 2560 else 895, "of": 2560, "delta": 2.0 ** -20}},
+                   "checks_before_draw": {"registration": True}, "negatives": {"draw-outside-the-partition": negative},
+                   "draw_counts": counts, "k": k, "population": 2560,
+                   "members": [{"name": n, "template": t} for n, t, _ in STMTS],
+                   "timing": {n: {"lean_verify_s": 6.0 + i, "timing": {"prove_total_s": 4.0 + i, "proof_bytes": [1100, 1100]}}
+                              for i, (n, _, _) in enumerate(STMTS)}}
+    (d / "a6" / "summary.json").write_text(json.dumps(summary))
+    return root
+
+
+def layers_run(root: Path) -> Path:
+    layers_sh(root, "flock"), layers_sh(root, "zk"), layers_sh(root, "sampled", k=32)
+    return root
+
+
+def test_a_layers_sh_run_gives_its_three_layers_each_a_statements_figures_as_stand_in_values(tmp_path):
+    """layers.sh's output is recognised by its own files (layers.txt beside a6/summary.json), each layer from its own
+    directory of the run, and the row says what the output says: stand-in values, figures a statement, its ε at δ."""
+
+    run = layers_run(tmp_path / "run")
+    rows = {x: PL.read(x, str(run)) for x in ("flock", "zk", "sampling")}
+    assert {r.format for r in rows.values()} == {PL.LAYERS_SH} and all(r.accepted for r in rows.values())
+    assert all(r.workload.startswith("stand-in values, never served: 2 statements of 2,560 units") for r in rows.values())
+    assert (rows["zk"].commit, rows["zk"].commit_from) == (SHA, "job.log's source") and "32 of them drawn" in rows["sampling"].workload
+    assert [r.proof for r in rows.values()] == ["plain", "zk", "zk"]
+    assert rows["sampling"].ran_with.startswith("ran with: coins local challenger; parameters development (a development")
+    assert rows["sampling"].eps_delta == "at most 895 of 2,560 units wrong except with probability 2^-20"
+    assert rows["flock"].eps_delta == PL.NOT_STATED and rows["zk"].device.startswith("GPU 4 (gpu-lease's")
+    line = table_lines(PL.render(list(rows.values()) + [PL.read("recursion", None)]))
+    assert "| 2 s a statement of 2,048 units; 3 s a statement of 512 units (Flock's prove_total_s) |" in line["Flock"]
+    assert "| 6 s a statement of 26 units; 7 s a statement of 6 units (Lean's verify) |" in line["with sampling"]
+    assert "900 bytes a statement of 2,048 units; 901 bytes a statement of 512 units (one rep's proof)" in line["Flock"]
+
+
+def test_a_stand_in_row_writes_no_figure_a_proof_block_under_the_metric_ids(tmp_path):
+    run = str(layers_run(tmp_path / "run"))
+    rows = [PL.read(x, run if x != "recursion" else None) for x in PL.LAYERS]
+    written = PL.measured(rows, IDS)
+    assert len(written) == 9 and all(m["value"] is None for m in written)
+    assert all(m["why"] == "stand-in values, never served: its figures are a statement's, not a proof block's" for m in written)
+
+
+def test_a_layers_sh_row_with_a_negative_case_accepted_or_no_zk_flag_prints_no_number(tmp_path):
+    neg = PL.read("zk", str(layers_sh(tmp_path / "a", "zk", negative=False)))
+    assert not neg.accepted and neg.statements == [] and "negative draw-outside-the-partition not refused" in neg.lean
+    plain = PL.read("zk", str(layers_sh(tmp_path / "b", "zk", zk_flag=False)))
+    assert plain.proof is None and plain.statements == [] and "states no proof" in plain.why
+    assert PL.read("recursion", str(layers_run(tmp_path / "c"))).status == "unreadable"
+
+
+def test_a_prove_path_row_names_the_commit_its_machine_txt_states(tmp_path):
+    out = tmp_path / "out"
+    prove_path_arm(out, "z")
+    (out / "machine.txt").write_text(f"11\nMem: 755\n{'c352729e2ee' + '0' * 29}\n{'5e' * 20}\n")
+    row = PL.read("zk", str(out))
+    assert row.commit == "c352729e2ee" + "0" * 29 and row.workload.startswith("arm z: ")
+    commits = next(x for x in PL.render([row]).splitlines() if x.startswith("- commits: "))
+    assert commits.startswith("- commits: Flock with zero knowledge c352729e2ee (machine.txt's git HEAD); a row reruns from main")
+    (out / "machine.txt").write_text("11\n")
+    assert PL.read("zk", str(out)).commit is None
+    assert "- commits: Flock with zero knowledge not stated; " in PL.render([PL.read("zk", str(out))])
+
+
+def test_a_served_a5_row_states_its_values_its_bound_its_coins_and_its_commit_from_its_files(tmp_path):
+    """A served a5 run's shapes: summary.json's source served beside REGISTERED kind=served, the audit's
+    wrong_units, summary.txt's COINS line and machine.txt's git HEAD (a5_llama1b_h200.sh's third line)."""
+
+    out = a5_out(tmp_path, source="served", audit={"wrong_units": {"bound": 2, "of": 880, "delta": 0.5}}) / "out"
+    (out / "machine.txt").write_text(f"uid=0(root)\n13722cef5f43\n{'45400e83995d' + '0' * 28}\nrow dir /w/r/llama32-1b__int8\n")
+    with (out / "summary.txt").open("a") as f:
+        f.write("COINS draw: one local challenger session (a development stand-in for the auditor's), law subset k=4 of 112 "
+                "units, delta 0.5; sessions: Flock --zk behind the Lean ZK server\n")
+    row = PL.read("sampling", str(tmp_path))
+    assert row.workload.startswith("served values: row llama32-1b__int8: RoPEHead_v1{D=64} x 4 drawn of 112 units (kind=served")
+    assert row.eps_delta == "at most 2 of 880 units wrong except with probability 0.5"
+    assert row.ran_with == ("ran with: coins local challenger; parameters not stated (summary.txt COINS draw: one local "
+                            "challenger session (a development stand-in for the auditor's), law subset k=4 of 112 units, delta 0.5; "
+                            "sessions: Flock --zk behind the Lean ZK server)")
+    assert row.commit == "45400e83995d" + "0" * 28 and row.proof_bytes == 125.0
+
+
+def test_an_a5_plain_run_is_the_flock_row_and_its_epsilon_table_gives_its_first_and_last_pairs(tmp_path):
+    """The one-stage script's plain run as ``--flock``, and a sampled run's ``epsilon`` table."""
+
+    table = [{"delta": d, "wrong_units": w} for d, w in ((0.5, 2), (0.1, 6), (1e-9, 57))]
+    flock = PL.read("flock", str(a5_out(tmp_path / "p", plain={"coins": "tree"}, epsilon={"population": 880, "table": table})))
+    assert flock.accepted and flock.format == PL.A5 and flock.proof == "plain" and flock.prover_s == 5.0
+    assert flock.eps_delta == ("at most 2 of 880 units wrong except with probability 0.5; at most 57 except with "
+                               "probability 1e-9 (summary.json epsilon, the first and last of its 3 pairs)")
+
+
+def served_arm(root: Path, layer: str, *, records: bool = False) -> Path:
+    """prove_path's served-arm run (with PROVE-PATH, or under PP_RECORDS=1 with RECORDS): its layer's
+    ``out/`` with ran-with.txt, machine.txt, the served arm and a forged arm whose commit failed."""
+
+    out = root / layer / "out"
+    arm = out / "served"
+    (arm / ("window" if records else "rank0")).mkdir(parents=True)
+    (out / "ran-with.txt").write_text(
+        "ran with: coins local challenger; parameters development (a local development challenger, under a small test key)\n"
+        f"served, compiled and verified at {SHA} (branch b), not main: window 0 of vllm's run r1, layer 0's SiluMul_v2 units\n")
+    (out / "machine.txt").write_text(f"96\n{SHA}\n")
+    audit = {"accepted": True, "verdicts": {"lean-draw/m0": True, "lean-verify/m0": True},
+             "wrong_units": {"bound": 0, "delta": 0.5, "of": 3}}
+    counts = {"SiluMul_v2{I=8192}": 3}
+    last = ("RECORDS " + json.dumps({"accepted": True, "ok": True, "negatives_refused": True, "draw_counts": counts,
+                                     "population": 3}) if records else
+            "PROVE-PATH " + json.dumps({"forged": False, "ok": True, "proof": "plain", "coins": "challenger", "delta": 0.5,
+                                        "ranks": {"0": {"accepted": True, "population": 3, "draw_counts": counts,
+                                                        "per_unit": {"SiluMul_v2{I=8192}": {"units": 3, "proof_bytes": 1248644}}}}}))
+    (arm / "audit.log").write_text("A5 " + json.dumps({"audit": audit, "source": "stand-in"}) + "\n" + last + "\n")
+    (arm / "summary.json").write_text(json.dumps({"source": "stand-in"} if records else {"plain": {"coins": "tree"}}))
+    timing = {"SiluMul_v2{I=8192}": {"gpus": 0, "lean_verify_s": 3.0,
+                                      "timing": {"prove_total_s": 6.0, "proof_bytes": [624321, 624321]}}}
+    (arm / ("window" if records else "rank0") / "summary.json").write_text(
+        json.dumps({"source": "stand-in", "draw_counts": counts, "timing": timing}))
+    (out / "served-forged").mkdir()
+    (out / "served-forged" / "commit.log").write_text(
+        "Traceback\nLookupError: no rows of SiluMul_v2{I=8192} at steps [24, 25]; its rows exist outside the scope\n")
+    return root
+
+
+@pytest.mark.parametrize("layer", ["flock", "zk"])
+def test_a_served_arm_run_reads_its_ran_with_its_one_rep_and_says_it_has_no_forged_run(tmp_path, layer):
+    row = PL.read(layer, str(served_arm(tmp_path, layer, records=layer == "zk")))
+    assert row.accepted and row.proof == ("plain" if layer == "flock" else "zk")
+    assert (row.prover_s, row.lean_s, row.proof_bytes) == (2.0, 1.0, 208107.0)
+    assert row.bytes_what.startswith("one rep's proof over its drawn blocks, of 2 reps in summary.json's timing")
+    assert row.ran_with == ("ran with: coins local challenger; parameters development (ran-with.txt: a local development "
+                            "challenger, under a small test key)")
+    assert row.workload == ("the output disagrees on its values: ran-with.txt says served (window 0 of vllm's run r1, "
+                            "layer 0's SiluMul_v2 units), the audit's source field says stand-in: arm served: "
+                            "SiluMul_v2{I=8192} x 3 drawn of 3 units; no forged run")
+    assert "no forged run: served-forged/commit.log: LookupError: no rows of SiluMul_v2{I=8192} at steps [24, 25]" in row.notes
+    assert row.eps_delta == "at most 0 of 3 units wrong except with probability 0.5"
+    assert (row.commit, row.device) == (SHA, "CPU (timing gpus 0)")
+
+
+def test_a_records_arm_whose_negatives_were_not_refused_prints_no_number(tmp_path):
+    arm = served_arm(tmp_path, "zk", records=True) / "zk" / "out" / "served"
+    log = (arm / "audit.log").read_text().replace('"negatives_refused": true', '"negatives_refused": false')
+    (arm / "audit.log").write_text(log)
+    row = PL.read("zk", str(tmp_path))
+    assert not row.accepted and row.prover_s is None and "RECORDS negatives_refused False" in row.lean
+
+
+def test_a_layers_sh_row_and_an_a5_row_whose_output_states_neither_stand_in_nor_served_say_values_not_stated(tmp_path):
+    d = layers_sh(tmp_path / "l", "zk") / "zk" / "out"
+    (d / "layers.txt").write_text((d / "layers.txt").read_text().splitlines()[0] + "\n")
+    assert PL.read("zk", str(tmp_path / "l")).workload.startswith("values not stated: 2 statements of 2,560 units")
+    a5 = PL.read("sampling", str(a5_out(tmp_path / "a")))
+    assert a5.workload.startswith("values not stated: row llama32-1b__int8__h200__tp1__b4: ")
+    assert PL.read("sampling", str(a5_out(tmp_path / "s", source="served"))).workload.startswith("served values: ")
+
+
+def test_a_layers_sh_rows_commit_is_the_sha_after_source_never_one_printed_before_it(tmp_path):
+    d = layers_sh(tmp_path, "zk") / "zk" / "out"
+    (d / "job.log").write_text(f"21:30:00Z fetch: main at {'1' * 40}\n" + (d / "job.log").read_text())
+    assert PL.read("zk", str(tmp_path)).commit == SHA
+    (d / "job.log").write_text(f"21:30:00Z fetch: main at {'1' * 40}\n")
+    assert PL.read("zk", str(tmp_path)).commit is None

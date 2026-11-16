@@ -1,4 +1,4 @@
-"""A served run's record, read for `report.py --served`: the inference-only check on the run's files, what it costs in
+"""A served run's record, read for `report.py --from`: the inference-only check on the run's files, what it costs in
 the clear, and the share of a block's work that no PoUW check credits.
 
 * **The files.** The run's `out/` (`OUT_FILES`), named by its path or by the run directory holding it (`files_of`):
@@ -56,14 +56,14 @@ LINE = re.compile(r"\[(\d+) s\] (read the case|check: |count: )(.*)")
 #: the files of the run's `out/` read, as each is named there
 OUT_FILES = {"verdicts": "record/verdicts.json", "policy": "inference-only-policy.json",
              "limits": "inference-only-limits.json", "count": "block-counts-*.json"}
-#: where a run's `out/` keeps the Program, the circuit record and the registration log it registered, which `--served`
+#: where a run's `out/` keeps the Program, the circuit record and the registration log it registered, which `--from`
 #: reads where no `--program`, `--circuit` and `--log` name them; the log one record a line, its first first
 REGISTERED = {"program": "registered/program.json", "circuit": "registered/circuit.json",
               "log": "registered/log.jsonl"}
 #: the option naming the class whose count (`block-counts-<class>.json`, its class's commas as dashes) a record is read
 #: at, where it holds counts of more than one
 CLASS_OPTION = "--served-class"
-#: the data file naming the served run of record, which the command reads where no `--served` names a record
+#: the data file naming the served run of record, which the command reads where no `--from` names a record
 OF_RECORD = Path(__file__).resolve().parent / "served_of_record.toml"
 POLICY_FORMAT = "verity-bench/inference-only-policy/v1"
 #: the field that says whether PoUW's verdict is of record
@@ -123,21 +123,18 @@ def _class_of(count: Path) -> str:
     return count.name.removeprefix("block-counts-").removesuffix(".json").replace("-", ",")
 
 
-def made_with(verdicts: Mapping[str, Any]) -> str:
-    """One line: the coins and the parameters PoUW's piece says it was made with, as the record states them: the
-    challenger's live session its coins came from (`coins.check.session`, which the piece writes only for live coins),
-    and its parameter set (`scheme`); or that the record names none."""
+def made_with(verdicts: Mapping[str, Any]) -> dict[str, str | None]:
+    """What PoUW's piece states it was made with, under the keys it writes today: ``session``, the challenger's live
+    session its coins came from (`coins.check.session`, which the piece writes only for live coins), and ``scheme``,
+    its parameter set; each None where the record names none. In-process coins are stated only under a retired key,
+    which this does not read, so a record of them names no session."""
     row = (verdicts.get("protocols") or {}).get("work")
     piece = (row.get("piece") or row.get("development")) if isinstance(row, dict) else None
     piece = piece if isinstance(piece, dict) else {}
     live = piece["coins"].get("check") if isinstance(piece.get("coins"), dict) else None
-    session = live.get("session") if isinstance(live, dict) else None
-    scheme = piece.get("scheme")
-    coins = (f"PoUW's coins from the challenger's live session {session!r}" if isinstance(session, str) and session else
-             "the record names no live challenger session for PoUW's coins")
-    params = (f"its parameters {scheme!r}" if isinstance(scheme, str) and scheme else
-              "the record names no parameters for PoUW's piece")
-    return f"Made with, as the record states it: {coins}; {params}."
+    session, scheme = live.get("session") if isinstance(live, dict) else None, piece.get("scheme")
+    return {"session": session if isinstance(session, str) and session else None,
+            "scheme": scheme if isinstance(scheme, str) and scheme else None}
 
 
 def of_record(path: Path | None = None) -> Path | None:
