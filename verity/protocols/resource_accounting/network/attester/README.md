@@ -31,5 +31,5 @@ network attester's definitions). It has no console script.
 - **Loads from**: `program/lean/`, no package. The Python, `verity.party`, `verity.channel`, `verity.runtime`,
   `verity.commitments`, `verity.protocols.proofs.spot.verifier.challenger` and `../verifier`. The scripts, `verity.protocols.resource_accounting.network.verifier`;
   `window_vectors.py` also the prover side, `verity.protocols.resource_accounting.network.prover`.
-- **Not here**: the programs that drive a run's proofs and chains (`chain_record.py`, `network_attester_chain.py` and the
-  `*_zk.sh` jobs), which are in `benchmarks/network_traces`.
+- **Not here**: the programs that drive a run's proofs and chains (`chain_record.py` and the `*_zk.sh` jobs), which are
+  in `benchmarks/network_traces`, and the chain's reads of a run (`network_attester_chain.py`), in `../prover`.

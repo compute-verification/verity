@@ -30,8 +30,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   execution phase's tables, or under `--lengths 2` of the network attester's word that it has none, their check, which
   is handed the SHA-512 of the network attester's public key and its session (`check --key-sha512 HEX --session HEX`),
   holds the run's deployment record to them and, with `--registrations FILE` and no problem found, writes what it was
-  checked under and then each registration it held, and `cost`, which measures a close); `network_attester_chain.py` is
-  the chain's reads of a relay run, and network certification's `prover/network_attester_zk.py` reads the relay's bucket rows
+  checked under and then each registration it held, and `cost`, which measures a close); `prover/network_attester_chain.py`
+  is the chain's reads of a relay run, and network certification's `prover/network_attester_zk.py` reads the relay's bucket rows
   in the proof system.
 - **Proofs in zero knowledge.** Each driver, in network certification's `prover/` but for `compile_slice_zk.py` here, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
@@ -46,7 +46,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   `prover/block_certifier.py` writes a period's accepted answer into the block record.
   `served_session.py` is the served session's runbook (below).
 - **The weights' load:** the network attester's `attester/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
-- **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
+- **A memory wipe's egress:** `wipe_gate.sh` and `prover/wipe_egress.py` (below).
 - **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
   a random string, and tries six ways to send it out, each with a network attester process of its own;
   `deviations.sh` is its tries as a job behind one ssh forward (below).
@@ -79,8 +79,8 @@ Memory accounting's streamed wipe signs no egress count; its check takes the cou
 its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` runs that relay through the gate
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
-`$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
-record from what the gate published. Each execution phase that, with its verification phase, meets [t0 − 1 s, t1 + 1 s) counts at the
+`$OUT` only the bundle less `witness/`. `prover/wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the
+`wipe-egress/v1` record from what the gate published. Each execution phase that, with its verification phase, meets [t0 − 1 s, t1 + 1 s) counts at the
 schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when the
 gate's check accepted the run, of which alone the gate publishes certificates, and every one of those execution phases
 is certified. The record is all the script writes: what the wipe's reader does with one is
@@ -409,7 +409,7 @@ A JSON file under no list and no `not_yet` glob fails as an undeclared key does.
 free text) can't be read this way and is only counted. The check is linear in the bytes it reads.
 
 **The relay path** (`CR_PATH=warden`, `chain_record.NETWORK_CERTIFIER`). Every step reads the relay's own run (the gate's
-`warden-rehearse`, its witness under `witness/`; `network_attester_chain.py`), and a proxy rehearsal's run, whose records came
+`warden-rehearse`, its witness under `witness/`; `prover/network_attester_chain.py`), and a proxy rehearsal's run, whose records came
 through the network attester's older proxy in front of the endpoint, is refused by name wherever it is given: that code is
 gone, and kept records of its runs are refused by the form that stays. The certificates step reruns
 the relay's own offline check on its witness (`relay_check.check`) and holds the public `certificates.jsonl` to the
