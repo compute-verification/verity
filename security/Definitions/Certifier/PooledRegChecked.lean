@@ -10,7 +10,7 @@ Definitions only. `PooledReg.lean`'s period, with each phase's check judging the
 accepted at.
 
 * `regRunR` is that run: the statement's program over the horizon on the trace with the registered openings, its
-  ingress the values those openings hold at each step's ingress gates. Where the network certifier registers a record
+  ingress the values those openings hold at each step's ingress gates. Where the network attester registers a record
   among the registered openings (`CertifierRegisters`), the operator's moves are those values, so the run is fixed
   before the phase's coins.
 * `PrCheckMissR` is the probability that the phase accepts at a statement and partition whose `FregR` holds no proof
@@ -28,9 +28,9 @@ open Claims.SamplingGeneric (Arg Compiled)
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 /-- **The run at the trace with the registered openings**: `C` over the horizon on the trace read at the statement with
-the registered openings, filled at the network certifier's values (`fillTrace` of `regValR`), its ingress the values the
+the registered openings, filled at the network attester's values (`fillTrace` of `regValR`), its ingress the values the
 registered openings hold at each step's ingress gates, and the incorrect proof blocks of `FregR` held at that trace
-(`heldAdv`). Where the network certifier registers a record among the registered openings (`CertifierRegisters`), it is
+(`heldAdv`). Where the network attester registers a record among the registered openings (`CertifierRegisters`), it is
 the run the leak relation at `FregR` is accepted at: the operator's moves there are those ingress values. It reads the
 statement, the registered openings and the prover's strategy, and no tape. -/
 noncomputable def regRunR (H : Msg → Msg) (D : Compiled Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg)

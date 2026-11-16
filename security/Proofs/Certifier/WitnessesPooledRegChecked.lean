@@ -17,7 +17,7 @@ that sends nothing, the program of two inputs sampled whole, the layout `twoLay`
 `certOps`), with no input registered and the free input, the gate `1`, checked. The check (`checkedValid₂`) pins the run at
 the gate `1` to the value the run at the trace with the registered openings holds there (`regRunR`), so it pins the
 checked input (`checkedUnique_pin`) and holds on that run, and its miss is `0` (`PhaseChecks` at `εchk = 0`). The
-network certifier has no connection; its record is the one step's `twoObs` (`checkedFormat₂`). Its last conjunct is the
+network attester has no connection; its record is the one step's `twoObs` (`checkedFormat₂`). Its last conjunct is the
 guarantee's event there, which is not empty: at every history the phase is accepted, registered as the period's and
 its record complete.
 
@@ -59,9 +59,9 @@ noncomputable abbrev checkedRun₂ : ℕ → Bool :=
 noncomputable abbrev checkedValid₂ : AuditStatement → (ℕ → Bool) → Prop :=
   fun _ ρ => ∀ g ∈ ({1} : Finset ℕ), ρ g = checkedRun₂ g
 
-/-! The network certifier: no connection, no server behavior to speak of, one device. -/
+/-! The network attester: no connection, no server behavior to speak of, one device. -/
 
-/-- The record format of a network certifier with no connection over one execution phase: it holds every schedule, its
+/-- The record format of a network attester with no connection over one execution phase: it holds every schedule, its
 record is the one step's record `twoObs`, and no cell reads back from it, as the code sends none. -/
 def checkedFormat₂ : RecordFormat Empty Unit (Fin 1 → List (Obs 0 1 1)) :=
   ⟨fun _ _ _ _ => [twoObs], fun _ _ c => c.elim, fun _ => True, fun _ _ _ => funext fun c => c.elim⟩
@@ -69,7 +69,7 @@ def checkedFormat₂ : RecordFormat Empty Unit (Fin 1 → List (Obs 0 1 1)) :=
 /-- No connection, so no arrivals. -/
 abbrev checkedArr₂ : Unit → Empty → Arrivals Unit := fun _ c => c.elim
 
-/-- The network certifier's device runs its recording code at `checkedFormat₂`. -/
+/-- The network attester's device runs its recording code at `checkedFormat₂`. -/
 abbrev checkedTrace₂ :
     Unit → CertifierSchedule Empty × Unit → (Empty → List (ℕ × CellView Unit)) × (Fin 1 → List (Obs 0 1 1)) :=
   fun _ p => recordingCode checkedFormat₂ p.1 (checkedArr₂ p.2)
@@ -98,7 +98,7 @@ execution phase audited by `twoL` against the prover that sends nothing, the pro
 `twoObs`, the phase's error `e₂` (`twoL`'s committed form's, with the collision finder against `certOps`). The check
 pins the run's gate `1` to the value of the run at the trace with the registered openings there: it pins the checked
 input (`CheckedUnique`, by `checkedUnique_pin`) and its miss is `0` (`PhaseChecks`), since that run passes it by
-construction; it is not a check any deployed system runs. The network certifier has no connection, so no cell reaches
+construction; it is not a check any deployed system runs. The network attester has no connection, so no cell reaches
 the client, and one secret: the read-back and the channel hold trivially. At every history the phase is accepted,
 registered as the period's and its record complete, which is the guarantee's event. -/
 theorem PooledLeakRegisteredChecked_honest :

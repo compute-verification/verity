@@ -26,8 +26,8 @@ open Claims.SamplingGeneric (Arg Compiled)
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
 
-/-- **The leak through the network certifier over a monitoring period, at the trace with the registered openings, with
-the checked inputs left out.** `PooledLeakRegistered`'s setting, with the network certifier's one run giving the cells
+/-- **The leak through the network attester over a monitoring period, at the trace with the registered openings, with
+the checked inputs left out.** `PooledLeakRegistered`'s setting, with the network attester's one run giving the cells
 the client receives and the phases' observations (`trusted-device`), reading back under a registered parameter of `Θ`
 (`RecordFormat.ReadsBy`, `MonitoringPeriodChannelReg` at each sample of the coins), and each phase's check pinning its
 checked inputs (`CheckedUnique`) and holding on the run at its trace with the registered openings except with

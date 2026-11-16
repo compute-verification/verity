@@ -11,7 +11,7 @@ import Proofs.Certifier.MonitoringPeriodSum
 `Guarantees.PooledLeakRegisteredChecked`: `PooledLeakRegistered`'s bound with each phase's check holding on the run at
 its trace with the registered openings, and its checked inputs left out of the count. The steps:
 
-1. `ingress_of_registers`: where the network certifier registers a record, the operator's moves over the horizon are
+1. `ingress_of_registers`: where the network attester registers a record, the operator's moves over the horizon are
    the registered openings' values at the ingress gates.
 2. `leakAtChecked_of_trace`: `leakAt_of_trace` with the incorrect set off the classes sampled `all` and the check
    holding on the trace's run.
@@ -526,7 +526,7 @@ theorem encard_pooledRegChecked_le {Lk K S m : ℕ} (lay : AuditStatement → Bo
           rw [htrust (sched z, srv z)]
           exact (hread θ _ hal hfit (arr (srv z))).symm)
 
-/-- **The leak through the network certifier over a monitoring period, at the trace with the registered openings, with
+/-- **The leak through the network attester over a monitoring period, at the trace with the registered openings, with
 the checked inputs left out**: `Guarantees.PooledLeakRegisteredChecked`. The bound is `pooledChecked_of_event` at
 `PooledLeakRegistered`'s event bound (`Compiled.ksRegR_of_sessionKS`) and its registration facts; the count is
 `encard_pooledRegChecked_le` at each sample of the coins, a registered phase's `WregR` holding only its partition's
