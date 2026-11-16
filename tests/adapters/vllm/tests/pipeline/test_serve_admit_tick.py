@@ -472,7 +472,7 @@ def test_install_refuses_what_the_tick_does_not_order_and_comes_off():
     assert not hasattr(g.sched, "_verity_tick") and "add_request" not in vars(g.sched)
 
 
-def test_watermark_lines_as_the_certifier_sends_them():
+def test_watermark_lines_as_the_network_attester_sends_them():
     assert sa.watermark_line(line(0, 0)) == (0, 0, ()) and sa.watermark_line(line(3, 7), (2, 5)) == (3, 7, ())
     assert sa.watermark_line(line(3, 7, [5]), (2, 5)) == (3, 7, (5,))                 # one lost release, the bucket's first
     assert sa.watermark_line(line(3, 9, [5, 6, 8]), (2, 5)) == (3, 9, (5, 6, 8))      # several, its last among them
@@ -1254,8 +1254,8 @@ REQUEST_LINES = [(b"POST /v1/completions HTTP/1.1", True), (b"GET /health HTTP/1
 
 def test_serve_openai_takes_for_a_requests_line_what_the_network_attester_does():
     """`hd.request_line` over first lines well formed and not: it gives a line's method and target where the network
-    attester puts its release on a request that begins with the line, and None where the certifier passes the bytes on
-    as the client wrote them."""
+    attester puts its release on a request that begins with the line, and None where the network attester passes the
+    bytes on as the client wrote them."""
     for line, is_one in REQUEST_LINES:
         sent = line + b"\r\nhost: s\r\nx-verity-release: 9\r\n\r\n"
         stamped = REL.with_release(sent, 3, bytes.fromhex(RUN), 1)
@@ -1309,9 +1309,9 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
     """A request with a client's own release headers, one byte before each one's name or between the name and its
     colon, on which the network attester then puts its release (`release.with_release`), dropping those of the
     client's it takes for release headers. One over HTTP, the byte ``\\xa0`` (its body not JSON, so it is answered at
-    once): the frontend has read the certifier's release of it, not the client's. Then each of the 256 bytes in each
-    place: whichever fields the certifier kept, the server's headers (`hd.header_fields`) give the certifier's
-    release, as the certifier's own reader does."""
+    once): the frontend has read the network attester's release of it, not the client's. Then each of the 256 bytes in
+    each place: whichever fields the network attester kept, the server's headers (`hd.header_fields`) give its
+    release, as its own reader does."""
     run = bytes.fromhex(RUN)
 
     def stamped(pre: bytes, post: bytes, n: int, rest: bytes = b"\r\n") -> bytes:
