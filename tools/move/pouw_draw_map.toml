@@ -610,13 +610,8 @@ files = ["adapters/vllm/tools/served_run/placement.toml"]
 [[words_in]]
 files = ["adapters/vllm/verity_vllm/check/replay/pouw_circuit.py"]
 [words_in.words]
+"Traced.draw" = "Traced.sample"
 "t.draw" = "t.sample"
-
-# adapters/vllm/verity_vllm/pipeline/commit_coins.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/verity_vllm/pipeline/commit_coins.py"]
-[words_in.words]
-"session.draw" = "session.sample"
 
 # adapters/vllm/verity_vllm/pipeline/serve_h1.py: our names it uses
 [[words_in]]
