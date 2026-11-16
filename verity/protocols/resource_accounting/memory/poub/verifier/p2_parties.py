@@ -1057,29 +1057,20 @@ def deployed_request(configuration: Mapping[str, Any], bound: Mapping[str, Any])
     raise NotImplementedError(GOAL)
 
 
-type Pin = Callable[[Mapping[str, Any], str, str], str]
-"""`pin(configuration, party, protocol)`: the SHA-512 of the key the configuration pins for the party in the protocol,
-in hex, `Refused` (``pin``) when it pins none (PoUS's device's `onsite.pin`)."""
-type Load = Callable[[Path, str], mc.LmsSigner]
-"""`signer(directory, key_sha512)`: the memory challenger's signer from its device's directory, `Refused` (``pin``)
-before its key is read unless its public key's SHA-512 is `key_sha512` (PoUS's device's `onsite.signer`)."""
+def starts() -> dict[str, Starter]:
+    """The verifier's start (`start`), by what starts the verifier beside PoUS's device (`verity_cli.served_table`'s
+    `POUB`)."""
+    return {VERIFIER: start}
 
 
-def starts(pin: Pin, signer: Load) -> dict[str, Starter]:
-    """The verifier's start (`start`) with the memory challenger's pin check handed in, by what starts the verifier
-    beside PoUS's device (`verity_cli.served_table`'s `POUB`)."""
-    return {VERIFIER: lambda configuration, bound, state: start(configuration, bound, state, pin=pin, signer=signer)}
-
-
-def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None, *, pin: Pin,
-          signer: Load) -> Start:
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
     """The verifier's start on the auditor's device (`ProtocolDef.starts`, through `starts`), from the configuration and
     its deploy bindings (`bound`, its `[bandwidth-verifier.bandwidth]`: `address`, and `challenger`, the memory
     challenger's PoUS device directory on this host). It raises `NotImplementedError(GOAL)` before reading any key:
     making it the path that runs needs a source the runtime gives a party for the registration (PoUS setup's record on
     that device, `pous_record`, for the setup's session id), the session id the auditor gives the memory challenger, and
-    the Lean process holding the registration (`hold`); then the closer's key, refused unless `pin(configuration,
-    CLOSER_PARTY, COMPONENT)` is its SHA-512 (`signer`), as `main` refuses it under `--trusted-sha512`."""
+    the Lean process holding the registration (`hold`); then the closer's key, refused unless the configuration's pin
+    for `CLOSER_PARTY`'s `COMPONENT` sessions is its SHA-512, as `main` refuses it under `--trusted-sha512`."""
     raise NotImplementedError(GOAL)
 
 
@@ -1087,7 +1078,7 @@ PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier})}
 
 
 __all__ = ["Books", "CASE_DIGESTS", "CLOSER_PARTY", "COIN_BYTES", "COMPONENT", "Closer", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "GOAL",
-           "ID", "LINES", "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "Pin", "Load", "SESSION", "Twin",
+           "ID", "LINES", "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "SESSION", "Twin",
            "VERIFIER", "VERSION", "Verifier", "answer", "broken", "case_digest", "core_answer", "deployed_request",
            "drive", "held_json", "hold", "line_of", "main", "message", "opening_json", "opening_of", "params_of",
            "plan_of", "pous_record", "recv", "registration_json", "registration_of",

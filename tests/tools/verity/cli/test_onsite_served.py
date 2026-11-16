@@ -125,10 +125,12 @@ def test_the_configuration_states_no_host_or_address():
 def test_the_memory_challenger_s_two_keys_are_pinned_and_hashed():
     cfg = R.load(CONFIG, REG)
     assert [(p["party"], p["protocol"], p["scheme"]) for p in cfg["pin"]] == [
-        ("memory-challenger", "pous", K.SCHEMES[0]), ("memory-challenger", "wipe", K.SCHEMES[0])]
+        (T.BANDWIDTH_VERIFIER, T.P2.COMPONENT, K.SCHEMES[0]), ("memory-challenger", "pous", K.SCHEMES[0]),
+        ("memory-challenger", "wipe", K.SCHEMES[0])]
     stated = {p["protocol"]: p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"]}
     assert {p["protocol"]: p["key-sha512"] for p in cfg["pin"]} == stated
     assert all(re.fullmatch("[0-9a-f]{128}", k) for k in stated.values()) and stated["pous"] != stated["wipe"]
+    assert stated["bandwidth"] == stated["pous"]   # the bandwidth close is signed with the PoUS key
     assert T.configuration(cfg["program"]["commit"])["pin"] == cfg["pin"]   # the table states no key of its own
     bare = {k: v for k, v in K.parse(CONFIG.read_text()).items() if k != "pin"}
     assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
@@ -154,7 +156,7 @@ def test_a_memory_challengers_placement_reads_the_configurations_pins_under_its_
     monkeypatch.setattr(mc, "committed", lambda: frozenset())
     assert T.placement(cfg, piece["wipe"], {"public_key": key["wipe"]})[mc.PREMISE].startswith(mc.UNCOMMITTED)
     assert T.placement(cfg, T.PARTIES["pous"]["prover"], {"public_key": key["pous"]}) is None
-    assert pin.keys() == {"pous", "wipe"}
+    assert pin.keys() == {"pous", "wipe", "bandwidth"}
 
 
 def test_the_registration_names_the_runs_own_configuration_and_is_not_written_yet(tmp_path):
@@ -407,16 +409,12 @@ def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_i
     assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
 
 
-def test_the_bandwidth_verifiers_start_is_handed_pouss_pin_check(tmp_path):
-    """The table hands PoUB's verifier PoUS's device's pin check (`onsite.pin`, `onsite.signer`), which `p2_parties`
-    may not load: a configuration that pins no PoUS key is refused before the directory is read, and a directory holding
-    no key after."""
+def test_the_bandwidth_verifiers_start_is_not_yet_a_path_that_runs(tmp_path):
+    """The table's start of PoUB's verifier raises before it reads a key or the directory: the party's command line
+    (`p2_parties.main`, under its pin) is the path that runs."""
     start = T.POUB.protocol().starts[T.P2.VERIFIER]
-    with pytest.raises(Refused, match="pins no key"):
+    with pytest.raises(NotImplementedError, match=T.P2.GOAL):
         start({}, {"challenger": str(tmp_path)}, None)
-    pin = {"party": T.CS.CHALLENGER, "protocol": T.CS.COMPONENT, "key-sha512": "00" * 64}
-    with pytest.raises(Refused, match="holds no memory challenger's key"):
-        start({"pin": [pin]}, {"challenger": str(tmp_path)}, None)
 
 
 def test_the_runtime_components_channels_are_their_protocols_manifests():

@@ -227,10 +227,8 @@ def test_a_line_before_the_verifier_asked_for_one_ends_it_out_of_phase(store) ->
 
 
 def test_the_verifiers_start_is_not_yet_a_path_that_runs_and_reads_no_key(tmp_path) -> None:
-    from verity.protocols.resource_accounting.memory.pous.attester import onsite
-
     assert p2_parties.VERIFIER not in p2_parties.PROTOCOLS[p2_parties.ID].starts
-    start = p2_parties.starts(onsite.pin, onsite.signer)[p2_parties.VERIFIER]
+    start = p2_parties.starts()[p2_parties.VERIFIER]
     with pytest.raises(NotImplementedError, match=p2_parties.GOAL):
         start({}, {"challenger": str(tmp_path)}, None)
     with pytest.raises(NotImplementedError, match=p2_parties.GOAL):
