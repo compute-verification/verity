@@ -45,7 +45,10 @@ STEP_WINDOW, STEP_DROP = 16, 2
 #: `information`'s bins of the offset, and its shuffles of the bits
 BINS, SHUFFLES = 8, 200
 #: the budget (a world-year's exfiltration against the compute it takes): the seconds one node's whole timing channel
-#: may take to carry a bit, at the budget's two ends
+#: may take to carry a bit, at the budget's two ends. 300 GB a year spread over the census's world
+#: (`benchmarks/census/adversary.json`, `world-inference-2027`) on eight-GPU nodes
+#: (`benchmarks/slowdown/data/hardware.toml`, `location.h200-hgx`) is a bit a node every 616 s at the fleet's
+#: utilization of 0.4 and every 246 s at 1, rounded to 600 and 240
 SECONDS_A_BIT = (240.0, 600.0)
 
 
