@@ -57,9 +57,8 @@ Lean takes as given is the clock's readings and the coins the challenger (`coins
 (--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE] [--challenger DIR
 --session SID --trusted-sha512 HEX]` is the verifier's side (`main`), each session with fresh coins, the memory
 challenger's key and session log in `--challenger`'s directory (the key loaded by the `device_key` the caller hands
-`main`, PoUS's device's `onsite.device_key` in the auditor's gate, and refused before any session unless its SHA-512 is
-`--trusted-sha512`, the key the configuration pins for the close: `CLOSER_PARTY`'s for `COMPONENT`) signing the close of
-the one session the auditor named `--session SID`, which is claimed in its log before the session's first coin, the
+`main`, PoUS's device's `onsite.device_key` in the auditor's gate, refused unless `--trusted-sha512` pins it) signing the
+close of the one session the auditor named `--session SID`, which is claimed in its log before the session's first coin, the
 Lean built in its package (`lake build poub-verifier`) unless `--lean-exe` names a built one, or, without `lake`
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
@@ -1046,8 +1045,7 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
 GOAL = CS.ONSITE_GOAL
 #: PoUB's P2 session's name in a deployment configuration: in its `protocols` and a binding's table
 COMPONENT = "bandwidth"
-#: the configuration's party whose `[[pin]]` for `COMPONENT` names the key that signs a session's close: the bandwidth
-#: verifier, which signs it with the memory challenger's PoUS key beside PoUS's device, so that pin names PoUS's key
+#: its `[[pin]]` names PoUS's key: it signs the close with the memory challenger's PoUS key
 CLOSER_PARTY = "bandwidth-verifier"
 
 
@@ -1058,19 +1056,11 @@ def deployed_request(configuration: Mapping[str, Any], bound: Mapping[str, Any])
 
 
 def starts() -> dict[str, Starter]:
-    """The verifier's start (`start`), by what starts the verifier beside PoUS's device (`verity_cli.served_table`'s
-    `POUB`)."""
     return {VERIFIER: start}
 
 
 def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
-    """The verifier's start on the auditor's device (`ProtocolDef.starts`, through `starts`), from the configuration and
-    its deploy bindings (`bound`, its `[bandwidth-verifier.bandwidth]`: `address`, and `challenger`, the memory
-    challenger's PoUS device directory on this host). It raises `NotImplementedError(GOAL)` before reading any key:
-    making it the path that runs needs a source the runtime gives a party for the registration (PoUS setup's record on
-    that device, `pous_record`, for the setup's session id), the session id the auditor gives the memory challenger, and
-    the Lean process holding the registration (`hold`); then the closer's key, refused unless the configuration's pin
-    for `CLOSER_PARTY`'s `COMPONENT` sessions is its SHA-512, as `main` refuses it under `--trusted-sha512`."""
+    """Raises `NotImplementedError(GOAL)`: the runtime gives a party no registration, session id or held Lean yet."""
     raise NotImplementedError(GOAL)
 
 

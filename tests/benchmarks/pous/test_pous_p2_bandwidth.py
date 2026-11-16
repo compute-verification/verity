@@ -39,7 +39,6 @@ sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "resource_accou
 import pous_test_signer as ts  # noqa: E402
 
 SEED = hashlib.sha512(b"test_pous_p2_bandwidth/seed").digest()
-#: the pin of the key `p2_party_at_leaf`'s party signs its close under
 AT_LEAF = hashlib.sha512(ts.AtLeaf(b"p2-party-at-leaf").public_key).hexdigest()
 
 

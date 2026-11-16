@@ -117,16 +117,14 @@ def case_of(registration: Mapping[str, Any], request: Mapping[str, Any], not_bef
 
 
 def close_key(case: Mapping[str, Any]) -> bytes | None:
-    """The public key the case's close names, None when its evidence holds no close; `KeyError`, `TypeError` or
-    `ValueError` when the evidence or the close doesn't decode."""
+    """None when the evidence holds no close; raises when it doesn't decode."""
     close = json.loads(bytes.fromhex(case["evidence"])).get("close")
     return None if close is None else bytes.fromhex(close["public_key"])
 
 
 def trusting(case: Mapping[str, Any], key_sha512: str | None) -> dict[str, Any]:
-    """`case` with its params' trusted keys the verifier's and never the case's own, which whoever kept the case wrote:
-    the close's key when its SHA-512 is `key_sha512` (the key the configuration pins for the close, or one a rehearsal
-    names), else none, so the check refuses the close (`Poub.P2Protocol.closeRefusal`); raises as `close_key` does."""
+    """`case` trusting the close's key only when its SHA-512 is `key_sha512`, else no key. The case's own list is
+    never trusted: whoever kept the case wrote it."""
     key = close_key(case)
     trusted = [key.hex()] if key is not None and hashlib.sha512(key).hexdigest() == key_sha512 else []
     return dict(case) | {"params": dict(case["params"]) | {"trusted": trusted}}

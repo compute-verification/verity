@@ -410,8 +410,6 @@ def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_i
 
 
 def test_the_bandwidth_verifiers_start_is_not_yet_a_path_that_runs(tmp_path):
-    """The table's start of PoUB's verifier raises before it reads a key or the directory: the party's command line
-    (`p2_parties.main`, under its pin) is the path that runs."""
     start = T.POUB.protocol().starts[T.P2.VERIFIER]
     with pytest.raises(NotImplementedError, match=T.P2.GOAL):
         start({}, {"challenger": str(tmp_path)}, None)

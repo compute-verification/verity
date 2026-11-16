@@ -72,10 +72,7 @@ same sessions, which no second session replaces. With neither, one process does 
    0700), held to PoUS's run case as one store (`p2_case.same_store`); its public answer, under a hiding commitment to the
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
    piece's, `served_bandwidth.py collect`). With ``--bw-case-exe`` (``poub-p2-protocol``) the Lean answers the
-   case, and its answer is the one written; without it the session's accept is undecided (`p2_case.unjudged`). The
-   close is trusted only under the key the configuration pins for it (`held_bandwidth.key_of`), or under
-   ``--bw-trusted-sha512``, a rehearsal's, which the summary names as the run's (``key_pin``), never under a key the
-   case lists; with neither, no session has a case and the bandwidth answer is undecided.
+   case, and its answer is the one written; without it the session's accept is undecided (`p2_case.unjudged`).
    ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
    ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_parties.SESSION`: two minutes), which
    its party holds every request to: it refuses one with another value before its first coin, naming each, and the
@@ -413,8 +410,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
              deployment: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
     """The piece's part on the card (module docstring, 1 to 3 and 6's session): the weights, setup, PoUS's session
     of ``rounds`` challenges and, with ``bw_party`` (the bandwidth party's command), PoUB-P2's over the held store
-    (`held_bandwidth.held`, under ``bw_request``, by default `held_bandwidth.request`'s, its close's key
-    `held_bandwidth.key_of`'s of ``deployment``, by default `from_runner()`'s, and ``bw_trusted_sha512``). Where they leave an answer
+    (`held_bandwidth.held`, under ``bw_request``, by default `held_bandwidth.request`'s). Where they leave an answer
     already (weights that aren't the pin's, no salt, a session that didn't complete or ran under another id), it is
     written as `answers` writes one and returned, never an accept. Else None: what the sessions left is kept for
     `answers`, in ``private`` (``run.json`` and the table, `STORE`, `HELD`) and ``bw_private`` (by default
@@ -544,8 +540,7 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
     id it answers under (a test signer's in tests), ``deployment`` what `trusted-device`'s premise reads
     (`period.deployment`: the configuration's hash, its pins and the committed set), by default `from_runner()`'s,
     ``trusted_sha512`` the challenger key it trusts, by default the one its pins give the memory challenger for PoUS
-    (none pinned: no session is accepted), ``bw_trusted_sha512`` the key the bandwidth session's close is trusted
-    under, by default the one its pins give it (`held_bandwidth.key_of`), ``case_exe`` the
+    (none pinned: no session is accepted), ``case_exe`` the
     run protocol's Lean (``pous-run-protocol``), whose answer on the case is then the verdict; without it the Python's
     reject or undecided stands and its accept is undecided (`period.unjudged`). What the sessions kept
     only for this (`STORE`, `HELD`, the P2 case not yet answered) is removed last, once both answers are written and

@@ -48,9 +48,9 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   run PoUS's streamed-wipe challenger (`verity/protocols/resource_accounting/memory/pous/verifier/wipe_party.py`, port 47611) and its block challenger
   (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--session SID --trusted-sha512 HEX] [--minutes M]` PoUB's
   P2 party (`verity/protocols/resource_accounting/memory/poub/verifier/p2_parties.py`, port 47612, with the registration the host
-  names; with `--session SID`, the session id the auditor gives the memory challenger, and `--trusted-sha512 HEX`, the
-  SHA-512 of the key the configuration pins for the close, it signs the session's close with the block challenger's key,
-  refused unless it is that key, and claims SID in its session log, `<root>/parties/pous/`, and keeps the session's case), as
+  names; with `--session SID`, the session id the auditor gives the memory challenger, it signs the session's close with
+  the block challenger's key, refused unless `--trusted-sha512 HEX` pins it, and claims SID in its session log,
+  `<root>/parties/pous/`, and keeps the session's case), as
   `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
   and the signed report on its stdout, as a lane's `--challenger-command` expects
   (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
@@ -597,9 +597,8 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
     `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, `bw_party`'s
     `--pous-session SID` (the registration the block challenger's record of PoUS session SID gives, read on this host)
     or `--fixture` (`PARTY_FIXED`'s), one of them, and `--session SID` (the session id its close is signed under, by the
-    block challenger's key and session log) with `--trusted-sha512 HEX` (the configuration's pin for the close, which the
-    party holds that key to), and nothing of `challenger_party`'s; never a path, an address or an egress count (the
-    session signs none, and `wipe_party` takes none)."""
+    block challenger's key and session log) with `--trusted-sha512 HEX` (its pin), and nothing of `challenger_party`'s;
+    never a path, an address or an egress count (the session signs none, and `wipe_party` takes none)."""
     name, module, port = PARTIES[verb]
     extra: list[str] = []
     args = list(rest)

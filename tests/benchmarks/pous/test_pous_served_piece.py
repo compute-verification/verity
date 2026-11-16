@@ -224,13 +224,12 @@ class Auditor:
 CONF = hashlib.sha512(b"a committed configuration").hexdigest()
 
 
-#: the key `p2_party_at_leaf`'s party signs the bandwidth session's close under
 BW_KEY = hashlib.sha512(ts.AtLeaf(b"p2-party-at-leaf").public_key).hexdigest()
 
 
 def _deployment(key: str, bw: str | None = BW_KEY) -> dict:
     """A committed configuration (`CONF`) that pins ``key`` for the memory challenger's PoUS sessions and ``bw`` for
-    the bandwidth verifier's bandwidth sessions' close."""
+    the bandwidth close."""
     scheme = "lms-sha512/n64-w1-h20/v0"
     pins = [{"key-sha512": key, "party": "memory-challenger", "protocol": "pous", "scheme": scheme}]
     if bw is not None:
@@ -1024,13 +1023,10 @@ def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_i
     assert opening["row"] == lean["commitment"] and opening["root"] == bw["commitment"]
 
 
-#: the key a prover makes itself, never the memory challenger's
 OWN_KEY = b"the prover's own key"
 
 
 def _signed_by_its_own_key(held: Path) -> None:
-    """The prover's edit of the case it holds (`HELD`) between the session and its answer: its close signed again under
-    a key the prover made (`OWN_KEY`), which its params name as the one trusted key."""
     case = json.loads(held.read_text())
     own = ts.AtLeaf(OWN_KEY)
     evidence = json.loads(bytes.fromhex(case["evidence"]))
@@ -1042,10 +1038,8 @@ def _signed_by_its_own_key(held: Path) -> None:
 
 @pytest.mark.slow
 def test_a_close_the_prover_signed_under_a_key_it_listed_itself_is_refused(registered, tmp_path, monkeypatch, case_exe):
-    """The case the bandwidth answer hands `poub-p2-protocol` is the prover's to keep (`HELD`), so its list of trusted
-    keys is the prover's word: a prover that signs the close under its own key and lists that key is refused by the
-    Lean (`closeRefusal`), since the answer trusts only the key the configuration pins for the memory challenger's
-    bandwidth close, whatever the case lists."""
+    """The prover keeps the case between its session and its answer (`HELD`), so the case's own list of trusted keys is
+    the prover's."""
     s = registered
     private = s.serve / "private" / "bandwidth"
     answer = _parts(s, tmp_path, monkeypatch, between=lambda: _signed_by_its_own_key(private / SP.HB.HELD),
@@ -1058,9 +1052,6 @@ def test_a_close_the_prover_signed_under_a_key_it_listed_itself_is_refused(regis
 
 @pytest.mark.slow
 def test_a_key_the_run_names_and_the_configuration_does_not_pin_is_a_rehearsals(registered, tmp_path, monkeypatch):
-    """A configuration that pins no key for the bandwidth close, and a run that names its own (``bw_trusted_sha512``):
-    the session's close is signed and checked under that key, and the summary says the run named it (``key_pin``
-    ``run``) and that `trusted-device` is a rehearsal's, never that it holds."""
     s = registered
     kw = _bandwidth(tmp_path, bw_case_exe=_bandwidth_judge(monkeypatch))
     pous = hashlib.sha512(kw["auditor"].signer.public_key).hexdigest()
@@ -1074,8 +1065,6 @@ def test_a_key_the_run_names_and_the_configuration_does_not_pin_is_a_rehearsals(
 
 @pytest.mark.slow
 def test_with_no_key_named_for_the_close_the_bandwidth_session_has_no_case(registered, tmp_path, monkeypatch):
-    """A configuration that pins no key for the bandwidth close and a run that names none: the party is given no
-    session id to sign a close under, no case is made, and the bandwidth answer is undecided naming why."""
     s = registered
     kw = _bandwidth(tmp_path, bw_case_exe=_bandwidth_judge(monkeypatch))
     pous = hashlib.sha512(kw["auditor"].signer.public_key).hexdigest()

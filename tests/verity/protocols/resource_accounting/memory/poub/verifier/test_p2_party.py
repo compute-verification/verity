@@ -236,8 +236,6 @@ def test_the_verifiers_start_is_not_yet_a_path_that_runs_and_reads_no_key(tmp_pa
 
 
 def test_the_party_refuses_a_closer_key_other_than_the_one_its_pin_names_before_any_session(tmp_path, capsys) -> None:
-    """`main` loads the memory challenger's key only through the pin (``--trusted-sha512``): another key, or a
-    challenger with no pin named, is refused before the registration is read, so no session's close is signed."""
     from types import SimpleNamespace
 
     key = SimpleNamespace(public_key=b"the memory challenger's key")

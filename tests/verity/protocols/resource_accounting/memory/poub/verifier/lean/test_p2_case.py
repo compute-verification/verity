@@ -358,8 +358,6 @@ def test_a_session_on_pous_setups_store_names_pous_store_and_is_accepted(exe, le
 
 
 def test_the_trusted_keys_are_the_pins_and_never_the_cases_own() -> None:
-    """`trusting` sets the case's trusted keys to the close's key where its SHA-512 is the pin's, to none for any other
-    key or no close, whatever the case listed; a close that doesn't decode raises."""
     key = b"the close's key"
 
     def case(close) -> dict:

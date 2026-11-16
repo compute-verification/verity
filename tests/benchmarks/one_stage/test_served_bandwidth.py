@@ -70,7 +70,6 @@ sys.exit(p2_parties.main(sys.argv[1:], device_key=lambda _directory: ts.AtLeaf({
 
 
 def _pin() -> str:
-    """The SHA-512 of the key `PARTY_EXE`'s party signs its close under, which its command pins."""
     spec = importlib.util.spec_from_file_location("pous_test_signer", SIGNER)
     ts = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ts)

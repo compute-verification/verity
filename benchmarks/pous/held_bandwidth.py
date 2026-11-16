@@ -11,10 +11,8 @@ declared them before that session, and the root the session bound. Its plan is t
 refuses a registration that isn't its store's (`hold`), and the session's case names the root (`p2_case.store_root`),
 which `p2_case.same_store` holds to PoUS's run case. The party is given a fresh session id (``--session``), which the
 memory challenger claims in its session log before the first coin and under which it signs the case's close of the
-verifier's log (`p2_parties.Closer`), and the key that close must be signed under (``--trusted-sha512``, `key_of`: the
-configuration's pin for it, or the key a rehearsal names), which the party refuses its own key unless it is. `decide`
-reads the keys the close is trusted under from that pin and never from the case it answers, which the developer's
-private directory holds (`p2_case.trusting`); with no key named, no session has a case.
+verifier's log (`p2_parties.Closer`), under the key ``--trusted-sha512`` pins (`key_of`). `decide` trusts that key
+and never one the case lists, since the case is kept in the developer's private directory.
 
 **A pass** reads every unit of the plan from ``C*``'s rows on their device: σ by the exact int8 product against the
 pass's signs (`bandwidth.Sketch`), y on the device (`receipts_of`), a few units held to `p2.Sketcher` (`spot`), and
@@ -237,9 +235,7 @@ def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_pe
 
 
 def key_of(deployment: Mapping[str, Any], trusted_sha512: str | None = None) -> str | None:
-    """The SHA-512 of the key a bandwidth session's close is trusted under: `trusted_sha512`, a rehearsal's own key,
-    else the one `deployment`'s pins (`period.deployment`'s) give the bandwidth verifier for its bandwidth sessions
-    (`p2_parties.CLOSER_PARTY`, `p2_parties.COMPONENT`), else None."""
+    """`trusted_sha512`, a rehearsal's, else the configuration's pin for the close."""
     pinned = mc.pinned(deployment["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT)
     return trusted_sha512 or min(pinned, default=None)
 
@@ -247,9 +243,9 @@ def key_of(deployment: Mapping[str, Any], trusted_sha512: str | None = None) -> 
 def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, request_: Mapping[str, Any],
          private: Path, trusted_sha512: str | None = None) -> None:
     """One PoUB-P2 session over the held `store` with the bandwidth party `party` (a shell command, to which
-    ``--pous-session`` and PoUS's session id `sid` are added, and with `trusted_sha512` (`key_of`) ``--session`` and a
-    fresh id for this session, under which the memory challenger signs the case's close, with ``--trusted-sha512``, the
-    key it signs under; without it, no session has a case; its port reached at `party_host`), under `request_`:
+    ``--pous-session`` and PoUS's session id `sid` are added, and ``--session`` and a fresh id for this session, under
+    which the memory challenger signs the case's close; without `trusted_sha512`, no session has a case; its port reached
+    at `party_host`), under `request_`:
     the session's record (`SESSION`: the party's answer and its own record of it, the registration, each pass and
     opening, the seconds) and, where the session made one, its case not yet answered (`HELD`), with the logs, to
     `private` (0700, files 0600), for `decide`. This is the part that reads the store."""
@@ -291,10 +287,7 @@ def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, requ
 
 
 def key_record(case: Mapping[str, Any], trusted_sha512: str, deployment: Mapping[str, Any], host: str) -> dict[str, Any]:
-    """What the summary says of the key `case`'s close is signed under: its SHA-512 (``key_sha512``), whether it is the
-    trusted one (``key_pinned``), whose word named that one (``key_pin``: ``configuration`` where `deployment` pins it,
-    ``run`` where only the run named it), and `trusted-device`'s premise for it (`memory_challenger.trusted_device`),
-    which holds only for the pinned key under a committed configuration and reads rehearsal under any other."""
+    """``key_pin`` is ``run`` where only the run named the key, and `trusted-device` then reads rehearsal."""
     key = p2_case.close_key(case)
     key_sha = None if key is None else hashlib.sha512(key).hexdigest()
     pinned = mc.pinned(deployment["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT)
@@ -315,9 +308,7 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     (`p2_case.same_store`) is refused. With `case_exe` (``poub-p2-protocol``) the Lean answers the case and
     its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the session undecided and no
     case written; without it the session's reject or undecided stands and its accept is undecided
-    (`p2_case.unjudged`). The close is trusted only under `key_of(deployment, trusted_sha512)` (`deployment`,
-    `period.deployment`'s, by default no configuration), whatever keys the case lists (`p2_case.trusting`): with none,
-    the session is undecided (`NO_KEY`), and the summary says of the close's key what `key_record` says. The summary names the program whose verdict the answer is and the host it ran on
+    (`p2_case.unjudged`). With no key `key_of` gives, the session is undecided (`NO_KEY`). The summary names the program whose verdict the answer is and the host it ran on
     (``decided_by``, `period.decided_by`): the Lean where it answered the case, else this Python. `HELD` stays, so the
     same session can be answered again; the caller removes it once it needs no other answer."""
     public.mkdir(parents=True, exist_ok=True)
