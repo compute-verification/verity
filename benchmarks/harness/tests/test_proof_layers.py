@@ -173,8 +173,7 @@ def test_an_a5_row_is_checked_against_the_proof_of_the_layer_it_is_given_as(tmp_
     coins = {"source": "challenger", "challenger": "local"}
     zk = PL.read("zk", str(a5_out(tmp_path / "zk", coins=coins)))
     assert zk.accepted and zk.prover_s == 5.0
-    assert zk.ran_with == ('ran with: coins local challenger; parameters not stated '
-                           '(summary.json coins {"challenger": "local", "source": "challenger"})')
+    assert zk.ran_with == "ran with: coins local challenger; parameters not stated (summary.json coins.challenger local)"
 
 
 def test_a_stopped_a5_run_says_where_it_stopped(tmp_path):
@@ -418,5 +417,70 @@ def test_a_served_a5_row_states_its_values_its_bound_its_coins_and_its_commit_fr
     assert row.workload.startswith("served values: row llama32-1b__int8: RoPEHead_v1{D=64} x 4 drawn of 112 units (kind=served")
     assert row.eps_delta == "at most 2 of 880 units wrong except with probability 0.5"
     assert row.ran_with == ("ran with: coins local challenger; parameters not stated (summary.txt COINS draw: one local "
-                            "challenger session (a development stand-in for the auditor's), law subset k=4 of 112 units, delta 0.5)")
+                            "challenger session (a development stand-in for the auditor's), law subset k=4 of 112 units, delta 0.5; "
+                            "sessions: Flock --zk behind the Lean ZK server)")
     assert row.commit == "45400e83995d" + "0" * 28 and row.proof_bytes == 125.0
+
+
+def test_an_a5_plain_run_is_the_flock_row_and_its_epsilon_table_gives_its_first_and_last_pairs(tmp_path):
+    """r20261115-230754-7a96 (the one-stage script's plain run) as ``--flock``, and r20261115-232508-db1d's ``epsilon``."""
+
+    table = [{"delta": d, "wrong_units": w} for d, w in ((0.5, 2), (0.1, 6), (1e-9, 57))]
+    flock = PL.read("flock", str(a5_out(tmp_path / "p", plain={"coins": "tree"}, epsilon={"population": 880, "table": table})))
+    assert flock.accepted and flock.format == PL.A5 and flock.proof == "plain" and flock.prover_s == 5.0
+    assert flock.eps_delta == ("at most 2 of 880 units wrong except with probability 0.5; at most 57 except with "
+                               "probability 1e-9 (summary.json epsilon, the first and last of its 3 pairs)")
+
+
+def served_arm(root: Path, layer: str, *, records: bool = False) -> Path:
+    """prove_path's served-arm run (r20261115-232155-e640, and under PP_RECORDS=1 r20261115-232009-1ff5): its layer's
+    ``out/`` with ran-with.txt, machine.txt, the served arm and a forged arm whose commit failed."""
+
+    out = root / layer / "out"
+    arm = out / "served"
+    (arm / ("window" if records else "rank0")).mkdir(parents=True)
+    (out / "ran-with.txt").write_text(
+        "ran with: coins local challenger; parameters development (a local development challenger, under a small test key)\n"
+        f"served, compiled and verified at {SHA} (branch b), not main: window 0 of vllm's run r1, layer 0's SiluMul_v2 units\n")
+    (out / "machine.txt").write_text(f"96\n{SHA}\n")
+    audit = {"accepted": True, "verdicts": {"lean-draw/m0": True, "lean-verify/m0": True},
+             "wrong_units": {"bound": 0, "delta": 0.5, "of": 3}}
+    counts = {"SiluMul_v2{I=8192}": 3}
+    last = ("RECORDS " + json.dumps({"accepted": True, "ok": True, "negatives_refused": True, "draw_counts": counts,
+                                     "population": 3}) if records else
+            "PROVE-PATH " + json.dumps({"forged": False, "ok": True, "proof": "plain", "coins": "challenger", "delta": 0.5,
+                                        "ranks": {"0": {"accepted": True, "population": 3, "draw_counts": counts,
+                                                        "per_unit": {"SiluMul_v2{I=8192}": {"units": 3, "proof_bytes": 1248644}}}}}))
+    (arm / "audit.log").write_text("A5 " + json.dumps({"audit": audit, "source": "stand-in"}) + "\n" + last + "\n")
+    (arm / "summary.json").write_text(json.dumps({"source": "stand-in"} if records else {"plain": {"coins": "tree"}}))
+    timing = {"SiluMul_v2{I=8192}": {"gpus": 0, "lean_verify_s": 3.0,
+                                      "timing": {"prove_total_s": 6.0, "proof_bytes": [624321, 624321]}}}
+    (arm / ("window" if records else "rank0") / "summary.json").write_text(
+        json.dumps({"source": "stand-in", "draw_counts": counts, "timing": timing}))
+    (out / "served-forged").mkdir()
+    (out / "served-forged" / "commit.log").write_text(
+        "Traceback\nLookupError: no rows of SiluMul_v2{I=8192} at steps [24, 25]; its rows exist outside the scope\n")
+    return root
+
+
+@pytest.mark.parametrize("layer", ["flock", "zk"])
+def test_a_served_arm_run_reads_its_ran_with_its_one_rep_and_says_it_has_no_forged_run(tmp_path, layer):
+    row = PL.read(layer, str(served_arm(tmp_path, layer, records=layer == "zk")))
+    assert row.accepted and row.proof == ("plain" if layer == "flock" else "zk")
+    assert (row.prover_s, row.lean_s, row.proof_bytes) == (2.0, 1.0, 208107.0)
+    assert row.bytes_what.startswith("one rep's proof over its drawn blocks, of 2 reps in summary.json's timing")
+    assert row.ran_with == ("ran with: coins local challenger; parameters development (ran-with.txt: a local development "
+                            "challenger, under a small test key)")
+    assert row.workload == ("served per ran-with.txt (window 0 of vllm's run r1, layer 0's SiluMul_v2 units), the audit's "
+                            "source stand-in: arm served: SiluMul_v2{I=8192} x 3 drawn of 3 units; no forged run")
+    assert "no forged run: served-forged/commit.log: LookupError: no rows of SiluMul_v2{I=8192} at steps [24, 25]" in row.notes
+    assert row.eps_delta == "at most 0 of 3 units wrong except with probability 0.5"
+    assert (row.commit, row.device) == (SHA, "CPU (timing gpus 0)")
+
+
+def test_a_records_arm_whose_negatives_were_not_refused_prints_no_number(tmp_path):
+    arm = served_arm(tmp_path, "zk", records=True) / "zk" / "out" / "served"
+    log = (arm / "audit.log").read_text().replace('"negatives_refused": true', '"negatives_refused": false')
+    (arm / "audit.log").write_text(log)
+    row = PL.read("zk", str(tmp_path))
+    assert not row.accepted and row.prover_s is None and "RECORDS negatives_refused False" in row.lean
