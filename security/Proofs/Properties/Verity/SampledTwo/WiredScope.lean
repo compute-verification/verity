@@ -25,7 +25,7 @@ namespace Verity.SampledTwo
 
 open Claims
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The wired statement is in the session's scope, or the sampled verdict never accepts** (`CouplesAt.scope`), from
 the join's premise and that the held copies' design evaluates. -/

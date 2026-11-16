@@ -26,7 +26,7 @@ namespace Verity.Sampled.MemberForm
 
 open FlockSoundness.Refine (ebind_ok)
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 open Classical in
 /-- **`Blobs.get` returns the first blob with the digest**: the first whose SHA-512 is the digest the hex names

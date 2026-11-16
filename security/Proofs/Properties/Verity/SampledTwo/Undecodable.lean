@@ -11,8 +11,8 @@ At a commitment `c` whose bytes carry no statement (`stmtOf c = none`) no `Joins
 prints, and `stmtOf c` is that print.
 
 `couplingTwo_of_stmtOf_none` is `CouplingTargetTwo`'s body at such a `c`, at any `terms`, from those two alone, and
-`joinedCouplingOfDistribution_decoded` is the two-stage subprotocol's coupling with `CouplesAt` taken only where the commitment carries
-a statement.
+`joinedCouplingOfDistribution_decoded` is the two-stage subprotocol's coupling with `CouplesAt` taken only where the
+commitment carries a statement.
 -/
 
 @[expose] public section
@@ -22,7 +22,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The sampled verdict never accepts at a commitment that does not decode**, from the composite's wiring at `θ`
 and the instance's cases carrying the play's commitment. -/
@@ -55,11 +55,11 @@ theorem couplingTwo_of_stmtOf_none {V : Vocab d α} {k : Verity.Registration.Com
     CouplingTwoAt V k A θ F c σ t :=
   .inl (prob_zero_of_stmtOf_none hwire hcc hn σ)
 
-/-- **The two-stage subprotocol's coupling, with `CouplesAt` only where the commitment decodes**: `joinedCouplingAt` at each
-commitment that carries a statement, and `couplingTwo_of_stmtOf_none` at each that carries none, from the composite's
-wiring at `θ` and `CaseCommits`, which read no commitment. -/
-theorem joinedCouplingOfDistribution_decoded (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
-    (F : Array ByteArray) (x : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Msg) (C : CaseOf)
+/-- **The two-stage subprotocol's coupling, with `CouplesAt` only where the commitment decodes**: `joinedCouplingAt` at
+each commitment that carries a statement, and `couplingTwo_of_stmtOf_none` at each that carries none, from the
+composite's wiring at `θ` and `CaseCommits`, which read no commitment. -/
+theorem joinedCouplingOfDistribution_decoded (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂)
+    (θ : ByteArray) (F : Array ByteArray) (x : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Msg) (C : CaseOf)
     (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
     (P : Sessions.Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Verity.Release → ℕ)
     (P' : Verity.Exchange → ℕ → Claims.Prover Unit)

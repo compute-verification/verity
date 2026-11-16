@@ -101,8 +101,9 @@ theorem sample_readsBack {record : String}
 
 /-- **The sample the form set a session up at is printable**: the record's sample is its `unit_draw` rebuilt
 (`Verity.Sampled.recordSample_raw`), so each of its objects is a well-formed tree (`FlockDeploy.wf_norm`). The setup
-decodes it to a subset or a stratified sample (`Verity.Sampled.setupAt_sampleDesign`, `sampleDesign_ok`, `samplingDesignWhy_zk`), and a
-well-formed value that decodes to either is printable (`FlockComplete.JsonRT.good_subset`, `good_stratified`). -/
+decodes it to a subset or a stratified sample (`Verity.Sampled.setupAt_sampleDesign`, `sampleDesign_ok`,
+`samplingDesignWhy_zk`), and a well-formed value that decodes to either is printable
+(`FlockComplete.JsonRT.good_subset`, `good_stratified`). -/
 theorem sample_good {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {record : String} {dj : Json}
     {x : Flock.SessionSpec × Array Flock.Setup × Json × Json} (hrd : Flock.Witness.recordDraw record = some dj)
     (h : Spot.OneStageZk.setupAt W rd (Flock.Witness.recordDraw record) = .ok x) : Claims.Json.Good dj := by

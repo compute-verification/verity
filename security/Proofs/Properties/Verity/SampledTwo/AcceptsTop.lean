@@ -56,8 +56,9 @@ at the play's replay sample. A held copy `heldOf` builds has the other eight by 
 first stage samples a uniform `K`-subset of the replay blocks (`SpotFlock.firstK`) that size is `K` at every play, so
 `PartsSizedAt` at `K`, which reads the play's parameters alone, gives it (`partsHeldAt_of_sized`). Every accepted
 play's first stage is of a count `K` (`firstK_of_formAccepts`): the form's parser takes a two-stage rule only with a
-rate sampling design (`Select.Rule.ofJson`), which `Select.resolve` makes `subset:K` at `1 ≤ K ≤ n`, so `PartsSizedAt` at each
-such `K` gives `PartsHeldAt` with nothing else asked (`partsHeldAt_of_accepts`). The run refuses an interior whose
+rate sampling design (`Select.Rule.ofJson`), which `Select.resolve` makes `subset:K` at `1 ≤ K ≤ n`, so
+`PartsSizedAt` at each such `K` gives `PartsHeldAt` with nothing else asked (`partsHeldAt_of_accepts`). The run
+refuses an interior whose
 strata are not the parts its replay block's cells give the check's templates (`interior-parts`), so an accepted
 play gives `PartsSizedAt` too (`partsSizedAt_of_formAccepts`): the templates' circuits the parser returns name
 those templates (`templateCircuits_names`). Asked at every
@@ -125,8 +126,8 @@ theorem recordsRead (C : CaseOf) : RecordsRead C := by
 
 /-- **An accepted two-stage run's registration checks have no code**, the boundary record's and the interior
 record's (`RunsAs.accepted_registered`), each at a registration with the run's own ports and registered values
-(`recordNamesOf`): the run checks each at its own registration with the sampling design it expands and, at the boundary, its work
-table. -/
+(`recordNamesOf`): the run checks each at its own registration with the sampling design it expands and, at the
+boundary, its work table. -/
 theorem checks_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Lean.Json}
     (ha : SpotFlock.RunsAs.AcceptedTwo i it j) :
     (∃ v, Spot.Docket.check i.record v = #[] ∧
@@ -252,7 +253,8 @@ theorem partsHeldAt_of_sized {A : Live₂} {C : CaseOf} {K : ℕ} (hK : SpotFloc
   rw [SpotFlock.select_subset_size hK hsel]
   exact hs o i it strata hA hi hit hst
 
-/-- **A two-stage rule `Select.Rule.ofJson` reads has a rate sampling design** for its first stage (`Select.replaySamplingDesign?`). -/
+/-- **A two-stage rule `Select.Rule.ofJson` reads has a rate sampling design** for its first stage
+(`Select.replaySamplingDesign?`). -/
 theorem ofJson_replay {j g : Lean.Json} {t : String} {k : Spot.Select.Counts}
     (h : Spot.Select.Rule.ofJson j = .ok (.twoStage g t k)) : (Spot.Select.parseRate t).isSome = true := by
   unfold Spot.Select.Rule.ofJson at h
@@ -296,8 +298,8 @@ theorem subset_text (K : ℕ) : s!"subset:{K}" = "subset" ++ ":" ++ Nat.repr K :
   simp only [String.append_assoc]
   rfl
 
-/-- **An accepted play's run has a two-stage rule with a rate sampling design**: the run of record's rule is the parameters'
-(`inputOf_first`), which the form's parser reads with `Select.Rule.ofJson`. -/
+/-- **An accepted play's run has a two-stage rule with a rate sampling design**: the run of record's rule is the
+parameters' (`inputOf_first`), which the form's parser reads with `Select.Rule.ofJson`. -/
 theorem rule_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input} (hA : FormAccepts C o)
     (hi : inputOn C o = some i) :
     ∃ g t k, i.rule = .twoStage g t k ∧ (Spot.Select.parseRate t).isSome = true := by
@@ -325,8 +327,9 @@ theorem rule_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Inp
 
 /-- **Each accepted play's held first stage is of a count `K`** (`SpotFlock.firstK`): the held copies are the ones
 `heldOf` builds (`HeldOfAt`), whose first-stage registration has the run's closure map, none at an accepted play
-(`closure_of_formAccepts`), and the rule `Select.resolve` makes of the run's, a rate sampling design (`rule_of_formAccepts`)
-resolved to `subset:K` at `1 ≤ K ≤ n` (`textOver_rate`), which Flock reads as a uniform `K`-subset. -/
+(`closure_of_formAccepts`), and the rule `Select.resolve` makes of the run's, a rate sampling design
+(`rule_of_formAccepts`) resolved to `subset:K` at `1 ≤ K ≤ n` (`textOver_rate`), which Flock reads as a uniform
+`K`-subset. -/
 theorem firstK_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
     (hit : i.interior = some it) : ∃ K, SpotFlock.firstK A.h.reg.first = some K := by
@@ -558,9 +561,9 @@ theorem names_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o 
     first | done | rfl | simp
   · exact Except.ok.inj (h1.symm.trans hids)
 
-/-- **`PartsSizedAt` is a lemma of the accept**: an accepted play's interior passed `interior-parts` (`interiorSteps_parts`), whose parts are the held copies' (`partsAt_heldOf`,
-`names_of_formAccepts`), at its replay sample, which has `K` blocks where the held first stage samples a `K`-subset
-(`SpotFlock.select_subset_size`). -/
+/-- **`PartsSizedAt` is a lemma of the accept**: an accepted play's interior passed `interior-parts`
+(`interiorSteps_parts`), whose parts are the held copies' (`partsAt_heldOf`, `names_of_formAccepts`), at its replay
+sample, which has `K` blocks where the held first stage samples a `K`-subset (`SpotFlock.select_subset_size`). -/
 theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C) :
     ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K := by
   intro K hK o i it strata hA hi hit hst
@@ -572,8 +575,8 @@ theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNon
   have hcl := closure_of_formAccepts hA hi
   obtain ⟨j, ha⟩ := acceptedTwo_of_formAccepts (ruleIsTwo C) hA hi hit
   obtain ⟨grain, replay, k, hr⟩ := ha.two
-  rcases SpotFlock.RunsAs.run_path ha.run with ⟨step, codes, hj⟩ | ⟨n, rule, samplingDesign, workTable, resolved, draw, rest,
-      read, -, -, -, ht, -, -, hres, hsel, -, inner, acc₂, staged, receipt, sym, pub, audit, hsec, -, -, -⟩
+  rcases SpotFlock.RunsAs.run_path ha.run with ⟨step, codes, hj⟩ | ⟨n, rule, samplingDesign, workTable, resolved, draw,
+      rest, read, -, -, -, ht, -, -, hres, hsel, -, inner, acc₂, staged, receipt, sym, pub, audit, hsec, -, -, -⟩
   · have hs := ha.accept
     rw [hj, SpotFlock.RunsAs.symbol_refused] at hs
     cases hs

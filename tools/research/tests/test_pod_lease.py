@@ -391,8 +391,8 @@ def _kill(*pids):
         if pid:
             try:
                 os.killpg(pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
+            except (ProcessLookupError, PermissionError) as e:     # gone already, or its pid another user's by now
+                print(f"_kill: group {pid} not signalled ({type(e).__name__})")
 
 
 def test_arming_over_ssh_writes_the_lease_starts_one_loop_and_the_idle_guard(tmp_path, reap):

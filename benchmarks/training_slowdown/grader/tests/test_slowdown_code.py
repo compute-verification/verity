@@ -143,7 +143,7 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
         dot_alone(monkeypatch, s.program)
     else:
         request.getfixturevalue("unit_prices")
-    capture_step = importlib.import_module(f"{G.PACKAGE}.capture.trace").capture_step
+    capture_step = importlib.import_module(f"{G.PACKAGE}.capture").capture_step
     torch.manual_seed(0)
     model = LF.LM(LF.SIZES["tiny"], ctx=2 * STEP[1], vocab=64, matmul_dtype=dtype)
     g = capture_step(model, torch.optim.AdamW(model.parameters(), **LF.ADAMW), LF.square_loss,

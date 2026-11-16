@@ -34,7 +34,7 @@ class _Waits(threading.Condition):
         return super().wait(timeout)
 
 
-def test_no_release_before_the_last_protocols_draw():
+def test_no_release_before_the_last_protocols_sample():
     _host, _rc, dev = committed()
     draws = SL.Draws(PROTOCOLS)
     draws._cv = _Waits()
@@ -80,7 +80,7 @@ def test_the_union_is_kept_with_an_input_an_unsampled_block_wrote_and_opens_agai
             com.open_range(1, 0, 1)                 # no sample read step 1
 
 
-def test_the_seal_reads_the_port_positions_of_a_step_no_draw_named(tmp_path):
+def test_the_seal_reads_the_port_positions_of_a_step_no_sample_named(tmp_path):
     """The seal holds the step-input port's committed positions to the rows the window ran, at every step
     (`serve_seal.port_positions`, and `seal_process`'s handoff): they are read just before the release, which still keeps
     only the sample's leaves."""
@@ -103,7 +103,7 @@ def test_the_seal_reads_the_port_positions_of_a_step_no_draw_named(tmp_path):
         committed_raw(dev, 1, PORT_NAMES[1])
 
 
-def test_a_released_window_seals_and_its_bundle_holds_exactly_the_draws_leaves(tmp_path):
+def test_a_released_window_seals_and_its_bundle_holds_exactly_the_samples_leaves(tmp_path):
     import torch
 
     from tests.pipeline.test_serve_seal import NAMES, ROWS, _ledgers
@@ -131,7 +131,7 @@ def test_a_released_window_seals_and_its_bundle_holds_exactly_the_draws_leaves(t
     assert OpenedReader(store, run)(*down) == host[2][base:base + dev.chunk]
 
 
-def test_a_later_draw_or_a_read_of_a_dropped_leaf_is_refused_by_name():
+def test_a_later_sample_or_a_read_of_a_dropped_leaf_is_refused_by_name():
     _host, rc, dev = committed()
     draws = SL.Draws(("spot",))
     draws.put(0, "spot", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
@@ -145,11 +145,11 @@ def test_a_later_draw_or_a_read_of_a_dropped_leaf_is_refused_by_name():
         OpenedReader(dev, rc)(1, "runner.sampler", 0, 4)
 
 
-def test_a_draw_is_never_redrawn_names_only_its_protocols_and_reads_only_what_was_committed():
+def test_a_protocol_samples_a_window_once_names_only_its_protocols_and_reads_only_what_was_committed():
     _host, _rc, dev = committed()
     draws = SL.Draws(PROTOCOLS)
     draws.put(0, "pouw_h1", [])
-    with pytest.raises(SL.Refused, match="drawn by pouw_h1 already"):
+    with pytest.raises(SL.Refused, match="sampled by pouw_h1 already"):
         draws.put(0, "pouw_h1", [])
     with pytest.raises(SL.Refused, match="not a protocol the release waits for"):
         draws.put(0, "pous", [])
@@ -265,7 +265,7 @@ def opts(**retention):
     return SimpleNamespace(retention=SimpleNamespace(**r), commit=True, scheme=R.NAME, window_gb=32.0, seal=True)
 
 
-def test_serve_openai_gates_every_device_held_seal_on_named_draws(tmp_path):
+def test_serve_openai_gates_every_device_held_seal_on_named_samples(tmp_path):
     assert SL.retention_refusal(opts()) is None
     assert "--release-after" in SL.retention_refusal(opts(release_after=""))
     assert "needs --retain device and --seal" in SL.retention_refusal(opts(retain="host"))

@@ -30,7 +30,7 @@ namespace Verity.SampledTwo
 
 open Claims
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The vocabulary's units are the replay blocks at what the verifier reads**: at the audit statement, partition
 and design the session's verifier reads of `x`, `UnitsAreReplay` under the reading `readX`. -/

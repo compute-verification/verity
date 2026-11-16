@@ -155,7 +155,7 @@ def test_prune_trees_folds_the_code_clones_packs_into_one_once_they_pass_50(tmp_
 
 
 def test_prune_trees_takes_each_train_and_after_landing_tree_an_hour_idle_that_no_process_works_in(tmp_path):
-    """A train's checkout with its log, and the tree of a job of the steps after a landing that was killed before it removed its
+    """A candidate's checkout with its log, and the tree of a job of the steps after a landing that was killed before it removed its
     own (`research merge`'s `_own_tree`), go once nothing in them changed for an hour and no process works in them; one changed
     since, one a process works in, and anything else in $TRAIN_TREES stay."""
     trains = (tmp_path / "trains").resolve()

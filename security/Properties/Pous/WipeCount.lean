@@ -6,18 +6,18 @@ public import Definitions.Certifier.Premises
 public import Definitions.Certifier.Guarantees.Marks
 
 /-!
-# An accepted wipe's egress is the network certifier's count over the wipe's span
+# An accepted wipe's egress is the network attester's count over the wipe's span
 
 `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) publishes an egress `E` (`egress_mib`), and the survivor
 bound it certifies is of the foreign content plus `E` (`MemoryChallenger.Properties.WipeSurvivorBound`). `WipeCountTied`
-says what `E` is when a count of the network certifier over the wipe's span is accepted beside the wipe, under the
+says what `E` is when a count of the network attester over the wipe's span is accepted beside the wipe, under the
 device's parameters: at least the bits the device sent in the execution phases from the start mark's phase to the end
 mark's phase plus the device's tail, phases that hold every cell the device sends from the start mark on out of what it
 read by the end mark. The statement only; `Proofs.Properties.Pous.WipeCount` proves it from its antecedents.
 
 ## The marks
 
-The network certifier on the wipe's link signs two marks for the wipe, each over a message it is handed, and stamps
+The network attester on the wipe's link signs two marks for the wipe, each over a message it is handed, and stamps
 each with the execution phase it handles it in (`Definitions.Certifier.Marks`): the start mark over the start
 message, which is of the wipe's commitment, before the fill; and the end mark over the end message, which is of the
 signed session, after the wipe closes. The memory challenger signs the SHA-512 of the start mark's certificate, the
@@ -34,7 +34,7 @@ The statement is over what the tree has, and takes the rest as parameters, each 
   its commitment and its public output); the device's parameters it runs under, all public (the registered hardware's
   key and link, the run's certifier session, and the schedule each phase's signed head names by digest); and the
   break its run carries.
-* `MarkDevice`: the network certifier on the wipe's link, its key, session and link, the link's registered capacity,
+* `MarkDevice`: the network attester on the wipe's link, its key, session and link, the link's registered capacity,
   its schedule, the marks it made, the phase it stamped on each and the bits it sent in each phase.
 
 While `WipeMarks` is a parameter, the wipe's check reads none of it: the wipe's acceptance holds nothing of `M`, and the
@@ -77,7 +77,7 @@ is of every cell the device sends in them.
 * Anything of an unmarked wipe. Its signed `start_mark` is empty, and a SHA-512 output is 64 bytes, so the memory
   challenger's antecedent is false and the statement holds vacuously. Such a wipe is charged the whole memory
   (`WipeProtocol.certify`).
-* A link no network certifier relays has no count. The wipe's egress is then the saturated one
+* A link no network attester relays has no count. The wipe's egress is then the saturated one
   (`StreamedWipe.EGRESS_MAX_UNITS`), at which its check certifies nothing (`WipeProtocol.gaps`): `certified` is false
   and `foreign_bits` is the whole memory. The statement's bound in bits is for an egress below the saturated one.
 -/
@@ -112,7 +112,7 @@ structure SpanCount where
 plus the tail. -/
 def SpanCount.egressBits (n : SpanCount) : ℕ := (n.endPhase + n.tail + 1 - n.startPhase) * n.capacityBits
 
-/-- A mark the network certifier made: the message it signed, the bucket it handled it in (the ticks it had done), and
+/-- A mark the network attester made: the message it signed, the bucket it handled it in (the ticks it had done), and
 the certificate it returned, the bytes of the certificate it signs under its key in its session on its link's marks,
 egress, at the phase it stamps, over the SHA-512 of a tag, the mark's own fresh salt and the message. -/
 structure Mark where
@@ -120,7 +120,7 @@ structure Mark where
   bucket : ℕ
   certificate : ByteArray
 
-/-- **The network certifier on the wipe's link**: its key, session and link; the link's egress capacity a phase, in
+/-- **The network attester on the wipe's link**: its key, session and link; the link's egress capacity a phase, in
 bits, a public parameter fixed when the link is registered; its schedule, the buckets of an execution phase (`T`) and
 the most egress cells a connection has (`E`); the phase the physical device stamps on a mark handled in a bucket; the
 marks it made; and the bits it sent on the link in each phase. -/
@@ -157,13 +157,13 @@ def CountRan {κ P C Ev Pr : Type} (count : P → C → Ev → Core.Outcome Span
   ∀ (cn : C) (en : Ev) (n : SpanCount) (profn : Pr),
     count params cn en = .accept n profn → (∃ a b, n.Of d a b) ∨ broken cn en
 
-/-- **The device sends at most its link's capacity a phase**, a line of the network certifier's model: in every
+/-- **The device sends at most its link's capacity a phase**, a line of the network attester's model: in every
 execution phase the bits it sends on the link, every cell of every connection, are at most the link's registered
 capacity, so a count's bits over a span bound the bits it sent in the span's phases. -/
 def SentWithinCapacity {κ : Type} (d : MarkDevice κ) : Prop :=
   ∀ φ : ℕ, d.sentBits φ ≤ d.capacityBits
 
-/-- **The device marks a message at most once**, a line of the network certifier's model: it refuses to mark a message
+/-- **The device marks a message at most once**, a line of the network attester's model: it refuses to mark a message
 it has marked, so any two of its marks over one message are one mark, with one certificate and one phase. -/
 def MarksOnce {κ : Type} (d : MarkDevice κ) : Prop :=
   ∀ a ∈ d.marks, ∀ b ∈ d.marks, a.message = b.message →
@@ -186,8 +186,8 @@ def SpanCounted {κ : Type} (M : WipeMarks) (d : MarkDevice κ) (c : StreamedWip
     n.sentBits d ≤ n.egressBits ∧
     (egressMib < StreamedWipe.EGRESS_MAX_UNITS → (n.egressBits : Int) ≤ egressMib * StreamedWipe.EGRESS_UNIT_BITS)
 
-/-- **An accepted wipe's egress is the network certifier's count over the wipe's span.** For the wipe's marks `M`, a
-count's check `count` with its break `broken`, the network certifier `d` on the wipe's link, whose stamp is its code
+/-- **An accepted wipe's egress is the network attester's count over the wipe's span.** For the wipe's marks `M`, a
+count's check `count` with its break `broken`, the network attester `d` on the wipe's link, whose stamp is its code
 (`NetTiming.DeviceIntact`), and `d`'s parameters `params` (the registered hardware's key and link, the run's certifier
 session, the schedule each phase's signed head names): when the wipe's compiled check accepts and publishes `out`, and
 the session's signed `start_mark` is the SHA-512 of the certificate of a mark the device made over the start message
@@ -220,7 +220,7 @@ def emptyMarks : WipeMarks := ⟨fun _ => .empty, fun _ => .empty, fun _ => .ok 
 /-- A mark over the empty message, handled in bucket 0, with an empty certificate. -/
 def emptyMark : Mark := ⟨.empty, 0, .empty⟩
 
-/-- A network certifier with an empty key and session on a link of no capacity that made one mark (`emptyMark`) and sent
+/-- A network attester with an empty key and session on a link of no capacity that made one mark (`emptyMark`) and sent
 nothing, on a schedule of one cell a bucket with no latency and no connection's cells, in phases of one bucket, its
 stamp its code's. -/
 def markedDevice : MarkDevice Unit :=
@@ -232,7 +232,7 @@ def markedSpan : SpanCount := ⟨Sha512.hash emptyMark.certificate, .empty, .emp
 /-- A count that accepts `markedSpan` of everything. -/
 def markedCount : Unit → Unit → Unit → Core.Outcome SpanCount Unit := fun _ _ _ => .accept markedSpan ()
 
-/-- A network certifier that made no mark. -/
+/-- A network attester that made no mark. -/
 def idleDevice : MarkDevice Unit :=
   ⟨.empty, .empty, "", 0, ⟨1, 0, fun _ => 0, fun _ => 0⟩, 1, 0, NetTiming.markPhase 1, [], fun _ => 0⟩
 

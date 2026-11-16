@@ -12,12 +12,12 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/poub/prover/remote_session"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/poub/prover/remote_session"))
 
 import device
 import sign_key
 from verity.commitments import randomness
-from verity.protocols.accounting.poub.verifier import receipts
+from verity.protocols.resource_accounting.memory.poub.verifier import receipts
 
 FRAMES = randomness.frame(randomness.frame("row") + randomness.frame(0))
 CONTEXT = {"k": 64, "n": 4096, "tag": "sketch-sha512"}

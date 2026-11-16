@@ -36,27 +36,27 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# An honest run of the network certifier's monitoring period, pooled (trusted definitions; used only by the
+# An honest run of the network attester's monitoring period, pooled (trusted definitions; used only by the
 satisfiability witnesses)
 
-`honestPooled`: a run that realizes the network certifier's monitoring period of two execution phases
+`honestPooled`: a run that realizes the network attester's monitoring period of two execution phases
 (`RealizesCommOfPooledLeakAccepted`), at which the two inputs of
-`Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted` hold together.
+`ResourceAccounting.Guarantees.Bridge.CommOfPooledLeakAccepted` hold together.
 
 Each execution phase is one step of the circuit that negates its one ingress bit (`negStmt`, on the layout
 `NetTiming.Witness.notLay`). The period's operator sends `false` at every step of every execution phase, whatever the
-phases closed before it observed, and the network certifier's record of each phase is the frame that circuit then
+phases closed before it observed, and the network attester's record of each phase is the frame that circuit then
 puts on the link (`frameRecord`). The period run (`honestNet`) is idle, on the device with no capacity over the
 circuit with no gate, as `acceptAllNet` is; its network audit accepts when both phases' records meet the leak relation
 with no incorrect proof block, and its claim is the monitoring period's good event at that record. The network
-certifier sees no connection and its run is its code's (`honestFmt`), so `trusted-device` holds there by definition.
+attester sees no connection and its run is its code's (`honestFmt`), so `trusted-device` holds there by definition.
 -/
 
 @[expose] public section
 
-namespace Accounting.NetWitness
+namespace ResourceAccounting.NetWitness
 
-open PouwWitness Claims Claims.Sampling NetTiming Accounting.JointBridge
+open PouwWitness Claims Claims.Sampling NetTiming ResourceAccounting.JointBridge
 open NetTiming.Witness (notLay)
 
 /-- The registration of the circuit that negates its input: one input gate and its negation, the negation returned,
@@ -66,15 +66,15 @@ def negStmt : AuditStatement := ⟨[], ⟨[.input, .not 0], [1]⟩, ⟨"", 0, []
 /-- Its partition: one proof block, of both gates. -/
 def negPart : Partition := ⟨[[[[0, 1]]]]⟩
 
-/-- One step as the network certifier observes it: a frame on the link, no jitter, every status complete. -/
+/-- One step as the network attester observes it: a frame on the link, no jitter, every status complete. -/
 def frameObs : Obs 1 1 1 := ⟨fun _ _ => some [], 0, fun _ => .complete⟩
 
-/-- The network certifier's record of two execution phases of one step each: at each, a frame on the link. -/
+/-- The network attester's record of two execution phases of one step each: at each, a frame on the link. -/
 def frameRecord : Fin 2 → List (Obs 1 1 1) := fun _ => [frameObs]
 
 /-- A period run on `nullDevice` over `emptyCircuit`, idle, on the coins of two verification phases: its every audit
 accepts when both execution phases' records meet the leak relation with no incorrect proof block, and the network
-certifier's claim is the monitoring period's good event at that record, at the period's operator that sends `false`
+attester's claim is the monitoring period's good event at that record, at the period's operator that sends `false`
 whatever the earlier phases observed. -/
 def honestNet : PeriodRun nullDevice Unit emptyCircuit (fun _ : Unit => Fin 2 → Bool) where
   units := 0
@@ -92,15 +92,15 @@ def honestNet : PeriodRun nullDevice Unit emptyCircuit (fun _ : Unit => Fin 2 �
   accepts _ _ := ∀ i, LeakAt (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 negStmt negPart (fun _ => false)
     (fun _ _ => [false]) ∅ (frameRecord i)
 
-/-- The record format of a network certifier that sees no connection and writes `frameRecord`. -/
+/-- The record format of a network attester that sees no connection and writes `frameRecord`. -/
 def honestFmt : RecordFormat Empty Unit (Fin 2 → List (Obs 1 1 1)) where
   record _ _ _ := frameRecord
   read _ _ c := c.elim
   fits _ := True
   read_record _ _ _ := funext fun c => c.elim
 
-/-- **`honestNet` realizes the network certifier's monitoring period of two sampled audits, pooled**: the audit's
-coins are the two verification phases' coins, the network certifier's device runs its code as written, the period's
+/-- **`honestNet` realizes the network attester's monitoring period of two sampled audits, pooled**: the audit's
+coins are the two verification phases' coins, the network attester's device runs its code as written, the period's
 operator sends `false` and reads no execution phase, each verification phase's audit accepts when its execution
 phase's record meets the leak relation with no incorrect proof block, and no proof block is incorrect. -/
 def honestPooled :
@@ -131,4 +131,4 @@ def honestPooled :
   accepts_imp _ _ h := h
   comm_iff _ _ := Iff.rfl
 
-end Accounting.NetWitness
+end ResourceAccounting.NetWitness

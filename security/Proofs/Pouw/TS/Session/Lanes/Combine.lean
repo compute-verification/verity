@@ -39,7 +39,7 @@ import Proofs.Pouw.H1Zy.CombineBits
 /-!
 # The combine's part of `LeafChecks` from its Definition
 
-`Accounting.Assumptions.TS.LeafChecks`' combine field bundles three claims: the combine circuit's input wires sit where
+`ResourceAccounting.Assumptions.TS.LeafChecks`' combine field bundles three claims: the combine circuit's input wires sit where
 `decC` reads them, the circuit computes `PouwH1Combine_v1`, and that Definition's `ok = 1` means `CombineOk`. The third is
 proved here for every input: the Definition on words (`Pouw.H1Zy.combineOk`, `h1zy._combine_body`) is `true` exactly
 when the lanes' partials XOR, in lane order, to the receipt (`combineOk_iff_xorAll`), so a view whose `ok` is the
@@ -57,9 +57,9 @@ piece's lowering computes its word view, and so their composition the body on wo
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open Accounting.TS Accounting.TS.Checked Flock.SoundAtBridge PouwWindow.Lanes
+open ResourceAccounting.TS ResourceAccounting.TS.Checked Flock.SoundAtBridge PouwWindow.Lanes
 
 /-- `PouwH1Combine_v1`'s `ok` on a leaf's 32 lanes' partials is `true` exactly when they XOR, in lane order, to the
 receipt (`xorAll`). -/
@@ -114,7 +114,7 @@ theorem combineComputes_of_lowers {nw : ℕ} {sess : Option (Fin 32) → RowsSes
   (combineLowers_iff sess decC).1 h
 
 /-- **`LeafChecks` from the lanes' field and `CombineComputes`**: the combine's field of
-`Accounting.Assumptions.TS.LeafChecks` needs only that its circuit computes its Definition at its port rows; that the
+`ResourceAccounting.Assumptions.TS.LeafChecks` needs only that its circuit computes its Definition at its port rows; that the
 Definition's `ok = 1` is `CombineOk` is `combineOk_of_def`. -/
 theorem leafChecks_of_combineComputes {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
     (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
@@ -125,7 +125,7 @@ theorem leafChecks_of_combineComputes {K nw : ℕ} {Pub : Type} (dq : List ℤ �
       (∀ u, ∀ g ∈ (sess (some l)).P.io u, (sess (some l)).Circ.eval vals g = vals g) →
       (decL (sess (some l)) (portRead (sess (some l)) vals)).ok = true →
       LaneOk dq part (decL (sess (some l)) (portRead (sess (some l)) vals)))
-    (hC : CombineComputes sess decC) : Accounting.Assumptions.TS.LeafChecks dq part sess decL decC :=
+    (hC : CombineComputes sess decC) : ResourceAccounting.Assumptions.TS.LeafChecks dq part sess decL decC :=
   ⟨hL, fun vals hv hok => combineOk_of_def _ (hC vals hv) hok⟩
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

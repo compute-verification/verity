@@ -96,7 +96,7 @@ def test_each_point_of_the_head_blocks_spec_is_launched_with_the_stores_key_with
     assert len(commands) == len(points) == 6
     for item, command in zip(points, commands, strict=True):
         flags, job = command[:command.index("--")], command[command.index("--") + 1:]
-        assert "--store-read" in flags and flags[flags.index("--timeout") + 1] == "90m"
+        assert "--store-read" in flags and flags[flags.index("--timeout") + 1] == f"{jobs.DIRECT_WAIT_S + 5400}"
         assert [flags[i + 1] for i, token in enumerate(flags) if token == "--env"] == [
             "RUST_MIN_STACK=67108864", f"VERITY_BENCH_SETUP={SETUP}"]
         assert job[-8:] == ["bash", LAUNCHER, "--spec", path, "--point", item.point.id, "--identity", item.identity]
