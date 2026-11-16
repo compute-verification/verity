@@ -64,16 +64,15 @@ class Run:
         self.draft = net.draft(target, W)
         self.s0 = self.draft.step0(self.ids, self.sampled, self.hidden, 0, kept, self.left)
         self.nodes = B.nodes[self.mark:]
-        ends = list(accumulate(t.leaves for _, t in net.leaves()))
-        self.leaf_of = lambda off: net.leaves()[bisect_right(ends, off)][0]  # noqa: E731
 
     def ids_of(self, nodes) -> list[str]:
         return [n.fn.id for n in nodes]
 
     def weights_read(self, nodes) -> set[str]:
         """The weight leaves the nodes' arguments start in."""
-        iw = len(self.B.params) - 1
-        return {self.leaf_of(r[2]) for n in nodes for a in n.args for r in (a.refs[0],) if r[:2] == ("p", iw)}
+        leaves = self.net.leaves()
+        ends, iw = list(accumulate(t.leaves for _, t in leaves)), len(self.B.params) - 1
+        return {leaves[bisect_right(ends, r[2])][0] for n in nodes for a in n.args for r in (a.refs[0],) if r[:2] == ("p", iw)}
 
 
 def _family(i: str) -> str:

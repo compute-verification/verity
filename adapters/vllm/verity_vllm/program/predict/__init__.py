@@ -3,7 +3,7 @@
 `phi` (φ: checkpoint config, target, TP, shape, sampler, execution), `build` (BuildProgram(φ): the `Derived[vLLM*]` Program the
 Build would derive, from a hand-written vocabulary, with the Llama-family decoder), `model_shape` (the shape facts of a
 checkpoint's config it builds from, and its weights record), `dsa` and `dsv4` (the family decoders it
-dispatches to by `FAMILY_FACTS[...]["arch"]`), `node` (a tensor-parallel node's Program: its ranks' forwards in one body, joined at
+dispatches to by `FAMILY_FACTS[...]["arch"]`) with `mtp` (`dsa`'s MTP draft layer: its weights record and draft forward), `node` (a tensor-parallel node's Program: its ranks' forwards in one body, joined at
 their collectives, with no peer Input), `common` (what every decoder writes with), `naming` (what a request Program's Build
 says about it beyond its digest, written down from φ: the audit's names without a trace), `score` (φ of a row from its declared
 inputs, the predicted workload Program and the predictor's code version), `aot` (the
