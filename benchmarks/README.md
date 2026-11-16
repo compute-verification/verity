@@ -59,8 +59,7 @@ says. These are the directories that have one:
 | `verity bench word_codec` | the KV cache's Sloth codec on one GPU: its tests and its benchmark at each width |
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
-README. `benchmarks/kernels/`'s directories have no `verity bench` name: each runs as its script's header says, the
-canonical `moe_align_block_size` on one GPU as `bash benchmarks/kernels/moe_align/run.sh`. `verity-bench` is the
+README. `benchmarks/kernels/`'s directories have no `verity bench` name: each runs as its script's header says. `verity-bench` is the
 harness's own command. `verity bench numerical judge` compares two results under the proof campaign's contract.
 
 ## The harness
