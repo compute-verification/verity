@@ -34,7 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Poub.Bandwidth.AuditRO
-import Proofs.Accounting.Prob
+import Proofs.ResourceAccounting.Prob
 import Proofs.Pouw.Prob
 
 /-!
@@ -49,9 +49,9 @@ event in `ℝ≥0∞`, and with `N > 0` its bound is finite and is the certifica
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting Pouw
+open ResourceAccounting Pouw
 open scoped ENNReal
 
 theorem pr_short_le_error {N b h s G k lam : ℕ} {ι α ΩW ΩS : Type} [Fintype ι] [Fintype α] {d : Device ι}
@@ -72,14 +72,14 @@ theorem pr_short_le_error {N b h s G k lam : ℕ} {ι α ΩW ΩS : Type} [Fintyp
           (real.dev (x, s')).ingress y.1 y.2.1 + d.chip + c + G * b + lam < k * b)).toReal := pr_eq_toReal _
     _ ≤ ((((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam).toReal :=
         ENNReal.toReal_mono hfin
-          (Accounting.SecurityProofs.Remote.AuditRO N b h d.chip c G q s k lam (real.dev (x, s')))
+          (ResourceAccounting.SecurityProofs.Remote.AuditRO N b h d.chip c G q s k lam (real.dev (x, s')))
     _ = _ := by
         rw [ENNReal.toReal_add (ENNReal.add_ne_top.1 hfin).1 (ENNReal.add_ne_top.1 hfin).2,
           ENNReal.toReal_add (ENNReal.add_ne_top.1 (ENNReal.add_ne_top.1 hfin).1).1
             (ENNReal.add_ne_top.1 (ENNReal.add_ne_top.1 hfin).1).2]
         simp only [ENNReal.toReal_div, ENNReal.toReal_pow, ENNReal.toReal_natCast, ENNReal.toReal_ofNat, hq]
 
-theorem BandwidthOfAudit : Accounting.Guarantees.BandwidthOfAudit := by
+theorem BandwidthOfAudit : ResourceAccounting.Guarantees.BandwidthOfAudit := by
   intro N b h s G k lam ι α ΩW ΩS _ _ _ _ d r hN real x s' B _ hread
   set c := ∑ i, d.cap i * (r.win .bandwidth).len
   refine le_trans (pr_mono ?_) (pr_short_le_error hN real x s')
@@ -92,7 +92,7 @@ theorem BandwidthOfAudit : Accounting.Guarantees.BandwidthOfAudit := by
     linarith
   exact_mod_cast this
 
-theorem BandwidthOfAuditPerRun : Accounting.Guarantees.BandwidthOfAuditPerRun := by
+theorem BandwidthOfAuditPerRun : ResourceAccounting.Guarantees.BandwidthOfAuditPerRun := by
   intro N b h s G k lam ι α ΩW ΩS _ _ _ _ d r hN real x s'
   set c := ∑ i, d.cap i * (r.win .bandwidth).len
   refine le_trans (pr_mono ?_) (pr_short_le_error hN real x s')
@@ -105,4 +105,4 @@ theorem BandwidthOfAuditPerRun : Accounting.Guarantees.BandwidthOfAuditPerRun :=
     linarith
   exact_mod_cast this
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

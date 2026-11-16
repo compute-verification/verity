@@ -23,7 +23,7 @@ place, two premises no refusal of the check enforces:
 
 namespace Verity.Sampled.MemberForm
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **SPOT's soundness at the per-member form's accepts** (`ExecutionPhaseInstance.spotSound`, at `claimReads`,
 `executionPhaseAt_form` and `executionPhaseReads_members`, at the check's accepts: `formAccepts`, `formApart`): where the window is

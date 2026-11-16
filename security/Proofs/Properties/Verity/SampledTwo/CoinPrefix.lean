@@ -312,7 +312,7 @@ end Along
 section Period
 
 variable (L : Locate) {K : ℕ}
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The period's play at two runs' coins is one until a release written from elements the coins differ at**: the
 outputs at the tape `ω` with `r` and with `r'` written in (`place`) have logs that are release by release the same

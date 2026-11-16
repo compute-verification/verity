@@ -1,4 +1,4 @@
-"""PoUW's serving code over PyTorch: what `verity.protocols.accounting.pouw.prover.serving` leaves to the workload.
+"""PoUW's serving code over PyTorch: what `verity.protocols.resource_accounting.compute.pouw.prover.serving` leaves to the workload.
 
 Importing this package hands its implementations in (`serving.tensors.use`, `use_h1`): `tensors_device.TENSORS`, the
 tensors on the device (pinned host copies, streams, raw pointers), and `h1.h1_device.H1`, H1's call tables, registered rows,
@@ -21,7 +21,7 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.serving import tensors as _tensors
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as _tensors
 
 __all__ = ["PearlCDeviceRun", "Receipts", "RowTableLibrary", "h1_tables_available", "hook_steps", "pearl_c_weight_roots",
            "row_table_side_stream"]

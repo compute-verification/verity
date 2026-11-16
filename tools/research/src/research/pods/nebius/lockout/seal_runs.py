@@ -95,8 +95,9 @@ def marker_problem(run_dir: Path) -> str | None:
         try:
             if os.lstat(run_dir / rel).st_mtime >= t0:
                 return f"{rel} changed after custody"
-        except OSError:
-            continue
+        except OSError as e:
+            if os.path.lexists(run_dir / rel):
+                print(f"vy-seal-runs: {run_dir / rel} unread, so not judged ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return None
 
 
@@ -116,8 +117,10 @@ def newest_mtime(run_dir: Path) -> float:
         for n in dirs + files:
             try:
                 newest = max(newest, os.lstat(os.path.join(base, n)).st_mtime)
-            except OSError:
-                continue
+            except OSError as e:
+                if os.path.lexists(os.path.join(base, n)):
+                    print(f"vy-seal-runs: {os.path.join(base, n)} unread, so its time is not counted ({type(e).__name__}: {e})",
+                          file=sys.stderr, flush=True)
     return newest
 
 
@@ -175,7 +178,9 @@ def candidates(root: Path, uid: int = 0) -> list[str]:
     for e in entries:
         try:
             st = e.stat(follow_symlinks=False)
-        except OSError:
+        except OSError as err:
+            if os.path.lexists(e.path):
+                print(f"vy-seal-runs: {e.path} unread, so not sealed now ({type(err).__name__}: {err})", file=sys.stderr, flush=True)
             continue
         if stat.S_ISDIR(st.st_mode) and not is_sealed(st, uid):
             out.append(e.name)

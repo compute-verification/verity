@@ -2,7 +2,7 @@ module
 
 public import Properties.Spot.HistoryTable
 public import Proofs.Flock.Recursive.TopRoot
-public import Proofs.Accounting.ReadUnit.Leaf
+public import Proofs.ResourceAccounting.ReadUnit.Leaf
 public import Proofs.Core.CanonUtf8
 public import Proofs.Flock.Bytes
 import all Init.Data.String.Defs
@@ -83,10 +83,10 @@ theorem uint_data (x : ℕ) : (FV3.uint x).data.toList = Hash.uint x := by
 
 theorem hash_data (b : ByteArray) : (Sha512.hash b).data.toList = (Verity.sha512 b.data.toList).bytes := by
   have hb : (⟨b.data.toList.toArray⟩ : ByteArray) = b := ByteArray.ext (by simp)
-  rw [Accounting.ReadUnit.Gates.isSha512_sha512 b.data.toList, hb]
+  rw [ResourceAccounting.ReadUnit.Gates.isSha512_sha512 b.data.toList, hb]
 
 theorem frame0_data : FV3.FRAME.data.toList = Hash.Tree.FRAME :=
-  Accounting.ReadUnit.Gates.push_zero_data _
+  ResourceAccounting.ReadUnit.Gates.push_zero_data _
 
 theorem foldl_step_data (ps : List ByteArray) (acc : ByteArray) :
     (ps.foldl Registered.step acc).data.toList =
@@ -144,7 +144,7 @@ theorem treeLeaf_data (bc : ByteArray) :
       (Verity.sha512 (Hash.Hm96.leafPrefix Verity.sha512 Flock.Hm96.Default512.key.data.toList ++
         bc.data.toList)).bytes := by
   rw [Flock.Hm96.Default512.treeLeaf, hash_data, ByteArray.toList_data_append,
-    Accounting.ReadUnit.Gates.leafPrefix_data]
+    ResourceAccounting.ReadUnit.Gates.leafPrefix_data]
   rfl
 
 theorem leafAt_data {cap : ℕ} {dom : ByteArray} (hd : dom.size = 64) (bcs : Array ByteArray) (ph : ByteArray)

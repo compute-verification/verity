@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 from verity.commitments.periods import rows as CS
-from verity.protocols.accounting.certifier.verifier import advice as A
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.resource_accounting.network.verifier import advice as A
 
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -354,13 +354,13 @@ class _Coins:
 
 def _draw(rec: dict, sampling_design: dict) -> dict:
     """A challenger's sample under the registration's expanded `sampling_design` (`service.select_draw` past its rule)."""
-    from verity.protocols.proofs.spot.device import coins as T
+    from verity.protocols.proofs.spot.verifier.challenger import coins as T
 
     n = rec["population"]
     return {**sampling_design, "population": n, "units": sorted(T.draw_first(T.OwnRandomness(_Coins()), sampling_design, n)["units"])}
 
 
-def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):
+def test_the_compilers_transfer_gate_units_are_sampled_whole_beside_the_sampled_rest(gated_tp):
     """The window's work sampling design proves every RoPE head (work 0, its floor all 32: an All stratum) and samples 2 of the 8 SiluMul rows, as
     the registration's sampling design states and the verifier's own window derives; a sample by it holds every transfer-gate unit."""
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D

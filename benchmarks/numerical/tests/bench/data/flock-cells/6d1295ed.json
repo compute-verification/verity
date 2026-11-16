@@ -18,11 +18,11 @@
   "verifier_run": "r20260925-220103-b7c0"
  },
  "interaction": {
-  "coin_wait_method": "live.coin_wait_per_round_ms = (the prover's coin wait - the verifier's round-handling time) / round trips, median over the timed sessions; verifier 216.243.220.199:10661",
+  "coin_wait_method": "live.coin_wait_per_round_ms = (the prover's coin wait - the verifier's round-handling time) / round trips, median over the timed sessions; verifier 203.0.113.11:10661",
   "hello_rtt_method": "the session's Hello request/response time (flock-pure-gpu rtt_ms), median",
   "hello_rtt_ms": 13.984418,
   "loopback_method": "loopback probe in this run: 5 timed sessions (5 per sub-batch) of the plateau point's instance files with the same binary against `serve` on 127.0.0.1, median per-round coin wait (wait_s / calls)",
-  "rtt_method": "net.rtt_ms = TCP connect time from the prover pod to the verifier pod (216.243.220.199:10659, its sshd), median of 30, measured in this run before the sweep",
+  "rtt_method": "net.rtt_ms = TCP connect time from the prover pod to the verifier pod (203.0.113.11:10659, its sshd), median of 30, measured in this run before the sweep",
   "t_total_includes_wait": true,
   "t_total_note": "live coins: t.total and the buckets include the prover's coin waits; prover compute alone is live.prover_compute_seconds = t.total - net.wait_seconds",
   "verifier_operator": "flock-backend-verifier-pod"
@@ -424,7 +424,7 @@
   "statement": "verity/flock-pure-block/v2",
   "units_per_vu": 96,
   "verifier": {
-   "placement": "216.243.220.199:10661",
+   "placement": "203.0.113.11:10661",
    "process": "flock-pure serve (separate process)"
   },
   "zk_mode": "none"

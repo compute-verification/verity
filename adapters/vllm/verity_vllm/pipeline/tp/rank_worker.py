@@ -598,7 +598,8 @@ class TP2CaptureWorkerExtension:
         runner = self.model_runner
         model = runner.get_model()
         post_load = register_post_load_tensors(model, _listed_for(post_load_tensors, rank))
-        eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
+        eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case,
+                              vllm_config=self.vllm_config)
         args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, commit_scheme=commit_scheme)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
         res: dict[str, Any] = {"rank": rank, "committer": com.name, "post_load_tensors": post_load}

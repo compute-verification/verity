@@ -26,6 +26,9 @@ DRIVE = 'lowrisk_lane = true\nlowrisk_excludes = ["*.lean", "verity/core/"]\nver
 ROOT = Path(__file__).resolve().parents[3]
 #: a change failing suite pkg's new test
 FAILING = {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"}
+#: policy.toml allowing suite pkg's new test to fail
+ALLOWS_NEW = ('schema = "policy/v0"\n[[allow]]\nid = "suite pkg::tests/test_x.py::test_new"\nowner = "ci"\n'
+              'expires = "2099-01-01T00:00:00Z"\nreason = "red; its fix is landing"\n')
 
 
 @pytest.fixture
@@ -37,7 +40,7 @@ def env(tmp_path, monkeypatch) -> Env:
 
 class Quick:
     """The quick tier faked under the real `vqueue_slim.start_quick` and its judge on ``runs``' Landing: each launch is run `q-N`,
-    running until `end` writes its result.json as `quick_tier.py` writes it."""
+    running until `end` writes its result.json as `quick_tier.py` writes it and ends it as the runner records its exit."""
 
     def __init__(self, loop: L.Loop, runs: Runs):
         self.runs, self.launches = runs, []
@@ -58,7 +61,7 @@ class Quick:
                  "rc": 1 if failed else 0, "rows": list(rows), "logs": "out/logs", "error": None}
         (d / "result.json").write_text(json.dumps({"schema": "research/result/v0.1", "kind": "quick-tier/v1", "run_id": f"q-{n}",
                                                    "validation": {"status": "failed" if failed else "passed"}, "tier": facts}))
-        self.runs.state[f"q-{n}"] = ("done", 1 if failed else 0, None)
+        self.runs.state[f"q-{n}"] = ("failed", 1, None) if failed else ("done", 0, None)
 
 
 def _verdict(env: Env, monkeypatch, decide=vqueue.decide, gate: str | None = None, **kw) -> tuple[L.Loop, Runs, Quick]:
@@ -155,8 +158,8 @@ def _tree_drive(**lists: list[str] | None) -> str:
     ("a benchmark", {"benchmarks/census/README.md": "x\n"}, vqueue_slim.QUICK),
     ("the circuit language", {"verity/circuits/program.py": "x = 1\n"}, "check"),
     ("the root's tests", {"tests/test_tree.py": "x = 1\n"}, vqueue_slim.QUICK),
-    ("a verifier", {"verity/protocols/accounting/pouw/verifier/audit.py": "x = 1\n"}, "check"),
-    ("a device", {"verity/protocols/compose/device/live_challenger/auditor.py": "x = 1\n"}, "check"),
+    ("a verifier", {"verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "x = 1\n"}, "check"),
+    ("a device", {"verity/protocols/compose/verifier/live_challenger/auditor.py": "x = 1\n"}, "check"),
     ("a Lean source", {"Lib/A.lean": "def a := 1\n"}, "check"),
     ("a lock", {"pkg/lean-audit.json": "{}\n"}, "check"),
     ("a move", {"c.txt": None, "moved/c.txt": "c\n", "a.txt": "moved/c\n"}, "check"),
@@ -207,9 +210,9 @@ def test_under_gate_verdict_no_file_of_the_tree_the_low_risk_lane_keeps_off_is_p
     audited = {f for f in files if f.endswith(".py") and {"verifier", "device"} & set(f.split("/")[:-1])
                and "tests" not in f.split("/") and not PurePosixPath(f).name.startswith("test_")}
     assert audited and not audited & plain, f"plain verifier or device Python: {sorted(audited & plain)[:10]}"
-    whole = {"verity/protocols/accounting/pouw/verifier/audit.py", "verity/protocols/compose/device/live_challenger/auditor.py",
+    whole = {"verity/protocols/resource_accounting/compute/pouw/verifier/audit.py", "verity/protocols/compose/verifier/live_challenger/auditor.py",
              "tools/research/src/research/cli.py", "tools/verity/lean/check.py", "tools/check/check.py",
-             "benchmarks/one_stage/a5.py", "verity/protocols/accounting/certifier/device/network_certifier_serve.py",
+             "benchmarks/one_stage/a5.py", "verity/protocols/resource_accounting/network/attester/network_attester_serve.py",
              "benchmarks/remote_session/auditor_line.py", "tools/move/restack.py"}
     quick = {"GLOSSARY.md", "benchmarks/census/README.md", "infra/README.md", "tools/agent-guard/boot.sh"}
     assert whole | quick <= set(files) and not whole & plain and quick <= plain
@@ -246,6 +249,25 @@ def test_under_gate_verdict_a_plain_candidate_whose_quick_tier_fails_is_a_red_of
     (failed,) = logged[1]["record"]["verdict"]["failed"]
     assert (failed["task"], failed["tests"], failed["named"], failed["kind"]) == (
         "step pytest", [f"pkg::{NEW}"], ["pkg/tests/test_x.py"], "own")
+
+
+def test_under_gate_verdict_a_plain_candidate_whose_quick_tier_fails_only_on_what_an_allowance_at_main_covers_lands(
+        env, monkeypatch):
+    """The quick tier fails suite pkg's new test, which an unexpired allowance of policy.toml at `main` covers.  Its run judged
+    itself with no policy, so it exited 1 and the runner recorded it `failed`: the candidate lands on it as on a pass, and the
+    tier is never taken for infra and started again."""
+    main = _main_to(env, {"tools/check/policy.toml": ALLOWS_NEW})
+    env.put(1, FAILING)
+    loop, runs, quick = _verdict(env, monkeypatch)
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    runs.end(main)
+    quick.end(sha, (_row(NEW),))
+    assert runs.state["q-1"][:2] == ("failed", 1)
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "advance", "on_main", "drop"] and env.main() == sha and len(quick.launches) == 1
+    tier = next(r for r in logged if r["action"] == "slim" and r["sha"] == sha)
+    assert tier["record"]["verdict"] == {"state": "pass", "passed": ["pytest"]}
 
 
 def test_under_gate_verdict_a_quick_tier_that_ended_in_infra_is_started_again_on_another_machine(env, monkeypatch):

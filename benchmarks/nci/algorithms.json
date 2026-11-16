@@ -2454,7 +2454,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "m_A 1/16 per FLOP with ample data; trades compute for data. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Up to 100 epochs nearly as good as fresh data: novel bits per training token about 17.3/100.",
+  "notes": "m_A 1/16 per FLOP with ample data; trades compute for data. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Up to 100 epochs nearly as good as fresh data: fresh input bits per training token about 17.3/100.",
   "scaling": [
    {
     "evidence": [

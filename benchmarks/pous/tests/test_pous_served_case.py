@@ -20,10 +20,10 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.prover import wipe_run
-from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.pous.verifier import wipe_period as W
+from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
+from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
 from verity.commitments.identity import canonical_json_bytes
 
 pytest.importorskip("torch")

@@ -54,7 +54,7 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.commitments.crypto import lms
 from verity.commitments.identity import canonical_json_text
-from verity.protocols.proofs.spot.device import challenger as Ch, coins as T
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as T
 from verity.protocols.proofs.spot.verifier.one_stage import draw as DR, partition as P, docket as R
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
