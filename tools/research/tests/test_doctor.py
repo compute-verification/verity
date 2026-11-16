@@ -6,7 +6,6 @@ import io
 import json
 import math
 import os
-import select
 import shlex
 import ssl
 import subprocess
@@ -20,6 +19,7 @@ from research import cli, doctor, notes_sync, runs, secret_hint, slack
 from research.doctor import FINDING, OK, SKIP, Check
 from research.pods import runpod
 from research.store import remote as store_remote
+from waits import wait_exit
 
 ALL_NAMES = sorted({n for need in doctor.SECRETS.values() for alts in need for n in doctor._alts(alts)})
 LANE = [n for alts in doctor.needs("lane") for n in alts]
@@ -655,12 +655,7 @@ def test_what_a_probe_runs_is_killed_before_the_deadline_with_everything_it_star
             raise subprocess.TimeoutExpired(self.args, timeout)
     monkeypatch.setattr(doctor.subprocess, "Popen", TimesOutOnceStarted)
     assert doctor.run(["sh", "-c", f"cat {fifo} & echo $!; wait"]) == (None, "")
-    try:
-        pidfd = os.pidfd_open(started[0])
-    except ProcessLookupError:                                       # gone already
-        return
-    select.select([pidfd], [], [])                                   # the grandchild (blocked on the fifo for good) has exited
-    os.close(pidfd)
+    wait_exit(started[0])                                            # the grandchild (blocked on the fifo for good) has exited
 
 
 def test_research_doctor_exits_0_ok_1_on_a_finding_2_on_usage(monkeypatch, capsys):

@@ -92,8 +92,8 @@
    "backends/flock/pod/30-cell.sh",
    "ROLE=prover",
    "REL=bf16-hopper",
-   "VERIFIER=64.247.206.241:19127",
-   "RTT_TARGET=64.247.206.241:19125",
+   "VERIFIER=203.0.113.13:19127",
+   "RTT_TARGET=203.0.113.13:19125",
    "LOOPBACK=1",
    "POINTS=1024 2048 4096 8192 16384 32768"
   ],
@@ -143,7 +143,7 @@
    "machine": "vy-flock-backend-h100d",
    "pod_id": "70tayjkf9joizu",
    "pod_name": "vy-flock-backend-h100d-veritor-campaign",
-   "host": "64.247.201.52",
+   "host": "203.0.113.14",
    "port": 17943,
    "root": "/workspace/research",
    "tool": "/workspace/research/tool/76d400cc8f881bca",
@@ -218,8 +218,8 @@
     "backends/flock/pod/30-cell.sh",
     "ROLE=prover",
     "REL=bf16-hopper",
-    "VERIFIER=64.247.206.241:19127",
-    "RTT_TARGET=64.247.206.241:19125",
+    "VERIFIER=203.0.113.13:19127",
+    "RTT_TARGET=203.0.113.13:19125",
     "LOOPBACK=1",
     "POINTS=1024 2048 4096 8192 16384 32768"
    ]
@@ -230,8 +230,8 @@
     "backends/flock/pod/30-cell.sh",
     "ROLE=prover",
     "REL=bf16-hopper",
-    "VERIFIER=64.247.206.241:19127",
-    "RTT_TARGET=64.247.206.241:19125",
+    "VERIFIER=203.0.113.13:19127",
+    "RTT_TARGET=203.0.113.13:19125",
     "LOOPBACK=1",
     "POINTS=1024 2048 4096 8192 16384 32768"
    ]

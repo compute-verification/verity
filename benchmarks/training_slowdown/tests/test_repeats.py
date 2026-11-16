@@ -304,15 +304,15 @@ def test_a_jobs_record_carries_its_steps_repeats_to_its_grade_and_the_record_wit
     for a, b in zip(he["groups"], he0["groups"]):
         assert a["macs"] == (pytest.approx(b["macs"] * share, rel=1e-12) if not all(b["weight"]) else b["macs"])
     assert any(not all(g["weight"]) for g in he["groups"])
-    assert after["rho"]["terms"]["products"] is not None and before["rho"]["terms"]["products"] is not None
+    assert after["record_slowdown"]["terms"]["products"] is not None and before["record_slowdown"]["terms"]["products"] is not None
     shape = synthetic.SHAPE | {"forward_macs_per_token": rec["forward_macs_per_token"]}
     for r, s, premise, other in ((rec, after, work.P_REPEATS, work.P_BATCH),
                                  (without_count(rec), before, work.P_BATCH, work.P_REPEATS)):
         bound = F_.bound(F_.measure(G.traced(r, row), shape), s["policy"]["c_gates"], s["policy"]["k_bits"])
-        published = [s["rho"]["products_rests_on"], bound["rests_on"]["products"],
-                     G.per_period(1.0, s["rho"] | {"binding_kind": "products"})["parts"]["proved"]]
+        published = [s["record_slowdown"]["products_rests_on"], bound["rests_on"]["products"],
+                     G.per_period(1.0, s["record_slowdown"] | {"binding_kind": "products"})["parts"]["proved"]]
         assert all(premise in x and other not in x for x in published)
-    assert work.COUNTED in after["rho"]["products_rests_on"]
+    assert work.COUNTED in after["record_slowdown"]["products_rests_on"]
     assert G.traced(rec, row)["formalism"]["labels"]["products"].endswith(F_.COUNTED_PRODUCTS)
     assert F_.COUNTED_PRODUCTS not in G.traced(without_count(rec), row)["formalism"]["labels"]["products"]
 

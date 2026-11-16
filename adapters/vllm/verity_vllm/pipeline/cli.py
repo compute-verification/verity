@@ -59,7 +59,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
     "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
     "glue": ("verity_vllm.glue", "per model, the code its `__models__` markers tie to it and the hours from staged checkpoint to record"),
-    "ids-front": ("verity_vllm.pipeline.ids_front", "the network certifier's id form in front of vLLM's own OpenAI server"),
+    "ids-front": ("verity_vllm.pipeline.ids_front", "the network attester's id form in front of vLLM's own OpenAI server"),
     "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
     "m1-capture": ("verity_vllm.pipeline.match_capture", "capture the observation log under the observer"),
     "manifest": ("verity_vllm.pipeline.manifest", "the required-value manifest (build, build-global, compare)"),

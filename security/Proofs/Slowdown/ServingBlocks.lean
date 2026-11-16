@@ -18,9 +18,9 @@ Each serving block's two caps are summed by `Verity.SecurityProofs.ServingBlockS
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.ServingBlocks
+namespace ResourceAccounting.SecurityProofs.ServingBlocks
 
-open Verity Finset Accounting.ServingBlocks
+open Verity Finset ResourceAccounting.ServingBlocks
 
 /-- The union bound: a nonnegative sum over `V` is at most the sum of its parts `P i`, when every `v` lies in one. -/
 theorem sum_le_sum_sum_filter {α ι : Type*} (V : Finset α) (s : Finset ι) (P : ι → α → Prop)
@@ -201,4 +201,4 @@ theorem UncertifiedElementary : Guarantees.ServingBlocks.UncertifiedElementary :
   rw [(Pc.mem_gates).1 hvs, hi, Option.map_some] at hsub
   exact ⟨⟨i, (Option.some_injective _ hsub).symm⟩, Pf.mem_gates.2 hi⟩
 
-end Accounting.SecurityProofs.ServingBlocks
+end ResourceAccounting.SecurityProofs.ServingBlocks

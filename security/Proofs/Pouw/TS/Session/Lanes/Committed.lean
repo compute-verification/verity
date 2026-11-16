@@ -37,13 +37,13 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The leaf and the receipt its 33 sessions' committed rows decode to
 
-`Accounting.Guarantees.TS.LeafLanesSound` opens the leaf the lanes' committed rows decode to, and checks the receipt the
+`ResourceAccounting.Guarantees.TS.LeafLanesSound` opens the leaf the lanes' committed rows decode to, and checks the receipt the
 combine's committed row decodes to: no premise says which leaf and receipt the rows hold. Each value is read where a
 statement reads it (`decL`, `decC` at the registrants' commit-time openings `openedReg`):
 
 * `aLane`, `aSlot`, `bLane`, `bSlot`, `cellLane`: A row `r` is lane `4 (r mod 8)`'s at row slot `⌊r/8⌋`, B row `j` lane
   `⌊(j mod 8)/2⌋`'s at column slot `2⌊j/8⌋ + (j mod 2)`, and cell `(i, j)` of the record lane
-  `4 (i mod 8) + ⌊(j mod 8)/2⌋`'s, the one lane whose cells it is among (`Accounting.TS.Lanes.cover`);
+  `4 (i mod 8) + ⌊(j mod 8)/2⌋`'s, the one lane whose cells it is among (`ResourceAccounting.TS.Lanes.cover`);
 * `leafOf`, `receiptOf`: the leaf those lanes' decodes read, and the combine's decoded receipt;
 * `aLane_rowOf` …, `cellLane_rowOf_colOf`: lane `l`'s A row at slot `s` is lane `4⌊l/4⌋`'s at the same slot, its B row
   at slot `t` lane `l mod 4`'s at the same slot, and its cells its own;
@@ -52,16 +52,16 @@ statement reads it (`decL`, `decC` at the registrants' commit-time openings `ope
 * `LaneKnownHolds.pub_eq`, `lane_eq`, `ok_eq`: where verity-verify-proof's checks give a lane's known fields, its decode's
   public inputs, index and `ok` are those; `CombineView.eta_ok`.
 
-Four lanes read each A row, and four each B row; that they decode it alike is `Accounting.TS.Lanes.read_bits` (one
+Four lanes read each A row, and four each B row; that they decode it alike is `ResourceAccounting.TS.Lanes.read_bits` (one
 registered tree, each read in full, the registrants' rows agreeing). Each cell of the record is read by its one lane,
 so no lane's reads of another's cells are asked.
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open PouwWindow.Lanes Flock.SoundAtBridge Accounting.TS.Checked
+open PouwWindow.Lanes Flock.SoundAtBridge ResourceAccounting.TS.Checked
 
 /-- The lane that reads A row `r`: lane `4 (r mod 8)`. -/
 def aLane (r : Fin 32) : Fin 32 := ⟨4 * (r.val % 8), by omega⟩
@@ -274,4 +274,4 @@ theorem laneAgrees_of {K nw : ℕ} {T : Tile} (sess : Option (Fin 32) → RowsSe
     rw [cellLane_rowOf_colOf]
     exact decLane_y _ _
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

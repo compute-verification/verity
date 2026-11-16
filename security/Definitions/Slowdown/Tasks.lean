@@ -28,7 +28,7 @@ The symbol table's task and slowdown rows, and the classes they are read in:
 
 @[expose] public section
 
-namespace Accounting.Slowdown
+namespace ResourceAccounting.Slowdown
 
 open Verity
 open scoped ENNReal
@@ -115,4 +115,4 @@ except with probability `Σ_a δ_a` and the cryptographic terms. -/
 def restricted {In L E ι : Type} [Fintype ι] (H : Hardware L E) (claim : ι → Actual.Run L → Prop) : Class In L :=
   physClass H ∩ ⋂ a, envelope (claim a)
 
-end Accounting.Slowdown
+end ResourceAccounting.Slowdown

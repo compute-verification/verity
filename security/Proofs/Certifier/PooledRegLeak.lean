@@ -12,13 +12,13 @@ public import Proofs.Certifier.TapRows
 # The pooled bound at the trace with the registered openings: the leak relation
 
 The leak relation at an execution phase's incorrect set holds with no probability once the set is the one of a trace
-that carries the network certifier's record.
+that carries the network attester's record.
 
 * `leakAt_of_trace`: at any trace whose transfer gates carry the observations, and any set that holds its incorrect
   proof blocks, the observations meet the leak relation at that set (`LeakAt`). `leakAt_congr`: the relation reads a
   statement through its program, layout, steps and registered inputs only.
 * `leakAt_regR`: the trace read at the statement with the registered openings (`regValR`), filled at the network
-  certifier's values, is such a trace where the network certifier registers the observations among the registered
+  attester's values, is such a trace where the network attester registers the observations among the registered
   openings, so the observations meet the leak relation at `FregR`.
 * `phaseLeaks_regR`: over a monitoring period, an execution phase is accepted, with whatever else `R` says of it,
   while its record fails the leak relation at its `WregR` with probability `0`, the form `NetTiming.pr_pooled_le` takes
@@ -84,7 +84,7 @@ theorem leakAt_congr {Lk K S : ℕ} (lay : AuditStatement → BoundaryGates Lk S
 /-! ## At the trace with the registered openings -/
 
 /-- **The leak relation at `FregR`, no probability**: at a statement in the audit's scope whose layout fits, where the
-network certifier registers the observations `o` among the registered openings and every registered input has one,
+network attester registers the observations `o` among the registered openings and every registered input has one,
 `o` meets the leak relation at `FregR`, at the registered openings' values. -/
 theorem leakAt_regR {H : Msg → Msg} {D : Compiled Coin A} {Lk K S : ℕ} (lay : AuditStatement → BoundaryGates Lk S)
     (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {x : Msg} {s : AuditStatement}
@@ -140,7 +140,7 @@ variable {m kV : ℕ} {Tp Sec : Type}
 
 /-- **Each accepted execution phase's record meets its leak relation at `WregR`**: over a monitoring period whose
 every accepted phase that `R` holds of has its statement registered as `sw i` with the partition `Pw i`, with a layout
-that fits, and at which the network certifier registers its record among the phase's registered openings `ops z ω i`,
+that fits, and at which the network attester registers its record among the phase's registered openings `ops z ω i`,
 which open every registered input at the registered value `ρ i`, a phase is accepted with `R` while its record fails
 the leak relation at its incorrect set with probability at most `0`. `R` is whatever else the caller's event says of a
 phase. Its conclusion is the form `NetTiming.pr_pooled_le` takes each phase's leak relation in. -/

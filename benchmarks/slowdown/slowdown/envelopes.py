@@ -7,7 +7,7 @@ route, which no inference block constrains) and its `delta`, split into the coin
 cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
-  (monitored capacity running no gate of `W_cert`: the host CPUs, the GPUs outside the floor credit `residual`
+  (registered capacity running no gate of `W_cert`: the host CPUs, the GPUs outside the floor credit `residual`
   and the clock above the credited one, together the audited residual `r̂`) and `skip` (its deficit `ε_W` and the
   certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
@@ -24,7 +24,7 @@ cryptography's advantage:
 * `Certifier`: a server block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
-  with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the network certifier form's public parameters
+  with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the network attester form's public parameters
   set. Its δ is 0: the certifier is the auditor's device (`trusted-device`), and the side channels an assumed bound.
 * The inference-only check is a registration check, not an envelope: the registered circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
@@ -84,7 +84,7 @@ class Context:
 
     @property
     def capacity(self) -> float:
-        """The monitored fleet's gates over the monitoring period at capacity."""
+        """The registered fleet's gates over the monitoring period at capacity."""
         return self.fleet.count * self.location.phi * self.period.seconds
 
 
@@ -149,7 +149,7 @@ SAMPLING = ("proof_share", "overhead", "replay", "step_flop", "p_evade", "luck",
 
 @dataclass(frozen=True)
 class Detection:
-    """Terminal detection, the verdict lag and (with `sampled`) SPOT (tiers T5); off, every unit is proved
+    """Terminal detection, the verdict lag and (with `sampled`) SPOT (tiers T5); off, every proof block is proved
     (`q = 1`, `χ = θ = 0`). Each field is `tiers.py`'s parameter of the same name (`proof_share` is its `share`)."""
 
     #: `J`: identities a detection doesn't end; `Δ`: the verdict lag in seconds
@@ -209,8 +209,8 @@ class Detection:
         return out
 
     def tail(self) -> float:
-        """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`: the chance some identity's faulty blocks escape past `K`
-        (`SlowdownRemoteMonitoringPeriod`'s escape term); 0 where every unit is proved."""
+        """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`: the chance some identity's incorrect proof blocks escape
+        past `K` (`SlowdownRemoteMonitoringPeriod`'s escape term); 0 where every proof block is proved."""
         if not self.sampled:
             return 0.0
         k = self.luck * math.log(1 / self.p_evade) / self.q()
@@ -275,7 +275,7 @@ class Wipe:
         return n * self.game_delta_coin, n * self.prf_advantage
 
 
-#: the network certifier form's public parameters the declared I/O bound reads (`Certifier.declared`)
+#: the network attester form's public parameters the declared I/O bound reads (`Certifier.declared`)
 DECLARED_IO = ("cell_bytes", "cell_rate", "lanes", "cells", "id_bits", "hold", "outputs", "bucket_s", "window_buckets")
 
 
@@ -290,7 +290,7 @@ RATIO_BITS = clog2(10 ** 7)
 #: ASCII characters but `"` and `\`, a quote and spaces
 NAME_BITS = clog2(sum(93 ** k for k in range(63)))
 #: the bits of a network-certifier-form id request besides its prompt ids that the ingress scan leaves free, each field's
-#: (`verity/protocols/accounting/certifier/verifier/io_request.py`'s `layout` and checks; `requestBits` of the Lean statement)
+#: (`verity/protocols/resource_accounting/network/verifier/io_request.py`'s `layout` and checks; `requestBits` of the Lean statement)
 REQUEST_HEAD = {
     "connection ordinal": 32,     # the cell header's u32, which `ingress_scan.step` checks only above the last
     "content-length": 32,         # a u32, free while the request is unfinished
@@ -309,17 +309,17 @@ CELL_HEADER, ID_FIELD, PROMPT_START = 9, 11, 367
 
 @dataclass(frozen=True)
 class Certifier:
-    """A network certifier on each host's links, and the channels it doesn't read.
+    """A network attester on each host's links, and the channels it doesn't read.
 
     With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
-    inference block runs on a single server (ruled). At the network certifier form's public parameters (the `NetworkCertifierParams` of
-    `verity/protocols/accounting/certifier/prover/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
+    inference block runs on a single server (ruled). At the network attester form's public parameters (the `NetworkAttesterParams` of
+    `verity/protocols/resource_accounting/network/prover/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
     `IDB` bits an id, `D`, `T`) a request's declared input is at most
 
         requestBits = Σ REQUEST_HEAD + (K0 + (C − 1) K) IDB,   K0 = ⌊(B − 9 − 367) / 11⌋,   K = ⌊(B − 9) / 11⌋
 
     bits: the head's fields the ingress scan leaves free (`REQUEST_HEAD`), then `K0` prompt ids in its first cell after
-    the head and `K` in each other cell (the grammar of `verity/protocols/accounting/certifier/verifier/io_request.py`, which
+    the head and `K` in each other cell (the grammar of `verity/protocols/resource_accounting/network/verifier/io_request.py`, which
     `ingress_scan.py` scans). A bucket adds `lanes ⌈log₂(r + 2)⌉` bits, each lane's block absent or `d ≤ r` data cells
     then padding. A slot is held `D + 1` buckets from its admission, so an execution phase of `T = window_buckets` buckets
     holds at most `lanes ⌈T / (D + 1)⌉` requests, and
@@ -348,25 +348,25 @@ class Certifier:
     side: float = 0.0
     #: each server's ingress at most its inference blocks' declared inputs, at the parameters below
     declared: bool = False
-    #: `B`, bytes a cell; `r`, cells a lane a bucket (its `slots`, the network certifier's line rate); lanes a server; `C`, cells a
+    #: `B`, bytes a cell; `r`, cells a lane a bucket (its `slots`, the network attester's line rate); lanes a server; `C`, cells a
     #: request
     cell_bytes: float = math.nan
     cell_rate: float = math.nan
     lanes: float = math.nan
     cells: float = math.nan
-    #: `IDB`, bits an id; `D`, a slot held `D + 1` buckets from its admission (the network certifier's `delay`); `KO`, outputs a
+    #: `IDB`, bits an id; `D`, a slot held `D + 1` buckets from its admission (the network attester's `delay`); `KO`, outputs a
     #: request; `τ_b`, seconds a bucket
     id_bits: float = math.nan
     hold: float = math.nan
     outputs: float = math.nan
     bucket_s: float = math.nan
-    #: `T`, buckets an execution phase (the network certifier's `window`), the length the per-server bound is stated per
+    #: `T`, buckets an execution phase (the network attester's `window`), the length the per-server bound is stated per
     window_buckets: float = math.nan
     #: the certified prompt ingress as a multiple of the declared bound, at most line rate (`Location.links`): 1 under
     #: the declared-ingress rule, and line rate the upper end until Lean proves the per-server bound
     declared_x: float = 1.0
 
-    CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "Accounting.Covered", "Accounting.TrustedUnits")
+    CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "ResourceAccounting.Covered", "ResourceAccounting.TrustedUnits")
     INTAKE = ("draft:declared-ingress",)
     DECLARED = ("draft:declared-ingress", "draft:per-server-ingress")
 
@@ -435,7 +435,7 @@ class Certifier:
 
     @property
     def line_rate(self) -> float:
-        """The network certifier's line rate a server, each way, bit/s: `lanes r 8B / τ_b`."""
+        """The network attester's line rate a server, each way, bit/s: `lanes r 8B / τ_b`."""
         return self.lanes * self.cell_rate * 8 * self.cell_bytes / self.bucket_s
 
     def prompts(self, ctx: Context) -> float:
@@ -502,7 +502,7 @@ class Remote:
     #: premises, and the registration
     CITES = ("Slowdown.Guarantees.SlowdownRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
     #: the server-block bound each of its cuts is an argument of: the inference-block yield alone
-    BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
+    BOUND = ("ResourceAccounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
     ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 
@@ -562,7 +562,7 @@ class Onsite(Remote):
     gets the serving cut `q(c_S, k_S) + ω_max μ k_S` as well, and contributes the lesser."""
 
     #: the server-block bound, both its cuts' minimum
-    BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBound",)
+    BOUND = ("ResourceAccounting.Guarantees.ServingBlocks.ServingBlockBound",)
 
     wipe: Wipe = Wipe()
     certifier: Certifier = Certifier()
@@ -571,12 +571,12 @@ class Onsite(Remote):
     form: str = "certified"
 
     #: `Windows` as proved: memory and line rate, on the physical annotation's four constraints
-    LINKS = ("Accounting.Guarantees.Actual.ServerBlocks", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
-             "Accounting.Placed.Memory", "Accounting.Placed.Links")
+    LINKS = ("ResourceAccounting.Guarantees.Actual.ServerBlocks", "ResourceAccounting.Placed.Causal", "ResourceAccounting.Placed.ComputeRate",
+             "ResourceAccounting.Placed.Memory", "ResourceAccounting.Placed.Links")
     #: `ServerBlocksAt` at the wipes, its state term from the wipe and its binding error from the certifier's ingress, which
     #: bounds information where `ServerBlocksAt` reads width at line rate: the information form is a draft
-    SERVING = ("Accounting.Guarantees.Actual.ServerBlocksAt", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
-               "Accounting.Placed.Links", "draft:windows-information-form")
+    SERVING = ("ResourceAccounting.Guarantees.Actual.ServerBlocksAt", "ResourceAccounting.Placed.Causal", "ResourceAccounting.Placed.ComputeRate",
+               "ResourceAccounting.Placed.Links", "draft:windows-information-form")
     PHYSICAL = tuple(dict.fromkeys(LINKS + SERVING + Wipe.SERVER + Wipe.DEVICE + Certifier.CITES + Certifier.INTAKE
                                    + Certifier.DECLARED))
 
@@ -615,7 +615,7 @@ class Onsite(Remote):
     def partition(self, ctx: Context) -> Partition:
         budget = self.budget(ctx)
         serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites() + self.BOUND, budget.inputs)
-        # The uncertified block may take the whole server block's input: generous to the adversary, since the
+        # The uncertified block may take the whole server block's input: generous to the malicious developer, since the
         # inference blocks' prompts come out of it too.
         uncertified = Budget(math.fsum(self.abiding(ctx, budget.gates).values()), budget.inputs)
         layout = Cut("layout", (self.blocks(ctx, budget.gates), Blocks("uncertified", uncertified, 1.0)), {},

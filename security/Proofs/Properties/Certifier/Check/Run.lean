@@ -27,7 +27,7 @@ certificate message's input names one certifier session, execution phase and dig
 open NetworkCheck hiding Params
 open NetworkCheck.Check
 open Flock
-open NetworkCertifier (ClockSync LogicalFrame expectedRow)
+open NetworkAttester (ClockSync LogicalFrame expectedRow)
 
 set_option maxRecDepth 20000
 

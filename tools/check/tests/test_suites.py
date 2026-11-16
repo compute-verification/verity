@@ -53,6 +53,59 @@ def test_a_tree_is_discovered_and_keyed_from_gits_view_of_it(tmp_path, monkeypat
     assert S.object_ids(S.worktree(), ["pkg"])["pkg"] != before["pkg"]
 
 
+def _mirrored(root: Path) -> None:
+    """A workspace whose tests mirror the tree under the root's `tests/`: member `lib`'s tests are the virtual member
+    `lib-tests` at `tests/lib`, `app` (on `lib`, reading `cards`) has a suite of its own whose tests sit beside it, `docs`'s
+    tests are a suite with no distribution at `tests/docs`, and the repository's own tests are `tests/` itself."""
+    files = {
+        "pyproject.toml": '[project]\nname = "ws"\n\n[tool.uv.workspace]\nmembers = ["lib", "tests/lib", "app"]\n\n'
+                          '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+        "lib/pyproject.toml": '[project]\nname = "lib"\n', "lib/lib.py": "",
+        "tests/lib/pyproject.toml": '[project]\nname = "lib-tests"\ndependencies = ["lib"]\n\n[tool.pytest.ini_options]\n',
+        "tests/lib/test_lib.py": "",
+        "app/pyproject.toml": '[project]\nname = "app"\ndependencies = ["lib"]\n\n[tool.pytest.ini_options]\n'
+                              'testpaths = ["tests"]\n\n[tool.verity.tests]\ninputs = ["cards", "docs/x.md"]\n',
+        "app/tests/test_app.py": "", "cards/c.toml": "", "tests/cards/test_cards.py": "",
+        "tests/docs/pyproject.toml": "[tool.pytest.ini_options]\n", "tests/docs/test_docs.py": "", "docs/x.md": "",
+        "tests/test_root.py": "",
+    }
+    for rel, text in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text)
+    _git(root, "init", "-q")
+
+
+def test_a_suite_whose_tests_mirror_the_tree_is_named_by_what_it_mirrors_and_reads_its_tests_beside_each_input(tmp_path,
+                                                                                                                  monkeypatch):
+    """`tests/X` holds `X`'s tests (`research.suite_layout`): the suite there is named as `X` names it, picked by `X`, and
+    each path a suite reads holds its tests at `tests/X` too; `tests` (or `tests/`) picks the repository's own suite."""
+    _mirrored(tmp_path)
+    S = _suites(monkeypatch, tmp_path)
+    found = S.discover()
+    assert {s.path: s.name for s in found} == {".": "repository", "app": "app", "tests/docs": "docs", "tests/lib": "lib"}
+    by, pkgs = {s.path: s for s in found}, S.members()
+    assert S.inputs_of(by["app"], pkgs) == ["app", "cards", "docs/x.md", "lib", "tests/cards", "tests/lib"]
+    assert S.inputs_of(by["tests/lib"], pkgs) == ["lib", "tests/lib"]
+    assert S.inputs_of(by["tests/docs"], pkgs) == ["tests/docs"]
+    for name, path in (("tests", "."), ("tests/", "."), ("repository", "."), ("lib", "tests/lib"), ("tests/lib", "tests/lib"),
+                       ("docs", "tests/docs"), ("app", "app")):
+        assert [s.path for s in S.select(found, [name])] == [path], name
+
+
+def test_tests_selects_the_repository_suite_where_tests_sit_beside_their_code(tmp_path, monkeypatch):
+    """Where suites keep their tests in their own `tests/` directories, `tests` would be part of many of their paths; it names
+    the repository's own suite exactly, as `.` and `repository` do."""
+    _workspace(tmp_path)
+    (tmp_path / "pyproject.toml").write_text((tmp_path / "pyproject.toml").read_text() + '\n[tool.pytest.ini_options]\n')
+    S = _suites(monkeypatch, tmp_path)
+    found = S.discover()
+    assert sorted(s.path for s in found) == [".", "a", "b"]
+    for name in ("tests", "tests/", ".", "repository"):
+        assert [s.path for s in S.select(found, [name])] == ["."], name
+    assert [s.path for s in S.select(found, ["a"])] == ["a"]
+    assert S.inputs_of(next(s for s in found if s.path == "a"), S.members()) == ["a"], "no `tests/a` to read"
+
+
 def test_a_clone_another_step_has_not_checked_out_yet_is_left_out_of_the_tree(tmp_path, monkeypatch):
     (tmp_path / "a.py").write_text("a = 1\n")
     _git(tmp_path, "init", "-q")
@@ -737,6 +790,56 @@ def test_a_nested_suite_leaves_the_key_of_the_suite_around_it_unless_that_one_de
     keys = _keys(S)
     (tmp_path / "a" / "sub" / "tests" / "test_sub.py").write_text("def test_sub():\n    assert True\n")
     assert touched() == ["a", "sub", "repository"] and _keys(S)["a"] != keys["a"]
+
+
+def test_a_mirrored_suite_keeps_the_name_and_the_inputs_of_the_directory_it_tests(tmp_path, monkeypatch):
+    """Every test moves under the root's `tests/`, mirrored by path: a suite at `tests/X` is `X`'s, so it keeps the name `X` gave
+    it (the check's tables name suites), an input or dependency `X` covers `tests/X` as it covered `X/tests`, and no suite
+    collects another's tests, the root's own suite included, whose test path now holds them all."""
+    _workspace(tmp_path)
+    root_pyproject = tmp_path / "pyproject.toml"
+    root_pyproject.write_text(root_pyproject.read_text().replace('members = ["a", "b"]', 'members = ["a", "b", "tests/a"]')
+                              + '\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (tmp_path / "a" / "pyproject.toml").write_text('[project]\nname = "a"\ndependencies = ["numpy>=1"]\n')
+    shutil.rmtree(tmp_path / "a" / "tests")
+    for d, text in (("tests/a", '[project]\nname = "a-tests"\ndependencies = ["a"]\n\n[tool.uv]\npackage = false\n\n'),
+                    ("tests/c", ""), ("tests/c/sub", "")):
+        (tmp_path / d).mkdir(parents=True)
+        (tmp_path / d / "pyproject.toml").write_text(text + '[tool.pytest.ini_options]\ntestpaths = ["."]\n')
+        (tmp_path / d / f"test_{d.rsplit('/', 1)[-1]}.py").write_text("def test_it():\n    pass\n")
+    (tmp_path / "tests" / "c" / "pyproject.toml").write_text('[tool.pytest.ini_options]\ntestpaths = ["."]\n\n'
+                                                             '[tool.verity.tests]\ninputs = ["a"]\n')
+    (tmp_path / "tests" / "test_root.py").write_text("def test_root():\n    pass\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "mirrored")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs = S.members()
+    by = {s.name: s for s in S.discover()}
+    assert sorted(by) == ["a", "b", "c", "c/sub", "repository"]
+    assert (by["a"].path, by["c"].path, by["c/sub"].path) == ("tests/a", "tests/c", "tests/c/sub")
+    assert by["repository"].inner == ("tests/a", "tests/c", "tests/c/sub") and by["c"].inner == ("tests/c/sub",)
+    assert "tests/a" in S.inputs_of(by["c"], pkgs), "an input `a` covers a's tests, now at tests/a"
+    assert S.test_files(by["c"], S.worktree()) == ["tests/c/test_c.py"], "c's test files leave out the suite under it"
+
+    (tmp_path / "c").mkdir()
+    (tmp_path / "c" / "pyproject.toml").write_text('[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    with pytest.raises(ValueError, match="move what is left at `X` to `tests/X`"):
+        S.discover()
+
+
+def test_a_suite_collects_none_of_the_suites_under_its_test_paths(tmp_path):
+    """Through the runner: `tests/x` holds the suite `tests/x/sub`, whose test fails when `x`'s pytest collects it."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"a": "def test_a():\n    pass\n"})
+    for d, test in (("tests/x", "def test_x():\n    pass\n"), ("tests/x/sub", "def test_sub():\n    assert False\n")):
+        (root / d).mkdir(parents=True)
+        (root / d / "pyproject.toml").write_text('[tool.pytest.ini_options]\ntestpaths = ["."]\n')
+        (root / d / f"test_{d.rsplit('/', 1)[-1]}.py").write_text(test)
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "mirrored")
+    p = _run_suite(root, tmp_path, "x")
+    assert p.returncode == 0 and "passed  x" in p.stdout and "c/sub" not in p.stdout, p.stdout
+    assert "1 passed" in (tmp_path / "logs" / "tests_x.log").read_text()
 
 
 def test_changed_selects_the_suite_a_file_is_moved_out_of(tmp_path, monkeypatch):
@@ -2524,3 +2627,20 @@ def test_a_suite_is_lent_only_with_its_fixtures_and_build_sources_as_they_are(tm
     assert lent() == ["plain"], "its build output is built from other sources"
     (root / "plain" / "tests" / "test_it.py").write_text(_PASSES + "\n")
     assert lent() == []
+
+
+def test_the_runner_names_suites_by_the_layout_rule_of_the_tree_it_is_in(tmp_path):
+    """post_train runs another tree's `suites.py` with its own interpreter: the suites are named by that tree's
+    `research.suite_layout`, not by the research the interpreter imports."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"a": "def test_a():\n    pass\n"})
+    (root / "pyproject.toml").write_text((root / "pyproject.toml").read_text() + '\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    rule = root / "tools" / "research" / "src" / "research" / "suite_layout.py"
+    rule.parent.mkdir(parents=True)
+    rule.write_text((HERE.parent / "research" / "src" / "research" / "suite_layout.py").read_text()
+                    .replace('ROOT_SUITE = "repository"', 'ROOT_SUITE = "the-trees-root"'))
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "its own rule")
+    r = _run_suite(root, tmp_path, "--list")
+    assert r.returncode == 0, r.stderr
+    assert "the-trees-root" in r.stdout and "repository" not in r.stdout, r.stdout

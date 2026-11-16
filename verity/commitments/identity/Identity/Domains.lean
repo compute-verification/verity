@@ -23,10 +23,10 @@ ones, and never the other protocols' separators.
 
 namespace Domains
 
--- The network certifier's mark certificate (`verity.protocols.accounting.certifier.verifier.certificate`)
+-- The network attester's mark certificate (`verity.protocols.accounting.certifier.verifier.certificate`)
 abbrev CERTIFIER_MARK : String := "verity-network-certifier/mark/v1"
 
--- The network certifier's count over a span between two marks (`verity.protocols.accounting.certifier.verifier.span`)
+-- The network attester's count over a span between two marks (`verity.protocols.accounting.certifier.verifier.span`)
 abbrev CERTIFIER_SPAN : String := "verity-network-certifier/span/v0"
 abbrev CERTIFIER_SPAN_PROTOCOL : String := "verity/certifier/span/v0"
 
@@ -190,7 +190,7 @@ abbrev POUB_PERIOD : String := "verity/remote-bandwidth/window/v1"
 abbrev REMOTE_SESSION_PAYLOAD_SALTS : String := "verity/remote-session/payload-salts/v0"
 abbrev STORE_SALT : String := "verity/store/salt/v1"
 
--- Not yet read from here: the network certifier and network accounting
+-- Not yet read from here: the network attester and network accounting
 abbrev CERTIFIER_ADVISED_ADVICE : String := "verity-network-certifier/advised-advice/v2"
 abbrev CERTIFIER_CERTIFICATES : String := "verity-network-certifier/certificates/v3"
 abbrev CERTIFIER_CLOCK : String := "verity-network-certifier/clock/v1"

@@ -1,10 +1,10 @@
 """No Python calls the wipe's counted check (`wipe_period.outcome_counted`, `counted_profile`) but its own module and the
 memory challenger's Lean package's tests, which hold it to `MemoryChallenger.WipeCount`.
 
-`outcome_counted` certifies at the count the evidence states, and nothing holds that count to the network certifier's
+`outcome_counted` certifies at the count the evidence states, and nothing holds that count to the network attester's
 count over the span until a composition ties `named` to it. So any other tracked Python file naming either fails here,
 unless `ALLOWED` names it. The Lean side's executables are held in that package's suite
-(`verity/protocols/accounting/pous/device/lean/tests/test_counted_callers.py`)."""
+(`verity/protocols/resource_accounting/memory/pous/attester/lean/tests/test_counted_callers.py`)."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ from pathlib import Path
 from test_repository import ROOT, _tracked
 
 NAMES = ("outcome_counted", "counted_profile")
-OWNER = "verity/protocols/accounting/pous/verifier/wipe_period.py"
-MIRROR_TESTS = "verity/protocols/accounting/pous/device/lean/tests/"
+OWNER = "verity/protocols/resource_accounting/memory/pous/verifier/wipe_period.py"
+MIRROR_TESTS = "verity/protocols/resource_accounting/memory/pous/attester/lean/tests/"
 #: The files that may name them besides `OWNER` and `MIRROR_TESTS`, each with why.
 ALLOWED: dict[str, str] = {}
 REMEDY = ("the counted check certifies on a count nobody holds until a composition ties `named` to the network "

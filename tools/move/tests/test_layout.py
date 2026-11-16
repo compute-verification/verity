@@ -593,6 +593,39 @@ def test_a_distributions_tests_path_follows_the_move_and_moves_json_records_only
     assert moves == [{"paths": {"dist/tests/old/": "dist/tests/new/"}}]
 
 
+def test_a_suite_whose_tests_path_becomes_its_directory_lists_its_test_files_from_there(tmp_path):
+    """Every test moves under the root's `tests/`, each suite's pyproject beside its tests: `pkg/pyproject.toml` with
+    `testpaths = ["tests"]` becomes `tests/pkg/pyproject.toml` with `["."]`, and the files its `[tool.verity.tests]` lists from
+    the suite's directory (`untraced`, a `[[reads]]` entry's `tests`) lose their `tests/`; its root-relative `inputs` and a
+    `[[reads]]` entry's `paths` don't, and its `pythonpath`, written from `pkg`, names the same directories from `tests/pkg`. An
+    input it adds to a list whose last line holds a comma or a comment goes first."""
+    r = tmp_path / "repo"
+    files = {"pkg/pyproject.toml": ('[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = [".", "../lib"]\n\n'
+                                    '[tool.verity.tests]\n'
+                                    'untraced = [\n    "tests/test_a.py",  # starts git\n    "tests/sub/test_b.py",\n]\n'
+                                    'inputs = ["tests/fixtures",\n          "pkg",  # its code\n]\n\n[[tool.verity.tests.reads]]\n'
+                                    'tests = ["tests/test_a.py"]\npaths = ["tests/test_root.py"]\n'),
+             "pkg/tests/test_a.py": "", "pkg/tests/sub/test_b.py": "", "tests/test_root.py": "", "tests/fixtures/x.json": "{}",
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(
+        '[roots]\nold = {}\nnew = {}\n\n[paths]\n"pkg/tests/" = "tests/pkg/"\n"pkg/pyproject.toml" = "tests/pkg/pyproject.toml"\n\n'
+        '[pyproject."tests/pkg/pyproject.toml"]\ntestpaths_replace = { "tests" = "." }\nstrip_suite_relative = "tests/"\n'
+        'pythonpath_from = "pkg"\nadd_inputs = ["lib"]\n\n[modules]\n"pkg.tests" = "tests.pkg"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"], check=True,
+                   capture_output=True)
+    assert (r / "tests/pkg/pyproject.toml").read_text() == (
+        '[tool.pytest.ini_options]\ntestpaths = ["."]\npythonpath = ["../../pkg", "../../lib"]\n\n[tool.verity.tests]\n'
+        'untraced = [\n    "test_a.py",  # starts git\n    "sub/test_b.py",\n]\n'
+        'inputs = ["lib", "tests/fixtures",\n          "pkg",  # its code\n]\n\n[[tool.verity.tests.reads]]\n'
+        'tests = ["test_a.py"]\npaths = ["tests/test_root.py"]\n')
+
+
 def test_uv_lock_names_a_moved_distribution_by_its_new_directory(tmp_path):
     """A map that moves a distribution and renames no member (the machine model to `verity/hardware/`): `uv lock` reads the
     locked distribution's metadata at its old directory and fails, and `uv sync` with it, so every suite of the moved tree
@@ -913,6 +946,17 @@ def test_an_anchor_inside_a_string_literal_stays_as_written(tmp_path):
                                                  'ROOT = Path(__file__).resolve().parents[2]\n' + toy)
 
 
+def test_a_pathlib_qualified_anchor_joined_back_keeps_its_module_inside_the_parentheses(tmp_path):
+    """A file that leaves the directory its anchor named joins its way back in parentheses; `pathlib.Path(...)` goes
+    inside them whole (outside, `pathlib.(Path(...) / ...)` doesn't parse)."""
+    r, p = _run(tmp_path, {"tools/a/b/t.py": "import pathlib\n\nHERE = pathlib.Path(__file__).resolve().parents[0]\n",
+                           "tools/a/b/data.json": "{}\n"},
+                LEVELS_MAP.replace('"benchmarks/live/" = "verity/composite/device/live/"', '"tools/a/b/t.py" = "tools/c/t.py"')
+                .replace('"benchmarks.live" = "verity.composite.device.live"', '"tools.a.b.t" = "tools.c.t"'))
+    assert p.returncode == 0, p.stderr
+    assert (r / "tools/c/t.py").read_text() == 'import pathlib\n\nHERE = (pathlib.Path(__file__).resolve().parents[1] / "a" / "b")\n'
+
+
 @pytest.mark.parametrize("text, comments", [
     ("", True), ("\n\n", True), ("# the data sheets\n", True), ("  # indented\r\n\t\n\f\n", True),
     ("# -*- coding: utf-8 -*-\n# one a GPU\n", True), ("#!/usr/bin/env python3\n", True),
@@ -972,6 +1016,20 @@ def test_a_relative_path_to_a_file_that_moves_beside_it_stays_relative_and_is_ce
     git(r, "add", "-A")
     cert = _certify(r, git(r, "rev-parse", "HEAD"))
     assert cert["certified"], cert["refusals"]
+
+
+def test_a_file_the_map_keeps_relative_moves_with_its_relative_paths_as_written(tmp_path):
+    """A test's relative paths name a toy's files (`"../../packages/x"` in a lakefile it writes): under [rewrite]
+    keep_relative, by its old path, they stay as written when it moves, and a root-relative path in it is still rewritten.
+    Without it the mover reads the toy's path as one to the directory the map splits."""
+    files = {"tools/a/b.sh": "", "tools/a/tests/test_t.py": 'LAKE = "path = \\"../../a\\""\nCODE = "tools/a/b.sh"\n'}
+    layout = ('[roots]\nold = {}\nnew = {}\n\n[paths]\n"tools/a/tests/" = "tests/tools/a/"\n"tools/a/b.sh" = "tools/a/c.sh"\n\n'
+              '[modules]\n"tools.a.tests" = "tests.tools.a"\n')
+    r, p = _run(tmp_path, files, layout + '\n[rewrite]\nkeep_relative = ["**/tests/*.py"]\n')
+    assert p.returncode == 0, p.stderr
+    assert (r / "tests/tools/a/test_t.py").read_text() == 'LAKE = "path = \\"../../a\\""\nCODE = "tools/a/c.sh"\n'
+    r, p = _run(tmp_path / "rewritten", files, layout)
+    assert p.returncode == 1 and "tests/tools/a/test_t.py: ../../a (part of tools/a moves)" in p.stderr, p.stderr
 
 
 @pytest.mark.parametrize("held", ['"""The data sheets, one a GPU."""\n', CODE, b"# caf\xe9\n"])

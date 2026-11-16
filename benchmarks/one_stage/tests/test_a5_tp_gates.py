@@ -20,7 +20,7 @@ import pytest
 
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
-from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
 from verity_vllm.definitions.registry.b1_tp2 import AllReduce2
 from verity.commitments.periods import rows as SR

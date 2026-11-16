@@ -379,7 +379,8 @@ def test_the_rule_the_gate_reads(monkeypatch):
     assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/protocols/proofs/flock/prover/", "verity/protocols/proofs/flock/prover/pod/", "verity/protocols/proofs/flock/prover/agreement/",
                                                            "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/proofs/flock/verifier/",
                                                            "verity/circuits/base/", "verity/circuits/lean/",
-                                                           "verity/commitments/lean/", "!README.md", "!PROTOCOL.md"]
+                                                           "verity/commitments/lean/", "!README.md", "!PROTOCOL.md",
+                                                           "!verity/protocols/proofs/flock/verifier/sigma/*"]
     assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
     assert {"verity/protocols/proofs/flock/verifier/VStar/In.lean", "verity/protocols/proofs/recursion/verifier/vstar_cli/"} <= set(tool.CHECK.merge_requires["lean-suites"])
     pin = __import__("json").loads((ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "upstream.json").read_text())
@@ -1175,7 +1176,8 @@ def test_the_agreement_scripts_import_only_the_standard_library_and_each_other()
 
 def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_in_it(tmp_path, monkeypatch):
     """`verity-verify-proof` is built from the Lean package alone: its proofs (`security/Proofs/Flock/`) and any Lake package
-    nested in it are no input, unless the package's lakefile requires something, which keeps everything in.  Nor is the
+    nested in it (`sigma/`) are no input, unless the package requires that one by path, and a change to `sigma/` alone
+    needs no agreement to merge.  Nor is the
     package's `lean-audit.json`, which only the audit reads: that one path, not every file of the name."""
     files = CHECK.tracked_files()
     closure = CHECK.agreement_closure(files)
@@ -1187,12 +1189,19 @@ def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_
     assert [f for f in files if f.startswith("security/Proofs/Flock/")]
     nested = ["verity/protocols/proofs/flock/verifier/lakefile.toml", "verity/protocols/proofs/flock/verifier/nested/lakefile.toml",
               "verity/protocols/proofs/flock/verifier/nested/N.lean"]
+    sigma = [f for f in files if f.startswith("verity/protocols/proofs/flock/verifier/sigma/")]
+    assert "verity/protocols/proofs/flock/verifier/sigma/SigmaDifftest.lean" in sigma and not set(sigma) & set(closure)
+    from research.merge import rule_touches
+    spec2 = importlib.util.spec_from_file_location("check_tool_nested", ROOT / "tools" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(tool)
+    assert rule_touches(list(tool.CHECK.merge_requires["lean-agreement"]), sigma) == []
     (tmp_path / "verity/protocols/proofs/flock/verifier/nested").mkdir(parents=True)
-    (tmp_path / nested[0]).write_text("")
+    (tmp_path / nested[0]).write_text('[[require]]\nname = "x"\npath = "../../../../circuits/base"\n')
     (tmp_path / nested[1]).write_text("")
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     assert CHECK.agreement_closure(nested) == nested[:1]
-    (tmp_path / nested[0]).write_text('[[require]]\nname = "x"\n')
+    (tmp_path / nested[0]).write_text('[[require]]\nname = "nested"\npath = "nested"\n')
     assert CHECK.agreement_closure(nested) == nested
 
 
@@ -1699,14 +1708,14 @@ def test_a_cold_check_runs_the_opt_in_tests_after_their_steps_suites_and_no_othe
 def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless_each_passed(tmp_path, monkeypatch, capsys):
     """Each suite's named tests in one `suites.py` run of its own with its variables set, every one of them, and no other
     suite's.  A named test that skipped (its mark reads a variable its suite doesn't list) or that its suite lacks (pytest's
-    "not found") ran nowhere, so it fails the step."""
+    "not found") ran nowhere, so it fails the step.  A suite whose tests moved to `tests/X` is still named by `X`."""
     from collections import namedtuple
 
     suite = namedtuple("suite", "name path")
     monkeypatch.setattr(CHECK, "OPT_IN", {"a/one": {"VERITY_A_SLOW": ("tests/test_a.py::test_x",),
                                                     "VERITY_A_E2E": ("tests/test_a.py::test_y",)},
                                           "b/two": {"VERITY_B_SLOW": ("tests/test_b.py::test_z",)}})
-    monkeypatch.setattr(CHECK.SUITES, "discover", lambda: [suite("one", "a/one"), suite("two", "b/two")])
+    monkeypatch.setattr(CHECK.SUITES, "discover", lambda: [suite("one", "a/one"), suite("two", "tests/b/two")])
     monkeypatch.setattr(CHECK, "AFTER_LEAN", ("two",))
     ran: list = []
     outcome = {"a/one": (0, {"passed": 2, "failed": 0, "error": 0, "skipped": 0}),
@@ -2114,6 +2123,66 @@ def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
                        capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
     want = "RUN r20261009-050001-aaaa r20261009-050002-bbbb" if twins else "RUN r20261009-050001-aaaa"
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == want, (p.stdout, p.stderr)
+
+
+#: a crashed twin launch whose exception was raised from another (`raise X from e`) or while handling one: one header per link
+_CHAINED = ("Traceback (most recent call last):\n  File \"r.py\", line 1, in <module>\nOSError: no route\n\n{join}\n\n"
+            "Traceback (most recent call last):\n  File \"r.py\", line 3, in <module>\nRunnerFailed: exit 1")
+
+
+@pytest.mark.parametrize("lost", ["research run --on vy-nebius-3: refused: the machine can start no run",
+                                  "research: run r20261009-050000-cccc refused on vy-nebius-3 (MemoryNotAvailable): busy",
+                                  "Traceback (most recent call last):",
+                                  _CHAINED.format(join="The above exception was the direct cause of the following exception:"),
+                                  _CHAINED.format(join="During handling of the above exception, another exception occurred:")])
+def test_train_sh_waits_past_a_refused_twin_for_every_other_twins_run_id(tmp_path, lost):
+    """A twin's launch refused on its machine, or crashed, before the other twins' runs launched, each a poll after the last:
+    train.sh waits on for their run ids, so RUN names every twin that launched. Stopping at the refusal left them out: the queue
+    never followed the one that ran, launched the shard again when the twins it knew exited 75, and left the unnamed twin running
+    when it dropped the candidate. A chained traceback counts as one lost twin: counted as two, it ended the wait with the last
+    twin's id unread."""
+    import os
+    import subprocess
+
+    git_env = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def git(*a, cwd=tmp_path / "repo"):
+        subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, env={**os.environ, **git_env})
+
+    git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
+    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "repo"), cwd=tmp_path)
+    git("commit", "-q", "--allow-empty", "-m", "c")
+    git("push", "-q", "origin", "HEAD:main")
+    bin_, slept, done = tmp_path / "bin", tmp_path / "slept", tmp_path / "launched"
+    bin_.mkdir()
+    logs = f"{tmp_path}/train-*.log"
+    # the launcher: the twins line and the lost twin at once, then each other twin's run once train.sh has slept past the last line
+    (bin_ / "uv").write_text(
+        "#!/bin/sh\n" + _POST_STUB.format(posted=tmp_path / "posted")
+        + "echo 'check: --on: twins 20261009T050000Z-ab12 on vy-nebius-1, vy-nebius-2, vy-nebius-3: the first to take a check "
+          "slot runs'\n"
+        + f"cat <<'EOT'\n{lost}\nEOT\nwhile [ ! -e {slept}.1 ]; do :; done\n"
+        + "echo 'research: run r20261009-050001-aaaa launched on vy-nebius-1 (p) pid=1 -> /r'\n"
+        + f"while [ ! -e {slept}.2 ]; do :; done\n"
+        + "echo 'research: run r20261009-050002-bbbb launched on vy-nebius-2 (p) pid=2 -> /r'\n"
+        + f"touch {done}\n")
+    # waits on the launch, not on a clock: a sleep returns once the launcher has printed its next line, so each poll reads one
+    marker = "Traceback" if lost.startswith("Traceback") else "refused"
+    (bin_ / "sleep").write_text(
+        f"#!/bin/sh\nif ! grep -qs '{marker}' {logs}; then while ! grep -qs '{marker}' {logs}; do :; done\n"
+        f"elif ! grep -qs 'aaaa launched' {logs}; then touch {slept}.1; while ! grep -qs 'aaaa launched' {logs}; do :; done\n"
+        f"else touch {slept}.2; while [ ! -e {done} ]; do :; done; fi\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, **git_env, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
+           "R2_ENDPOINT": "dummy"}
+    for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
+        env.pop(k, None)
+    p = subprocess.run(["bash", str(ROOT / "tools" / "check" / "train.sh"), "HEAD", "vy-nebius-1,vy-nebius-2,vy-nebius-3"],
+                       capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa r20261009-050002-bbbb", (p.stdout, p.stderr)
+    assert "train: 3 twins, but only these launched" in p.stderr, p.stderr
 
 
 #: the stubbed `uv`'s answer to train.sh's post to the merge thread: the post's body is copied to {posted}, and nothing launches

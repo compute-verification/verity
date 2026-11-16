@@ -58,7 +58,7 @@ MODEL_FIELDS = ("n_total", "n_active", "d_model", "entry_fee", "fanout")
 FAMILIES = frozenset({"reference", "architecture", "optimizer", "data", "objective", "parallel-communication",
                       "local-learning", "fine-tuning", "low-rank", "rl-adapter", "seed-based", "zeroth-order",
                       "distillation", "sparsity-moe", "precision", "growth-reuse", "retrieval"})
-#: ``attacker``: state at the cheapest rate an attacker could use (weights at the retained-quality rate, no optimizer
+#: ``attacker``: state at the cheapest rate a malicious developer could use (weights at the retained-quality rate, no optimizer
 #: state); ``as-published``: state at the precision the method is published with (weights and optimizer moments).
 CONVENTIONS = frozenset({"attacker", "as-published"})
 #: the full-parameter recipe a strategy must beat: ``multiplier_needed`` is the multiplier at which the strategy's
@@ -91,7 +91,7 @@ ATTACKER_RATES = {"state_bits_per_param": "b_w.pretrained/frontier-lossy:central
 
 def traits(alg: dict, convention: str = "attacker") -> dict:
     """An algorithm's traits under a convention: ``as-published`` keeps them; ``attacker`` caps its state and boundary
-    bits at the literature's central rates (``ATTACKER_RATES``), the cheapest an attacker could use at about the same
+    bits at the literature's central rates (``ATTACKER_RATES``), the cheapest a malicious developer could use at about the same
     quality, so that every algorithm is compared alike."""
     tr = dict(alg["traits"])
     if convention == "attacker":
