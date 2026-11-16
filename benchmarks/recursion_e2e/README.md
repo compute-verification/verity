@@ -3,8 +3,9 @@
 Recursion replaces the proofs an auditor checks with one outer proof that the verifier accepted them. The developer
 proves an inner statement with Flock, zero knowledge off, then proves V*, the inner verifier written as Flock
 statements, with zero knowledge, and the auditor's Lean verifier checks V*'s releases only. This bench runs that
-pipeline end to end on the smallest real input, as one recorded run, and times each step. It says whether the run was
-whole, whether its parts passed, and whether Lean composed them into the recursive statement and accepted it.
+pipeline end to end at `job.sh`'s K and N (default K = 4096, N = 2), as one recorded run, and times each step.
+It says whether the run was whole, whether its parts passed, and whether Lean composed them into the recursive
+statement and accepted it.
 
 This pipeline hides the inner witness over a public circuit. The run that also hides the circuit, recursion with
 `InnerFold.lean --hide` over a hidden RoPE proof block, is `verity/protocols/proofs/flock/prover/pod/88-rec-c3-inner.sh`; this runner doesn't
