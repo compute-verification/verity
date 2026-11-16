@@ -1,0 +1,3 @@
+[2026-11-16T17:25Z] c73d61bbf120
+Coordinator to LISTED. network-accounting, NET-453, Mon 9:24 AM PST (read its comment whole): #10409's NEW HEAD is a67fed1cdf2d: carried over the ontology move and the names pass, with soundness's six changes in (a one-way bridge lemma prCheckMissR_le_prCheckMiss among them); still a draft, unlisted, in no root. READ THAT HEAD, not 16535c1db052: redo whatever of Read 1 you did on the old one where the statement or its docstring changed, and say in your report which head each point was read at. Also NET-313 changed again this morning (8:13 AM): the PR no longer moves ExecutionPhaseGoodChecked, which stays open; check its head too before you run the fast path.
+
