@@ -59,8 +59,8 @@ goal = "benchmarks/proof-system-performance"
 
 # `run.py layers`'s three: under each, the Flock layer (member "flock"), the zero-knowledge layer (member "zero
 # knowledge") and last the sampling layer with no member, the row's own reading (benchmarks/prove/README.md's "The proof
-# system by layer"). The runs are each layer's run of record: proofs' served runs of layer 0's 880 RoPE heads of
-# Llama 3.2 1B int8 (15 Nov, from commits not on main), until proofs posts the same from a clone of main.
+# system by layer"). The runs named are each layer's run of record: served runs of layer 0's 880 RoPE heads of
+# Llama 3.2 1B int8, from commits not on main, until runs from a clone of main replace them.
 [[metric]]
 id = "benchmarks/proof-layer-prover-seconds"
 title = "Prover time a sampled block"

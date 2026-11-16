@@ -133,7 +133,7 @@ def test_the_printed_row_states_its_proof(tmp_path):
             PL.read("flock", None)]
     text = PL.render(rows)
     line = table_lines(text)
-    assert line["with sampling"].startswith("| with sampling | row llama32-1b__int8__h200__tp1__b4: ")
+    assert line["with sampling"].startswith("| with sampling | values not stated: row llama32-1b__int8__h200__tp1__b4: ")
     assert "| plain | not stated | not stated | — |" in line["with sampling"]
     assert "| zk | not stated | ε not stated at δ 0.5 | 3 s a drawn block (Flock's prove_total_s" in line["Flock with zero knowledge"]
     assert line["Flock"].startswith("| Flock | not run | — | — | — | — |")
@@ -156,7 +156,7 @@ def test_an_a5_run_reads_its_audit_its_timing_and_states_no_more_of_its_coins_th
     row = PL.read("sampling", str(a5_out(tmp_path)))
     assert row.accepted and row.format == PL.A5
     assert (row.prover_s, row.lean_s, row.proof_bytes) == (5.0, 2.0, 125.0)
-    assert row.workload == ("row llama32-1b__int8__h200__tp1__b4: RoPEHead_v1{D=64} x 4 drawn of 112 units "
+    assert row.workload == ("values not stated: row llama32-1b__int8__h200__tp1__b4: RoPEHead_v1{D=64} x 4 drawn of 112 units "
                             "(kind=served commitment=rows-sha512)")
     assert row.ran_with == "ran with: not stated"
     assert row.detail == "A5 line's verdicts challenger/m0, a challenger per drawn member"
@@ -319,7 +319,7 @@ STMTS = (("s8-coord-k2048-c0", "ScaledMmS8Coordinate_v1{K=2048}", 2048), ("s8-co
 
 def layers_sh(root: Path, layer: str, *, k: int = 2560, zk_flag: bool | None = None, negative: bool = True) -> Path:
     """One layer of a `benchmarks/one_stage/layers.sh all` run under `root` (its flock/, zk/ or sampled/), in the shapes
-    r20261115-212759-0c34 wrote."""
+    its stand-in run wrote."""
 
     d = root / layer / "out"
     (d / "a6").mkdir(parents=True)
@@ -405,7 +405,7 @@ def test_a_prove_path_row_names_the_commit_its_machine_txt_states(tmp_path):
 
 
 def test_a_served_a5_row_states_its_values_its_bound_its_coins_and_its_commit_from_its_files(tmp_path):
-    """r20261115-220537-6ebb's shapes: summary.json's source served beside REGISTERED kind=served, the audit's
+    """A served a5 run's shapes: summary.json's source served beside REGISTERED kind=served, the audit's
     wrong_units, summary.txt's COINS line and machine.txt's git HEAD (a5_llama1b_h200.sh's third line)."""
 
     out = a5_out(tmp_path, source="served", audit={"wrong_units": {"bound": 2, "of": 880, "delta": 0.5}}) / "out"
@@ -423,7 +423,7 @@ def test_a_served_a5_row_states_its_values_its_bound_its_coins_and_its_commit_fr
 
 
 def test_an_a5_plain_run_is_the_flock_row_and_its_epsilon_table_gives_its_first_and_last_pairs(tmp_path):
-    """r20261115-230754-7a96 (the one-stage script's plain run) as ``--flock``, and r20261115-232508-db1d's ``epsilon``."""
+    """The one-stage script's plain run as ``--flock``, and a sampled run's ``epsilon`` table."""
 
     table = [{"delta": d, "wrong_units": w} for d, w in ((0.5, 2), (0.1, 6), (1e-9, 57))]
     flock = PL.read("flock", str(a5_out(tmp_path / "p", plain={"coins": "tree"}, epsilon={"population": 880, "table": table})))
@@ -433,7 +433,7 @@ def test_an_a5_plain_run_is_the_flock_row_and_its_epsilon_table_gives_its_first_
 
 
 def served_arm(root: Path, layer: str, *, records: bool = False) -> Path:
-    """prove_path's served-arm run (r20261115-232155-e640, and under PP_RECORDS=1 r20261115-232009-1ff5): its layer's
+    """prove_path's served-arm run (with PROVE-PATH, or under PP_RECORDS=1 with RECORDS): its layer's
     ``out/`` with ran-with.txt, machine.txt, the served arm and a forged arm whose commit failed."""
 
     out = root / layer / "out"
@@ -471,8 +471,9 @@ def test_a_served_arm_run_reads_its_ran_with_its_one_rep_and_says_it_has_no_forg
     assert row.bytes_what.startswith("one rep's proof over its drawn blocks, of 2 reps in summary.json's timing")
     assert row.ran_with == ("ran with: coins local challenger; parameters development (ran-with.txt: a local development "
                             "challenger, under a small test key)")
-    assert row.workload == ("served per ran-with.txt (window 0 of vllm's run r1, layer 0's SiluMul_v2 units), the audit's "
-                            "source stand-in: arm served: SiluMul_v2{I=8192} x 3 drawn of 3 units; no forged run")
+    assert row.workload == ("the output disagrees on its values: ran-with.txt says served (window 0 of vllm's run r1, "
+                            "layer 0's SiluMul_v2 units), the audit's source field says stand-in: arm served: "
+                            "SiluMul_v2{I=8192} x 3 drawn of 3 units; no forged run")
     assert "no forged run: served-forged/commit.log: LookupError: no rows of SiluMul_v2{I=8192} at steps [24, 25]" in row.notes
     assert row.eps_delta == "at most 0 of 3 units wrong except with probability 0.5"
     assert (row.commit, row.device) == (SHA, "CPU (timing gpus 0)")
@@ -484,3 +485,20 @@ def test_a_records_arm_whose_negatives_were_not_refused_prints_no_number(tmp_pat
     (arm / "audit.log").write_text(log)
     row = PL.read("zk", str(tmp_path))
     assert not row.accepted and row.prover_s is None and "RECORDS negatives_refused False" in row.lean
+
+
+def test_a_layers_sh_row_and_an_a5_row_whose_output_states_neither_stand_in_nor_served_say_values_not_stated(tmp_path):
+    d = layers_sh(tmp_path / "l", "zk") / "zk" / "out"
+    (d / "layers.txt").write_text((d / "layers.txt").read_text().splitlines()[0] + "\n")
+    assert PL.read("zk", str(tmp_path / "l")).workload.startswith("values not stated: 2 statements of 2,560 units")
+    a5 = PL.read("sampling", str(a5_out(tmp_path / "a")))
+    assert a5.workload.startswith("values not stated: row llama32-1b__int8__h200__tp1__b4: ")
+    assert PL.read("sampling", str(a5_out(tmp_path / "s", source="served"))).workload.startswith("served values: ")
+
+
+def test_a_layers_sh_rows_commit_is_the_sha_after_source_never_one_printed_before_it(tmp_path):
+    d = layers_sh(tmp_path, "zk") / "zk" / "out"
+    (d / "job.log").write_text(f"21:30:00Z fetch: main at {'1' * 40}\n" + (d / "job.log").read_text())
+    assert PL.read("zk", str(tmp_path)).commit == SHA
+    (d / "job.log").write_text(f"21:30:00Z fetch: main at {'1' * 40}\n")
+    assert PL.read("zk", str(tmp_path)).commit is None

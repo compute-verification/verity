@@ -64,6 +64,8 @@ FETCH = ("out/recursion_e2e.json", "out/*audit.log", "out/*summary.json", "out/s
          "*/out/a6/session-*/lean-verify.log", "*/gpu-lease-usage.jsonl", "*/out/machine.txt", "*/out/ran-with.txt",
          "*/out/*audit.log", "*/out/*summary.json", "*/out/*-forged/commit.log")
 NOT_STATED = "not stated"
+#: what a row's workload opens with where its output states neither stand-in nor served values
+VALUES_NOT_STATED = "values not stated"
 #: what a run id that can't be fetched here takes instead
 FIX = "give the run's out/ as a directory instead (where the store's read key is: `research fetch RUN`, then ~/.research/runs/RUN)"
 #: the line a table prints unless every row ran on a deployed challenger's coins at deployed parameters, which this
@@ -430,8 +432,10 @@ def read_prove_path(d: Path, row: Row) -> None:
     ran_with = _text(arm.parent / "ran-with.txt").splitlines()
     served = next((x for x in ran_with if x.startswith("served")), None)
     source = {x.get("source") for x in summaries} - {None}
-    row.workload = ((f"served per ran-with.txt ({served.split('not main: ', 1)[-1]})"
-                     + (f", the audit's source {', '.join(sorted(source))}" if source else "") + ": " if served else "")
+    place = served.split("not main: ", 1)[-1] if served else ""
+    row.workload = ((f"the output disagrees on its values: ran-with.txt says served ({place}), the audit's source field "
+                     f"says {', '.join(sorted(source))}: " if served and source - {"served"} else
+                     f"served per ran-with.txt ({place}): " if served else "")
                     + f"arm {arm.name}: " + _drawn(counts, population, n_ranks))
     for forged in sorted(arm.parent.glob(f"{arm.name}-forged")):
         if not (forged / "audit.log").is_file():
@@ -464,14 +468,15 @@ def read_prove_path(d: Path, row: Row) -> None:
         _eps_delta((pp or {}).get("delta")))
 
 
-def _commit(*paths: Path) -> str | None:
-    """The commit the first of `paths` that exists states: its first whole git sha (prove_path's run.sh's ``git rev-parse
-    HEAD`` in machine.txt, layers.sh's ``source`` in job.log), never a part of a longer digest."""
+def _commit(*paths: Path, after: str = "") -> str | None:
+    """The commit the first of `paths` that exists states: its first whole git sha that follows `after` (prove_path's
+    run.sh's ``git rev-parse HEAD`` in machine.txt; layers.sh's job.log, after ``source ``, so no sha printed before it
+    stands in), never a part of a longer digest."""
 
     for path in paths:
         if path.is_file():
-            found = re.search(r"(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])", _text(path))
-            return found.group(0) if found else None
+            found = re.search(re.escape(after) + r"(?<![0-9a-f])([0-9a-f]{40})(?![0-9a-f])", _text(path))
+            return found.group(1) if found else None
     return None
 
 
@@ -505,7 +510,9 @@ def read_a5(d: Path, row: Row) -> None:
     window = " ".join(w for w in registered.split() if w.startswith(("kind=", "commitment=")))
     counts = summary.get("draw_counts") or (a5 or {}).get("draw_counts") or {}
     served = summary.get("source") == "served" and "kind=served" in window
-    row.workload = (("served values: " if served else "")
+    stand_in = summary.get("source") == "stand-in" and "kind=served" not in window
+    row.workload = (("served values: " if served else "stand-in values (summary.json source stand-in): " if stand_in else
+                     f"{VALUES_NOT_STATED}: ")
                     + (f"row {Path(machine[len('row dir '):]).name}: " if machine else
                        f"source {summary['source']}: " if summary.get("source") else "")
                     + _drawn(counts, summary.get("population")) + (f" ({window})" if window else ""))
@@ -538,7 +545,7 @@ def _delta(x: float) -> str:
 
 
 def read_layers_sh(d: Path, row: Row) -> None:
-    """A layers.sh layer's out (proofs' `benchmarks/one_stage/layers.sh`): layers.txt's ``ran with:`` line and whether its
+    """A layers.sh layer's out (`benchmarks/one_stage/layers.sh`): layers.txt's ``ran with:`` line and whether its
     values are stand-ins (`STAND_IN`); a6/summary.json's statements, each with Flock's ``prove_total_s``, Lean's verify
     seconds and its proof's bytes, a statement's and not a proof block's; its verdicts (the plain run's every statement's,
     or the audit's, every Lean verdict and every negative case); the sample's ``wrong_units`` bound as its ε at δ; each
@@ -579,11 +586,11 @@ def read_layers_sh(d: Path, row: Row) -> None:
         drawn = f", {s.get('k')} of them drawn" if s.get("k") != s.get("population") else ", every unit drawn"
         row.eps_delta = _wrong_units(audit.get("wrong_units")) or NOT_STATED
     population = s.get("population") or sum(int(x.get("units") or 0) for x in stmts)
-    row.workload = ((f"{STAND_IN}: " if any(STAND_IN in x for x in said) else "")
+    row.workload = ((f"{STAND_IN}: " if any(STAND_IN in x for x in said) else f"{VALUES_NOT_STATED}: ")
                     + f"{len(stmts)} statements of {population:,} units{drawn}: "
                     + "; ".join(f"{x['name']}, {x['units']:,} units" + (f" of {x['template']}" if x.get("template") else "")
                                 for x in stmts))
-    row.commit, row.commit_from = _commit(d / "job.log"), "job.log's source"
+    row.commit, row.commit_from = _commit(d / "job.log", after="source "), "job.log's source"
     for x in stmts:
         pb = x.pop("proof_bytes")
         x["proof_bytes"] = pb[0] if isinstance(pb, list) and pb and len(set(pb)) == 1 else pb if isinstance(pb, int) else None
