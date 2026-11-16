@@ -2,7 +2,7 @@
 
 `verity bench memory --local` measures, on one GPU machine of your own, how much of the card's memory read rate a
 memory audit (PoUB) leaves uncertified while the card's memory is read in timed passes beside vLLM serving Llama 3.2
-1B. Lower is better.
+1B at two engine steps a second. Lower is better.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu
@@ -55,15 +55,15 @@ verifier times every pass and checks each one's answers against the store's comm
 
 The first line is the share of the card's memory read rate, at its data sheet's read bandwidth, that one accepted
 session leaves uncertified: the session's γ in its verifier's ledger at the specification's rate. 0 would mean the
-whole read rate over the session was certified as spent reading the store, the arena the card serves from. **The
-target is 0.14 at an error of at most 2^-100.**
+whole read rate over the session was certified as spent reading the store, the arena the card serves from. **A
+node's target is 0.14 at an error of at most 2^-100; one card's share at its own sheet has none.**
 
 - **Its error** is printed beside it with its power of two, as `δ = 2.8e-05 (2^-15.1)`. It reads
   `δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)`: δ is the chance, over the verifier's coins, that
   the share is wrong, and each window's adv_t is a prover's edge at telling SHA-512's output from random, which the
   number names but neither prices nor assumes away. The error is priced against one prover, one that makes at most
   2^80 SHA-512 compressions over the session on any hardware (`audit.QUERIES_LOG2`). At the 16 sketch rows a `--local`
-  session registers, the sketch term is the largest, about 2^-15.1, far above the target's 2^-100; the deployed
+  session registers, the sketch term is the largest, about 2^-15.1, far above the node's 2^-100; the deployed
   registration's 64 rows (`node.py --rows 64`), which `run.sh` doesn't pass yet, bring that term below it.
 - **It varies from run to run** with the lateness allowance each session's calibration sets, through the timing term,
   and its error is a probability, the chance the share is wrong, not a band around it: two runs' shares can differ by
@@ -78,7 +78,8 @@ target is 0.14 at an error of at most 2^-100.**
   so you could re-roll them. The line under it says so, and the JSON's `audit` is false.
 - **Who decided each number is in the document.** `gamma_decided_by` is `lean` where PoUB's Lean verifier decided the
   share. Where the document holds `numbers_decided_by`, it lists by key which printed numbers are the Lean verifier's
-  and which are the Python ledger's: the error's sketch and sample terms are among the latter.
+  and which are the Python ledger's: the error's sketch and sample terms are among the latter. A record whose reading
+  holds no `gamma_decided_by`, as none made before PoUB's Lean decided γ does, prints no number.
 - **It certifies reads, not contents.** The audit certifies reads of the registered store whatever it holds; the
   verifier holds no checkpoint, so the store's bytes are the developer's choice, which the store's line says.
 - **The store is the card's memory, not a request's.** A session whose store is below half the card's memory
@@ -88,7 +89,8 @@ target is 0.14 at an error of at most 2^-100.**
 - The share is of the one card's read rate and its host's: the verifier's node is one card of the card's node sheet,
   handed to it as `--node`. A line names the card and the sheet with the SHA-256 of the tree's data sheets
   (`hardware/`) and of the verifier (`verity/protocols/resource_accounting/memory/poub/verifier/`), Markdown left out, in the JSON's
-  `machine` with the arena's GiB and vLLM's share of the card.
+  `machine` with the arena's GiB, vLLM's share of the card, the engine's steps a second at most and the share of the
+  session its steps took (`step_hz`, `busy`), and the `vllm` and `torch` versions `VLLM_PY` holds.
 
 **Exit codes:**
 
@@ -141,6 +143,9 @@ line prints the measured pass and the lateness allowed.
   of a second at 2773 openings each, its groups counted at the pass the session's calibration measures on the card,
   `PACE_PASS_MS=0`). `--local` refuses any other `PACED` or `PACE_PASS_MS`, and any `UNPACED`, `SESSIONS`, `WINDOWS`,
   `WINDOW_MS` or `SAMPLES`;
+- the load it is measured beside: the engine at most two steps a second (`--step-hz 2 --align-steps`). A lighter
+  load lowers the share by serving less, not by a better prover; a `--step-hz` in `ENGINE_ARGS` measures beside
+  another load, which the `ran with` line and `machine.step_hz` state;
 - the data sheets the share is of, and this command.
 
 A number from a changed verifier or sheet is not a result, and the digests in its `machine` line say which changed.
@@ -236,7 +241,7 @@ The command prints and writes through the harness kit's report (`kit.report`, `b
 `$RESEARCH_RUN_DIR/out/memory.json`, outside one where `OUT` names a directory to `$OUT/memory.json`, and with
 neither nothing, but `--local` outside a research run also leaves it as `out/memory.json` beside its records, where
 `--from` reads it; the loopback, a node run and `--from` leave nothing with neither. Where the kit writes, an
-accepted session of a node run or of `--from` also writes the run's result,
+accepted session of a node run or of `--local` also writes the run's result,
 `$RESEARCH_RUN_DIR/result.json` (where `research` reads a run's result) or `$OUT/result.json`, through the kit's
 writer, in the five fields every resource's benchmark reports. Each is read from
 the verifier's record alone, and its `inputs` name the recorded run and the record's keys it came from: `metric` (the
@@ -250,26 +255,30 @@ binding terms to the ledger's own and holds no PRF advantage; no rate is in it, 
 readings). A capacity's rate is the verifier's own figure for the node (`timing.py`), not the registered hardware's,
 and its unit says so. The printed number is written once more under
 `memory-accounting/node-read-rate-uncertified`, the id of its metric on the console's Metrics tab (`benchmarks/memory/metrics.toml`).
-That entry also carries the goal's target, 0.14, and says whether the number is within it or past it. A session whose
+That entry also carries the goal's target, 0.14, and says whether the number is within it or past it, with its error
+(`within target; error 7.89e-31 (2^-100.0)`). A `--local` session's entry is
+`memory-accounting/one-machine-read-rate-uncertified`, one card's share at its own data sheet, with no target and its
+error in its unit. A session whose
 verifier held no checkpoint, every session now, still writes it, with `"bound": false` and its verdict naming that premise
-(`within target; the verifier held no checkpoint`); a bound session's entry, from a record made while the verifier could bind
+(`within target; error 3.94e-31 (2^-101.0); the verifier held no checkpoint`); a bound session's entry, from a record made while the verifier could bind
 the store, holds neither. Where the number's error
-is above 2^-100, the goal's bound, the verdict names that as well (`within target; the verifier held no checkpoint;
-its error is above 2^-100`): the record's declared error where it holds one, else the ledger's own, and above it
+is above 2^-100, the goal's bound, the verdict names that as well (`within target; error 4.66e-10 (2^-31.0); the verifier
+held no checkpoint; its error is above 2^-100`): the record's declared error where it holds one, else the ledger's own, and above it
 where the record holds neither. At a share of 1 or
 more, verified is 0 and free the whole capacity. At an error of 1 or more, `metric`, `verified` and each `free` are
 written with no value and the reason as their `why`; the capacities and the error are written as ever. An amount
 whose keys the
 record doesn't hold as numbers is left out of the result. The two references are other runs' numbers and are not in
-it; a loopback writes none, since it certifies nothing, and a session that wasn't accepted writes none, as it prints
+it; a loopback writes none, since it certifies nothing, nor does `--from` of another run, whose numbers are that
+run's, which stderr says, and a session that wasn't accepted writes none, as it prints
 no number. A result holds one measurement a name, so a run that prints a second session keeps its first one's result
 and says so on stderr.
 
 - `run.py`: the command.
 - `references.json`: the two references' runs.
-- `tests/`: the printer, the four ways in and the references, against records built in the tests, a stand-in for the
-  store and one for the processes; no session runs in the suite (from this directory, `uv run --project ../.. pytest
-  tests`; or `uv run tools/check/suites.py benchmarks/memory` from the clone's root).
+- `tests/benchmarks/memory/`: the printer, the four ways in and the references, against records built in the tests, a
+  stand-in for the store and one for the processes; no session runs in the suite (`uv run tools/check/suites.py
+  benchmarks/memory` from the clone's root).
 
 **Reads and writes:** reads a run's `out/verifier.json` (a gate run's, under `out/host/`) and the references' runs
 from the evidence store; under `research run` writes an accepted session's amounts to the run's result,
