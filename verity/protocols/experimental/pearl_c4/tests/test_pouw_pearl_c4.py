@@ -369,7 +369,7 @@ def test_row_rules_and_inert_work(fmt):
     # 10^-4 units against a cap of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 6% of this tile's cap
     # with B̃'s overfit factor; MXFP4 is contrast only)
     assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 3)
-    # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
+    # forming only at positions where every credited B code is zero (their A elements are inert), 3 rows x 3 columns'
     # share; MXFP4 chains hold identity atoms on some samples (about 0.21% of atoms on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
     assert clean.total == clean.forming + clean.identity + clean.split and (fmt != "nvfp4" or clean.identity == 0)
@@ -404,7 +404,7 @@ def screened_tile(blocks: int, b_blocks: int = 0):
 
 
 def witness_elements(s, ops) -> int:
-    """Item 4's elements over the 4 x 4 tile: the witness's salt-dead A elements and the unneeded positions' A elements."""
+    """Item 4's elements over the 4 x 4 tile: the witness's salt-dead A elements and the inert positions' A elements."""
     unneeded = [all(ops.b.codes[j][t] & 7 == 0 for j in range(4)) for t in range(1024)]
     return sum(p or u for i in range(4)
                for p, u in zip(F.salt_dead(s.fmt, ops.a.x[i], ops.a.alpha[i], ops.a.ae[i]), unneeded))
@@ -413,7 +413,7 @@ def witness_elements(s, ops) -> int:
 @pytest.mark.parametrize("blocks", (2, 4))
 def test_a_row_the_old_inert_bound_rejected_is_admitted_and_debited_on_the_witness(blocks):
     """Screened blocks past D-SS's retired one-in-64 cap, on A alone: the row is credited, item 4 charges only the
-    witness's salt-dead and unneeded elements (not every element of a screened block), no block pair
+    witness's salt-dead and inert elements (not every element of a screened block), no block pair
     is screened, and the tile stays under ρ."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(blocks)
     assert sum(F.dead_blocks(s.fmt, x)) == blocks > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)

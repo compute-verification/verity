@@ -299,7 +299,7 @@ def test_the_verdict_turns_at_the_inert_bound():
 
 def test_a_refused_row_is_left_out():
     """A row whose ok word is 0 is no row of the cap: a zero row there (every atom of its words flagged, a +0 total after
-    the first group, all its elements unneeded), with or without its certificates, leaves the verdict as it is without the
+    the first group, all its elements inert), with or without its certificates, leaves the verdict as it is without the
     row; admitted, the zero row's debit is over the cap."""
     k, tile, n, rho = 256, (2, 2), 2, 1000
     rng = random.Random("cap-refused")
