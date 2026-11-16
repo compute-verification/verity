@@ -37,7 +37,6 @@ says. These are the directories that have one:
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
 | `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
-| `verity bench property_redteam` | a stacking-property check graded against the red team's cases |
 | `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`) for each block type, and the Lean verifier timed on one kept proof (`lean-verify`); and the proof benchmark by layer, Flock, with zero knowledge, with sampling and with recursion, the benchmark result for each layer read from its own run's output (`layers`). From a clone, in order: the adapter's bootstrap, the three partition files and the Flock, zero-knowledge and sampling runs of `benchmarks/one_stage/README.md`'s section "The three benchmarks of the proof-layers table"; the recursion job, `bash benchmarks/recursion_e2e/job.sh K=2048 N=2 GPU=0 FLOCK_WORK=DIR` (`benchmarks/prove/README.md`'s "On a machine of your own"); then `verity bench prove layers --flock A --zk B --sampling C --recursion E` on the four runs' `OUT` directories |
 | `verity bench prove_path` | a served run's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
 | `verity bench rate_squaring` | squarings a second modulo the store codec's primes, each form gated before it is timed: `sq` on one GPU, `ifma` on the host's CPUs |
@@ -56,7 +55,6 @@ says. These are the directories that have one:
 | `verity bench unit_lowering` | writing a PoUW H1 circuit file: peak memory and wall time by K, its SHA-512 held to a reference |
 | `verity bench unit_walk` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds at each width |
 | `verity bench verifier_cost` | a verifier's time against the size of the description it reads and of the circuit that description unrolls to |
-| `verity bench word_codec` | the KV cache's Sloth codec on one GPU: its tests and its benchmark at each width |
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
 README. `benchmarks/kernels/`'s directories have no `verity bench` name: each runs as its script's header says, the
