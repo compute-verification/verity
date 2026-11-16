@@ -125,7 +125,7 @@ an answer carries, what an answer holds when nothing is certified, and the terms
 `Account.witness` is the key under which an accepted answer names the key its check ran under, a key of one of the
 auditor's devices on the site; a protocol that needs no such device names none, and its answers are of the whole site.
 An answer names no location and no registration's head: which hardware it is about is what the device holding its key
-(`Site.holder`) reaches, a network certifier's links to its host (`Site.hostLinks`) for egress and a memory challenger's
+(`Site.holder`) reaches, a network attester's links to its host (`Site.hostLinks`) for egress and a memory challenger's
 hosts (`Site.hostsOf`) for compute, memory and reads, and an answer whose key no device or more than one holds counts
 for nothing. `Account.rests` names the answers a protocol's own rest on, those its check read as given and did not
 verify: such an answer lists each one's name (`Account.nameOf`) under a key, and counts only when each is an accepted

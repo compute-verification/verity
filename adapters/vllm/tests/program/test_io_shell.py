@@ -1,6 +1,6 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
-Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network certifier's scan
+Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network attester's scan
 state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
 bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`; `SelectCollect_v2` v1 at a
 round). Ingress schema v1 likewise: its encoder's JSON in whole blocks, `IngressSampled_v1` as `sampled_reference` in and out of
@@ -244,7 +244,7 @@ def test_a_slots_entry_counts_its_outputs_cuts_its_ids_and_is_zero_when_empty(KO
 @pytest.mark.parametrize("KO, NP, STOP", [(2, 4, ()), (4, 32, (128001,)), (64, 1024, (128001,))],
                          ids=["small", "ko4", "record"])
 def test_a_slots_entry_is_the_scans_entry_bit_for_bit(KO, NP, STOP):
-    """`SlotEntry_v1`'s row is the network certifier's entry at the scan's class of its KO (`ingress_scan.entry_encode`,
+    """`SlotEntry_v1`'s row is the network attester's entry at the scan's class of its KO (`ingress_scan.entry_encode`,
     in `entry_layout`'s order: read at bit 0, n from bit 1 and the ids from bit 33, 33 + KO·IDB bits a request, 1,121 at
     KO 64), so the scan reads an honest slot as its Program wrote it: an empty slot's entry is `NONE`, an occupied
     slot's read 1 with its n and ids, and a request the class can't hold read 1 and n = KO + 1, which the scan refuses.

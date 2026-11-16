@@ -9,7 +9,7 @@ from typing import Any
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`TokenFeed_v1` at a small class (4 prompt ids) and at the class of record's (1,024), each the first position's and
     every other's; `OutCollect_v1` at KO 2 and 64, the first position's and every other's; and
-    `SlotEntry_v1` at the small class (KO 2, 4 prompt ids) with no stop id (TINY's), at the network certifier's KO 4 class
+    `SlotEntry_v1` at the small class (KO 2, 4 prompt ids) with no stop id (TINY's), at the network attester's KO 4 class
     (4 outputs, 32 prompt ids) and at the class of record's (KO 64, 1,024), these two with Llama-3.2-1B's stop id
     (128001); `SelectCollect_v1` and `SelectEntry_v1` at TINY's select (V 256, groups of 16) and small class, and at
     Llama-3.2-1B's (V 128,256) at 4 outputs and 32 prompt ids with its stop id, `SelectEntry_v1` also at the class of

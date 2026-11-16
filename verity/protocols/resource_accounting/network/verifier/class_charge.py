@@ -1,6 +1,6 @@
 """How an execution phase's class of connection rows is charged (`charge`): its whole schedule, or less.
 
-A class is one of the schedule's (`content_rows`' "The classes"), and the head the network certifier signs for an
+A class is one of the schedule's (`content_rows`' "The classes"), and the head the network attester signs for an
 execution phase lists the class's three tables (`connection_rows.Head`). A connection of a class is charged its
 schedule, what a response of any length the class admits can carry, while the length of its response is the server's
 to choose. It is charged less only where four verdicts on the class in that execution phase (`VERDICTS`) say the
@@ -8,7 +8,7 @@ length is no one's choice:
 
 - the stop record: the count of ids a response releases is the registered stop rule's, on the committed ids and the
   request's three words;
-- the response tie: the ids the network certifier released are the committed ids below that count;
+- the response tie: the ids the network attester released are the committed ids below that count;
 - the certified read: the three words the rule reads (the most ids asked for, the prompt's length and whether the end
   id is ignored) are the certified request's;
 - the compute audit: its second stage over the class's sample, that the committed ids are the outputs of the
@@ -59,7 +59,7 @@ another.
 
 **One serve, one registration.** The four are one class's only where they are of one serve under what that serve
 registered: the class's records on this head, counted or not, name one serve and one registration (`ONE`). The head
-holds the network certifier's rows to a serve; it says nothing of the values the stop record and the compute audit
+holds the network attester's rows to a serve; it says nothing of the values the stop record and the compute audit
 judge, so two verdicts on one head can be of two serves' values, and these two names are what holds them to one.
 Where the records name two of either, the class is at its whole schedule and `charge` says which (`differ`).
 
@@ -76,9 +76,9 @@ the class is at its whole schedule too, whatever its verdicts say, and the line 
 holds the schedule's digest and none of its classes' sizes or its response limit, so `charge` can't read the word
 from the head alone, and no caller is charged below a schedule by leaving the schedule out.
 
-`charge` checks no signature, and `head` is its caller's. The network certifier's signature on a registration is
+`charge` checks no signature, and `head` is its caller's. The network attester's signature on a registration is
 checked by `connection_rows.check_registration`, under the key and the session the auditor hands the offline check
-of a network certifier's run, which keeps each registration it held in a file that says what it was checked under;
+of a network attester's run, which keeps each registration it held in a file that says what it was checked under;
 a caller's heads are to be read from that file and from nowhere else."""
 
 from __future__ import annotations

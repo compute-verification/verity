@@ -1,6 +1,6 @@
-"""One execution phase's network certificates through the proof system (N2), on a network certifier's link
+"""One execution phase's network certificates through the proof system (N2), on a network attester's link
 (`NetworkCertifierProfile`): the round trip to an accepted, exhaustive outcome, the public-items rule on the registration, the
-head check against the network certifier's grid and digest, and each way an execution phase fails closed, on injected
+head check against the network attester's grid and digest, and each way an execution phase fails closed, on injected
 coins and an injected clock. Each round's verdict of record is decided on a stand-in proof of the proof block
 (`standin`: the prover's rows and output word by the gates' references, the Lean run reading its session file)."""
 
@@ -37,7 +37,7 @@ LINK = "responses"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 DELTA = 2.0 ** -40
 SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(3)]
-#: the network certifier's parameters digest (`network_certifier.NetworkCertifierParams.digest`), which both ends' heads bind
+#: the network attester's parameters digest (`network_certifier.NetworkCertifierParams.digest`), which both ends' heads bind
 NETWORK_CERTIFIER_DIGEST = bytes(range(64))
 
 
@@ -63,7 +63,7 @@ def ingress_records(arrivals=([1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0])):
 
 
 class Run:
-    """A network certifier's link (an LMS signer on a small tree, its records under `NETWORK_CERTIFIER_DIGEST`), the protocol's
+    """A network attester's link (an LMS signer on a small tree, its records under `NETWORK_CERTIFIER_DIGEST`), the protocol's
     parameters, and the challenger's stream. The certifier's coins give each record a fresh salt, the same in every
     run."""
 
@@ -596,8 +596,8 @@ def test_the_opening_must_be_the_registered_phases(tmp_path):
 
 
 def test_a_link_is_a_network_certifiers_with_both_heads_under_its_digest_and_no_sync(tmp_path):
-    """A link (`NetworkCertifierProfile`) is the network certifier's records: its public items are `PUBLIC`, a window whose two
-    records the network certifier certified under its parameters digest is accepted with no sync declared, by the
+    """A link (`NetworkCertifierProfile`) is the network attester's records: its public items are `PUBLIC`, a window whose two
+    records the network attester certified under its parameters digest is accepted with no sync declared, by the
     Lean's verdict of record, the Python beside it and the in-the-clear check alike, and a window whose egress record was
     certified under a shaper's digest instead is a reject. A link without a `NetworkCertifierProfile` has no verdict, and its two
     ends are one grid."""
