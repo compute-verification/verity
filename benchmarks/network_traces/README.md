@@ -9,8 +9,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 
 - `verity bench network_traces` runs `run.sh`: one chunk of per-token vLLM timing traces on a leased GPU
   (`record.py`), as a job whose resources are in the script's header.
-- Every other `.sh` here is a job on a node, its command and resources in its header (`capture_loopback.sh`, on a
-  machine where the job may capture). The proving jobs build Flock's `flock-circuit`, the Lean `verity-verify-proof` and the
+- Every other `.sh` here is a job on a node, its command and resources in its header. The proving jobs build Flock's `flock-circuit`, the Lean `verity-verify-proof` and the
   Lean ZK server with `benchmarks/pouw/hidden_zk/job.sh`.
 - Every run is published, with its report and outputs, as an Attempt in the evidence store
   (`tools/research/src/research/store/README.md`). Results are read from there, never from this README.
@@ -33,25 +32,17 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   checked under and then each registration it held, and `cost`, which measures a close); `network_attester_chain.py` is
   the chain's reads of a relay run, and network certification's `prover/network_attester_zk.py` reads the relay's bucket rows
   in the proof system.
-- **Proofs in zero knowledge.** Each driver, in network certification's `prover/` but for `compile_slice_zk.py` here, proves its
+- **Proofs in zero knowledge.** Each driver, in network certification's `prover/`, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
   `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of record), `n2_tie_zk.py`
-  (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
-  scan's answers held by `NetworkCheck.Period`) and `compile_slice_zk.py` (the compile slice). `leak_scan.py`, in
+  (the ingress tie), `scan_zk.py` (the step-indexed scan) and `scan_period.py` (the
+  scan's answers held by `NetworkCheck.Period`). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with
-  `prover/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network
-  certification must refuse, each by the check and code that refuse it), `leak_guard.py` (the record's leak guard, below)
-  and `prover/released_keys.py` (the keys a record releases, each declared public by name, below).
-  `prover/block_certifier.py` writes a period's accepted answer into the block record.
+  `prover/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice), `leak_guard.py` (the record's leak
+  guard, below) and `prover/released_keys.py` (the keys a record releases, each declared public by name, below).
   `served_session.py` is the served session's runbook (below).
-- **The weights' load:** the network attester's `attester/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
-- **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
-- **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
-  a random string, and tries six ways to send it out, each with a network attester process of its own;
-  `deviations.sh` is its tries as a job behind one ssh forward (below).
-- **A second count:** `capture_flows.py` sums a packet capture taken beside a relay run by flow and direction and holds
-  it against the relay's record of that run (below).
+- **The weights' load:** the network attester's `attester/load_relay.py` (below).
 
 ## The gate's load
 
@@ -73,26 +64,13 @@ two gate verbs on the auditor's machine:
 - The witness, every row's salts, is the sink's `--witness` file (0600) on the developer's host. The network attester's host
   never writes a salt.
 
-## The wipe's egress
-
-Memory accounting's streamed wipe signs no egress count; its check takes the count as evidence. The count over
-its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` runs that relay through the gate
-(`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
-when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
-`$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
-record from what the gate published. Each execution phase that, with its verification phase, meets [t0 − 1 s, t1 + 1 s) counts at the
-schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when the
-gate's check accepted the run, of which alone the gate publishes certificates, and every one of those execution phases
-is certified. The record is all the script writes: what the wipe's reader does with one is
-its own function, `wipe_monitoring.counted` (`verity/protocols/resource_accounting/memory/pous/verifier/wipe_monitoring.py`), and is stated there.
-
 ## The served session
 
 `served_session.py` is the runbook of the served session of record, the network attester in front of a served model.
 `plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. The gate is
 `site.json`'s `gate`, whose host is the name of the environment variable that holds the challenger host's address
-(`VY_CHALLENGER_1_HOST`): the session, the front (`certifier_piece.py front`), a chain on the gate's coins and
-`wipe_gate.sh` read it there, and without it and with no gate given (`--gate`, `CHALLENGER`) each ends naming it.
+(`VY_CHALLENGER_1_HOST`): the session, the front (`certifier_piece.py front`) and a chain on the gate's coins read
+it there, and without it and with no gate given (`--gate`, `CHALLENGER`) each ends naming it.
 `session` runs the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
@@ -148,192 +126,13 @@ whose rows count each Commit period's requests, steps and outputs and its advice
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ): report.md, the report's
 other keys and the steps' summaries count the execution phase's requests and outputs and the advice's bits, and the scan's
 answers are the case's evidence less its certificates. The leak guard (`--public`) moves any file the piece doesn't
-declare out of its directory. `kind_scan.py DIR` reads a piece's files field by field and reports each one that is of
-none of the four public kinds and no certificate of the network attester's, a case or a scan's answers left there
-among them; `--received OUT` does so for what a verifier on another machine reads of a served run's OUT. Split in two
+declare out of its directory. Split in two
 around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's
 committed execution phase (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its
 `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
 V3c's; each step releases through its own hold. The check reads an audit's state entry among its `roots` and its
 `registered` alone, and a served execution phase's registration holds its `SCAN_STATE` in its `window`'s `activations.values`
 alone, so a served period's answer is a reject at the state tie.
-
-## A cheating server
-
-`deviations.py` is the cheating server on the relay's path (`negatives.py` is the catalogue of what each check
-refuses). A deviating process sits between the network attester (`network_attester_serve.py`'s relay, in its id egress form)
-and the server's id front. It plants a random string and tries one way to send it out, a class a try; a receiver that
-reads only what the client got scores the bits it has back; and the table sets them beside the check that refuses the
-class, in the refusal's own words, and what the leak bound charges. The dry run, against the stand-in id endpoint:
-
-    uv run benchmarks/network_traces/deviations.py try --stand-in --out DIR
-
-Against a served front, whose `HOST:PORT` is the value of an environment variable the command names:
-
-    FRONT=HOST:PORT uv run benchmarks/network_traces/deviations.py try --front-env FRONT --out DIR \
-        [--cell-bytes B] [--tail S] [-- --window T --delay D ...]
-
-And against a served front that listens on its own node's loopback, as a `research run` job on a node that holds a
-tunnel key to it (`deviations.sh`: one ssh forward, then the tries, then a guard that fails the job if anything it
-keeps holds an address; `research run --env` records none of the three values, and `REACH_ONLY=1` ends the job
-once the front is reached, with no try):
-
-    PEER_AUTHORITY=USER@HOST[:SSH_PORT] FRONT_AUTHORITY=HOST:PORT TUNNEL_KEY=FILE \
-        bash benchmarks/network_traces/deviations.sh [TRY-FLAG ...] [-- REHEARSE-FLAG ...]
-
-Then the table again, once the server's record of the tries' sampled ids is there:
-
-    uv run benchmarks/network_traces/deviations.py table --out DIR --ids REQUESTS.jsonl
-
-- The six classes (`--class`, by default all, each one try, in this order): `honest`, the control; `tokens`, a
-  planted bit in each output id; `length`, a response's last id event dropped to set its count's parity; `fail`, a
-  response withheld; `extra`, bytes out of the id form after the trailer; `bucket`, a response held `--hold-ms`, a bit
-  a connection over `--bucket-requests` connections. When honest is refused no other class is tried.
-- Two deviations are not tried, and no row says anything of either:
-  - a response with an id event more than the server's own. `length` only drops a response's last id event and never
-    adds one.
-  - a failure part-way through a response. `fail` withholds a response whole, so the relay fails its connection at
-    the first egress cell; no try has a server send some of a response's cells and withhold the rest.
-- A try is the deviating process, then `network_attester_serve.py rehearse --ids` through it: a key, the traffic, the relay,
-  its client and its offline check, on the host's clock. The flags after `--` are the rehearsal's own, the schedule's
-  among them; `--cell-bytes` is the relay's B, which fixes an id event's size. `--tail` covers a connection admitted
-  at the last request's time: the schedule's delay and its cells.
-- The front's address has no default. Only the deviating process reads it, from its environment, and nothing a try
-  writes holds it: the relay's upstream is the deviating process on the loopback.
-- A try keeps `DIR/CLASS.json`: the schedule, the check's verdict and its words, each connection's request name,
-  release number, cells' kinds, the ids it was sent and the bits planted on it, the egress record's cells, the
-  watermark's last line, lost releases and error, and the size and SHA-256 of every file of its run directory. The
-  run directory, with the relay's records and their salts, is under `--scratch`, by default a temporary directory
-  that is removed. The table is made from `DIR` alone.
-- The relay's check refuses `fail`, `extra` and a `bucket` hold past a cell's deadline, in its audit's words; a
-  shorter hold is accepted and isn't seen at the client's bucket. `tokens` and `length` leave id-form cells, which the
-  relay's check accepts; the I/O tie's content refuses them (`io_tie.cells_match` on each bucket of the egress
-  record). Its map is the certified placement, a stand-in for the advice's.
-- The tie needs the Commit's sampled ids of each request: `--ids`, the server's record, or under `--stand-in` the
-  stand-in's own. Without them the tie isn't run and the row says so. A line of `--ids` is a request's `output_ids`
-  under its `user`, or under its `id` `verity-RUN-N`, the name the certified tick gives a request: the network attester's
-  run id and the request's release number. A try also names its request i `CLASS-TAG-i` (`--tag`, by default a random
-  one a command). Either way one record of the server over every try, and over what it served before them, holds
-  each request once.
-- A refusal counts only where it is the deviation's: the tie refuses exactly the ids the planted bits changed or the
-  connections whose last event was dropped, and the relay failed exactly the connections withheld or held, or each
-  connection at the cell after a response the front sent whole. A row refused for anything else didn't do what its
-  check says: a server that answers out of the id form, or stops, is never a deviation refused.
-- The receiver reads a cell's bucket, never when inside its bucket it arrived. That channel is
-  `benchmarks/certifier_timing`'s to measure: `verity bench certifier_timing run --attacks burst`.
-- The command exits 0 when honest was accepted and each other class was refused by its check, or wasn't shown to the
-  client; 1 when a class did otherwise, honest was refused, or a try wrote no check (it has no row, and the classes
-  after it are still tried); and 2 when none of those and a row is shown neither way, as `tokens` and `length` are
-  until the tie has the server's record.
-- A lost release or a watermark's error stops the tries. Under `--watermark` (a rehearsal flag, after `--`) the
-  network attester names on its watermark each release that its server connection lost. A try that lost a release
-  did not reach its server whole, and a server whose gate does not read lost names stops ordering there. So after
-  each try the command reads the network attester's own log of the run, in the try's run directory: when its
-  `watermark` names a lost release or an error, or the network attester ran with the watermark and wrote no log, no
-  later class is tried, the command says which try it stopped at, why, and which classes it left, and it exits 5.
-  The log has an error only where the stream did not open, backed up, or was closing before a line or its
-  terminating chunk was written, so its server did not get the watermark whole; a stream that ended clean has none.
-  A try keeps what that log says of the watermark: its last line, the lost releases and the kind of error that
-  stopped it, if one did.
-
-## A second count from a packet capture
-
-`capture_flows.py` reads a capture taken beside a run through the relay, at a point that is neither the server's
-process nor the network attester's, and counts the bytes between the two a second time. Its docstring says which bytes
-are compared, why they must agree and what it refuses. It says "agrees" or the difference in bytes, and gives no
-protocol's verdict.
-
-**Taking the capture**, where every packet between the server and the network attester passes:
-
-    tcpdump -i IFACE -U -s 130 -w run.pcap 'ip host SERVER'
-
-- The filter keeps the flows with the server's address on one side and nothing else, so a shared link's other traffic
-  never enters the file: one `or` clause for each further address (`ip6 host` for an IPv6 one, which `ip host` never
-  keeps), and, on an interface captured by its name, `vlan and (…)` where its frames carry a VLAN tag and
-  `vlan and vlan and (…)` where they carry two, which `vlan and (…)` doesn't keep. A capture of every interface
-  (`-i any`) is a Linux cooked one, where `tcpdump` refuses a filter that holds `vlan`, and the filter without it
-  keeps a frame under one tag and none under two. The reader walks the one tag a cooked v1 capture holds after its
-  header, where the header's type names it (a v2 capture holds nothing of that tag); a second tag can reach either
-  as four bytes before the IP header that no type names, and the reader refuses a cooked frame whose type says IP
-  where no IP header starts by that name. It tells by the first byte there, so an unnamed second tag of priority 2
-  with a VLAN id of 1280 or more (under IPv4's type), or of priority 3 (under IPv6's), its drop-eligible bit clear,
-  is not refused by that name. The reader refuses a file that still holds a flow between two addresses it wasn't
-  given; `--skip-foreign` counts and skips them. A flow the filter left out is refused by nothing: the record's bytes
-  on it are a difference in each direction, and nothing names the cause.
-- `-s 130` keeps at most each packet's first 130 bytes: every header and, where the headers are shorter (a common
-  packet's are 54 to 66 bytes), the first bytes of its content, so the file holds the start of each segment. The
-  reader needs the 130 for the longest headers it reads, and reads every length from the headers, never from how
-  much was kept.
-- Start it before the run's first connection and stop it after its last has closed: a flow without its SYN or its FIN
-  is only a floor. `tcpdump` gets its packets a little after they pass, so stop it only once the file has stopped
-  growing (`-U` writes each packet as it comes), or its last packets are lost.
-- The file is pcap; `tcpdump -r IN -w OUT.pcap` rewrites a pcapng one. A capture point that writes each direction of a
-  fibre to its own file gives two files: name both.
-
-**On the server's loopback**, where the server listens on its machine's loopback at `PORT` and the network attester
-reaches it through a forward that ends on that machine, their bytes pass in the clear only there, between the
-forward's end and the server's port:
-
-    tcpdump -i lo -U -s 54 -w run.pcap 'ip host 127.0.0.1 and tcp port PORT'
-
-- Every flow on a loopback has its address on both sides, so the address alone keeps them all, other programs' among
-  them. The port clause keeps the flows of the server's port and nothing else: none of the server's own connections
-  to another port is in the file.
-- `-s 54` keeps no byte of any segment's content, where `-s 130` keeps each segment's first bytes, a request's start
-  and a token id among them. A TCP packet's headers on a Linux loopback are Ethernet's 14 bytes, IPv4's 20 and TCP's
-  20 or more, so never under 54, and the reader reads none of TCP's options: it counts the file as it counts one
-  kept at 130. A packet with eight bytes of IP options or more is kept too short for its headers, and the reader
-  refuses the file by that name.
-- The two sides are one address, told apart by the server's port: the reader takes them as
-  `--server 127.0.0.1:PORT --certifier 127.0.0.1`.
-- The filter and the length are for a server reached over IPv4. Reached over IPv6, the server leaves no packet in
-  this file, since `ip host` keeps IPv4 alone, and the reader refuses nothing in a file of no packet: it counts no
-  flow, says each direction differs by the record's whole count and pairs no connection, and nothing names the
-  cause. That server's capture is `tcpdump -i lo -U -s 74 -w run.pcap 'ip6 host ::1 and tcp port PORT'`, read with
-  `--server [::1]:PORT --certifier ::1`. IPv6's header is 40 bytes where IPv4's is 20, so a TCP packet's headers are
-  never under 74 and that file holds no byte of content either. A packet under an IPv6 extension header never enters
-  it: the filter looks for TCP's header right after IPv6's.
-- The count is of what the server's port received and sent. The link under the forward carries the forward's own
-  bytes, which this capture doesn't hold and the reader doesn't read.
-
-**On one machine**, `capture_loopback.sh` is the reader's own check, not a served run: the stand-in front, the network
-attester and the load on one machine's loopback (`network_attester_serve.py rehearse --fake --watermark`), a capture of the
-loopback beside them, then the reader. It captures at 54 bytes a packet, as the command above does, so neither its
-temporary file of every TCP flow on the loopback nor the file it keeps of the run's two ports holds a byte of
-content. The front and the relay share an address there, so the front's is given with its port, and the load's
-connections to the relay are among the other flows. The run is in the bytes egress form, or with `EGRESS=id` at its
-launch in the id form, id requests each answered an id event a token. It is a `research run` job where the job may
-capture, which a pool node's job may not. It holds the reader's count to the relay's on the same bytes; it puts no
-link between two machines under the capture.
-
-**Reading it:**
-
-    python benchmarks/network_traces/capture_flows.py --capture run.pcap --server SERVER[:PORT] \
-        --certifier CERTIFIER --run RUN --out capture_flows.json
-
-`RUN` is the relay's run directory (`network_attester_serve.py serve`); without it the capture is summed and listed only. The
-result file holds every flow's sums, and the table is:
-
-- The packets read and what was skipped, then the record's connections to the server and how many of its execution
-  phases' records (each phase's ingress, egress and reasons) are certified under its key.
-- A line for each direction between the server and the network attester: its flows, `packets` and `wire bytes` (every frame,
-  with its headers, ACKs and retransmissions), `payload bytes` (above the TCP header, a retransmitted segment each time
-  it was sent), `stream bytes` (each sequence number once, which the record's count is held against), `holes` (bytes
-  of sequence numbers the capture missed) and `record bytes`. Then what the direction says: `agrees`; `differs by N
-  bytes`, the capture's less the record's, where both counts are exact; `bound: …` with the range the difference lies
-  in, where a count is only a bound (a hole, a flow without its SYN or FIN, a connection that failed or whose release
-  was lost, the watermark's connection in no pair) and the range holds 0; `differs: …` where it doesn't.
-- The pairing. No record holds a port, so connections and flows are paired by their two counts, as multisets: how many
-  paired and how many of each stay unpaired. Two connections of equal counts aren't told apart, and "agree" is said of
-  the sums and the multisets, never of one connection.
-- Each connection whose counts are bounds, and the bytes the server answered on the watermark's connection, which are
-  in no record and in no sum. Where that connection pairs with no flow, its answer can't be told from the server's
-  other bytes and stays in the sum from the server: that direction is then a bound, lower by as many bytes as the
-  capture counts from the server on the largest flow in no pair, and the line says so.
-- Every other flow with a given address on one side, a line each: what the given side sent (`out`) and received
-  (`in`). Machines are named `server`, `certifier` and `other-N`, with their ports: no address is printed or written.
-
-It exits 0 when it read the capture and 2 when it refused it.
 
 ## The chain's run of record
 

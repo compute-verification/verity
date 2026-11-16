@@ -147,8 +147,7 @@ def test_the_least_minutes_are_two_seconds_a_request_three_minutes_and_the_key_m
 
 def test_one_network_attester_session_takes_the_gates_most_requests_at_height_13_in_an_hour(host):
     """The gate's most requests, 1700, at height 13 (8192 one-time keys) take 60 minutes, a scan rehearsal's on its own
-    prompts too: one session of about 57 minutes of arrivals and tail, the whole-node wipe's 745 execution phases and more
-    (`wipe_gate.sh`)."""
+    prompts too: one session of about 57 minutes of arrivals and tail, the whole-node wipe's 745 execution phases and more."""
     assert A.NETWORK_CERTIFIER_REQUESTS[1] == A.NETWORK_CERTIFIER_PROMPT_REQUESTS[1] == 1700 and A.network_attester_minutes(1700, 13) == 60
     for token, argv in (("ab12", []), ("cd34", ["--scan", "--prompts", "--tokens", "24"])):
         rc, out = gate(host, REQUEST + argv + ["--requests", "1700", "--minutes", "60", "--height", "13"],

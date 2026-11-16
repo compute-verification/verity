@@ -1593,8 +1593,7 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
   - The length terms' max_tokens in the slice. `CompileSlice_v7` reads every length slot from ``cert``, so none is free
     witness, but what holds ``cert`` to the certified record is a stand-in, the honest cert row under the network attester's
     salt, until max_tokens is read from the certified body. The circuit bounds max_tokens only from above, so a lower
-    one the output still fits passes at a lower charge. `compile_slice_zk` proves `CompileSlice_v7` against that
-    stand-in (its ``max-tokens`` proof block is refused by the b‖c check alone); a proof of the length rule is open
+    one the output still fits passes at a lower charge. A proof of the length rule is open
     (`send_lengths` stays on until one holds it).
 - In `CompileSlice_v1`, `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns)
   as witness it bounds, and `CacheStep_v1` derives the hits only while the no-eviction bound holds. `CompileSlice_v4`
@@ -1621,8 +1620,7 @@ carry chain. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`), the se
 certified tick, is v1 charging the length terms too: `ChargeLink_v2{D, 0, 0, K}`, a length slot for each certified
 arrival, its certified max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and
 what binds its inputs, why every advised execution phase is proved, a served execution phase at its engine's class (w212 under its
-AsyncScheduler, 1,021,302 ANDs, and 857,866 at the sync class), and its `--zk` runs through
-`benchmarks/network_traces/compile_slice_zk.py`.
+AsyncScheduler, 1,021,302 ANDs, and 857,866 at the sync class).
 
 ## The replay at the served shape
 

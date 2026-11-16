@@ -108,7 +108,7 @@ below P. The served bits and the unit's ANDs are the same at every G: a block's 
 **Cost** (`size`): the cache calls dominate where there is a cache. A unit walked costs about CN·(2·(B·CTW + EW) + 2·IW)
 ANDs (`cache_step`'s cost; a lookup, which writes nothing, about half), and each step's three lookups walk min(CN + 1, CU)
 units and its two computes ⌊(B − 1 + T) / B⌋. On corpus-smallkv's class the unit is past circuit-check's lowering:
-its circuit = reference tests, sidecar and ZK run (`benchmarks/network_traces/compile_slice_zk.py`) are at the
+its circuit = reference tests and sidecar are at the
 demonstration classes (`demo`, `demo_async`) and at the served vLLM run's sizes. At AS = 1 ``rows`` is ``map``'s: R²
 products of a slot's row and 2·R·(R − 1) one-to-one ANDs a step in place of the slot-for-slot comparison.
 

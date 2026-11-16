@@ -10,7 +10,7 @@ statics and tie are vLLM's compiler's (`adapters/vllm/verity_vllm/compiler`).
 
 - **Python**: `verity.protocols.resource_accounting.network.prover`. Its importers, each with the modules it imports:
   - `adapters/vllm`: `ingress_scan`, `window_charge`, `workload`;
-  - `benchmarks/network_traces`: `block_certifier`, `egress_zk`, `ingress_scan`, `leak_scan`, `lengths_row`, `n2_zk`,
+  - `benchmarks/network_traces`: `ingress_scan`, `leak_scan`, `lengths_row`, `n2_zk`,
     `network_attester_zk`, `proof_drivers`, `released_keys`, `scan_period`, `scan_zk`, `stop_verdicts`, `window_chain`,
     `window_charge`;
   - `benchmarks/network_e2e`: `window_chain`, `window_charge`;
@@ -23,7 +23,7 @@ statics and tie are vLLM's compiler's (`adapters/vllm/verity_vllm/compiler`).
   - `verity/protocols/compose/verifier/live_challenger`: its tests, `released_keys` and `scan_zk`;
   - `verity/protocols/resource_accounting/network/verifier`: its tests, `egress`, `ingress_scan`, `io_ids`, `lengths_row`,
     `response_tie`, `window_charge` and `workload`. No module of that package imports this one.
-- **Commands**: no console script and no Lean. The drivers `egress_zk`, `n2_zk`, `n2_tie_zk`, `network_attester_zk`,
+- **Commands**: no console script and no Lean. The drivers `n2_zk`, `n2_tie_zk`, `network_attester_zk`,
   `released_keys`, `scan_period` and `scan_zk` each have a `__main__`, which `benchmarks/network_traces`'s jobs run.
 - **The period check's evidence**: `period.verified_answer`, each answer the period check reads with its one-stage
   inputs; an interface, its body not written.
