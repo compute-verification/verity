@@ -341,7 +341,7 @@ private theorem printable_arr {arr : Array Json} (h : ∀ e ∈ arr, JsonCanon.P
   rcases List.mem_append.1 hc1 with hmid | hbr
   · rcases mem_intercalate_rev _ hmid with hsep | ⟨x, hx, hcx⟩
     · rw [List.mem_singleton] at hsep; subst hsep; decide
-    · rw [FirewallJson.jsonCharsList_eq] at hx
+    · rw [jsonCharsList_eq] at hx
       obtain ⟨e, he, rfl⟩ := List.mem_map.1 hx
       exact (printable_iff_chars.1 (h e (Array.mem_toList_iff.1 he))) c hcx
   · rw [List.mem_singleton] at hbr; subst hbr; decide
@@ -359,10 +359,10 @@ private theorem printable_mkObj {L : List (String × Json)} (hd : L.Pairwise fun
   rcases List.mem_append.1 hc1 with hmid | hbr
   · rcases mem_intercalate_rev _ hmid with hsep | ⟨x, hx, hcx⟩
     · rw [List.mem_singleton] at hsep; subst hsep; decide
-    · rw [FirewallJson.jsonCharsObj_eq] at hx
+    · rw [jsonCharsObj_eq] at hx
       obtain ⟨e, he, rfl⟩ := List.mem_map.1 hx
       obtain ⟨e', he', rfl⟩ := List.mem_map.1 ((perm_ofList hd).mem_iff.1 he)
-      rw [FirewallJson.memberChars] at hcx
+      rw [memberChars] at hcx
       rcases List.mem_append.1 hcx with hkey | hval
       · rcases List.mem_cons.1 hkey with rfl | hk2
         · decide
@@ -390,6 +390,7 @@ private theorem printable_hexOf (b : ByteArray) : JsonCanon.Printable (.str (hex
 
 /-- The partition object prints to ASCII: its format tag and query are concrete literals, its one spliced leaf is the
 program digest (`printable_hexOf`). -/
+set_option maxHeartbeats 4000000 in
 private theorem printable_partition : JsonCanon.Printable partitionObj := by
   unfold partitionObj Spot.Partition.build
   refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
@@ -409,6 +410,7 @@ private theorem printable_partition : JsonCanon.Printable partitionObj := by
 /-- The component parameters print to ASCII: every character of `printJson paramsJ` is below `0x7f`. The concrete members
 are discharged by the kernel; the hash-spliced ones (the challenger key, the proofs' digests, the program and the window
 root) by `printable_hexOf`, `printable_partition` and `ProgramParse.printable_programJ`. -/
+set_option maxHeartbeats 4000000 in
 theorem printable_paramsJ : JsonCanon.Printable paramsJ := by
   rw [paramsJ]
   refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
@@ -457,6 +459,7 @@ theorem printable_paramsJ : JsonCanon.Printable paramsJ := by
 
 /-- The composite's parameters print to ASCII; the `Printable` witness `canon_plain` takes for `θJ`. The one component's
 `id` is a concrete literal and its `params` is `paramsJ`. -/
+set_option maxHeartbeats 4000000 in
 theorem printable_θJ : JsonCanon.Printable θJ := by
   rw [θJ]
   refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
