@@ -241,6 +241,49 @@ DOCKET_SCOPED = [
     (["security/Proofs/Properties/Verity/Recursive/Refusals.lean"], {"p.own.registration": "p.own.docket"}),
     (["security/Properties/lean-audit.json"], {"Spot.MonitoringPeriod.registrationOf": "Spot.MonitoringPeriod.docketOf"}),
 ]
+#: files whose code spells the words only for other names (the registration protocol's, PoUB's, PoUW's, the ZK server's,
+#: a circuit input's binding, the recursion proofs' own records) or for locals: the docket part leaves them as they are.
+DOCKET_OTHERS = [
+    *(f"security/Proofs/Flock/Claims/Recursion/{f}.lean"
+      for f in ("CoinTie", "ComposeParts", "ComposeShared", "Deploy", "DeployInputs", "OpensReads", "RestElemR")),
+    "security/Proofs/Properties/InferenceOnly/Lemmas.lean",
+    "security/Proofs/Properties/Poub/Remote/Sample.lean",
+    "security/Proofs/Properties/Poub/Remote/SubprotocolWitnesses.lean",
+    "security/Proofs/Properties/Verity/Recursive.lean",
+    "security/Properties/InferenceOnly.lean",
+    "security/Properties/Poub/Remote.lean",
+    "security/Properties/Poub/Remote/HonestLog.lean",
+    "security/Properties/Poub/Remote/HonestLog/Case.lean",
+    "verity/circuits/evaluate/Evaluate/Walk.lean",
+    "verity/circuits/lean/Circuits/Program.lean",
+    *(f"verity/protocols/accounting/poub/verifier/lean/Poub/{f}.lean" for f in ("Difftest", "Protocol", "Window")),
+    *(f"verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/{f}.lean" for f in ("CreditOnce", "Lanes", "LeafOwn", "Pass")),
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/RegFile.lean",
+    "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Check.lean",
+    FLOCK + "Flock/Registered.lean",
+    *(f"verity/protocols/proofs/recursion/verifier/zk_server/ZkServer/{f}.lean" for f in ("Loop", "Record")),
+    SPOT + "Produced.lean",
+]
+
+
+def docket_unsorted() -> list[str]:
+    """The `.lean` files whose code (`rename.regions`: not a comment or a string) spells a word of `DOCKET_WORDS` and that
+    none of the docket part's lists names: each needs reading, and a place in one of them, before the part runs."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import rename
+    named = {*DOCKET_FILES, *DOCKET_OTHERS, *(f for files, _ in DOCKET_SCOPED for f in files)}
+    word = re.compile(r"(?<![\w'])(?:" + "|".join(sorted(DOCKET_WORDS, key=len, reverse=True)) + r")(?![\w'])")
+    out = []
+    for f in tracked("*.lean"):
+        if f in named or "/tests/fixtures/" in f"/{f}" or not word.search(text := Path(f).read_text(encoding="utf-8")):
+            continue
+        parts = rename.regions(f, text)
+        if any(rename.kind_at(parts, m.start()) == rename.CODE for m in word.finditer(text)):
+            out.append(f)
+    return out
+
+
 DOCKET_HEADER = """\
 # Written by tools/move/lean_names_pass.py --part docket: the Lean names pass's docket part, which `rename.py --map` runs
 # after the pass's map and `--hand`, and which is dropped whole by not running it. SPOT's run record, the circuit's digest,
@@ -307,6 +350,9 @@ def main() -> None:
         return hand()
     parts = a.part or ["areas", "ontology", "retired"]
     if "docket" in parts:
+        if unsorted := docket_unsorted():
+            raise SystemExit("the docket part: these files' code spells `registration` words its lists don't sort; read "
+                             "each and add it to DOCKET_FILES, DOCKET_SCOPED or DOCKET_OTHERS:\n  " + "\n  ".join(unsorted))
         DOCKET_MAP.write_text(docket())
         print(DOCKET_MAP)
         if parts == ["docket"]:
