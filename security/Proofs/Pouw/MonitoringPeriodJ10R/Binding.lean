@@ -12,7 +12,7 @@ public import Definitions.Compose.Guarantees.PeriodBinding
 # A sampled layer's binding from its hashed openings
 
 The reduction behind binding's premise at a sampled window's proofs whose openings are frame-v3-sha512 paths
-(`Accounting.TS.HashedOpenings`), for any `SampledLayer`, at J10-R's (`tileLayer`), and at every period's
+(`ResourceAccounting.TS.HashedOpenings`), for any `SampledLayer`, at J10-R's (`tileLayer`), and at every period's
 (`Declared.monitoringPeriodLayer`) as the guarantee `Pouw.SecurityProofs.MonitoringPeriodBindingPerProver`, with its two witnesses. The
 open terms are explicit.
 
@@ -44,7 +44,7 @@ position's leaf, and none fixes a position's verifier, root and rank by its cut.
 
 namespace Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.Binding
 
-open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose Pouw.RelativeSecurity
 
 section Layer
 
@@ -97,7 +97,7 @@ theorem prob_cont (ℓ : Pos) (P : Paths (Paths C m × B) S → Prop) :
     prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => P (pf.cont ℓ p.1 p.2)) =
       prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => P p.1) := by
   have hs : ∀ x z, pf.cont ℓ (pf.cont ℓ x z) (pf.cont ℓ z x) = x :=
-    Accounting.SecurityProofs.TS.spliceAt_swap (pf.cut ℓ).1 (pf.cut ℓ).2
+    ResourceAccounting.SecurityProofs.TS.spliceAt_swap (pf.cut ℓ).1 (pf.cut ℓ).2
   let Φ : Paths (Paths C m × B) S × Paths (Paths C m × B) S → Paths (Paths C m × B) S × Paths (Paths C m × B) S :=
     fun p => (pf.cont ℓ p.1 p.2, pf.cont ℓ p.2 p.1)
   have hΦ : Function.Involutive Φ := fun p => by simp only [Φ, hs]
@@ -108,7 +108,7 @@ theorem prob_cont (ℓ : Pos) (P : Paths (Paths C m × B) S → Prop) :
 theorem finds_le [Nonempty (Paths (Paths C m × B) S)] (H : Hash.Msg → Hash.Digest) (L : Finset Pos) (q : ℕ) :
     prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => ∃ uv, hl.Finds pf H L p.1 p.2 uv) ≤
       (hl.finder pf H L q).Pr (fun u => (H u).bytes) := by
-  rw [Claims.Finder.Pr, Accounting.SecurityProofs.Remote.Binding.claims_pr]
+  rw [Claims.Finder.Pr, ResourceAccounting.SecurityProofs.Remote.Binding.claims_pr]
   refine prob_mono (Ω := Paths (Paths C m × B) S × Paths (Paths C m × B) S) fun y hy => ?_
   refine ⟨hy.choose.1, hy.choose.2, ?_, hy.choose_spec.1⟩
   simp [HashedOpenings.finder, hy]
@@ -144,7 +144,7 @@ theorem forked_le [Nonempty (Paths (Paths C m × B) S)] (H : Hash.Msg → Hash.D
         ((prob_or_le _ _).trans (add_le_add hU le_rfl)))
 
 open Classical in
-/-- **Binding through `ecr/sha-512` at the fork finder** (`Accounting.Guarantees.Compose.BindingOfECR` at
+/-- **Binding through `ecr/sha-512` at the fork finder** (`ResourceAccounting.Guarantees.Compose.BindingOfECR` at
 `forked_le`): for every `δ' > 0`, `Pr[MovedIn w] ≤ δ' + |L|²/(4δ')·(ecr(finder) + κ)`, `κ` the unverified and split
 terms. -/
 theorem movedIn_le [Nonempty V] [Nonempty (Paths (Paths C m × B) S)] (H : Hash.Msg → Hash.Digest) (L : Finset Pos)
@@ -156,7 +156,7 @@ theorem movedIn_le [Nonempty V] [Nonempty (Paths (Paths C m × B) S)] (H : Hash.
           else (⊤ : ENNReal)) +
           ENNReal.ofReal (2 * ∑ ℓ ∈ L, prob (fun x => hl.Unverified pf H x ℓ) +
             prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => ∃ ℓ ∈ L, hl.Split pf p.1 p.2 ℓ))) :=
-  Accounting.SecurityProofs.Compose.Binding.bindingOfECR C B S m s pf w L (fun u => (H u).bytes)
+  ResourceAccounting.SecurityProofs.Compose.Binding.bindingOfECR C B S m s pf w L (fun u => (H u).bytes)
     (hl.finder pf H L q) _ δ' hL hδ (forked_le hl pf H L q)
 
 /-- **Binding under `ecr/sha-512` at the fork finder's `q` calls**: `Pr[MovedIn w] ≤ |L|·√(q/2^256 + κ)`, `κ` the
@@ -178,7 +178,7 @@ theorem movedIn_le_sqrt [Nonempty V] [Nonempty (Paths (Paths C m × B) S)] (H : 
     have := hcr
     unfold Claims.ExpectedCR at this
     rwa [hEx] at this
-  have hsq := Accounting.SecurityProofs.TS.SampledBindingOfFork C B S m s pf w L hL
+  have hsq := ResourceAccounting.SecurityProofs.TS.SampledBindingOfFork C B S m s pf w L hL
   have hΦ := (forked_le hl pf H L q).trans (add_le_add hP le_rfl)
   calc prob (fun x => pf.MovedIn x w) = √(prob (fun x => pf.MovedIn x w) ^ 2) := (Real.sqrt_sq (prob_nonneg _)).symm
     _ ≤ √((L.card : ℝ) ^ 2 * (q / 2 ^ (256 : ℝ) + (2 * ∑ ℓ ∈ L, prob (fun x => hl.Unverified pf H x ℓ) +
@@ -223,7 +223,7 @@ theorem monitoringPeriodPositions_mem {ι C Ξ V : Type} (Cd : Declared ι) {n N
 
 section OneMonitoringPeriod
 
-open Accounting.Compose.PeriodBinding
+open ResourceAccounting.Compose.PeriodBinding
 
 theorem oneProb_zero {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p ω) : prob p = 0 := by
   classical
@@ -312,7 +312,7 @@ theorem acceptAll_moved : ∃ x, acceptAllLayer.MovedIn x 0 := by
 /-- Under `honestOutcomes` every position a tile reads is committed to `false`. -/
 theorem honest_committed (x : OneCoins) (w : Fin 1) : honestLayer.committed x (w, 0) = false := by
   unfold SampledLayer.committed
-  refine Accounting.SecurityProofs.TS.FixedMeets.plural_of_val _ _ (fun _ => false) (fun y v => ⟨?_, ?_⟩) x
+  refine ResourceAccounting.SecurityProofs.TS.FixedMeets.plural_of_val _ _ (fun _ => false) (fun y v => ⟨?_, ?_⟩) x
     fun _ => rfl
   · rintro ⟨_, _, _, -, -, hv⟩
     exact hv.symm
@@ -325,7 +325,7 @@ end Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.Binding
 
 namespace Pouw.SecurityProofs
 
-open Accounting.Compose Accounting.Compose.PeriodBinding Accounting.TS Pouw.RelativeSecurity
+open ResourceAccounting.Compose ResourceAccounting.Compose.PeriodBinding ResourceAccounting.TS Pouw.RelativeSecurity
   Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.Binding
 
 /-- **A period's binding per prover** (`movedIn_le_sqrt` at the period's positions). -/

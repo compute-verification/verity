@@ -4,7 +4,7 @@ The simplest exact path from the P2-encoded weights store to the W8A8 GEMM on on
 layer's matrix with memory-accounting's P2 decode, unchanged, into a plaintext load buffer, then run the exact GEMM
 on that buffer.
 
-- `layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from the store's
+- `verity/protocols/resource_accounting/memory/poub/prover/p2_stage/layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from the store's
   layout JSON (memory-accounting's `p2_store/store.py layout`, or its toy's `toy.json`): each tensor from a label boundary,
   zero past its end, and at its `staging_offset` in its layer's load buffer. `Weights` is the plaintext, the seeded
   weights stream (`verity.protocols.resource_accounting.memory.pous.prover.served_weights`), and `payloads` lays it out as the store's W. `check_blocks` holds
@@ -14,7 +14,7 @@ on that buffer.
   development store under a public test salt. An encoded store is refused unless its `setup.json`'s `program` is the
   weights manifest's name of its weights (`weights_name`: the generator's `model`), and a manifest that gives no name
   is refused; only a caller that holds nothing to a weights manifest passes none.
-- `stage.py`: `decode_matrix(store, layer, tensor, out_buf)` and the fixture's `decode_layer(store, layer, staging)`,
+- `verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py`: `decode_matrix(store, layer, tensor, out_buf)` and the fixture's `decode_layer(store, layer, staging)`,
   built on `libp2v1.so` through `p2_store.gpu.Kernels` (keys by `p2v1_keys` v4, then `p2v1_decode`). A chunk of labels is
   decoded at a time, and each row's payload bytes are scattered to their place in the buffer. What the reference refuses
   raises `StoreError` with the fixture's flag bits: 2 for a row that isn't a codeword or isn't below p, 3 for a last

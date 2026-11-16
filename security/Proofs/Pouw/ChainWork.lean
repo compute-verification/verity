@@ -21,7 +21,7 @@ note proposes and no guarantee states.
 
 @[expose] public section
 
-namespace Accounting.ChainWork
+namespace ResourceAccounting.ChainWork
 
 open Pous Pous.Labelling
 open scoped ENNReal
@@ -141,4 +141,4 @@ theorem chain_work (N w m : ℕ) (d : Fin (N + 1) → Bits w) (A₁ : (LabelQry 
     rw [mul_comm ((N + 1 : ℕ) : ℝ≥0∞), mul_assoc, ← mul_div_assoc, ← mul_div_assoc, ← Nat.cast_mul,
       show (N + 1) * (N + 1 + (N + 1)) ^ 2 = 4 * (N + 1) ^ 3 by ring]
 
-end Accounting.ChainWork
+end ResourceAccounting.ChainWork

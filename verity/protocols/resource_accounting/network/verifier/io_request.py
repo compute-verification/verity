@@ -3,7 +3,7 @@ the proof block a bucket row that binds each request's prompt_len and arrival or
 certified ingress cells, its reference in the clear and the Boolean Definitions it is built from. Nothing here is in a
 Spec or proved.
 
-**The cells are the network attester's** (`network_attester.NetworkCertifier._ingress`, its rows as `network_attester_rows` registers them, a row a
+**The cells are the network attester's** (`network_attester.NetworkAttester._ingress`, its rows as `network_attester_rows` registers them, a row a
 bucket). An execution phase's ingress is T rows, row t bucket t's L·R slots of B bytes, R the network attester's r. A
 bucket's live connections, admitted and not past their ingress `END`, hold R slots each, ranked by ordinal (lane ρ:
 slots ρ·R … ρ·R + R − 1), and a slot no connection holds is B zero bytes. Connection q's cells are its client's bytes
@@ -364,10 +364,10 @@ class ServedIngress(NamedTuple):
     records: tuple = ()
 
 
-def serve(params: W.NetworkCertifierParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
+def serve(params: W.NetworkAttesterParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
           buckets: int, hold: int = 0) -> ServedIngress:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], and the network attester's own ingress
-    (`network_attester.NetworkCertifier._ingress`) serves it: admitted in arrival order at the first bucket with a free lane, which it
+    (`network_attester.NetworkAttester._ingress`) serves it: admitted in arrival order at the first bucket with a free lane, which it
     holds until `hold` buckets after its ingress `END` (standing in for its egress), its client's bytes arriving
     rate[k] a bucket from its admission (its `END` with the last)."""
     B = params.cell_bytes
@@ -387,7 +387,7 @@ def serve(params: W.NetworkCertifierParams, requests: Sequence[bytes], arrivals:
             c.ingress += requests[k][c.bytes_in:sent]
             c.bytes_in, c.ingress_ended = sent, sent == len(requests[k])
             if c.ingress_end is None:
-                frames = W.NetworkCertifier._ingress(network_attester, c, t)
+                frames = W.NetworkAttester._ingress(network_attester, c, t)
                 got.setdefault(c.ordinal, []).append(sum(f[0] in (DATA, W.END) for f in frames))
                 for f in frames:
                     grid.enqueue(f)

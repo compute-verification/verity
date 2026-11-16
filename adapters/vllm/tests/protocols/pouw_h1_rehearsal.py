@@ -135,8 +135,12 @@ def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
     import time
 
     from verity.circuits.codec import canonical_json, encode_program, program_digest
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        h1 as PH,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        served as SV,
+    )
 
     from tests.protocols.pouw_h1_gpu import layout_of
     d.mkdir(parents=True, exist_ok=True)
@@ -176,9 +180,15 @@ def declaration(layers: int = 32) -> tuple[list[tuple[int, int]], dict[int, str]
 def declared_draw_k(layers: int = 32) -> int:
     """The sample K the period's open commits (``--draw-k``, ``draw_k``) for the declared window: the proof system's
     selection, `pouw_h1_challenger.draw_k` over `pouw_h1_served.declared_layout`, which `credit.strata` reads."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        h1 as PH,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        challenger as PHC,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        served as SV,
+    )
     shapes, modules = declaration(layers)
     return PHC.draw_k(SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps))
 
@@ -186,7 +196,9 @@ def declared_draw_k(layers: int = 32) -> int:
 def fill_length() -> dict:
     """The fixed length `pouw_h1.FILL` serves (``--length``, `credit.LENGTH_FIELD`): each of its requests' public
     max_tokens, every one admitted at step 0 and run to its cap (``ignore_eos``, the public-cap done source)."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        h1 as PH,
+    )
     return {"max_tokens": [PH.FILL.max_tokens] * PH.FILL.slots, "stop": "fixed"}
 
 
@@ -197,7 +209,9 @@ def period_open_argv(name: str, cap: int, circuit: str, draw_k: int, model: str 
     (``--model``, whose registration's weights' root the open signs; never a ``--weights-root`` of the prover's), each
     stratum's circuit file's SHA-512 (``--circuit-files``, `pouw_h1_circuits.build`'s ``files``) and the fixed length
     its window serves (``--length``, `fill_length`)."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        h1 as PH,
+    )
     return ["period-open", "--name", name, "--cap", str(cap), "--circuit", circuit, "--draw-k", str(draw_k),
             "--rows", str(PH.FILL.rows), *(["--model", model] if model else []),
             "--circuit-files", json.dumps(circuit_files, sort_keys=True, separators=(",", ":")),
@@ -264,8 +278,12 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     import shutil
     import time
 
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import handoff as HO
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        handoff as HO,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        prover as PV,
+    )
     prover = PV.private(Path(a.prover_root) / reserved["session"])
     scratch = Path(tempfile.mkdtemp(prefix="h1-handoff-"))
     holder = HO.Holder(scratch / "stream.sock")
@@ -308,7 +326,9 @@ def key_custody(prover: Path, published: Path) -> dict[str, Any]:
     import os
     import stat
 
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        prover as PV,
+    )
     path = prover / PV.KEY
     if not path.is_file():
         return {"kept": False, "ok": False}
@@ -383,9 +403,15 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     from a sampling challenge phase the gate reserves beside it and opens withheld on the window's sample root
     (`pouw_h1_window.DrawSession`), as `test_pouw_h1._salted` forges one in process: (the forged commitment, its
     challenge phase, its sample's)."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        challenger as PHC,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        requests as RQ,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        window as PHW,
+    )
     from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
     reserved = gate("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.families(len(honest["rounds"])),
                     "--minutes", "30")
@@ -506,8 +532,12 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
 
 
 def rehearse(a: argparse.Namespace) -> dict[str, Any]:
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        h1 as PH,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        challenger as PHC,
+    )
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "period": a.period, "live": a.gate is not None, "served": a.served}

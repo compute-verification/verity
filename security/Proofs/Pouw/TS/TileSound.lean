@@ -39,21 +39,21 @@ import Proofs.Pouw.RelativeSecurity
 /-!
 # A tile unit's proof layer with its Definition's checks is sound through its Flock sessions (the proof)
 
-`Accounting.SecurityProofs.TS.TileSessionSound`, as `Accounting.SecurityProofs.TS.HeldSessionSound` is proved. The tile
+`ResourceAccounting.SecurityProofs.TS.TileSessionSound`, as `ResourceAccounting.SecurityProofs.TS.HeldSessionSound` is proved. The tile
 layer accepts where the checked layer does and verity-verify-proof's known-content and complete checks pass, and opens the
 same rows, so `AcceptedLive` is its acceptance's first conjunct. Its unsound event is inside the checked layer's
 (`Pouw.RelativeSecurity.prob_mono`), because on every path an accepted proof whose rows meet `CheckedRel` meets
 `TileRel` (`tile_of_checked`): each `ok` wire is at the `ok` row unless the `ok` tie collides
-(`Accounting.TS.Held.tie_ok`), the checked relation's assignment is the opened rows there, and
-`Accounting.Assumptions.TS.TileChecks`, which `TileComputes` gives at the tile's `K`
-(`Accounting.TS.Tile.tileChecks_of_computes`), gives each sampled proof block's decoded cells.
+(`ResourceAccounting.TS.Held.tie_ok`), the checked relation's assignment is the opened rows there, and
+`ResourceAccounting.Assumptions.TS.TileChecks`, which `TileComputes` gives at the tile's `K`
+(`ResourceAccounting.TS.Tile.tileChecks_of_computes`), gives each sampled proof block's decoded cells.
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Tile
+namespace ResourceAccounting.TS.Tile
 
-open Accounting.TS Accounting.TS.Checked Accounting.TS.Held Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Held Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 
 /-- **An accepted proof's rows that meet `CheckedRel` meet `TileRel`**: at a session whose known-content check passed,
 naming `ok` with rows each the word `1`, whose served roots are registered and whose circuit computes the tile's
@@ -63,7 +63,7 @@ theorem tile_of_checked {R C K : ℕ} (s : RowsSession) (o : s.Out) (ok : String
     {dec : (ℕ → ℕ → Option Bool) → ℕ → TileView R C K}
     (hk : Flock.Registered.checkKnownAll s.own known = .ok ()) (hm : (ok, ks) ∈ known)
     (hks : ∀ r ∈ ks, r.1 = okRow) (hS : ∀ u, s.ServedRegistered u)
-    (hT : Accounting.Assumptions.TS.TileChecks dq s ok dec) (hK32 : 32 ∣ K) (hK : K < 2 ^ 17)
+    (hT : ResourceAccounting.Assumptions.TS.TileChecks dq s ok dec) (hK32 : 32 ∣ K) (hK : K < 2 ^ 17)
     (hc : CheckedRel s o ok (openedReg s)) : TileRel s o ok dq dec known (openedReg s) := by
   refine ⟨hc, ?_⟩
   by_cases hcol : OkColl s ok ks
@@ -78,13 +78,13 @@ theorem tile_of_checked {R C K : ℕ} (s : RowsSession) (o : s.Out) (ok : String
   rw [regRead_at s _ hg hr, regRead_at s _ hg hr] at e
   exact (Option.some.inj e).symm
 
-end Accounting.TS.Tile
+end ResourceAccounting.TS.Tile
 
-open Accounting.TS Accounting.TS.Checked Accounting.TS.Tile in
-theorem Accounting.SecurityProofs.TS.TileSessionSound : Accounting.Guarantees.TS.TileSessionSound := by
+open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Tile in
+theorem ResourceAccounting.SecurityProofs.TS.TileSessionSound : ResourceAccounting.Guarantees.TS.TileSessionSound := by
   intro Ω _ S nπ R C K P sess out ok known form dqW rd right δ hCR hSamplingDesign hk hS hok hKn hK32 hK hT hδ hδ0
   refine ⟨fun _ _ _ h => h.1, fun w i => ?_⟩
-  have hC := (Accounting.SecurityProofs.TS.CheckedSessionSound sess out ok right δ hCR hSamplingDesign hk hS hok hδ
+  have hC := (ResourceAccounting.SecurityProofs.TS.CheckedSessionSound sess out ok right δ hCR hSamplingDesign hk hS hok hδ
     hδ0).2.2.2
   have hsub : ∀ x, (tileLayer sess out ok known (Lanes.dqOf dqW) (fun x w i v u => tileView (rd x w i v u))
       right).Unsound x w i → (checkedLayer sess out ok right).Unsound x w i := by

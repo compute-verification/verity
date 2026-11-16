@@ -784,7 +784,7 @@ STANDING = {"Verity.Assumptions.TrustedDevice": "trusted-device: the network cer
                                               "at the times it crossed, not what the device's code computes, and, "
                                               "with the auditor's placement of it (certifier-coverage), that the "
                                               "node has no egress but through it",
-            "Accounting.Covered": "certifier-coverage: the links in the room are the registered ones, each through the "
+            "ResourceAccounting.Covered": "certifier-coverage: the links in the room are the registered ones, each through the "
                                   "network certifier (a listed physical premise, the auditor's placement, under "
                                   "trusted-device). The site registration asserts that the network certifier splits the "
                                   "node's uplink; that the node has no other egress is this placement, which the "

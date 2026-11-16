@@ -66,7 +66,7 @@ short of those receipts' words leaves some window short (`Run.pr_unpaid_le`), an
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -301,28 +301,28 @@ theorem pr_unpaid_le {τ : ℕ} (A : Run n P N b h ρ S L q r s d) (tier : ℕ �
 
 end Run
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono pr_or_le)
 
-/-- **A window's pooled sample** (`Accounting.Guarantees.RateWindowSample`). -/
-theorem RateWindowSample : Accounting.Guarantees.RateWindowSample := by
+/-- **A window's pooled sample** (`ResourceAccounting.Guarantees.RateWindowSample`). -/
+theorem RateWindowSample : ResourceAccounting.Guarantees.RateWindowSample := by
   intro P N b h ρ S L q r s d K A
   exact Chain.pr_sample_le A d K
 
-/-- **A session's pooled samples: the monitoring period and every window** (`Accounting.Guarantees.RateRunSample`). -/
-theorem RateRunSample : Accounting.Guarantees.RateRunSample := by
+/-- **A session's pooled samples: the monitoring period and every window** (`ResourceAccounting.Guarantees.RateRunSample`). -/
+theorem RateRunSample : ResourceAccounting.Guarantees.RateRunSample := by
   intro n P N b h ρ S L q r s d K Kw A
   exact Run.pr_samples_le A K Kw
 
 /-- **The route `Sampled` for a session, with named words, with side sources that ignore the oracle**
-(`Accounting.Guarantees.RateRunSampledNamedRO`). -/
-theorem RateRunSampledNamedRO : Accounting.Guarantees.RateRunSampledNamedRO := by
+(`ResourceAccounting.Guarantees.RateRunSampledNamedRO`). -/
+theorem RateRunSampledNamedRO : ResourceAccounting.Guarantees.RateRunSampledNamedRO := by
   intro n P N b h ρ S L q r s d K Kw lam τ tier A hA
   have h₁ := Run.pr_samples_le A K Kw
   have h₂ := Run.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun w η j ι =>
@@ -350,4 +350,4 @@ theorem RateRunSampledNamedRO : Accounting.Guarantees.RateRunSampledNamedRO := b
     push Not at hD
     exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

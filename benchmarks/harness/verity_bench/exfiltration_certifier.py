@@ -42,17 +42,18 @@ def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction
     def read(inp: Mapping, **rows: Any) -> dict:
         doc = lb.document(inp, **rows, **charged)
         if (schema := doc["schema"]) != TERM_SCHEMA:
-            raise ValueError(f"the network certifier's document is `{schema}` and this command reads `{TERM_SCHEMA}`: its "
+            raise ValueError(f"the network attester's document is `{schema}` and this command reads `{TERM_SCHEMA}`: its "
                              "term of record, its rows' terms by jitter bound, their ε and their labels may mean "
                              "something else (read the new document in benchmarks/harness/verity_bench/exfiltration.py "
                              "and name its schema there)")
         if off := sorted(name for name, k in doc["legend"].items() if k.get("mark") not in (None, *MARKS)):
-            raise ValueError(f"the network certifier's rows {', '.join(off)} carry a mark this command doesn't print: a "
+            raise ValueError(f"the network attester's rows {', '.join(off)} carry a mark this command doesn't print: a "
                              f"row's mark is one of {', '.join(MARKS)}")
         return doc
 
     how = "given (--scan-delta)"
     if scan_delta is None:
+        # the document's `scan_delta` source, as `exfiltration/v3` writes it until a format version
         most = max(read(lb.inputs(response_ids=response_ids), only=SCOPES)["rows"], key=lambda r: r["phases"])
         scan_delta = PERIOD_ERROR / Fraction(most["phases"])
         how = (f"this command's, in place of the calculator's default: {_p(float(PERIOD_ERROR))}, the error a monitoring "

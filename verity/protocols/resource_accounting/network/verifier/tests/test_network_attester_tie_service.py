@@ -33,7 +33,7 @@ import standin
 
 B = 512
 #: two lanes of r = 2 slots, 4-bucket windows
-PARAMS = W.NetworkCertifierParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
+PARAMS = W.NetworkAttesterParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
 LINK, RUN = "requests", "r-tie-test"
 SESSION = hashlib.sha512(b"tie-test").digest()
 #: a span: request 1 (40 tokens) takes 2 cells, its DATA in bucket 3 and its END in bucket 4, so it
@@ -382,7 +382,7 @@ def test_the_tie_gate_names_its_pinned_circuit_digest():
 def test_an_unpinned_size_class_is_refused(tmp_path):
     """IoTieRequest at L = 3 has no pinned circuit digest, so its gate names none and no proof of its proof block is
     accepted, even one Lean accepts."""
-    params = W.NetworkCertifierParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1)
+    params = W.NetworkAttesterParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1)
     served = _serve(params=params, windows=2)
     run, advice = Run(tmp_path, params=params, served=served), _advice(SPAN)
     assert not HC.pinned(run.tie.gates()[0])
