@@ -12,7 +12,7 @@ Definition before anything is timed; nothing here changes a committed format, an
 | `ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh` | the ship frame, below |
 | `job_nvcc.sh` | the nvcc a job's own library compiles with off the card, outside a ship |
 
-Each directory is also a test suite, run on the CPU from the tree's root:
+Each directory but `moe_align` is also a test suite, run on the CPU from the tree's root:
 
 ```bash
 uv sync --all-packages --extra torch-cpu

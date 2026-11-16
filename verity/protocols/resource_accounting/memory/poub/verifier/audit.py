@@ -78,7 +78,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: the plan and memory-map units and
    the census's layout rule, the memory-map unit's verdict on the record's appends and heads among them, `mapped`),
    each pass is credited the bits the circuit reads from complete blocks at its step, less a block for each planned
-   block it credits no receipt of (`linked_bits`, `Accounting.Guarantees.RequirementMoved`; `GammaTerms.linked`), less
+   block it credits no receipt of (`linked_bits`, `ResourceAccounting.Guarantees.RequirementMoved`; `GammaTerms.linked`), less
    the share ε of it the units' sample leaves unproved, its δ added to the ledger's error (`GammaTerms.error`);
    without one the credit is the node's reads of its store.
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
@@ -163,7 +163,7 @@ window it joined (the window of the first root received after its append), L = `
 of T in D, so it leaves the credited store within L windows unless the prover appends it again, which gives it a fresh
 index and a fresh coin, and so a fresh bound key.  A carrier of a registered circuit's may work on a block from its coin
 until it leaves, so what the carriers may hold grows with the passes in L windows
-(`Accounting.Guarantees.RegisteredCircuitRequirement`'s `C`): over 30 s of 61 ms passes it is under 8% of the store at
+(`ResourceAccounting.Guarantees.RegisteredCircuitRequirement`'s `C`): over 30 s of 61 ms passes it is under 8% of the store at
 both served models' caps (`PROTOCOL.md` §4, "The lifetime cap"), where 60 windows was an hour at the stated window."""
 
 
@@ -1477,7 +1477,7 @@ class PostSeedVerdict(Protocol):
 
 
 class RequirementLink(Protocol):
-    """The served circuit's requirement, linked to a session's passes (Lean's `Accounting.Requirement`), as `ledger`
+    """The served circuit's requirement, linked to a session's passes (Lean's `ResourceAccounting.Requirement`), as `ledger`
     reads it: whether the link `holds`, and `read_bits(step)`, the bits the circuit reads at a step from complete blocks
     (`creditedReadBits`: the bits of `requirement.credited_reads` in `verity.circuits`; for a store of registered
     blocks only, the weights while KV isn't registered, the bits the step reads of registered values).  It holds once
@@ -1524,9 +1524,9 @@ class Scheduled:
     """The schedule check's verdict on a session (`AuditRun.scheduled`, `schedule.check`): every pass's plan was the
     published schedule's at the pass's step, the appends were the schedule's, and the schedule was at most `cap` bits,
     the cap the session's parameters committed before its first coin (`Params.schedule_cap`).  So each pass's layout is
-    the verifier's fixed function of a schedule of at most `cap` bits (`Accounting.ScheduleDeterministic`).  It names
+    the verifier's fixed function of a schedule of at most `cap` bits (`ResourceAccounting.ScheduleDeterministic`).  It names
     its session by its registration and its coin commitment's root, as the record does (`Record.registration`,
-    `Record.coins`).  `cap` bounds the `a` that `Accounting.Assumptions.SteeredLayout` reads for this session: fewer
+    `Record.coins`).  `cap` bounds the `a` that `ResourceAccounting.Assumptions.SteeredLayout` reads for this session: fewer
     than 2^(cap+1) schedules encode in at most `cap` bits, and the cap was fixed before the coins, so on every coin the
     check accepts the layout is one of those schedules' plans.  The bits of the schedule published after the coins
     would not bound it: their length can follow the coins."""
@@ -1666,13 +1666,13 @@ def pooled(record: Record) -> tuple[float, float]:
 
     Window t samples s_t distinct receipts of its U_t from its own openings coin, released after its roots, so they all
     land on correct ones with probability at most g_t^(s_t), g_t its correct share, however the prover adapted to the
-    windows before.  Over the session (`Accounting.Guarantees.PooledSampling`, `RateRunSample`), every sample lands
+    windows before.  Over the session (`ResourceAccounting.Guarantees.PooledSampling`, `RateRunSample`), every sample lands
     on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t samples
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
     min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on the deployed
     sample, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes,
-    + the receipts' binding term (`Accounting.Guarantees.Remote.PooledSample`, `ledger.draw`).
+    + the receipts' binding term (`ResourceAccounting.Guarantees.Remote.PooledSample`, `ledger.draw`).
 
     Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
     `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.Poub.PooledCovers` proves at least
@@ -1718,7 +1718,7 @@ def linked_bits(window: WindowRecord, requirement: RequirementLink, block_bytes:
                 post_seed: bool) -> tuple[int, ...]:
     """Each pass's credit on a requirement link, in bits, its post-seed receipts credited or not (`post_seed`).
 
-    `Accounting.Guarantees.RequirementMoved`: when the pass's plan covers the complete blocks the circuit reads at its
+    `ResourceAccounting.Guarantees.RequirementMoved`: when the pass's plan covers the complete blocks the circuit reads at its
     step (`PlanMatches`, the link's to hold), a pass that moved the planned blocks M moved every bit the circuit reads
     from complete blocks at that step, r = `read_bits(step)`, but at most a block's b bits for each planned block
     outside M.  A pass computes one receipt a planned block, so one whose receipts are all credited covers its plan,
@@ -1758,7 +1758,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     `link` is a binding record's only: an unbound receipt is of its block alone, and the record says nothing of where
     its read was made.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an
     approximation for a large store).  A sketch-sha512 record's receipts also rest on `SketchBound`
-    (`Accounting.Guarantees.Remote.SketchBoundDeployed` at 64 rows, `SketchBoundRun` at 16), whose terms add to the
+    (`ResourceAccounting.Guarantees.Remote.SketchBoundDeployed` at 64 rows, `SketchBoundRun` at 16), whose terms add to the
     failure probability, not to γ:
     `timing.sketch_failure` of the prover's SHA-512 compressions over the session (`PROTOCOL.md` §4).
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on

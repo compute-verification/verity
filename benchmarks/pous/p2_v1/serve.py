@@ -48,8 +48,8 @@ from verity.protocols.resource_accounting.memory.poub.prover import p2_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, p2, receipts
 
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
-FIXTURE_SHA512 = ("4108408908b13f0b4b7912ce55ecc92c70f37ec71afc8f0b65e9b421831b08f6"
-                  "6b824180d631d850c0190801432c68cdf324f942640f7799a561eff22d1b3840")
+FIXTURE_SHA512 = ("24105e1575ed49793c2eaec7f765ea71303686601c8e29bc514fd5cb6fd277c8"
+                  "cce4adab78668250916e890790a14b1b3f7d4cfac821b9a1fbc4fd5e1b6bb875")
 NODE = b"p2-toy-node"
 EMBED = b"verity-pous/p2-serve/toy/embedding/v0\0"
 FIXTURE_CHALLENGE = hashlib.sha512(b"verity-pous/p2-serve/fixture/challenge/v0").digest()[:receipts.CHALLENGE_BYTES]

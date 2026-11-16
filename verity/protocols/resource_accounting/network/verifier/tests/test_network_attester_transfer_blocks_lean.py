@@ -173,7 +173,7 @@ def test_a_network_attester_phase_reads_the_network_certifiers_digest_and_no_syn
     for s in _syncs(c):
         assert c.both(syncs=s) == honest
     lw = c.lw
-    other = replace(lw, network_attester=SVC.NetworkCertifierProfile(3, bytes(64)))
+    other = replace(lw, network_attester=SVC.NetworkAttesterProfile(3, bytes(64)))
     assert other.program == lw.program
     c.lw = other
     lean, python = c.both()

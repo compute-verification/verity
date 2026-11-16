@@ -171,10 +171,10 @@ class Options:
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
     protocol: str = option("--protocol", choices=tuple(PROTOCOLS), default="vllm",
                            help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
-                                "network certifier's id requests streamed in the scan's id form, raw, and every other request as vllm "
+                                "network attester's id requests streamed in the scan's id form, raw, and every other request as vllm "
                                 "(serve_protocol.IdsProtocol)")
     id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
-                             help="--protocol ids: each id event's bytes, the network certifier's cell payload B − 9 (default 503: the scan's "
+                             help="--protocol ids: each id event's bytes, the network attester's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
@@ -239,7 +239,7 @@ class Options:
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
     admit: str = option("--admit", choices=ADMIT, default="arrival",
-                        help="arrival (default): each request to the engine once parsed; release-order: in the network certifier's release "
+                        help="arrival (default): each request to the engine once parsed; release-order: in the network attester's release "
                              "order (x-verity-release), each once every earlier-released one is in; tick: in release order, each at "
                              "the step whose logical time its release bucket has closed by (serve_admit.TickGate), its windows' "
                              "served rows naming no compile slice (serve_commit.NO_TICK_SLICE)")
@@ -247,7 +247,7 @@ class Options:
                                 help="release-order, tick: skip a missing earlier release once a later request has waited this long; "
                                      "tick: open the gate once the watermark has stalled this long")
     tick_bucket_ms: float = option("--tick-bucket-ms", type=float, default=100.0,
-                                   help="tick: the network certifier's bucket (its deployment's bucket_ms)")
+                                   help="tick: the network attester's bucket (its deployment's bucket_ms)")
     tick_sat_ms: float = option("--tick-sat-ms", type=float, default=0.0,
                                 help="tick: the engine class's step time while vLLM's waiting queue is nonempty (registered with "
                                      "the class)")

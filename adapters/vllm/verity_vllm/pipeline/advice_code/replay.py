@@ -28,7 +28,7 @@ request, whether that request had arrived: at every other step it would be block
 arrival into a quiet engine starts the next step. `compare` matches two schedules step by step.
 
 **The certified tick** (``--admit tick``, `verity_vllm.pipeline.serve_admit.TickGate`) removes the timing input: the engine
-adds a request when a logical clock T has passed the close of its network-certifier release bucket, and T is a function of
+adds a request when a logical clock T has passed the close of its network attester's release bucket, and T is a function of
 the steps (`Tick`, registered with the engine class). `replay(tick=..., released=...)` runs that rule from the certified
 release buckets alone, so it asks nothing.
 

@@ -85,7 +85,7 @@ def streamsOfBlocks (U : Fin 105 × Fin 64 → Hash.Digest) : Streams := fun j b
 /-- **The certificate fits the state bound `S₀`**: `S · len + S_chip + ∑ cap_i · round ≤ S₀`, the capacity account's
 `S` bits a tick over a window of `len` ticks beside the device's on-chip state and its side channels' capacity over
 `round` ticks (`PeriodHeld`'s fit). -/
-def Fits {ι : Type} [Fintype ι] (d : Accounting.Device ι) (len round : ℕ) (S S₀ : ℝ) : Prop :=
+def Fits {ι : Type} [Fintype ι] (d : ResourceAccounting.Device ι) (len round : ℕ) (S S₀ : ℝ) : Prop :=
   S * len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ S₀
 
 /-- **`f` doesn't read the primitive** at the other audits' coins `o`: its value at `(ω, y)` is its value at `(ω', y)`
@@ -97,16 +97,16 @@ def ReadsNoPrimitive {ΩW ΩQ Ω Y X : Type} (f : ΩW × ΩQ × (Ω × Y) → X)
 
 /-- `PeriodHeld`'s event at the coins `x`: the verifier's whole decision accepts with no break in the period's own data
 while the capacity account held fewer than `S · len` bit-ticks over the capacity window. -/
-def AcceptedShort {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+def AcceptedShort {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : Audits ΩW ΩQ) (S : ℝ) (x : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)) :
     Prop :=
   P.Accepts x ∧ ¬ P.Break x ∧ (r.held x : ℝ) < S * (r.win .capacity).len
 
 /-- `PeriodHeldAt`'s event at the point `pt` and the coins `x`. -/
-def AcceptedShortAt (pt : Run.Point) (N : ℕ) [NeZero N] {ι : Type} [Fintype ι] {d : Accounting.Device ι}
+def AcceptedShortAt (pt : Run.Point) (N : ℕ) [NeZero N] {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι}
     {α ΩW ΩQ : Type} [Fintype α]
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : AuditsAt N ΩW ΩQ) (S : ℝ) (x : ΩW × ΩQ × ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)) :
     Prop :=
   P.Accepts pt x ∧ ¬ P.Break pt x ∧ (r.held x : ℝ) < S * (r.win .capacity).len
@@ -120,8 +120,8 @@ decision accepts the period with no break while the capacity account held fewer 
 probability at most `δ + ε_max` over the memory challenger's hm96 coins and its streams, uniform. -/
 def PeriodHeldCoins : Prop :=
   ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
-    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-      (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : ResourceAccounting.Device ι)
+      (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
       (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
       DeviceModel r P τ D Q L round → Instantiates P τ → Fits d (r.win .capacity).len round S Pous.EndToEnd.S →
         ∀ o : ΩW × ΩQ, ReadsNoPrimitive P.session o → ReadsNoPrimitive P.device o → ReadsNoPrimitive r.schedule o →
@@ -137,8 +137,8 @@ whole decision accepts the period with no break while the capacity account held 
 probability at most `δ + ε_max + ε(t, 1) + ε(t, 6720)` over the source and the hm96 coins. -/
 def PeriodHeldSha512 : Prop :=
   ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
-    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-      (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : ResourceAccounting.Device ι)
+      (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
       (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
       DeviceModel r P τ D Q L round → Instantiates P τ → Fits d (r.win .capacity).len round S Pous.EndToEnd.S →
         ∀ o : ΩW × ΩQ, ReadsNoPrimitive P.session o → ReadsNoPrimitive P.device o → ReadsNoPrimitive r.schedule o →
@@ -159,8 +159,8 @@ def PeriodHeldCoinsAt : Prop :=
     Pous.Guarantees.RoundsBound p ε₀ 105 (ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130)) →
     Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
       ∀ (pt : Run.Point) (N : ℕ) [NeZero N], 524288 ≤ N → N ≤ 134217728 →
-        ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-          (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+        ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : ResourceAccounting.Device ι)
+          (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
           (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),
           RingDeviceAt N pt r P D Q L round → Fits d (r.win .capacity).len round S (SAt N) →
             ∀ o : ΩW × ΩQ, ReadsNoPrimitive P.session o → ReadsNoPrimitive P.device o → ReadsNoPrimitive r.schedule o →
@@ -176,8 +176,8 @@ def PeriodHeldSha512At : Prop :=
     Pous.Guarantees.RoundsBound p ε₀ 105 (ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130)) →
     Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
       ∀ (pt : Run.Point) (N : ℕ) [NeZero N], 524288 ≤ N → N ≤ 134217728 →
-        ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-          (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+        ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : ResourceAccounting.Device ι)
+          (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
           (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),
           RingDeviceAt N pt r P D Q L round → Fits d (r.win .capacity).len round S (SAt N) →
             ∀ o : ΩW × ΩQ, ReadsNoPrimitive P.session o → ReadsNoPrimitive P.device o → ReadsNoPrimitive r.schedule o →

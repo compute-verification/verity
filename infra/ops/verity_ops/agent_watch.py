@@ -1,6 +1,6 @@
 """The agent watch: free a cloud agent whose run is held, and record what it sees, from the control pod.
 
-    python3 agent_watch.py loop --log /data/agent-watch/events.jsonl     $CURSOR_API_KEY set; standard library only
+    python3 agent_watch.py loop --log /data/agent-watch/events.jsonl     $CURSOR_API_KEY set; the standard library and `research` on the path
 
 An agent hears Slack, Linear and timer events only between runs, and a run can hang after a tool call returns, for hours and for several coordinators at once, and without the watch only a
 person pressing Stop frees one. Every `POLL_S` the watch lists the agents (`GET /v1/agents`, which shows every agent on the account:
@@ -226,7 +226,7 @@ handle that is no lane, and a name the API won't give place nobody: the runs of 
 `run_ended` with role `unknown`, each run with its `sender`, for the relay to ring infra once. Such a sender is a stray,
 watched as a worker is, under no lane, and infra is rung for it that once (`unplaced`): a read whose senders infra was all
 rung for is marked `quiet`. A run whose handle
-`quiet_handles` lists (ci: drive reads its own train checks' ends) is skipped. `run_ends.json` keeps each node's last read and the runs
+`quiet_handles` lists (ci: drive reads its own candidates' checks' ends) is skipped. `run_ends.json` keeps each node's last read and the runs
 seen (`RUN_ENDS_KEEP_S`); runs that ended before the first read are never rung. `agent_watch.py runs` prints what it would read.
 
 The run's end also starts a clock (`awaiting` in `state.json`) on whoever must act on it: the sender when the list has it, a

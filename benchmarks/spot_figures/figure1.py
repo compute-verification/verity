@@ -87,7 +87,7 @@ from typing import Callable, Iterator, Sequence
 
 import cards as spot_cards
 from verity.protocol import MONITORING_PERIODS
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.prover import plancheck
 from verity.protocols.proofs.spot.prover.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design, two_stage_strata)
@@ -295,7 +295,7 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
     word = (f"served as the token select's output word, {bits} bits (the design card's token_bytes), the registered "
             "circuit's only output a token")
     cert = sc.get("certifier")
-    schedule = NetworkCertifierParams(**cert["value"]["schedule"]) if cert else None
+    schedule = NetworkAttesterParams(**cert["value"]["schedule"]) if cert else None
     cap = schedule.max_tokens_cap if schedule else None
     if served not in (None, *SERVED):
         raise ValueError(f"a request's served tokens are one of {SERVED}, not {served!r}")

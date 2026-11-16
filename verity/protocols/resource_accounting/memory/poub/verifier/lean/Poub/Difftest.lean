@@ -1,6 +1,7 @@
 module
 
 public import Difftest
+public import Poub.Gamma
 public import Poub.Line
 public import Poub.P2
 public import Poub.P2Session
@@ -20,7 +21,8 @@ with its codec seed, the verifier's registry (`registry`: registrations, session
 closes, and `registry/v0` both ways), `line.py`'s memory line (`line` of groups and windows given, `line_record` read
 off an accepted session's record, `Poub.Line`: rationals as strings `n` or `n/d`) and `pooled.py`'s pooled
 bound, which the line
-reads (`pooled`, `Poub.Pooled`), whose refusals are outputs (`{"refused": why}`),
+reads (`pooled`, `Poub.Pooled`), and `ledger.gamma`'s γ terms (`gamma`, `Poub.Gamma`), whose refusals are outputs
+(`{"refused": why}`),
 so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `Poub.Schedule`).
 `p2.py`'s P2 store (`Poub.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
 and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); and a whole P2 session as
@@ -546,6 +548,54 @@ def lineRecordFn (j : Json) : V Json := do
       | none => Line.lineOfSummary? onRecord g none samples seen per b chip node δ rates
     | .error _ => Line.lineOfSummary? onRecord g none samples seen per b chip node δ rates)
 
+private def termsJ (t : Gamma.Terms) : List (String × Json) :=
+  [("gamma", ratJ t.gamma),
+   ("horizon", Json.mkObj [("floor", ratJ t.floor), ("gamma", ratJ t.gammaPooled), ("sample", ratJ t.pooled)]),
+   ("terms", Json.mkObj [("timing", ratJ t.timing), ("sample", ratJ t.sample), ("chip", ratJ t.chip),
+     ("counting", ratJ t.counting), ("rebuild", ratJ t.rebuild), ("host", ratJ t.host), ("link", ratJ t.link),
+     ("carrier", ratJ t.carrier)])]
+
+/-- γ's terms as `audit.GammaTerms.to_json` writes them, each rational a string `n` or `n/d`. -/
+def gammaJ (x : Gamma.Gamma) : Json :=
+  let w := Gamma.worst x.windows Gamma.Terms.gamma
+  let h := Gamma.worst x.windows Gamma.Terms.gammaPooled
+  Json.mkObj (termsJ x.terms ++
+    [("linked", .bool false), ("steering_bits", .null),
+     ("windows", .arr (x.windows.map fun v =>
+       Json.mkObj ([("span_ns", toJson v.spanNs), ("window", toJson v.window)] ++ termsJ v.terms))),
+     ("error", Json.mkObj [("windows", ratJ x.error), ("horizon", ratJ x.errorPooled)]),
+     ("worst", Json.mkObj [("gamma", ratJ w.terms.gamma),
+       ("horizon", Json.mkObj [("gamma", ratJ h.terms.gammaPooled), ("window", toJson h.window)]),
+       ("window", toJson w.window)])])
+
+private def gammaOn (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : Nat) (j : Json) : V Json := do
+  pure (refusedOr (gammaJ <$> Gamma.gamma reg digest sm g (← ratIn j "delta" "input") (← nat j "block_bytes")
+    (← nat j "chip_bytes") (← ratIn j "capacity_bytes_per_s" "input") (← ratIn j "squarings_per_s" "input")))
+
+/-- `ledger.gamma`'s terms (`audit.GammaTerms`) of `{"registration", "record", "delta", "block_bytes", "chip_bytes",
+"capacity_bytes_per_s", "squarings_per_s"}` (`record` as `recordJ` writes it, sampled its `groups_per_coin` windows a
+coin, 1 when it doesn't name it), or why there are none (`Gamma.gamma`). -/
+def gammaFn (j : Json) : V Json := do
+  let reg ← registrationOf (← J.get j "registration" "input")
+  let rj ← J.get j "record" "input"
+  let g ← if J.has rj "groups_per_coin" then J.nat rj "groups_per_coin" "record" else pure 1
+  gammaOn reg (← hex rj "registration") (← summaryOf rj) g j
+
+/-- `audit.named_bits` of `{"k"}` (`Gamma.namedBits`), or why the bracket of log₂ k! doesn't decide it. -/
+def namedBitsFn (j : Json) : V Json := do
+  pure (refusedOr (toJson <$> Gamma.namedBits (← nat j "k")))
+
+/-- `gammaFn` of the record of one of the accepted sessions `r` runs, that session's own: the registration it ran on
+and its record as `outcome` writes it equal to `record`, at its own windows a coin; refused unless one is. -/
+def gammaOfRegistry (r : Registry) (j : Json) : V Json := do
+  let rj ← J.get j "record" "input"
+  for live in r.live do
+    for run in live.sessions do
+      if let .running s f g := run then
+        if let some x := s.summary then
+          if recordJ s.digest x f g == rj then return (← gammaOn s.reg s.digest x g j)
+  pure (refusedOr (.error "the record is not one this verifier accepted"))
+
 private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
   let xs ← J.asArr j ctx
   if xs.size ≠ n then throw s!"{ctx}: {n} integers"
@@ -735,7 +785,8 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
   ("leaf_receipt", leafReceiptFn), ("draws", receiptSampleFn), ("schedule", scheduleFn),
-  ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn),
+  ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn), ("gamma", gammaFn),
+  ("named_bits", namedBitsFn),
   ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn),
   ("p2_session", p2SessionFn), ("span_public", spanPublicFn), ("span_held", spanHeldFn), ("span", spanFn)]
 

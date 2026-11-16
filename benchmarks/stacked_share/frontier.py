@@ -1,7 +1,7 @@
 """What honest inference needs from the circuit for frontier open models, and where their dynamic memory comes from: one
 decode token-step and one prefill token of each model of `frontier_models.json`, at its reference node and workload, in
 nonlinear units by class and by role, with the stacked share f of `share.py`. Nonlinear units are the gate model's
-(`Accounting.Gates`): only linear maps with coefficients fixed before the coins are free (a weight times an activation),
+(`ResourceAccounting.Gates`): only linear maps with coefficients fixed before the coins are free (a weight times an activation),
 every product of two run-dependent values is a data product, a unit, and every other nonlinear operation a unit as
 property/v1 (`verity.circuits.stacking`) counts it.
 

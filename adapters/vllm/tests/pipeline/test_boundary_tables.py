@@ -601,6 +601,20 @@ def test_the_tables_private_directory_is_never_under_what_leaves_the_node(tmp_pa
         BW.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, layers=(0,))
 
 
+def test_a_tables_layout_no_cache_holds_is_refused_by_name_before_the_channel(tmp_path):
+    """A serve's tables naming a layout `history_tables.LAYOUT_WORDS` doesn't hold (a typo, FlashMLA's dense fp8) are refused by
+    name as the serve starts, before rank 0's channel is made, and not with a bare KeyError; the two layouts give their words."""
+    tables = {"private": str(tmp_path / "node"), "layers": 2, "capacity": LEAVES}
+    for bad in ("fp8", "FP8_DS_MLA", None, ["bf16"]):
+        with pytest.raises(ValueError, match=r"the history tables' layout is one of \['bf16', 'fp8_ds_mla'\], not "):
+            BW.BoundaryWindows.of({"check": "c", "tables": {**tables, "layout": bad}}, tmp_path / "out", public=[tmp_path / "run"])
+    assert not (tmp_path / "node").exists()
+    for layout, words in (("bf16", 576), ("fp8_ds_mla", 328)):
+        bw = BW.BoundaryWindows.of({"check": "c", "tables": {**tables, "layout": layout}}, tmp_path / "out", public=[tmp_path / "run"])
+        bw.stop()
+        assert bw.words == BT.words_of(layout) == H.LAYOUT_WORDS[layout] == words
+
+
 def modes(root) -> set[tuple[str, int]]:
     return {("dir" if q.is_dir() else "file", stat.S_IMODE(q.stat().st_mode)) for q in [root, *root.rglob("*")]}
 
