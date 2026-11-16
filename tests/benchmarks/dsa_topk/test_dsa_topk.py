@@ -249,7 +249,7 @@ def test_wrapped_ops_keep_their_overloads_under_a_dispatch_mode(monkeypatch):
 
 def test_register_is_off_unless_asked(monkeypatch):
     calls = []
-    monkeypatch.setattr(dsa_topk, "install", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(dsa_topk, "install", lambda canon=None: calls.append(canon))
     for v in (None, "", "0"):
         if v is None:
             monkeypatch.delenv(dsa_topk.ENV, raising=False)
@@ -260,10 +260,11 @@ def test_register_is_off_unless_asked(monkeypatch):
     monkeypatch.setenv(dsa_topk.ENV, "sorted")
     with pytest.raises(ValueError, match="canonical"):
         dsa_topk.register()
-    monkeypatch.setenv(dsa_topk.ENV, "canonical")
     monkeypatch.delenv(dsa_topk.LOG_ENV, raising=False)
-    dsa_topk.register()
-    assert calls == [()]
+    for mode in ("canonical", "canonical-bisect"):
+        monkeypatch.setenv(dsa_topk.ENV, mode)
+        dsa_topk.register()
+    assert [c.refine for c in calls] == [True, False]
 
 
 def logits(rows: int, cols: int):
@@ -352,7 +353,8 @@ class NoKernel:
 def test_a_launching_calls_one_write_holds_its_launch(monkeypatch, tmp_path):
     torch = pytest.importorskip("torch")
     monkeypatch.setattr(dsa_topk, "_capturing", lambda: False)
-    monkeypatch.setattr(dsa_topk, "kernels", lambda: dict.fromkeys(("canon_row", "count_seg", "emit_seg"), NoKernel()))
+    monkeypatch.setattr(dsa_topk, "kernels", lambda: dict.fromkeys(("canon_row", "count_seg", "emit_seg", "fix_find",
+                                                                    "fix_count", "fix_emit"), NoKernel()))
     canon, ns = dsa_topk.Canon(), fake_ns([])
     dsa_topk.install(ns, canon)
     dsa_topk.log_to(canon, str(tmp_path))
@@ -476,7 +478,131 @@ def test_kernels_canonicalize_in_interpreter(monkeypatch, dist, seg_min_keys):
         stats = dict(zip(dsa_topk.STATS, canon.stats(x.device).tolist()))
         assert stats["rows_long"] == sum(m > k for m in n)
         if how == "atomic" and dist == "randn":
-            assert stats["rows_bisected"] == 0
+            assert stats["rows_bisected"] == stats["rows_refined"] == 0
+
+
+def concentrated_case(seed: int, rows: int, cols: int, k: int, dist: str):
+    """Rows whose keys crowd the k-th one, as where the pin's cooperative_topk misses: ``shift`` (32 plus a normal),
+    ``steps`` (32 plus a multiple of 1/64: ties at the k-th key in the k-th key's window)."""
+    rng = random.Random(seed)
+    data = [[32.0 + (rng.gauss(0, 1) if dist == "shift" else rng.randrange(12) / 64) for _ in range(cols)]
+            for _ in range(rows)]
+    n = [rng.choice([k - 3, k, cols, cols, rng.randrange(k + 1, cols + 1)]) for _ in range(rows)]
+    return data, [0] * rows, n
+
+
+def missed(torch, x, lo, n, k, rng):
+    """The pin's miss: the true top-k set with its smallest few keys swapped for keys just below the k-th."""
+    out = torch.full((x.shape[0], k), -1, dtype=torch.int32)
+    for r in range(x.shape[0]):
+        m = max(int(n[r]), 0)
+        if m <= k:
+            out[r, :m] = torch.arange(m, dtype=torch.int32)
+            continue
+        key = [dsa_topk.ordered(int(b)) for b in x[r, lo[r]:lo[r] + m].contiguous().view(torch.int32)]
+        order = sorted(range(m), key=lambda i: (-key[i], i))
+        drop = rng.randrange(1, min(4, m - k) + 1)
+        sel = order[:k - drop] + order[k:k + drop]
+        rng.shuffle(sel)
+        out[r] = torch.tensor(sel, dtype=torch.int32)
+    return out
+
+
+def coarse_bins(torch, values):
+    """The pin's cooperative_topk's coarse bin of each float32: the top 10 bits of its fp16 rounding's ordered key."""
+    b = values.to(torch.float16).view(torch.int16).to(torch.int64)
+    return torch.where(b < 0, b ^ 0x7FFF, b) >> 6
+
+
+def overflowed(torch, x, lo, n, k, rng):
+    """The pin's cooperative_topk past its candidate cap: every key above the k-th key's coarse bin, then keys of
+    that bin in no order of score."""
+    out = torch.full((x.shape[0], k), -1, dtype=torch.int32)
+    for r in range(x.shape[0]):
+        m = max(int(n[r]), 0)
+        if m <= k:
+            out[r, :m] = torch.arange(m, dtype=torch.int32)
+            continue
+        key = [dsa_topk.ordered(int(b)) for b in x[r, lo[r]:lo[r] + m].contiguous().view(torch.int32)]
+        cb = coarse_bins(torch, x[r, lo[r]:lo[r] + m]).tolist()
+        win = cb[sorted(range(m), key=lambda i: (-key[i], i))[k - 1]]
+        above = [i for i in range(m) if cb[i] > win]
+        sel = above + rng.sample([i for i in range(m) if cb[i] == win], k - len(above))
+        rng.shuffle(sel)
+        out[r] = torch.tensor(sel, dtype=torch.int32)
+    return out
+
+
+def paths(torch, x, lo, n, k, first):
+    """The rows a split pass bisects and refines from a fast selection ``first``: of the rows of more than ``k`` keys
+    whose candidate (the selection's smallest key) is not the k-th key, those whose k-th key's top 13 bits are the
+    candidate's or a neighbour's are refined, the rest bisected."""
+    bisected = refined = 0
+    for r in range(x.shape[0]):
+        m = int(n[r])
+        if m <= k:
+            continue
+        key = [dsa_topk.ordered(int(b)) for b in x[r, lo[r]:lo[r] + m].contiguous().view(torch.int32)]
+        sel = [int(i) for i in first[r] if 0 <= int(i) < m]
+        tau = min((key[i] for i in sel), default=(1 << 31) - 1)
+        if sum(v > tau for v in key) < k <= sum(v >= tau for v in key):
+            continue
+        kth = sorted(key, reverse=True)[k - 1]
+        near = abs((kth >> 19) - (tau >> 19)) <= 1
+        refined += near
+        bisected += not near
+    return bisected, refined
+
+
+@pytest.mark.parametrize("dist", ["randn", "int", "edge", "shift", "steps"])
+def test_refined_pass_is_the_present_one_bit_for_bit(monkeypatch, dist):
+    """The split pass with its refinement (`Canon` ``refine``) writes what the present one (every failed row
+    bisected) writes, bit for bit and the reference both, from a right selection with its ties broken at random, a
+    near miss, the pin's overflow, a wrong one and garbage, on random logits, logits crowded at the k-th key (where
+    the pin overflows) and ties there. The same rows fail their candidate under both; the
+    refinement takes exactly those whose k-th key is in the candidate's window (`paths`), and its tables are zeros
+    after every call."""
+    torch = interpreted(monkeypatch)
+    rng = random.Random(7)
+    k, rows, cols = 16, 8, 160
+    if dist in ("shift", "steps"):
+        data, lo, n = concentrated_case(9, rows, cols, k, dist)
+    else:
+        data, lo, n = rows_case(9, rows, cols, k, dist)
+    x = torch.tensor(data, dtype=torch.float32)
+    lo_t, n_t = torch.tensor(lo, dtype=torch.int32), torch.tensor(n, dtype=torch.int32)
+    ref = dsa_topk.reference_rows(x, lo, n, k)
+    refined = 0
+    guess = {"missed": missed, "overflow": overflowed}
+    for how in ("atomic", "missed", "overflow", "dup", "wrong", "garbage"):
+        if how in guess:
+            first = guess[how](torch, x, lo, n, k, rng)
+        else:
+            first = fast_selection(torch, x, lo, n, k, how, rng)
+        outs, stats = [], []
+        for canon in (dsa_topk.Canon(seg_min_keys=24, block=32, refine=False),
+                      dsa_topk.Canon(seg_min_keys=24, block=32)):
+            canon._sms[x.device] = 64
+            assert canon.segments(x.device, rows, cols) > 1
+            out = first.clone()
+            canon.run("top_k_per_row_prefill", x, out, k, 0, lo_t, lo_t + n_t, rows=rows, ncols=cols, ls0=cols, ls1=1)
+            outs.append(out)
+            stats.append(dict(zip(dsa_topk.STATS, canon.stats(x.device).tolist())))
+            assert all(int(t.abs().sum()) == 0 for t in canon._fine.values()), how
+        assert torch.equal(outs[1], outs[0]) and torch.equal(outs[0], ref), how
+        present, new = stats
+        bisected, refined_here = paths(torch, x, lo, n, k, first)
+        assert (present["rows_bisected"], present["rows_refined"]) == (bisected + refined_here, 0), how
+        assert (new["rows_bisected"], new["rows_refined"]) == (bisected, refined_here), how
+        assert new["rows_long"] == present["rows_long"] == sum(m > k for m in n)
+        assert new["rows_tied"] == present["rows_tied"], how
+        if how == "missed" and dist in ("randn", "shift"):
+            assert present["rows_bisected"] == sum(m > k for m in n)
+        if how == "overflow" and dist != "edge":
+            assert bisected == 0
+        refined += refined_here
+    if dist in ("shift", "steps"):
+        assert refined > 0
 
 
 @pytest.mark.parametrize("sms", [1, 64])

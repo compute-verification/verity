@@ -3,10 +3,33 @@ that `dsa_topk` imports without Triton and Triton resolves the helpers through t
 
 A block's two counts ride in one int32 (``gt + (eq << 16)``), so one prefix sum and one reduction a block serve both;
 ``BLOCK`` must stay below 2**15, and canon_row reads it as 32-key words. A row's counts accumulate per lane and
-reduce once."""
+reduce once.
+
+A split row (``count_seg``, ``emit_seg``, then under REFINE ``fix_find``, ``fix_count`` and ``fix_emit``) whose
+candidate fails is refined when the k-th key is in the candidate's window: the keys whose top 13 bits (sign, exponent,
+4 mantissa bits: the fast kernels' fp16 coarse bin, in which their candidate overflow drops keys) are the candidate's
+or a neighbour's, for fp16 rounds a key just below a bin's edge into the bin. ``emit_seg``'s programs histogram
+their segments' window keys by their offset in the window (`FINE` bins of 2**`LOW_BITS`) into the row's table,
+``fix_find``'s find the fine bin of the k-th key and count their keys above it and in it by its last `LOW_BITS`,
+``fix_count``'s read the k-th key from those counts and count their segments against it, and ``fix_emit``'s write
+them at their ranks: three reads of a segment where bisection makes 34 of the row. Every table is all zeros between
+calls. A failed candidate whose window misses the k-th key is bisected by one program. ws holds, a row: each
+segment's (gt, eq), the candidate, each segment's keys above the window, the row's path (`REFINED`, `BISECTED`), its
+fine bin and k-th key, and each segment's (gt, eq) against that key."""
 import triton
 import triton.language as tl
 from triton.language.extra import libdevice
+
+WIN = tl.constexpr(19)
+FINE = tl.constexpr(2048)
+LOW = tl.constexpr(1024)
+LOW_BITS = tl.constexpr(10)
+#: the window's keys: three 13-bit prefixes of 2**19 keys
+SPAN = tl.constexpr(3 << 19)
+#: a row's words of hist: its window table, its k-th key's fine bin's counts, and its keys above that bin
+HROW = tl.constexpr(2048 + 1024 + 1)
+REFINED = tl.constexpr(1)
+BISECTED = tl.constexpr(2)
 
 
 @triton.jit
@@ -113,6 +136,24 @@ def _popc(x, HW: tl.constexpr):
 
 
 @triton.jit
+def _below(counts, x):
+    # the bins wholly below the one where a count from the top reaches the k-th key: x is the keys under it, so the
+    # bin index of the k-th key
+    return tl.sum((tl.cumsum(counts, axis=0) <= x).to(tl.int32), axis=0)
+
+
+@triton.jit
+def _base(tau):
+    # the first key of the candidate's window: the 13-bit prefix below the candidate's (`WIN`)
+    return ((tau >> WIN).to(tl.int64) - 1) << WIN
+
+
+@triton.jit
+def _row_ws(ws, r, SEG):
+    return ws + r * (5 * SEG + 4)
+
+
+@triton.jit
 def canon_row(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
               K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, HW: tl.constexpr):
     # one program a row, one read: the keys at or above the fast kernel's smallest selected key, in ascending order,
@@ -162,7 +203,6 @@ def canon_row(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
 @triton.jit
 def count_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, SEG,
               K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr):
-    # ws per row: SEG (gt, eq) pairs, then the candidate
     r = tl.program_id(0)
     s = tl.program_id(1)
     lo, n = _bounds(r, A, B, ncols, next_n, MODE)
@@ -172,7 +212,7 @@ def count_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, SEG,
         seg = tl.cdiv(tl.cdiv(n, SEG), BLOCK) * BLOCK
         start = s * seg
         c_gt, c_eq = _count(row, start, tl.minimum(start + seg, n), tau, ls1, BLOCK)
-        w = ws + r * (2 * SEG + 1)
+        w = _row_ws(ws, r, SEG)
         tl.store(w + 2 * s, c_gt)
         tl.store(w + 2 * s + 1, c_eq)
         if s == 0:
@@ -180,36 +220,177 @@ def count_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, SEG,
 
 
 @triton.jit
-def emit_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, stats, SEG,
-             K: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, SEGP2: tl.constexpr):
+def _counts(w, SEG, SEGP2: tl.constexpr):
+    # each segment's counts against the row's candidate, and the row's
+    segs = tl.arange(0, SEGP2)
+    sm = segs < SEG
+    gts = tl.load(w + 2 * segs, mask=sm, other=0)
+    eqs = tl.load(w + 2 * segs + 1, mask=sm, other=0)
+    n_gt = tl.sum(gts, axis=0)
+    n_eq = tl.sum(eqs, axis=0)
+    return gts, eqs, n_gt, n_eq
+
+
+@triton.jit
+def emit_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, hist, stats, SEG,
+             K: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, SEGP2: tl.constexpr, REFINE: tl.constexpr):
     # each segment emits its keys at their ranks; the row's totals and the counts before the segment come from
-    # count_seg's, so the candidate is checked before any write
+    # count_seg's, so the candidate is checked before any write. A failed candidate is bisected by one program, or
+    # under REFINE its segments fill the row's table and count their keys above the window for fix_find
     r = tl.program_id(0)
     s = tl.program_id(1)
     lo, n = _bounds(r, A, B, ncols, next_n, MODE)
     if n > K:
         row = logits + r.to(tl.int64) * ls0 + lo.to(tl.int64) * ls1
         orow = out + r.to(tl.int64) * os0
-        w = ws + r * (2 * SEG + 1)
+        w = _row_ws(ws, r, SEG)
         tau = tl.load(w + 2 * SEG)
         segs = tl.arange(0, SEGP2)
-        sm = segs < SEG
-        gts = tl.load(w + 2 * segs, mask=sm, other=0)
-        eqs = tl.load(w + 2 * segs + 1, mask=sm, other=0)
-        n_gt = tl.sum(gts, axis=0)
-        n_eq = tl.sum(eqs, axis=0)
+        gts, eqs, n_gt, n_eq = _counts(w, SEG, SEGP2)
+        seg = tl.cdiv(tl.cdiv(n, SEG), BLOCK) * BLOCK
+        start = s * seg
+        end = tl.minimum(start + seg, n)
         if (n_gt < K) & (n_gt + n_eq >= K):
-            seg = tl.cdiv(tl.cdiv(n, SEG), BLOCK) * BLOCK
-            start = s * seg
-            _emit(row, orow, start, tl.minimum(start + seg, n), tau, K - n_gt,
+            _emit(row, orow, start, end, tau, K - n_gt,
                   tl.sum(tl.where(segs < s, gts, 0), axis=0), tl.sum(tl.where(segs < s, eqs, 0), axis=0),
                   ls1, BLOCK)
             if s == 0:
                 tl.atomic_add(stats + 0, 1)
                 if n_gt + n_eq > K:
                     tl.atomic_add(stats + 1, 1)
+        elif REFINE:
+            base = _base(tau)
+            h = hist + r.to(tl.int64) * HROW
+            c_up = tl.zeros([BLOCK], dtype=tl.int32)
+            for b in range(start, end, BLOCK):
+                idx = b + tl.arange(0, BLOCK)
+                m = idx < end
+                rel = _ordered(tl.load(row + idx.to(tl.int64) * ls1, mask=m, other=0.0)).to(tl.int64) - base
+                c_up += (m & (rel >= SPAN)).to(tl.int32)
+                tl.atomic_add(h + (rel >> LOW_BITS), tl.full([BLOCK], 1, tl.int32),
+                              mask=m & (rel >= 0) & (rel < SPAN))
+            tl.store(w + 2 * SEG + 1 + s, tl.sum(c_up, axis=0))
         elif s == 0:
             tl.atomic_add(stats + 0, 1)
             tl.atomic_add(stats + 2, 1)
             if _bisect(row, orow, n, ls1, K, BLOCK):
                 tl.atomic_add(stats + 1, 1)
+
+
+@triton.jit
+def _zero_slice(h, s, SEG, N: tl.constexpr):
+    # this segment's share of the N words at h back to zeros
+    per = tl.cdiv(N, SEG)
+    offs = s * per + tl.arange(0, N)
+    tl.store(h + offs, tl.zeros([N], dtype=tl.int32), mask=offs < tl.minimum(s * per + per, N))
+
+
+@triton.jit
+def _failed(w, SEG, K: tl.constexpr, SEGP2: tl.constexpr):
+    _gts, _eqs, n_gt, n_eq = _counts(w, SEG, SEGP2)
+    return (n_gt >= K) | (n_gt + n_eq < K)
+
+
+@triton.jit
+def fix_find(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, hist, stats, SEG,
+             K: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, SEGP2: tl.constexpr):
+    # a failed row whose window holds the k-th key: the fine bin that holds it, and each segment's keys above that
+    # bin and in it by their last bits, into the row's counts; any other failed row bisected by one program
+    r = tl.program_id(0)
+    s = tl.program_id(1)
+    lo, n = _bounds(r, A, B, ncols, next_n, MODE)
+    if n > K:
+        w = _row_ws(ws, r, SEG)
+        if _failed(w, SEG, K, SEGP2):
+            row = logits + r.to(tl.int64) * ls0 + lo.to(tl.int64) * ls1
+            h = hist + r.to(tl.int64) * HROW
+            segs = tl.arange(0, SEGP2)
+            up = tl.sum(tl.load(w + 2 * SEG + 1 + segs, mask=segs < SEG, other=0), axis=0)
+            fine = tl.load(h + tl.arange(0, FINE))
+            t = tl.sum(fine, axis=0)
+            if (up < K) & (up + t >= K):
+                base = _base(tl.load(w + 2 * SEG))
+                fb = _below(fine, up + t - K)
+                seg = tl.cdiv(tl.cdiv(n, SEG), BLOCK) * BLOCK
+                start = s * seg
+                end = tl.minimum(start + seg, n)
+                c_up = tl.zeros([BLOCK], dtype=tl.int32)
+                for b in range(start, end, BLOCK):
+                    idx = b + tl.arange(0, BLOCK)
+                    m = idx < end
+                    rel = _ordered(tl.load(row + idx.to(tl.int64) * ls1, mask=m, other=0.0)).to(tl.int64) - base
+                    c_up += (m & ((rel >> LOW_BITS) > fb)).to(tl.int32)
+                    tl.atomic_add(h + FINE + (rel & (LOW - 1)), tl.full([BLOCK], 1, tl.int32),
+                                  mask=m & ((rel >> LOW_BITS) == fb))
+                tl.atomic_add(h + FINE + LOW, tl.sum(c_up, axis=0))
+                if s == 0:
+                    tl.store(w + 3 * SEG + 1, tl.full([], REFINED, tl.int32))
+                    tl.store(w + 3 * SEG + 2, fb)
+            elif s == 0:
+                tl.store(w + 3 * SEG + 1, tl.full([], BISECTED, tl.int32))
+                tl.atomic_add(stats + 0, 1)
+                tl.atomic_add(stats + 2, 1)
+                if _bisect(row, out + r.to(tl.int64) * os0, n, ls1, K, BLOCK):
+                    tl.atomic_add(stats + 1, 1)
+
+
+@triton.jit
+def fix_count(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, hist, stats, SEG,
+              K: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, SEGP2: tl.constexpr):
+    # a refined row: the k-th key from the row's counts, and each segment's keys above and at it; every failed
+    # row's window table back to zeros
+    r = tl.program_id(0)
+    s = tl.program_id(1)
+    lo, n = _bounds(r, A, B, ncols, next_n, MODE)
+    if n > K:
+        w = _row_ws(ws, r, SEG)
+        if _failed(w, SEG, K, SEGP2):
+            h = hist + r.to(tl.int64) * HROW
+            _zero_slice(h, s, SEG, FINE)
+            if tl.load(w + 3 * SEG + 1) == REFINED:
+                row = logits + r.to(tl.int64) * ls0 + lo.to(tl.int64) * ls1
+                lows = tl.load(h + FINE + tl.arange(0, LOW))
+                j = _below(lows, tl.load(h + FINE + LOW) + tl.sum(lows, axis=0) - K)
+                kth = (_base(tl.load(w + 2 * SEG)) + (tl.load(w + 3 * SEG + 2).to(tl.int64) << LOW_BITS) + j)
+                kth = kth.to(tl.int32)
+                seg = tl.cdiv(tl.cdiv(n, SEG), BLOCK) * BLOCK
+                start = s * seg
+                c_gt, c_eq = _count(row, start, tl.minimum(start + seg, n), kth, ls1, BLOCK)
+                tl.store(w + 3 * SEG + 4 + 2 * s, c_gt)
+                tl.store(w + 3 * SEG + 5 + 2 * s, c_eq)
+                if s == 0:
+                    tl.store(w + 3 * SEG + 3, kth)
+
+
+@triton.jit
+def fix_emit(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, hist, stats, SEG,
+             K: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, SEGP2: tl.constexpr):
+    # a refined row: each segment's keys at their ranks from the k-th key, as emit_seg's; the row's counts back to
+    # zeros
+    r = tl.program_id(0)
+    s = tl.program_id(1)
+    lo, n = _bounds(r, A, B, ncols, next_n, MODE)
+    if n > K:
+        w = _row_ws(ws, r, SEG)
+        if _failed(w, SEG, K, SEGP2):
+            if tl.load(w + 3 * SEG + 1) == REFINED:
+                h = hist + r.to(tl.int64) * HROW
+                _zero_slice(h + FINE, s, SEG, LOW)
+                row = logits + r.to(tl.int64) * ls0 + lo.to(tl.int64) * ls1
+                orow = out + r.to(tl.int64) * os0
+                segs = tl.arange(0, SEGP2)
+                sm = segs < SEG
+                gts = tl.load(w + 3 * SEG + 4 + 2 * segs, mask=sm, other=0)
+                eqs = tl.load(w + 3 * SEG + 5 + 2 * segs, mask=sm, other=0)
+                n_gt = tl.sum(gts, axis=0)
+                seg = tl.cdiv(tl.cdiv(n, SEG), BLOCK) * BLOCK
+                start = s * seg
+                _emit(row, orow, start, tl.minimum(start + seg, n), tl.load(w + 3 * SEG + 3), K - n_gt,
+                      tl.sum(tl.where(segs < s, gts, 0), axis=0), tl.sum(tl.where(segs < s, eqs, 0), axis=0),
+                      ls1, BLOCK)
+                if s == 0:
+                    tl.store(h + FINE + LOW, 0)
+                    tl.atomic_add(stats + 0, 1)
+                    tl.atomic_add(stats + 3, 1)
+                    if n_gt + tl.sum(eqs, axis=0) > K:
+                        tl.atomic_add(stats + 1, 1)
