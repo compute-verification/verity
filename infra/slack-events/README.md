@@ -24,7 +24,7 @@ Every route is `api/index.py`, the FastAPI app `slack_events/app.py` builds; `se
 | `GET /api/slack/health` | whoever holds `HEALTH_TOKEN` | The numbers under Health. |
 | `GET /api/cron/drain` | Vercel cron, every minute, `CRON_SECRET` | Consumes the topic (`subscriber.drain`, below). |
 | `GET /api/cron/watchdog` | Vercel cron, every 5 minutes, `CRON_SECRET` | Rings again a chat post with no 👀 and no lane reply after 15 minutes (the names of its routing line, else the rule's), and the admin as well, once, when that line sent it to the person's usual lane; rings the admin and says so in the thread after 60; every doorbell it rings is URGENT (a person is waiting); once a day (16:00Z) posts the open chat threads to the admin's inbox; rings `crons.STALL_TO` when the queue stalls, and publishes the hourly canary (Health). |
-| `GET /api/cron/reconcile` | Vercel cron, every 10 minutes, `CRON_SECRET` | Re-enqueues, keyed on channel and ts as Slack's event is, each post of the last hour (older than 2 minutes) the consumer should have routed and didn't: a person's in a chat or ask channel that should ring someone and has neither a routing line nor a doorbell, and an `external_posters` one in those channels or `#agent-coordination` that names a lane whose inbox has no doorbell for it. Rings `crons.STALL_TO` when Slack has gone silent (Health). |
+| `GET /api/cron/reconcile` | Vercel cron, every 10 minutes, `CRON_SECRET` | Re-enqueues, keyed on channel and ts as Slack's event is, each post of the last hour (older than 2 minutes) the consumer should have routed and didn't: a person's in a chat or ask channel that should ring someone and has neither a routing line nor a doorbell, and an `external_posters` one in those channels or `#agent-coordination` that names a lane whose inbox has no doorbell for it. Rings `crons.STALL_TO` when Slack has gone silent (Health). With `LINEAR_API_KEY`, rings a lane once for each issue filed in its Linear team in the last 6 hours by any means, not yet taken up, that it didn't file and its inbox has no doorbell naming (`crons.new_issues`). |
 
 ## Modules
 
@@ -59,6 +59,7 @@ the clock. No test calls Slack, Vercel, GitHub or a model.
 | Reminders, escalation, the daily list | `crons.watchdog`, `crons.daily` |
 | A stalled queue | `crons.stall`, `crons.canary`; Health, below |
 | Posts that were never routed | `crons.reconcile`, `crons.unrung` (an external poster's) |
+| A new Linear issue in a lane's team | `crons.new_issues`; the sweep's audit (`unheard`) is the backstop |
 | Slack calling us no more | `crons.silence`; Health, below |
 | Routing by model | `router.py` |
 | Newcomers | `consumer.newcomer`; Newcomers, below |
@@ -165,7 +166,8 @@ the registry changed since the deployment before (`service/ignore.py`, vercel.js
    control pod), `RESEARCH_NOTES_TOKEN` (reads the published `routes.d` and `people.d`, and writes `people.d` when a
    newcomer's chat opens, so it needs write access to the notes repository), `HEALTH_TOKEN` (any long random string;
    whoever polls health holds it) and `CRON_SECRET` (Vercel sends it to the crons). `RESEARCH_ROUTES_URL` overrides
-   where the routes are read from.
+   where the routes are read from. `LINEAR_API_KEY`, a Linear personal API key with read access to every lane's team,
+   lets reconciliation ring a lane for a new issue; without it nothing reads Linear.
 4. In the Slack app: Event Subscriptions on, Request URL `https://<deployment>/api/slack/events`, bot events
    `message.channels`, `message.groups` and `team_join`. Slack delivers message events only for channels the bot is in:
    invite it to `#ask-the-team` and `#resource-accounting` (it reads their threads for its routing lines, too). Leave
