@@ -257,22 +257,24 @@ def read_here() -> list[str]:
 
 def peers(path: Path | None = None) -> dict[str, list[str]]:
     """{machine: ssh's options and destination for it} from `PEERS`, a line a machine; {} where this machine has none."""
-    try:
-        text = (path or PEERS).read_text(encoding="utf-8")
-    except OSError:
+    path = path or PEERS
+    if not path.is_file():
         return {}
-    return {f[0]: f[1:] for f in (ln.split("#")[0].split() for ln in text.splitlines()) if len(f) >= 2}
+    return {f[0]: f[1:] for f in (ln.split("#")[0].split() for ln in path.read_text(encoding="utf-8").splitlines()) if len(f) >= 2}
 
 
-def read_peer(ssh: Sequence[str]) -> list[str] | None:
-    """`MACHINE_COMMAND`'s lines on the machine its `PEERS` line `ssh` reaches, as the login that line names; None when ssh
-    can't reach it, doesn't already know its host key, or it printed less than a reading. It changes nothing."""
+def read_peer(ssh: Sequence[str]) -> list[str] | str:
+    """`MACHINE_COMMAND`'s lines on the machine its `PEERS` line `ssh` reaches, as the login that line names; else why it read
+    none: ssh couldn't reach it or doesn't already know its host key, it hung, or it printed less than a reading. It changes
+    nothing."""
     try:
         r = subprocess.run(["ssh", *PEER_SSH, *ssh, MACHINE_COMMAND], capture_output=True, text=True, timeout=120)
-    except (OSError, subprocess.SubprocessError):
-        return None
+    except subprocess.TimeoutExpired:
+        return "ssh hung past 120 s"
     lines = r.stdout.splitlines()
-    return lines if r.returncode != 255 and len(lines) >= 6 else None
+    if r.returncode == 255:
+        return "ssh can't reach it or doesn't know its host key"
+    return lines if len(lines) >= 6 else "ssh printed less than a reading"
 
 
 Judge = Callable[[Machine], tuple[bool | None, str]]
@@ -297,9 +299,11 @@ def over_machines(root: Path, names: Sequence[str], judge: Judge, what: str) -> 
         closed, why = None, f"no fresh reading ({when})" if entry is None else "the reading holds none"
         if name == me:
             closed, why = judge(Machine.of(read_here()))
-        if closed is None and remote.get(name):
-            closed, why = judge(Machine.of(remote[name]))
+        if closed is None and isinstance(got := remote.get(name), list):
+            closed, why = judge(Machine.of(got))
             over_ssh += closed is not None
+        elif closed is None and got:
+            why = f"{got} ({why})"
         if closed is None and name in recorded:
             closed, why = judge(Machine.of(recorded[name]))
         if closed is not True:

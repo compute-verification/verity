@@ -526,8 +526,9 @@ def test_the_peers_list_is_a_line_a_machine_its_name_then_ssh(O: ModuleType, tmp
     assert O.peers(tmp_path / "none") == {}
 
 
-@pytest.mark.parametrize(("rc", "out", "got"), [(0, FIXED, FIXED), (1, FIXED[:6], FIXED[:6]), (255, FIXED, None),
-                                                (0, FIXED[:5], None)])
+@pytest.mark.parametrize(("rc", "out", "got"), [(0, FIXED, FIXED), (1, FIXED[:6], FIXED[:6]),
+                                                (255, FIXED, "ssh can't reach it or doesn't know its host key"),
+                                                (0, FIXED[:5], "ssh printed less than a reading")])
 def test_a_peer_is_read_over_ssh_without_a_prompt_and_only_at_a_known_host_key(O: ModuleType, monkeypatch: pytest.MonkeyPatch,
                                                                                 rc: int, out: list, got) -> None:
     """Ours come first, so they hold over the line's own (ssh takes an option's first value): the line's `accept-new` can't take
@@ -549,7 +550,7 @@ def test_a_peer_ssh_that_hangs_reads_nothing(O: ModuleType, monkeypatch: pytest.
     def run(argv, **kw):
         raise subprocess.TimeoutExpired(argv, kw["timeout"])
     monkeypatch.setattr(O.subprocess, "run", run)
-    assert O.read_peer(["research@cpu-2.invalid"]) is None
+    assert O.read_peer(["research@cpu-2.invalid"]) == "ssh hung past 120 s"
 
 
 def test_the_machine_checks_read_each_listed_peer_over_ssh_ahead_of_the_reading(O: ModuleType, tmp_path: Path, now: float,
@@ -560,7 +561,7 @@ def test_the_machine_checks_read_each_listed_peer_over_ssh_ahead_of_the_reading(
     peers = tmp_path / "peers"
     peers.write_text("".join(f"vy-nebius-cpu-{n} -i /k research@cpu-{n}.invalid\n" for n in (2, 10)), encoding="utf-8")
     monkeypatch.setattr(O, "PEERS", peers)
-    answers: dict[str, list[str] | None] = {"research@cpu-2.invalid": FIXED, "research@cpu-10.invalid": None}
+    answers: dict[str, list[str] | str] = {"research@cpu-2.invalid": FIXED, "research@cpu-10.invalid": "ssh hung past 120 s"}
     asked: list[str] = []
     monkeypatch.setattr(O, "read_peer", lambda ssh: asked.append(ssh[-1]) or answers[ssh[-1]])
     monkeypatch.setattr(O, "here", lambda: "an-agent-vm")
@@ -583,6 +584,12 @@ def test_the_machine_checks_read_each_listed_peer_over_ssh_ahead_of_the_reading(
     closed, why = O.sudo_refused(root, {})
     assert closed is False and why.endswith("(sudo gives research root: vy-nebius-cpu-2)")
     assert "read vy-nebius-cpu-2 itself and 2 over ssh" in why
+    monkeypatch.setattr(O, "here", lambda: "an-agent-vm")
+    answers.update({"research@cpu-2.invalid": FIXED, "research@cpu-10.invalid": "ssh hung past 120 s"})
+    (root / "benchmarks/security_findings/readings.toml").write_text("")
+    closed, why = O.updates_and_kernel(root, {})
+    assert closed is None and "1 over ssh" in why, "a peer ssh can't read, with no reading, is unread and says why"
+    assert "unread: ssh hung past 120 s (" in why and why.endswith(": vy-nebius-cpu-10)")
 
 
 def test_tonights_readings_decide_each_finding_with_the_checks_commands(O: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
