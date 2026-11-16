@@ -9,7 +9,7 @@ audited one of two ways:
   else `pous_check`'s, built once a run: `timed_audit_exe`), whose verdict is the record's: where it can't run, every
   audit is undecided.  Its extra gate (`codec`) decodes segment 0 of the device's `C` with the scheme's own codec back
   to `W`'s, when that segment is wholly encoded.
-- `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
+- `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory attester (`memory_attester/live.py`) at `Δ` plus the RTT
   cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
   of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
   Its sessions are signed with S1's LMS key in `--mc-lms-key DIR` (made there when absent), every session's id in the
@@ -30,7 +30,7 @@ audited one of two ways:
    bytes as `W` and runs the weight set's GEMMs on them; plain reads `W`. Both are timed from a CUDA graph where the path is
    capturable, every rep kept. Decode overhead is POUS over plain, minus one.
 4. **The limit and the audits.** The limit is fixed before any load (`Δ = 0.5 ms` plus the loopback allowance, which P2
-   caps at 354 µs); the framing's memory challenger audits at k = 105 against it: the honest audit under POUS forwards, then the value control
+   caps at 354 µs); the framing's memory attester audits at k = 105 against it: the honest audit under POUS forwards, then the value control
    (one block in ten zeroed), the late control (one answer in ten held past the limit; the only answers held) and the
    recompute control (one block in ten of all of `C` dropped, each challenged dropped block re-encoded on the device from its
    decoded row `Dec(C_i)`, which the game gives the prover free: two roots, and the margin is the limit minus each
@@ -76,8 +76,8 @@ class V3:
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
 
-    impl, live = "p2-v3-gpu", H.MEMORY_CHALLENGER
-    memory_challenger_args: tuple[str, ...] = ()
+    impl, live = "p2-v3-gpu", H.MEMORY_ATTESTER
+    memory_attester_args: tuple[str, ...] = ()
     accepted = "audits_accepted"
     """The audit document's count of accepted audits that the gates read."""
 
@@ -99,7 +99,7 @@ class V3:
         self.model = protocol.commit(self.scheme_obj, w_host)
         self.salt = protocol.sample_salt(SETUP_SOURCE, self.model)
         self.prefix = p2.expand_prefix(self.params, self.salt)
-        self.memory_challenger_args = () if research else ("--strict",)
+        self.memory_attester_args = () if research else ("--strict",)
 
     def manifest(self) -> dict[str, Any]:
         return self.params.manifest()
@@ -130,29 +130,29 @@ class V3:
 
 
 class MC(V3):
-    """`p2-16448/v4` audited by the memory challenger (`p2-v3-mc-gpu`, `memory_challenger/live.py`): sessions over a coin
+    """`p2-16448/v4` audited by the memory attester (`p2-v3-mc-gpu`, `memory_attester/live.py`): sessions over a coin
     tree committed before them, each round's whole answer hashed after its receipt time, one signature a session.  Its
-    leaves are each block's `sha512/row/v2` digest (`memory_challenger.block_digest`), what the verdict checks a round's
+    leaves are each block's `sha512/row/v2` digest (`memory_attester.block_digest`), what the verdict checks a round's
     digest against.  `sign_with` picks the
     signer: S1's LMS key in a directory, whose sessions the verdict accepts, or the PoUS tests' test signer, which
-    `memory_challenger.SCHEMES` never accepts (fail closed), so its gates read the verdict under the signer's own mapping
+    `memory_attester.SCHEMES` never accepts (fail closed), so its gates read the verdict under the signer's own mapping
     (`accepted`) and, under the test signer, check the real verdict rejected them all."""
 
-    impl, live = "p2-v3-mc-gpu", HERE.parent / "memory_challenger" / "live.py"
+    impl, live = "p2-v3-mc-gpu", HERE.parent / "memory_attester" / "live.py"
     accepted = "audits_accepted_under_signer"
     c_of = V3.impl
     lms_key = ""
 
     def sign_with(self, lms_key: str, session_log: str = "") -> None:
         if lms_key and not session_log:
-            raise ValueError("--mc-lms-key takes --mc-session-log FILE: the memory challenger's used-session log")
+            raise ValueError("--mc-lms-key takes --mc-session-log FILE: the memory attester's used-session log")
         self.lms_key = lms_key
-        self.memory_challenger_args = (*self.memory_challenger_args,
+        self.memory_attester_args = (*self.memory_attester_args,
                                        *(("--signer", "lms", "--lms-key", lms_key, "--session-log", session_log) if lms_key
                                          else ("--signer", "test")))
 
     def leaf(self, i: int, block: bytes) -> bytes:
-        from verity.protocols.resource_accounting.memory.pous.attester.memory_challenger import block_digest
+        from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import block_digest
         return block_digest(block)
 
 
@@ -373,9 +373,9 @@ def _failed(gates: dict[str, Any], facts: dict[str, Any], P: R.Params, segments:
 def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int, int, int], bytes], framing: type[V3] = V3,
         backend: Backend | None = None, params: R.Params | None = None, vectors: dict[str, Any] | None = None,
         research: bool = False, load: Callable[[Any, V3], Callable[[], Any] | None] | None = None) -> dict[str, Any]:
-    """One run of P2's arm under `framing` (`V3`, `p2-16448/v4`'s, or `MC`, its blocks under the memory challenger).  `backend`, `params` and
+    """One run of P2's arm under `framing` (`V3`, `p2-16448/v4`'s, or `MC`, its blocks under the memory attester).  `backend`, `params` and
     `vectors` replace the GPU kernels, the deployment point and the pinned vectors, and `research` lets `V3`'s memory
-    challenger audit where P2 has no certificate (the CPU tests).  `load(c, framing)`, from a caller hosting this harness in
+    attester audit where P2 has no certificate (the CPU tests).  `load(c, framing)`, from a caller hosting this harness in
     its own process, is called once `C` is on the device and before the limit is calibrated, and gives the honest audit's load
     in place of `--load-tokens`' POUS forwards (None: no load)."""
     import torch
@@ -463,7 +463,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
         return {"implementation": {"name": fr.impl, "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
                                    "kernels": f"p2v1.cu: p2dec.cu's tuned decode with {fr.scheme} keys expanded by p2keys4.cuh (counter-mode "
                                               "SHA-512 from the key prefix's midstate); encode by an addition-chain root on CGBN's generic squaring",
-                                   "memory_challenger": str(fr.live.relative_to(H.ROOT)), "memory_challenger_args": list(fr.memory_challenger_args)},
+                                   "memory_attester": str(fr.live.relative_to(H.ROOT)), "memory_attester_args": list(fr.memory_attester_args)},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
                 "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex(),
                           "keys_version": keys_version(bound)},
@@ -487,8 +487,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     leaves = out / "leaves-p2.bin"
     leaves.write_bytes(b"".join(fr.leaf(i, c_host[i * nb:(i + 1) * nb]) for i in range(blocks)))
-    fields, live, extra = fr.ready(), fr.live, list(fr.memory_challenger_args)
-    if live == H.MEMORY_CHALLENGER:
+    fields, live, extra = fr.ready(), fr.live, list(fr.memory_attester_args)
+    if live == H.MEMORY_ATTESTER:
         extra += ["--lean-exe", str(getattr(a, "pous_timed_audit", None) or timed_audit_exe(out))]
     H.leave_reserved(a)
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
@@ -512,7 +512,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                  **rec, **H.recompute_margins(rec, set(dropped), limit)}
     mc = isinstance(fr, MC)
     if mc:
-        from memory_challenger.live import signature_control
+        from memory_attester.live import signature_control
 
         tampered = control("p2-tampered", H.control_answers(c_host, nb, tamper=set(range(0, blocks, TAMPER_EVERY))))
         signature = signature_control(honest, lambda i: fr.leaf(i, c_host[i * nb:(i + 1) * nb]))
@@ -540,20 +540,20 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
             gates["signer"] = {"passed": all((d.get("signer") or {}).get("test") is False
                                              and d.get("audits_accepted") == d.get(acc) for d in rounds),
                                "schemes": sorted({(d.get("signer") or {}).get("scheme") for d in rounds}, key=str),
-                               "note": "S1's LMS at lms.DEPLOYED: the verdict is the one under memory_challenger.SCHEMES"}
+                               "note": "S1's LMS at lms.DEPLOYED: the verdict is the one under memory_attester.SCHEMES"}
         else:
             gates["fail_closed"] = {"passed": all(d.get("audits_accepted") == 0 for d in rounds),
                                     "accepted": [d.get("audits_accepted") for d in rounds],
-                                    "note": "memory_challenger.SCHEMES accepts no test-signed session: no session is "
+                                    "note": "memory_attester.SCHEMES accepts no test-signed session: no session is "
                                             "accepted, honest or not, and no storage profile is issued"}
     allowance = honest.get("rtt_allowance_ns")
     point = {"k": k == R.K_AUDIT, "rtt_allowance": allowance is not None and allowance <= R.RTT_ALLOWANCE_CAP_NS,
              "deadline": honest.get("deadline_ns") == R.DELTA_NS, "blocks": 1 << 8 <= blocks <= 1 << 23}
     gates["operating_point"] = {"passed": all(point.values()), **point}
     gaps = tuple(f"operating point: {name} is not the frozen value" for name, ok in point.items() if not ok)
-    if "--strict" in fr.memory_challenger_args:
+    if "--strict" in fr.memory_attester_args:
         gates["certificate"] = {"passed": not honest.get("refused") and bool(honest.get("audits")),
-                                "refused": honest.get("refused"), "memory_challenger_gaps": honest.get("gaps"),
+                                "refused": honest.get("refused"), "memory_attester_gaps": honest.get("gaps"),
                                 "note": "protocol.TimedAudit refuses any k or Δ + RTT the certificate does not cover; the "
                                         "gaps it lists (such as W's segment count) are reported, not refused"}
         gaps += tuple(honest.get("gaps") or ())

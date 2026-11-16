@@ -1,6 +1,6 @@
 # The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory
 # wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,
-# each party on its machine, and the key the auditor pinned for its memory challenger.
+# each party on its machine, and the key the auditor pinned for its memory attester.
 # `verity run` stops on it with NotImplementedError until goal demos/onsite-demo brings it.
 format = "verity/config/v0"
 protocols = ["sampled-proofs", "pouw", "inference-only", "certifier", "wipe"]
@@ -48,7 +48,7 @@ machine = "gate-host"
 principal = "auditor"
 
 [[party]]
-name = "memory-challenger"
+name = "memory-attester"
 machine = "auditor-host"
 principal = "auditor"
 
@@ -58,7 +58,7 @@ machine = "prover-node"
 principal = "developer"
 
 [[pin]]
-party = "memory-challenger"
+party = "memory-attester"
 protocol = "wipe"
 scheme = "lms-sha512/n64-w1-h20/v0"
 key-sha512 = "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb4198fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"
@@ -100,17 +100,17 @@ to = "verifier"
 messages = ["out-record", "certificate", "registration", "deployment", "groups"]
 
 [[channel]]
-from = "memory-challenger"
+from = "memory-attester"
 to = "prover"
 messages = ["Fill", "FillDone", "Read", "End"]
 
 [[channel]]
 from = "prover"
-to = "memory-challenger"
+to = "memory-attester"
 messages = ["FillAck", "Answer"]
 
 [[channel]]
-from = "memory-challenger"
+from = "memory-attester"
 to = "verifier"
 messages = ["WipeReport"]
 after = ["End"]

@@ -18,7 +18,7 @@ parties are those of the static table `REGISTRY` names: the served window's (`to
 ``--bindings FILE`` gives the bindings: the hosts, addresses and gate commands the table's pieces reach the
 parties by, which the configuration never states, so binding another host changes no hash. It is TOML, a table per
 party and in it a table per listed subprotocol that declares that party, of strings and integers
-(``[memory-challenger.pous] address = "HOST:PORT"``); one naming another party or subprotocol is refused by name
+(``[memory-attester.pous] address = "HOST:PORT"``); one naming another party or subprotocol is refused by name
 (``binding``). They are kept beside the run (``STATE/bindings.json``), never in its record.
 
 ``--dry-run`` runs nothing: it prints a ``PLAN`` line for each party it would run (without ``--on``, the ``--party``
@@ -41,8 +41,8 @@ onsite, its id the line's ``product``), printed as a line and written to ``STATE
     VERDICT {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
              "reason": R, "registration": DIGEST, "run": RUN, "simulated": [...], "verdict": V}
 
-onsite's line also has ``trusted-device``: each memory challenger's premise that its device ran on a machine the
-developer doesn't control (`memory_challenger.trusted_device`), by component, from the outcome of its run here.
+onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
+developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here.
 
 ``coins`` is ``simulated`` when the challenger's host is a machine a prover's party is on, else ``development`` (the
 keys are made for the run). ``simulated`` names each premise the placement leaves unmet (a party that sends coins on a

@@ -1,4 +1,4 @@
-"""The streamed wipe's memory challenger as a party of its own, so it runs on a host the developer doesn't control (the
+"""The streamed wipe's memory attester as a party of its own, so it runs on a host the developer doesn't control (the
 challenger host, `trusted-device`) while the prover stays on its node: `challenger_party`'s shape, for the wipe. This
 module is what both sides and the verifier share: the wire's frames, the request (`request_of`, `params_of`), the
 report's readers (`commitment_of`, `signed_of`) and where the challenger ran (`placement`). The challenger's side is
@@ -32,14 +32,14 @@ from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 from . import streamed_wipe as sw
 
 MODULE = "verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger"
 """The module `command` starts as the challenger's side: `wipe_challenger.main`."""
 PREMISE = mc.PREMISE
-PARTY = "memory-challenger"
+PARTY = "memory-attester"
 """The configuration's party whose `[[pin]]` entries for the wipe name the keys `placement` reads."""
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
 CHUNK = 1 << 14
@@ -112,8 +112,8 @@ def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Ma
               configuration: str | None = None, committed: Collection[str] = frozenset(), verifier: str | None = None,
               store_gaps: Sequence[str] = (), simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-device`'s premise holds: that the memory challenger ran on a
-    machine the developer doesn't control (`memory_challenger.trusted_device`). It holds (`holds: …`) only under a
+    """Which host ran each party, and whether `trusted-device`'s premise holds: that the memory attester ran on a
+    machine the developer doesn't control (`memory_attester.trusted_device`). It holds (`holds: …`) only under a
     configuration whose hash `configuration` is one of `committed`, when `key_sha512`, the SHA-512 of the key the
     session was signed under, is a key that configuration's `pins` (its `[[pin]]` entries) give `PARTY` for the wipe;
     under any other configuration or key, a run's own pin included, it reads rehearsal, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
@@ -123,15 +123,15 @@ def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Ma
     leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's declared tiers
     (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
     if simulated and host != node:
-        raise ValueError(f"a simulated placement runs the memory challenger on the developer's node {node}, not on {host}")
+        raise ValueError(f"a simulated placement runs the memory attester on the developer's node {node}, not on {host}")
     kind = "own-host" if host != node else "simulated" if simulated else "prover-node"
-    names = {"own-host": f"the memory challenger ran on {host}, not the developer's {node}",
-             "simulated": f"the memory challenger ran as a process of its own on the developer's node {node}, standing "
+    names = {"own-host": f"the memory attester ran on {host}, not the developer's {node}",
+             "simulated": f"the memory attester ran as a process of its own on the developer's node {node}, standing "
                           "in for a host the developer doesn't control",
-             "prover-node": f"the memory challenger ran on the developer's node {node}"}[kind]
+             "prover-node": f"the memory attester ran on the developer's node {node}"}[kind]
     premise = mc.trusted_device(pins, PARTY, "wipe", key_sha512, names, configuration=configuration,
                                 committed=committed)
-    return {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
+    return {"kind": kind, "parties": {"memory_attester": host, "prover": node, "verifier": verifier or node},
             PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared],
             "store_gaps": list(store_gaps)}
 

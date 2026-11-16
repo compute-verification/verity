@@ -21,7 +21,7 @@ from verity.channel import Message
 from verity.party import Finish, Identity, Received, Send
 from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover, p2_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import coins, p2, p2_parties, receipts
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import setup
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check
@@ -233,7 +233,7 @@ def test_the_verifiers_start_refuses_a_closer_key_the_configuration_does_not_pin
     from verity.protocols.resource_accounting.memory.pous.attester import onsite
 
     def pinned(key: bytes) -> dict:
-        pin = {"party": "memory-challenger", "protocol": "pous", "key-sha512": hashlib.sha512(key).hexdigest()}
+        pin = {"party": "memory-attester", "protocol": "pous", "key-sha512": hashlib.sha512(key).hexdigest()}
         return {"pin": [pin]}
 
     assert p2_parties.VERIFIER not in p2_parties.PROTOCOLS[p2_parties.ID].starts

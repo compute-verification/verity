@@ -1,4 +1,4 @@
-"""Concurrent sessions on one memory-challenger key (`memory_challenger.LmsSigner`, `onsite.device_key`), as the
+"""Concurrent sessions on one memory-attester key (`memory_attester.LmsSigner`, `onsite.device_key`), as the
 all-protocols runner's windows share their device's: they take turns at the key's leaf state, each signing at a leaf of
 its own; a crash between a leaf's reservation and its signature never reuses the leaf; and windows that start at once on
 a fresh device make its key and session log once.  No clock: a thread's wait on a lock is seen through `fcntl.flock`."""
@@ -13,10 +13,10 @@ import sys
 import threading
 
 import pous_test_signer as ts
-from test_pous_memory_challenger import SESSION, judge, session
+from test_pous_memory_attester import SESSION, judge, session
 
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
 
 
@@ -82,7 +82,7 @@ def test_concurrent_sessions_on_one_leaf_state_each_sign_at_a_leaf_of_their_own(
 CRASH = """
 import hashlib, os, sys
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 signer = mc.LmsSigner(lms.keygen(lms.Params(64, 1, 3), hashlib.sha512(b"crash key").digest()), sys.argv[1], sys.argv[2])
 lms.sign_at = lambda *a: os._exit(17)
 signer.sign(bytes(32), b"record")

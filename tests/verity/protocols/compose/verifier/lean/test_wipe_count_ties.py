@@ -107,11 +107,11 @@ def test_a_wipe_that_names_nothing_ties_nothing():
 
 def test_the_count_is_on_its_hosts_one_link():
     """The count's parameters as the composite takes them refuse a host with a second link besides the memory
-    challengers' (the count's standard site gives `node0` a link to `node1`), and parameters with no registered
+    attesters' (the count's standard site gives `node0` a link to `node1`), and parameters with no registered
     hardware; the count's own decoder takes both."""
     count, _ = pair(2, alone=False)
     got = R.HOST_SPAN.answer(count)
-    assert got["verdict"] == R.REJECT and "links besides the memory challengers'" in got["reason"]
+    assert got["verdict"] == R.REJECT and "links besides the memory attesters'" in got["reason"]
     assert S.reference(count)["verdict"] == R.ACCEPT
     plain = S.build("honest", 2)
     assert S.reference(plain)["verdict"] == R.ACCEPT
@@ -122,7 +122,7 @@ KEY0 = "0" * 48
 
 
 def site_with(*links: tuple[str, str, str]) -> dict:
-    """`CoreOnsite`'s `siteWith`: two hosts, a network attester and a memory challenger, joined by `links`, as
+    """`CoreOnsite`'s `siteWith`: two hosts, a network attester and a memory attester, joined by `links`, as
     `registered.site_of` reads a site."""
     locs = [{"id": "node0", "kind": "host", "key": ""}, {"id": "node1", "kind": "host", "key": ""},
             {"id": "cert0", "kind": "certifier", "key": KEY0}, {"id": "chal0", "kind": "challenger", "key": ""}]
@@ -150,7 +150,7 @@ def test_wipe_link_is_the_leans():
                        (site_with(UPLINK, BARE), "node0")]:
         assert refusal(site, host) is not None, (host, site["links"])
     assert refusal(site_with(UPLINK, BETWEEN, CHALLENGED), "node0") == (
-        "host node0: it has 2 links besides the memory challengers' (eth0, hh0); a count on one of them is not of what "
+        "host node0: it has 2 links besides the memory attesters' (eth0, hh0); a count on one of them is not of what "
         "left on the others")
 
 

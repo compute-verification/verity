@@ -1,9 +1,9 @@
-"""The streamed-label wipe (experimental): a proof of secure erasure for a memory wipe, run by the memory challenger.
+"""The streamed-label wipe (experimental): a proof of secure erasure for a memory wipe, run by the memory attester.
 `PROTOCOL.md` ("The streamed-label wipe") is its specification and states the guarantee. This module holds the records,
-the derivations and the verdict; the challenger that runs a session is the device's `WipeMemoryChallenger`
+the derivations and the verdict; the challenger that runs a session is the device's `WipeMemoryAttester`
 (`pous/attester/wipe_challenger.py`).
 
-The memory challenger, the auditor's device on a machine the developer doesn't control, fills every memory tier of one
+The memory attester, the auditor's device on a machine the developer doesn't control, fills every memory tier of one
 server with labels it derives itself, then reveals `k` indices sampled on live coins after the fill and checks each answer
 against its own derivation, under a deadline per batch.  The labels are the auditor's randomness: the answers are
 checked in the clear, and nothing of the prover's is opened.
@@ -69,7 +69,7 @@ from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.scheme import DIGEST_BYTES
 from verity.commitments.randomness import derive
 
-from verity.protocols.resource_accounting.memory.pous.attester.memory_challenger import SCHEMES, Verify
+from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import SCHEMES, Verify
 
 PROTOCOL = "verity-pous/streamed-wipe/v2"
 KEY_DOMAIN = "verity/pous/streamed-wipe-labels/v1"
@@ -100,7 +100,7 @@ DEPLOYED_K = 74_000
 
 
 def raw_clock_ns() -> int:
-    """A reading of `CLOCK`, the raw monotonic clock, in ns: what a `WipeMemoryChallenger` reads unless a clock is injected."""
+    """A reading of `CLOCK`, the raw monotonic clock, in ns: what a `WipeMemoryAttester` reads unless a clock is injected."""
     return time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)
 
 

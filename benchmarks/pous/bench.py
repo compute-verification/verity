@@ -38,7 +38,7 @@ Implementations (`IMPLS`), each adding one class:
   prefix and leaves, `p2_v1/harness.py`'s `V3`), so the device serves its blocks, and its audits go through `protocol.TimedAudit` with its
   certificate (`verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover,
   and `pous-timed-audit`'s verdict decides them (`--pous-timed-audit`, else built once a run).
-* `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory challenger (`memory_challenger/live.py`, `p2_v1/harness.py`'s `MC`) at
+* `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory attester (`memory_attester/live.py`, `p2_v1/harness.py`'s `MC`) at
   `Δ + RTT_ALLOWANCE_CAP_NS`, with a tampered-block and a bad-signature control beside the others.  Its sessions are signed
   with S1's LMS key in `--mc-lms-key DIR`, every session's id in the session log `--mc-session-log FILE` (a file of its
   own); without a key they are test-signed, so the verdict rejects them all (its `fail_closed` gate), and it issues no
@@ -400,7 +400,7 @@ class P2V3Gpu:
 
 
 class P2V3McGpu(P2V3Gpu):
-    """The same kernels and framing, audited by the memory challenger (`p2_v1/harness.py`'s `MC`)."""
+    """The same kernels and framing, audited by the memory attester (`p2_v1/harness.py`'s `MC`)."""
 
     name = "p2-v3-mc-gpu"
 
@@ -426,7 +426,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--audits", type=int, default=20,
                     help="timed audits per round; 0 (band-gpu, p2-v3-gpu): an untimed placement, which runs the gates, encode, "
                          "the loop and the step floor but no limit, audit or control, and is labelled timed: false")
-    ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the memory challenger's round-trip allowance")
+    ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the memory attester's round-trip allowance")
     ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
     ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v3-gpu: only the first N segments (0: all)")
     ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous")
@@ -443,8 +443,8 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
                     help="band-gpu, p2-v3-gpu: the calibration quantile added to the 0.5 ms deadline")
     ap.add_argument("--deadline-ns", type=int, default=0, help="band-gpu, p2-v3-gpu: the audit's Δ (0: the protocol's 0.5 ms)")
     ap.add_argument("--clock", default="wall", choices=["wall", "logical"],
-                    help="band-gpu, p2-v3-gpu: time answers on the memory challenger's clock (wall) or by the responder's reported time (logical)")
-    ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v3-gpu: the memory challenger process's core")
+                    help="band-gpu, p2-v3-gpu: time answers on the memory attester's clock (wall) or by the responder's reported time (logical)")
+    ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v3-gpu: the memory attester process's core")
     ap.add_argument("--responder-cpu", type=int, default=None, help="band-gpu, p2-v3-gpu: the responder thread's core")
     ap.add_argument("--load-tokens", type=int, default=1, help="band-gpu, p2-v3-gpu: T of the POUS forwards run during the audit (0: none)")
     ap.add_argument("--step-reps", type=int, default=200, help="band-gpu: single-row Π₂ calls timed per kernel variant")
@@ -460,10 +460,10 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
                     help="reference, p2-v3-gpu: a built pous-timed-audit, the audit's verdict of record (default: "
                          "pous_check's; p2-v3-gpu builds it there once a run, a no-op after pod.sh's PREPARE=1)")
     ap.add_argument("--mc-lms-key", default="",
-                    help="p2-v3-mc-gpu: sign the memory challenger's sessions with S1's LMS key in this directory (made "
+                    help="p2-v3-mc-gpu: sign the memory attester's sessions with S1's LMS key in this directory (made "
                          "there when absent); without one they are test-signed and the verdict rejects them all")
     ap.add_argument("--mc-session-log", default="",
-                    help="p2-v3-mc-gpu with --mc-lms-key: the memory challenger's used-session log, a file of its own outside "
+                    help="p2-v3-mc-gpu with --mc-lms-key: the memory attester's used-session log, a file of its own outside "
                          "the key's directory (made with a new key; for a key that exists, a missing log is refused)")
     ap.add_argument("--band-d", type=int, default=0,
                     help="band-gpu: the band's in-degree d (0: the registered scheme's, 12); d >= 5, where the certificate "

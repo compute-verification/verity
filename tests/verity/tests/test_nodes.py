@@ -78,7 +78,7 @@ def log_of(kind: str, composite: str, certifier: tuple[str, str, str] | None = N
 
 
 def reached(entry: Entry) -> Entry:
-    """`entry` with a memory challenger of the auditor's linked to the host."""
+    """`entry` with a memory attester of the auditor's linked to the host."""
     return replace(entry, locs=(*entry.locs, Loc(CHALLENGER, "challenger", "site", "auditor", key="dummy-key",
                                                          scheme=SCHEME)),
                    links=(*entry.links, Link(f"{CHALLENGER}-link", (CHALLENGER, HOST), 1, 1)))

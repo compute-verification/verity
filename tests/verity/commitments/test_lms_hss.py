@@ -16,7 +16,7 @@ ATTACHMENT = bytes(range(32))
 I = bytes(range(16))
 LOWER = bytes(range(80))
 ROOT = bytes(range(64, 128))
-#: the role digests of I, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", period 7: the party key over LOWER, the
+#: the role digests of I, DEPLOYMENT, "memory-attester", ATTACHMENT, "server-3", period 7: the party key over LOWER, the
 #: period's root over ROOT with 5 records, and block 2's liveness, each its first 16 bytes
 PINNED = {"party-key": "aac07cba2b023595971ea1f884604caf", "period-root": "890d26452f5bbaeafce3da7ebb6b3ba2",
           "liveness": "ea5dac1a35dcab621d4d99aa83e7bd5d"}
@@ -28,9 +28,9 @@ def device(tmp_path) -> R.Identity:
 
 
 def _messages() -> dict[str, bytes]:
-    return {"party-key": R.party_key_message(I, DEPLOYMENT, "memory-challenger", LOWER),
-            "period-root": R.period_root_message(I, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", 7, 5, ROOT),
-            "liveness": R.liveness_message(I, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", 7, 2)}
+    return {"party-key": R.party_key_message(I, DEPLOYMENT, "memory-attester", LOWER),
+            "period-root": R.period_root_message(I, DEPLOYMENT, "memory-attester", ATTACHMENT, "server-3", 7, 5, ROOT),
+            "liveness": R.liveness_message(I, DEPLOYMENT, "memory-attester", ATTACHMENT, "server-3", 7, 2)}
 
 
 def test_pinned_role_digests() -> None:
@@ -42,16 +42,16 @@ def test_role_digests_bind_every_field() -> None:
     """Changing any one field of a message changes its digest, and the three roles never share one."""
     base = _messages()
     assert len(set(base.values())) == 3 and all(len(m) == 64 for m in base.values())
-    variants = [R.party_key_message(I, OTHER, "memory-challenger", LOWER),
+    variants = [R.party_key_message(I, OTHER, "memory-attester", LOWER),
                 R.party_key_message(I, DEPLOYMENT, "network-certifier", LOWER),
-                R.party_key_message(I, DEPLOYMENT, "memory-challenger", LOWER[::-1]),
-                R.period_root_message(I, DEPLOYMENT, "memory-challenger", ATTACHMENT[::-1], "server-3", 7, 5, ROOT),
-                R.period_root_message(I, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-4", 7, 5, ROOT),
-                R.period_root_message(I, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", 8, 5, ROOT),
-                R.period_root_message(I, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", 7, 6, ROOT),
-                R.period_root_message(I, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", 7, 5, ROOT[::-1]),
-                R.liveness_message(I, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", 7, 3),
-                R.liveness_message(I[::-1], DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", 7, 2)]
+                R.party_key_message(I, DEPLOYMENT, "memory-attester", LOWER[::-1]),
+                R.period_root_message(I, DEPLOYMENT, "memory-attester", ATTACHMENT[::-1], "server-3", 7, 5, ROOT),
+                R.period_root_message(I, DEPLOYMENT, "memory-attester", ATTACHMENT, "server-4", 7, 5, ROOT),
+                R.period_root_message(I, DEPLOYMENT, "memory-attester", ATTACHMENT, "server-3", 8, 5, ROOT),
+                R.period_root_message(I, DEPLOYMENT, "memory-attester", ATTACHMENT, "server-3", 7, 6, ROOT),
+                R.period_root_message(I, DEPLOYMENT, "memory-attester", ATTACHMENT, "server-3", 7, 5, ROOT[::-1]),
+                R.liveness_message(I, DEPLOYMENT, "memory-attester", ATTACHMENT, "server-3", 7, 3),
+                R.liveness_message(I[::-1], DEPLOYMENT, "memory-attester", ATTACHMENT, "server-3", 7, 2)]
     assert not set(variants) & set(base.values()) and len(set(variants)) == len(variants)
 
 
@@ -65,30 +65,30 @@ def test_malformed_fields_are_refused(bad) -> None:
 def test_a_party_signs_roots_and_liveness_that_verify_under_the_identity(device) -> None:
     """The party's lower key, certified by the identity for the party in the deployment, signs a period's root and a
     block's liveness, and both verify under the identity alone."""
-    party = device.issue(DEPLOYMENT, "memory-challenger")
+    party = device.issue(DEPLOYMENT, "memory-attester")
     party.start(ATTACHMENT)
     root = party.period_root(ATTACHMENT, "server-3", 7, 5, ROOT)
     I_low = party.lower[:16]
-    m = R.period_root_message(I_low, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", 7, 5, ROOT)
-    assert R.hss_verify(SMALL, device.public, DEPLOYMENT, "memory-challenger", root, m)
+    m = R.period_root_message(I_low, DEPLOYMENT, "memory-attester", ATTACHMENT, "server-3", 7, 5, ROOT)
+    assert R.hss_verify(SMALL, device.public, DEPLOYMENT, "memory-attester", root, m)
     live = party.liveness(ATTACHMENT, "server-3", 7, 2)
-    assert R.verify_liveness(SMALL, device.public, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", 7, 2, live)
+    assert R.verify_liveness(SMALL, device.public, DEPLOYMENT, "memory-attester", ATTACHMENT, "server-3", 7, 2, live)
     assert live.signature.q == root.signature.q + 1
     assert R.HssSignature.decode(SMALL, live.encode()) == live
 
 
 def test_a_signature_is_refused_off_its_party_deployment_or_fields(device, tmp_path) -> None:
-    party = device.issue(DEPLOYMENT, "memory-challenger")
+    party = device.issue(DEPLOYMENT, "memory-attester")
     party.start(ATTACHMENT)
     live = party.liveness(ATTACHMENT, "server-3", 7, 2)
-    ok = dict(params=SMALL, identity=device.public, deployment=DEPLOYMENT, party="memory-challenger", attachment=ATTACHMENT,
+    ok = dict(params=SMALL, identity=device.public, deployment=DEPLOYMENT, party="memory-attester", attachment=ATTACHMENT,
               link="server-3", period=7, block=2, sig=live)
     assert R.verify_liveness(**ok)
     other = R.Identity.init(tmp_path / "other", SMALL)
     for bad in [dict(identity=other.public), dict(deployment=OTHER), dict(party="network-certifier"),
                 dict(attachment=ATTACHMENT[::-1]), dict(link="server-4"), dict(period=8), dict(block=3)]:
         assert not R.verify_liveness(**(ok | bad)), bad
-    stranger = other.issue(DEPLOYMENT, "memory-challenger")
+    stranger = other.issue(DEPLOYMENT, "memory-attester")
     stranger.start(ATTACHMENT)
     forged = R.HssSignature(stranger.lower, stranger.certificate, stranger.liveness(ATTACHMENT, "server-3", 7, 2).signature)
     assert not R.verify_liveness(**(ok | dict(sig=forged)))
@@ -100,18 +100,18 @@ def test_a_signature_is_refused_off_its_party_deployment_or_fields(device, tmp_p
 
 def test_the_identity_signs_one_leaf_per_lower_key_and_rotates(device) -> None:
     """Each issue certifies a new lower tree at the identity's next leaf; the party's newest is the one `party` opens."""
-    a = device.issue(DEPLOYMENT, "memory-challenger")
-    b = device.issue(DEPLOYMENT, "memory-challenger")
-    c = device.issue(OTHER, "memory-challenger")
+    a = device.issue(DEPLOYMENT, "memory-attester")
+    b = device.issue(DEPLOYMENT, "memory-attester")
+    c = device.issue(OTHER, "memory-attester")
     assert [a.certificate.q, b.certificate.q, c.certificate.q] == [0, 1, 2]
     assert len({a.lower, b.lower, c.lower}) == 3
-    assert device.party(DEPLOYMENT, "memory-challenger").lower == b.lower
+    assert device.party(DEPLOYMENT, "memory-attester").lower == b.lower
     with pytest.raises(R.StateError):
         device.party(DEPLOYMENT, "network-certifier")
 
 
 def test_seeds_are_private_and_never_made_twice(device) -> None:
-    party = device.issue(DEPLOYMENT, "memory-challenger")
+    party = device.issue(DEPLOYMENT, "memory-attester")
     for p in [device.directory / R.IDENTITY_SEED, party.directory / R.LOWER_SEED]:
         assert stat.S_IMODE(p.stat().st_mode) == 0o600
     assert stat.S_IMODE(device.directory.stat().st_mode) == 0o700
@@ -120,16 +120,16 @@ def test_seeds_are_private_and_never_made_twice(device) -> None:
 
 
 def test_a_lower_key_whose_certificate_is_not_the_identitys_is_refused(device, tmp_path) -> None:
-    party = device.issue(DEPLOYMENT, "memory-challenger")
+    party = device.issue(DEPLOYMENT, "memory-attester")
     other = R.Identity.init(tmp_path / "other", SMALL)
     with pytest.raises(R.StateError, match="certificate"):
-        R.PartyKey(party.directory, other.public, DEPLOYMENT, "memory-challenger", SMALL)
+        R.PartyKey(party.directory, other.public, DEPLOYMENT, "memory-attester", SMALL)
     with pytest.raises(R.StateError, match="certificate"):
         R.PartyKey(party.directory, device.public, DEPLOYMENT, "network-certifier", SMALL)
 
 
 def test_a_used_up_lower_key_refuses_to_sign(device) -> None:
-    party = device.issue(DEPLOYMENT, "memory-challenger")
+    party = device.issue(DEPLOYMENT, "memory-attester")
     party.start(ATTACHMENT)
     for b in range(2 ** SMALL.H):
         party.liveness(ATTACHMENT, "server-3", 0, b)
@@ -147,7 +147,7 @@ def test_a_party_signs_only_for_the_attachment_it_started_and_a_restart_signs_no
     """`start` records the attachment on the key's leaf state before any signature of it. The key signs for that
     attachment only; the same key reopened (a restart of its party) is refused the attachment, so it signs nothing more
     of it, and may start another."""
-    party = device.issue(DEPLOYMENT, "memory-challenger")
+    party = device.issue(DEPLOYMENT, "memory-attester")
     with pytest.raises(R.StateError, match="not the one this key started"):
         party.liveness(ATTACHMENT, "server-3", 7, 0)
     party.start(ATTACHMENT)
@@ -155,7 +155,7 @@ def test_a_party_signs_only_for_the_attachment_it_started_and_a_restart_signs_no
     party.liveness(ATTACHMENT, "server-3", 7, 0)
     with pytest.raises(R.StateError, match="not the one this key started"):
         party.period_root(ATTACHMENT[::-1], "server-3", 7, 1, ROOT)
-    restarted = device.party(DEPLOYMENT, "memory-challenger")
+    restarted = device.party(DEPLOYMENT, "memory-attester")
     assert restarted.lower == party.lower
     with pytest.raises(R.StateError, match="already started"):
         restarted.start(ATTACHMENT)
@@ -163,5 +163,5 @@ def test_a_party_signs_only_for_the_attachment_it_started_and_a_restart_signs_no
         restarted.liveness(ATTACHMENT, "server-3", 7, 1)
     restarted.start(ATTACHMENT[::-1])
     live = restarted.liveness(ATTACHMENT[::-1], "server-3", 0, 0)
-    assert R.verify_liveness(SMALL, device.public, DEPLOYMENT, "memory-challenger", ATTACHMENT[::-1], "server-3", 0, 0, live)
+    assert R.verify_liveness(SMALL, device.public, DEPLOYMENT, "memory-attester", ATTACHMENT[::-1], "server-3", 0, 0, live)
     assert live.signature.q == 1

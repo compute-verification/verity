@@ -1,11 +1,11 @@
 """The streamed wipe as two parties of the deployment layer (`verity.runtime`), the protocol `wipe_party` speaks as a byte
-stream, in messages: the memory challenger, whose party is `verity/protocols/resource_accounting/memory/pous/attester/wipe_challenger.py`'s,
+stream, in messages: the memory attester, whose party is `verity/protocols/resource_accounting/memory/pous/attester/wipe_challenger.py`'s,
 and the prover, whose party is `verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py`'s. This module holds what both
 speak.
 
 ~~~text
-memory-challenger -> prover   Fill {first, count} + labels (private) ... FillDone; then per batch Read {indices} (coins); End
-prover -> memory-challenger   FillAck once it holds the fill; per batch Answer, 64 bytes an index (private)
+memory-attester -> prover   Fill {first, count} + labels (private) ... FillDone; then per batch Read {indices} (coins); End
+prover -> memory-attester   FillAck once it holds the fill; per batch Answer, 64 bytes an index (private)
 ~~~
 
 The run's parameters are `wipe_party.request_of`'s request, which names no reads: the challenger chooses them, never the
@@ -29,7 +29,7 @@ from . import wipe_party as WP
 
 ID = "verity/pous/streamed-wipe"
 VERSION = 1
-CHALLENGER, PROVER = "memory-challenger", "prover"
+CHALLENGER, PROVER = "memory-attester", "prover"
 #: the wipe's name in a deployment configuration: in its `protocols`, a `[[pin]]`'s `protocol` and a binding's table
 COMPONENT = "wipe"
 MAX_BATCH = 1 << 10

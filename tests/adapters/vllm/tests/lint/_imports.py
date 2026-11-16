@@ -231,7 +231,7 @@ SIDES: dict[str, bool] = {
     "verity.protocols.resource_accounting.network.attester.program.lean": False,
     "verity.protocols.resource_accounting.memory.pous.attester": False,
     "verity.protocols.resource_accounting.memory.pous.attester.challenger_session": True,
-    "verity.protocols.resource_accounting.memory.pous.attester.memory_challenger": True,
+    "verity.protocols.resource_accounting.memory.pous.attester.memory_attester": True,
     "verity.runtime": False,
     "verity.protocols.resource_accounting.memory.poub.attester": False,
     "verity.protocols.resource_accounting.memory.poub.verifier.remote_session": False,

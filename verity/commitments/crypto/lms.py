@@ -1,11 +1,11 @@
 """A stateful hash-based signature: LMS with LM-OTS (RFC 8554) over SHA-512, in plain Python, the scheme of the network
-attester's certificates and the memory challenger's records, and the reference of their in-proof verifier
+attester's certificates and the memory attester's records, and the reference of their in-proof verifier
 (`verity.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n64``.
 
 **Use.** One key per device per role. ``keygen(DEPLOYED, seed)`` (seed: N = 64 secret bytes the device keeps), then once
 ``LeafState.create(path, public_key(key), DEPLOYED.H)``; to sign, ``sign(key, state, message)`` with ``state = LeafState(path,
 public_key(key), DEPLOYED.H)``; to check, ``verify(DEPLOYED, public, message, sig)``. The message is a role's digest
-(`certificate_message`, `memory_challenger_message`), never hand-rolled. A network attester first starts its session on
+(`certificate_message`, `memory_attester_message`), never hand-rolled. A network attester first starts its session on
 the state (``state.start(session)``), which refuses a session id the key has already started.
 
 **HSS: a device's identity and its parties' keys** (RFC 8554 §6 at two levels; NIST SP 800-208). A device's long-lived
@@ -53,7 +53,7 @@ from pathlib import Path
 
 __all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "DEPLOYED", "DEPLOYMENT_BYTES", "DIRECTIONS", "HssSignature", "Identity",
            "LeafState", "Params", "PartyKey", "PrivateKey", "ROLES", "SESSION_BYTES", "Signature", "StateError",
-           "certificate_message", "digits", "hss_verify", "key", "keygen", "liveness_message", "memory_challenger_message",
+           "certificate_message", "digits", "hss_verify", "key", "keygen", "liveness_message", "memory_attester_message",
            "party_key_message", "period_root_message", "public_key", "root_of", "sign", "sign_at", "verify",
            "verify_certificate", "verify_liveness", "TOY_N"]
 
@@ -149,7 +149,7 @@ class Signature:
 #: distinct from the ids of the checks that read it (`verity/network-certificate/v4`, `verity/network-records/v3`). The
 #: last three are HSS's (`party_key_message`, `period_root_message`, `liveness_message`).
 ROLES = {"network-certificate": "verity/network-certificate-message/v2",
-         "memory-challenger-record": "verity/memory-challenger-record/v1",
+         "memory-attester-record": "verity/memory-challenger-record/v1",
          "party-key": "verity/party-key/v1",
          "period-root": "verity/period-root/v1",
          "liveness": "verity/liveness/v1"}
@@ -181,11 +181,11 @@ def certificate_message(I: bytes, session: bytes, link: str, direction: str, win
     return _digest("network-certificate", I, context, record)
 
 
-def memory_challenger_message(I: bytes, session: str | bytes, record: bytes) -> bytes:
-    """The message a memory challenger's session record signs: as `certificate_message`, the tag
+def memory_attester_message(I: bytes, session: str | bytes, record: bytes) -> bytes:
+    """The message a memory attester's session record signs: as `certificate_message`, the tag
     ``verity/memory-challenger-record/v1`` and the context the session id."""
     sid = session.encode() if isinstance(session, str) else bytes(session)
-    return _digest("memory-challenger-record", I, _field(sid), record)
+    return _digest("memory-attester-record", I, _field(sid), record)
 
 
 #: the length of a deployment configuration's hash, SHA-512 of the file

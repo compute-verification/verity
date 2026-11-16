@@ -5,7 +5,7 @@ links and log, `Site.ofLog`, and `Registration.Entry.refusal`, check for check a
 
 The Site is a tree of locations, each with its owner: the site at the root, stating the site's unit of time
 (`Site.time_unit`), its hosts, a host's devices, memory leaves by tier and bytes under a device or a host, and at the
-site the auditor's own: its devices, the network attesters and memory challengers, and its hosts, each a machine a
+site the auditor's own: its devices, the network attesters and memory attesters, and its hosts, each a machine a
 device of its may run in and one that holds none of the prover's hardware (`PARENTS`), each with its key, the key's
 scheme (`SCHEMES`). An auditor's device states its time base and how far its clock may drift, which is the drift of
 every device of the auditor's in it (`Site.drift`). A host states its on-chip state and the rate its leaves of a tier
@@ -47,7 +47,7 @@ end (`incomplete`):
 | `owner` | each new certifier, challenger or auditor's device is the auditor's own, with its key and its key's scheme, one of `SCHEMES`; every other new location is the prover's and states no scheme; each new auditor's device states its time base, the auditor's for it, and the auditor's figure for its clock's drift, below 1 where there is one, and no other new location states a time base or a drift |
 | `inventory` | the log, at its end: under each host, every memory leaf the auditor has figures for, at least its count of devices of each SKU it lists, and each way out it lists, as a link under that id with an end at the host at its rate |
 | `uncertified` | onsite: every boundary link is certified or says why no certifier splits it |
-| `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
+| `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory attester's link |
 
 The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `held`, `read_rate`, `over`, `time_unit`,
 `clock`, `drift`, `mediated`, `boundary`, `units`, `registered`) are functions of the site alone, but `device`, which reads the
@@ -179,7 +179,7 @@ PARENTS: dict[str, tuple[str | None, ...]] = {
 LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
 """The pairs of kinds a link may join, in either order. No link ends at an auditor's device."""
 AUDITOR_KINDS = ("certifier", "challenger", "auditor-host")
-"""The auditor's own: its devices, the network certifiers and the memory challengers, and its hosts."""
+"""The auditor's own: its devices, the network certifiers and the memory attesters, and its hosts."""
 SCHEMES = ("lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0")
 """The signature schemes a registered key may be of: one LMS key that signs, and a root LMS key that certifies the
 keys that sign."""
@@ -1173,7 +1173,7 @@ class Site:
         return None if p is None else p.parent
 
     def reached(self) -> list[str]:
-        """What the memory challengers reach: the ends of their links."""
+        """What the memory attesters reach: the ends of their links."""
         return [e for k in self.links if "challenger" in (self.kind(k.ends[0]), self.kind(k.ends[1])) for e in k.ends]
 
     # --- the views a protocol reads -----------------------------------------------------------------------------------
@@ -1472,12 +1472,12 @@ def _covered(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
 
 
 def _reached(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
-    """Onsite: the host of every memory leaf is at an end of a memory challenger's link."""
+    """Onsite: the host of every memory leaf is at an end of a memory attester's link."""
     t = s.add(e)
     if c == "onsite":
         reached = t.reached()
         if far := sorted({h for x in t.locs if x.kind == "memory" and (h := t.host_of(x)) is not None} - set(reached)):
-            return f"hosts {far} hold the prover's memory, and no memory challenger links to them"
+            return f"hosts {far} hold the prover's memory, and no memory attester links to them"
     return None
 
 

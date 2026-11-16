@@ -489,7 +489,7 @@
     {
       "handle": "memory-accounting",
       "holder": "bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3",
-      "remit": "Memory accounting: PoUS, PoUB (the bandwidth audits) and secure erasure, the memory challenger, their Lean and their runs.",
+      "remit": "Memory accounting: PoUS, PoUB (the bandwidth audits) and secure erasure, the memory attester, their Lean and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAJE0SREV",
       "retired_usergroups": [

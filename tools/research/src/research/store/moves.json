@@ -5130,6 +5130,13 @@
         "verity/protocols/workload_classification/training_detection/inference_only/verifier/pyproject.toml": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/pyproject.toml",
         "verity/runtime/pyproject.toml": "tests/verity/runtime/pyproject.toml"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/memory_challenger/": "benchmarks/pous/memory_attester/",
+        "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_memory_challenger.py": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_memory_attester.py",
+        "verity/protocols/resource_accounting/memory/pous/attester/memory_challenger.py": "verity/protocols/resource_accounting/memory/pous/attester/memory_attester.py"
+      }
     }
   ]
 }

@@ -27,7 +27,7 @@ REFUSALS = (D.Reject, ValueError)
 P2 = lms.Params(64, 1, 2)
 DEPLOYMENT = hashlib.sha512(b"memory-challenger-lean/deployment").digest()
 ATTACHMENT = bytes(range(32))
-PARTY, LINK, PERIOD = "memory-challenger", "server-3", 7
+PARTY, LINK, PERIOD = "memory-attester", "server-3", 7
 RECORDS = [hashlib.sha512(b"memory-challenger-lean/record %d" % i).digest()[: 8 + 9 * i] for i in range(5)]
 
 

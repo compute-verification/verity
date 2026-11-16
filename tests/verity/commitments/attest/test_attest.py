@@ -76,16 +76,16 @@ def test_an_opening_is_refused_off_its_record_position_count_or_root() -> None:
 
 @pytest.fixture
 def party(tmp_path) -> lms.PartyKey:
-    return lms.Identity.init(tmp_path / "device", SMALL).issue(DEPLOYMENT, "memory-challenger")
+    return lms.Identity.init(tmp_path / "device", SMALL).issue(DEPLOYMENT, "memory-attester")
 
 
 def _accepts(party: lms.PartyKey, s: A.SignedPeriod, reads: list[A.Read]) -> bool:
     """`Attest.accepts`, in the Python it is held to: the lower key's certificate in the clear (`Attest.checkKey`), then
     the root's signature under the lower key and each read's opening (`Attest.check`)."""
     sig = lms.HssSignature.decode(SMALL, s.signature)
-    if not lms.verify_certificate(SMALL, party.identity, DEPLOYMENT, "memory-challenger", sig.lower, sig.certificate):
+    if not lms.verify_certificate(SMALL, party.identity, DEPLOYMENT, "memory-attester", sig.lower, sig.certificate):
         return False
-    m = lms.period_root_message(sig.lower[:16], DEPLOYMENT, "memory-challenger", s.attachment, s.link, s.period, s.count,
+    m = lms.period_root_message(sig.lower[:16], DEPLOYMENT, "memory-attester", s.attachment, s.link, s.period, s.count,
                                 s.root)
     return (lms.verify(SMALL, sig.lower, m, sig.signature)
             and all(A.verify_opening(s.root, s.count, r.position, r.record, r.path) for r in reads))
@@ -96,7 +96,7 @@ def test_a_period_signs_liveness_per_block_and_its_root_once(party) -> None:
     blocks = [_records(3), [], _records(2)]
     for w, records in enumerate(blocks):
         live = period.block(w, records)
-        assert lms.verify_liveness(SMALL, party.identity, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", 7, w,
+        assert lms.verify_liveness(SMALL, party.identity, DEPLOYMENT, "memory-attester", ATTACHMENT, "server-3", 7, w,
                                    lms.HssSignature.decode(SMALL, live))
     s = period.close()
     assert s.records == tuple(r for b in blocks for r in b) and s.root == A.root(s.records)
@@ -156,7 +156,7 @@ def test_a_restart_within_the_attachment_signs_nothing_more_of_it(party) -> None
     started, so it opens no period of it, and signs for another attachment."""
     period = A.Period(party, ATTACHMENT, "server-3", 7)
     period.block(0, _records(2))
-    restarted = lms.PartyKey(party.directory, party.identity, DEPLOYMENT, "memory-challenger", SMALL)
+    restarted = lms.PartyKey(party.directory, party.identity, DEPLOYMENT, "memory-attester", SMALL)
     with pytest.raises(lms.StateError, match="already started"):
         A.Period(restarted, ATTACHMENT, "server-3", 7)
     with pytest.raises(lms.StateError, match="not the one this key started"):
@@ -164,5 +164,5 @@ def test_a_restart_within_the_attachment_signs_nothing_more_of_it(party) -> None
     A.Period(party, ATTACHMENT, "server-3", 8).block(0, [])
     other = A.Period(restarted, ATTACHMENT[::-1], "server-3", 7)
     live = other.block(0, _records(1))
-    assert lms.verify_liveness(SMALL, party.identity, DEPLOYMENT, "memory-challenger", ATTACHMENT[::-1], "server-3", 7, 0,
+    assert lms.verify_liveness(SMALL, party.identity, DEPLOYMENT, "memory-attester", ATTACHMENT[::-1], "server-3", 7, 0,
                                lms.HssSignature.decode(SMALL, live))

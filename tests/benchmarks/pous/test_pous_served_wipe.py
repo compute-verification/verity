@@ -6,7 +6,7 @@ DIR/answer.json is the subprotocol's core answer (verity/wipe/v0) in the form `A
 summary beside it; the wipe runs on the serve's leased card, or under a lease of its own, by the node's `gpu-lease`
 or, where none is installed, the tree's own. A card that isn't idle and a
 gate key that isn't on the node are refused before demo.sh runs, and nothing is killed. The verifier trusts the one
-challenger key WIPE_KEY_SHA512 pins, by default the one the run's configuration pins for the memory challenger's wipe
+challenger key WIPE_KEY_SHA512 pins, by default the one the run's configuration pins for the memory attester's wipe
 (VERITY_PINS): a session signed under another is rejected, and with none pinned the piece refuses before it asks for a
 card."""
 
@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party as WP
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
@@ -42,10 +42,10 @@ DECIDED = {"program": "wipe-protocol", "host": socket.gethostname()}
 #: the SHA-512 of the key the challenger's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
 PINNED = runpy.run_path(str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "wipe_side.py"))["key_sha512"]()
 #: the wipe key the run's configuration pins (VERITY_PINS): the pin of a run that sets none of its own
-AUDITOR_PIN = hashlib.sha512(b"the configuration's pin of the memory challenger's wipe key").hexdigest()
-PINS = [{"key-sha512": hashlib.sha512(b"its PoUS key").hexdigest(), "party": "memory-challenger", "protocol": "pous",
+AUDITOR_PIN = hashlib.sha512(b"the configuration's pin of the memory attester's wipe key").hexdigest()
+PINS = [{"key-sha512": hashlib.sha512(b"its PoUS key").hexdigest(), "party": "memory-attester", "protocol": "pous",
          "scheme": "lms-sha512/n64-w1-h20/v0"},
-        {"key-sha512": AUDITOR_PIN, "party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0"}]
+        {"key-sha512": AUDITOR_PIN, "party": "memory-attester", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0"}]
 UNTRUSTED = "the session is signed by a key that is not a trusted memory challenger's"
 #: the tree's own lease script, which the wrapper takes where the node has no `gpu-lease`
 TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
@@ -170,7 +170,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert public["k"] == W.READS and public["memory_bits"] == W.SEGMENT_LABELS * sw.LABEL_BITS
     assert public["certified"] is False and public["foreign_bits"] > 0
     placement = answer["profile"]["placement"]
-    assert placement["trusted-device"] == (f"{mc.UNCOMMITTED} (no configuration); the memory challenger ran on vy-auditor-2, not the developer's "
+    assert placement["trusted-device"] == (f"{mc.UNCOMMITTED} (no configuration); the memory attester ran on vy-auditor-2, not the developer's "
                                          "vy-dc-h200")
     profile = {k: v for k, v in answer["profile"].items() if k != "placement"}
     private = tmp_path / "pieces" / "serve-run" / "private" / "wipe"
@@ -360,7 +360,7 @@ def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(node
 
 def test_a_run_that_pins_no_key_trusts_the_configurations_wipe_pin_and_no_other(node, tmp_path) -> None:
     """With WIPE_KEY_SHA512 unset the wipe is judged under the key the run's configuration pins for the memory
-    challenger's wipe (VERITY_PINS), not its PoUS pin: demo.sh gets it as `--trusted-sha512`, and the stand-in
+    attester's wipe (VERITY_PINS), not its PoUS pin: demo.sh gets it as `--trusted-sha512`, and the stand-in
     challenger's session, signed under another key, is rejected as any other key's is, by a case that trusts no key."""
     d = tmp_path / "pieces" / "wipe"
     env = ({k: v for k, v in node.items() if k != "WIPE_KEY_SHA512"}

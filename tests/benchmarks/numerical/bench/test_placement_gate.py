@@ -1,4 +1,4 @@
-"""The proof system's deployment gate (``bench.placement.gate``): the ZK server, network attesters, memory challengers and
+"""The proof system's deployment gate (``bench.placement.gate``): the ZK server, network attesters, memory attesters and
 challenger each where the architecture puts them, over injected probe records and ``/proc`` readings."""
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ ZK_SERVER = {"product_uuid": "u-zk", "boot_id": "b-zk", "hypervisor": True, "sys
              "cpu_model": "AMD EPYC 9654"}
 CHALLENGER = {"product_uuid": "u-ch", "boot_id": "b-ch", "hypervisor": False, "sys_vendor": "Dell Inc.", "public_ip": "198.51.100.7",
               "cpu_model": "Intel Xeon 6538N"}
-#: The memory challenger inside node 2's guest: its kernel's boot id; the DMI uuid is root-only, so a user's probe lacks it.
+#: The memory attester inside node 2's guest: its kernel's boot id; the DMI uuid is root-only, so a user's probe lacks it.
 INSIDE_N2 = {"boot_id": "b-n2", "hypervisor": True, "sys_vendor": "QEMU", "public_ip": "203.0.113.2", "cpu_model": "AMD EPYC 9654"}
 
 SCOPE = "/pous-quiet.slice/run-u7.scope"
@@ -43,7 +43,7 @@ ABSENT = ("zk-server", "challenger")
 
 
 def _mc(**kw):
-    args = {"role": "memory-challenger", "me": INSIDE_N2, "peers": GUARDED, "absent": ABSENT, "cores": CORES, "tasks": QUIET,
+    args = {"role": "memory-attester", "me": INSIDE_N2, "peers": GUARDED, "absent": ABSENT, "cores": CORES, "tasks": QUIET,
             "own": OWN, **kw}
     return PL.gate(**args)
 
@@ -54,14 +54,14 @@ def _problems(v):
 
 
 def test_the_rule_table_names_every_role_and_only_known_peers():
-    assert set(PL.GATE_RULES) == {"zk-server", "certifier", "memory-challenger", "challenger"}
+    assert set(PL.GATE_RULES) == {"zk-server", "certifier", "memory-attester", "challenger"}
     for role, rule in PL.GATE_RULES.items():
         assert set(rule) == {"same", "separate", "vm", "cores"}
         assert set(rule["same"]) | set(rule["separate"]) <= set(PL.PEER_ROLES) and not set(rule["same"]) & set(rule["separate"])
-    assert PL.GATE_RULES["certifier"] == PL.GATE_RULES["memory-challenger"]
+    assert PL.GATE_RULES["certifier"] == PL.GATE_RULES["memory-attester"]
 
 
-def test_the_memory_challenger_inside_node_2_on_its_quiet_cores_passes():
+def test_the_memory_attester_inside_node_2_on_its_quiet_cores_passes():
     v = _mc()
     assert v["passed"] is True and v["problems"] == [] and v["schema"] == PL.GATE_SCHEMA
     assert v["peers"] == [{"name": "vy-nebius-2", "role": "worker", "relation": "same machine", "problems": []}]
@@ -77,14 +77,14 @@ def test_the_memory_challenger_inside_node_2_on_its_quiet_cores_passes():
     ({**INSIDE_N2, "product_uuid": "u-n1"}, "its product_uuid u-n1 is not the node's u-n2"),
     ({"public_ip": "203.0.113.2", "cpu_model": "AMD EPYC 9654"}, "none of machine_id, product_uuid, boot_id is recorded on both"),
 ])
-def test_a_memory_challenger_outside_the_node_it_guards_is_refused(me, why):
+def test_a_memory_attester_outside_the_node_it_guards_is_refused(me, why):
     assert f"vy-nebius-2 (worker): {why}" in _problems(_mc(me=me))
 
 
 @pytest.mark.parametrize("kw,why", [
-    ({"peers": []}, "a memory-challenger guards exactly one worker (--peer worker=FILE): 0 named"),
+    ({"peers": []}, "a memory-attester guards exactly one worker (--peer worker=FILE): 0 named"),
     ({"peers": GUARDED + [("worker", "vy-nebius-1", NODE1)]}, "guards exactly one worker (--peer worker=FILE): 2 named"),
-    ({"peers": [], "absent": ABSENT + ("worker",)}, "--absent worker: a memory-challenger's rule needs its worker"),
+    ({"peers": [], "absent": ABSENT + ("worker",)}, "--absent worker: a memory-attester's rule needs its worker"),
     ({"absent": ("zk-server",)}, "no challenger named: name every one (--peer challenger[:NAME]=FILE), or --absent challenger"),
     ({"peers": GUARDED + [("zk-server", "zk", ZK_SERVER)]}, "zk-server is both named and declared absent"),
 ])
@@ -92,7 +92,7 @@ def test_every_peer_role_is_named_or_declared_absent(kw, why):
     assert why in _problems(_mc(**kw))
 
 
-def test_a_memory_challenger_sharing_the_zk_servers_or_the_challengers_machine_is_refused():
+def test_a_memory_attester_sharing_the_zk_servers_or_the_challengers_machine_is_refused():
     v = _mc(peers=GUARDED + [("zk-server", "zk", {**ZK_SERVER, "boot_id": "b-n2"})], absent=("challenger",))
     assert "zk (zk-server): they share boot_id b-n2 (one machine)" in _problems(v)
     v = _mc(peers=GUARDED + [("challenger", "ch", CHALLENGER)], absent=("zk-server",))
@@ -248,7 +248,7 @@ def test_the_gate_command_exits_0_on_a_pass_and_1_with_the_reasons_on_a_refusal(
     (tmp_path / "n2.json").write_text(json.dumps(NODE2))
     (tmp_path / "n1.json").write_text(json.dumps(NODE1))
     out = tmp_path / "placement-gate.json"
-    argv = ["--role", "memory-challenger", "--self", str(tmp_path / "me.json"), "--peer", f"worker:vy-nebius-2={tmp_path / 'n2.json'}",
+    argv = ["--role", "memory-attester", "--self", str(tmp_path / "me.json"), "--peer", f"worker:vy-nebius-2={tmp_path / 'n2.json'}",
             "--absent", "zk-server", "--absent", "challenger", "--cores", "124-127", "--out", str(out)]
     rc, v, err = _cli(monkeypatch, tmp_path / "a", capsys, *argv)
     assert rc == 0 and v["passed"] is True and err == "" and json.loads(out.read_text()) == v
@@ -256,7 +256,7 @@ def test_the_gate_command_exits_0_on_a_pass_and_1_with_the_reasons_on_a_refusal(
     argv[5] = f"worker:vy-nebius-1={tmp_path / 'n1.json'}"
     rc, v, err = _cli(monkeypatch, tmp_path / "b", capsys, *argv)
     assert rc == 1 and v["passed"] is False and json.loads(out.read_text()) == v
-    assert "placement gate: memory-challenger: vy-nebius-1 (worker): its boot_id b-n2 is not the node's b-n1" in err
+    assert "placement gate: memory-attester: vy-nebius-1 (worker): its boot_id b-n2 is not the node's b-n1" in err
     rc, v, err = _cli(monkeypatch, tmp_path / "c", capsys, *argv[:2], "--self", "-", *argv[4:5], f"worker={tmp_path / 'n2.json'}",
                       *argv[6:], stdin=json.dumps(INSIDE_N2))
     assert rc == 0 and v["peers"][0]["name"] == "worker"
@@ -272,7 +272,7 @@ def test_the_gate_command_exits_0_on_a_pass_and_1_with_the_reasons_on_a_refusal(
 def test_a_malformed_gate_command_is_a_usage_error(monkeypatch, tmp_path, capsys, argv, why):
     (tmp_path / "me.json").write_text(json.dumps(INSIDE_N2))
     with pytest.raises(SystemExit) as e:
-        _cli(monkeypatch, tmp_path, capsys, "--role", "memory-challenger", "--self", str(tmp_path / "me.json"), *argv)
+        _cli(monkeypatch, tmp_path, capsys, "--role", "memory-attester", "--self", str(tmp_path / "me.json"), *argv)
     assert e.value.code == 2 and why in capsys.readouterr().err
 
 

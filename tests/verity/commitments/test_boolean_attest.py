@@ -16,7 +16,7 @@ from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.crypto import lms as R
 
 TOY = R.Params(R.TOY_N, 1, 1, toy=True)
-DEPLOYMENT, PARTY, ATTACHMENT, LINK, PERIOD = bytes(range(64)), "memory-challenger", bytes(range(32)), "server-3", 7
+DEPLOYMENT, PARTY, ATTACHMENT, LINK, PERIOD = bytes(range(64)), "memory-attester", bytes(range(32)), "server-3", 7
 ROOT = bytes(range(64, 128))
 L = 161
 

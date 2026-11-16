@@ -1,33 +1,33 @@
-"""The composed check of a recorded PoUS run: what setup published and what the memory challenger signed, joined.
+"""The composed check of a recorded PoUS run: what setup published and what the memory attester signed, joined.
 
 A run is the setup's public outputs (`verity/pous/p2/v4/setup` on acceptance, `{"blocks", "commitment", "root", "salt"}`,
-`root` the root of `C*`'s leaves under `salt`), the memory challenger's table of `C*` (every block's `sha512/row/v2` digest
-in block order, `memory_challenger.block_digest`: the harness's `DIGESTS.bin`) and its record of one signed session
+`root` the root of `C*`'s leaves under `salt`), the memory attester's table of `C*` (every block's `sha512/row/v2` digest
+in block order, `memory_attester.block_digest`: the harness's `DIGESTS.bin`) and its record of one signed session
 (`ChallengePhaseRecord`: the signed session, the commitment it released with it and its coin openings).  `check` judges
-it with two inputs of the verifier's own: `trusted`, the verifier's list of memory-challenger keys, which never comes
+it with two inputs of the verifier's own: `trusted`, the verifier's list of memory-attester keys, which never comes
 from the run's record (whoever writes the record could otherwise list its own key), and the 32-byte id the audit fixes
 for its session, which the verifier computes itself and never reads from the record: on the served piece
-`challenger_party.session_id`, derived from the audit's binding and the commitment and salt the memory challenger logged
+`challenger_party.session_id`, derived from the audit's binding and the commitment and salt the memory attester logged
 for it.  It accepts the run at P2's deployed point (`DEPLOYED`: `2^19` blocks of 2,056 bytes in 8 segments, `k = 105`,
-`Δ + RTT ≤ 854,000 ns`) under S1's LMS (`memory_challenger.SCHEMES`) when, in order:
+`Δ + RTT ≤ 854,000 ns`) under S1's LMS (`memory_attester.SCHEMES`) when, in order:
 
 1. the setup published the point's block count and a 24-byte salt;
 2. the table holds one 64-byte digest a block, and its leaves under that salt (`verifier.row_leaf`) have the root the setup
    published, so the table is the one of the `C*` setup checked;
 3. the session audits that setup at the point: every block, the point's `k`, a limit within the point's `Δ + RTT`, answers
    of the point's block size, and its `binding` the published root;
-4. the session runs under the audit's id (`session`, in the signed header), which the memory challenger runs at most one
-   session under (`memory_challenger.SessionLog`), so an audit has at most one session `check` accepts, and a retry
+4. the session runs under the audit's id (`session`, in the signed header), which the memory attester runs at most one
+   session under (`memory_attester.SessionLog`), so an audit has at most one session `check` accepts, and a retry
    under another id is refused here;
-5. `memory_challenger.verdict` accepts the session against the table, signed under a key in `trusted`.
+5. `memory_attester.verdict` accepts the session against the table, signed under a key in `trusted`.
 
 The first refusal is the reason (`Refused`), word for word the Lean's.  `check_at` takes another point and other schemes, for tests.
 `PousCheck.Run` (`pous-run`, in `check/`) is the check in Lean, held to this by `check/tests/test_run.py`; what its
 acceptance establishes is `RunCheckAccepts` (`security/Properties/Pous/EndToEnd.lean`), proved.
 
-`check_signed` (`check_signed_at` at another point) is the run on the memory challenger's signed setup
+`check_signed` (`check_signed_at` at another point) is the run on the memory attester's signed setup
 (`PousCheck.SignedRun`): in place of the table it reads the setup record the session's key signed under the session's id
-(`memory_challenger.SetupRecord`) and one `Opening` per round, the row of the block the round asks for and its path to
+(`memory_attester.SetupRecord`) and one `Opening` per round, the row of the block the round asks for and its path to
 the published root.  It checks step 1 and steps 3 to 4 above, then that each opening's row is under the root, then the
 verdict against the rows the openings opened (an answer that is not its block is wrong), then that the setup record is
 signed by the session's key and scheme under the session's id and holds the published blocks, commitment, salt and
@@ -40,7 +40,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 from .schemes.p2 import (
     CERT_BLOCKS,
@@ -89,7 +89,7 @@ class Setup:
 
 @dataclass(frozen=True, slots=True)
 class ChallengePhaseRecord:
-    """One session as the memory challenger records it: what it signed, the commitment it released with it and its coin
+    """One session as the memory attester records it: what it signed, the commitment it released with it and its coin
     openings.  Which keys are trusted is the verifier's, never the record's (`check`'s `trusted`)."""
 
     signed: mc.SignedSession
@@ -190,7 +190,7 @@ def check_signed_at(point: Point, schemes: Mapping[str, mc.Verify], trusted: Col
 
 def check_signed(trusted: Collection[bytes], setup: Setup, session: ChallengePhaseRecord,
                  signed_setup: mc.SignedSetupRecord, openings: Sequence[Opening], session_id: bytes) -> None:
-    """Accept the run on the memory challenger's signed setup (`PousCheck.SignedRun`), or raise `Refused` with the first
+    """Accept the run on the memory attester's signed setup (`PousCheck.SignedRun`), or raise `Refused` with the first
     reason, at `DEPLOYED` under S1's LMS: in place of the table, the setup record the session's key signed under the
     session's id, and one opening per round, its row under the published root.  Its guarantee is not proved."""
     check_signed_at(DEPLOYED, mc.SCHEMES, trusted, setup, session, signed_setup, openings, session_id)
@@ -199,7 +199,7 @@ def check_signed(trusted: Collection[bytes], setup: Setup, session: ChallengePha
 def check(trusted: Collection[bytes], setup: Setup, digests: bytes, session: ChallengePhaseRecord,
           session_id: bytes) -> None:
     """Accept the run, or raise `Refused` with the first reason (module docstring).  `trusted` is the verifier's list of
-    memory-challenger keys and `session_id` the id the audit fixes; neither comes from the run's record."""
+    memory-attester keys and `session_id` the id the audit fixes; neither comes from the run's record."""
     check_at(DEPLOYED, mc.SCHEMES, trusted, setup, digests, session, session_id)
 
 

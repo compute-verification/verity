@@ -1,4 +1,4 @@
-"""`wipe_period` and `wipe_party`: one wipe in one process, on an injected clock, and the memory challenger's side and
+"""`wipe_period` and `wipe_party`: one wipe in one process, on an injected clock, and the memory attester's side and
 the prover's over a socket pair, each verdict of `verity/wipe/v0` (the Lean's is `MemoryChallenger.WipeProtocol`,
 difftested in `tests/verity/protocols/resource_accounting/memory/pous/attester/lean/test_wipe_protocol.py`): an honest segment accepted
 and not certified (`uncounted`) whatever egress its evidence gives, since no network attester signs that count, with
@@ -13,7 +13,7 @@ whole against a challenger side on a host of its own (`wipe_side.py`), its recor
 boundary), the reads and the session's window. The verifier trusts the one key its pin names (`wipe.trusted_sha512`): a
 session signed under another is rejected, and a challenger on its own host with no key pinned is refused. The record
 says `trusted-device` holds only under a committed configuration, for a session signed under a key its `[[pin]]` entries
-give the memory challenger for the wipe (`period.json`'s `deployment`): a run's own pin, a rehearsal's host name or a
+give the memory attester for the wipe (`period.json`'s `deployment`): a run's own pin, a rehearsal's host name or a
 configuration nobody committed gives a rehearsal with no bound."""
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ import pous_test_signer as ts
 import wipe_judge
 import wipe_side
 from verity.runtime.stream import Side
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_store as WS
 from verity.protocols.resource_accounting.memory.pous.verifier.period import decided_by
@@ -262,9 +262,9 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     assert WP.placement("n0", "n0", OTHER)["kind"] == "prover-node" and WP.placement("n0", "a", OTHER)["kind"] == "own-host"
     simulated = WP.placement("n0", "n0", OTHER, simulated=True)
     assert simulated["kind"] == "simulated" and simulated[WP.PREMISE] == (
-        f"{mc.UNCOMMITTED} (no configuration); the memory challenger ran as a process of its own on the developer's node n0, standing in for a "
+        f"{mc.UNCOMMITTED} (no configuration); the memory attester ran as a process of its own on the developer's node n0, standing in for a "
         "host the developer doesn't control")
-    with pytest.raises(ValueError, match="simulated placement runs the memory challenger on the developer's node"):
+    with pytest.raises(ValueError, match="simulated placement runs the memory attester on the developer's node"):
         WP.placement("n0", "a", OTHER, simulated=True)
 
 
@@ -273,14 +273,14 @@ REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 OTHER = hashlib.sha512(b"a key that is no auditor's").hexdigest()
 PINNED = hashlib.sha512(b"the auditor's wipe key").hexdigest()
 CONF = hashlib.sha512(b"a committed configuration").hexdigest()
-PINS = [{"key-sha512": PINNED, "party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0"},
-        {"key-sha512": OTHER, "party": "memory-challenger", "protocol": "pous", "scheme": "lms-sha512/n64-w1-h20/v0"}]
+PINS = [{"key-sha512": PINNED, "party": "memory-attester", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0"},
+        {"key-sha512": OTHER, "party": "memory-attester", "protocol": "pous", "scheme": "lms-sha512/n64-w1-h20/v0"}]
 UNDER = {"pins": PINS, "configuration": CONF, "committed": frozenset({CONF})}
 
 
 def test_the_premise_text_is_the_device_modules() -> None:
     assert mc.REHEARSAL == REHEARSAL and WP.PREMISE == mc.PREMISE == "trusted-device"
-    assert mc.pinned(PINS, "memory-challenger", "wipe") == {PINNED} and not mc.pinned(PINS, "network-certifier", "wipe")
+    assert mc.pinned(PINS, "memory-attester", "wipe") == {PINNED} and not mc.pinned(PINS, "network-certifier", "wipe")
 
 
 def test_a_rehearsal_on_the_prover_node_names_another_host_and_has_no_bound() -> None:
@@ -288,7 +288,7 @@ def test_a_rehearsal_on_the_prover_node_names_another_host_and_has_no_bound() ->
     names say `own-host`, and the premise is a rehearsal's all the same, with the key custody left out of the bound."""
     where = WP.placement("node-a", "on-node-rehearsal", OTHER, **UNDER)
     assert where["kind"] == "own-host" and not WP.holds(where)
-    assert where[WP.PREMISE] == (f"{REHEARSAL} (configuration {CONF}); the memory challenger ran on on-node-rehearsal, "
+    assert where[WP.PREMISE] == (f"{REHEARSAL} (configuration {CONF}); the memory attester ran on on-node-rehearsal, "
                                  "not the developer's node-a")
     assert W.uncertified(where, None) == [f"key custody: {where[WP.PREMISE]}"]
     assert not WP.holds(WP.placement("node-a", "on-node-rehearsal", None, **UNDER))
@@ -298,7 +298,7 @@ def test_the_auditor_host_under_its_pinned_key_holds() -> None:
     where = WP.placement("vy-dc-h200", AUDITOR, PINNED, **UNDER)
     assert where["kind"] == "own-host" and WP.holds(where) and W.uncertified(where, None) == []
     assert where[WP.PREMISE] == (f"holds: the session is signed under the key configuration {CONF} pins for "
-                                 "memory-challenger's wipe sessions; the memory challenger ran on vy-auditor-2, not the "
+                                 "memory-attester's wipe sessions; the memory attester ran on vy-auditor-2, not the "
                                  "developer's vy-dc-h200")
 
 
@@ -336,8 +336,8 @@ def committed(monkeypatch) -> None:
 
 
 def side_pin() -> list[dict[str, str]]:
-    """The configuration's pin of `wipe_side.py`'s key for the memory challenger's wipe sessions."""
-    return [{"key-sha512": wipe_side.key_sha512(), "party": "memory-challenger", "protocol": "wipe",
+    """The configuration's pin of `wipe_side.py`'s key for the memory attester's wipe sessions."""
+    return [{"key-sha512": wipe_side.key_sha512(), "party": "memory-attester", "protocol": "wipe",
              "scheme": "lms-sha512/n64-w1-h20/v0"}]
 
 
@@ -376,8 +376,8 @@ def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypat
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
     assert answer["profile"]["placement"]["trusted-device"] == (
-        f"holds: the session is signed under the key configuration {CONF} pins for memory-challenger's wipe sessions; "
-        "the memory challenger ran on auditor, not the developer's n0")
+        f"holds: the session is signed under the key configuration {CONF} pins for memory-attester's wipe sessions; "
+        "the memory attester ran on auditor, not the developer's n0")
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]
     assert json.loads(bytes.fromhex(case["evidence"]))["egress_mib"] is None
@@ -537,7 +537,7 @@ def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, mo
     period, side_of = _side(tmp_path, {"trusted_sha512": None})
     started = []
     monkeypatch.setattr(wipe_run, "run", lambda *a, **kw: started.append(a))
-    with pytest.raises(ValueError, match="wipe.trusted_sha512 is unset with the memory challenger on auditor"):
+    with pytest.raises(ValueError, match="wipe.trusted_sha512 is unset with the memory attester on auditor"):
         wipe_run.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"], side_of=side_of)
     assert not started and not (tmp_path / "out").exists()
 
@@ -553,7 +553,7 @@ def test_run_itself_refuses_a_party_on_another_host_with_no_key_pinned(monkeypat
         raise ConnectionError("the session started")
     monkeypatch.setattr(wipe_run, "session", session)
     there, here = Side("auditor", ("true",)), Side("n0", ("true",))
-    with pytest.raises(ValueError, match=r"no key is pinned \(trusted_sha512\) with the memory challenger on auditor"):
+    with pytest.raises(ValueError, match=r"no key is pinned \(trusted_sha512\) with the memory attester on auditor"):
         wipe_run.run("n0", SMALL, party=there)
     assert not started
     for party, pin in ((there, "ab" * 64), (here, None)):
@@ -574,7 +574,7 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path,
     assert record["report"]["key_pinned"] is True and record["report"]["key_sha512"] == wipe_side.key_sha512()
     where = record["placement"]
     assert answer["profile"]["placement"] == where and where["kind"] == "own-host" and not WP.holds(where)
-    assert where[WP.PREMISE] == f"{REHEARSAL} (configuration {CONF}); the memory challenger ran on auditor, not the developer's n0"
+    assert where[WP.PREMISE] == f"{REHEARSAL} (configuration {CONF}); the memory attester ran on auditor, not the developer's n0"
     assert record["uncertified"][0] == f"key custody: {where[WP.PREMISE]}"
 
 

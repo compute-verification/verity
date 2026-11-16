@@ -10,7 +10,7 @@ is `verity/wipe/v0`'s, under S1's LMS; `test_answer` the test signers' protocol'
 wipe's component with its count held (`MemoryChallenger.WipeProtocol.countedTest`), under the test signers' schemes:
 the same formats, its check `wipe_period.outcome_counted`.
 
-`build(m, seed)` makes one wipe with the change `m` (`EXPECT`), signed by the memory challenger's tests' key at S1's
+`build(m, seed)` makes one wipe with the change `m` (`EXPECT`), signed by the memory attester's tests' key at S1's
 deployed parameters (`mc_cases.deployed_signer`) so that `verity/wipe/v0` itself takes it: an honest wipe at a small fill
 and `READS` reads, one 32 MiB segment at `READS` reads and one at `REMOTE_READS` with a MiB declared past the fill, and
 an honest wipe whose evidence gives an egress of 0 (each accepted and not certified, its evidence giving an egress count
@@ -22,7 +22,7 @@ label past that threshold of foreign content, a read past its deadline, a sessio
 malformed params, commitment and evidence. `case(kind, seed)` is a wipe aimed at a verdict or at a decoding failure
 (`KINDS`), and `cases(seed)` one of each with its answer, as a composition's difftest takes a real component's cases.
 
-This is test-side Python (it imports `verity_difftest` and the memory challenger's tests' cases), so it lives beside the
+This is test-side Python (it imports `verity_difftest` and the memory attester's tests' cases), so it lives beside the
 wipe protocol's difftest (`test_wipe_protocol.py`), and other suites load it by path."""
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ import verity_difftest as D
 import wipe_cases as WC
 from verity_difftest import protocol as P
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_store as WS
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WCH
@@ -142,10 +142,10 @@ def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipePa
          spends: Callable[[int], int] = lambda b: 1, stop_after: int | None = None,
          coins: bytes = b"coins", session_id: bytes = bytes(32), server: bytes = SERVER,
          start: int = 1_000) -> tuple[sw.WipeCommitment, sw.SignedWipe | None]:
-    """One wipe of `WipeMemoryChallenger` against `prover(params)` on an injected clock: read `b` takes `spends(b)` ns,
+    """One wipe of `WipeMemoryAttester` against `prover(params)` on an injected clock: read `b` takes `spends(b)` ns,
     and with `stop_after` the prover leaves after that many reads, so the session is never signed."""
     clock = M.Clock(start)
-    c = WCH.WipeMemoryChallenger(WC.SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
+    c = WCH.WipeMemoryAttester(WC.SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
                                 coin_secret=coins)
     p = prover(params)
     for first, data in c.fill(max(1, params.labels // 3)):

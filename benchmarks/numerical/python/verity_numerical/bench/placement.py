@@ -25,12 +25,12 @@ TCP-connect RTT on it of at least :data:`RTT_FLOOR_MS`).  A shared public IP tha
     python3 placement.py probe [--peer HOST:PORT] [--rtt HOST:PORT] [--out FILE]     stdlib only: runs on a pod before a cell's job
 
 The same checks are the deployment gate of the proof system's parties (:func:`gate`, :data:`GATE_RULES`): the developer's
-ZK server, and the auditor's network attesters, memory challengers and challenger.  It runs on the machine, and in the cgroup,
+ZK server, and the auditor's network attesters, memory attesters and challenger.  It runs on the machine, and in the cgroup,
 of the role it checks, and refuses (exit 1, the reasons in its JSON verdict) unless
 
 - every peer the role must be separate from (:func:`separate`: :func:`assess` finds nothing; with ``--link``, a routed link with
   a TCP-connect round trip of at least :data:`RTT_FLOOR_MS`) is, and every peer it must share a machine with, the one node a
-  certifier or memory challenger guards, is that machine (:func:`same_machine`: inside the node's isolation boundary);
+  certifier or memory attester guards, is that machine (:func:`same_machine`: inside the node's isolation boundary);
 - the ZK server is a VM guest;
 - a role on dedicated cores may run on exactly ``--cores``, and no task outside its own cgroup may run on any of them
   (:func:`dedicated_cores` over :func:`read_tasks`' ``/proc``; kernel threads are not counted).
@@ -383,7 +383,7 @@ def separation(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Map
 GATE_RULES: dict[str, dict[str, Any]] = {
     "zk-server": {"same": (), "separate": ("worker", "challenger"), "vm": True, "cores": True},
     "certifier": {"same": ("worker",), "separate": ("zk-server", "challenger"), "vm": False, "cores": True},
-    "memory-challenger": {"same": ("worker",), "separate": ("zk-server", "challenger"), "vm": False, "cores": True},
+    "memory-attester": {"same": ("worker",), "separate": ("zk-server", "challenger"), "vm": False, "cores": True},
     "challenger": {"same": (), "separate": ("zk-server", "worker"), "vm": False, "cores": False},
 }
 PEER_ROLES = ("worker", "zk-server", "challenger")

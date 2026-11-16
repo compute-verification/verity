@@ -46,7 +46,7 @@ class Key(Protocol):
 
 @dataclass(frozen=True)
 class Identity:
-    """Who a party is and what its machine gives it: its name in the manifest, its instance (`memory-challenger@s1`), the
+    """Who a party is and what its machine gives it: its name in the manifest, its instance (`memory-attester@s1`), the
     deployment configuration's hash, its key, its state directory (persisted across restarts), the local capabilities
     the manifest says it needs (a signer, a store), by name, and `clock`: the clock its clock source reads, as a record
     names it (`CLOCK_MONOTONIC ns`), None for virtual time, in a replay, and for a party with no clock."""

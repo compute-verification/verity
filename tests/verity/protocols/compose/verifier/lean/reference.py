@@ -417,7 +417,7 @@ def wipe_link(site: dict, host: str) -> str:
     if not own:
         raise span.Refused(f"host {host}: it has no link besides the memory challengers'")
     if len(own) > 1:
-        raise span.Refused(f"host {host}: it has {len(own)} links besides the memory challengers' "
+        raise span.Refused(f"host {host}: it has {len(own)} links besides the memory attesters' "
                            f"({', '.join(k['id'] for k in own)}); a count on one of them is not of what left on the others")
     k = own[0]
     if not _site_joins(site, k, "certifier", "host"):
