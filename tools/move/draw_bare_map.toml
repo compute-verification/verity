@@ -1,0 +1,184 @@
+# The retired word family DRAW's bare words (`draw`, `drawn`, `draws`, `Draw`, `Drawn`) in memory accounting's Lean
+# and Python, which `draw_compound_map.toml` leaves to each owner: renamed to the Glossary's sample, sampled, samples.
+#
+# Two parts, namespaces first.
+# - `tools/move/rename.py --map tools/move/draw_bare_map.toml` renames our `Draw` namespaces' qualified names and our
+#   `Draw` modules' paths, as whole words in every file that spells them (`[[words_in]]`, files "*"):
+#   `Accounting.Remote.Draw` and `.Assumptions`, `Accounting.SecurityProofs.Remote.Draw` (`Remote.Draw`), and the
+#   modules `…/Remote/Draw` and `…/RemoteHeld/Draw`, wherever the area that holds them stands.
+# - `tools/move/draw_bare.py code` then renames the unqualified bare words in code and in backticked names alone, never
+#   in prose or a string literal, in the files `[code.files]` lists. `draw_bare.py plan --write` writes that list: our
+#   files where no other owner's declaration of the word is reachable through the file's imports (Lean) or imported
+#   (Python), and no record serializes a field by its name. Every other file of ours that spells a bare word in code
+#   is in `[code.by_hand]`, renamed by hand and built; `[code.tokens]` holds the hand edits the build needs.
+# Prose is left for its own map, and PoUW's files in the accounting area (`TS`, `Headline*`, `Compose*`, `HMu`,
+# `Pouw*`, `TS.Drawn` among them) for its lane.
+
+[rewrite]
+exclude = [
+  "tools/move/**",
+  "GLOSSARY.md",
+  "tests/lint/**",
+  "tests/test_retired_terms.py",
+  "tools/verity/lean/tests/fixtures/**",
+  # the certifier's files, which network accounting reruns each map over
+  "verity/protocols/accounting/certifier/**",
+  "security/**/Certifier/**",
+]
+
+[keep]
+strings = [
+  "\"draw\"",
+  "\"drawn\"",
+  "\"draws\"",
+  "\"unit_draw\"",
+  "'draw'",
+  "'drawn'",
+  "'draws'",
+  "draw/0",
+  "draw/second/0",
+]
+patterns = [
+  "draw: (?:coins: )?",
+]
+
+[words]
+
+[[words_in]]
+files = ["*"]
+
+[words_in.words]
+"Remote.Draw" = "Remote.Sample"
+"RemoteHeld.Draw" = "RemoteHeld.Sample"
+"Remote/Draw" = "Remote/Sample"
+"RemoteHeld/Draw" = "RemoteHeld/Sample"
+
+[code]
+# the words `draw_bare.py code` renames, in code and backticks only
+words = { Draw = "Sample", Drawn = "Sampled", draw = "sample", drawn = "sampled", draws = "samples" }
+# other owners' names our files spell, kept: Flock's and SPOT's `Draw` namespaces, Core's module and `Draw.Subset`,
+# PoUW's and SPOT's properties, Flock's sampling module, the game's `draw`
+keep = [
+  "Flock\\.Draw\\b",
+  "Spot\\.Draw\\b",
+  "Core\\.Draw\\b",
+  "Draw\\.Subset\\b",
+  "Pouw\\.Draw\\b",
+  "Sampling\\.Draws\\b",
+  "Game\\.draw\\b",
+]
+
+# the hand edits the build needs, by file (a glob, which an area's move leaves standing): each name, renamed where it
+# stands in code: our `Draw` namespaces, where a file of `[code.by_hand]` names them unqualified
+[code.tokens]
+"security/Definitions/*/Remote/Sample.lean" = ["Draw.pooled"]
+"security/Proofs/*/RemoteHeld/Sample.lean" = ["namespace Draw", "end Draw", "Draw.pooledSampleLive"]
+"security/Proofs/*/RemoteHeld/DrawMeets.lean" = ["Draw.arrange_lt", "Draw.prfAdvantage_honest", "Draw.four_le_words"]
+
+# `[code.files]` (each file's words) and `[code.by_hand]` (each file's reason) follow, as `draw_bare.py plan --write`
+# writes them on the moved tree
+
+[code.files]
+
+[code.by_hand]
+"security/Definitions/Accounting/ReadUnit.lean" = "drawn: security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean, not ours, reaches it and spells `drawn`"
+"security/Definitions/Poub/Guarantees/Stacking.lean" = "drawn: verity/protocols/accounting/poub/verifier/lean/Poub/Registry.lean, ours, takes `drawn` by hand"
+"security/Definitions/Poub/RateAudit.lean" = "Draw: reaches security/Definitions/Core/Draw.lean, which declares `Draw`"
+"security/Definitions/Poub/RateAuditSketch.lean" = "Draw: reaches security/Definitions/Core/Draw.lean, which declares `Draw`"
+"security/Definitions/Poub/Remote/Sample.lean" = "Drawn: reaches security/Definitions/Pouw/TS/Drawn.lean, which declares `Drawn`"
+"security/Definitions/Poub/Remote/SketchLine.lean" = "Draw: reaches security/Definitions/Core/Draw.lean, which declares `Draw`"
+"security/Proofs/Accounting/ReadUnit/Binding.lean" = "draw: reaches security/Definitions/Core/Draw.lean, which declares `draw`; drawn: reaches security/Properties/Verity/Game.lean, which declares `drawn`"
+"security/Proofs/Accounting/ReadUnit/Deployed.lean" = "drawn: reaches verity/protocols/proofs/flock/verifier/Flock/HmRow.lean, which declares `drawn`"
+"security/Proofs/Accounting/ReadUnit/Guarantees.lean" = "draw: reaches security/Definitions/Core/Draw.lean, which declares `draw`; drawn: reaches security/Properties/Verity/Game.lean, which declares `drawn`"
+"security/Proofs/Accounting/ReadUnit/Witnesses.lean" = "draw: reaches security/Definitions/Core/Draw.lean, which declares `draw`"
+"security/Proofs/Poub/RateAudit/DeployedSketch.lean" = "Draw: reaches security/Definitions/Core/Draw.lean, which declares `Draw`"
+"security/Proofs/Poub/RateAudit/DeployedSketchSum.lean" = "Draw: reaches security/Definitions/Core/Draw.lean, which declares `Draw`"
+"security/Proofs/Poub/RemoteHeld/Binding.lean" = "Drawn: reaches security/Definitions/Pouw/TS/Drawn.lean, which declares `Drawn`"
+"security/Proofs/Poub/RemoteHeld/DrawMeets.lean" = "Draw: `Sample` is already a name in its code"
+"security/Proofs/Poub/RemoteHeld/Line.lean" = "Draw: reaches security/Definitions/Core/Draw.lean, which declares `Draw`"
+"security/Proofs/Poub/RemoteHeld/Sample.lean" = "Draw: `Sample` is already a name in its code"
+"security/Proofs/Pous/EndToEnd.lean" = "Draw: reaches verity/commitments/lean/Commitments/Draw.lean, which declares `Draw`"
+"security/Proofs/Properties/Poub/Remote/Coins.lean" = "drawn: `sampled` is already a name in its code"
+"security/Proofs/Properties/Poub/Remote/Frozen.lean" = "drawn: reaches verity/protocols/proofs/flock/verifier/Flock/HmRow.lean, which declares `drawn`"
+"security/Proofs/Properties/Poub/Remote/Lifetime.lean" = "drawn: reaches verity/protocols/proofs/flock/verifier/Flock/HmRow.lean, which declares `drawn`"
+"security/Proofs/Properties/Poub/Remote/Live.lean" = "drawn: `sampled` is already a name in its code"
+"security/Proofs/Properties/Poub/Remote/RecordAccepts.lean" = "Draw: reaches security/Definitions/Core/Draw.lean, which declares `Draw`; drawn: reaches verity/protocols/interface/CoreProtocol/Example.lean, which declares `drawn`"
+"security/Proofs/Properties/Poub/Remote/Released.lean" = "drawn: reaches verity/protocols/proofs/flock/verifier/Flock/HmRow.lean, which declares `drawn`"
+"security/Proofs/Properties/Poub/Remote/Run.lean" = "drawn: reaches verity/protocols/proofs/flock/verifier/Flock/HmRow.lean, which declares `drawn`"
+"security/Proofs/Properties/Poub/Remote/Sample.lean" = "Draw: reaches verity/commitments/lean/Commitments/Draw.lean, which declares `Draw`; draws: `samples` is already a name in its code"
+"security/Proofs/Properties/Poub/Remote/Shared.lean" = "drawn: `sampled` is already a name in its code; draws: `samples` is already a name in its code"
+"security/Proofs/Properties/Poub/Remote/SharedLink.lean" = "drawn: `sampled` is already a name in its code; draws: `samples` is already a name in its code"
+"security/Proofs/Properties/Poub/Remote/SubprotocolWitnesses.lean" = "drawn: reaches verity/protocols/interface/CoreProtocol/Example.lean, which declares `drawn`"
+"security/Proofs/Properties/Pous/Wipe.lean" = "draw: reaches security/Definitions/Core/Game.lean, which declares `draw`"
+"security/Properties/Accounting/Served.lean" = "Draw: reaches security/Definitions/Core/Draw.lean, which declares `Draw`; draw: reaches security/Definitions/Compose/Compose.lean, which declares `draw`"
+"security/Properties/Poub/Remote.lean" = "draws: `samples` is already a name in its code"
+"security/Properties/Poub/Remote/Coins.lean" = "drawn: reaches verity/protocols/proofs/flock/verifier/Flock/HmRow.lean, which declares `drawn`; draws: `samples` is already a name in its code"
+"security/Properties/Poub/Remote/Shared.lean" = "draws: `samples` is already a name in its code"
+"security/Properties/Pous/EndToEnd.lean" = "draw: reaches security/Definitions/Core/Game.lean, which declares `draw`"
+"security/Properties/Pous/MemoryChallenger/Session.lean" = "draw: verity/protocols/accounting/pous/device/lean/MemoryChallenger/Records.lean, ours, takes `draw` by hand"
+"security/Properties/Pous/Period.lean" = "Drawn: security/Properties/Pous/Period/Audits.lean, ours, takes `Drawn` by hand"
+"security/Properties/Pous/Period/Audits.lean" = "Drawn: security/Properties/Assumptions/Pous.lean, not ours, reaches it and spells `Drawn`"
+"verity/protocols/accounting/poub/prover/opening_prover.py" = "drawn: benchmarks/one_stage/a7.py, not ours, imports it and spells `drawn`"
+"verity/protocols/accounting/poub/prover/p2_party_prover.py" = "draws: benchmarks/pous/p2_v1/bandwidth.py, not ours, imports it and spells `draws`"
+"verity/protocols/accounting/poub/prover/period_prover.py" = "draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/prover/remote_session/device.py" = "draws: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `draws` by hand"
+"verity/protocols/accounting/poub/prover/remote_session/prover.py" = "draws: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `draws` by hand"
+"verity/protocols/accounting/poub/tests/test_remote_session.py" = "drawn: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `drawn` by hand"
+"verity/protocols/accounting/poub/verifier/audit.py" = "draw: `sample` is already a name in its code; drawn: `sampled` is already a name in its code; draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/lean/Poub/Difftest.lean" = "drawn: reaches verity/protocols/interface/CoreProtocol/Profile.lean, which declares `drawn`"
+"verity/protocols/accounting/poub/verifier/lean/Poub/Line.lean" = "drawn: security/Proofs/Properties/Verity/Recursive/Target.lean, not ours, reaches it and spells `drawn`"
+"verity/protocols/accounting/poub/verifier/lean/Poub/P2Protocol.lean" = "draw: reaches verity/protocols/interface/CoreProtocol/Profile.lean, which declares `draw`; draws: reaches verity/protocols/proofs/flock/verifier/Flock/ZkServer/Finish.lean, which declares `draws`"
+"verity/protocols/accounting/poub/verifier/lean/Poub/P2Session.lean" = "drawn: reaches verity/protocols/proofs/flock/verifier/Flock/HmRow.lean, which declares `drawn`; draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/lean/Poub/Protocol.lean" = "drawn: reaches verity/protocols/interface/CoreProtocol/Example.lean, which declares `drawn`"
+"verity/protocols/accounting/poub/verifier/lean/Poub/Registry.lean" = "drawn: `sampled` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/lean/Poub/Session.lean" = "drawn: security/Proofs/Properties/Verity/Recursive/Target.lean, not ours, reaches it and spells `drawn`; draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/lean/Poub/Shared.lean" = "drawn: security/Proofs/Properties/Verity/Recursive/Target.lean, not ours, reaches it and spells `drawn`; draws: security/Proofs/Properties/Challenger/Withheld.lean, not ours, reaches it and spells `draws`"
+"verity/protocols/accounting/poub/verifier/lean/Poub/Span.lean" = "drawn: reaches verity/protocols/interface/CoreProtocol/Profile.lean, which declares `drawn`"
+"verity/protocols/accounting/poub/verifier/lean/Poub/Verifier.lean" = "drawn: reaches verity/protocols/interface/CoreProtocol/Profile.lean, which declares `drawn`"
+"verity/protocols/accounting/poub/verifier/lean/Poub/Window.lean" = "drawn: security/Proofs/Properties/Verity/Recursive/Target.lean, not ours, reaches it and spells `drawn`"
+"verity/protocols/accounting/poub/verifier/lean/tests/ra_cases.py" = "drawn: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `drawn` by hand; draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/lean/tests/test_registry.py" = "drawn: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `drawn` by hand"
+"verity/protocols/accounting/poub/verifier/lean/tests/test_replay.py" = "draws: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `draws` by hand"
+"verity/protocols/accounting/poub/verifier/lean/tests/test_span.py" = "drawn: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `drawn` by hand; draws: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `draws` by hand"
+"verity/protocols/accounting/poub/verifier/lean/tests/test_units.py" = "draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/ledger.py" = "draw: `sample` is already a name in its code; drawn: imports verity/protocols/proofs/spot/verifier/profile.py, which declares `drawn`; draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/opening.py" = "drawn: benchmarks/one_stage/a7.py, not ours, imports it and spells `drawn`"
+"verity/protocols/accounting/poub/verifier/p2_case.py" = "draw: benchmarks/pous/tests/test_pous_served_piece.py, not ours, imports it and spells `draw`; draws: benchmarks/pous/held_bandwidth.py, not ours, imports it and spells `draws`"
+"verity/protocols/accounting/poub/verifier/p2_parties.py" = "draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/period.py" = "draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/session/checks.py" = "draws: benchmarks/remote_session/tests/test_session.py, not ours, imports it and spells `draws`"
+"verity/protocols/accounting/poub/verifier/session/lean_verifier.py" = "drawn: benchmarks/remote_session/tests/test_session.py, not ours, imports it and spells `drawn`"
+"verity/protocols/accounting/poub/verifier/session/verifier.py" = "draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/session_parties.py" = "draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/tests/test_append_coins.py" = "draws: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `draws` by hand"
+"verity/protocols/accounting/poub/verifier/tests/test_appends.py" = "drawn: `sampled` is already a name in its code; draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/tests/test_ledger.py" = "draw: verity/protocols/accounting/poub/verifier/ledger.py, ours, takes `draw` by hand; drawn: `sampled` is already a name in its code; draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/tests/test_opening.py" = "drawn: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `drawn` by hand; draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/tests/test_p2.py" = "drawn: `sampled` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/tests/test_pooled.py" = "drawn: imports verity/protocols/proofs/spot/verifier/profile.py, which declares `drawn`"
+"verity/protocols/accounting/poub/verifier/tests/test_poub.py" = "drawn: `sampled` is already a name in its code; draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/tests/test_poub_vectors.py" = "draws: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `draws` by hand"
+"verity/protocols/accounting/poub/verifier/tests/test_registrations.py" = "drawn: verity/protocols/accounting/poub/verifier/audit.py, ours, takes `drawn` by hand"
+"verity/protocols/accounting/poub/verifier/tests/test_session_parties.py" = "draw: imports verity/runtime/sources.py, which declares `draw`"
+"verity/protocols/accounting/poub/verifier/tests/test_shared_coin.py" = "drawn: `sampled` is already a name in its code; draws: `samples` is already a name in its code"
+"verity/protocols/accounting/poub/verifier/timing.py" = "drawn: imports verity/protocols/proofs/spot/verifier/profile.py, which declares `drawn`"
+"verity/protocols/accounting/poub/verifier/verifier_party.py" = "draws: `samples` is already a name in its code"
+"verity/protocols/accounting/pous/device/challenger_party.py" = "draw: benchmarks/pous/tests/test_pous_served_piece.py, not ours, imports it and spells `draw`"
+"verity/protocols/accounting/pous/device/lean/MemoryChallenger/Difftest.lean" = "draw: reaches verity/protocols/interface/CoreProtocol/Profile.lean, which declares `draw`"
+"verity/protocols/accounting/pous/device/lean/MemoryChallenger/Records.lean" = "draw: security/Proofs/Properties/Challenger/RunCoins.lean, not ours, reaches it and spells `draw`"
+"verity/protocols/accounting/pous/device/lean/tests/mc_cases.py" = "draw: `sample` is already a name in its code"
+"verity/protocols/accounting/pous/device/lean/tests/test_formats.py" = "draw: `sample` is already a name in its code"
+"verity/protocols/accounting/pous/device/lean/tests/test_protocol.py" = "draw: Hypothesis's `draw`, the library's name, kept"
+"verity/protocols/accounting/pous/device/lean/tests/test_verdict.py" = "draw: Hypothesis's `draw`, the library's name, kept"
+"verity/protocols/accounting/pous/device/lean/tests/test_wipe_count.py" = "draw: Hypothesis's `draw`, the library's name, kept"
+"verity/protocols/accounting/pous/device/memory_challenger.py" = "draw: benchmarks/pous/big_case.py, not ours, imports it and spells `draw`"
+"verity/protocols/accounting/pous/prover/period_prover.py" = "draw: benchmarks/pous/big_case.py, not ours, imports it and spells `draw`"
+"verity/protocols/accounting/pous/verifier/check/tests/test_run.py" = "draw: `sample` is already a name in its code"
+"verity/protocols/accounting/pous/verifier/check/tests/test_setup_difftest.py" = "draw: Hypothesis's `draw`, the library's name, kept"
+"verity/protocols/accounting/pous/verifier/check/tests/test_signed_run.py" = "draw: Hypothesis's `draw`, the library's name, kept"
+"verity/protocols/accounting/pous/verifier/tests/test_pous_challenger_party.py" = "draw: imports verity/runtime/sources.py, which declares `draw`"
+"verity/protocols/accounting/pous/verifier/tests/test_pous_memory_challenger.py" = "draw: verity/protocols/accounting/pous/device/memory_challenger.py, ours, takes `draw` by hand"
+"verity/protocols/accounting/pous/verifier/tests/test_pous_run.py" = "draw: verity/protocols/accounting/pous/device/memory_challenger.py, ours, takes `draw` by hand"
+"verity/protocols/accounting/pous/verifier/tests/test_pous_session_proofs.py" = "draw: verity/protocols/accounting/pous/device/memory_challenger.py, ours, takes `draw` by hand"
+"verity/protocols/accounting/pous/verifier/tests/test_pous_verdict_circuit.py" = "draw: verity/protocols/accounting/pous/device/memory_challenger.py, ours, takes `draw` by hand"
+"verity/protocols/accounting/pous/verifier/tests/test_pous_wipe_parties.py" = "draw: imports verity/runtime/sources.py, which declares `draw`"

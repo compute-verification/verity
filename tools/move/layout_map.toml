@@ -1,0 +1,337 @@
+# The repository's layout move: what `tools/move/layout.py` moves, renames and rewrites (the platform layout).
+#
+# [paths] maps an old path prefix (a file, or a directory ending in "/") to its new one; the longest prefix that matches a
+# tracked file decides where it goes, and a row that maps a directory to itself keeps it where it is. Python module names follow from the paths and [roots] (`layout.py` derives every rename);
+# [modules] lists the renames at package level, and the script fails when what it derives disagrees with them. [aliases]
+# adds old names that no file in the tree carries any more. [retired] lists the old paths the move empties, and [drop] the
+# files it deletes (an `__init__.py` of a package level that goes, a pyproject whose distribution folds into `verity`).
+# The hand fixups that followed the generated move, as a commit of their own: `tools/move/fixups/platform.py`, removed once
+# the move landed (`git show 7d291b14d:tools/move/fixups/platform.py`).
+
+[roots]
+# import name -> its package directory, before and after; a module outside every root is named by its path from the root
+# (`benchmarks.pouw.pearl_c4.replay`), and imports only by path.
+old = { verity = "verity", verity_catalog = "catalog/verity_catalog", verity_kernels = "kernels/verity_kernels", verity_experimental = "experimental/verity_experimental", verity_flock = "backends/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/circuit_check/src/circuit_check", cluster = "tools/cluster/src/cluster" }
+new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+# --- ml/: Python and CUDA, provers, Python circuits, kernels (ml/ can't affect soundness)
+"verity/primitives/__init__.py" = "verity/ml/__init__.py"
+"verity/primitives/circuits/" = "verity/ml/circuits/"
+"verity/primitives/commitments/" = "verity/ml/commitments/"
+"verity/primitives/crypto/" = "verity/ml/crypto/"
+"verity/primitives/randomness/" = "verity/ml/randomness/"
+"catalog/verity_catalog/definitions/" = "verity/ml/circuits/ops/"
+"catalog/verity_catalog/silicon/" = "verity/ml/circuits/silicon/"
+"catalog/verity_catalog/targets/" = "verity/ml/circuits/targets/"
+"catalog/tests/" = "verity/ml/circuits/ops/tests/"
+"catalog/pyproject.toml" = "verity/ml/circuits/ops/pyproject.toml"
+"kernels/verity_kernels/" = "verity/ml/kernels/"
+"kernels/hash_gpu/" = "verity/ml/kernels/hash_gpu/"
+# Flock keeps its distribution and import name (`verity_flock` depends on verity-vllm and verity-numerical, which depend on
+# `verity`, so it can't fold into `verity`); its verifier's Lean is core's first package
+"backends/flock/" = "verity/ml/flock/"
+"backends/flock/verifier/lean/" = "verity/core/service/flock/"
+
+# --- experimental/: work in progress, including today's Python verifiers until their Lean versions land in core/
+"experimental/verity_experimental/" = "verity/experimental/"
+"experimental/tests/" = "verity/experimental/tests/"
+"experimental/pyproject.toml" = "verity/experimental/pyproject.toml"
+# no test in ml imports experimental: the two that exercise its multiproof and its claims run with its tests
+"verity/primitives/commitments/tests/test_sha512_framings.py" = "verity/experimental/tests/commitments/test_sha512_framings.py"
+"verity/primitives/commitments/tests/test_hm96.py" = "verity/experimental/tests/commitments/test_hm96.py"
+# experimental's planner and consumers of sampled proofs join the protocol (no module name clashes)
+"experimental/verity_experimental/sampled_proofs/" = "verity/experimental/protocols/sampled_proofs/"
+"verity/claims/" = "verity/experimental/claims/"
+"verity/protocols/" = "verity/experimental/protocols/"
+"verity/protocols/accounting/work/pouw/" = "verity/experimental/protocols/pouw/"
+"verity/protocols/accounting/space/pous/" = "verity/experimental/protocols/pous/"
+"verity/protocols/accounting/communication/certifier/" = "verity/experimental/protocols/certifier/"
+"verity/protocols/verification/sampled_proofs/" = "verity/experimental/protocols/sampled_proofs/"
+
+# --- Security/: what core/ guarantees, and the proofs
+"verity/Security/" = "Security/"
+
+# --- tests/: the whole tree's rules (a pyproject.toml at verity/ would end uv's search for the workspace of verity/ml/flock)
+"verity/tests/test_boundaries.py" = "tests/test_boundaries.py"
+# the stratified-draw check imports experimental's sampled proofs: it runs with Flock's tests, outside the agreement
+"backends/flock/verifier/stratified_agree.py" = "verity/ml/flock/tests/stratified_agree.py"
+
+# --- tools/: the verity command, the run recorder and the run-store client
+"tools/check/" = "tools/verity/check/"
+"tools/circuit_check/" = "tools/verity/circuit_check/"
+"tools/lean/" = "tools/verity/lean/"
+# the Lean check's entry point takes the check's name; `lean-audit.json` keeps its name until it retires
+"tools/lean/audit.py" = "tools/verity/lean/check.py"
+
+# --- infra/: our machines, cluster, deploys and messaging
+"tools/cluster/" = "infra/cluster/"
+"tools/research/control/" = "infra/control/"
+
+# --- benchmarks/: the measuring side (the census, and the GPU probes that measure the silicon)
+"catalog/census/" = "benchmarks/census/"
+"tools/tc_probe/" = "benchmarks/tc_probe/"
+"tools/tc_probe_fp4/" = "benchmarks/tc_probe_fp4/"
+"tools/native_peak/" = "benchmarks/native_peak/"
+
+[retired]
+paths = ["catalog/", "kernels/", "experimental/", "backends/flock/", "verity/primitives/", "verity/claims/",
+         "tools/check/", "tools/circuit_check/", "tools/lean/", "tools/cluster/", "tools/tc_probe/", "tools/tc_probe_fp4/",
+         "tools/native_peak/", "tools/research/control/"]
+
+[split]
+# A reference to a directory the map splits follows its larger part; each one here says why that is what it means
+# (`layout.py` fails on any other, and on an entry no reference needs): "old file: old directory" = why.
+".agents/skills/friction/SKILL.md: backends/flock" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+".agents/skills/friction/SKILL.md: verity/protocols/accounting" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+".agents/skills/testing/SKILL.md: backends/flock" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+"AGENTS.md: backends/flock" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+"AGENTS.md: catalog" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+"README.md: backends/flock" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+"README.md: backends/flock/verifier" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+"README.md: catalog" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+"archive/README.md: backends/flock" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+"archive/README.md: backends/flock/verifier" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+"backends/flock/live/src/circuit.rs: backends" = "a join from the crate's directory, not the file's: the move's hand fixups corrected it"
+"backends/flock/live/src/lookup.rs: backends" = "a join from the crate's directory, not the file's: the move's hand fixups corrected it"
+"backends/flock/live/src/sha512_native.rs: backends" = "a join from the crate's directory, not the file's: the move's hand fixups corrected it"
+"backends/flock/pod/10-link.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
+"backends/flock/pod/20-pure.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
+"backends/flock/pod/50-preflight.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
+"backends/flock/pod/70-class-sweep.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
+"backends/flock/pod/76-read-gadget.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
+"backends/flock/pod/86-zk-cpu-steps.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
+"backends/flock/tool.py: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
+"backends/flock/verifier/ci-bundle.sh: backends/flock/verifier" = "the verifier's patches and scripts, which stay with ml/flock"
+"backends/flock/verifier/tool.py: backends/flock/verifier" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
+"benchmarks/numerical/pyproject.toml: backends/flock" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
+"benchmarks/numerical/tests/bench/test_views.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
+"benchmarks/pouw/hidden_zk/job.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
+"benchmarks/private_circuit/pod.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
+"integrations/vllm/tests/lint/test_p12_shared_keys.py: catalog" = "the catalog's Definitions, all under ml/circuits (the census that leaves holds none)"
+"integrations/vllm/tests/program/test_dense_family_boundary.py: catalog" = "the catalog's Definitions, all under ml/circuits (the census that leaves holds none)"
+"integrations/vllm/tests/program/test_sampling_split.py: catalog" = "the catalog's Definitions, all under ml/circuits (the census that leaves holds none)"
+"integrations/vllm/tools/migrate/split_sampling.py: catalog" = "the catalog's Definitions, all under ml/circuits (the census that leaves holds none)"
+"integrations/vllm/verity_vllm/ops/pod_bootstrap.sh: catalog" = "the bootstrap's distributions check, which the move's hand fixups rewrote"
+"pyproject.toml: backends/flock" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
+"pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
+"tests/test_doc_paths.py: verity/primitives" = "a synthetic tree's directory, which the move's hand fixups restored"
+"tests/test_gate_paths.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
+"tools/check/check.py: backends/flock" = "docstrings, and the Rust tests' inputs (the build script, patches and live crate, all under ml/flock)"
+"tools/check/check.py: backends/flock/verifier" = "FLOCK_VERIFIER, the agreement's scripts; the Lean package is FLOCK_LEAN, which agreement_closure reads too"
+"tools/check/ci.toml: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
+"tools/check/pyproject.toml: backends/flock/verifier" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
+"tools/check/queue.toml: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
+"tools/check/tests/test_check.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
+"tools/check/tests/test_check.py: backends/flock/verifier" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
+"tools/check/tests/test_slot.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
+"tools/check/tool.py: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
+"tools/check/train.sh: backends/flock" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+"tools/research/README.md: backends/flock" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+"tools/research/pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
+"tools/research/src/research/merge.py: backends/flock" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
+"tools/research/tests/test_jobs_dispatch.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
+"tools/research/tests/test_jobs_vectors.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
+"tools/research/tests/test_merge_gate.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
+"tools/research/tests/test_queue.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
+"tools/research/tests/test_store_prov.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
+"tools/research/tests/test_store_vllm_tools.py: catalog" = "the vLLM tools' closure as the test expects it: the catalog's code, under ml/circuits"
+"verity/primitives/circuits/pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
+"verity/primitives/commitments/pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
+"verity/protocols/accounting/work/pouw/pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
+"verity/protocols/pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
+"verity/protocols/verification/sampled_proofs/pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
+
+[drop]
+paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "verity/pyproject.toml", "experimental/verity_experimental/sampled_proofs/__init__.py",
+         "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/communication/__init__.py",
+         "verity/protocols/accounting/space/__init__.py", "verity/protocols/accounting/work/__init__.py",
+         "verity/protocols/verification/__init__.py"]
+
+[tokens]
+# directories that no row moves whole, as they read in text after the move (each rewrite is reported as approximate)
+"catalog" = "verity/ml/circuits"
+"catalog/verity_catalog" = "verity/ml/circuits"
+"kernels" = "verity/ml/kernels"
+"experimental" = "verity/experimental"
+"verity/primitives" = "verity/ml"
+"verity/protocols/accounting" = "verity/experimental/protocols"
+"verity/protocols/accounting/work" = "verity/experimental/protocols"
+"verity/protocols/accounting/space" = "verity/experimental/protocols"
+"verity/protocols/accounting/communication" = "verity/experimental/protocols"
+"verity/protocols/verification" = "verity/experimental/protocols"
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`); every module under one follows it unless a longer entry
+# says otherwise
+"backends.flock" = "verity.ml.flock"
+"backends.flock.verifier.lean" = "verity.core.service.flock"
+"backends.flock.verifier.stratified_agree" = "verity.ml.flock.tests.stratified_agree"
+"catalog.census" = "benchmarks.census"
+"catalog.tests" = "verity.ml.circuits.ops.tests"
+"experimental.tests" = "verity.experimental.tests"
+"kernels.hash_gpu" = "verity.ml.kernels.hash_gpu"
+"tools.check" = "tools.verity.check"
+"tools.circuit_check" = "tools.verity.circuit_check"
+"tools.cluster" = "infra.cluster"
+"tools.lean" = "tools.verity.lean"
+"tools.lean.audit" = "tools.verity.lean.check"
+"tools.native_peak" = "benchmarks.native_peak"
+"tools.research.control" = "infra.control"
+"tools.tc_probe" = "benchmarks.tc_probe"
+"tools.tc_probe_fp4" = "benchmarks.tc_probe_fp4"
+"verity.Security" = "Security"
+"verity.claims" = "verity.experimental.claims"
+"verity.primitives" = "verity.ml"
+"verity.primitives.circuits" = "verity.ml.circuits"
+"verity.primitives.commitments" = "verity.ml.commitments"
+"verity.primitives.commitments.tests.test_hm96" = "verity.experimental.tests.commitments.test_hm96"
+"verity.primitives.commitments.tests.test_sha512_framings" = "verity.experimental.tests.commitments.test_sha512_framings"
+"verity.primitives.crypto" = "verity.ml.crypto"
+"verity.primitives.randomness" = "verity.ml.randomness"
+"verity.protocols" = "verity.experimental.protocols"
+"verity.protocols.accounting.communication.certifier" = "verity.experimental.protocols.certifier"
+"verity.protocols.accounting.space.pous" = "verity.experimental.protocols.pous"
+"verity.protocols.accounting.work.pouw" = "verity.experimental.protocols.pouw"
+"verity.protocols.verification.sampled_proofs" = "verity.experimental.protocols.sampled_proofs"
+"verity.tests.test_boundaries" = "tests.test_boundaries"
+"verity_catalog.definitions" = "verity.ml.circuits.ops"
+"verity_catalog.silicon" = "verity.ml.circuits.silicon"
+"verity_catalog.targets" = "verity.ml.circuits.targets"
+"verity_experimental" = "verity.experimental"
+"verity_experimental.sampled_proofs" = "verity.experimental.protocols.sampled_proofs"
+"verity_kernels" = "verity.ml.kernels"
+
+[aliases]
+# old names of package levels that the move removes, for readers of old data and bare imports
+"verity_catalog" = "verity.ml.circuits"
+"verity.protocols.accounting" = "verity.experimental.protocols"
+"verity.protocols.accounting.work" = "verity.experimental.protocols"
+"verity.protocols.accounting.space" = "verity.experimental.protocols"
+"verity.protocols.accounting.communication" = "verity.experimental.protocols"
+"verity.protocols.verification" = "verity.experimental.protocols"
+
+[distributions]
+# distributions that the move folds into `verity`: their dependents depend on `verity`, their members leave the workspace,
+# and their pyprojects become suite-only (pytest and [tool.verity.tests], with `verity` among the inputs)
+merged = ["verity-catalog", "verity-kernels", "verity-experimental"]
+# distributions the move makes, by directory (their pyprojects are in [create])
+new = { "verity-cli" = "tools/verity/cli" }
+
+[create]
+# new files: path = contents (the map is their source: a rerun writes them again when they differ, and never rewrites them)
+"verity/ml/__init__.py" = '''
+"""Python and CUDA: the provers, the Python versions of core's circuits (`circuits`, with `ops`, what models compute, and
+`silicon`, what the GPUs actually compute), the commitments, crypto and randomness they use, and the kernels. Nothing here
+affects soundness, and nothing here imports `verity.experimental` but C-Flock's tests, which `tests/test_boundaries.py`
+names."""
+'''
+"verity/experimental/__init__.py" = '''
+"""Work in progress, including today's Python verifiers (the protocols, the claims they cite, multiproofs and private
+circuits) until their Lean versions land in core/. It may import `verity.ml`; `verity.ml` and core/ never import it."""
+'''
+"verity/experimental/protocols/__init__.py" = '''
+"""The protocols in Python: PoUW, PoUS, the network certifier and sampled proofs, with the integrity profile (`profile`)."""
+'''
+"tools/verity/cli/pyproject.toml" = '''[project]
+name = "verity-cli"
+version = "0.0.0"
+description = "`verity`: the repository's one command (check, bench, --remote), dispatching to the tools beside it."
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+verity = "verity_cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["verity_cli"]
+dev-mode-exact = true
+'''
+"tools/verity/cli/verity_cli/__init__.py" = '''
+"""`verity`: the repository's one command, dispatching to the tools beside it.
+
+    verity check [ARGS]             the check a merge requires (check/check.py)
+    verity check PART... [ARGS]     only those parts of it, tests, circuits or lean (their jobs in check/ci.toml)
+    verity check --remote [ARGS]    the check recorded as an Attempt, on a free pod unless --on POD names one
+    verity check move BASE HEAD     certify a pure move (check/move_check.py)
+    verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
+"""
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parents[2]
+ROOT = HERE.parents[1]
+
+
+def _run(argv: list[str]) -> int:
+    return subprocess.run(argv, cwd=ROOT).returncode
+
+
+def _check(args: list[str]) -> int:
+    if args and args[0] == "move":
+        return _run([sys.executable, str(HERE / "check" / "move_check.py"), *args[1:]])
+    return _run([sys.executable, str(HERE / "check" / "check.py"), *args])
+
+
+def _bench(args: list[str]) -> int:
+    names = sorted(p.name for p in (ROOT / "benchmarks").iterdir() if p.is_dir() and not p.name.startswith((".", "_")))
+    if not args or args[0] not in names:
+        raise SystemExit("verity bench NAME [ARGS]: NAME is one of " + ", ".join(names))
+    d = ROOT / "benchmarks" / args[0]
+    for runner, argv in (("run.py", [sys.executable]), ("run.sh", ["bash"])):
+        if (d / runner).exists():
+            return _run([*argv, str(d / runner), *args[1:]])
+    raise SystemExit(f"benchmarks/{args[0]} has no run.py or run.sh: run its tool through `research run`")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__)
+        return 0
+    if args[0] == "check":
+        return _check(args[1:])
+    if args[0] == "bench":
+        return _bench(args[1:])
+    raise SystemExit(f"verity: no command {args[0]!r}\\n{__doc__}")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+'''
+
+[rewrite]
+# Never rewritten: records of what was, and files whose bytes a digest pins.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock",
+           "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**",
+           "**/price_twins.json", "tools/move/**",
+           "catalog/verity_catalog/silicon/captures/**", "catalog/verity_catalog/silicon/hawkeye/**",
+           "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "tools/check/tests/test_suites.py", "tools/verity/check/tests/test_suites.py",          # synthetic trees borrow old names
+           "tools/check/tests/test_move_check.py", "tools/verity/check/tests/test_move_check.py",  # so do its synthetic moves
+           "tools/research/src/research/store/moves.json"]       # each move's old paths, kept as they were
+# Old paths that are keys outside the tree, never rewritten: the frozen evidence artifact is laid out at its former repository
+# paths (`verity_numerical.bench.frozen`), and labels cite them.
+keep = ["backends/numerical/reports", "backends/numerical/reports/*", "backends/*/results", "backends/*/results/*",
+        "backends/*/results_*", "backends/*/results.*"]
+# Kept only in the files a glob matches: vLLM's `census/` is a run directory's census phase (census/census.json, traces/),
+# never the repository's census data, which no file of the integration names.
+keep_in = {"integrations/vllm/**" = ["census", "census/*"]}
+# Dotted names that are no module, never rewritten, nor anything below them: PoUW's torch op (`verity_pouw.ncp_linear.default`)
+# is in the library namespace `verity_pouw`, which its registration names.
+keep_dotted = ["verity_pouw.ncp_linear"]
+# Rewritten although excluded above: data keyed by repository path (their pinned digests must not change).
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "backends/flock/tests/fixtures/randomness_lean.json",
+           "verity/ml/flock/tests/fixtures/randomness_lean.json",
+           "experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json",
+           "verity/experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json",
+           "**/lake-manifest.json", "catalog/verity_catalog/silicon/captures/README.md",
+           "verity/ml/circuits/silicon/captures/README.md"]

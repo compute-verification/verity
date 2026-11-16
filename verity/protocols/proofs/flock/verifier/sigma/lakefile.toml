@@ -1,0 +1,21 @@
+# The σ-lift check's difftest port: `Flock.Sigma.check` (in Flock's verifier's package) held to
+# `verity.circuits.ops.boolean.versions.sigma_check`, the Python that mirrors it.
+name = "core_sigma"
+defaultTargets = ["sigma-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "flock_verifier"
+path = ".."
+
+[[require]]
+name = "verity_difftest"
+path = "../../../../../circuits/difftest"
+
+[[lean_exe]]
+name = "sigma-difftest"
+root = "SigmaDifftest"

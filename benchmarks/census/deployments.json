@@ -1,0 +1,15 @@
+[
+  {
+    "id": "dc-12500-machines-600s",
+    "label": "reference datacenter: 12,500 eight-GPU machines (100,000 GPUs), every machine audited in 10-minute windows",
+    "machines": 12500,
+    "gpus_per_machine": 8,
+    "window_s": 600,
+    "role": "reference",
+    "sources": [
+      {
+        "label": "stated parameters: results per monitoring period over all compute, the datacenter's size and the window length stated"
+      }
+    ]
+  }
+]

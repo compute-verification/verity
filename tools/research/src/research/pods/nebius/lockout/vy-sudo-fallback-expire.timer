@@ -1,0 +1,11 @@
+[Unit]
+Description=vy-sudo-fallback-expire every 10 minutes and at boot, so a node down at the expiry drops the fallback when it comes back
+
+[Timer]
+OnBootSec=1min
+OnCalendar=*:0/10
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

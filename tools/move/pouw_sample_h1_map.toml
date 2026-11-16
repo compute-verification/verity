@@ -1,0 +1,45 @@
+# The retired word DRAW in the names of H1's four serving modules: what `tools/move/rename.py --map
+# tools/move/pouw_sample_h1_map.toml` renames. GLOSSARY.md's term is the sample, spelled as proofs' map spells its own
+# (`Draw` to `Sample`, `Drawn` to `Sampled`), all under `verity/protocols/accounting/pouw/prover/serving/h1/`:
+# - `draw.py` (H1's sampling coin from a sample session of its own) to `sample.py`;
+# - `drawn.py` (a served H1 window's sampled proof blocks staged and checked as credit does) to `sampled.py`;
+# - `drawn_rows.py` (those blocks' rows) to `sampled_rows.py`;
+# - `serve_draw.py` (the window's sampled units as serving reads them) to `serve_sample.py`.
+# Each word is the module's whole dotted name or path (`h1.draw`, `h1/drawn_rows`), so the files move with every absolute
+# import, `from ...h1 import drawn`, serving's lazy export table, pyproject input, lint allowlist and workload-message entry
+# that names them, and nothing else under `h1/` is touched.
+#
+# What stays:
+# - every name the modules declare (`NO_DRAW_SESSION`, `draw_session_reason`, `drawn_of`, `drawn_reads`, `drawn_units`, ...)
+#   and the keys their records carry (`"draw"`, `"drawn"`, `draw_root`): not this map's;
+# - the domain tag `verity/pouw/h1/draw/v1` ([keep]: format ids), which `h1/draw` would otherwise match;
+# - `benchmarks/pouw/h1_prove/drawn.py`, `drawn.sh` and `drawn_cost.sh`, the CLI and its jobs, their `H1_DRAWN_*`
+#   variables, and the refusal texts that name the CLI (`drawn.py`'s reader, `drawn.py binds`), which a test compares whole;
+# - vllm's test module `test_pouw_h1_drawn.py`, whose name is vllm's;
+# - a bare `drawn` or `draw.py` in prose, which may name either file or one-stage's `draw.py`;
+# - records of what was: the move tool's maps and tests, research's `moves.json`, GLOSSARY.md.
+
+[words]
+
+[[words_in]]
+files = ["*"]
+
+[words_in.words]
+"h1.draw" = "h1.sample"
+"h1/draw" = "h1/sample"
+"h1.drawn" = "h1.sampled"
+"h1/drawn" = "h1/sampled"
+"h1.drawn_rows" = "h1.sampled_rows"
+"h1/drawn_rows" = "h1/sampled_rows"
+"h1.serve_draw" = "h1.serve_sample"
+"h1/serve_draw" = "h1/serve_sample"
+"h1 import drawn" = "h1 import sampled"
+"h1 import drawn_rows" = "h1 import sampled_rows"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "GLOSSARY.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []

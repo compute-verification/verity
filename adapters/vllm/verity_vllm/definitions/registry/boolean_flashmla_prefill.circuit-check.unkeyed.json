@@ -1,0 +1,12 @@
+{
+ "binding_peaks": {
+  "_model_roots:FlashMlaPrefillHead_v2": 10.89,
+  "_model_roots:FlashMlaPrefillPair_v2": 10.41,
+  "_model_roots:FlashMlaPrefill_v2": 12.02
+ },
+ "peaks": {
+  "FlashMlaPrefillHead_v2{NP=1,D=32,BN=16,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.25}": 8.48,
+  "FlashMlaPrefillPair_v2{D=32,BN=16,FIRST=False,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.25}": 8.13,
+  "FlashMlaPrefill_v2{NH=1,NP=1,D=32,BN=16,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.25}": 9.53
+ }
+}

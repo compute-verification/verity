@@ -1,0 +1,1043 @@
+{
+ "authenticatable": true,
+ "authenticity_reasons": [],
+ "binding": {
+  "object_digest": "614e68308eac819c6004b58702b699fee5af3510d6f9976a564ee00065b395be",
+  "public_values": "614e68308eac819c6004b58702b699fee5af3510d6f9976a564ee00065b395be59d6c2d7d4e8992ec230f9c5f96bffcbb2cff12404a0b946d14bf50c30e7e1dd01",
+  "statement_digest": "59d6c2d7d4e8992ec230f9c5f96bffcbb2cff12404a0b946d14bf50c30e7e1dd"
+ },
+ "canonical": "{\"family\":{\"digest\":\"88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6\",\"id\":\"veritor.int8-q7@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"boundary/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"boundary\"},{\"id\":\"boundary/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"boundary\"},{\"id\":\"boundary/2\",\"layout\":{\"value\":8},\"leaf\":2,\"position\":2,\"root\":\"boundary\"},{\"id\":\"kappa_W/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"kappa_W\"},{\"id\":\"kappa_W/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"kappa_W\"},{\"id\":\"ru0/0\",\"layout\":{\"value\":32},\"leaf\":0,\"position\":0,\"root\":\"ru0\"},{\"id\":\"ru0/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"ru0\"},{\"id\":\"ru0/2\",\"layout\":{\"value\":32},\"leaf\":2,\"position\":2,\"root\":\"ru0\"},{\"id\":\"ru0/3\",\"layout\":{\"value\":32},\"leaf\":3,\"position\":3,\"root\":\"ru0\"},{\"id\":\"ru0/4\",\"layout\":{\"value\":32},\"leaf\":4,\"position\":4,\"root\":\"ru0\"},{\"id\":\"ru1/0\",\"layout\":{\"value\":32},\"leaf\":0,\"position\":0,\"root\":\"ru1\"},{\"id\":\"ru1/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"ru1\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[\"x0\",\"w2\"],\"out\":[\"Twice[0]/m\"]},\"declared_interface\":{\"args\":[\"x0\",\"w2\"],\"projection\":{\"args\":[0,1],\"returns\":[2]},\"returns\":[\"Twice[0]/m\"]},\"roots\":[\"boundary\",\"kappa_W\",\"ru0\"],\"subcircuit\":\"8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc\",\"target\":{\"encoding\":\"call\",\"id\":\"Twice[0]\"}},{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":1},\"boundary\":{\"in\":[\"v\"],\"out\":[\"Dot[0]/Square[0]/t\"]},\"declared_interface\":{\"args\":[\"v\",\"v\"],\"projection\":{\"args\":[0,0],\"returns\":[1,0,1]},\"returns\":[\"Dot[0]/Square[0]/t\",\"v\",\"Dot[0]/Square[0]/t\"]},\"roots\":[\"boundary\",\"ru0\"],\"subcircuit\":\"1beec089f6aba8a336c7a673629de89ec29aecb005865efcc613acec48a6cee7\",\"target\":{\"encoding\":\"call\",\"id\":\"Dot[0]/Square[0]\"}},{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":2},\"boundary\":{\"in\":[\"Dot[0]/Square[0]/t\"],\"out\":[\"Dot[0]/Double[0]/s\"]},\"declared_interface\":{\"args\":[\"Dot[0]/Square[0]/t\"],\"projection\":{\"args\":[0],\"returns\":[1]},\"returns\":[\"Dot[0]/Double[0]/s\"]},\"roots\":[\"ru0\"],\"subcircuit\":\"84a0900cde84ca78e428724eae6bb58be66da0bc5aa8b8cfd754f861ec36bcc5\",\"target\":{\"encoding\":\"call\",\"id\":\"Dot[0]/Double[0]\"}},{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":3},\"boundary\":{\"in\":[\"v\",\"w\"],\"out\":[\"H[0]/c\"]},\"roots\":[\"boundary\",\"kappa_W\",\"ru0\"],\"subcircuit\":\"d97713b8d7bfe9e59ddd7a988099d357aa2344e8a6245282be6dca72504b8566\"},{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":1,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":4},\"boundary\":{\"in\":[\"z\",\"w\"],\"out\":[\"J[0]/d\"]},\"roots\":[\"boundary\",\"kappa_W\",\"ru1\"],\"subcircuit\":\"d97713b8d7bfe9e59ddd7a988099d357aa2344e8a6245282be6dca72504b8566\"}],\"references\":[{\"leaf\":\"ru0/4\",\"offset\":[],\"ref\":\"Dot[0]/Double[0]/s\"},{\"leaf\":\"ru0/3\",\"offset\":[],\"ref\":\"Dot[0]/Square[0]/t\"},{\"leaf\":\"ru0/1\",\"offset\":[],\"ref\":\"H[0]/c\"},{\"leaf\":\"ru1/1\",\"offset\":[],\"ref\":\"J[0]/d\"},{\"leaf\":\"ru0/2\",\"offset\":[],\"ref\":\"Twice[0]/m\"},{\"leaf\":\"boundary/1\",\"offset\":[],\"ref\":\"v\"},{\"leaf\":\"kappa_W/1\",\"offset\":[],\"ref\":\"w\"},{\"leaf\":\"kappa_W/0\",\"offset\":[],\"ref\":\"w2\"},{\"leaf\":\"boundary/0\",\"offset\":[],\"ref\":\"x0\"},{\"leaf\":\"boundary/2\",\"offset\":[],\"ref\":\"z\"}],\"roots\":[{\"count\":3,\"domain\":\"26df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"boundary\",\"owner\":-1,\"root\":\"689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4\"},{\"count\":2,\"domain\":\"6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"kappa_W\",\"owner\":-2,\"root\":\"e15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b\"},{\"count\":5,\"domain\":\"536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f7757\"},{\"count\":2,\"domain\":\"6a4ad6bc481f6858396dafc1a1f543eaf0668e28b08d7e4d34e8bb18da7cdf54\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru1\",\"owner\":1,\"root\":\"05c051efaa138aa09308a8008a8f98b1506273066eb8dabc4fd13832d98639c3\"}],\"subcircuits\":[{\"definition\":{\"name\":\"identity/vu/square\"},\"digest\":\"1beec089f6aba8a336c7a673629de89ec29aecb005865efcc613acec48a6cee7\",\"gates\":[{\"args\":[[\"in\",0],[\"in\",0]],\"op\":\"mul8\"}],\"in\":[8],\"out\":[0]},{\"definition\":{\"name\":\"identity/vu/double\"},\"digest\":\"84a0900cde84ca78e428724eae6bb58be66da0bc5aa8b8cfd754f861ec36bcc5\",\"gates\":[{\"args\":[[\"in\",0],[\"in\",0]],\"op\":\"add32\"}],\"in\":[32],\"out\":[0]},{\"definition\":{\"name\":\"identity/vu/twice\"},\"digest\":\"8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc\",\"gates\":[{\"args\":[[\"in\",0],[\"in\",1]],\"op\":\"mul8\"}],\"in\":[8,8],\"out\":[0]},{\"definition\":{\"name\":\"identity/vu/gj\"},\"digest\":\"d97713b8d7bfe9e59ddd7a988099d357aa2344e8a6245282be6dca72504b8566\",\"gates\":[{\"args\":[[\"in\",0],[\"in\",1]],\"op\":\"mul8\"},{\"args\":[[\"gate\",0]],\"op\":\"requant_u7\"}],\"in\":[8,8],\"out\":[1]}]}",
+ "description": "The requant_s8 of the body F+H and G+J share replaced by requant_u7: on 300 both give 2, so relations and witness accept the same words -- a different gate with an equal output is caught only by the body digest / statement digest.",
+ "digest": "614e68308eac819c6004b58702b699fee5af3510d6f9976a564ee00065b395be",
+ "identity": {
+  "mutation": {
+   "base": "identity/base-honest",
+   "category": "gate ids",
+   "caught_by": "statement digest (structural); relations and witness accept",
+   "statement_identical": false
+  }
+ },
+ "lowered_v3": {
+  "note": "derived by veritor.interface.lowering.lower_v3(): the format-2 lowering with maximal runs of consecutive packed words of one leaf merged into ranges (merge_ranges); expands to `lowering`",
+  "obligations": [
+   {
+    "entries": [
+     {
+      "ref": "x0",
+      "schema": "u8"
+     },
+     {
+      "ref": "w2",
+      "schema": "u8"
+     },
+     {
+      "ref": "Twice[0]/m",
+      "schema": "u32"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0,
+     1
+    ],
+    "kind": "d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f5165",
+    "outputs": [
+     2
+    ],
+    "ranges": 0,
+    "slots": 3
+   },
+   {
+    "entries": [
+     {
+      "ref": "v",
+      "schema": "u8"
+     },
+     {
+      "ref": "Dot[0]/Square[0]/t",
+      "schema": "u32"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "bc11e4644964297bf6b06e433fd77f85d576965769650cd10db8762c8526fdda",
+    "outputs": [
+     1
+    ],
+    "ranges": 0,
+    "slots": 2
+   },
+   {
+    "entries": [
+     {
+      "ref": "Dot[0]/Square[0]/t",
+      "schema": "u32"
+     },
+     {
+      "ref": "Dot[0]/Double[0]/s",
+      "schema": "u32"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "16e43d357b254345b50a387ba2ab6f7e19955d6dba843ce22dd118fd30fbf5dd",
+    "outputs": [
+     1
+    ],
+    "ranges": 0,
+    "slots": 2
+   },
+   {
+    "entries": [
+     {
+      "ref": "v",
+      "schema": "u8"
+     },
+     {
+      "ref": "w",
+      "schema": "u8"
+     },
+     {
+      "ref": "H[0]/c",
+      "schema": "u8"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0,
+     1
+    ],
+    "kind": "3821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d03",
+    "outputs": [
+     2
+    ],
+    "ranges": 0,
+    "slots": 3
+   },
+   {
+    "entries": [
+     {
+      "ref": "z",
+      "schema": "u8"
+     },
+     {
+      "ref": "w",
+      "schema": "u8"
+     },
+     {
+      "ref": "J[0]/d",
+      "schema": "u8"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0,
+     1
+    ],
+    "kind": "3821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d03",
+    "outputs": [
+     2
+    ],
+    "ranges": 0,
+    "slots": 3
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        0
+       ]
+      ],
+      "op": "add32"
+     }
+    ],
+    "kind": "16e43d357b254345b50a387ba2ab6f7e19955d6dba843ce22dd118fd30fbf5dd",
+    "outputs": [
+     0
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 32
+     }
+    ],
+    "subcircuit": "84a0900cde84ca78e428724eae6bb58be66da0bc5aa8b8cfd754f861ec36bcc5"
+   },
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "local",
+        0
+       ]
+      ],
+      "op": "requant_u7"
+     }
+    ],
+    "kind": "3821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d03",
+    "outputs": [
+     1
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     },
+     {
+      "ordinal": 1,
+      "width": 8
+     }
+    ],
+    "subcircuit": "d97713b8d7bfe9e59ddd7a988099d357aa2344e8a6245282be6dca72504b8566"
+   },
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        0
+       ]
+      ],
+      "op": "mul8"
+     }
+    ],
+    "kind": "bc11e4644964297bf6b06e433fd77f85d576965769650cd10db8762c8526fdda",
+    "outputs": [
+     0
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     }
+    ],
+    "subcircuit": "1beec089f6aba8a336c7a673629de89ec29aecb005865efcc613acec48a6cee7"
+   },
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "mul8"
+     }
+    ],
+    "kind": "d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f5165",
+    "outputs": [
+     0
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     },
+     {
+      "ordinal": 1,
+      "width": 8
+     }
+    ],
+    "subcircuit": "8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc"
+   }
+  ]
+ },
+ "lowering": {
+  "note": "derived by veritor.interface.lowering.lower(); legacy backend data, not part of the Verity ontology",
+  "obligations": [
+   {
+    "expected": {},
+    "inputs": [
+     0,
+     1
+    ],
+    "kind": "d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f5165",
+    "outputs": [
+     2
+    ],
+    "positions": [
+     "x0",
+     "w2",
+     "Twice[0]/m"
+    ]
+   },
+   {
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "bc11e4644964297bf6b06e433fd77f85d576965769650cd10db8762c8526fdda",
+    "outputs": [
+     1
+    ],
+    "positions": [
+     "v",
+     "Dot[0]/Square[0]/t"
+    ]
+   },
+   {
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "16e43d357b254345b50a387ba2ab6f7e19955d6dba843ce22dd118fd30fbf5dd",
+    "outputs": [
+     1
+    ],
+    "positions": [
+     "Dot[0]/Square[0]/t",
+     "Dot[0]/Double[0]/s"
+    ]
+   },
+   {
+    "expected": {},
+    "inputs": [
+     0,
+     1
+    ],
+    "kind": "3821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d03",
+    "outputs": [
+     2
+    ],
+    "positions": [
+     "v",
+     "w",
+     "H[0]/c"
+    ]
+   },
+   {
+    "expected": {},
+    "inputs": [
+     0,
+     1
+    ],
+    "kind": "3821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d03",
+    "outputs": [
+     2
+    ],
+    "positions": [
+     "z",
+     "w",
+     "J[0]/d"
+    ]
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        0
+       ]
+      ],
+      "op": "add32"
+     }
+    ],
+    "kind": "16e43d357b254345b50a387ba2ab6f7e19955d6dba843ce22dd118fd30fbf5dd",
+    "outputs": [
+     0
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 32
+     }
+    ],
+    "subcircuit": "84a0900cde84ca78e428724eae6bb58be66da0bc5aa8b8cfd754f861ec36bcc5"
+   },
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "local",
+        0
+       ]
+      ],
+      "op": "requant_u7"
+     }
+    ],
+    "kind": "3821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d03",
+    "outputs": [
+     1
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     },
+     {
+      "ordinal": 1,
+      "width": 8
+     }
+    ],
+    "subcircuit": "d97713b8d7bfe9e59ddd7a988099d357aa2344e8a6245282be6dca72504b8566"
+   },
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        0
+       ]
+      ],
+      "op": "mul8"
+     }
+    ],
+    "kind": "bc11e4644964297bf6b06e433fd77f85d576965769650cd10db8762c8526fdda",
+    "outputs": [
+     0
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     }
+    ],
+    "subcircuit": "1beec089f6aba8a336c7a673629de89ec29aecb005865efcc613acec48a6cee7"
+   },
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "mul8"
+     }
+    ],
+    "kind": "d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f5165",
+    "outputs": [
+     0
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     },
+     {
+      "ordinal": 1,
+      "width": 8
+     }
+    ],
+    "subcircuit": "8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc"
+   }
+  ]
+ },
+ "name": "identity/mut/gate-op-equal-output",
+ "object": {
+  "family": {
+   "digest": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+   "id": "veritor.int8-q7@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "boundary/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "boundary"
+   },
+   {
+    "id": "boundary/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "boundary"
+   },
+   {
+    "id": "boundary/2",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "boundary"
+   },
+   {
+    "id": "kappa_W/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "kappa_W"
+   },
+   {
+    "id": "kappa_W/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "kappa_W"
+   },
+   {
+    "id": "ru0/0",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/2",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/3",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 3,
+    "position": 3,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/4",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 4,
+    "position": 4,
+    "root": "ru0"
+   },
+   {
+    "id": "ru1/0",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru1"
+   },
+   {
+    "id": "ru1/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "ru1"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [
+      "x0",
+      "w2"
+     ],
+     "out": [
+      "Twice[0]/m"
+     ]
+    },
+    "declared_interface": {
+     "args": [
+      "x0",
+      "w2"
+     ],
+     "projection": {
+      "args": [
+       0,
+       1
+      ],
+      "returns": [
+       2
+      ]
+     },
+     "returns": [
+      "Twice[0]/m"
+     ]
+    },
+    "roots": [
+     "boundary",
+     "kappa_W",
+     "ru0"
+    ],
+    "subcircuit": "8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc",
+    "target": {
+     "encoding": "call",
+     "id": "Twice[0]"
+    }
+   },
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 1
+    },
+    "boundary": {
+     "in": [
+      "v"
+     ],
+     "out": [
+      "Dot[0]/Square[0]/t"
+     ]
+    },
+    "declared_interface": {
+     "args": [
+      "v",
+      "v"
+     ],
+     "projection": {
+      "args": [
+       0,
+       0
+      ],
+      "returns": [
+       1,
+       0,
+       1
+      ]
+     },
+     "returns": [
+      "Dot[0]/Square[0]/t",
+      "v",
+      "Dot[0]/Square[0]/t"
+     ]
+    },
+    "roots": [
+     "boundary",
+     "ru0"
+    ],
+    "subcircuit": "1beec089f6aba8a336c7a673629de89ec29aecb005865efcc613acec48a6cee7",
+    "target": {
+     "encoding": "call",
+     "id": "Dot[0]/Square[0]"
+    }
+   },
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 2
+    },
+    "boundary": {
+     "in": [
+      "Dot[0]/Square[0]/t"
+     ],
+     "out": [
+      "Dot[0]/Double[0]/s"
+     ]
+    },
+    "declared_interface": {
+     "args": [
+      "Dot[0]/Square[0]/t"
+     ],
+     "projection": {
+      "args": [
+       0
+      ],
+      "returns": [
+       1
+      ]
+     },
+     "returns": [
+      "Dot[0]/Double[0]/s"
+     ]
+    },
+    "roots": [
+     "ru0"
+    ],
+    "subcircuit": "84a0900cde84ca78e428724eae6bb58be66da0bc5aa8b8cfd754f861ec36bcc5",
+    "target": {
+     "encoding": "call",
+     "id": "Dot[0]/Double[0]"
+    }
+   },
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 3
+    },
+    "boundary": {
+     "in": [
+      "v",
+      "w"
+     ],
+     "out": [
+      "H[0]/c"
+     ]
+    },
+    "roots": [
+     "boundary",
+     "kappa_W",
+     "ru0"
+    ],
+    "subcircuit": "d97713b8d7bfe9e59ddd7a988099d357aa2344e8a6245282be6dca72504b8566"
+   },
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 1,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 4
+    },
+    "boundary": {
+     "in": [
+      "z",
+      "w"
+     ],
+     "out": [
+      "J[0]/d"
+     ]
+    },
+    "roots": [
+     "boundary",
+     "kappa_W",
+     "ru1"
+    ],
+    "subcircuit": "d97713b8d7bfe9e59ddd7a988099d357aa2344e8a6245282be6dca72504b8566"
+   }
+  ],
+  "references": [
+   {
+    "leaf": "ru0/4",
+    "offset": [],
+    "ref": "Dot[0]/Double[0]/s"
+   },
+   {
+    "leaf": "ru0/3",
+    "offset": [],
+    "ref": "Dot[0]/Square[0]/t"
+   },
+   {
+    "leaf": "ru0/1",
+    "offset": [],
+    "ref": "H[0]/c"
+   },
+   {
+    "leaf": "ru1/1",
+    "offset": [],
+    "ref": "J[0]/d"
+   },
+   {
+    "leaf": "ru0/2",
+    "offset": [],
+    "ref": "Twice[0]/m"
+   },
+   {
+    "leaf": "boundary/1",
+    "offset": [],
+    "ref": "v"
+   },
+   {
+    "leaf": "kappa_W/1",
+    "offset": [],
+    "ref": "w"
+   },
+   {
+    "leaf": "kappa_W/0",
+    "offset": [],
+    "ref": "w2"
+   },
+   {
+    "leaf": "boundary/0",
+    "offset": [],
+    "ref": "x0"
+   },
+   {
+    "leaf": "boundary/2",
+    "offset": [],
+    "ref": "z"
+   }
+  ],
+  "roots": [
+   {
+    "count": 3,
+    "domain": "26df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "boundary",
+    "owner": -1,
+    "root": "689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4"
+   },
+   {
+    "count": 2,
+    "domain": "6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "kappa_W",
+    "owner": -2,
+    "root": "e15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b"
+   },
+   {
+    "count": 5,
+    "domain": "536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f7757"
+   },
+   {
+    "count": 2,
+    "domain": "6a4ad6bc481f6858396dafc1a1f543eaf0668e28b08d7e4d34e8bb18da7cdf54",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru1",
+    "owner": 1,
+    "root": "05c051efaa138aa09308a8008a8f98b1506273066eb8dabc4fd13832d98639c3"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "identity/vu/square"
+    },
+    "digest": "1beec089f6aba8a336c7a673629de89ec29aecb005865efcc613acec48a6cee7",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        0
+       ],
+       [
+        "in",
+        0
+       ]
+      ],
+      "op": "mul8"
+     }
+    ],
+    "in": [
+     8
+    ],
+    "out": [
+     0
+    ]
+   },
+   {
+    "definition": {
+     "name": "identity/vu/double"
+    },
+    "digest": "84a0900cde84ca78e428724eae6bb58be66da0bc5aa8b8cfd754f861ec36bcc5",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        0
+       ],
+       [
+        "in",
+        0
+       ]
+      ],
+      "op": "add32"
+     }
+    ],
+    "in": [
+     32
+    ],
+    "out": [
+     0
+    ]
+   },
+   {
+    "definition": {
+     "name": "identity/vu/twice"
+    },
+    "digest": "8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        0
+       ],
+       [
+        "in",
+        1
+       ]
+      ],
+      "op": "mul8"
+     }
+    ],
+    "in": [
+     8,
+     8
+    ],
+    "out": [
+     0
+    ]
+   },
+   {
+    "definition": {
+     "name": "identity/vu/gj"
+    },
+    "digest": "d97713b8d7bfe9e59ddd7a988099d357aa2344e8a6245282be6dca72504b8566",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        0
+       ],
+       [
+        "in",
+        1
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "gate",
+        0
+       ]
+      ],
+      "op": "requant_u7"
+     }
+    ],
+    "in": [
+     8,
+     8
+    ],
+    "out": [
+     1
+    ]
+   }
+  ]
+ },
+ "relations": "accept",
+ "statement": "76657269746f722f70726f6f66732f73746174656d656e742f7632000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6000000200000000416e43d357b254345b50a387ba2ab6f7e19955d6dba843ce22dd118fd30fbf5dd00000001000000010000000000000001000000056164643332000000020000000000000000000000000001000000003821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d030000000200000002000000000000000100000002000000046d756c3800000002000000000000000000010000000a72657175616e745f75370000000101000000000000000100000001bc11e4644964297bf6b06e433fd77f85d576965769650cd10db8762c8526fdda00000001000000010000000000000001000000046d756c3800000002000000000000000000000000000100000000d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f51650000000100000002000000000000000100000001000000046d756c3800000002000000000000000000010000000100000000000000051111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000000000000000000000d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f516500000003000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4000000000000000300000000000000006627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8be15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b00000000000000020000000000000002536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f77570000000000000005000000030000000000000000000000000000000000000000000000027538000000000100000000000000000000000000000000000000027538000000000200000000000000020000000000000002000000037533320000000002000000000000000100000001000000021111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000010000000000000000bc11e4644964297bf6b06e433fd77f85d576965769650cd10db8762c8526fdda00000002000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b400000000000000030000000000000002536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f77570000000000000005000000020000000000000000000000010000000000000001000000027538000000000100000000000000030000000000000003000000037533320000000001000000000000000100000001111111111111111111111111111111111111111111111111111111111111111122222222222222222222222222222222222222222222222222222222222222220000000000000002000000000000000016e43d357b254345b50a387ba2ab6f7e19955d6dba843ce22dd118fd30fbf5dd000000010000000000000002536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f775700000000000000050000000200000000000000000000000300000000000000030000000375333200000000000000000000000004000000000000000400000003753332000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000300000000000000003821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d0300000003000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4000000000000000300000000000000006627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8be15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b00000000000000020000000000000002536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f7757000000000000000500000003000000000000000000000001000000000000000100000002753800000000010000000000000001000000000000000100000002753800000000020000000000000001000000000000000100000002753800000000020000000000000001000000010000000211111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000400000000000000013821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d0300000003000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4000000000000000300000000000000006627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8be15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b000000000000000200000000000000036a4ad6bc481f6858396dafc1a1f543eaf0668e28b08d7e4d34e8bb18da7cdf5405c051efaa138aa09308a8008a8f98b1506273066eb8dabc4fd13832d98639c30000000000000002000000030000000000000000000000020000000000000002000000027538000000000100000000000000010000000000000001000000027538000000000200000000000000010000000000000001000000027538000000000200000000000000010000000100000002",
+ "statement_digest": "59d6c2d7d4e8992ec230f9c5f96bffcbb2cff12404a0b946d14bf50c30e7e1dd",
+ "statement_v3": "76657269746f722f70726f6f66732f73746174656d656e742f7633000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6000000200000000416e43d357b254345b50a387ba2ab6f7e19955d6dba843ce22dd118fd30fbf5dd00000001000000010000000000000001000000056164643332000000020000000000000000000000000001000000003821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d030000000200000002000000000000000100000002000000046d756c3800000002000000000000000000010000000a72657175616e745f75370000000101000000000000000100000001bc11e4644964297bf6b06e433fd77f85d576965769650cd10db8762c8526fdda00000001000000010000000000000001000000046d756c3800000002000000000000000000000000000100000000d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f51650000000100000002000000000000000100000001000000046d756c3800000002000000000000000000010000000100000000000000051111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000000000000000000000d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f516500000003000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4000000000000000300000000000000006627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8be15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b00000000000000020000000000000002536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f77570000000000000005000000030000000000000000000000000000000000000000000000000275380000000000010000000000000000000000000000000000000002753800000000000200000000000000020000000000000002000000037533320000000002000000000000000100000001000000021111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000010000000000000000bc11e4644964297bf6b06e433fd77f85d576965769650cd10db8762c8526fdda00000002000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b400000000000000030000000000000002536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f775700000000000000050000000200000000000000000000000001000000000000000100000002753800000000000100000000000000030000000000000003000000037533320000000001000000000000000100000001111111111111111111111111111111111111111111111111111111111111111122222222222222222222222222222222222222222222222222222222222222220000000000000002000000000000000016e43d357b254345b50a387ba2ab6f7e19955d6dba843ce22dd118fd30fbf5dd000000010000000000000002536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f7757000000000000000500000002000000000000000000000000030000000000000003000000037533320000000000000000000000000004000000000000000400000003753332000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000300000000000000003821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d0300000003000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4000000000000000300000000000000006627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8be15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b00000000000000020000000000000002536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f7757000000000000000500000003000000000000000000000000010000000000000001000000027538000000000001000000000000000100000000000000010000000275380000000000020000000000000001000000000000000100000002753800000000020000000000000001000000010000000211111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000400000000000000013821515836c21b214cc36bf8120ecbf2ceb41a6050c5ca294cdc31abdd248d0300000003000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4000000000000000300000000000000006627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8be15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b000000000000000200000000000000036a4ad6bc481f6858396dafc1a1f543eaf0668e28b08d7e4d34e8bb18da7cdf5405c051efaa138aa09308a8008a8f98b1506273066eb8dabc4fd13832d98639c30000000000000002000000030000000000000000000000000200000000000000020000000275380000000000010000000000000001000000000000000100000002753800000000000200000000000000010000000000000001000000027538000000000200000000000000010000000100000002",
+ "statement_v3_digest": "54adf2e30194b1148baa3953a8c01618cf32da4a9776c3acbdc1cae661b0d087",
+ "subcircuits_well_formed": [
+  true,
+  true,
+  true,
+  true
+ ],
+ "tags": [
+  "identity",
+  "mutation",
+  "structural-only"
+ ],
+ "values": [
+  [
+   5,
+   2,
+   10
+  ],
+  [
+   3,
+   9
+  ],
+  [
+   9,
+   18
+  ],
+  [
+   3,
+   100,
+   2
+  ],
+  [
+   3,
+   100,
+   2
+  ]
+ ],
+ "verdict": "accept",
+ "witness": "76657269746f722f70726f6f66732f7769746e6573732f763200000000050000000300000001050000000244de3aaedb05677f24efe632f3031f8e483d8ef61325428709ae51645011d379871a169c3d990656ce7ed8bba513a6108e07b2b00202dadc0c12b336538f8268000000010200000001d79877baae66daca523baf87e923d13db8f5e0bb753c629d547aa31c0708e3e7000000040000000a000000039f9a07226078afe0933ba0435772ab0c6584ba46ed7d65a8ca22c6ae50f3fe70077af89378ca6670a1a86a084e7112e6cb19ce8f79c53d0cf915b212d84349c997881271d9b39b1f1b78d5ee5a9cd42520453ea3acdc9a33b9986f52ceb50eab00000002000000010300000002d3d67b92fc5fadba461a9743cf40019878ce80b9c2ecbc5e2242248e2b079e6d871a169c3d990656ce7ed8bba513a6108e07b2b00202dadc0c12b336538f82680000000400000009000000033bc43debafde88355a72353b45950417ad9eebd0688e4e4a15ceac29adb27bf9077af89378ca6670a1a86a084e7112e6cb19ce8f79c53d0cf915b212d84349c997881271d9b39b1f1b78d5ee5a9cd42520453ea3acdc9a33b9986f52ceb50eab000000020000000400000009000000033bc43debafde88355a72353b45950417ad9eebd0688e4e4a15ceac29adb27bf9077af89378ca6670a1a86a084e7112e6cb19ce8f79c53d0cf915b212d84349c997881271d9b39b1f1b78d5ee5a9cd42520453ea3acdc9a33b9986f52ceb50eab0000000400000012000000038b82d7928ee43486d70efb7a23f286d184cfe48e8839d5a576e59e04aa306f24b328394a8f35d67eeb07b9f01f93e12d253a3d23351aa7d2628ecd7791fdd5eff60e7d1a1efe4672f8503778e4aff25a328b7d93ee52db9600ac78518947d68e00000003000000010300000002d3d67b92fc5fadba461a9743cf40019878ce80b9c2ecbc5e2242248e2b079e6d871a169c3d990656ce7ed8bba513a6108e07b2b00202dadc0c12b336538f8268000000016400000001f0d62b3a42b2e9fd53fdd728bd1def415fa87c557ae18a6ee289732e2991289a000000010200000003b90508bda6b4f0c507a335d13b48bf5391e2468615ea4b701d01dba03376f083237375030f3edd68a53dfef9458bdc84ad11a5223d7388fbca89ab9ff2c2674597881271d9b39b1f1b78d5ee5a9cd42520453ea3acdc9a33b9986f52ceb50eab00000003000000010300000002aaf199917ead6f960bfad869ef3778c70b942cff9851cdc14d78d8a97e575fcb0af8fa4612fecf23c0efc549d59875ed8236c983908b1d9332e19b1931ca716c000000016400000001f0d62b3a42b2e9fd53fdd728bd1def415fa87c557ae18a6ee289732e2991289a000000010200000001084f82f0fdf5c9cd61e467b28dcd688c56c3ca9fe29c5ae5cfc6ccb57196a332",
+ "witness_verdict": "accept"
+}

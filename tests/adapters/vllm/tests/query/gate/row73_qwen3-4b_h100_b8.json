@@ -1,0 +1,36 @@
+{
+ "row": "73",
+ "row_id": "qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager",
+ "mode": "v2",
+ "build_seconds": 493,
+ "v2_identities_rows": 247327,
+ "v2_complete": true,
+ "v2_unmodelled": {},
+ "v2_manifest_digest": "a2aaa282144ce3369301ea91a3491fb2c450e2d530fe7e8bf3c1daf0c5111d79",
+ "v1_manifest_digest": "a2aaa282144ce3369301ea91a3491fb2c450e2d530fe7e8bf3c1daf0c5111d79",
+ "program_digest_equal": true,
+ "v1_identities": 243115,
+ "v2_identities": 243115,
+ "common": 243115,
+ "v1_rows": 247327,
+ "v2_rows": 247327,
+ "multiplicity_diff_n": 0,
+ "only_v1_n": 0,
+ "only_v2_n": 0,
+ "lines": {
+  "member_rename": [],
+  "range": [],
+  "only_v1": [],
+  "only_v2": []
+ },
+ "multiplicity": [],
+ "residuals_applied": {
+  "Gemm_v2:out->0": 532512,
+  "RoPE_v1:key->1": 133128,
+  "RoPE_v1:query->0": 133128,
+  "encoding:hidden": 17136,
+  "encoding:in": 3698,
+  "encoding:sampled_token_ids": 476
+ },
+ "aliases": 35
+}

@@ -1,0 +1,1205 @@
+// The wide word codecs on the RTX PRO 6000 (sm_120): `wide.py` is the reference. One build per field (WW_BITS = 127,
+// 255, 521, 256 or 512); WW_SQR picks the squaring (0: operand scanning on 64-bit products, 1: PTX carry chains, lo and
+// hi passes).
+//
+// A field element is N little-endian u32 limbs. p = 2^M − C (C = 1 for the Mersenne fields, 19 for p255, 189 and 569
+// for the full-width p256 and p512, M = 32N). Lazy values: `sqr` and `mul` take inputs below 2^M + 2^8 (Mersenne) or
+// 2^(32N) (the others) and return values in the same range; `canon` takes such a value to [0, p).
+//
+// The store E holds word i's limb e at u32 index 32·N·⌊i/32⌋ + 32·e + (i mod 32): a warp's load of one limb of 32
+// consecutive words reads 128 contiguous bytes, and a task's record (L words a lane) is the 32·L·N u32 from 32·L·N·q.
+//
+// Kernels (extern "C" launchers at the end):
+//   encode / decode   a flat store of payloads / words, word i at index base + i: decode mode 0 XORs the payloads,
+//                     mode 2 writes them
+//   chain_*           compute only, U independent words a thread, each step's input the previous step's output, the
+//                     index (and so the tweak) advancing by the grid's stride: square (one squaring a step), encode and
+//                     decode
+//   gemm              y[b][n] = Σ_k x[b][k] W[n][k], FP8 E4M3 mma.m16n8k32, W the A operand decoded from the store in the
+//                     fragment layout (`wide.fragment_payloads`), one task (16 rows × 512 columns) a warp
+#include <cstdint>
+
+#ifdef WW_HOST
+// The field arithmetic and the codec built for the host (`tests/wide_host.py`): the same source, CUDA's qualifiers
+// emptied and its integer intrinsics written out.
+#define __device__
+#define __host__
+#define __forceinline__ inline
+#define __constant__ static
+static inline uint32_t __funnelshift_l(uint32_t lo, uint32_t hi, uint32_t s) {
+  s &= 31;
+  return s ? (hi << s) | (lo >> (32 - s)) : hi;
+}
+static inline uint32_t __funnelshift_r(uint32_t lo, uint32_t hi, uint32_t s) {
+  s &= 31;
+  return s ? (lo >> s) | (hi << (32 - s)) : lo;
+}
+static inline uint32_t __umulhi(uint32_t a, uint32_t b) { return (uint32_t)(((uint64_t)a * b) >> 32); }
+#else
+#include <cuda_runtime.h>
+#endif
+
+#ifndef WW_BITS
+#define WW_BITS 521
+#endif
+#ifndef WW_SQR
+#define WW_SQR 0
+#endif
+#ifndef WW_KMAX
+#define WW_KMAX 4
+#endif
+// WW_ROLL = 1: the fused GEMM's code kept small enough for the instruction cache (for p521 the words decoded in a loop).
+// WW_OCC: the CTAs an SM the fused GEMM is compiled for (`__launch_bounds__`; 1 lets the compiler use up to 255
+// registers).
+#ifndef WW_ROLL
+#define WW_ROLL 0
+#endif
+#ifndef WW_OCC
+#define WW_OCC 1
+#endif
+// WW_CC = 1: the limb additions and subtractions (and the Mersenne decode's fold) as PTX carry chains, one IADD3.X a
+// limb, rather than 64-bit accumulators (IADD.64 and the MOVs that build their register pairs). Device builds only.
+#ifndef WW_CC
+#define WW_CC 0
+#endif
+#if WW_CC && defined(WW_HOST)
+#error "WW_CC is PTX: device builds only"
+#endif
+// WW_KW: the adjacent K-chunks a CTA of the fused GEMM covers (GEMM_WARPS / WW_KW row groups).
+#ifndef WW_KW
+#define WW_KW 1
+#endif
+#if WW_KW != 1 && WW_KW != 2
+#error "WW_KW is 1 or 2"
+#endif
+// WW_MAXREG: the fused GEMM's registers a thread (`__maxnreg__`, in place of WW_OCC's bounds), such as 160, at which
+// three CTAs an SM leave 4096 registers to other kernels beside them.
+#ifndef WW_MAXREG
+#define WW_MAXREG 0
+#endif
+#if WW_MAXREG
+#define WW_GEMM_BOUNDS __maxnreg__(WW_MAXREG)
+#else
+#define WW_GEMM_BOUNDS __launch_bounds__(GEMM_WARPS * 32, WW_OCC)
+#endif
+
+namespace ww {
+
+template <int BITS>
+struct Fd;
+template <>
+struct Fd<127> {
+  static constexpr int N = 4, M = 127, PB = 126;
+  static constexpr uint32_t C = 1;
+};
+template <>
+struct Fd<255> {
+  static constexpr int N = 8, M = 255, PB = 254;
+  static constexpr uint32_t C = 19;
+};
+template <>
+struct Fd<521> {
+  static constexpr int N = 17, M = 521, PB = 520;
+  static constexpr uint32_t C = 1;
+};
+template <>
+struct Fd<256> {
+  static constexpr int N = 8, M = 256, PB = 256;
+  static constexpr uint32_t C = 189;
+};
+template <>
+struct Fd<512> {
+  static constexpr int N = 16, M = 512, PB = 512;
+  static constexpr uint32_t C = 569;
+};
+
+using F = Fd<WW_BITS>;
+constexpr int N = F::N, M = F::M, PB = F::PB;
+constexpr uint32_t C = F::C;
+constexpr bool MERS = C == 1;
+constexpr bool FULL = M == 32 * N;      // a word is all its limbs' bits, p = 3 mod 4
+constexpr int MB = M / 32, MS = M % 32;  // bit M is bit MS of limb MB
+constexpr uint32_t FOLD = C << (32 * N - M);  // 2^(32N) mod p, not Mersenne
+// the full-width root: (p + 1)/4 = (2^RN − 1)·2^RS + RE, RE = 2^RS − (C − 1)/4 (`wide.root_split`)
+constexpr int RD = (int)(C - 1) / 4;
+constexpr int rs_of(int d) { return d == 0 ? 0 : 1 + rs_of(d / 2); }
+constexpr int RS = rs_of(RD), RN = M - 2 - RS, RE = (1 << RS) - RD;
+constexpr int KMAX = WW_KMAX;
+constexpr int LANES = 32, TASK_TILES = 16, LANE_BYTES = 16 * TASK_TILES, TASK_COLS = 32 * TASK_TILES;
+constexpr int L = (8 * LANE_BYTES + PB - 1) / PB;  // words a lane a task
+constexpr int GEMM_WARPS = 4;
+constexpr int KW = WW_KW;
+static_assert(GEMM_WARPS % KW == 0, "a CTA holds whole row groups");
+static_assert(32 * N > M || FULL, "a spare bit above p, or a full-width word");
+static_assert(C != 1 || (MB == N - 1 && MS > 0), "a Mersenne p's top bit is inside the last limb");
+static_assert(!FULL || (C % 4 == 1 && PB == M), "a full-width p is 3 mod 4, its payload the whole word");
+static_assert(MERS || FOLD < 65536, "`reduce`'s last carry fits limb 0");
+
+__host__ __device__ constexpr uint32_t plimb(int e) {
+  return e < MB ? (e == 0 ? 0xFFFFFFFFu - (C - 1) : 0xFFFFFFFFu) : e == MB ? (MS ? (1u << MS) - 1 : 0) : 0;
+}
+
+__constant__ uint32_t kC[KMAX][N];   // c_j
+__constant__ uint32_t kNC[KMAX][N];  // p − c_j (Mersenne decode)
+__constant__ uint32_t kTau[N];       // τ
+__constant__ uint32_t kDTw[N];       // the tweak state's step over LANES words (`tw_init`'s dv for s = LANES)
+__constant__ uint32_t kI[N];        // p255: √−1, c1, c1·√−1
+__constant__ uint32_t kC1[N];
+__constant__ uint32_t kC1I[N];
+
+// --- carry chains (PTX) -------------------------------------------------------------------------------------------------
+
+#if WW_SQR == 1 || WW_CC
+__device__ __forceinline__ uint32_t madlo_cc(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t r;
+  asm volatile("mad.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
+  return r;
+}
+__device__ __forceinline__ uint32_t madclo_cc(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t r;
+  asm volatile("madc.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
+  return r;
+}
+__device__ __forceinline__ uint32_t madhi_cc(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t r;
+  asm volatile("mad.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
+  return r;
+}
+__device__ __forceinline__ uint32_t madchi_cc(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t r;
+  asm volatile("madc.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
+  return r;
+}
+__device__ __forceinline__ uint32_t addc0(uint32_t a) {
+  uint32_t r;
+  asm volatile("addc.u32 %0, %1, 0;" : "=r"(r) : "r"(a));
+  return r;
+}
+__device__ __forceinline__ uint32_t add_cc(uint32_t a, uint32_t b) {
+  uint32_t r;
+  asm volatile("add.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b));
+  return r;
+}
+__device__ __forceinline__ uint32_t addc_cc(uint32_t a, uint32_t b) {
+  uint32_t r;
+  asm volatile("addc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b));
+  return r;
+}
+__device__ __forceinline__ uint32_t sub_cc(uint32_t a, uint32_t b) {
+  uint32_t r;
+  asm volatile("sub.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b));
+  return r;
+}
+__device__ __forceinline__ uint32_t subc_cc(uint32_t a, uint32_t b) {
+  uint32_t r;
+  asm volatile("subc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b));
+  return r;
+}
+__device__ __forceinline__ uint32_t subc0() {
+  uint32_t r;
+  asm volatile("subc.u32 %0, 0, 0;" : "=r"(r));
+  return r;
+}
+#endif
+
+// --- limbs ------------------------------------------------------------------------------------------------------------
+
+template <int K>
+__device__ __forceinline__ uint32_t add_k(uint32_t (&r)[K], const uint32_t (&a)[K], const uint32_t (&b)[K]) {
+#if WW_CC
+  r[0] = add_cc(a[0], b[0]);
+#pragma unroll
+  for (int e = 1; e < K; ++e) r[e] = addc_cc(a[e], b[e]);
+  return addc0(0);
+#else
+  uint64_t c = 0;
+#pragma unroll
+  for (int e = 0; e < K; ++e) {
+    c += (uint64_t)a[e] + b[e];
+    r[e] = (uint32_t)c;
+    c >>= 32;
+  }
+  return (uint32_t)c;
+#endif
+}
+
+template <int K>
+__device__ __forceinline__ uint32_t sub_k(uint32_t (&r)[K], const uint32_t (&a)[K], const uint32_t (&b)[K]) {
+#if WW_CC
+  r[0] = sub_cc(a[0], b[0]);
+#pragma unroll
+  for (int e = 1; e < K; ++e) r[e] = subc_cc(a[e], b[e]);
+  return subc0() & 1;  // borrow
+#else
+  int64_t c = 0;
+#pragma unroll
+  for (int e = 0; e < K; ++e) {
+    c += (int64_t)a[e] - b[e];
+    r[e] = (uint32_t)c;
+    c >>= 32;
+  }
+  return (uint32_t)(c & 1);  // borrow
+#endif
+}
+
+template <int K>
+__device__ __forceinline__ void copy_k(uint32_t (&r)[K], const uint32_t (&a)[K]) {
+#pragma unroll
+  for (int e = 0; e < K; ++e) r[e] = a[e];
+}
+
+template <int K>
+__device__ __forceinline__ void select_k(uint32_t (&r)[K], bool s, const uint32_t (&a)[K], const uint32_t (&b)[K]) {
+#pragma unroll
+  for (int e = 0; e < K; ++e) r[e] = s ? a[e] : b[e];
+}
+
+template <int K>
+__device__ __forceinline__ bool eq_k(const uint32_t (&a)[K], const uint32_t (&b)[K]) {
+  uint32_t d = 0;
+#pragma unroll
+  for (int e = 0; e < K; ++e) d |= a[e] ^ b[e];
+  return d == 0;
+}
+
+__device__ __forceinline__ void pconst(uint32_t (&p)[N]) {
+#pragma unroll
+  for (int e = 0; e < N; ++e) p[e] = plimb(e);
+}
+
+// p − a for canonical a (a = 0 gives p, which every lazy input takes).
+__host__ __device__ __forceinline__ void neg_el(uint32_t (&r)[N], const uint32_t (&a)[N]) {
+  int64_t c = 0;
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    c += (int64_t)plimb(e) - a[e];
+    r[e] = (uint32_t)c;
+    c >>= 32;
+  }
+}
+
+// --- products ---------------------------------------------------------------------------------------------------------
+
+// t = a·b, 2N limbs.
+__device__ __forceinline__ void mul_full(uint32_t (&t)[2 * N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
+#pragma unroll
+  for (int i = 0; i < 2 * N; ++i) t[i] = 0;
+#pragma unroll
+  for (int i = 0; i < N; ++i) {
+    uint32_t c = 0;
+#pragma unroll
+    for (int j = 0; j < N; ++j) {
+      uint64_t s = (uint64_t)a[i] * b[j] + t[i + j] + c;
+      t[i + j] = (uint32_t)s;
+      c = (uint32_t)(s >> 32);
+    }
+    t[i + N] = c;
+  }
+}
+
+// t = a², 2N limbs: the products a_i a_j (i < j) once, doubled, then the squares.
+__device__ __forceinline__ void sqr_full(uint32_t (&t)[2 * N], const uint32_t (&a)[N]) {
+#pragma unroll
+  for (int i = 0; i < 2 * N; ++i) t[i] = 0;
+#if WW_SQR == 1
+#pragma unroll
+  for (int i = 0; i < N - 1; ++i) {
+    // lo pass: t[i + j] += lo(a_i a_j), j = i + 1 … N − 1, carry into t[i + N]
+    t[2 * i + 1] = madlo_cc(a[i], a[i + 1], t[2 * i + 1]);
+#pragma unroll
+    for (int j = i + 2; j < N; ++j) t[i + j] = madclo_cc(a[i], a[j], t[i + j]);
+    t[i + N] = addc0(t[i + N]);
+    // hi pass: t[i + j + 1] += hi(a_i a_j), carry into t[i + N + 1]
+    t[2 * i + 2] = madhi_cc(a[i], a[i + 1], t[2 * i + 2]);
+#pragma unroll
+    for (int j = i + 2; j < N; ++j) t[i + j + 1] = madchi_cc(a[i], a[j], t[i + j + 1]);
+    if (i + N + 1 < 2 * N) t[i + N + 1] = addc0(t[i + N + 1]);
+  }
+#else
+#pragma unroll
+  for (int i = 0; i < N - 1; ++i) {
+    uint32_t c = 0;
+#pragma unroll
+    for (int j = i + 1; j < N; ++j) {
+      uint64_t s = (uint64_t)a[i] * a[j] + t[i + j] + c;
+      t[i + j] = (uint32_t)s;
+      c = (uint32_t)(s >> 32);
+    }
+    t[i + N] = c;
+  }
+#endif
+  t[2 * N - 1] = t[2 * N - 2] >> 31;
+#pragma unroll
+  for (int i = 2 * N - 2; i > 0; --i) t[i] = __funnelshift_l(t[i - 1], t[i], 1);
+  t[0] <<= 1;
+#if WW_SQR == 1
+  uint32_t lo = (uint32_t)((uint64_t)a[0] * a[0]);
+  t[0] = add_cc(t[0], lo);
+#pragma unroll
+  for (int i = 0; i < N; ++i) {
+    const uint32_t hi = __umulhi(a[i], a[i]);
+    if (i > 0) t[2 * i] = addc_cc(t[2 * i], a[i] * a[i]);
+    t[2 * i + 1] = addc_cc(t[2 * i + 1], hi);
+  }
+#else
+  uint32_t c = 0;
+#pragma unroll
+  for (int i = 0; i < N; ++i) {
+    uint64_t s = (uint64_t)a[i] * a[i] + t[2 * i] + c;
+    t[2 * i] = (uint32_t)s;
+    uint64_t s2 = (uint64_t)t[2 * i + 1] + (s >> 32);
+    t[2 * i + 1] = (uint32_t)s2;
+    c = (uint32_t)(s2 >> 32);
+  }
+#endif
+}
+
+// --- reduction mod p ----------------------------------------------------------------------------------------------------
+
+// r ≡ t (mod p), t of T limbs below 2^(64·N), r lazy.
+template <int T>
+__device__ __forceinline__ void reduce(uint32_t (&r)[N], const uint32_t (&t)[T]) {
+  if constexpr (MERS) {
+    // t = lo + 2^M hi ≡ lo + hi; hi below 2^(32T − M) ≤ 2^(32N + 32)
+    uint32_t lo[N], hi[N];
+#pragma unroll
+    for (int e = 0; e < N; ++e) {
+      lo[e] = e < MB ? t[e] : e == MB ? t[e] & ((1u << MS) - 1) : 0;
+      const uint32_t h0 = MB + e < T ? t[MB + e] : 0, h1 = MB + e + 1 < T ? t[MB + e + 1] : 0;
+      hi[e] = MS ? __funnelshift_r(h0, h1, MS) : h0;
+    }
+    const uint32_t cy = add_k<N>(r, lo, hi);
+    // r + 2^(32N) cy, below 2^(M + 2): fold bit M and above once more
+    const uint32_t top = (r[MB] >> MS) | (cy << (32 * N - M));
+    uint32_t topl[N];
+#pragma unroll
+    for (int e = 0; e < N; ++e) topl[e] = e == 0 ? top : 0;
+    r[MB] &= (1u << MS) - 1;
+    add_k<N>(r, r, topl);
+  } else {
+    // 2^(32N) ≡ FOLD (38 for p255, C at full width). t = lo + 2^(32N) hi ≡ lo + FOLD hi, then the carry limb (≤ FOLD)
+    // once more, then a carry once more.
+    static_assert(T <= 2 * N, "reduce takes at most 2N limbs");
+    uint64_t c = 0;
+#pragma unroll
+    for (int e = 0; e < N; ++e) {
+      const uint32_t h = N + e < T ? t[N + e] : 0;
+      c += (uint64_t)h * FOLD + t[e];
+      r[e] = (uint32_t)c;
+      c >>= 32;
+    }
+    uint64_t d = (uint64_t)(uint32_t)c * FOLD;
+#pragma unroll
+    for (int e = 0; e < N; ++e) {
+      d += r[e];
+      r[e] = (uint32_t)d;
+      d >>= 32;
+    }
+    r[0] += (uint32_t)d * FOLD;  // a carry leaves r below FOLD², in limb 0, so this one does not carry
+  }
+}
+
+__device__ __forceinline__ void sqr(uint32_t (&r)[N], const uint32_t (&a)[N]) {
+  uint32_t t[2 * N];
+  sqr_full(t, a);
+  reduce<2 * N>(r, t);
+}
+
+__device__ __forceinline__ void mul(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
+  uint32_t t[2 * N];
+  mul_full(t, a, b);
+  reduce<2 * N>(r, t);
+}
+
+// [0, p) from a lazy value.
+__device__ __forceinline__ void canon(uint32_t (&r)[N]) {
+  uint32_t p[N], s[N];
+  pconst(p);
+  if constexpr (MERS) {
+    // r < 2^M + 2^8 < 2p: r ≥ p iff r + 1 has bit M
+    uint32_t one[N];
+#pragma unroll
+    for (int e = 0; e < N; ++e) one[e] = e == 0;
+    add_k<N>(s, r, one);
+    const bool ge = (s[MB] >> MS) & 1;
+    s[MB] &= (1u << MS) - 1;
+    select_k<N>(r, ge, s, r);
+  } else {
+    // r < 2^(32N), below 3p for p255 and 2p at full width: subtract p while r ≥ p, twice or once
+#pragma unroll
+    for (int pass = 0; pass < (FULL ? 1 : 2); ++pass) {
+      const uint32_t borrow = sub_k<N>(s, r, p);
+      select_k<N>(r, !borrow, s, r);
+    }
+  }
+}
+
+__device__ __forceinline__ void addmod(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
+  // a, b canonical: a + b < 2p, at full width with a carry out of the N limbs
+  const uint32_t cy = add_k<N>(r, a, b);
+  uint32_t p[N], s[N];
+  pconst(p);
+  const uint32_t borrow = sub_k<N>(s, r, p);
+  select_k<N>(r, cy || !borrow, s, r);
+}
+
+__device__ __forceinline__ void submod(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
+  // a, b canonical
+  uint32_t p[N], s[N];
+  pconst(p);
+  const uint32_t borrow = sub_k<N>(r, a, b);
+  add_k<N>(s, r, p);
+  select_k<N>(r, borrow, s, r);
+}
+
+// r = a·s mod p, a canonical, s < 2^64; canonical.
+__device__ __forceinline__ void mul_u64(uint32_t (&r)[N], const uint32_t (&a)[N], uint64_t s) {
+  uint32_t t[N + 2];
+  const uint32_t s0 = (uint32_t)s, s1 = (uint32_t)(s >> 32);
+  uint32_t c = 0;
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    uint64_t v = (uint64_t)a[e] * s0 + c;
+    t[e] = (uint32_t)v;
+    c = (uint32_t)(v >> 32);
+  }
+  t[N] = c;
+  t[N + 1] = 0;
+  c = 0;
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    uint64_t v = (uint64_t)a[e] * s1 + t[e + 1] + c;
+    t[e + 1] = (uint32_t)v;
+    c = (uint32_t)(v >> 32);
+  }
+  t[N + 1] = c;
+  reduce<N + 2>(r, t);
+  canon(r);
+}
+
+// --- ρ and ρ⁻¹ --------------------------------------------------------------------------------------------------------
+
+__device__ __forceinline__ bool is_odd(const uint32_t (&y)[N]) { return y[0] & 1; }
+
+// y ← ρ⁻¹(y) − u, y and u canonical.
+__device__ __forceinline__ void dec_round(uint32_t (&y)[N], const uint32_t (&u)[N]) {
+  const bool odd = is_odd(y);
+  uint32_t v[N];
+  sqr(v, y);
+  canon(v);
+  uint32_t w[N];
+  if constexpr (MERS || FULL) {
+    uint32_t p[N];
+    pconst(p);
+    sub_k<N>(w, p, v);  // odd y has y² ≠ 0, so p − y² is canonical
+  } else {
+    uint32_t v2[N];
+    add_k<N>(v2, v, v);  // 2y² < 2p < 2^256
+    canon(v2);
+    copy_k<N>(w, v2);
+  }
+  select_k<N>(v, odd, w, v);
+  submod(y, v, u);
+}
+
+template <int K>
+__device__ __forceinline__ void decode_word(uint32_t (&y)[N], const uint32_t (&t)[N]) {
+#pragma unroll
+  for (int j = K - 1; j >= 0; --j) {
+    uint32_t u[N];
+    addmod(u, kC[j], t);
+    dec_round(y, u);
+  }
+}
+
+// r = a + b folded once mod a Mersenne p: a ≤ p + 1 and b ≤ p give r ≤ p + 1. (A template, as `dec_round_mers`, so
+// that the full-width builds, whose MB is N, never instantiate it.)
+template <int B = MB>
+__device__ __forceinline__ void add_fold(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
+  static_assert(MERS && B == MB, "Mersenne only");
+  add_k<N>(r, a, b);
+#if WW_CC
+  uint32_t top[N];
+#pragma unroll
+  for (int e = 0; e < N; ++e) top[e] = e == 0 ? r[MB] >> MS : 0;
+  r[MB] &= (1u << MS) - 1;
+  add_k<N>(r, r, top);
+#else
+  uint64_t c = r[MB] >> MS;
+  r[MB] &= (1u << MS) - 1;
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    c += r[e];
+    r[e] = (uint32_t)c;
+    c >>= 32;
+  }
+#endif
+}
+
+// y ← ρ⁻¹(y) − u for a Mersenne p, given nu ≡ −u below 2^(M+1). y² = lo + 2^M·hi ≡ lo + hi with lo, hi < 2^M, and
+// −x ≡ x ⊕ p for x < 2^M, so ρ⁻¹(y) − u ≡ (lo ⊕ m) + (hi ⊕ m) + nu, m = p for odd y and 0 for even: a sum below
+// 2^(M+2), folded once and made canonical.
+template <int B = MB>
+__device__ __forceinline__ void dec_round_mers(uint32_t (&y)[N], const uint32_t (&nu)[N]) {
+  static_assert(MERS && B == N - 1, "the top limb holds bit M − 1");
+  const uint32_t m = 0u - (y[0] & 1);
+  uint32_t t[2 * N];
+  sqr_full(t, y);
+#if WW_CC
+  uint32_t a[N], b[N];
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    const uint32_t pm = plimb(e) & m;
+    a[e] = (e < MB ? t[e] : t[e] & ((1u << MS) - 1)) ^ pm;
+    b[e] = __funnelshift_r(t[MB + e], t[MB + e + 1], MS) ^ pm;
+  }
+  const uint32_t c1 = add_k<N>(a, a, b);
+  const uint32_t c2 = add_k<N>(y, a, nu);
+  uint32_t top[N];
+#pragma unroll
+  for (int e = 0; e < N; ++e) top[e] = e == 0 ? (y[MB] >> MS) | ((c1 + c2) << (32 * N - M)) : 0;
+  y[MB] &= (1u << MS) - 1;
+  add_k<N>(y, y, top);
+#else
+  uint64_t c = 0;
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    const uint32_t lo = e < MB ? t[e] : t[e] & ((1u << MS) - 1);
+    const uint32_t hi = __funnelshift_r(t[MB + e], t[MB + e + 1], MS);
+    const uint32_t pm = plimb(e) & m;
+    c += (uint64_t)(lo ^ pm) + (hi ^ pm) + nu[e];
+    y[e] = (uint32_t)c;
+    c >>= 32;
+  }
+  uint64_t top = (y[MB] >> MS) | (c << (32 * N - M));
+  y[MB] &= (1u << MS) - 1;
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    top += y[e];
+    y[e] = (uint32_t)top;
+    top >>= 32;
+  }
+#endif
+  canon(y);
+}
+
+// The decode's tweak over words i, i + s, i + 2s, …: t(i) = τ·i canonical, or for a Mersenne p its negation −t(i)
+// (≤ p + 1, lazy), which the decode adds where it would subtract t(i).
+__device__ __forceinline__ void tw_init(uint32_t (&v)[N], uint32_t (&dv)[N], uint64_t i, uint64_t s) {
+  mul_u64(v, kTau, i);
+  mul_u64(dv, kTau, s);
+  if constexpr (MERS) {
+    neg_el(v, v);
+    neg_el(dv, dv);
+  }
+}
+
+__device__ __forceinline__ void tw_step(uint32_t (&v)[N], const uint32_t (&dv)[N]) {
+  if constexpr (MERS) add_fold(v, v, dv);
+  else addmod(v, v, dv);
+}
+
+// k inverse rounds of word y under the tweak state v (`tw_init`).
+template <int K>
+__device__ __forceinline__ void decode_tw(uint32_t (&y)[N], const uint32_t (&v)[N]) {
+  if constexpr (MERS) {
+#pragma unroll
+    for (int j = K - 1; j >= 0; --j) {
+      uint32_t nu[N];
+      add_k<N>(nu, v, kNC[j]);
+      dec_round_mers(y, nu);
+    }
+  } else {
+    decode_word<K>(y, v);
+  }
+}
+
+// a^(2^n) for lazy a, n squarings.
+template <int NSQ>
+__device__ __forceinline__ void sqr_n(uint32_t (&a)[N]) {
+#pragma unroll 1
+  for (int n = 0; n < NSQ; ++n) sqr(a, a);
+}
+
+// r = a^(2^n − 1), a lazy: x_2j = x_j^(2^j)·x_j, x_(j+1) = x_j²·a (`wide._pow2m1_chain`).
+template <int NN>
+__device__ __forceinline__ void pow2m1(uint32_t (&r)[N], const uint32_t (&a)[N]) {
+  static_assert(NN >= 1, "n ≥ 1");
+  if constexpr (NN == 1) {
+    copy_k<N>(r, a);
+  } else if constexpr (NN % 2) {
+    pow2m1<NN - 1>(r, a);
+    sqr(r, r);
+    mul(r, r, a);
+  } else {
+    uint32_t h[N];
+    pow2m1<NN / 2>(h, a);
+    copy_k<N>(r, h);
+    sqr_n<NN / 2>(r);
+    mul(r, r, h);
+  }
+}
+
+// r = a^E for a small E ≥ 1, left to right.
+template <int E>
+__device__ __forceinline__ void pow_small(uint32_t (&r)[N], const uint32_t (&a)[N]) {
+  static_assert(E >= 1, "E ≥ 1");
+  if constexpr (E == 1) {
+    copy_k<N>(r, a);
+  } else if constexpr (E % 2) {
+    pow_small<E - 1>(r, a);
+    mul(r, r, a);
+  } else {
+    pow_small<E / 2>(r, a);
+    sqr(r, r);
+  }
+}
+
+// ρ(a), a canonical.
+__device__ __forceinline__ void root(uint32_t (&r)[N], const uint32_t (&a)[N]) {
+  uint32_t p[N];
+  pconst(p);
+  if constexpr (MERS || FULL) {
+    // s = a^((p+1)/4): 2^(M − 2) for a Mersenne p, (2^RN − 1)·2^RS + RE at full width
+    uint32_t s[N], q[N], ns[N];
+    if constexpr (MERS) {
+      copy_k<N>(s, a);
+      sqr_n<M - 2>(s);
+    } else {
+      uint32_t e[N];
+      pow2m1<RN>(s, a);
+      sqr_n<RS>(s);
+      pow_small<RE>(e, a);
+      mul(s, s, e);
+    }
+    canon(s);
+    sqr(q, s);
+    canon(q);
+    const bool square = eq_k<N>(q, a), odd = is_odd(s);
+    sub_k<N>(ns, p, s);
+    select_k<N>(r, odd != square, s, ns);  // a = 0: s = 0 is even and a square, so r = s
+  } else {
+    // β = a^(2^252 − 2) = (a^(2^250 − 1)² · a)², the ed25519 chain
+    uint32_t z2[N], z9[N], z11[N], x5[N], x10[N], x20[N], x40[N], x50[N], x100[N], t[N];
+    sqr(z2, a);                 // a^2
+    sqr(t, z2);
+    sqr(t, t);                  // a^8
+    mul(z9, t, a);              // a^9
+    mul(z11, z9, z2);           // a^11
+    sqr(t, z11);                // a^22
+    mul(x5, t, z9);             // a^(2^5 − 1)
+    copy_k<N>(t, x5);
+    sqr_n<5>(t);
+    mul(x10, t, x5);            // 2^10 − 1
+    copy_k<N>(t, x10);
+    sqr_n<10>(t);
+    mul(x20, t, x10);           // 2^20 − 1
+    copy_k<N>(t, x20);
+    sqr_n<20>(t);
+    mul(x40, t, x20);           // 2^40 − 1
+    copy_k<N>(t, x40);
+    sqr_n<10>(t);
+    mul(x50, t, x10);           // 2^50 − 1
+    copy_k<N>(t, x50);
+    sqr_n<50>(t);
+    mul(x100, t, x50);          // 2^100 − 1
+    copy_k<N>(t, x100);
+    sqr_n<100>(t);
+    mul(t, t, x100);            // 2^200 − 1
+    sqr_n<50>(t);
+    mul(t, t, x50);             // 2^250 − 1
+    sqr(t, t);
+    mul(t, t, a);               // 2^251 − 1
+    sqr(t, t);                  // β = a^(2^252 − 2)
+    uint32_t q[N], na[N], ia[N], sel[N], s[N], ns[N];
+    sqr(q, t);
+    canon(q);
+    sub_k<N>(na, p, a);
+    mul(ia, kI, a);
+    canon(ia);
+    const bool e_a = eq_k<N>(q, a), e_na = eq_k<N>(q, na), e_ia = eq_k<N>(q, ia);
+    uint32_t one[N];
+#pragma unroll
+    for (int e = 0; e < N; ++e) one[e] = e == 0;
+    select_k<N>(sel, e_ia, kC1, kC1I);
+    select_k<N>(sel, e_na, kI, sel);
+    select_k<N>(sel, e_a, one, sel);
+    canon(t);
+    mul(s, t, sel);
+    canon(s);
+    const bool want_odd = !(e_a || e_na), odd = is_odd(s);
+    sub_k<N>(ns, p, s);
+    select_k<N>(r, odd == want_odd, s, ns);  // a = 0: β = 0 and e_a, so r = s = 0
+  }
+}
+
+template <int K>
+__device__ __forceinline__ void encode_word(uint32_t (&x)[N], const uint32_t (&t)[N]) {
+#pragma unroll 1
+  for (int j = 0; j < K; ++j) {
+    uint32_t u[N], a[N];
+    addmod(u, kC[j], t);
+    addmod(a, x, u);
+    root(x, a);
+  }
+}
+
+#ifndef WW_HOST
+// --- the store ----------------------------------------------------------------------------------------------------------
+
+__device__ __forceinline__ uint64_t limb_index(uint64_t i, int e) { return 32ull * N * (i >> 5) + 32ull * e + (i & 31); }
+
+__device__ __forceinline__ void load_word(uint32_t (&y)[N], const uint32_t* __restrict__ s, uint64_t i) {
+#pragma unroll
+  for (int e = 0; e < N; ++e) y[e] = __ldcs(s + limb_index(i, e));
+}
+
+__device__ __forceinline__ void store_word(uint32_t* __restrict__ s, uint64_t i, const uint32_t (&y)[N]) {
+#pragma unroll
+  for (int e = 0; e < N; ++e) s[limb_index(i, e)] = y[e];
+}
+
+template <int K, int MODE>
+__global__ void __launch_bounds__(256) decode_kernel(const uint32_t* __restrict__ store, uint32_t* __restrict__ out,
+                                                     uint64_t n, uint64_t base, unsigned long long* xr) {
+  const uint64_t stride = (uint64_t)gridDim.x * blockDim.x;
+  uint64_t i = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t t[N], ts[N];
+  tw_init(t, ts, base + i, stride);
+  uint64_t acc = 0;
+  for (; i < n; i += stride) {
+    uint32_t y[N];
+    load_word(y, store, i);
+    decode_tw<K>(y, t);
+    if (MODE == 2) store_word(out, i, y);
+#pragma unroll
+    for (int e = 0; e < N; ++e) acc ^= (uint64_t)y[e] << (e & 1) * 32;
+    tw_step(t, ts);
+  }
+  atomicXor(xr, (unsigned long long)acc);
+}
+
+template <int K>
+__global__ void __launch_bounds__(256) encode_kernel(const uint32_t* __restrict__ in, uint32_t* __restrict__ out, uint64_t n,
+                                                     uint64_t base) {
+  const uint64_t stride = (uint64_t)gridDim.x * blockDim.x;
+  uint64_t i = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t t[N], ts[N];
+  mul_u64(t, kTau, base + i);
+  mul_u64(ts, kTau, stride);
+  for (; i < n; i += stride) {
+    uint32_t x[N];
+#pragma unroll
+    for (int e = 0; e < N; ++e) x[e] = in[limb_index(i, e)];
+    encode_word<K>(x, t);
+    store_word(out, i, x);
+    addmod(t, t, ts);
+  }
+}
+
+// --- compute only -------------------------------------------------------------------------------------------------------
+
+__device__ __forceinline__ void seed_word(uint32_t (&y)[N], uint64_t id) {
+  uint64_t h = id * 0x9E3779B97F4A7C15ull + 0x632BE59BD9B4E019ull;
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    h ^= h >> 29;
+    h *= 0xBF58476D1CE4E5B9ull;
+    y[e] = (uint32_t)(h >> 32);
+  }
+  y[N - 1] &= 0x3FFFFFFFu >> (32 * N - M > 2 ? 32 * N - M - 2 : 0);
+  canon(y);
+}
+
+template <int U>
+__global__ void __launch_bounds__(256) chain_square(uint64_t steps, unsigned long long* xr) {
+  const uint64_t id = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t y[U][N];
+#pragma unroll
+  for (int u = 0; u < U; ++u) seed_word(y[u], id * U + u);
+#pragma unroll 1
+  for (uint64_t s = 0; s < steps; ++s) {
+#pragma unroll
+    for (int u = 0; u < U; ++u) sqr(y[u], y[u]);
+  }
+  uint64_t acc = 0;
+#pragma unroll
+  for (int u = 0; u < U; ++u)
+#pragma unroll
+    for (int e = 0; e < N; ++e) acc ^= y[u][e];
+  atomicXor(xr, (unsigned long long)acc);
+}
+
+template <int K, int U>
+__global__ void __launch_bounds__(256) chain_encode(uint64_t steps, unsigned long long* xr) {
+  const uint64_t id = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x, stride = (uint64_t)gridDim.x * blockDim.x * U;
+  uint32_t y[U][N], t[U][N], ts[N];
+#pragma unroll
+  for (int u = 0; u < U; ++u) {
+    seed_word(y[u], id * U + u);
+    mul_u64(t[u], kTau, id * U + u);
+  }
+  mul_u64(ts, kTau, stride);
+#pragma unroll 1
+  for (uint64_t s = 0; s < steps; ++s) {
+#pragma unroll
+    for (int u = 0; u < U; ++u) {
+      encode_word<K>(y[u], t[u]);
+      addmod(t[u], t[u], ts);
+    }
+  }
+  uint64_t acc = 0;
+#pragma unroll
+  for (int u = 0; u < U; ++u)
+#pragma unroll
+    for (int e = 0; e < N; ++e) acc ^= y[u][e];
+  atomicXor(xr, (unsigned long long)acc);
+}
+
+template <int K, int U>
+__global__ void __launch_bounds__(256) chain_decode(uint64_t steps, unsigned long long* xr) {
+  const uint64_t id = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x, stride = (uint64_t)gridDim.x * blockDim.x * U;
+  uint32_t y[U][N], t[U][N], ts[N];
+#pragma unroll
+  for (int u = 0; u < U; ++u) {
+    seed_word(y[u], id * U + u);
+    tw_init(t[u], ts, id * U + u, stride);
+  }
+#pragma unroll 1
+  for (uint64_t s = 0; s < steps; ++s) {
+#pragma unroll
+    for (int u = 0; u < U; ++u) {
+      decode_tw<K>(y[u], t[u]);
+      tw_step(t[u], ts);
+    }
+  }
+  uint64_t acc = 0;
+#pragma unroll
+  for (int u = 0; u < U; ++u)
+#pragma unroll
+    for (int e = 0; e < N; ++e) acc ^= y[u][e];
+  atomicXor(xr, (unsigned long long)acc);
+}
+
+// --- the fused GEMM -----------------------------------------------------------------------------------------------------
+
+__device__ __forceinline__ void mma_e4m3(float (&d)[4], const uint32_t (&a)[4], uint32_t b0, uint32_t b1) {
+  asm volatile(
+      "mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
+      : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
+}
+
+// Stream bits bit … bit + 31 of the lane's payloads (word w carries bits w·PB … w·PB + PB − 1); `bit` is a constant.
+__device__ __forceinline__ uint32_t take4(const uint32_t (&x)[L][N], int bit) {
+  const int w = bit / PB, sh = bit % PB, e = sh / 32, s = sh % 32;
+  uint32_t v = x[w][e] >> s;
+  if (s && e + 1 < N) v |= x[w][e + 1] << (32 - s);
+  if (sh + 32 > PB && w + 1 < L) v |= x[w + 1][0] << (PB - sh);
+  return v;
+}
+
+// The rolled decode (WW_ROLL, p521's few wide words): word 0 decoded, then the words rotated down one, L times.
+constexpr bool ROLL_DECODE = WW_ROLL && L <= 4;
+
+// One task (16 rows × 512 columns) a warp, four warps a CTA: GEMM_WARPS / KW row groups × KW adjacent K-chunks, the
+// CTA's chunks of x in shared memory. ahead > 0: once its own record is in registers, each warp prefetches into the L2
+// the record of the same warp `ahead` CTAs on (a wave later when ahead is the resident CTAs), so the next wave's HBM
+// reads overlap this wave's arithmetic.
+template <int KR, int NB8, bool PARTIALS>
+__global__ void WW_GEMM_BOUNDS gemm_kernel(const uint32_t* __restrict__ E, const uint8_t* __restrict__ x,
+                                           float* __restrict__ y, int Mb, int Nn, int Kd, uint64_t wbase, int ahead) {
+  constexpr int RG = GEMM_WARPS / KW, UNITS = TASK_COLS / 16;
+  __shared__ __align__(16) uint8_t xs[KW][NB8 * 8][TASK_COLS];  // row r's 16-byte unit c at c ^ (r mod 8): no conflicts
+  const int nchunks = Kd / TASK_COLS, nk = nchunks / KW;
+  const int warp = threadIdx.x / 32, h = warp % KW, pair = warp / KW;
+  const int kt = blockIdx.x % nk, kc = kt * KW + h;
+  const int nb = (blockIdx.x / nk) * RG + pair;  // < Nn / 16: `ww_gemm`'s grid
+  const int lane = threadIdx.x & 31, g = lane >> 2, tq = lane & 3;
+  const uint64_t q = (uint64_t)nb * nchunks + kc;
+  for (int e = threadIdx.x; e < NB8 * 8 * KW * UNITS; e += GEMM_WARPS * 32) {
+    const int b = e / (KW * UNITS), c = e % (KW * UNITS);
+    uint4 v = make_uint4(0, 0, 0, 0);
+    if (b < Mb) v = __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)kt * KW * TASK_COLS) + c);
+    *reinterpret_cast<uint4*>(&xs[c / UNITS][b][16 * ((c % UNITS) ^ (b & 7))]) = v;
+  }
+  __syncthreads();
+  uint32_t w[L][N];
+  const uint32_t* rec = E + q * (32ull * L * N) + lane;
+#pragma unroll
+  for (int i = 0; i < L; ++i)
+#pragma unroll
+    for (int e = 0; e < N; ++e) w[i][e] = __ldcs(rec + 32 * (i * N + e));
+  const uint32_t* nxt = nullptr;
+  if (ahead > 0) {
+    const unsigned bx = blockIdx.x + (unsigned)ahead;
+    const int nb2 = (int)(bx / nk) * RG + pair;
+    if (nb2 * 16 < Nn) nxt = E + ((uint64_t)nb2 * nchunks + (bx % nk) * KW + h) * (32ull * L * N);
+  }
+  uint32_t t[N], t32[N];
+  if constexpr (KR > 0) tw_init(t, t32, wbase + q * (32ull * L) + lane, LANES);
+  // a record is L·N rows of 128 bytes, one L2 line each
+  if (nxt)
+    for (int r = lane; r < L * N; r += 32) asm volatile("prefetch.global.L2 [%0];" ::"l"(nxt + 32 * r));
+  if constexpr (KR > 0 && ROLL_DECODE) {
+#pragma unroll 1
+    for (int i = 0; i < L; ++i) {
+      decode_tw<KR>(w[0], t);
+      tw_step(t, kDTw);
+      uint32_t w0[N];
+      copy_k<N>(w0, w[0]);
+#pragma unroll
+      for (int ii = 0; ii + 1 < L; ++ii) copy_k<N>(w[ii], w[ii + 1]);
+      copy_k<N>(w[L - 1], w0);
+    }
+  } else if constexpr (KR > 0 && WW_ROLL) {
+#pragma unroll
+    for (int i = 0; i < L; ++i) {
+      decode_tw<KR>(w[i], t);
+      tw_step(t, kDTw);
+    }
+  } else if constexpr (KR > 0) {
+#pragma unroll
+    for (int i = 0; i < L; ++i) {
+      decode_tw<KR>(w[i], t);
+      tw_step(t, t32);
+    }
+  }
+  float acc[NB8][4];
+#pragma unroll
+  for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
+#pragma unroll
+  for (int tt = 0; tt < TASK_TILES; ++tt) {
+    const uint32_t a[4] = {take4(w, 128 * tt), take4(w, 128 * tt + 32), take4(w, 128 * tt + 64), take4(w, 128 * tt + 96)};
+#pragma unroll
+    for (int j = 0; j < NB8; ++j) {
+      uint32_t b0 = *reinterpret_cast<const uint32_t*>(&xs[h][8 * j + g][16 * ((2 * tt) ^ g) + 4 * tq]);
+      uint32_t b1 = *reinterpret_cast<const uint32_t*>(&xs[h][8 * j + g][16 * ((2 * tt + 1) ^ g) + 4 * tq]);
+      mma_e4m3(acc[j], a, b0, b1);
+    }
+  }
+#pragma unroll
+  for (int j = 0; j < NB8; ++j) {
+#pragma unroll
+    for (int e = 0; e < 4; ++e) {
+      int n = nb * 16 + g + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
+      if (b < Mb) {
+        if constexpr (PARTIALS) y[((size_t)kc * Mb + b) * Nn + n] = acc[j][e];
+        else atomicAdd(y + (size_t)b * Nn + n, acc[j][e]);
+      }
+    }
+  }
+}
+
+__global__ void dtw_kernel(uint32_t* out) {
+  uint32_t v[N], dv[N];
+  tw_init(v, dv, 0, LANES);
+#pragma unroll
+  for (int e = 0; e < N; ++e) out[e] = dv[e];
+}
+
+__global__ void spin_kernel(long long cycles) {
+  long long t0 = clock64();
+  while (clock64() - t0 < cycles) {
+  }
+}
+#endif  // WW_HOST
+
+}  // namespace ww
+
+using namespace ww;
+
+
+static_assert(WW_KMAX >= 1 && WW_KMAX <= 8, "WW_KMAX");
+#define WW_CASE(n, F) \
+  case n:             \
+    F(n);             \
+    break;
+#if WW_KMAX >= 4
+#define WW_CASES(F) WW_CASE(1, F) WW_CASE(2, F) WW_CASE(3, F) WW_CASE(4, F)
+#elif WW_KMAX >= 3
+#define WW_CASES(F) WW_CASE(1, F) WW_CASE(2, F) WW_CASE(3, F)
+#elif WW_KMAX >= 2
+#define WW_CASES(F) WW_CASE(1, F) WW_CASE(2, F)
+#else
+#define WW_CASES(F) WW_CASE(1, F)
+#endif
+#define WW_K_SWITCH(k, F) \
+  switch (k) {            \
+    WW_CASES(F)           \
+    default:              \
+      return 1;           \
+  }
+
+#ifdef WW_HOST
+#include <cstdio>
+
+// stdin: k, then the k c_j, τ, √−1, c1, c1·√−1 (each N hex limbs, least significant first), then lines "i m y": stdout
+// gets, a line each, encode(m) at index i and the k inverse rounds of y at index i (`wide.decode_raw`), as N hex limbs.
+static bool read_el(uint32_t (&a)[N]) {
+  for (int e = 0; e < N; ++e)
+    if (scanf("%x", &a[e]) != 1) return false;
+  return true;
+}
+static void write_el(const uint32_t (&a)[N]) {
+  for (int e = 0; e < N; ++e) printf(e ? " %08x" : "%08x", a[e]);
+}
+
+int main() {
+  int k;
+  if (scanf("%d", &k) != 1 || k < 1 || k > KMAX) return 1;
+  for (int j = 0; j < k; ++j) {
+    if (!read_el(kC[j])) return 1;
+    neg_el(kNC[j], kC[j]);
+  }
+  if (!read_el(kTau) || !read_el(kI) || !read_el(kC1) || !read_el(kC1I)) return 1;
+  unsigned long long i;
+  while (scanf("%llu", &i) == 1) {
+    uint32_t m[N], y[N], t[N], v[N], dv[N];
+    if (!read_el(m) || !read_el(y)) return 1;
+    mul_u64(t, kTau, i);
+    // the decode's tweak stepped to i in up to 50 lazy steps of 3, as the kernels advance it
+    const unsigned long long r = i / 3 < 50 ? i / 3 : 50;
+    tw_init(v, dv, i - 3 * r, 3);
+    for (unsigned long long s = 0; s < r; ++s) tw_step(v, dv);
+#define F(K)                 \
+  do {                       \
+    encode_word<K>(m, t);    \
+    decode_tw<K>(y, v);      \
+  } while (0)
+    WW_K_SWITCH(k, F)
+#undef F
+    write_el(m);
+    printf(" ");
+    write_el(y);
+    printf("\n");
+  }
+  return 0;
+}
+#else
+
+extern "C" {
+
+int ww_constants(int* out) {
+  out[0] = WW_BITS; out[1] = N; out[2] = PB; out[3] = L; out[4] = LANES; out[5] = TASK_TILES; out[6] = GEMM_WARPS;
+  out[7] = KMAX; out[8] = WW_SQR; out[9] = WW_ROLL; out[10] = WW_OCC; out[11] = WW_CC; out[12] = KW; out[13] = WW_MAXREG;
+  return 0;
+}
+
+// c: k × N limbs; tau, i_, c1, c1i: N limbs each (the last three p255's, ignored otherwise).
+int ww_set_key(const uint32_t* c, int k, const uint32_t* tau, const uint32_t* i_, const uint32_t* c1, const uint32_t* c1i) {
+  if (k < 1 || k > KMAX) return 1;
+  uint32_t cc[KMAX][N] = {}, nc[KMAX][N] = {};
+  for (int j = 0; j < k; ++j) {
+    for (int e = 0; e < N; ++e) cc[j][e] = c[j * N + e];
+    neg_el(nc[j], cc[j]);
+  }
+  if (cudaMemcpyToSymbol(kC, cc, sizeof cc) || cudaMemcpyToSymbol(kNC, nc, sizeof nc) ||
+      cudaMemcpyToSymbol(kTau, tau, 4 * N))
+    return 2;
+  if (i_ && (cudaMemcpyToSymbol(kI, i_, 4 * N) || cudaMemcpyToSymbol(kC1, c1, 4 * N) || cudaMemcpyToSymbol(kC1I, c1i, 4 * N)))
+    return 2;
+  uint32_t* dtw = nullptr;
+  if (cudaMalloc(&dtw, 4 * N)) return 2;
+  dtw_kernel<<<1, 1>>>(dtw);
+  const bool bad = cudaGetLastError() || cudaMemcpyToSymbol(kDTw, dtw, 4 * N, 0, cudaMemcpyDeviceToDevice);
+  cudaFree(dtw);
+  if (bad) return 2;
+  return cudaDeviceSynchronize() ? 3 : 0;
+}
+
+int ww_decode(const uint32_t* store, uint32_t* out, uint64_t n, uint64_t base, int k, unsigned long long* xr, int grid,
+              cudaStream_t s) {
+#define F(K)                                                                    \
+  do {                                                                          \
+    if (out) decode_kernel<K, 2><<<grid, 256, 0, s>>>(store, out, n, base, xr); \
+    else decode_kernel<K, 0><<<grid, 256, 0, s>>>(store, out, n, base, xr);     \
+  } while (0)
+  WW_K_SWITCH(k, F)
+#undef F
+  return cudaGetLastError() ? 4 : 0;
+}
+
+int ww_encode(const uint32_t* in, uint32_t* out, uint64_t n, uint64_t base, int k, int grid, cudaStream_t s) {
+#define F(K) encode_kernel<K><<<grid, 256, 0, s>>>(in, out, n, base)
+  WW_K_SWITCH(k, F)
+#undef F
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// what: 0 decode, 1 encode (k rounds a step), 2 the squaring (one a step); u: independent chains a thread (1 or 2; 1, 2
+// or 4 for the squaring).
+int ww_chain(int what, int k, int u, uint64_t steps, unsigned long long* xr, int grid, cudaStream_t s) {
+  if (what == 0) {
+#define F(K) do { if (u == 2) chain_decode<K, 2><<<grid, 256, 0, s>>>(steps, xr); else chain_decode<K, 1><<<grid, 256, 0, s>>>(steps, xr); } while (0)
+    WW_K_SWITCH(k, F)
+#undef F
+  } else if (what == 1) {
+#define F(K) do { if (u == 2) chain_encode<K, 2><<<grid, 256, 0, s>>>(steps, xr); else chain_encode<K, 1><<<grid, 256, 0, s>>>(steps, xr); } while (0)
+    WW_K_SWITCH(k, F)
+#undef F
+  } else if (what == 2) {
+    if (u == 1) chain_square<1><<<grid, 256, 0, s>>>(steps, xr);
+    else if (u == 2) chain_square<2><<<grid, 256, 0, s>>>(steps, xr);
+    else if (u == 4) chain_square<4><<<grid, 256, 0, s>>>(steps, xr);
+    else return 1;
+  } else {
+    return 1;
+  }
+  return cudaGetLastError() ? 4 : 0;
+}
+
+int ww_spin(long long cycles, cudaStream_t s) {
+  spin_kernel<<<1, 1, 0, s>>>(cycles);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The fused GEMM: k rounds (0: the store holds payloads, no decode); ahead: the L2 prefetch's distance in CTAs (0: none;
+// a wave is `ww_gemm_occupancy` × the SMs).
+int ww_gemm(int k, const uint32_t* E, const uint8_t* x, float* y, int Mb, int Nn, int Kd, uint64_t wbase, int partials,
+            int ahead, cudaStream_t s) {
+  if (Mb < 1 || Mb > 32 || Nn % (16 * GEMM_WARPS) || Kd % (KW * TASK_COLS) || k < 0 || k > KMAX || ahead < 0) return 1;
+  if (wbase % (32ull * L)) return 1;
+  const int nb8 = Mb <= 8 ? 1 : Mb <= 16 ? 2 : 4;
+  const int grid = (Nn / 16 / (GEMM_WARPS / KW)) * (Kd / TASK_COLS / KW);
+#define G(KR, NB)                                                                                                    \
+  do {                                                                                                               \
+    if (partials)                                                                                                    \
+      gemm_kernel<KR, NB, true><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, ahead);                 \
+    else                                                                                                             \
+      gemm_kernel<KR, NB, false><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, ahead);                \
+  } while (0)
+#define GK(KR) do { if (nb8 == 1) G(KR, 1); else if (nb8 == 2) G(KR, 2); else G(KR, 4); } while (0)
+  switch (k) {
+    case 0: GK(0); break;
+    WW_CASES(GK)
+    default: return 1;
+  }
+#undef GK
+#undef G
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The fused GEMM's resident CTAs an SM for k and Mb, as `ww_gemm` would launch it, or −1.
+int ww_gemm_occupancy(int k, int Mb, int partials) {
+  if (Mb < 1 || Mb > 32 || k < 0 || k > KMAX) return -1;
+  const int nb8 = Mb <= 8 ? 1 : Mb <= 16 ? 2 : 4;
+  int r = -1;
+#define G(KR, NB)                                                                                                \
+  do {                                                                                                           \
+    if (partials) cudaOccupancyMaxActiveBlocksPerMultiprocessor(&r, gemm_kernel<KR, NB, true>, GEMM_WARPS * 32, 0); \
+    else cudaOccupancyMaxActiveBlocksPerMultiprocessor(&r, gemm_kernel<KR, NB, false>, GEMM_WARPS * 32, 0);        \
+  } while (0)
+#define GK(KR) do { if (nb8 == 1) G(KR, 1); else if (nb8 == 2) G(KR, 2); else G(KR, 4); } while (0)
+  switch (k) {
+    case 0: GK(0); break;
+    WW_CASES(GK)
+    default: return -1;
+  }
+#undef GK
+#undef G
+  return r;
+}
+
+}  // extern "C"
+#endif  // WW_HOST
