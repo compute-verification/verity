@@ -1,7 +1,7 @@
 # verity_vllm.pipeline.tp
 
 A run that several ranks serve together (tensor parallelism): the commands that capture it, commit it, match it and
-replay it, the extension each rank's worker loads (`rank_worker`), and the wires of a window over every rank (`wires`).
+replay it, and the extension each rank's worker loads (`rank_worker`).
 `pipeline/row_tp.py` is the row that runs the commands in order.
 
 ## Interface
