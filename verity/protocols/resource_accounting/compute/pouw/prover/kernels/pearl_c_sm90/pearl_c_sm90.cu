@@ -504,7 +504,7 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
   }
 }
 
-// G4: pearl-c-h100-v1-h3 (pearl_c_device.H100); gemm_fast is the plain GEMM unpromoted.  The 128 x 128 tile; _n64: 128 x 64
+// G4: pearl-c-h100-v1 (pearl_c_device.H100); gemm_fast is the plain GEMM unpromoted.  The 128 x 128 tile; _n64: 128 x 64
 // (n a multiple of 64, not 128); _d: 64 x 64 (decode's few rows, m a multiple of 64, not 128); gemm_words: 128 x 32 and
 // gemm_words_d: 64 x 32, the 32-column words (A'F_B, B~F_A, G); gemm_words_win_d: gemm_words_d's windows a CTA each (WIN)
 #define GEMM(NAME, MODE, TM, BN, G)                                                                                       \

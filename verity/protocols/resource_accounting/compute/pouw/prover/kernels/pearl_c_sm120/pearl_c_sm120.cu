@@ -1,4 +1,4 @@
-// Pearl-C on the RTX PRO 6000 Blackwell (sm_120a): the kernels of `pearl-c-sm120-v1-h3` (verity/protocols/accounting/pouw/prover/schemes/
+// Pearl-C on the RTX PRO 6000 Blackwell (sm_120a): the kernels of `pearl-c-sm120-v1` (verity/protocols/accounting/pouw/prover/schemes/
 // pearl_c.py on pearl_c_device.SM120, hashing -h3) and the plain FP8 GEMMs, for run.py.  Every kernel takes one Args by value:
 // 16 pointers p[] and 16 ints i[].  sm_120 has no wgmma, TMA multicast or tcgen05: the products are warp-level mma.sync
 // (kind::f8f6f4 m16n8k32 E4M3 for every FP8 atom, m16n8k16 BF16 for the peel) fed by ldmatrix from shared memory that
@@ -404,7 +404,7 @@ template <int MODE, int G> DEV void ml_body(const Args& a) {
   }
 }
 
-// G4: pearl-c-sm120-v1-h3 (pearl_c_device.SM120); _u: unpromoted (SM120_UNPROMOTED); gemm_fast is the plain GEMM unpromoted;
+// G4: pearl-c-sm120-v1 (pearl_c_device.SM120); _u: unpromoted (SM120_UNPROMOTED); gemm_fast is the plain GEMM unpromoted;
 // _d: the 64 x 64 tile; gemm_words: the 128 x 32 tile; ML_GEMM: the 128 x 128 tile on the mainloop, _s y alone
 #define ML_GEMM(NAME, MODE, G)                                                                                \
   extern "C" __global__ void __launch_bounds__(ML_NT, 1) NAME(const Args a) { ml_body<MODE, G>(a); } \
