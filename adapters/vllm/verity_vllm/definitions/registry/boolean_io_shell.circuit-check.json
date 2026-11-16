@@ -1,0 +1,24 @@
+{
+ "definitions": {
+  "IngressPrompt_v2{MODEL='m',LP=3,V=1000}": {
+   "and": 2001
+  },
+  "IngressPrompt_v2{MODEL='served-model',LP=16,V=128256}": {
+   "and": 11660
+  },
+  "IngressSampled_v1{MODEL='m',LP=3,V=1000,RID=6}": {
+   "and": 8537,
+   "type": "9040ba263ec84a43ef811212ba3831a8c5037203e8c3323604caa964c2e9dbb900291fcfb4b466c9667a8d06a39e82fb791057d227c22640bb8a3a10877f35cd"
+  },
+  "IngressSampled_v1{MODEL='served-model',LP=16,V=128256,RID=16}": {
+   "and": 18366,
+   "type": "1d0e1e545614e1459998feef0d1e529b83b4dee668c7ab7436cf0fbf600b73d7158f64996623889e6315fab4ca94b3862ed0e31b80ed607d731f4d9d55760a12"
+  },
+  "ScanSlots_v2{NS=4548,NP=4,IDB=17,K0=12,K=45,OCC=[376,36709],LP=[168,36501],MAX=[200,36533],IDS=[474,36807]}": {
+   "and": 60
+  },
+  "ScanSlots_v2{NS=9353,NP=1024,IDB=17,K0=12,K=45,OCC=[376,37763,75150,112537],LP=[168,37555,74942,112329],MAX=[200,37587,74974,112361],IDS=[1528,38915,76302,113689]}": {
+   "and": 120
+  }
+ }
+}

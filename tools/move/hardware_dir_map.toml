@@ -1,0 +1,43 @@
+# The hardware directory's emptying: what `tools/move/layout.py --map tools/move/hardware_dir_map.toml` moves and rewrites.
+#
+# `verity/hardware/` holds no module: the card and node files are the top-level `hardware/`, and their readers are
+# `verity/device.py`. Its tests go to the flat files' suite, `verity/tests/tests/`, where `device.py`'s tests are
+# (`test_package.py` as `test_imports.py`: it tests what importing the wire and the Site reads, and no package), and its
+# README to `hardware/README.md`, beside the files it describes. The empty package file and the suite's `pyproject.toml`
+# go ([drop]): the flat files' suite reads what this one did, and nothing is left to import.
+# No Python class, Lean name or lock record changes. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/hardware/README.md" = "hardware/README.md"
+"verity/hardware/tests/test_cards.py" = "verity/tests/tests/test_cards.py"
+"verity/hardware/tests/test_nodes.py" = "verity/tests/tests/test_nodes.py"
+"verity/hardware/tests/test_package.py" = "verity/tests/tests/test_imports.py"
+"verity/hardware/tests/test_sheet_lean.py" = "verity/tests/tests/test_sheet_lean.py"
+
+[retired]
+# the directory this map empties: `layout.py` refuses a tracked file under one that has no row, so a file only a
+# branch has under it gets a row in that branch's rows file
+paths = ["verity/hardware/"]
+
+[drop]
+# the package file, a docstring alone, and the suite's pyproject: verity/tests/pyproject.toml lists what it read
+paths = ["verity/hardware/__init__.py", "verity/hardware/pyproject.toml"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), files whose bytes a digest pins, lock files and Lean sources; and the boundaries' test, whose fixtures make
+# up files under `verity/hardware/` and whose list of standard-library places loses the directory by hand.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "**/*vectors*.json",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/research/src/research/store/moves.json",
+           "**/*.lean", "tests/tree.toml", "tests/test_boundaries.py", "tools/check/tests/test_move_check.py"]
+
+[modules]
+# the renames [paths] implies (`layout.py --modules`)
+"verity.hardware.tests.test_cards" = "verity.tests.tests.test_cards"
+"verity.hardware.tests.test_nodes" = "verity.tests.tests.test_nodes"
+"verity.hardware.tests.test_package" = "verity.tests.tests.test_imports"
+"verity.hardware.tests.test_sheet_lean" = "verity.tests.tests.test_sheet_lean"

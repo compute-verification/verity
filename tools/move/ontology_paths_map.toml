@@ -1,0 +1,118 @@
+# The protocols' ontology, way B: written by `python3 tools/move/ontology_paths.py --way B`, run by
+# `python3 tools/move/layout.py --map tools/move/ontology_paths_map.toml`. Edit the script, not this file.
+#
+# - `policy/` becomes `workload_classification/`, with `inference_only` under `training_detection/`;
+# - `accounting/` becomes `resource_accounting/`, grouped by resource: `compute/pouw`, `memory/pous`,
+#   `memory/poub`, and the network protocol at `verity/protocols/resource_accounting/network/`;
+# - an attester's `device/` (the network certifier's, PoUS's and PoUB's) becomes `attester/`;
+# - the challenger's two `device/` directories go under their protocol's `verifier/`: SPOT's to `challenger/`,
+#   compose's `live_challenger/` straight under `verifier/`;
+# - `registration/` leaves `accounting/` and sits beside the layers.
+# Lean module names follow their package's root, so no Lean module, declaration or lock record changes; a Lake
+# path between packages does. Lean sources are not rewritten (a comment's path rebuilds the module). The format
+# is `layout_map.toml`'s.
+#
+# Names that follow a path, which the mover rewrites: workspace members and suite inputs, `uv.lock` (by
+# `uv lock`), Lake requirement paths (`lakefile.toml`, `lake-manifest.json`) and the check's pins of those
+# manifests, the listing's paths and distributions (`tests/import_order.toml`). No distribution or Lake package
+# name follows a path (`pous-check`, `memory-challenger-lean`, `certifier_program`, `core_memory_challenger`), so
+# none needs a line. The hand lines the move's change adds, which name a directory by its last part:
+# `tests/test_boundaries.py`'s `_trusted` and `tests/test_lowrisk_excludes.py`'s `TRUSTED_DIRS` gain `attester`;
+# `tests/tree.toml`'s `NAME/device/` becomes `NAME/attester/`, with a row for each resource group;
+# `benchmarks/demo_minutes/tests/test_no_pin_literal.py`'s `SCANNED` gains `verity/protocols/registration`.
+# Then two regenerations: `uv run tools/check/import_order.py` (the listing's lines re-sort) and
+# `tools/pous_grader/TRUSTED.sha256` by the command `tests/test_pins.py` prints (it pins a rewritten lakefile).
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", verity_torch = "adapters/torch/verity_torch" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", verity_torch = "adapters/torch/verity_torch" }
+
+[paths]
+"verity/protocols/accounting/" = "verity/protocols/resource_accounting/"
+"verity/protocols/accounting/pouw/" = "verity/protocols/resource_accounting/compute/pouw/"
+"verity/protocols/accounting/pous/" = "verity/protocols/resource_accounting/memory/pous/"
+"verity/protocols/accounting/pous/device/" = "verity/protocols/resource_accounting/memory/pous/attester/"
+"verity/protocols/accounting/poub/" = "verity/protocols/resource_accounting/memory/poub/"
+"verity/protocols/accounting/poub/device/" = "verity/protocols/resource_accounting/memory/poub/attester/"
+"verity/protocols/accounting/certifier/" = "verity/protocols/resource_accounting/network/"
+"verity/protocols/accounting/certifier/device/" = "verity/protocols/resource_accounting/network/attester/"
+"verity/protocols/accounting/registration/" = "verity/protocols/registration/"
+"verity/protocols/policy/" = "verity/protocols/workload_classification/"
+"verity/protocols/policy/inference_only/" = "verity/protocols/workload_classification/training_detection/inference_only/"
+"verity/protocols/proofs/spot/device/" = "verity/protocols/proofs/spot/verifier/challenger/"
+"verity/protocols/compose/device/" = "verity/protocols/compose/verifier/"
+
+[retired]
+# the directories this map empties
+paths = ["verity/protocols/accounting/", "verity/protocols/policy/"]
+
+[create]
+# the new groups' packages, empty as every group's is
+"verity/protocols/resource_accounting/compute/__init__.py" = ""
+"verity/protocols/resource_accounting/memory/__init__.py" = ""
+"verity/protocols/workload_classification/training_detection/__init__.py" = ""
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded
+# moves), files whose bytes a digest pins, every Lean file and every kernel source.
+exclude = ["fixtures/**",
+           "**/fixtures/**",
+           "**/*vectors*.json",
+           "**/*vectors*.txt.gz",
+           "**/CHANGELOG.md",
+           "*.patch",
+           "**/TRUSTED.sha256",
+           "**/lake-manifest.json.lock",
+           "tools/move/**",
+           "benchmarks/numerical/tests/bench/data/**",
+           "**/price_twins.json",
+           "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**",
+           "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**",
+           "adapters/vllm/manifests/**",
+           "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**",
+           "adapters/vllm/verity_vllm/pins/**",
+           "**/*.lean",
+           "**/*.cu",
+           "**/*.cuh",
+           "**/*.cpp",
+           "**/*.h",
+           "**/*.c"]
+include = ["**/fixtures/README.md",
+           "**/fixtures/**/README.md",
+           "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json",
+           "adapters/vllm/manifests/README.md"]
+# the auditor devices' install directories, each a checkout of the tree (`pods/nebius/challenger/`,
+# `pods/nebius/verifier/`): their units name the challenger's service by its path there
+root_prefixes = ["/opt/vy-challenger/current/", "/opt/vy-verifier/current/"]
+# paths into history, read at a recorded run's commit: replay.py's ERA_PARTS adds each new layout at its end
+keep_in = {"benchmarks/one_stage/replay.py" = ["verity/protocols/accounting/pouw/prover/kernels/served_zk"]}
+
+[split]
+# `accounting/` splits: registration leaves it for `verity/protocols/registration/`, and a reference to the
+# whole directory follows the larger part, `resource_accounting/`. SPOT's directory has no row of its own, so
+# a reference to it reads as split though only its `device/` moves, into its own `verifier/`.
+"tests/tree.toml: verity/protocols/accounting" = "the layer's own row; registration, which leaves it, has a row of its own"
+"benchmarks/demo_minutes/tests/test_no_pin_literal.py: verity/protocols/accounting" = "the scan follows `resource_accounting/`; `verity/protocols/registration` joins its list by hand"
+"verity/protocols/accounting/certifier/verifier/README.md: verity/protocols/proofs/spot" = "the link names SPOT whole, which stays; only its `device/` moves, inside it"
+
+[modules]
+# what `layout.py --modules` derives from [paths] and [roots]
+"verity.protocols.accounting" = "verity.protocols.resource_accounting"
+"verity.protocols.accounting.certifier" = "verity.protocols.resource_accounting.network"
+"verity.protocols.accounting.certifier.device" = "verity.protocols.resource_accounting.network.attester"
+"verity.protocols.accounting.poub" = "verity.protocols.resource_accounting.memory.poub"
+"verity.protocols.accounting.poub.device" = "verity.protocols.resource_accounting.memory.poub.attester"
+"verity.protocols.accounting.pous" = "verity.protocols.resource_accounting.memory.pous"
+"verity.protocols.accounting.pous.device" = "verity.protocols.resource_accounting.memory.pous.attester"
+"verity.protocols.accounting.pouw" = "verity.protocols.resource_accounting.compute.pouw"
+"verity.protocols.accounting.registration" = "verity.protocols.registration"
+"verity.protocols.compose.device" = "verity.protocols.compose.verifier"
+"verity.protocols.policy" = "verity.protocols.workload_classification"
+"verity.protocols.policy.inference_only" = "verity.protocols.workload_classification.training_detection.inference_only"
+"verity.protocols.proofs.spot.device" = "verity.protocols.proofs.spot.verifier.challenger"

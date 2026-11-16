@@ -1,0 +1,339 @@
+"""`verity`: the repository's one command, dispatching to the tools beside it.
+
+    verity check [ARGS]             the whole check, run on `main` after each landing (tools/check/check.py)
+    verity check PART... [ARGS]     only those parts of it, tests, circuits or lean (their jobs in tools/check/ci.toml)
+    verity check --record [ARGS]    the check recorded as an Attempt (check.py --record; a lane's own: --on M --pool NAME)
+    verity check move BASE HEAD     certify a pure move (tools/check/move_check.py)
+    verity ci ls [--hours H]        recent check runs, running and ended, from the store's live records (tools/check/live.py)
+    verity ci inspect RUN           a check's steps: state, elapsed, an ETA from each step's recorded median, and its reds so far
+    verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
+    verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
+                                    a deployment configuration's parties on this machine, and its verdict (run.py)
+    verity config new|check|hash    write, check or hash a deployment configuration (run.py)
+    verity verify proof [ARGS]      Flock's Lean verifier, the executable `lake build` writes in its package, with ARGS as
+                                    its own (`verity verify proof verify --zk --circuit F --public F --session DIR`), run
+                                    in the directory you are in and exiting with its status
+    verity tasks list --json [--kind after-landing|preflight] [--changed BASE]
+                                    the check's task graph here (`tasks/v1`, tools/check/tasks.py; its README's "Tasks")
+    verity tasks run ID [--out FILE]
+                                    run one task here as check runs it, and print its verdict, outputs, seconds and key
+    verity graph [--json [--packed]] [--family F]
+                                    the fine-grained check's task graph of this checkout (`verity-graph/v2`, graph/README.md)
+    verity graph unpack [FILE]      the graph/v2 a packed listing (`--packed`) packs
+    verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
+    verity graph check --local [--family F]
+                                    run the graph serially here, uncached: the reference executor
+    verity demo [NAME] [ARGS]       `verity run demos/NAME.toml ARGS`, the demo's one file; NAME defaults to onsite_compute
+    verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
+                                    holds it, with its Lean options as `lake build` gives them, exiting with lean's
+                                    status, and last the axiom probe: each theorem whose
+                                    axioms go beyond the standard three (`sorryAx` too), or none, or each that failed, when
+                                    lean has an error on its own lines (on a project machine with
+                                    --on auto); --siblings: then fail on a name another module of its package declares too
+    verity lean deployed [--rev REV] [--today YYYY-MM-DD]
+                                    the deployed guarantees' rows as JSON, read from the Lean locks at REV by git alone:
+                                    each one's gap as the running checkout's Lean check computes it, and each open or gap
+                                    premise once by name; --today defaults to today in America/Los_Angeles (deployed.py)
+"""
+from __future__ import annotations
+
+import argparse
+import contextlib
+import importlib.util
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import tomllib
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parents[2]
+ROOT = HERE.parents[1]
+#: the check's scripts, which `verity check`, `verity ci` and `verity tasks` start
+CHECK = ROOT / "tools" / "check"
+LAKEFILES = ("lakefile.lean", "lakefile.toml")
+USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]\n"
+         "verity lean deployed [--rev REV] [--today YYYY-MM-DD]")
+#: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
+LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
+#: `research run --wait`'s line when the run moved to its late twin on another machine, which is then the run
+MOVED = re.compile(r"^research: run \S+ left its line without starting \S+; its late twin (\S+) on (\S+) is the run now", re.M)
+#: Flock's Lean verifier, which `verity verify proof` runs: its Lake package and the root module of the executable `lake
+#: build` writes there, whose name the package's lakefile gives (`verify_proof_exe`)
+VERIFIER = "verity/protocols/proofs/flock/verifier"
+VERIFY_PROOF_ROOT = "FlockVerify"
+#: the demo `verity demo` runs given no NAME
+DEFAULT_DEMO = "onsite_compute"
+
+
+def verify_proof_exe(root: Path) -> str:
+    """The name of the `[[lean_exe]]` the verifier's lakefile below ``root`` builds from `VERIFY_PROOF_ROOT`."""
+    exes = tomllib.loads((root / VERIFIER / "lakefile.toml").read_text()).get("lean_exe", [])
+    names = [e["name"] for e in exes if e.get("root") == VERIFY_PROOF_ROOT]
+    if len(names) != 1:
+        raise SystemExit(f"verity verify proof: {VERIFIER}/lakefile.toml has {len(names)} [[lean_exe]] with root = "
+                         f"{VERIFY_PROOF_ROOT!r}, not one: name the verifier's root in verity_cli.VERIFY_PROOF_ROOT")
+    return names[0]
+
+
+def _run(argv: list[str]) -> int:
+    return subprocess.run(argv, cwd=ROOT).returncode
+
+
+def _check(args: list[str]) -> int:
+    if args and args[0] == "move":
+        return _run([sys.executable, str(CHECK / "move_check.py"), *args[1:]])
+    return _run([sys.executable, str(CHECK / "check.py"), *args])
+
+
+def _runner(top: str, command: str, args: list[str]) -> int:
+    """Run ``top/NAME``'s run.py or run.sh with the rest of ``args``."""
+    here = ROOT / top
+    names = sorted(p.name for p in here.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))) if here.is_dir() else []
+    if args:
+        args = [args[0].replace("-", "_"), *args[1:]]
+    if not args or args[0] not in names:
+        raise SystemExit(f"verity {command} NAME [ARGS] (a - in NAME is a _): NAME is one of " + (", ".join(names) or "none"))
+    d = here / args[0]
+    for runner, argv in (("run.py", [sys.executable]), ("run.sh", ["bash"])):
+        if (d / runner).exists():
+            return _run([*argv, str(d / runner), *args[1:]])
+    raise SystemExit(f"{top}/{args[0]} has no run.py or run.sh: run its tool through `research run`")
+
+
+def _demo(args: list[str]) -> int:
+    """`verity demo [NAME] [ARGS]`: `verity run demos/NAME.toml ARGS`, NAME `onsite_compute` when the first of ``args`` is
+    a flag or there is none."""
+    name, rest = (args[0], args[1:]) if args and not args[0].startswith("-") else (DEFAULT_DEMO, args)
+    config = ROOT / "demos" / f"{name.replace('-', '_')}.toml"
+    if not config.is_file():
+        names = sorted(p.stem for p in (ROOT / "demos").glob("*.toml"))
+        raise SystemExit(f"verity demo [NAME] [ARGS] (a - in NAME is a _): NAME is one of {', '.join(names) or 'none'}")
+    from . import run
+
+    return run.run_main([str(config), *rest])
+
+
+def _git(*argv: str, env: dict | None = None, cwd: Path = ROOT) -> str:
+    return subprocess.run(["git", *argv], cwd=cwd, env=env, capture_output=True, text=True, check=True).stdout.strip()
+
+
+def _tree(file: str) -> Path:
+    """The checkout `verity lean try` ships: the one ``file`` lies in, else the current directory's, else the CLI's own
+    (``ROOT``).  ``ROOT`` doesn't come first: a lane in a `git worktree` runs the main checkout's venv, and shipping that tree
+    would build its version of the file, or miss the file."""
+    p = Path(file)
+    where = p.resolve().parent if p.is_file() else Path.cwd()
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=where, capture_output=True, text=True)
+    if top.returncode:
+        return ROOT
+    tree = Path(top.stdout.strip())
+    if not (tree / "tools" / "verity" / "lean" / "lean_changed.py").is_file():
+        raise SystemExit(f"verity lean try: {tree} is not a Verity checkout (no tools/verity/lean/lean_changed.py)")
+    return tree
+
+
+def _snapshot(tree: Path, tmp: Path) -> Path:
+    """A checkout `research run --source` ships as is: ``tree`` when it is clean, else a detached worktree under ``tmp`` of a
+    commit of its working tree (untracked files that aren't ignored included), made without touching its branch or index."""
+    if not _git("status", "--porcelain", cwd=tree):
+        return tree
+    index = tmp / "index"
+    index.write_bytes((tree / _git("rev-parse", "--git-path", "index", cwd=tree)).read_bytes())
+    env = {**os.environ, "GIT_INDEX_FILE": str(index)}
+    _git("add", "-A", env=env, cwd=tree)
+    commit = _git("commit-tree", _git("write-tree", env=env, cwd=tree), "-p", "HEAD", "-m", "verity lean try: the working tree",
+                  cwd=tree)
+    _git("worktree", "add", "-q", "--detach", str(tmp / "tree"), commit, cwd=tree)
+    return tmp / "tree"
+
+
+def _probe():
+    """`tools/verity/lean/axiom_probe.py`, which `lean_changed.py --try` runs too."""
+    spec = importlib.util.spec_from_file_location("axiom_probe_for_verity_cli", HERE / "lean" / "axiom_probe.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _siblings():
+    """`tools/verity/lean/siblings.py`, which `lean_changed.py --try` runs too."""
+    spec = importlib.util.spec_from_file_location("lean_siblings_for_verity_cli", HERE / "lean" / "siblings.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _lean_here(file: str, siblings: bool = False) -> int:
+    """`lake env lean` in the directory of the nearest lakefile above FILE, against that package's built imports and with
+    its Lean options (`siblings.options`), on a copy of FILE with the axiom probe appended (`axiom_probe.py`), whose line is
+    the last; lean's status on FILE's own lines.
+    With ``siblings``, the copy's build then goes through the sibling check (`siblings.py`), whose status it takes; where
+    its stub is refused over a sibling, `lake build` of the siblings the refusal names comes first, once (`siblings.check`).
+    Before FILE is elaborated, and again after such a rebuild, Lake says which of the modules that could be siblings it
+    holds as their inputs are now (`lake` with `siblings.WORD`, which compiles nothing; the plan's `word` is a line, with
+    the seconds), which decides for a build Lake took rather than made (`siblings.plan`)."""
+    path = (Path(file) if Path(file).is_file() else _tree(file) / file).resolve()
+    pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
+    if not path.is_file() or path.suffix != ".lean" or pkg is None:
+        raise SystemExit(f"verity lean try: {file} is not a .lean file in a Lake package (a directory with a "
+                         f"{' or '.join(LAKEFILES)})")
+    where = pkg.relative_to(ROOT) if pkg.is_relative_to(ROOT) else pkg
+    lake = shutil.which("lake") or str(Path.home() / ".elan" / "bin" / "lake")
+    if not Path(lake).is_file():
+        raise SystemExit(f"verity lean try: no `lake` here: `bash tools/verity/lean/setup.sh {where}` installs elan, the "
+                         "toolchain and the package's dependencies, then `lake build` there builds its imports")
+    rel, probe, sib = os.path.relpath(path, pkg), _probe(), _siblings()
+    opts = sib.options(pkg)
+
+    def ask(args: list[str]) -> tuple[int, str, float, int]:
+        return sib.run([lake, *args], pkg)
+
+    plan = sib.plan(pkg, rel, ask) if siblings else None
+    if isinstance(plan, str):
+        print(f"verity lean try: {rel}: no sibling check: {plan}", flush=True)
+        plan = None
+    elif plan is not None and plan.word:
+        print(f"verity lean try: {rel}: {plan.word}", flush=True)
+
+    def lean(copy: str, args: list[str], show) -> tuple[int, str]:
+        p = subprocess.run([lake, "env", "lean", *args, copy], cwd=pkg, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           text=True)
+        for line in p.stdout.splitlines(keepends=True):
+            show(line)
+        return p.returncode, p.stdout
+
+    with sib.scratch(pkg) if plan else contextlib.nullcontext() as work:
+        at = os.path.relpath(sib.source(plan, work), pkg / probe.COPIES) if plan else rel
+        args = opts + (sib.lean_args(pkg, plan, work) if plan else [])
+        print(f"verity lean try: lake env lean {''.join(o + ' ' for o in opts)}{probe.COPIES / at}, {rel} with the axiom "
+              f"probe after its last line{', then the sibling check' if plan else ''} (in {where})", flush=True)
+        rc, said, _ = probe.probe(pkg, at, path.read_text(), lambda copy, show: lean(copy, args, show))
+        if rc == 0 and plan:
+            rc, output, lines = sib.check(
+                plan, work, lambda a: sib.run([lake, "env", "lean", *a], pkg),
+                lambda refusal: sib.run([lake, "build", *(f"+{m}" for m in sib.named(plan, refusal))], pkg)[:3],
+                lambda: sib.plan(pkg, rel, ask))
+            print(output, end="")
+            for line in lines.splitlines():
+                print(f"verity lean try: {rel}: {line}", flush=True)
+    if said:
+        print(f"verity lean try: {rel}: {said}", flush=True)
+    return rc
+
+
+def _lean(args: list[str]) -> int:
+    if args and args[0] == "deployed":
+        from . import deployed
+
+        return deployed.main(args[1:])
+    ap = argparse.ArgumentParser(prog="verity lean try", description="Elaborate one Lean file: `lake env lean FILE` in the Lake "
+                                 "package that holds it (the nearest lakefile above FILE), against that package's built "
+                                 "imports (`lake build` there first) and with its `[leanOptions]`, as `lake build` gives "
+                                 "them, exiting with lean's status; its last line, the "
+                                 "axiom probe's, names each theorem whose axioms go beyond propext, Classical.choice and "
+                                 "Quot.sound (sorryAx too), or says none do; where lean has an error on FILE's own lines, "
+                                 "no answer of `#print axioms` is shown, and it names each theorem with an error on its own "
+                                 "lines as failed.")
+    ap.add_argument("file", metavar="FILE", help="the .lean file: a path from here, or from the root of "
+                    "the checkout you're in, which is the tree it elaborates")
+    ap.add_argument("--siblings", action="store_true", help="once it elaborates, import its build beside every built module "
+                    "of its package that doesn't import it, which fails on a name two of them declare, as the package's "
+                    "root would")
+    ap.add_argument("--on", metavar="MACHINE", help="elaborate it on a project machine instead: `auto`, where `research run "
+                    "--on auto` places it")
+    ap.add_argument("--pool", help="with --on: the machine's pool for it")
+    ap.add_argument("--as", dest="lane", metavar="LANE", help="with --on: the lane the pool's slot names (default $RESEARCH_LANE)")
+    if not args or args[0] != "try":
+        raise SystemExit(USAGE)
+    a = ap.parse_args(args[1:])
+    if a.on is None:
+        if a.pool or a.lane:
+            ap.error("--pool and --as go with --on")
+        return _lean_here(a.file, a.siblings)
+    tree = _tree(a.file)
+    file = a.file if not Path(a.file).is_file() else os.path.relpath(Path(a.file).resolve(), tree)
+    if file.startswith(os.pardir + os.sep) or not (tree / file).is_file():
+        raise SystemExit(f"verity lean try: no {a.file} in {tree}, the checkout it ships: put FILE in a checkout")
+    research = [sys.executable, "-m", "research"]
+    t0 = time.monotonic()
+    with tempfile.TemporaryDirectory(prefix="verity-lean-try-") as tmp:
+        source = _snapshot(tree, Path(tmp))
+        try:
+            p = subprocess.Popen([*research, "run", "--on", a.on, *(["--pool", a.pool] if a.pool else []),
+                                  *(["--as", a.lane] if a.lane else []), "--project", "verity",
+                                  "--source", str(source), "--cwd", "clone", "--wait", "--wait-every", "5", "--",
+                                  "python3", "tools/verity/lean/lean_changed.py", "--try", file,
+                                  *(["--siblings"] if a.siblings else [])],
+                                 cwd=ROOT, stderr=subprocess.PIPE, text=True)
+            said = []
+            for line in p.stderr:
+                sys.stderr.write(line)
+                said.append(line)
+            rc = p.wait()
+        finally:
+            if source != tree:
+                subprocess.run(["git", "worktree", "remove", "--force", str(source)], cwd=tree, capture_output=True)
+    if not (m := LAUNCHED.search("".join(said))):
+        print(f"verity lean try: `research run` exited {rc} without starting a run", file=sys.stderr)
+        return rc or 1
+    run_id, machine = moved[-1] if (moved := MOVED.findall("".join(said))) else m.groups()
+    subprocess.run([*research, "fetch", run_id, "--on", machine, "--all"], cwd=ROOT, stdout=subprocess.DEVNULL)
+    d = Path(os.environ.get("RESEARCH_RUNS", Path.home() / ".research" / "runs")).expanduser() / run_id
+    for name, to in (("stdout.log", sys.stdout), ("stderr.log", sys.stderr)):
+        if (d / name).is_file():
+            to.write((d / name).read_text(errors="replace"))
+    print(f"verity lean try: run {run_id} on {machine}: exit {rc} in {time.monotonic() - t0:.0f} s wall", flush=True)
+    return rc
+
+
+def _verify(args: list[str]) -> int:
+    """`verity verify proof ARGS`: the Lean verifier's executable with ARGS, in the caller's directory, where the files
+    ARGS name are; its exit status."""
+    if args[:1] != ["proof"]:
+        raise SystemExit((f"verity verify: no command {args[0]!r}\n" if args else "") + "verity verify proof [ARGS]")
+    name = verify_proof_exe(ROOT)
+    exe = ROOT / VERIFIER / ".lake" / "build" / "bin" / name
+    try:
+        return subprocess.run([str(exe), *args[1:]]).returncode
+    except FileNotFoundError:
+        raise SystemExit(f"verity verify proof: {VERIFIER}/.lake/build/bin/{name} is not built: `bash "
+                         f"tools/verity/lean/setup.sh {VERIFIER}` installs elan, the toolchain and the package's "
+                         f"dependencies, then `lake build {name}` there builds it") from None
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__)
+        return 0
+    if args[0] == "check":
+        return _check(args[1:])
+    if args[0] == "ci":
+        return _run([sys.executable, str(CHECK / "live.py"), *args[1:]])
+    if args[0] == "bench":
+        return _runner("benchmarks", "bench", args[1:])
+    if args[0] == "tasks":
+        return _run([sys.executable, str(CHECK / "tasks.py"), *args[1:]])
+    if args[0] == "graph":
+        from verity_graph.cli import main as graph
+
+        return graph(args[1:])
+    if args[0] in ("run", "config"):
+        from . import run
+
+        return (run.run_main if args[0] == "run" else run.config_main)(args[1:])
+    if args[0] == "demo":
+        return _demo(args[1:])
+    if args[0] == "verify":
+        return _verify(args[1:])
+    if args[0] == "lean":
+        return _lean(args[1:])
+    raise SystemExit(f"verity: no command {args[0]!r}\n{__doc__}")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

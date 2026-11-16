@@ -1,0 +1,8 @@
+[Unit]
+Description=renice to 19 every research run that did not come through a check slot, so the train checks win the cores (pods/nebius/slot_only.py --renice, /etc/vy/direct-runs-nice)
+ConditionPathExists=/etc/vy/direct-runs-nice
+
+[Service]
+Type=oneshot
+TimeoutStartSec=2min
+ExecStart=/usr/bin/python3 /usr/local/lib/vy-monitoring/slot_only.py --renice 19 --marker /etc/vy/direct-runs-nice --log /workspace/monitoring/direct-nice.jsonl

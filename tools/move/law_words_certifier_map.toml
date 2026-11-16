@@ -1,0 +1,19 @@
+# The retired word "law" in network-accounting's files, which `law_words_map.toml` leaves: what `tools/move/rename.py --map
+# tools/move/law_words_certifier_map.toml` renames, to that map's targets. GLOSSARY.md: "law", "draw law" -> the sampling
+# design; prose takes "sampling design". The files are the certifier's (`verity/protocols/accounting/certifier/`, its
+# `security/` areas) and its benchmarks'.
+# It renames phrases only, so a bare word, a string key or a name never matches. Left by it, as `law_words_map.toml`
+# leaves them:
+# - bytes a record, a wire format, a hash or a signature takes in: one-token strings (the record key `law`, the
+#   `kind_scan` key paths `law.k`, `profile.levels[].draw.law`), and the partition files' `"law"` keys under `prove_path/`;
+# - the bare `law` in code (with `blaw` beside it in `test_scan_zk`) and every Lean name (`hlaw`, `Zk.RecordCustodyZKLaw`,
+#   which proofs' areas define), which follow proofs' map and lean's names move.
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/**", "security/**/Certifier/**", "benchmarks/network_traces/**",
+         "benchmarks/network_e2e/**", "benchmarks/network_sim/**", "benchmarks/prove_path/**"]
+[words_in.words]
+"the sample's law" = "the sample's sampling design"
+"stratified law" = "stratified sampling design"

@@ -1,0 +1,989 @@
+#!/usr/bin/env bash
+# Share one machine's GPUs between concurrent runs: one lock file per GPU, held with flock(1).
+#
+#   gpu-lease N [--wait] [--on LIST] [--cores CPUS] [--max-min M] [--mem-gb G] [--preemptible] [--timed] -- CMD...
+#                                                take N free GPUs and run CMD with CUDA_VISIBLE_DEVICES naming them
+#   gpu-lease status                             one line per GPU: index, free or held, and the holder: minutes held, pid, run
+#                                                id, who, UUID, start and command
+#
+# A GPU is held while any process has its lock ($GPU_LEASE_DIR/<index>.lock) open: CMD and every child it starts inherit the
+# descriptors, and the kernel drops the lock when the last of them exits, so a killed run never leaks a GPU and there is nothing
+# to clean up.  CUDA_DEVICE_ORDER=PCI_BUS_ID makes the indices nvidia-smi's.  Too few free GPUs exits 75 (EX_TEMPFAIL) at once,
+# holding nothing; --wait retries every $GPU_LEASE_POLL_S seconds (default 15) instead.
+# Holding nothing is also how a CPU-only run shares the machine: it simply doesn't call gpu-lease.
+# GPU_LEASE_COUNT overrides the GPU count nvidia-smi reports (tests; a machine without nvidia-smi).
+# On a machine whose other GPUs belong to Kubernetes (the Nebius cluster), $GPU_LEASE_ALLOWED_FILE (default /etc/vy/direct-gpus)
+# names the only indices gpu-lease may hand out, comma-separated, or `none` (every GPU is Kubernetes'): it then refuses. The file
+# is written by the cluster's bring-up (cluster_up.sh), never by hand. Absent, every GPU is gpu-lease's.
+#
+# --on LIST takes the N GPUs only from LIST, comma-separated indices or UUIDs (GPU-...), in that order; a GPU outside the allowed
+# set is refused.  CMD gets GPU_LEASE_UUID, the UUIDs it holds (comma-separated), to record with its results.  The holder is named
+# by $GPU_LEASE_WHO (else $RESEARCH_LANE, else the user), so `status` says who holds what and for how long.
+# GPU_LEASE_UUID_TABLE overrides the UUIDs nvidia-smi reports, comma-separated in index order (tests).
+#
+# Waiting is first come, first served, so a whole-node request (`gpu-lease 8 --wait`) is not starved by shorter leases starting
+# around it: a --wait request that can't be met at once queues as $GPU_LEASE_DIR/wait.<ns>.<pid>, locked while it waits, and
+# every later request (waiting or not) leaves the GPUs to the older waiters: a request without --wait exits 75 naming them.
+# A waiter with --on LIST holds back only the GPUs in LIST, so a later request may still take a free GPU outside every older
+# waiter's list.
+# `status` lists the waiters.  A waiter that dies drops its lock, and the next reader removes its file.
+#
+# --max-min M ends CMD after M minutes (SIGTERM, SIGKILL 20 s later; exit 124) and records `until=` in the lease, and it lets the
+# request backfill: it may go ahead of the waiters when it ends before the oldest one's GPUs are sure to be free.  That time is
+# the n-th earliest of the allowed GPUs' "free by": now for a free GPU, a lease's until=, else its start plus $GPU_LEASE_MAX_MIN
+# (default 30, the servers' lease rule), else now for a lease past that.  So a timed window waiting for the last long lease to
+# drain keeps the other GPUs busy with jobs that will be gone when it can start.
+#
+# Memory: CMD runs in a systemd user scope with MemoryMax=G GiB and no swap, so a job that runs away is OOM-killed inside its own
+# cgroup (the scope `gpu-lease-<pid>`, named in the user journal) instead of the kernel choosing a victim for the whole machine.
+# G is --mem-gb, else $GPU_LEASE_MEM_GB_PER_GPU (default 90% of MemTotal over the GPU count) per GPU leased; --mem-gb 0 runs
+# uncapped.  Where this user's systemd can't make a scope (a container, no lingering), CMD runs uncapped and gpu-lease says so.
+#
+# --preemptible marks a lease that may be stopped for a waiter (fill work: a quality run, a sweep that resumes from its checkpoints).
+# The oldest waiter, when the free GPUs and the preemptible leases together cover what it needs, stops the newest preemptible
+# leases: SIGTERM to the whole scope (else the pid), SIGKILL 30 s later, each logged to $GPU_LEASE_DIR/preempted.log.  The stopped
+# job exits 143 and restarts however its launcher restarts it.  A request without --wait preempts nothing, and neither does a
+# --preemptible one: fill work waits for fill work, or a queue of it would stop its own leases in turn.  A preemptible lease is
+# taken only once its grace since its grant has passed: its own --max-min, at most $GPU_LEASE_PREEMPT_GRACE_MAX_S (2400), or
+# $GPU_LEASE_PREEMPT_GRACE_S (600) without one, so a point that started finishes (a benchmark point stopped minutes in loses its
+# whole engine start); the waiter waits for it meanwhile.
+#
+# --timed (or GPU_LEASE_TIMED=1) tags a timed window: the lease records timed=1, and the server's ops daemon keeps the machine quiet
+# while it is held (it pauses other CPU-heavy work; on vy-nebius-2, node_ops.py).  A lease of every GPU by one holder counts as one
+# too.
+#
+# Booked windows: $GPU_LEASE_WINDOWS (default /workspace/pouw/fill/windows, node 2's bookings, which its fill runner reads too) has
+# one window per line, `START MINUTES # note`, START in UTC (2026-10-04T11:15Z) and MINUTES 30 when left out.  A request that isn't
+# --timed and whose lease would overlap one is refused (75, holding nothing): the lease runs from now to its --max-min, and without
+# --max-min it has no end, so while a window lies ahead a request needs a --max-min that ends by the window's start.  With --wait
+# it waits instead, unqueued (so it holds up no other request), until its lease clears every window.  GPU_LEASE_NOW overrides the
+# time it reads, epoch seconds (tests).
+#
+# CPU quota: where the machine's CPU time is capped (a container's cpu.max: $GPU_LEASE_CPU_MAX, default /sys/fs/cgroup/cpu.max), runs
+# pinned to more CPUs than the quota allows are throttled together, and a timed run among them is void.  --cores CPUS (48-57,60)
+# declares the CPUs a run pins: CMD runs under `taskset -c CPUS`, and the lease records cores=CPUS.  The pin is the lease's word, not
+# a fence: a job can still widen its own affinity.  Every CPU of the list must be one this request may run on here: `taskset -c
+# CPUS` is tried, and a list it can't pin to at all, or pins to only a part of (the rest are CPUs this machine hasn't, or outside
+# its cpuset; taskset drops them silently), is refused (2), naming the CPUs that are not, before any GPU is taken or any lease
+# stopped for it, quota or none.  What the trial was pinned to is Cpus_allowed_list in $GPU_LEASE_PROC/self/status, read under it.
+# Before it takes any GPU, a request with --cores counts its CPUS with every live lease's, each CPU once: a lease's cores=, or for
+# a lease that declared none the CPUs its processes are allowed on at that moment (Cpus_allowed_list of its pid's process tree
+# under $GPU_LEASE_PROC, default /proc; every CPU when none of them is left to read).
+# A count over the quota is refused (75, holding nothing), saying the count, the quota, each lease's CPUs and what to do; with
+# --wait the request waits instead, unqueued, until they fit.  A machine without a quota (no file, or `max`) refuses nothing.
+# The count covers leases only: a process that holds no lease is not in it, whatever it is pinned to.  And only the leases of this
+# lease directory ($GPU_LEASE_DIR): a machine with a second directory is not counted across them.  A request without --cores is
+# not refused either: where there is a quota and a live lease declared its cores, it starts with one warning line naming that
+# lease, and the next request that declares counts it.  Where there is a quota and the request may run on every CPU, it also says
+# that its lease counts as all of them, so every request that declares waits or is refused while it is held.
+# What the count can't see, the machine's own counter shows: every lease writes cpu.stat's nr_throttled and throttled_usec (the
+# file beside cpu.max) into its owner lines when it starts, and end_nr_throttled and end_throttled_usec when it is released, and
+# says the difference on stderr, so a timed run shows whether the machine was throttled while it held its GPUs.
+#
+# Usage, report only: when CMD exits (any status), gpu-lease releases the GPUs and then tells the holder on stderr, per GPU, how long
+# it held it and how much of that the node's utilisation sampler saw busy (util > 0 or SM activity >= 1%), with a hint to prepare
+# on the CPU outside the lease when the GPU was busy under half of at least 5 sampled minutes.  It appends a gpu-lease/usage/v1
+# record to $RESEARCH_RUN_DIR/gpu-lease-usage.jsonl (published with the run) and to $GPU_LEASE_USAGE_LOG (default
+# /workspace/research/lease-usage.jsonl).  The readings come from $GPU_LEASE_UTIL_LOG, a glob of JSONL lines {"t", "gpus": [{"i",
+# "uuid", "util", "smact"}]} each covering $GPU_LEASE_UTIL_CADENCE_S seconds (default /workspace/pouw/infra/util/*.jsonl, every 10 s),
+# never from NVML, so a timed window stays quiet; with no log a lease records its held time alone.  Busy and sampled time are
+# capped at the held time.  Nothing is refused or stopped on it, and CMD's exit status is gpu-lease's.
+# GPU_LEASE_STARTED overrides the lease's start time, %Y-%m-%dT%H:%M:%SZ (tests).
+#
+# Agent mode: while the node's scheduler (`cluster agent --mode live`, infra/cluster) holds $GPU_LEASE_DIR/agent.lock, it decides
+# instead of the rules above.  Every request queues at once as its wait file, which also records --max-min (max=), the memory limit
+# (mem=), --preemptible (preempt=1) and --timed (timed=1); the agent stops what its plan evicts, and grants by writing
+# $GPU_LEASE_DIR/grant.<pid>, the GPU indices comma-separated.  gpu-lease takes exactly those GPUs (polling every
+# $GPU_LEASE_AGENT_POLL_S seconds, default 0.5) and preempts nothing itself.  A request without --wait gives up with 75 when no
+# grant comes within $GPU_LEASE_AGENT_WAIT_S seconds (default 10).  Once agent.lock is free (the agent stopped or died), the next
+# poll falls back to the rules above, keeping its place in the queue.
+# A lease's owner lines are written as soon as its locks are taken (the UUIDs and the memory scope are looked up before), so a
+# held lock never shows the previous holder's line for longer than that.  When CMD ends, still holding the locks, the lease
+# prefixes each of its lines with `released=TIME`, so a reader of the file sees it ended (a node's lines once named a run for
+# hours after its locks were free); the line stays, for the run that last held the GPU (gpu_adopt, the keeper's grants).
+# A lease killed outright leaves its line unmarked: `status` reports a free lock as free whatever its owner file says.
+#
+# Foreign memory: a free lock is not a free GPU.  A run's process that outlives its lease (vLLM's TP rank workers, which
+# hold no lock, after a cancel) leaves the GPU's memory taken, and the next holder fails
+# for lack of it.  So before a GPU is granted, `nvidia-smi --query-compute-apps` must show no process on it using more than
+# $GPU_LEASE_FOREIGN_MIB MiB (default 1024) that is foreign: neither a lease holder's (a lock owner pid among its ancestors, as
+# gpu_adopt.py judges) nor this request's own (one of gpu-lease's ancestors).  Such a GPU is not granted; the request waits (or, without
+# --wait, exits 75), its finding goes to $GPU_LEASE_LOG (default $GPU_LEASE_DIR/lease.log) once per change and to
+# $GPU_LEASE_DIR/<i>.foreign, which `status` shows (`foreign <i> ...`) and node 1's n1_lease.py copies into n1-lease.json.
+# An nvidia-smi that doesn't answer within $GPU_LEASE_SMI_TIMEOUT_S seconds (default 10), or fails, never holds grants up: the
+# GPUs are granted as before, and the log says `unverified`.  $GPU_LEASE_SMI names the nvidia-smi to ask; where GPU_LEASE_COUNT
+# fakes the GPUs (tests), nothing is asked unless it is set.
+
+set -u
+dir=${GPU_LEASE_DIR:-/run/gpu-lease}
+cpu_max=${GPU_LEASE_CPU_MAX:-/sys/fs/cgroup/cpu.max}
+case $cpu_max in */*) cpu_stat=${cpu_max%/*}/cpu.stat ;; *) cpu_stat=cpu.stat ;; esac
+
+allowed_file=${GPU_LEASE_ALLOWED_FILE:-/etc/vy/direct-gpus}
+windows_file=${GPU_LEASE_WINDOWS:-/workspace/pouw/fill/windows}
+
+gpu_indices() {
+  # the indices gpu-lease may use, one per line: the allowed file's list, else 0..count-1
+  local total i a
+  total=$(gpu_count)
+  if [ -r "$allowed_file" ]; then
+    a=$(tr -d ' \n' < "$allowed_file")
+    [ "$a" = none ] && return 0
+    echo "$a" | tr ',' '\n' | while read -r i; do [ -n "$i" ] && [ "$i" -lt "$total" ] && echo "$i"; done
+  else
+    for ((i = 0; i < total; i++)); do echo "$i"; done
+  fi
+}
+
+gpu_count() {
+  if [ -n "${GPU_LEASE_COUNT:-}" ]; then echo "$GPU_LEASE_COUNT"; else nvidia-smi -L 2>/dev/null | grep -c '^GPU '; fi
+}
+
+uuid_table() {
+  # "index uuid" per line
+  if [ -n "${GPU_LEASE_UUID_TABLE:-}" ]; then
+    echo "$GPU_LEASE_UUID_TABLE" | tr ',' '\n' | awk 'NF {print NR - 1, $1}'
+  else
+    nvidia-smi --query-gpu=index,uuid --format=csv,noheader 2>/dev/null | tr -d ' ' | tr ',' ' '
+  fi
+}
+
+usage() {
+  echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] [--cores CPUS] [--max-min M] [--mem-gb G] [--preemptible] [--timed] --" \
+    "CMD... | gpu-lease status" >&2
+  echo "  --cores CPUS (48-57,60): CMD is pinned to them (taskset -c; a job can still widen its own affinity), and the request is" \
+    "refused when they and the live leases' CPUs pass the machine's CPU quota. The count covers leases only, and the leases of this" \
+    "lease directory: a machine with a second directory is not counted across them" >&2
+  exit 2
+}
+
+stop_lease() {
+  # SIGTERM GPU $1's preemptible lease (its scope, else its pid); SIGKILL once 30 s have passed since
+  local owner pid unit t sig=TERM
+  owner=$(cat "$dir/$1.owner" 2>/dev/null) || return 0
+  pid=$(echo "$owner" | sed -n 's/^pid=\([0-9]*\) .*/\1/p')
+  unit=$(echo "$owner" | sed -n 's/.* scope=\([^ ]*\) .*/\1/p')
+  t=$(echo "$owner" | sed -n 's/.* preempted=\([0-9]*\)$/\1/p')
+  if [ -n "$t" ]; then
+    [ $(($(date -u +%s) - t)) -ge 30 ] || return 0
+    sig=KILL
+  fi
+  [ -n "$pid" ] || return 0
+  if [ -z "$unit" ] || ! systemctl --user kill --signal="$sig" "$unit.scope" 2> /dev/null; then
+    pkill -"$sig" -P "$pid" 2> /dev/null
+    kill -s "$sig" "$pid" 2> /dev/null
+  fi
+  echo "${owner% preempted=*} preempted=$(date -u +%s)" > "$dir/$1.owner"
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) SIG$sig GPU $1 for pid $$ (n=$n, who=${who// /_}): $owner" >> "$dir/preempted.log"
+}
+
+preempt_for() {
+  # the oldest waiter stops the newest preemptible leases when, with the free GPUs, they cover what it needs
+  local want=$1 i fd owner free=0
+  local -a pre=()
+  local now since until grace since_s until_s
+  now=${GPU_LEASE_NOW:-$(date -u +%s)}
+  for i in "${CANDIDATES[@]}"; do
+    exec {fd}>>"$dir/$i.lock" || continue
+    if flock -n -s "$fd"; then free=$((free + 1)); exec {fd}>&-; continue; fi
+    exec {fd}>&-
+    owner=$(cat "$dir/$i.owner" 2>/dev/null)
+    case " $owner " in *" preempt=1 "*) ;; *) continue ;; esac
+    since=$(echo "$owner" | sed -n 's/.*since=\([^ ]*\).*/\1/p')
+    until=$(echo "$owner" | sed -n 's/.* until=\([^ ]*\).*/\1/p')
+    since_s=$(date -u -d "$since" +%s 2>/dev/null) || since_s=0
+    grace=${GPU_LEASE_PREEMPT_GRACE_S:-600}
+    if [ -n "$until" ] && until_s=$(date -u -d "$until" +%s 2>/dev/null); then
+      grace=$((until_s - since_s)); [ "$grace" -le "${GPU_LEASE_PREEMPT_GRACE_MAX_S:-2400}" ] || grace=${GPU_LEASE_PREEMPT_GRACE_MAX_S:-2400}
+    fi
+    [ $((now - since_s)) -ge "$grace" ] || continue
+    pre+=("$since $i")
+  done
+  [ "$free" -lt "$want" ] && [ $((free + ${#pre[@]})) -ge "$want" ] || return 0
+  printf '%s\n' "${pre[@]}" | sort -r | head -n $((want - free)) | while read -r _ i; do stop_lease "$i"; done
+}
+
+live_waiters() {
+  # the queued --wait requests, oldest first; a file whose waiter is gone (its lock free) is removed
+  local f fd
+  for f in "$dir"/wait.*; do
+    [ -e "$f" ] || continue
+    exec {fd}<"$f" 2>/dev/null || continue
+    if flock -n -s "$fd"; then exec {fd}>&-; rm -f "$f"; continue; fi
+    exec {fd}>&-
+    echo "$f"
+  done
+}
+
+ahead() {
+  # the waiters this request must leave the GPUs to: all of them, or for a queued waiter the older ones
+  live_waiters | awk -v me="${MYWAIT:-}" 'me == "" || $0 < me'
+}
+
+reserved() {
+  # the GPUs the waiters ahead may take, one index per line: their --on lists, or all of ALL once one has none (or is unreadable)
+  local f on g
+  for f in $(ahead); do
+    on=$(sed -n 's/.* on=\([^ ]*\).*/\1/p' "$f" 2>/dev/null)
+    [ -n "$on" ] || { printf '%s\n' "${ALL[@]}"; return; }
+    for g in $(echo "$on" | tr ',' ' '); do
+      case $g in GPU-*) echo "$table" | awk -v u="$g" '$2 == u {print $1}' ;; *) echo "$g" ;; esac
+    done
+  done
+}
+
+take_unreserved() {
+  # take N from the GPUs no waiter ahead may take
+  local i rc
+  local -a res
+  mapfile -t res < <(reserved)
+  CANDIDATES=()
+  for i in "${ALL[@]}"; do printf '%s\n' "${res[@]}" | grep -qx "$i" || CANDIDATES+=("$i"); done
+  take "$1"; rc=$?
+  CANDIDATES=("${ALL[@]}")
+  return $rc
+}
+
+free_by() {
+  # when each allowed GPU is free at the latest (epoch seconds), one per line
+  local i fd owner t now
+  now=$(date -u +%s)
+  for i in $(gpu_indices); do
+    exec {fd}>>"$dir/$i.lock" || continue
+    if flock -n -s "$fd"; then exec {fd}>&-; echo "$now"; continue; fi
+    exec {fd}>&-
+    owner=$(cat "$dir/$i.owner" 2>/dev/null)
+    t=$(echo "$owner" | sed -n 's/.*until=\([^ ]*\).*/\1/p')
+    if [ -n "$t" ]; then
+      t=$(date -u -d "$t" +%s 2>/dev/null) || t=$now
+    else
+      t=$(echo "$owner" | sed -n 's/.*since=\([^ ]*\).*/\1/p')
+      t=$(date -u -d "$t" +%s 2>/dev/null) && t=$((t + 60 * ${GPU_LEASE_MAX_MIN:-30})) || t=$now
+    fi
+    [ "$t" -gt "$now" ] && echo "$t" || echo "$now"
+  done
+}
+
+may_backfill() {
+  # a --max-min request that ends before the oldest waiter ahead of it can start
+  local head need t_head
+  [ -n "$maxmin" ] || return 1
+  head=$(ahead | head -1)
+  [ -n "$head" ] || return 0
+  need=$(awk '{for (i = 1; i <= NF; i++) if ($i ~ /^n=[0-9]+$/) {print substr($i, 3); exit}}' "$head" 2>/dev/null)
+  [ -n "$need" ] || return 1
+  t_head=$(free_by | sort -n | sed -n "${need}p")
+  [ -n "$t_head" ] && [ $(($(date -u +%s) + 60 * maxmin)) -le "$t_head" ]
+}
+
+window_clash() {
+  # the first line of $windows_file whose window this request's lease (now to its --max-min, else no end) would overlap; 1 if none
+  local now line m s e
+  local -a f
+  [ -r "$windows_file" ] || return 1
+  now=${GPU_LEASE_NOW:-$(date -u +%s)}
+  while IFS= read -r line || [ -n "$line" ]; do
+    read -r -a f <<< "${line%%#*}"
+    [ "${#f[@]}" -ge 1 ] || continue
+    s=$(date -u -d "${f[0]}" +%s 2>/dev/null) || continue
+    m=${f[1]:-30}
+    [[ $m =~ ^[0-9]+(\.[0-9]+)?$ ]] || continue
+    e=$((s + 60 * 10#${m%%.*}))
+    [ "${m%%.*}" = "$m" ] || e=$((e + 60))
+    if [ "$now" -lt "$e" ] && { [ -z "$maxmin" ] || [ "$s" -lt $((now + 60 * maxmin)) ]; }; then
+      echo "$line"
+      return 0
+    fi
+  done < "$windows_file"
+  return 1
+}
+
+agent_up() {
+  # the node's scheduler agent holds agent.lock while it runs
+  local fd
+  [ -e "$dir/agent.lock" ] || return 1
+  { exec {fd}<"$dir/agent.lock"; } 2>/dev/null || return 1
+  if flock -n -s "$fd"; then exec {fd}>&-; return 1; fi
+  exec {fd}>&-
+}
+
+queue_me() {
+  # MYWAIT: this request's wait file, locked while it waits
+  exec {wfd}>"$dir/.wait.$$"
+  flock -x "$wfd"
+  echo "pid=$$ n=$n${on:+ on=$on} run=${RESEARCH_RUN_ID:--} who=${who// /_} since=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "${maxmin:+max=$maxmin }${memgb:+mem=${memgb}G }${preempt:+preempt=1 }${timed:+timed=1 }" >&"$wfd"
+  MYWAIT="$dir/wait.$(date -u +%s%N).$$"
+  mv "$dir/.wait.$$" "$MYWAIT"
+  echo "gpu-lease: waiting for $n GPU(s)${on:+ in --on $on}$1, queued as $(basename "$MYWAIT")" >&2
+}
+
+take_grant() {
+  # take exactly the GPUs the agent granted this request, when they are gpu-lease's to hand out here and n of them
+  local g i
+  local -a granted=()
+  [ -r "$dir/grant.$$" ] || return 1
+  for g in $(tr ',' ' ' < "$dir/grant.$$"); do
+    for i in "${ALL[@]}"; do [ "$i" = "$g" ] && granted+=("$g"); done
+  done
+  [ "${#granted[@]}" -eq "$n" ] || return 1
+  CANDIDATES=("${granted[@]}")
+  take "$n"; local rc=$?
+  CANDIDATES=("${ALL[@]}")
+  return $rc
+}
+
+minutes_since() {
+  local since
+  since=$(echo "$1" | sed -n 's/.*since=\([^ ]*\).*/\1/p')
+  since=$(date -u -d "$since" +%s 2>/dev/null) && echo "$((($(date -u +%s) - since) / 60))m "
+}
+
+status() {
+  local i fd state owner since age now f
+  now=$(date -u +%s)
+  [ -r "$allowed_file" ] && echo "# direct-run GPUs from $allowed_file: $(tr -d '\n' < "$allowed_file") (the rest are Kubernetes')"
+  for i in $(gpu_indices); do
+    owner=$(cat "$dir/$i.owner" 2>/dev/null)
+    exec {fd}>>"$dir/$i.lock" || { echo "$i unreadable"; continue; }
+    if flock -n -s "$fd"; then state=free; owner=""; else state=held; fi
+    exec {fd}>&-
+    age=""
+    [ -n "$owner" ] && age=$(minutes_since "$owner")
+    echo "$i $state${owner:+ $age$owner}"
+  done
+  for i in $(gpu_indices); do
+    [ -r "$dir/$i.foreign" ] || continue
+    while IFS= read -r owner; do
+      f=$(echo "$owner" | sed -n 's/^pid=\([0-9]*\) .*/\1/p')
+      [ -n "$f" ] && [ -d "/proc/$f" ] && echo "foreign $i $owner"
+    done < "$dir/$i.foreign"
+  done
+  for f in $(live_waiters); do
+    owner=$(cat "$f" 2>/dev/null)
+    echo "waiting $(minutes_since "$owner")$owner"
+  done
+}
+
+take_free() {
+  # take N from CANDIDATES less $2... (indices): TAKEN = the indices, their lock descriptors left open; 1 (holding nothing) when
+  # fewer than N are free
+  local want=$1 i fd
+  shift
+  TAKEN=() FDS=()
+  for i in "${CANDIDATES[@]}"; do
+    [ "${#TAKEN[@]}" -lt "$want" ] || break
+    case " $* " in *" $i "*) continue ;; esac
+    exec {fd}>>"$dir/$i.lock" || continue
+    if flock -n -x "$fd"; then TAKEN+=("$i") FDS+=("$fd"); else exec {fd}>&-; fi
+  done
+  if [ "${#TAKEN[@]}" -lt "$want" ]; then
+    drop_taken
+    return 1
+  fi
+}
+
+drop_taken() {
+  local fd
+  for fd in "${FDS[@]}"; do exec {fd}>&-; done
+  TAKEN=() FDS=()
+}
+
+take() {
+  # take N free GPUs from CANDIDATES, none with foreign memory on it (foreign_gpus); 1 (holding nothing) when there aren't N
+  local want=$1 g
+  local -a busy=()
+  take_free "$want" || return 1
+  foreign_gpus || return 0
+  [ "${#FOREIGN[@]}" -gt 0 ] || return 0
+  for g in "${FOREIGN[@]}"; do busy+=("${g%% *}"); done
+  drop_taken
+  take_free "$want" "${busy[@]}"
+}
+
+ppid_of() {
+  local s
+  s=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+  s=${s##*) }
+  set -- $s
+  echo "$2"
+}
+
+smi_apps() {
+  # nvidia-smi's compute apps, `pid, used_memory, gpu_uuid` per line; 1 when it fails or gives no answer within
+  # $GPU_LEASE_SMI_TIMEOUT_S: a wedged nvidia-smi (a GPU fallen off the bus) can sit in the kernel past any signal, so it is left
+  # behind, never waited on
+  local f=$dir/.smi.$$ k=0 lim
+  rm -f "$f.out" "$f.rc"
+  ( timeout -k 2 "${GPU_LEASE_SMI_TIMEOUT_S:-10}" "${GPU_LEASE_SMI:-nvidia-smi}" --query-compute-apps=pid,used_memory,gpu_uuid \
+      --format=csv,noheader > "$f.out" 2> /dev/null; echo "$?" > "$f.rc" ) > /dev/null 2>&1 &
+  lim=$((${GPU_LEASE_SMI_TIMEOUT_S:-10} * 10 + 30))
+  while [ ! -s "$f.rc" ]; do
+    [ "$k" -lt "$lim" ] || { disown $! 2> /dev/null; return 1; }
+    sleep 0.1
+    k=$((k + 1))
+  done
+  wait $! 2> /dev/null
+  [ "$(cat "$f.rc")" = 0 ] || { rm -f "$f.out" "$f.rc"; return 1; }
+  cat "$f.out"
+  rm -f "$f.out" "$f.rc"
+}
+
+foreign_gpus() {
+  # FOREIGN: one "INDEX pid=P mem=M MiB user=U cmd=..." per process of more than $GPU_LEASE_FOREIGN_MIB MiB on a candidate GPU that
+  # neither a lease holder (a lock owner pid among its ancestors; the locks this request holds aside) nor this request (one of
+  # gpu-lease's ancestors) owns; each GPU's finding is in $dir/<i>.foreign, and is logged once per change.  1 (FOREIGN empty)
+  # when nothing was asked (GPU_LEASE_COUNT without GPU_LEASE_SMI, or no nvidia-smi), or nvidia-smi gave no answer: logged
+  # `unverified`, and the GPUs are granted as before
+  local apps line p m u i fd owner q own=" " held=" " note k
+  FOREIGN=()
+  if [ -n "${GPU_LEASE_COUNT:-}" ] && [ -z "${GPU_LEASE_SMI:-}" ]; then return 1; fi
+  command -v "${GPU_LEASE_SMI:-nvidia-smi}" > /dev/null 2>&1 || return 1
+  if ! apps=$(smi_apps); then
+    note="unverified: ${GPU_LEASE_SMI:-nvidia-smi} gave no answer in ${GPU_LEASE_SMI_TIMEOUT_S:-10} s, so GPUs ${TAKEN[*]} go to pid $$ unchecked"
+    echo "gpu-lease: $note" >&2
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $note (n=$n, who=${who// /_}, run=${RESEARCH_RUN_ID:--})" >> "${GPU_LEASE_LOG:-$dir/lease.log}"
+    return 1
+  fi
+  for i in $(gpu_indices); do
+    case " ${TAKEN[*]} " in *" $i "*) continue ;; esac
+    exec {fd}>>"$dir/$i.lock" || continue
+    if flock -n -s "$fd"; then exec {fd}>&-; continue; fi
+    exec {fd}>&-
+    owner=$(sed -n 's/^pid=\([0-9]*\) .*/\1/p' "$dir/$i.owner" 2>/dev/null)
+    [ -n "$owner" ] && held+="$owner "
+  done
+  q=$$
+  while [ -n "$q" ] && [ "$q" -gt 1 ]; do own+="$q "; q=$(ppid_of "$q") || break; done
+  while IFS=, read -r p m u; do
+    p=${p//[!0-9]/} m=${m//[!0-9]/} u=${u// /}
+    [ -n "$p" ] && [ -n "$m" ] && [ "$m" -gt "${GPU_LEASE_FOREIGN_MIB:-1024}" ] || continue
+    i=$(echo "$table" | awk -v u="$u" '$2 == u {print $1}')
+    case " ${CANDIDATES[*]} " in *" $i "*) ;; *) continue ;; esac
+    case "$own" in *" $p "*) continue ;; esac
+    q=$p k=0
+    while [ -n "$q" ] && [ "$q" -gt 1 ] && [ "$k" -lt 64 ]; do
+      case "$held" in *" $q "*) continue 2 ;; esac
+      q=$(ppid_of "$q") || break
+      k=$((k + 1))
+    done
+    [ -d "/proc/$p" ] || continue
+    FOREIGN+=("$i pid=$p mem=${m}MiB user=$(stat -c %U "/proc/$p" 2>/dev/null || echo '?') cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | cut -c1-120)")
+  done <<< "$apps"
+  for i in "${CANDIDATES[@]}"; do
+    note=$(printf '%s\n' "${FOREIGN[@]}" | awk -v i="$i" '$1 == i {sub(/^[0-9]+ /, ""); print}')
+    if [ -z "$note" ]; then rm -f "$dir/$i.foreign"; continue; fi
+    echo "$note" | sed "s/ cmd=/ seen=$(date -u +%Y-%m-%dT%H:%M:%SZ) cmd=/" > "$dir/.$i.foreign.$$" &&
+      chmod 666 "$dir/.$i.foreign.$$" 2> /dev/null; mv -f "$dir/.$i.foreign.$$" "$dir/$i.foreign"
+  done
+  note=$(printf '%s; ' "${FOREIGN[@]}")
+  if [ "${#FOREIGN[@]}" -gt 0 ] && [ "$note" != "${said_foreign:-}" ]; then
+    echo "gpu-lease: not granting a GPU a foreign process holds memory on: ${note%; }" >&2
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) foreign: ${note%; } (not granted to pid $$, n=$n, who=${who// /_}, run=${RESEARCH_RUN_ID:--})" \
+      >> "${GPU_LEASE_LOG:-$dir/lease.log}"
+  fi
+  said_foreign=$note
+}
+
+cpus_outside() {
+  # the CPUs of the list $1 that the list $2 doesn't hold, as a list (48-55,60); nothing when it holds them all
+  local part c lo="" hi="" out=""
+  local -A held=()
+  for part in ${2//,/ }; do
+    for ((c = 10#${part%-*}; c <= 10#${part#*-}; c++)); do held[$c]=1; done
+  done
+  for part in ${1//,/ }; do
+    for ((c = 10#${part%-*}; c <= 10#${part#*-}; c++)); do [ -n "${held[$c]:-}" ] || echo "$c"; done
+  done | sort -nu | {
+    while read -r c; do
+      if [ -n "$lo" ] && [ "$c" -eq $((hi + 1)) ]; then hi=$c; continue; fi
+      [ -z "$lo" ] || out+="${out:+,}$lo$([ "$hi" -gt "$lo" ] && echo "-$hi")"
+      lo=$c hi=$c
+    done
+    [ -z "$lo" ] || out+="${out:+,}$lo$([ "$hi" -gt "$lo" ] && echo "-$hi")"
+    echo "$out"
+  }
+}
+
+cores_over() {
+  # why this request's --cores can't be pinned beside the live leases (stdout; exit 75): together, each CPU counted once, they pass
+  # the machine's CPU quota.  0 when they fit, or the machine has no quota.  A live lease is a held lock whose owner line isn't
+  # marked released; a lock whose line is marked is not probed, so a request taking that GPU at this moment never meets the probe
+  local i fd line leases=""
+  for i in $(gpu_indices); do
+    line=$(cat "$dir/$i.owner" 2>/dev/null)
+    case $line in released=*) continue ;; esac
+    exec {fd}>>"$dir/$i.lock" || continue
+    if flock -n -s "$fd"; then exec {fd}>&-; continue; fi
+    exec {fd}>&-
+    leases+="$i ${line%% cmd=*}"$'\n'
+  done
+  GL_CORES=$cores GL_LEASES=$leases GL_CPU_MAX=$cpu_max GL_PROC=${GPU_LEASE_PROC:-/proc} python3 - <<'PY'
+import os, re, sys
+
+e = os.environ
+proc = e["GL_PROC"]
+
+
+def parse(text):
+    out = set()
+    for part in text.strip().split(","):
+        lo, _, hi = part.partition("-")
+        if lo.isdigit() and (not hi or hi.isdigit()):
+            out.update(range(int(lo), int(hi or lo) + 1))
+    return out
+
+
+def fmt(cpus):
+    runs = []
+    for c in sorted(cpus):
+        if runs and runs[-1][1] == c - 1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return ",".join(f"{a}-{b}" if b > a else f"{a}" for a, b in runs)
+
+
+KIDS = {}                           # each process's children, read once
+
+
+def tree(pid):
+    """pid and its descendants, from every process's parent in its stat"""
+    if not KIDS:
+        for p in os.listdir(proc):
+            if p.isdigit():
+                try:
+                    with open(f"{proc}/{p}/stat") as fh:
+                        s = fh.read()
+                    KIDS.setdefault(s[s.rindex(")") + 2:].split()[1], []).append(p)
+                except (OSError, ValueError, IndexError):
+                    pass
+    out, todo = [], [pid]
+    while todo:
+        out.append(todo.pop())
+        todo += KIDS.get(out[-1], [])
+    return out
+
+
+def allowed(pid):
+    """the CPUs pid's threads may run on"""
+    try:
+        tasks = [f"{proc}/{pid}/task/{t}" for t in os.listdir(f"{proc}/{pid}/task")]
+    except OSError:
+        tasks = [f"{proc}/{pid}"]
+    out = set()
+    for t in tasks:
+        try:
+            with open(f"{t}/status") as fh:
+                out |= parse(next((ln.split(":", 1)[1] for ln in fh if ln.startswith("Cpus_allowed_list:")), ""))
+        except OSError:
+            pass
+    return out
+
+
+def every():
+    try:
+        with open(f"{proc}/stat") as fh:
+            n = sum(1 for ln in fh if re.match(r"cpu\d", ln))
+    except OSError:
+        n = 0
+    return set(range(n or os.cpu_count() or 1))
+
+
+try:
+    with open(e["GL_CPU_MAX"]) as fh:
+        quota_line = fh.read().split()
+except OSError:
+    quota_line = []
+if len(quota_line) != 2 or not (quota_line[0].isdigit() and quota_line[1].isdigit() and int(quota_line[1])):
+    sys.exit(0)                     # no quota here: no file, or `max`
+quota, period = int(quota_line[0]), int(quota_line[1])
+leases = {}
+for line in e["GL_LEASES"].splitlines():
+    i, _, head = line.partition(" ")
+    if head.startswith("released="):
+        continue
+    f = dict(t.split("=", 1) for t in head.split() if "=" in t)
+    leases.setdefault(f.get("pid") or f"GPU {i}'s", ([], f))[0].append(i)
+mine = parse(e["GL_CORES"])
+total, parts, rows = set(mine), len(mine), []
+for pid, (gpus, f) in leases.items():
+    if f.get("cores"):
+        cpus = parse(f["cores"])
+        how = f"cores={fmt(cpus)}"
+    else:
+        cpus = set().union(*(allowed(p) for p in tree(pid))) if pid.isdigit() else set()
+        how = f"none declared, its processes are allowed on {fmt(cpus)}"
+        if not cpus:
+            cpus = every()
+            how = f"none declared and no process of it left to read, so every CPU, {fmt(cpus)}"
+    total |= cpus
+    parts += len(cpus)
+    rows.append(f"  GPU {','.join(gpus)}, pid {f.get('pid', '?')}, run {f.get('run', '-')}, who {f.get('who', '?')}: {how} ({len(cpus)})")
+if len(total) * period <= quota:
+    sys.exit(0)
+shared = "" if parts == len(total) else "; a CPU two of them name counts once"
+print(f"{len(total)} CPUs would be pinned on this machine, over its CPU quota of {quota / period:g} (cpu.max {quota} {period} in "
+      f"{e['GL_CPU_MAX']}){shared}")
+print(f"  this request: --cores {fmt(mine)} ({len(mine)})")
+print("\n".join(rows + ["  the count covers leases only: a process that holds no lease is not in it",
+                        "  start when a lease ends, ask for fewer CPUs, or have the holder of a lease that declared none pass --cores"]))
+sys.exit(75)
+PY
+}
+
+throttled() {
+  # "NR USEC": cpu.stat's nr_throttled and throttled_usec for the cgroup whose cpu.max is the quota; nothing where it has none
+  awk '$1 == "nr_throttled" {n = $2} $1 == "throttled_usec" {u = $2} END {if (n ~ /^[0-9]+$/ && u ~ /^[0-9]+$/) print n, u}' \
+    "$cpu_stat" 2>/dev/null
+}
+
+declared_beside() {
+  # the live leases other than this one (TAKEN) that declared their cores, "GPU 0,1, pid P, run R, who W: cores=LIST" each, joined
+  # with "; "; nothing where the machine has no CPU quota
+  local quota="" period="" i fd line cpus pid run w key out="" order=()
+  local -A gpus=() what=()
+  [ -r "$cpu_max" ] && read -r quota period < "$cpu_max"
+  case $quota$period in ''|*[!0-9]*) return 0 ;; esac
+  for i in $(gpu_indices); do
+    case " ${TAKEN[*]} " in *" $i "*) continue ;; esac
+    line=" $(cat "$dir/$i.owner" 2>/dev/null)"
+    line="${line%% cmd=*} "
+    case $line in " released="*) continue ;; esac
+    [[ $line =~ \ cores=([0-9,-]+)\  ]] || continue
+    cpus=${BASH_REMATCH[1]} pid="?" run=- w="?"
+    exec {fd}>>"$dir/$i.lock" || continue
+    if flock -n -s "$fd"; then exec {fd}>&-; continue; fi
+    exec {fd}>&-
+    [[ $line =~ \ pid=([0-9]+)\  ]] && pid=${BASH_REMATCH[1]}
+    [[ $line =~ \ run=([^ ]+)\  ]] && run=${BASH_REMATCH[1]}
+    [[ $line =~ \ who=([^ ]+)\  ]] && w=${BASH_REMATCH[1]}
+    key=$pid
+    [ "$pid" != "?" ] || key=gpu$i
+    if [ -n "${gpus[$key]:-}" ]; then gpus[$key]+=",$i"; continue; fi
+    order+=("$key")
+    gpus[$key]=$i
+    what[$key]="pid $pid, run $run, who $w: cores=$cpus"
+  done
+  [ "${#order[@]}" -gt 0 ] || return 0
+  for key in "${order[@]}"; do out+="${out:+; }GPU ${gpus[$key]}, ${what[$key]}"; done
+  echo "$out"
+}
+
+counts_whole() {
+  # "N QUOTA" where the machine has a CPU quota and this lease, declaring no cores, may run on all N CPUs of it, which is what
+  # cores_over counts it as (its process tree's Cpus_allowed_list, every CPU where none is read); nothing otherwise
+  local quota="" period="" proc=${GPU_LEASE_PROC:-/proc} n k
+  [ -r "$cpu_max" ] && read -r quota period < "$cpu_max"
+  case $quota$period in ''|*[!0-9]*) return 0 ;; esac
+  [ "$period" -gt 0 ] || return 0
+  n=$(grep -c '^cpu[0-9]' "$proc/stat" 2>/dev/null)
+  [ "${n:-0}" -gt 0 ] || n=$(nproc --all)
+  k=$n
+  [ -r "$proc/self/status" ] && k=$(awk -v n="$n" '$1 == "Cpus_allowed_list:" {
+    split($2, parts, ","); for (i in parts) { m = split(parts[i], r, "-"); for (c = r[1] + 0; c <= r[m] + 0; c++) if (c < n && !(c in seen)) { seen[c]; k++ } }
+  } END { print k + 0 }' "$proc/self/status")
+  [ "$k" = 0 ] || [ "$k" = "$n" ] || return 0
+  echo "$n $(awk -v q="$quota" -v p="$period" 'BEGIN { printf "%g", q / p }')"
+}
+
+report_usage() {
+  # report only (the lease's status never depends on it): each leased GPU's held time, and its busy time over the node sampler's
+  # readings inside the lease; never NVML, so a timed window stays quiet
+  command -v python3 > /dev/null 2>&1 || return 0
+  GL_RC=$1 GL_END=$(date -u +%Y-%m-%dT%H:%M:%SZ) GL_SINCE=$started GL_IDX="${TAKEN[*]}" GL_UUID="${uuids[*]}" GL_WHO=$who \
+    GL_PID=$$ GL_SCOPE=${scope:+gpu-lease-$$} GL_TIMED=$timed GL_PRE=$preempt GL_CMD=$cmdline timeout 30 python3 - <<'PY' || true
+import glob, json, os, socket, sys
+from datetime import datetime
+
+e = os.environ
+since, end = e["GL_SINCE"], e["GL_END"]
+pattern = e.get("GPU_LEASE_UTIL_LOG", "/workspace/pouw/infra/util/*.jsonl")
+cadence = float(e.get("GPU_LEASE_UTIL_CADENCE_S", "10"))
+uuids = e["GL_UUID"].split()
+gpus = [{"index": int(i), "uuid": uuids[k] if k < len(uuids) else "-", "busy": 0.0, "sampled": 0.0}
+        for k, i in enumerate(e["GL_IDX"].split())]
+files = sorted(glob.glob(pattern))
+if not files and "GPU_LEASE_UTIL_LOG" in e:
+    print(f"gpu-lease: no sampler log matches {pattern}, so the usage record has sampled_s 0", file=sys.stderr)
+for f in files:
+    name = os.path.basename(f)
+    if name[:4].isdigit() and name[:10] < since[:10]:
+        continue
+    try:
+        fh = open(f, errors="replace")
+    except OSError:
+        continue
+    with fh:
+        for line in fh:
+            k = line.find('"t"')
+            if k < 0:
+                continue
+            q = line.find('"', line.find(":", k) + 1)
+            if not since <= line[q + 1:q + 21] <= end:
+                continue
+            try:
+                s = json.loads(line)
+            except ValueError:
+                continue
+            for g in s.get("gpus") or []:
+                util, smact = g.get("util"), g.get("smact")
+                if util is None and smact is None:
+                    continue
+                for v in gpus:
+                    if (v["uuid"] != "-" and g.get("uuid") == v["uuid"]) or (v["uuid"] == "-" and g.get("i", g.get("index")) == v["index"]):
+                        v["sampled"] += cadence
+                        v["busy"] += cadence if (util or 0) > 0 or (smact or 0) >= 0.01 else 0
+held = max(0, int((datetime.strptime(end, "%Y-%m-%dT%H:%M:%SZ") - datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ")).total_seconds()))
+# each reading counts a whole cadence, so a lease's readings can add up to one cadence past its held time
+for v in gpus:
+    v["sampled"] = min(v["sampled"], held)
+    v["busy"] = min(v["busy"], v["sampled"])
+
+
+def hms(x: float) -> str:
+    x = int(x)
+    return f"{x // 3600}h{x % 3600 // 60:02d}m{x % 60:02d}s" if x >= 3600 else f"{x // 60}m{x % 60:02d}s"
+
+
+for v in gpus:
+    share = f" ({100 * v['busy'] / v['sampled']:.0f}%)" if v["sampled"] else ""
+    hint = "; prepare on the CPU outside the lease" if v["sampled"] >= 300 and v["busy"] < 0.5 * v["sampled"] else ""
+    print(f"gpu-lease: GPU {v['index']} ({v['uuid'][:12]}) held {hms(held)}, busy {hms(v['busy'])} of {hms(v['sampled'])} sampled"
+          f"{share}{hint}", file=sys.stderr)
+rec = {"schema": "gpu-lease/usage/v1", "host": socket.gethostname(), "pid": int(e["GL_PID"]), "scope": e.get("GL_SCOPE") or None,
+       "who": e["GL_WHO"], "run": e.get("RESEARCH_RUN_ID") or None, "timed": e.get("GL_TIMED") == "1",
+       "preemptible": e.get("GL_PRE") == "1", "since": since, "end": end, "rc": int(e["GL_RC"]), "cmd": e.get("GL_CMD", ""),
+       "gpus": [{"index": v["index"], "uuid": v["uuid"], "held_s": held, "busy_s": int(v["busy"]), "sampled_s": int(v["sampled"])}
+                for v in gpus]}
+outs = [os.path.join(e["RESEARCH_RUN_DIR"], "gpu-lease-usage.jsonl")] if e.get("RESEARCH_RUN_DIR") else []
+for path in outs + [e.get("GPU_LEASE_USAGE_LOG", "/workspace/research/lease-usage.jsonl")]:
+    try:
+        with open(path, "a") as out:
+            out.write(json.dumps(rec) + "\n")
+    except OSError:
+        pass
+PY
+}
+
+[ $# -ge 1 ] || usage
+if [ "$1" = status ]; then status; exit 0; fi
+n=$1; shift
+case $n in ''|*[!0-9]*|0) usage ;; esac
+wait=0 on="" cores="" maxmin="" memgb="" preempt="" timed=${GPU_LEASE_TIMED:-}
+[ "$timed" = 1 ] || timed=""
+while [ $# -gt 0 ] && [ "$1" != -- ]; do
+  case $1 in
+    --wait) wait=1 ;;
+    --preemptible) preempt=1 ;;
+    --timed) timed=1 ;;
+    --on) [ $# -ge 2 ] || usage; on=$2; shift ;;
+    --cores)
+      [ $# -ge 2 ] || usage; cores=$2; shift
+      [[ $cores =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || usage
+      for part in ${cores//,/ }; do [ "${part%-*}" -le "${part#*-}" ] 2> /dev/null || usage; done ;;
+    --max-min) [ $# -ge 2 ] || usage; maxmin=$2; shift; case $maxmin in ''|*[!0-9]*|0) usage ;; esac ;;
+    --mem-gb) [ $# -ge 2 ] || usage; memgb=$2; shift; case $memgb in ''|*[!0-9]*) usage ;; esac ;;
+    *) usage ;;
+  esac
+  shift
+done
+[ "${1:-}" = -- ] || usage
+shift
+[ $# -ge 1 ] || usage
+mapfile -t CANDIDATES < <(gpu_indices)
+total=${#CANDIDATES[@]}
+if [ "$total" -eq 0 ] && [ -r "$allowed_file" ]; then
+  echo "gpu-lease: no GPU is for direct runs here ($allowed_file: none): submit through the cluster's queues (sky)" >&2; exit 2
+fi
+if [ -n "$on" ]; then
+  table=$(uuid_table)
+  picked=()
+  for g in $(echo "$on" | tr ',' ' '); do
+    case $g in
+      GPU-*) i=$(echo "$table" | awk -v u="$g" '$2 == u {print $1}') ;;
+      *[!0-9]*) usage ;;
+      *) i=$g ;;
+    esac
+    if [ -z "$i" ] || ! printf '%s\n' "${CANDIDATES[@]}" | grep -qx "$i"; then
+      echo "gpu-lease: GPU $g is not one gpu-lease hands out here (${CANDIDATES[*]:-none})" >&2; exit 2
+    fi
+    picked+=("$i")
+  done
+  CANDIDATES=("${picked[@]}")
+  total=${#CANDIDATES[@]}
+fi
+if [ "$n" -gt "$total" ]; then echo "gpu-lease: $n GPUs asked, $total are gpu-lease's here${on:+ in --on $on}" >&2; exit 2; fi
+mkdir -p "$dir" 2>/dev/null
+[ -w "$dir" ] || {
+  echo "gpu-lease: $dir is not writable: make it once for every user of this machine's GPUs (sudo mkdir -m 1777 $dir)," \
+    "or name one with GPU_LEASE_DIR; every run sharing these GPUs must use the same one" >&2
+  exit 2
+}
+if [ -n "$cores" ]; then
+  for tool in python3 taskset; do
+    command -v "$tool" > /dev/null 2>&1 || { echo "gpu-lease: --cores needs $tool, which isn't on PATH here" >&2; exit 2; }
+  done
+  # tried now: under the lease the pin would fail only at CMD's start, after the GPUs are taken and a lease may have been stopped
+  pin_status=${GPU_LEASE_PROC:-/proc}/self/status
+  pinned_to=$(taskset -c "$cores" cat "$pin_status" 2>&1) || {
+    echo "gpu-lease: --cores $cores can't be pinned on this machine, so nothing is leased:" \
+      "${pinned_to:-taskset -c $cores cat $pin_status failed}" >&2
+    exit 2
+  }
+  # taskset pins to the CPUs of the list this request may run on and says nothing of the rest: a run that declared them would
+  # be counted on CPUs it never had, and timed on fewer than it asked for
+  pinned_to=$(sed -n 's/^Cpus_allowed_list:[[:space:]]*//p' <<< "$pinned_to")
+  [[ $pinned_to =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || {
+    echo "gpu-lease: --cores $cores: $pin_status doesn't say which CPUs taskset pinned to (no Cpus_allowed_list), so nothing" \
+      "is leased" >&2
+    exit 2
+  }
+  outside=$(cpus_outside "$cores" "$pinned_to")
+  [ -z "$outside" ] || {
+    echo "gpu-lease: --cores $cores names CPUs this request can't run on here ($outside), so nothing is leased: every CPU of" \
+      "the list must be one of this machine's that it may use" >&2
+    exit 2
+  }
+fi
+
+who=${GPU_LEASE_WHO:-${RESEARCH_LANE:-$(id -un)}}
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+scope=()
+if [ "$memgb" != 0 ]; then
+  if [ -z "$memgb" ]; then
+    per=${GPU_LEASE_MEM_GB_PER_GPU:-$(awk -v n="$(gpu_count)" '/^MemTotal:/ {printf "%d", $2 * 0.9 / 1048576 / (n > 0 ? n : 1)}' /proc/meminfo)}
+    memgb=$((per * n))
+  fi
+  if command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; then
+    scope=(systemd-run --user --scope --quiet --collect --unit "gpu-lease-$$" -p "MemoryMax=${memgb}G" -p MemorySwapMax=0 --)
+  else
+    echo "gpu-lease: this user's systemd can't make a scope here, so CMD runs without a memory limit" >&2
+    memgb=""
+  fi
+fi
+[ -n "${table:-}" ] || table=$(uuid_table)
+ALL=("${CANDIDATES[@]}")
+MYWAIT=""
+rm -f "$dir/grant.$$"
+asked=$(date -u +%s)
+said="" said_over="" cfd=""
+cores_unlock() { [ -z "$cfd" ] || { exec {cfd}>&-; cfd=""; }; }
+while :; do
+  if [ -n "$cores" ]; then
+    # under cores.lock from the count until this lease's owner lines are written, so two requests never count without each other
+    exec {cfd}>>"$dir/cores.lock" && flock -x "$cfd" || { echo "gpu-lease: can't lock $dir/cores.lock" >&2; exit 2; }
+    over=$(cores_over); rc=$?
+    if [ "$rc" != 0 ]; then
+      cores_unlock
+      [ "$rc" = 75 ] || { echo "gpu-lease: the CPU quota check of --cores $cores failed (exit $rc), so nothing is leased" >&2; exit 2; }
+      if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; MYWAIT=""; fi
+      if [ "$wait" != 1 ]; then echo "gpu-lease: refused, holding nothing: $over" >&2; exit 75; fi
+      [ "$said_over" = "$over" ] || printf 'gpu-lease: %s\ngpu-lease: waiting, unqueued, until they fit\n' "$over" >&2
+      said_over=$over
+      sleep "${GPU_LEASE_POLL_S:-15}"
+      continue
+    fi
+  fi
+  if [ -z "$timed" ] && clash=$(window_clash); then
+    cores_unlock
+    if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; MYWAIT=""; fi
+    span="from now with no --max-min"
+    [ -z "$maxmin" ] || span="of up to $maxmin min from now"
+    why="a lease $span overlaps the window booked in $windows_file: $clash"
+    if [ "$wait" != 1 ]; then
+      echo "gpu-lease: $why (add a --max-min that ends by its start, or --wait to start once the lease clears it)" >&2
+      exit 75
+    fi
+    [ "$said" = "$clash" ] || echo "gpu-lease: $why; waiting, unqueued, until the lease clears it" >&2
+    said=$clash
+    sleep "${GPU_LEASE_POLL_S:-15}"
+    continue
+  fi
+  if agent_up; then
+    [ -n "$MYWAIT" ] || queue_me " from the node's agent"
+    take_grant && break
+    if [ "$wait" != 1 ] && [ $(($(date -u +%s) - asked)) -ge "${GPU_LEASE_AGENT_WAIT_S:-10}" ]; then
+      rm -f "$MYWAIT"
+      echo "gpu-lease: the node's agent granted no $n GPU(s) in ${GPU_LEASE_AGENT_WAIT_S:-10} s: add --wait to queue" >&2
+      exit 75
+    fi
+    cores_unlock
+    sleep "${GPU_LEASE_AGENT_POLL_S:-0.5}"
+    continue
+  fi
+  if [ -z "$(ahead)" ] || may_backfill; then take "$n" && break; else take_unreserved "$n" && break; fi
+  if [ "$wait" != 1 ]; then
+    [ -z "$MYWAIT" ] || rm -f "$MYWAIT"
+    first=$(ahead | head -1)
+    if [ -n "$first" ]; then
+      echo "gpu-lease: a request is waiting first ($(cat "$first" 2>/dev/null)): add --wait to queue behind it, or a" \
+        "--max-min short enough to end before it can start" >&2
+    else
+      echo "gpu-lease: fewer than $n of $total GPUs free ($(status | grep -v '^#' | tr '\n' ';'))" >&2
+    fi
+    exit 75
+  fi
+  cores_unlock
+  [ -n "$(ahead)" ] || [ -n "$preempt" ] || preempt_for "$n"
+  [ -n "$MYWAIT" ] || queue_me ""
+  sleep "${GPU_LEASE_POLL_S:-15}"
+done
+started=${GPU_LEASE_STARTED:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
+ends=""
+[ -n "$maxmin" ] && ends=" until=$(date -u -d "@$(($(date -u -d "$started" +%s) + 60 * maxmin))" +%Y-%m-%dT%H:%M:%SZ)"
+uuids=()
+thr0=$(throttled)
+counters=${thr0:+nr_throttled=${thr0% *} throttled_usec=${thr0#* } }
+for i in "${TAKEN[@]}"; do
+  u=$(echo "$table" | awk -v i="$i" '$1 == i {print $2}')
+  uuids+=("${u:--}")
+  echo "pid=$$ run=${RESEARCH_RUN_ID:--} who=${who// /_} uuid=${u:--} since=$started$ends${memgb:+ mem=${memgb}G}" \
+    "$counters${cores:+cores=$cores }${preempt:+preempt=1 }${timed:+timed=1 }${scope:+scope=gpu-lease-$$ }cmd=$(echo "$*" | cut -c1-80)" \
+    > "$dir/$i.owner"
+done
+cores_unlock
+if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; fi
+rm -f "$dir/grant.$$"
+CUDA_VISIBLE_DEVICES=$(IFS=,; echo "${TAKEN[*]}")
+GPU_LEASE_UUID=$(IFS=,; echo "${uuids[*]}")
+export CUDA_VISIBLE_DEVICES CUDA_DEVICE_ORDER=PCI_BUS_ID GPU_LEASE_UUID
+pinned=${cores:+, CMD pinned to CPUs $cores}
+echo "gpu-lease: GPUs $CUDA_VISIBLE_DEVICES ($GPU_LEASE_UUID) for $who, pid $$${RESEARCH_RUN_ID:+ (run $RESEARCH_RUN_ID)}${ends:+,$ends}$pinned" >&2
+if [ -z "$cores" ]; then
+  beside=$(declared_beside)
+  [ -z "$beside" ] || echo "gpu-lease: warning: no --cores here, beside a lease that declared its own ($beside): this run's CPUs are" \
+    "in no count against the machine's CPU quota until the next request that declares counts them; pass --cores" >&2
+  whole=$(counts_whole)
+  [ -z "$whole" ] || echo "gpu-lease: no --cores: this lease counts as all ${whole% *} CPUs of this machine against its CPU quota" \
+    "of ${whole#* } while it is held, so every other lease that names --cores waits or is refused until it ends; pass --cores LIST" \
+    "(per card, the ten CPUs of its own NUMA node that the slots file gives)" >&2
+fi
+cmdline=$(echo "$*" | cut -c1-200)
+[ -n "$cores" ] && set -- taskset -c "$cores" "$@"
+[ -n "$maxmin" ] && set -- timeout -k 20 "$((maxmin * 60))" "$@"
+# CMD runs as a child, not exec'd, so the lease can report its usage once CMD is done.  `0<&0` keeps CMD's stdin (a background job's
+# is /dev/null otherwise); a SIGTERM, SIGINT or SIGHUP to gpu-lease is passed on to CMD; gpu-lease exits with CMD's status.
+"${scope[@]}" "$@" 0<&0 &
+child=$!
+trap 'kill -TERM "$child" 2> /dev/null' TERM INT HUP
+rc=0; wait "$child" || rc=$?
+while kill -0 "$child" 2> /dev/null; do rc=0; wait "$child" || rc=$?; done
+trap - TERM INT HUP
+released=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+thr1=$(throttled)
+for i in "${TAKEN[@]}"; do
+  line=$(cat "$dir/$i.owner" 2>/dev/null) || continue
+  case "$line" in
+    "pid=$$ "*" cmd="*)
+      echo "released=$released ${line%% cmd=*}${thr1:+ end_nr_throttled=${thr1% *} end_throttled_usec=${thr1#* }} cmd=${line#* cmd=}" \
+        > "$dir/$i.owner" ;;
+    "pid=$$ "*) echo "released=$released $line" > "$dir/$i.owner" ;;
+  esac
+done
+[ -z "$thr0" ] || [ -z "$thr1" ] || echo "gpu-lease: CPU throttling on this machine while the lease was held: nr_throttled" \
+  "+$((${thr1% *} - ${thr0% *})), throttled_usec +$((${thr1#* } - ${thr0#* })) ($cpu_stat)" >&2
+for fd in "${FDS[@]}"; do exec {fd}>&-; done
+rm -f "$dir/grant.$$"
+report_usage "$rc"
+exit "$rc"

@@ -1,0 +1,295 @@
+{
+ "canonical": "{\"family\":{\"digest\":\"88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6\",\"id\":\"veritor.int8-q7@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"w/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"kappa_W\"},{\"id\":\"w/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"kappa_W\"},{\"id\":\"x/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"boundary\"},{\"id\":\"x/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"boundary\"},{\"id\":\"x/1/0\",\"layout\":{\"value\":8},\"leaf\":2,\"position\":2,\"root\":\"boundary\"},{\"id\":\"x/1/1\",\"layout\":{\"value\":8},\"leaf\":3,\"position\":3,\"root\":\"boundary\"},{\"id\":\"y/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"ru0\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[\"w/0\",\"w/1\",\"x/0\",\"x/1\"],\"out\":[\"y/0\"]},\"declared_interface\":{\"args\":[\"w/0\",\"w/1\",\"x/0\",\"x/1\"],\"returns\":[\"y/0\"]},\"roots\":[\"kappa_W\",\"boundary\",\"ru0\"],\"subcircuit\":\"7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0\"},{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":1},\"boundary\":{\"in\":[\"w/0\",\"w/1\",\"x/1/0\",\"x/1/1\"],\"out\":[\"y/0\"]},\"declared_interface\":{\"args\":[\"w/0\",\"w/1\",\"x/1/0\",\"x/1/1\"],\"returns\":[\"y/0\"]},\"roots\":[\"kappa_W\",\"boundary\",\"ru0\"],\"subcircuit\":\"7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0\"}],\"references\":[{\"leaf\":\"w/0\",\"offset\":[],\"ref\":\"w/0\"},{\"leaf\":\"w/1\",\"offset\":[],\"ref\":\"w/1\"},{\"leaf\":\"x/0\",\"offset\":[],\"ref\":\"x/0\"},{\"leaf\":\"x/1\",\"offset\":[],\"ref\":\"x/1\"},{\"leaf\":\"x/1/0\",\"offset\":[],\"ref\":\"x/1/0\"},{\"leaf\":\"x/1/1\",\"offset\":[],\"ref\":\"x/1/1\"},{\"leaf\":\"y/0\",\"offset\":[],\"ref\":\"y/0\"}],\"roots\":[{\"count\":4,\"domain\":\"741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"boundary\",\"owner\":-1,\"root\":\"a58ae1957d7b16be0fbefc28c4169def1b8b19edd85f1941f56878ec0b695593\"},{\"count\":2,\"domain\":\"6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"kappa_W\",\"owner\":-2,\"root\":\"6eb2d48c2f6afaca15112715d517be3046b293f819c2a194940db916d76a9325\"},{\"count\":1,\"domain\":\"53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"f83f0882edd38f7866985c3e7c73c589c53279296acbf2d45b73f2a271a6203f\"}],\"subcircuits\":[{\"definition\":{\"name\":\"q7/dot2-requant-u7\"},\"digest\":\"7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0\",\"gates\":[{\"args\":[[\"in\",2],[\"in\",0]],\"op\":\"mul8\"},{\"args\":[[\"in\",3],[\"in\",1]],\"op\":\"mul8\"},{\"args\":[[\"gate\",0],[\"gate\",1]],\"op\":\"add32\"},{\"args\":[[\"gate\",2]],\"op\":\"requant_u7\"}],\"in\":[8,8,8,8],\"out\":[3]}]}",
+ "code": "E_DUPLICATE_PRODUCER",
+ "description": "Two obligations (units 0 and 1) with different activations both produce the value 'y/0': a value has one producing gate, in one sampled subcircuit (the shared weights, being incoming to both, are fine).",
+ "detail": "value 'y/0' is produced by obligations 0 and 1",
+ "digest": "675a39d66bdbf2e64181f895282f95eca7cf2c2e7f57badfb480ec7ac1dd3a81",
+ "name": "reject/duplicate-producer",
+ "object": {
+  "family": {
+   "digest": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+   "id": "veritor.int8-q7@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "w/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "kappa_W"
+   },
+   {
+    "id": "w/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "kappa_W"
+   },
+   {
+    "id": "x/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "boundary"
+   },
+   {
+    "id": "x/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "boundary"
+   },
+   {
+    "id": "x/1/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "boundary"
+   },
+   {
+    "id": "x/1/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 3,
+    "position": 3,
+    "root": "boundary"
+   },
+   {
+    "id": "y/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [
+      "w/0",
+      "w/1",
+      "x/0",
+      "x/1"
+     ],
+     "out": [
+      "y/0"
+     ]
+    },
+    "declared_interface": {
+     "args": [
+      "w/0",
+      "w/1",
+      "x/0",
+      "x/1"
+     ],
+     "returns": [
+      "y/0"
+     ]
+    },
+    "roots": [
+     "kappa_W",
+     "boundary",
+     "ru0"
+    ],
+    "subcircuit": "7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0"
+   },
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 1
+    },
+    "boundary": {
+     "in": [
+      "w/0",
+      "w/1",
+      "x/1/0",
+      "x/1/1"
+     ],
+     "out": [
+      "y/0"
+     ]
+    },
+    "declared_interface": {
+     "args": [
+      "w/0",
+      "w/1",
+      "x/1/0",
+      "x/1/1"
+     ],
+     "returns": [
+      "y/0"
+     ]
+    },
+    "roots": [
+     "kappa_W",
+     "boundary",
+     "ru0"
+    ],
+    "subcircuit": "7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0"
+   }
+  ],
+  "references": [
+   {
+    "leaf": "w/0",
+    "offset": [],
+    "ref": "w/0"
+   },
+   {
+    "leaf": "w/1",
+    "offset": [],
+    "ref": "w/1"
+   },
+   {
+    "leaf": "x/0",
+    "offset": [],
+    "ref": "x/0"
+   },
+   {
+    "leaf": "x/1",
+    "offset": [],
+    "ref": "x/1"
+   },
+   {
+    "leaf": "x/1/0",
+    "offset": [],
+    "ref": "x/1/0"
+   },
+   {
+    "leaf": "x/1/1",
+    "offset": [],
+    "ref": "x/1/1"
+   },
+   {
+    "leaf": "y/0",
+    "offset": [],
+    "ref": "y/0"
+   }
+  ],
+  "roots": [
+   {
+    "count": 4,
+    "domain": "741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "boundary",
+    "owner": -1,
+    "root": "a58ae1957d7b16be0fbefc28c4169def1b8b19edd85f1941f56878ec0b695593"
+   },
+   {
+    "count": 2,
+    "domain": "6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "kappa_W",
+    "owner": -2,
+    "root": "6eb2d48c2f6afaca15112715d517be3046b293f819c2a194940db916d76a9325"
+   },
+   {
+    "count": 1,
+    "domain": "53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "f83f0882edd38f7866985c3e7c73c589c53279296acbf2d45b73f2a271a6203f"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "q7/dot2-requant-u7"
+    },
+    "digest": "7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        2
+       ],
+       [
+        "in",
+        0
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "in",
+        3
+       ],
+       [
+        "in",
+        1
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "gate",
+        0
+       ],
+       [
+        "gate",
+        1
+       ]
+      ],
+      "op": "add32"
+     },
+     {
+      "args": [
+       [
+        "gate",
+        2
+       ]
+      ],
+      "op": "requant_u7"
+     }
+    ],
+    "in": [
+     8,
+     8,
+     8,
+     8
+    ],
+    "out": [
+     3
+    ]
+   }
+  ]
+ },
+ "subcircuits_well_formed": [
+  true
+ ],
+ "tags": [
+  "stage-1",
+  "rejection",
+  "binding",
+  "sharing"
+ ],
+ "verdict": "reject"
+}

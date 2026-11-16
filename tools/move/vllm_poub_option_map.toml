@@ -1,0 +1,36 @@
+# The vLLM adapter's PoUB option takes the protocol's name: what `tools/move/layout.py --map
+# tools/move/vllm_poub_option_map.toml` moves and rewrites. `remote_bandwidth/` held the binder and the Commit's session
+# (`CommitSession`), which attach PoUB's node store (`verity/protocols/accounting/poub/prover/node_store/`) to the engine;
+# its tests' directory goes with it. What a caller selects the option by (``--remote-verifier``, the settings, the
+# records' fields) does not change, and nothing under `verity/protocols/accounting/poub/` is rewritten.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"adapters/vllm/verity_vllm/protocols/remote_bandwidth/" = "adapters/vllm/verity_vllm/protocols/poub/"
+"adapters/vllm/tests/protocols/remote_bandwidth/" = "adapters/vllm/tests/protocols/poub/"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[modules]
+"adapters.vllm.tests.protocols.remote_bandwidth" = "adapters.vllm.tests.protocols.poub"
+"verity_vllm.protocols.remote_bandwidth" = "verity_vllm.protocols.poub"
+
+# The adapter's tests import their package from `adapters/vllm/` as `tests`.
+[aliases]
+"tests.protocols.remote_bandwidth" = "tests.protocols.poub"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), files whose bytes a
+# digest pins and lock files; and memory-accounting's PoUB, whose two mentions of the adapter's old path are theirs.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch",
+           "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/research/src/research/store/moves.json",
+           "verity/protocols/accounting/poub/**"]
+# `protocols.DRIVERS` names the driver's package by its directory's name alone.
+words_in = { "adapters/vllm/verity_vllm/protocols/__init__.py" = ["remote_bandwidth"] }

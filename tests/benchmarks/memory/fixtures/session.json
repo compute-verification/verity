@@ -1,0 +1,14 @@
+{
+ "k": 0, "accepted": true, "failure": null, "verdict": "lean",
+ "samples": 4, "windows": 1, "window_ns": 1000000000,
+ "draws": {"0": [[0, 1]]},
+ "windows_seen": [{"passes": 2, "slack_ns": 5}],
+ "lean_check_ns": {"0": 7},
+ "ledger": {
+  "spec": {"gamma": 0.25, "terms": {}, "horizon": {}},
+  "measured": {"gamma": 0.5},
+  "inputs": {"spec_bytes_per_s": 2e12},
+  "sketch_failure": {"log2": -40.0},
+  "memory": {"hbm_bytes": 8589934592}
+ }
+}
