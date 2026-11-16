@@ -20,9 +20,9 @@ no tile work, no slack (`λ = 0`), one sampled block and `m = 0`, where the hypo
 
 @[expose] public section
 
-namespace Accounting.BoundReceipt
+namespace ResourceAccounting.BoundReceipt
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (Bits)
 
 /-- The rest that does nothing: no memory, nothing sent, and a chip that commits to all-`false` receipts at once. -/
@@ -68,11 +68,11 @@ theorem blankNode_event (E : Store 1 1) (z : Store 1 1) (G : Mix 1 1 1 2) :
     unfold floor
     omega
 
-end Accounting.BoundReceipt
+end ResourceAccounting.BoundReceipt
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate Accounting.BoundReceipt
+open ResourceAccounting.Rate ResourceAccounting.BoundReceipt
 open Pous (Bits pr)
 open scoped ENNReal
 
@@ -156,4 +156,4 @@ theorem BoundReceiptLinkInteractive_nontrivial :
   rw [pr_one hev, not_le]
   exact link_error_lt
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

@@ -103,7 +103,7 @@ The proof is `Proofs.Pouw.MonitoringPeriodJ10RStrata`'s: at each stratum, what `
 namespace Properties.Pouw.MonitoringPeriodJ10RStrata
 
 open Properties.Pouw.MonitoringPeriodJ10R
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-! ## The sampling block's sample and stratum `s`'s view of it -/
 
@@ -169,7 +169,7 @@ noncomputable def runAt {ι C V : Type} (Cd : Declared ι) (hr : 0 < Cd.rounds) 
     (ws : CreditExecutionPhases (StrataCoin C m σ) n) (opened : Paths (StrataCoin C m σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : Paths (StrataCoin C m σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop) :
-    PeriodRun C (Equiv.Perm (Fin (tileCount σ s)) × Rest σ s) Cd.rounds (k s) (tileCount σ s) n V :=
+    Outcomes C (Equiv.Perm (Fin (tileCount σ s)) × Rest σ s) Cd.rounds (k s) (tileCount σ s) n V :=
   tileRun σ k hk s unitOf (creditAt hM σ s ws) (pullAt hM σ s opened) (relAt hM σ s ws place tile)
     (rightAt hM hr σ s enc place tile)
 

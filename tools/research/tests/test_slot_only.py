@@ -408,7 +408,7 @@ def test_it_stops_every_process_of_a_live_run_outside_the_slots_but_its_runner(t
 
 
 def test_renice_moves_a_direct_runs_processes_to_nice_19_once_and_leaves_slot_runs_alone(tmp_path, monkeypatch, capsys):
-    """On node 1 lanes' direct runs must not take the cores the train checks need. `--renice 19` stops nothing: it renices every
+    """On node 1 lanes' direct runs must not take the cores the candidates' checks need. `--renice 19` stops nothing: it renices every
     process of a live run outside the slots, its runner too, and logs a run only while it moved a process."""
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "direct-runs-nice", tmp_path / "direct-nice.jsonl"
     gate = _run(runs, "r-gate", "running", ["python3", "tools/check/slot.py", "--", "true"], pgid=10, runner=9)
@@ -456,7 +456,7 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
 def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_no_research_run():
     """The deployed marker lists no command (the challenger runs only through vy-challenger-gate, the verifier through
     vy-verifier-gate) and goes, with the timer that enforces it, to the auditor devices only, each host's gate to it alone (the
-    challenger's and certifier's units also go to vy-auditor-2, which runs a certifier); vy-admin's sshd drop-in goes to them and
+    challenger's and network attester's units also go to vy-auditor-2, which runs a network attester); vy-admin's sshd drop-in goes to them and
     to each CPU node that carries the lock-out, whose sshd lets only research log in without it; the nodes' shared peers file and
     the cluster's description name no auditor device."""
     import tomllib
@@ -466,8 +466,10 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     nebius = Path(S.__file__).resolve().parent
     assert (nebius / "auditor").read_text().startswith("#") and S.auditor_commands(nebius / "auditor") == []
     rows = [{"src": e.get("template", ""), **e} for e in tomllib.loads((nebius / "deploy.toml").read_text())["file"]]
-    on = {e["path"]: e["nodes"] for e in rows if e.get("src", "").endswith(("/auditor", "/vy-auditor-only.service",
-                                                                            "/vy-auditor-only.timer", "/11-vy-admin.conf"))}
+    on: dict[str, list[str]] = {}
+    for e in rows:
+        if e.get("src", "").endswith(("/auditor", "/vy-auditor-only.service", "/vy-auditor-only.timer", "/11-vy-admin.conf")):
+            on.setdefault(e["path"], []).extend(e["nodes"])
     locked_cpu = [n for e in rows if e["path"] == "/usr/local/sbin/vy-lockout" for n in e["nodes"] if n.startswith("vy-nebius-cpu-")]
     assert on == {**{p: hosts for p in ("/etc/vy/auditor", "/etc/systemd/system/vy-auditor-only.service",
                                         "/etc/systemd/system/vy-auditor-only.timer")},

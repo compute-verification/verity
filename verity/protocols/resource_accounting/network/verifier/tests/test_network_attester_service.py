@@ -1,5 +1,5 @@
 """One execution phase's network certificates through the proof system (N2), on a network attester's link
-(`NetworkCertifierProfile`): the round trip to an accepted, exhaustive outcome, the public-items rule on the registration, the
+(`NetworkAttesterProfile`): the round trip to an accepted, exhaustive outcome, the public-items rule on the registration, the
 head check against the network attester's grid and digest, and each way an execution phase fails closed, on injected
 coins and an injected clock. Each round's verdict of record is decided on a stand-in proof of the proof block
 (`standin`: the prover's rows and output word by the gates' references, the Lean run reading its session file)."""
@@ -37,7 +37,7 @@ LINK = "responses"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 DELTA = 2.0 ** -40
 SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(3)]
-#: the network attester's parameters digest (`network_attester.NetworkCertifierParams.digest`), which both ends' heads bind
+#: the network attester's parameters digest (`network_attester.NetworkAttesterParams.digest`), which both ends' heads bind
 NETWORK_CERTIFIER_DIGEST = bytes(range(64))
 
 
@@ -73,7 +73,7 @@ class Run:
         sampled = itertools.count(0xc0)
         self.issuer = Issuer(self.signer, signers.SESSION, coins=lambda n: bytes([next(sampled) % 256]) * n)
         self.lw = TransferBlocks(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
-                              proof_deadline=proof_deadline, network_attester=SVC.NetworkCertifierProfile(3, NETWORK_CERTIFIER_DIGEST))
+                              proof_deadline=proof_deadline, network_attester=SVC.NetworkAttesterProfile(3, NETWORK_CERTIFIER_DIGEST))
         self.clock = Clock()
         self.stream = self.lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: coins * n,
                                      clock=self.clock)
@@ -204,8 +204,8 @@ def test_the_spec_declares_each_public_item_with_its_reason(tmp_path):
     assert lw.spec.check.program == P.program_sha512(Program(lw.unit))
     assert lw.spec.digest() != replace(lw, run="another").spec.digest()
     assert lw.spec.digest() != replace(lw, certifier_session=signers.OTHER_SESSION).spec.digest()
-    assert lw.spec.digest() != replace(lw, network_attester=SVC.NetworkCertifierProfile(3, bytes(64))).spec.digest()
-    assert lw.spec.digest() != replace(lw, network_attester=SVC.NetworkCertifierProfile(4, NETWORK_CERTIFIER_DIGEST)).spec.digest()
+    assert lw.spec.digest() != replace(lw, network_attester=SVC.NetworkAttesterProfile(3, bytes(64))).spec.digest()
+    assert lw.spec.digest() != replace(lw, network_attester=SVC.NetworkAttesterProfile(4, NETWORK_CERTIFIER_DIGEST)).spec.digest()
 
 
 def test_n2_compares_no_grid_and_holds_no_frames(tmp_path):
@@ -596,10 +596,10 @@ def test_the_opening_must_be_the_registered_phases(tmp_path):
 
 
 def test_a_link_is_a_network_certifiers_with_both_heads_under_its_digest_and_no_sync(tmp_path):
-    """A link (`NetworkCertifierProfile`) is the network attester's records: its public items are `PUBLIC`, a window whose two
+    """A link (`NetworkAttesterProfile`) is the network attester's records: its public items are `PUBLIC`, a window whose two
     records the network attester certified under its parameters digest is accepted with no sync declared, by the
     Lean's verdict of record, the Python beside it and the in-the-clear check alike, and a window whose egress record was
-    certified under a shaper's digest instead is a reject. A link without a `NetworkCertifierProfile` has no verdict, and its two
+    certified under a shaper's digest instead is a reject. A link without a `NetworkAttesterProfile` has no verdict, and its two
     ends are one grid."""
     run = Run(tmp_path)
     lw = run.lw
@@ -621,9 +621,9 @@ def test_a_link_is_a_network_certifiers_with_both_heads_under_its_digest_and_no_
     with pytest.raises(ValueError, match="one grid"):
         replace(lw, ingress=replace(PARAMS, buckets=PARAMS.buckets + 1))
     with pytest.raises(ValueError, match="one or more windows"):
-        SVC.NetworkCertifierProfile(0, NETWORK_CERTIFIER_DIGEST)
+        SVC.NetworkAttesterProfile(0, NETWORK_CERTIFIER_DIGEST)
     with pytest.raises(ValueError, match="64 bytes"):
-        SVC.NetworkCertifierProfile(3, bytes(32))
+        SVC.NetworkAttesterProfile(3, bytes(32))
 
 
 def test_a_head_leaf_opens_from_the_head_alone(tmp_path):

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Pouw.TS.Sampled
 public import Proofs.Pouw.TS.ProofsSound
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # An honest coin-keyed proof layer meets (I8)'s premises
@@ -43,9 +43,9 @@ restated statement bounds this cheater; it doesn't exclude it.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.Keyed
+namespace ResourceAccounting.SecurityProofs.TS.Keyed
 
-open Finset Accounting.TS Pouw.RelativeSecurity
+open Finset ResourceAccounting.TS Pouw.RelativeSecurity
 
 theorem coinAt_splice {Ω : Type} : ∀ {n : ℕ} (w : Fin n) (x z : Paths Ω n),
     coinAt (splice (w : ℕ) x z) w = coinAt z w
@@ -316,7 +316,7 @@ theorem keyedSampled_meets_budget (n : ℕ) :
 
 section Plays
 
-open Accounting.Assumptions.TS
+open ResourceAccounting.Assumptions.TS
 
 theorem key_false (c : Bool) : key false c = c := by cases c <;> rfl
 
@@ -437,7 +437,7 @@ theorem lastRG_receiptLuck : ∀ n, (lastRG n).ReceiptLuck (1 / 2)
 /-- **The restated (I8) applies to the last-round cheater**: every premise of `ProofsSoundOfPinned` holds, so
 `ProofsSound` holds at `δ_bind = δ_ZK = 0`. -/
 theorem lastPlay_proofsSound (n : ℕ) : ProofsSound (lastPlay n) 1 0 0 1 :=
-  _root_.Accounting.SecurityProofs.TS.ProofsSoundOfPinned Bool (n + 1) 1 (lastPlay n) (lastLayer n) 1 0 0
+  _root_.ResourceAccounting.SecurityProofs.TS.ProofsSoundOfPinned Bool (n + 1) 1 (lastPlay n) (lastLayer n) 1 0 0
     (lastLayer_of n) (lastLayer_binding n) (lastLayer_sound n) (lastLayer_pins n) (lastPlay_rightFixed n)
 
 /-- **It is a cheater the statement is about**: the all-`true` path is accepted, the ideal game charges it one
@@ -497,7 +497,7 @@ theorem honestRG_deficiency : ∀ (n : ℕ) (x : Paths Bool n), (honestRG n).gam
 /-- **The honest coin-keyed layer's play meets every premise of `ProofsSoundOfPinned`**, `Of` and `RightFixed` among
 them, so `ProofsSound` holds at `δ_bind = δ_ZK = 0`. -/
 theorem keyedPlay_proofsSound (n : ℕ) : ProofsSound (keyedPlay n) 1 0 0 1 :=
-  _root_.Accounting.SecurityProofs.TS.ProofsSoundOfPinned Bool (n + 1) 1 (keyedPlay n) (keyedLayer n) 1 0 0
+  _root_.ResourceAccounting.SecurityProofs.TS.ProofsSoundOfPinned Bool (n + 1) 1 (keyedPlay n) (keyedLayer n) 1 0 0
     ⟨fun _ hx => hx, fun x _ => honestRG_accepts (n + 1) x⟩ (keyedLayer_binding n) (keyedLayer_sound n)
     (keyedLayer_pins n) (fun x _ _ => by
       show (1 - (honestRG (n + 1)).game.deficiency x / ((n + 1 : ℕ) : ℝ)) * 1 ≤ 1
@@ -505,4 +505,4 @@ theorem keyedPlay_proofsSound (n : ℕ) : ProofsSound (keyedPlay n) 1 0 0 1 :=
 
 end Plays
 
-end Accounting.SecurityProofs.TS.Keyed
+end ResourceAccounting.SecurityProofs.TS.Keyed

@@ -1,5 +1,5 @@
 """N2's egress side of the scan (`egress`) on the network attester's own egress: links of variable-length responses
-served through the network attester's schedule (`egress_traffic`, `network_attester.NetworkCertifier._egress`), and the slot state each
+served through the network attester's schedule (`egress_traffic`, `network_attester.NetworkAttester._egress`), and the slot state each
 bucket's egress reads. The reference renders every bucket row the network attester registered from that state; the
 Boolean Definition computes its reference's outputs, bit for bit, on honest and adversarial states (the row of a state
 that renders none too); it reads only the state; and the verifier's registered read of its row output holds the computed
@@ -19,7 +19,7 @@ from verity.protocols.resource_accounting.network.verifier.link_frame import DAT
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 
 #: the network attester's schedule the tests serve: T = 6 buckets of 4 lanes of r = 2 slots, D = 2
-PARAMS = W.NetworkCertifierParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
+PARAMS = W.NetworkAttesterParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
 SESSION = bytes(range(32))
 #: the request slots and outputs a slot the served links' states hold
 NR, K = 4, 16

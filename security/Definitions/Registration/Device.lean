@@ -31,7 +31,7 @@ account's average in bits.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- The op classes a step charges. -/
 inductive OpClass
@@ -128,4 +128,4 @@ def chipHeld : ℕ := ∑ t ∈ w.ticks, (sc t).chip a
 
 end Schedule
 
-end Accounting
+end ResourceAccounting

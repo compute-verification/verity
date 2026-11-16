@@ -59,7 +59,7 @@ plurality of the rows a receipt shows (`Receipts.Shows`) over those continuation
 
 @[expose] public section
 
-namespace Accounting.Remote.Sample
+namespace ResourceAccounting.Remote.Sample
 
 open scoped ENNReal
 
@@ -138,4 +138,4 @@ noncomputable def finder [Fintype X] [Nonempty X] (D : Run n m s κ X) (prf : Fi
 
 end Receipts
 
-end Accounting.Remote.Sample
+end ResourceAccounting.Remote.Sample

@@ -121,7 +121,7 @@ def test_status_reads_every_run_on_a_machine_with_one_ssh(machine, tmp_path, mon
     assert "slot check slot b (cores 64-95) since 2026-10-07T03:02Z\n" in out and "slot Lean slot check/0 since 2026-10-07T03:05Z\n" in out
     assert (f"waits gpu-lease {leases}: 2 GPU(s) preemptible since 2026-10-07T03:01Z; 1 waiter(s) ahead, 2 of 4 GPUs unlocked; "
             "pool 1 GPU(s), 1 holder(s) pending\n") in out
-    assert "waits check slot since " in out and ": 0 ahead in line; b held (a trains only)\n" in out
+    assert "waits check slot since " in out and ": 0 ahead in line; b held (a: candidates only)\n" in out
     assert out.count("waits") == 2 and "gpus GPU 1" not in out
 
 

@@ -109,6 +109,6 @@ inputs = [
     "verity/circuits/silicon",
     "verity/protocols/__init__.py",
     "verity/protocols/proofs/__init__.py",
-    "verity/protocols/resource_accounting/__init__.py",
+    "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/__init__.py",
 ]

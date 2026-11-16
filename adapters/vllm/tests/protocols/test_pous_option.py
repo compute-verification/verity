@@ -19,14 +19,24 @@ from concurrent import futures
 
 import pytest
 import torch
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
-from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    challenger_party as CP,
+)
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    challenger_session as CS,
+)
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_challenger as mc,
+)
+from verity.protocols.resource_accounting.memory.pous.prover import (
+    challenger_prover as CR,
+)
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 from verity.protocols.resource_accounting.memory.pous.verifier import period, setup
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
+    P2Params,
+)
 from verity.runtime.stream import Side
 
 from verity_vllm import config

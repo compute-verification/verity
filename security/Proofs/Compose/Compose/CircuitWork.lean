@@ -3,9 +3,9 @@ module
 public import Proofs.Compose.Compose.ServiceBudget
 public import Proofs.Compose.Compose.ServiceCovers
 public import Proofs.Pouw.Headline.Luck
-public import Proofs.Accounting.Lemmas.TS.Receipt
-public import Proofs.Accounting.Lemmas.Compose
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS.Receipt
+public import Proofs.ResourceAccounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # `CircuitWork`: the circuit's work under live coins
@@ -28,9 +28,9 @@ public import Proofs.Accounting.Lemmas.TS
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Compose.WorkProof
+namespace ResourceAccounting.SecurityProofs.Compose.WorkProof
 
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-! ## The luck per stage -/
 
@@ -87,9 +87,9 @@ theorem luckAt_of_perTile {ι K C : Type} [Fintype C] (Sc : Scheme K) (Cd : Decl
         have e0 : tileLuck0 Sc Cd Np t = Sc.guess k := by simp [tileLuck0, hk, hc, Option.elim]
         rw [e1, e0]
         have hPin : (tileGame mode right same .folded t).Pinned := ⟨fun _ h => h, fun _ => trivial⟩
-        have hL := Accounting.SecurityProofs.TS.LuckOfReceipt (tileGame mode right same .folded t)
+        have hL := ResourceAccounting.SecurityProofs.TS.LuckOfReceipt (tileGame mode right same .folded t)
           (Sc.mu k) (Sc.rB k) hPin
-          (Accounting.SecurityProofs.TS.Headline.operandLuck_of_pointMass (Sc.mu k) _ (h1 t ht k hk hc))
+          (ResourceAccounting.SecurityProofs.TS.Headline.operandLuck_of_pointMass (Sc.mu k) _ (h1 t ht k hk hc))
           (h2 t ht k hk hc) (hLP k).2.2.1
         exact ⟨tileLuck_of mode right same .folded t (Sc.foldLuck k) hL,
           tileLuck_of mode right same .whole t (Sc.guess k) (h3 t ht k hk hc)⟩
@@ -313,17 +313,17 @@ theorem writerReads : (Cd.layer hr hK pr).WriterReads := by
 end Layer
 
 /-- `CircuitWork`: off `SampledRightOff`'s event and the budget's tail, `work_of_bounds`. -/
-theorem circuitWork : Accounting.Guarantees.Compose.CircuitWork := by
+theorem circuitWork : ResourceAccounting.Guarantees.Compose.CircuitWork := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd Np Kd hN hr hK W Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS hρ
     hρN hwmax hlk ha hb hΛ hSR hG hOf hMoved hJS hPins hMu hRB hGs hUF
   obtain ⟨hwf, -, hδs, hLP, hlc⟩ := hS
-  obtain ⟨E, hE, hEoff⟩ := Accounting.SecurityProofs.TS.SampledRightOff C (Equiv.Perm (Fin Np) × Ξ) 1 Cd.rounds Kd
+  obtain ⟨E, hE, hEoff⟩ := ResourceAccounting.SecurityProofs.TS.SampledRightOff C (Equiv.Perm (Fin Np) × Ξ) 1 Cd.rounds Kd
     (Cd.layer hr hK pr) δbind δks hMoved hJS hPins
   have hBud : RoundGame.BudgetAt Λ (serviceGame (Ξ := Ξ) (tileStage Cd Np) W (shareCone Sc Cd Np) a b Kd) :=
     Budget.serviceBudget (tileStage Cd Np) W (shareCone Sc Cd Np) (tileLuck Sc Cd Np) (tileLuck0 Sc Cd Np) Kd ρ p
       p0 a b wmax Λ (shareCone_nonneg Sc Cd Np) hρ hρN hwmax hlk (luckAt_of_perTile Sc Cd hLP W hMu hRB hGs) ha
       hb hSR
-  have hTail := Accounting.SecurityProofs.TS.budget_tail _ Λ hΛ hBud (Real.log (1 / δs))
+  have hTail := ResourceAccounting.SecurityProofs.TS.budget_tail _ Λ hΛ hBud (Real.log (1 / δs))
   have hexp : Real.exp (-Real.log (1 / δs)) = δs := by
     rw [Real.exp_neg, Real.exp_log (one_div_pos.mpr hδs), one_div, inv_inv]
   rw [hexp] at hTail
@@ -375,4 +375,4 @@ theorem circuitWork : Accounting.Guarantees.Compose.CircuitWork := by
   refine (prob_mono hsub).trans ((prob_or_le _ _).trans ?_)
   linarith
 
-end Accounting.SecurityProofs.Compose.WorkProof
+end ResourceAccounting.SecurityProofs.Compose.WorkProof
