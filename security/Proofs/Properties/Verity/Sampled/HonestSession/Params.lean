@@ -808,7 +808,7 @@ private theorem params_full :
     ParamsAt θ₀ p ∧ p.own.partition = partitionObj ∧ p.own.program = programFile ∧
     p.own.circuit = hexOf circuitSha ∧ p.own.pub = hexOf (Sha512.hash publicFile) ∧
     p.base.verifier.program = program ∧ p.base.verifier.query = query ∧ p.base.verifier.samplingDesign = samplingDesign ∧
-    p.base.verifier.workTable = none ∧ p.base.challenger = some (key₀, label₀) := by
+    p.base.verifier.workTable = none ∧ p.base.challenger = some (key₀, label₀) ∧ p.members = none := by
   -- The two instance facts are now proved (not hypotheses): the descriptor is plain (`ProgramProof.plain_programJ`) and
   -- `norm` leaves it fixed (`ProgramParse.norm_programJ`), so `ProgramPlain` and `NormFacts` are discharged here.
   have hpp : ProgramPlain := ProgramProof.plain_programJ
@@ -847,7 +847,7 @@ private theorem params_full :
       P.own.partition = partitionObj ∧ P.own.program = programFile ∧ P.own.circuit = hexOf circuitSha ∧
       P.own.pub = hexOf (Sha512.hash publicFile) ∧ P.base.verifier.program = program ∧
       P.base.verifier.query = query ∧ P.base.verifier.samplingDesign = samplingDesign ∧ P.base.verifier.workTable = none ∧
-      P.base.challenger = some (key₀, label₀) := by
+      P.base.challenger = some (key₀, label₀) ∧ P.members = none := by
     rw [hC, hNp]
     -- The two spliced digests pass the form check; proved off the hash so the walk rewrites by them.
     have hdc : Spot.OneStageZk.digest? (hexOf circuitSha) = true := by
@@ -886,7 +886,7 @@ private theorem params_full :
     have hgk_pub : Spot.Challenger.hexOf? (.str gk) = some keyPub := by
       show (Flock.unhex gk).toOption = some keyPub
       rw [← hgk, Flock.Hex.unhex_hexOf]; rfl
-    refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
+    refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9, ?f10⟩
     -- `Spot.keys?` and `Spot.sortStrings` are blocked so the walk never hands the parser's key checks (`exactly`, whose
     -- body reads them) to the kernel's `whnf`, which cannot reduce `sortStrings`'s well-founded `Array.qsort`; the rules
     -- below (`keys?_mkObj`, `keys?_obj`, `sortStrings_of_sorted`, `sortStrings_eq_sortLt`) rewrite each occurrence instead.
@@ -903,17 +903,18 @@ private theorem params_full :
     case f7 => kernel_rfl'            -- verifier.samplingDesign = samplingDesign
     case f8 => rfl                    -- verifier.workTable = none
     case f9 => kernel_rfl'            -- challenger = some (key₀, label₀)
-  obtain ⟨P, hwalk, hpart, hprog, hc, hpub, hvp, hvq, hvl, hvt, hch⟩ := hpar
+    case f10 => kernel_rfl'           -- members = none
+  obtain ⟨P, hwalk, hpart, hprog, hc, hpub, hvp, hvq, hvl, hvt, hch, hm⟩ := hpar
   exact ⟨P, ⟨[{ id := VStar.Recursive.Sampled.PROTOCOL, params := ZkServer.printJson paramsJ }], hdec,
       { id := VStar.Recursive.Sampled.PROTOCOL, params := ZkServer.printJson paramsJ }, by rfl, hwalk⟩,
-      hpart, hprog, hc, hpub, hvp, hvq, hvl, hvt, hch⟩
+      hpart, hprog, hc, hpub, hvp, hvq, hvl, hvt, hch, hm⟩
 
 theorem params_spec : ∃ p, ParamsAt θ₀ p ∧
     p.own.partition = partitionObj ∧ p.own.program = programFile ∧ p.base.verifier.program = program ∧
     p.base.verifier.query = query ∧ p.base.verifier.samplingDesign = samplingDesign ∧ p.base.verifier.workTable = none ∧
-    p.base.challenger = some (key₀, label₀) := by
-  obtain ⟨p, hpat, hpart, hprog, _, _, hvp, hvq, hvl, hvt, hch⟩ := params_full
-  exact ⟨p, hpat, hpart, hprog, hvp, hvq, hvl, hvt, hch⟩
+    p.base.challenger = some (key₀, label₀) ∧ p.members = none := by
+  obtain ⟨p, hpat, hpart, hprog, _, _, hvp, hvq, hvl, hvt, hch, hm⟩ := params_full
+  exact ⟨p, hpat, hpart, hprog, hvp, hvq, hvl, hvt, hch, hm⟩
 
 theorem digests :
     programDigestOf θ₀ = some (Verity.sha512 circuitFile.data.toList) ∧
