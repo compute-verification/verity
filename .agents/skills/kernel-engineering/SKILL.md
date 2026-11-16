@@ -81,7 +81,7 @@ Stop at the lowest tier that decides the attempt. Only a candidate that beats it
 
 | Tier | Runs on | Establishes | How |
 |---|---|---|---|
-| 1 conformance | CPU | the build; the SASS gate on each binary; no spills; the twin against `verity.circuits.silicon` on small tiles; the executor's step order on `RecordingDev` | `uv run tools/verity/check/suites.py benchmarks/pouw`; `python3 verity/protocols/accounting/pouw/prover/sass_gate.py K.cubin --json gate.json` |
+| 1 conformance | CPU | the build; the SASS gate on each binary; no spills; the twin against `verity.circuits.silicon` on small tiles; the executor's step order on `RecordingDev` | `uv run tools/check/suites.py benchmarks/pouw`; `python3 verity/protocols/accounting/pouw/prover/sass_gate.py K.cubin --json gate.json` |
 | 2a screen | one leased GPU, untimed | the device gates at the served shapes; a poisoned transcript accepted and a no-write control rejected; a diagnostic interleaved time; the time split; ncu, compute-sanitizer, sweeps | `research run ... -- gpu-lease 1 --wait -- ...`, or fill chunks of at most 8 minutes |
 | 2b timed | the whole node, locked-2100 | the measured panel row | `bench.py` under `research run --no-sampler` and `gpu-lease 8 --wait --timed`, then `verify.py --tier 2b` after the lease, in the same run |
 | 3 served | vLLM on the card | the served arms, the time split, the verify job, the served row | [Hooking a kernel into vLLM](#hooking-a-kernel-into-vllm) |

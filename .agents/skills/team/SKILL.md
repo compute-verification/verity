@@ -23,7 +23,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   command; `AGENT_GUARD_LOCAL_OK=1` in the command opts in.
 
   ~~~text
-  research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # --quick: no slow tests
+  research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py'  # --quick: no slow tests
   research status RUN  # check back on a run
   ~~~
 

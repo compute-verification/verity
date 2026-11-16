@@ -18,7 +18,7 @@ there when the workload exits and publishes to the store:
 
 - always, the run's logs and records (`custody.RUN_FILES`) and all of `$OUT` (`$RESEARCH_RUN_DIR/out`, whatever the cwd);
 - each `--declared-output GLOB` (quote it; `fnmatch` on paths relative to the run dir, so `*` crosses `/`);
-- other files in path order up to 256 MiB in all (`custody.UNDECLARED_CAP_BYTES`, kept for older launches; it drops to 0
+- other files in path order up to 256 MiB in all (`custody.UNDECLARED_LIMIT_BYTES`, kept for older launches; it drops to 0
   once lanes declare their outputs). The rest are listed in `meta.trimmed` by path, size and sha256, and custody prints
   `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`.
 
@@ -39,7 +39,8 @@ A local `research run` (no `--on`) publishes only its telemetry and the files it
    it (a build, a Lean `.lake`), or an absolute path; never a relative path that resolves against the run dir. On a machine
    every run of a commit shares the source tree, while a clone is the run's own, removed when it ends, and the workload
    imports its Python from it. A `--cwd source` run that builds Lean (`lake`, `check.py`, `suites.py`, `lean_changed.py`)
-   waits for the tree's lock until the run building there ends (`research/treelock.py`); `--cwd clone` doesn't wait.
+   waits for the tree's lock until the run building there ends (`research/treelock.py`), and only once it holds its own
+   slot, so a run in a pool's line holds no tree; `--cwd clone` doesn't wait.
    Locally only the cwd moves: an editable install imports from, and writes beside `__file__` in, the invoking checkout.
 2. **Keep results in `$OUT`, small:** numbers, JSON, logs, digests of big things. A large artifact that must survive (a
    model, a proof, a trace past about 100 MiB) goes there too: a node holds no store write key, so `research data put` in
