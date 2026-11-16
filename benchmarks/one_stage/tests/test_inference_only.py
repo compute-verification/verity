@@ -2,7 +2,7 @@
 registered before it served, by `InferenceOnlyCheck.Count`'s rule. `BitAtx32_v1`'s price is an explicit circuit that computes the
 primitive, input by input; the verdict's rule is the count rule's reference (`inference_only_reference.check_count_detail`) on its
 rows, and the Lean instance it makes is one on which that reference counts the verdict's gates; n is the H200's sessions
-at the declared utilization over the lease, rounded up to the grid, from the class's fixed load alone; the policy is its
+at the utilization over the lease, rounded up to the grid, from the class's fixed load alone; the policy is its
 session's gates and fresh bits with every weight held, those by kind (a split the verdict recomputes and holds the
 policy to, and a policy written before the split is read as before), and n, under an H200 int8 serve's φ or the one ``--serve`` states,
 cut at Pearl+'s linears where it says, and a BF16 checkpoint under the int8 serve's φ is refused by name; and on toy

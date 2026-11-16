@@ -1,4 +1,4 @@
-"""A served run's two shares of the card's capacity, from its serve dir: the declared utilization, the work the served
+"""A served run's two shares of the card's capacity, from its serve dir: the utilization, the work the served
 model's steps declare at θ over the wall the engine took to serve them, term by term, and the credited share, the MACs
 Pearl+'s PoUW verdict credited at θ over that same wall.
 
@@ -15,7 +15,7 @@ last step's output, plus the on-loop part of the closes of the Commit windows it
 - the LM head: hidden × vocab MACs a token the step emitted, at θ/2.
 
 θ is the H200's dense int8 (and FP8) rate in MACs at each reading of its clock its card states (`RHO`, the tensor
-clock's and the SM clock's), side by side. The declared utilization is the steps' ideal seconds over the wall, and ``terms`` splits it into
+clock's and the SM clock's), side by side. The utilization is the steps' ideal seconds over the wall, and ``terms`` splits it into
 the three terms' own shares, which sum to it.
 
 The credited share reads Pearl+'s verdict (``--credit``: ``served_passes.py verify``'s ``answer.json``, core's answer
@@ -35,7 +35,7 @@ Pearl+'s own served run (`pearlplus_shares`, from `served_passes.py`'s serve and
 piece's) has no step trace: its wall is its timed ``generate`` call's, its declared work that call's passes' linear MACs
 alone, and its credited work the verdict's credit over those passes (the verify document's ``timed``), both at θ. Every
 pass of that run is written whole for the verdict inside its step; the same load served with no pass retained
-(`served_passes.py serve --no-retain`) gives the declared utilization without that write (`pearlplus_unretained`): the
+(`served_passes.py serve --no-retain`) gives the utilization without that write (`pearlplus_unretained`): the
 retained run's declared work over the unretained run's wall.
 """
 from __future__ import annotations
@@ -184,7 +184,7 @@ LOAD = ("arm", "requests", "prompt_tokens", "output_tokens")
 
 
 def pearlplus_unretained(shares: dict[str, Any], served: dict[str, Any], unretained: dict[str, Any]) -> dict[str, Any]:
-    """The declared utilization of `pearlplus_shares`' run (``shares``, of ``served``) without retention: its declared work
+    """The utilization of `pearlplus_shares`' run (``shares``, of ``served``) without retention: its declared work
     over the wall of ``unretained``, `served_passes.py serve --no-retain`'s document of the same load, at each reading;
     ValueError when ``unretained`` retained its passes or served another load (`LOAD` and the engine's batched tokens)."""
     if unretained.get("retained") is not False:

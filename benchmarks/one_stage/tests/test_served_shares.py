@@ -1,5 +1,5 @@
 """`served_shares.py` on toy serve dirs: a full-prefill step of 8,192 tokens of the served 1B declares 8.617 ms at the
-tensor clock, the declared utilization is the steps' ideal seconds over the loads' busy wall (a Commit window's on-loop
+tensor clock, the utilization is the steps' ideal seconds over the loads' busy wall (a Commit window's on-loop
 close in it), term by term, the credited share is Pearl+'s credited MACs over the same wall (none for no credit or a
 rejected answer), the prover's replay is a CPU term beside them (the cores it takes to keep pace), and a row with no
 start position or an undeclared model is refused."""
