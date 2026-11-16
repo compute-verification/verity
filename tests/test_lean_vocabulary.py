@@ -781,7 +781,7 @@ KNOWN: dict[str, str] = {
     "tools/verity/cli/verity_cli/run.py::Registry": "homonym, what `verity run` reads off step 0's table: rename (ci)",
     # verity/core/
     "verity/commitments/attest/__init__.py::Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
+        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's attestation period (proofs)",
     "verity/party.py::Record": "homonym, a party's log entry: rename (proofs)",
     "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",

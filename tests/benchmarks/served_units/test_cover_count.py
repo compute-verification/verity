@@ -92,26 +92,26 @@ def test_the_default_counts_a_boolean_version_only_where_its_controls_refused(cc
     does not; t004's was not run and t005 has none: three types with none, by family with each one's reason."""
     assert cc.main([write(tmp_path, RECORD)]) == 0
     out = capsys.readouterr().out.splitlines()
-    assert out[1:5] == ["on the card: 6 types, 1,600 blocks",
-                        "accepted in the listed form: 2 types, 1,500 blocks",
-                        "accepted on the Boolean version only: 1 types, 40 blocks",
-                        "with none (the Boolean version counted): 3 types, 60 blocks"]
+    assert out[1:5] == ["on the card: 6 types, 1,600 proof blocks",
+                        "accepted in the listed form: 2 types, 1,500 proof blocks",
+                        "accepted on the Boolean version only: 1 types, 40 proof blocks",
+                        "with none (the Boolean version counted): 3 types, 60 proof blocks"]
     assert out[5:] == [
-        "  Logits: 2 types, 30 blocks",
-        f"    t004  20 blocks  not-run/estimate-past-160GB (v2t004; listed form not-run-not-reached)  {LOGITS1}",
-        f"    t005  10 blocks  not-run-not-reached; no Boolean version in the record  {LOGITS2}",
-        "  SplitAttn: 1 types, 30 blocks",
-        f"    t003  30 blocks  held-control-off (v2t003; listed form not-run-stage-past-62GB)  {SPLIT2}",
-        "3 of 6 block types have no statement the Lean verifier accepted (--form boolean)"]
+        "  Logits: 2 types, 30 proof blocks",
+        f"    t004  20 proof blocks  not-run/estimate-past-160GB (v2t004; listed form not-run-not-reached)  {LOGITS1}",
+        f"    t005  10 proof blocks  not-run-not-reached; no Boolean version in the record  {LOGITS2}",
+        "  SplitAttn: 1 types, 30 proof blocks",
+        f"    t003  30 proof blocks  held-control-off (v2t003; listed form not-run-stage-past-62GB)  {SPLIT2}",
+        "3 of 6 proof-block types have no statement the Lean verifier accepted (--form boolean)"]
 
 
 def test_form_listed_counts_only_the_listed_form(cc, tmp_path, capsys):
     assert cc.main([write(tmp_path, RECORD), "--form", "listed"]) == 0
     out = capsys.readouterr().out.splitlines()
-    assert out[3] == "accepted on the Boolean version only: 1 types, 40 blocks (not counted: --form listed)"
-    assert out[4] == "with none (listed form only): 4 types, 100 blocks"
-    assert f"    t002  40 blocks  not-run-estimate-past-64GB  {SPLIT1}" in out
-    assert out[-1] == "4 of 6 block types have no statement the Lean verifier accepted (--form listed)"
+    assert out[3] == "accepted on the Boolean version only: 1 types, 40 proof blocks (not counted: --form listed)"
+    assert out[4] == "with none (listed form only): 4 types, 100 proof blocks"
+    assert f"    t002  40 proof blocks  not-run-estimate-past-64GB  {SPLIT1}" in out
+    assert out[-1] == "4 of 6 proof-block types have no statement the Lean verifier accepted (--form listed)"
 
 
 def test_check_exits_1_only_when_the_count_is_not_0(cc, tmp_path, capsys):
@@ -124,7 +124,7 @@ def test_check_exits_1_only_when_the_count_is_not_0(cc, tmp_path, capsys):
     covered["beside_extras"] = {}
     covered["fifth_pass"]["by_family"] = {}
     assert cc.main([write(tmp_path, covered), "--check"]) == 0
-    assert capsys.readouterr().out.splitlines()[-1].startswith("0 of 2 block types")
+    assert capsys.readouterr().out.splitlines()[-1].startswith("0 of 2 proof-block types")
 
 
 def _totals(r):
@@ -196,7 +196,7 @@ def test_card_a_record_of_exactly_the_cards_types_passes(cc, tmp_path, capsys):
     assert cc.main([write(tmp_path, v8), "--card", card(tmp_path, ON_CARD)]) == 0
     out = capsys.readouterr().out.splitlines()
     assert out[0] == f"record: circuits/request-cover/v8, tree {'0' * 40}, of the card {CARD_SOURCE}"
-    assert out[-1].startswith("3 of 6 block types")
+    assert out[-1].startswith("3 of 6 proof-block types")
 
 
 @pytest.mark.parametrize(("types", "says"), [
@@ -237,6 +237,6 @@ def test_an_art_id_is_fetched_with_research_data_fetch(cc, monkeypatch, capsys):
     assert len(calls) == 1 and len(calls[0]) == 6
     assert calls[0][:5] == ["/bin/research", "data", "fetch", "art:" + "ab" * 32, "--to"]
     out = capsys.readouterr().out.splitlines()
-    assert out[0].startswith("record: ") and out[-1].startswith("3 of 6 block types")
+    assert out[0].startswith("record: ") and out[-1].startswith("3 of 6 proof-block types")
     assert cc.main(["art:" + "cd" * 32]) == 2
     assert "exited 1: no such artifact" in capsys.readouterr().err
