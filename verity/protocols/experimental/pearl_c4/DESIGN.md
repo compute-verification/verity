@@ -15,8 +15,8 @@ run its tests.
   `NotImplementedError("compute-accounting/pearl-c4-experimental")` until then: PoUW loads nothing of `experimental/`.
 - `prover/pc4.py`: its tile check as a circuit, on PoUW's shared tile-check parts (`circuit.tile_units`), and
   `prover/pc4_rowk.py` its row proof blocks cut along k on `circuit.rowk`'s cut, each with its circuit-check sidecar.
-- `tests/`: the twin, the fixture, the gate and `f1_fast` against the scalar reference, the scheme's pinned vectors
-  (`pearl_c4_vectors.py`, `pearl_c4_regions_vectors.py`, their JSON in `tests/vectors/`) and the scheme's and circuit's
+- `tests/verity/protocols/experimental/pearl_c4/`: the twin, the fixture, the gate and `f1_fast` against the scalar reference, the scheme's pinned vectors
+  (`pearl_c4_vectors.py`, `pearl_c4_regions_vectors.py`, their JSON in its `vectors/`) and the scheme's and circuit's
   tests, as a suite of their own. They extend PoUW's tests, whose helpers they import by name (`conftest.py`).
 
 ## Where the rest is
