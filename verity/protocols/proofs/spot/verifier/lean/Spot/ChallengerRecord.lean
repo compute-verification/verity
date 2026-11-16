@@ -56,7 +56,10 @@ def recordMessage (I : ByteArray) (host : String) (c : LiveCommitment) : V ByteA
   let d ← taggedSha512 COMMITMENT_TAG c.toJson
   return Flock.Sha512.hash (field RECORD_ROLE.toUTF8 ++ I ++ field (field host.toUTF8) ++ field d)
 
-private def hexOf? (j : Json) : Option ByteArray :=
+/-- A JSON string's bytes, if it is lowercase hex. Public (not `private`) so a completeness proof can rewrite it by its
+`.str` case (a round-tripping hex value decodes to its bytes) without the walk evaluating the blocked `unhex`; its callers
+are unchanged. -/
+def hexOf? (j : Json) : Option ByteArray :=
   match j with
   | .str s => (Flock.unhex s).toOption
   | _ => none

@@ -32,7 +32,7 @@ def Ratio.ofNat (n : Nat) : Ratio := ⟨n, 1⟩
 def Ratio.toString (r : Ratio) : String :=
   if r.den = 1 then s!"{r.num}" else s!"{r.num}/{r.den}"
 
-private def natOf (s : String) (ctx : String) : V Nat :=
+def natOf (s : String) (ctx : String) : V Nat :=
   if !s.isEmpty && s.all Char.isDigit && (s.length = 1 || s.front != '0') then .ok s.toNat!
   else .error s!"{ctx}: {s.quote} is not a natural number in canonical form"
 

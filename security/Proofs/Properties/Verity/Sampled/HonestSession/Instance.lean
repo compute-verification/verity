@@ -170,12 +170,12 @@ noncomputable def inst (hJ : JsonCanon.JsonFacts) : Instance Verity.Idle.device 
     obtain ⟨rfl, -, -⟩ := session_some hC hP hS hPr h
     show programDigestOf θ₀ = some (Verity.sha512 (if θ₀ = θ₀ then circuitFile else θ₀).data.toList)
     rw [ite_eq_left rfl]
-    exact (Params.digests hJ).1
+    exact (Params.digests).1
   publicHash θ' A h := by
     obtain ⟨rfl, -, -⟩ := session_some hC hP hS hPr h
     show publicDigestOf θ₀ = some (Verity.sha512 (if θ₀ = θ₀ then publicFile else θ₀).data.toList)
     rw [ite_eq_left rfl]
-    exact (Params.digests hJ).2
+    exact (Params.digests).2
   registered _ := Array.append_empty.symm
 
 end
@@ -201,7 +201,7 @@ private theorem registered_at : base.registered θ₀ = #[circuitFile, publicFil
 
 theorem circuit_at (hJ : JsonCanon.JsonFacts) : base.circuitFile θ₀ (base.registered θ₀) = circuitFile := by
   have hd : base.programDigest θ₀ = some (Verity.sha512 circuitFile.data.toList) :=
-    (show base.programDigest θ₀ = programDigestOf θ₀ from rfl).trans (Params.digests hJ).1
+    (show base.programDigest θ₀ = programDigestOf θ₀ from rfl).trans (Params.digests).1
   unfold Vocab.circuitFile
   rw [hd, registered_at]
   exact namedFile_first _ _
@@ -209,7 +209,7 @@ theorem circuit_at (hJ : JsonCanon.JsonFacts) : base.circuitFile θ₀ (base.reg
 theorem public_at (hJ : JsonCanon.JsonFacts) (h : Distinct) :
     base.publicFile θ₀ (base.registered θ₀) = publicFile := by
   have hd : base.publicDigest θ₀ = some (Verity.sha512 publicFile.data.toList) :=
-    (show base.publicDigest θ₀ = publicDigestOf θ₀ from rfl).trans (Params.digests hJ).2
+    (show base.publicDigest θ₀ = publicDigestOf θ₀ from rfl).trans (Params.digests).2
   unfold Vocab.publicFile
   rw [hd, registered_at]
   exact namedFile_second h
@@ -217,7 +217,7 @@ theorem public_at (hJ : JsonCanon.JsonFacts) (h : Distinct) :
 /-- `live` is the session v2 sets up on `θ₀` and the registered files, where their SHA-512s differ. -/
 theorem sets_up (hC : CircuitFileFacts) (hP : PublicFileFacts) (hS : SetupFacts) (hPr : ProgramFacts)
     (hJ : JsonCanon.JsonFacts) (hd : Distinct) : SetsUp base θ₀ (base.registered θ₀) (live hC hP hS hPr) := by
-  obtain ⟨p, hp, hpart, hprog, hvp, hvq, hvl, hvt, hch⟩ := Params.params_spec hJ
+  obtain ⟨p, hp, hpart, hprog, hvp, hvq, hvl, hvt, hch⟩ := Params.params_spec
   have hI := live_inputs hC hP hS hPr
   have hcirc : (live hC hP hS hPr).I.circuitFile = base.circuitFile θ₀ (base.registered θ₀) := by
     rw [hI, circuit_at hJ]; rfl
