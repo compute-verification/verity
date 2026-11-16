@@ -344,7 +344,7 @@ def test_declared_jobs_reads_a_commit_from_before_the_move_that_renamed_ci_toml(
 
 def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_path, monkeypatch):
     """Red-team 1171: `locate` read `moves.json` before looking at the current path, so a corrupt one made `merge.declaration`
-    none and `merge.required_steps` require nothing (a train sent no lean-agreement inputs)."""
+    none and `merge.required_steps` require nothing (a candidate sent no lean-agreement inputs)."""
     from research import merge
 
     moves = tmp_path / "moves.json"
