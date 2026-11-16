@@ -37,6 +37,27 @@ runs where `research run --on` with custody works today, the research coordinato
 A failure is a verdict and never retried; an error is, by the Job queue, until max_attempts.  The slots are saved to
 `dispatch-{name}.json` after each change (mode 600: it holds lease tokens), so a restarted dispatcher keeps tending the runs it
 launched.  Launch logs are under `logs/`.
+
+`research-run` is a lead's own `research run` line, run by the control pod with the keys it holds:
+
+    research worker --dispatch --kinds research-run [--slots 4] --name control
+
+    payload     {repo, commit, command, lane}, nothing else: `command` is a `research run ... -- ARGV` line, `lane` the lane that
+                sent it.  A payload `run_plan` refuses completes `failed` with why, and nothing is launched.
+    allowlist   each option before `--` is one of `run_allowed`'s, with a value of its form (`runline`), and anything else is refused:
+                CPU machines only (`--on auto`, the default, or `--on vy-nebius-cpu-N`), and never a path or key of the pod
+                (`--send`, `--source`, `--env-host`, `--runs-dir`, `--store-read`), the run's machine-side settings (`--id`,
+                `--claimed`, custody) or an auditor device (`remote.restricted`).  `--gpus 0` is always added, so a kind the
+                commit registers can't book a GPU.
+    slots       --slots virtual ones, `research-run-N`: no pod is measured, and the claim sends no capabilities.
+    launch      `PYTHON -P -s -m research run --source . --project verity OPTS --gpus 0 -- ARGV` in the commit's worktree, with
+                the dispatcher's own tree's research (`run_env`): nothing of the commit runs on the pod.
+    observe     every POLL_S the run's records and the last TAIL_BYTES of its stdout.log, following a run that left its line for
+                its late twin; they go out as `progress` {run_id, machine, state, rc, tail} at each renewal, and at the end as
+                the summary: its `research status` row, the tail and a result.json of at most RESULT_BYTES.
+    lease       a `cancel` answer cancels the run as `research cancel` does (SIGTERM to its process group on its machine); a
+                lost lease leaves it running and stops tending it.  It is stopped only past its own --timeout (else
+                RUN_TIMEOUT_MAX_S), its pool's wait, the launch and the runner's margin together.
 """
 from __future__ import annotations
 
@@ -54,9 +75,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..pods.lease import LEASE_FILE, RUN_MARGIN_S
+from . import runline
 from .client import TOKEN_ENV, WORKER_TOKEN_ENV, Unreachable
 
-KINDS = ("merge-check", "lean-regen", "audit-main")
+POD_KINDS = ("merge-check", "lean-regen", "audit-main")
+RUN_KIND = "research-run"
+KINDS = (*POD_KINDS, RUN_KIND)
 CHECK_KINDS = ("merge-check", "audit-main")
 PROJECT = "verity"
 STEP_S = 5
@@ -76,6 +100,158 @@ LAUNCHED = re.compile(r"research: run (r\d{8}-\d{6}-[0-9a-f]{4,}) launched")
 #: `research run --on`'s two ways of saying the machine failed a tool's preflight
 PREFLIGHT_REFUSED = re.compile(r"\(PreflightFailed\)|failed the preflight|preflight .+ did not finish")
 
+# ---- research-run: a lead's `research run` line, checked against the first week's allowlist (CPU machines only) ---------------
+
+RUN_SLOTS = 4
+RUN_SLOT = "research-run-"                 # a virtual slot's name, numbered from 1
+PAYLOAD = frozenset({"repo", "commit", "command", "lane"})
+LANE = re.compile(r"[a-z][a-z0-9-]{0,39}")
+COMMAND_MAX = 16384                         # characters of the line
+TAIL_BYTES = 6000                           # of stdout.log, in progress and the summary
+RESULT_BYTES = 2000                         # a result.json larger than this is named, not copied, in the summary
+SUMMARY_CHARS = 9000                        # the row, the tail and the result.json, under the site's 64 KiB body once escaped
+#: the longest --timeout: what the run's custody key lives without --custody-ttl (store.custody.DEFAULT_TTL; a test holds the
+#: two equal), which the list doesn't hold, and so what `research run` allows; a run that gives none is stopped as though it
+#: gave this
+RUN_TIMEOUT_MAX_S = 6 * 3600
+RUN_CPUS_MAX, RUN_MEM_GB_MAX = 64, 512
+CPU_MACHINE = re.compile(r"vy-nebius-cpu-[1-9][0-9]*")
+#: the queue's kinds whose shape takes no GPU (infra/cluster/kinds/)
+CPU_KINDS = frozenset({"agent-test", "lean-audit"})
+WORD = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def _number(read: Callable[[str], float], low: float, most: float, unit: str = "") -> Callable[[str], str | None]:
+    """A value `research run` reads with ``read``, above ``low`` and at most ``most``: NaN and an unreadable value are refused."""
+    def why(value: str) -> str | None:
+        try:
+            n = read(value)
+        except ValueError:
+            return "which `research run` can't read"
+        return None if low < n <= most else f"which isn't above {low:g} and at most {most:g}{unit}"
+    return why
+
+
+def _timeout_s(value: str) -> float:
+    from ..remote import timeout_seconds
+
+    return timeout_seconds(value)
+
+
+def _named(value: str) -> str:
+    return "a GPU run, or a run that needs " + value + ", goes through a Cursor worker for now"
+
+
+def _on(restricted: Callable[[], set[str]]) -> Callable[[str], str | None]:
+    def why(value: str) -> str | None:
+        if value != "auto" and not CPU_MACHINE.fullmatch(value):
+            return f"which isn't auto or a vy-nebius-cpu-N machine: {_named('another machine')}"
+        if value != "auto":
+            try:
+                devices = restricted()
+            except Exception as e:  # noqa: BLE001 -- unknown is refused
+                return f"and whether it is an auditor device can't be read ({type(e).__name__}: {e})"
+            if value in devices:
+                return "which is an auditor device, which no job reaches"
+        return None
+    return why
+
+
+def run_allowed(restricted: Callable[[], set[str]]) -> dict[str, runline.Form]:
+    """Each option a research-run line may carry, and the form of its value; `--on`'s check reads the auditor devices from
+    ``restricted``."""
+    from ..pods.nebius.slot_only import POOLS
+
+    return {
+        "--on": _on(restricted),
+        "--pool": frozenset(POOLS),
+        "--cpus": _number(int, 0, RUN_CPUS_MAX),
+        "--mem-gb": _number(float, 0, RUN_MEM_GB_MAX, " GB"),
+        "--timeout": _number(_timeout_s, 0, RUN_TIMEOUT_MAX_S, " s"),
+        "--max-min": _number(int, 0, RUN_TIMEOUT_MAX_S // 60, " min"),
+        "--cwd": frozenset({"source", "clone"}),
+        "--kind": frozenset(CPU_KINDS),
+        "--stage": WORD,
+        "--expect": re.compile(r"^[A-Za-z0-9_.-]+="),
+        "--require-result": None,
+        "--declared-output": re.compile(r"^."),
+        "--question": re.compile(r"^."),
+        "--stay": None,
+    }
+
+
+RUN_REPEATABLE = frozenset({"--expect", "--declared-output"})
+
+
+def _restricted() -> set[str]:
+    from .. import remote
+
+    return remote.restricted(remote.load_machines())
+
+
+@dataclass(frozen=True)
+class RunPlan:
+    opts: list[str]            # the checked options, `--on` first and `--gpus 0` last
+    argv: list[str]            # the workload, after `--`
+    lane: str
+    limit_s: float             # the dispatcher stops the run past this, counted from its claim
+
+
+def run_plan(payload: Any, repo: str, restricted: Callable[[], set[str]] = _restricted) -> RunPlan:
+    """What a research-run job launches, or ValueError saying why it is refused (module doc)."""
+    if not isinstance(payload, dict) or set(payload) != PAYLOAD:
+        got = sorted(payload) if isinstance(payload, dict) else type(payload).__name__
+        raise ValueError(f"the payload must hold exactly {', '.join(sorted(PAYLOAD))}, and it holds {got}")
+    if MOVED.get(payload["repo"], payload["repo"]) != MOVED.get(repo, repo):
+        raise ValueError(f"the job is for {payload['repo']!r}, and this dispatcher runs {repo}")
+    if not isinstance(payload["commit"], str) or not SHA.fullmatch(payload["commit"]):
+        raise ValueError("payload.commit must be a full commit sha")
+    if not isinstance(payload["lane"], str) or not LANE.fullmatch(payload["lane"]):
+        raise ValueError(f"payload.lane must be a lane's name ({LANE.pattern})")
+    line = payload["command"]
+    if not isinstance(line, str) or not 0 < len(line) <= COMMAND_MAX or "\0" in line:
+        raise ValueError(f"payload.command must be a `research run` line of 1 to {COMMAND_MAX} characters, without NUL")
+    try:
+        tokens = shlex.split(line)
+    except ValueError as e:
+        raise ValueError(f"payload.command doesn't split as a shell line ({e})") from None
+    if tokens[:2] != ["research", "run"] or "--" not in tokens or not tokens[tokens.index("--") + 1:]:
+        raise ValueError("payload.command must be `research run [OPTIONS] -- COMMAND...`")
+    i = tokens.index("--")
+    try:
+        opts = runline.options(tokens[2:i], run_allowed(restricted), repeatable=RUN_REPEATABLE,
+                               unknown=lambda name: f"takes {name}, which a research-run job may not carry: {_named(name)}")
+    except runline.Refused as e:
+        raise ValueError(f"its `research run` {e}") from None
+    if not any(name == "--on" for name, _ in opts):
+        opts.insert(0, ("--on", "auto"))
+    given = dict(opts)
+    run_s = max(_timeout_s(given.get("--timeout", "0")), int(given.get("--max-min", "0")) * 60) or RUN_TIMEOUT_MAX_S
+    from ..pods.nebius.slot_only import POOL_WAIT_S
+
+    return RunPlan([x for name, value in opts for x in (name,) + ((value,) if value is not None else ())] + ["--gpus", "0"],
+                   tokens[i + 1:], payload["lane"], run_s + POOL_WAIT_S + LAUNCH_TIMEOUT_S + RUN_MARGIN_S)
+
+
+def run_env(environ: dict[str, str], tree: Path, lane: str) -> dict[str, str]:
+    """The `research run` launcher's environment: ``environ`` (the launch child's, which is the dispatcher's and holds the pod's
+    keys, which the launcher needs to mint the run's custody) without the Job queue's tokens, CURSOR_CONVERSATION_ID or any
+    PYTHON* variable, and with PYTHONPATH the research of ``tree`` (the dispatcher's own tree) alone, RESEARCH_LAUNCHER_TREE
+    that tree, RESEARCH_AT_CHECKOUT=1 (that tree's research, never a cached main's) and RESEARCH_LANE and RESEARCH_AGENT_URL
+    the lane. The workload gets none of it: `research run` sends no local variable to the machine but what --env names."""
+    drop = {TOKEN_ENV, WORKER_TOKEN_ENV, "CURSOR_CONVERSATION_ID"}
+    env = {k: v for k, v in environ.items() if k not in drop and not k.startswith("PYTHON")}
+    env.update(PYTHONPATH=str(tree / "tools" / "research" / "src"), RESEARCH_LAUNCHER_TREE=str(tree), RESEARCH_AT_CHECKOUT="1",
+               RESEARCH_LANE=lane, RESEARCH_AGENT_URL=lane)
+    return env
+
+
+def own_tree() -> Path | None:
+    """The checkout this module runs from, which a research-run launch runs `research` from; None when it isn't in one."""
+    here = Path(__file__).resolve()
+    tree = here.parents[5]
+    return tree if (tree / "tools" / "research" / "src" / "research" / "jobs" / "dispatch.py").resolve() == here else None
+
 
 class DispatchError(Exception):
     """The dispatcher can't go on (a refused token, a worker the Job queue doesn't know): fix the setup and restart it."""
@@ -85,6 +261,8 @@ class DispatchError(Exception):
 class Observation:
     state: str                   # running | passed | failed | error
     summary: str
+    run_id: str | None = None    # research-run: the run now, its late twin once it has moved there
+    progress: dict | None = None  # research-run: {run_id, machine, state, rc, tail}
 
 
 @dataclass
@@ -104,6 +282,9 @@ class Slot:
     probed: float | None = None
     problem: str | None = None
     bench_until: float = 0.0     # after a failed preflight
+    virtual: bool = False        # a research-run slot: no pod behind it
+    progress: dict | None = None  # research-run: what the last observation saw, sent at each renewal
+    limit_s: float | None = None  # research-run: run_plan's limit_s
 
 
 def lease_needed(timeout_s: int) -> int:
@@ -128,10 +309,13 @@ def unavailable(capabilities: dict) -> str | None:
 @dataclass
 class Dispatcher:
     client: Any                                  # call(method, path, body) -> (status, body)
-    runner: Any                                  # probe(pod), start(job, attempt, pod), poll(launch), observe(job, run_id), stop(run_id)
+    runner: Any                                  # probe(pod), start(job, attempt, pod), poll(launch), observe(job, run_id), stop(run_id),
+                                                 # research-run's cancel(run_id) and restricted()
     pods: list[str]
     name: str = "rc"
-    kinds: tuple[str, ...] = KINDS
+    kinds: tuple[str, ...] = POD_KINDS
+    run_slots: int = 0                           # research-run's virtual slots, when it is among the kinds
+    repo: str = "compute-verification/verity"
     state_path: Path | None = None
     clock: Callable[[], float] = time.time
     sleep: Callable[[float], None] = time.sleep
@@ -143,10 +327,11 @@ class Dispatcher:
 
     def __post_init__(self):
         saved = self._load()
-        self.slots = [saved.get(p) or Slot(p) for p in self.pods]
+        virtual = [f"{RUN_SLOT}{i}" for i in range(1, self.run_slots + 1)] if RUN_KIND in self.kinds else []
+        self.slots = [saved.get(p) or Slot(p) for p in self.pods] + [saved.get(v) or Slot(v, virtual=True) for v in virtual]
         for s in saved.values():
-            if s.pod not in self.pods and s.job:
-                self.log(f"{s.pod}: job {s.job['id']} was running there, but the pod isn't in --pods; its lease will lapse")
+            if s.pod not in self.pods + virtual and s.job:
+                self.log(f"{s.pod}: job {s.job['id']} was running there, but the slot isn't in --pods or --slots; its lease will lapse")
 
     @property
     def worker(self) -> str:
@@ -185,21 +370,26 @@ class Dispatcher:
             return
         free = free[self.turn % len(free):] + free[:self.turn % len(free)]   # each pod gets the first ask in turn
         self.turn += 1
+        empty = set()                            # pods, virtual slots: a kind of slot whose claim came back empty this pass
         for s in free:
-            if self.clock() < s.bench_until:
+            if s.virtual in empty or self.clock() < s.bench_until:
                 continue
-            if s.probed is None or self.clock() - s.probed >= PREFLIGHT_S:
+            kinds = [k for k in self.kinds if (k == RUN_KIND) == s.virtual]
+            if not s.virtual and (s.probed is None or self.clock() - s.probed >= PREFLIGHT_S):
                 self._measure(s)
-            if s.problem:
+            if s.problem or not kinds:
                 continue
+            ask = {"worker": self.worker, "kinds": kinds, "slot": s.pod}
+            if not s.virtual:
+                ask["capabilities"] = s.capabilities
             try:
-                status, body = self.client.call("POST", "/api/jobs/claim", {"worker": self.worker, "kinds": list(self.kinds),
-                                                                           "slot": s.pod, "capabilities": s.capabilities})
+                status, body = self.client.call("POST", "/api/jobs/claim", ask)
             except Unreachable as e:
                 self.log(f"claim: the Job queue is unreachable ({e})")
                 break
             if status == 204:
-                break
+                empty.add(s.virtual)
+                continue
             if status != 200:
                 raise DispatchError(f"claim refused: {status} {body.get('error')}")
             self._start(s, body)
@@ -224,10 +414,20 @@ class Dispatcher:
         s.claimed = s.renewed = s.observed = now
         s.run_id, s.outcome, s.phase = None, None, "launching"
         self.log(f"{s.pod}: job {s.job['id']} ({s.job['kind']}) attempt {s.attempt}: launching")
-        need = lease_needed(s.job["payload"].get("timeout_s") or DEFAULT_TIMEOUT_S)
-        if (s.capabilities or {}).get("lease_s") is not None and s.capabilities["lease_s"] < need and "min_lease_s" not in s.job["requirements"]:
-            self.log(f"{s.pod}: job {s.job['id']} was added without min_lease_s, and the pod's lease ({s.capabilities['lease_s']} s) is "
-                     f"under the {need} s it needs; `research pods extend {s.pod}` before it ends the run")
+        if s.job["kind"] == RUN_KIND:
+            try:
+                s.limit_s = run_plan(s.job["payload"], self.repo, self.runner.restricted).limit_s
+            except ValueError as e:      # a verdict on the payload: no attempt would launch it
+                s.outcome = ["failed", f"refused: {e}"]
+                self._save()
+                self._report(s)
+                return
+            s.progress = {"run_id": None, "machine": None, "state": "launching", "rc": None, "tail": ""}
+        else:
+            need = lease_needed(s.job["payload"].get("timeout_s") or DEFAULT_TIMEOUT_S)
+            if (s.capabilities or {}).get("lease_s") is not None and s.capabilities["lease_s"] < need and "min_lease_s" not in s.job["requirements"]:
+                self.log(f"{s.pod}: job {s.job['id']} was added without min_lease_s, and the pod's lease ({s.capabilities['lease_s']} s) is "
+                         f"under the {need} s it needs; `research pods extend {s.pod}` before it ends the run")
         try:
             s.launch = self.runner.start(s.job, s.attempt, s.pod)
         except Exception as e:  # noqa: BLE001
@@ -252,7 +452,8 @@ class Dispatcher:
         if self.clock() - s.renewed < RENEW_S:
             return
         try:
-            progress = {k: v for k, v in (("pod", s.pod), ("run_id", s.run_id), ("step", s.phase)) if v}
+            progress = (s.progress if s.job["kind"] == RUN_KIND else
+                        {k: v for k, v in (("pod", s.pod), ("run_id", s.run_id), ("step", s.phase)) if v})
             status, body = self.client.call("POST", f"/api/jobs/{s.job['id']}/renew", {"lease_token": s.lease, "progress": progress})
         except Unreachable as e:
             self.log(f"{s.pod}: job {s.job['id']}: renew unreachable ({e}); the lease has {s.job.get('lease_s', 900)} s")
@@ -265,8 +466,13 @@ class Dispatcher:
                 s.outcome = ["error", "stopped: the job was cancelled"]
             self._save()
             return
-        self.log(f"{s.pod}: job {s.job['id']}: the lease is gone ({status} {body.get('error')}); stopping the run and dropping the job")
-        self._stop(s)
+        if s.job["kind"] == RUN_KIND:
+            what = f"run {s.run_id}" if s.run_id else f"its launch ({s.launch})" if s.launch else "nothing launched"
+            self.log(f"{s.pod}: job {s.job['id']}: the lease is gone ({status} {body.get('error')}); {what} is left running, "
+                     "and no longer tended here")
+        else:
+            self.log(f"{s.pod}: job {s.job['id']}: the lease is gone ({status} {body.get('error')}); stopping the run and dropping the job")
+            self._stop(s)
         self._free(s)
 
     def _launching(self, s: Slot) -> None:
@@ -281,11 +487,16 @@ class Dispatcher:
         s.launch = None
         if rc == 0 and run_id:
             s.run_id, s.phase, s.observed = run_id, "running", self.clock()
+            if s.progress is not None:
+                s.progress = {**s.progress, "run_id": run_id, "state": "submitted"}
             self.log(f"{s.pod}: job {s.job['id']}: run {run_id}")
-        elif PREFLIGHT_REFUSED.search(tail):
+        elif not s.virtual and PREFLIGHT_REFUSED.search(tail):
             s.bench_until = self.clock() + BENCH_S
             s.outcome = ["error", f"{s.pod} failed check's preflight, so another pod takes the job: {tail[-400:]}"]
             self.log(f"{s.pod}: failed check's preflight; benched for {BENCH_S} s")
+        elif s.virtual:                          # a verdict: another attempt would launch the same line again
+            s.progress = {**(s.progress or {}), "run_id": run_id, "state": "launch failed", "rc": rc, "tail": tail[-TAIL_BYTES:]}
+            s.outcome = ["failed", f"`research run` exited {rc}" + (f" (run {run_id})" if run_id else "") + f":\n{tail[-TAIL_BYTES:]}"]
         else:
             s.outcome = ["error", f"the launch exited {rc}" + (f" (run {run_id})" if run_id else "") + f": {tail[-400:]}"]
         self._save()
@@ -296,10 +507,18 @@ class Dispatcher:
             obs = self.runner.observe(s.job, s.run_id)
         except Exception as e:  # noqa: BLE001 -- fetch trouble is retried at the next poll, within the timeout
             obs = Observation("running", f"observing: {type(e).__name__}: {e}")
-        timeout = int(s.job["payload"].get("timeout_s") or DEFAULT_TIMEOUT_S)
+        if obs.run_id and obs.run_id != s.run_id:
+            self.log(f"{s.pod}: job {s.job['id']}: run {s.run_id} left its line unstarted; following its late twin {obs.run_id}")
+            s.run_id = obs.run_id
+        if obs.progress is not None:
+            s.progress = obs.progress
+        if s.limit_s is not None:
+            timeout, what = s.limit_s, "its own --timeout, its pool's wait, the launch and the runner's margin"
+        else:
+            timeout, what = int(s.job["payload"].get("timeout_s") or DEFAULT_TIMEOUT_S), "the job's timeout_s"
         if obs.state == "running" and self.clock() - s.claimed > timeout:
             self._stop(s)
-            obs = Observation("error", f"stopped after the job's timeout_s ({timeout} s); last seen: {obs.summary}")
+            obs = Observation("error", f"stopped after {what} ({timeout:g} s); last seen: {obs.summary}")
         if obs.state != "running":
             s.outcome = [obs.state, obs.summary]
         s.phase = obs.summary[:80] if obs.state == "running" else s.phase
@@ -308,7 +527,7 @@ class Dispatcher:
     def _report(self, s: Slot) -> None:
         outcome, summary = s.outcome
         try:
-            body = {"lease_token": s.lease, "outcome": outcome, "summary": str(summary)[:2000]}
+            body = {"lease_token": s.lease, "outcome": outcome, "summary": str(summary)[:SUMMARY_CHARS if s.job["kind"] == RUN_KIND else 2000]}
             if s.run_id:                                   # the site takes run_id only as a string
                 body["run_id"] = s.run_id
             status, body = self.client.call("POST", f"/api/jobs/{s.job['id']}/complete", body)
@@ -326,14 +545,16 @@ class Dispatcher:
         try:
             if s.launch:
                 self.runner.kill(s.launch)
-            if s.run_id:
+            if s.run_id and s.job["kind"] == RUN_KIND:
+                self.runner.cancel(s.run_id)
+            elif s.run_id:
                 self.runner.stop(s.run_id)
         except Exception as e:  # noqa: BLE001 -- the pod's lease and guard still end a run nobody stopped
             self.log(f"{s.pod}: stopping job {s.job['id']}: {type(e).__name__}: {e}")
         s.launch = None
 
     def _free(self, s: Slot) -> None:
-        s.job = s.lease = s.run_id = s.launch = s.outcome = None
+        s.job = s.lease = s.run_id = s.launch = s.outcome = s.progress = s.limit_s = None
         s.phase, s.attempt = "", 0
         s.probed = None                          # a fresh preflight before the next job
         self._save()
@@ -418,7 +639,11 @@ class ResearchRunner:
     python: str = sys.executable
     environ: dict | None = None
     url: str | None = None                   # where to fetch from; default https://github.com/{repo}.git
+    launcher_tree: Path | None = field(default_factory=own_tree)   # research-run's launcher runs this tree's research
     children: dict = field(default_factory=dict, repr=False)
+
+    def restricted(self) -> set[str]:
+        return _restricted()
 
     def env(self) -> dict:
         env = dict(os.environ if self.environ is None else self.environ)
@@ -458,7 +683,8 @@ class ResearchRunner:
         (self.workdir / "logs").mkdir(parents=True, exist_ok=True)
         spec.with_suffix(".result").unlink(missing_ok=True)
         spec.write_text(json.dumps({"job": job, "attempt": attempt, "pod": pod, "repo": self.repo, "workdir": str(self.workdir),
-                                    "python": self.python, "url": self.url or f"https://github.com/{self.repo}.git"}, indent=1))
+                                    "python": self.python, "url": self.url or f"https://github.com/{self.repo}.git",
+                                    "launcher_tree": str(self.launcher_tree) if self.launcher_tree else None}, indent=1))
         with open(self.workdir / "logs" / f"{stem}.log", "ab") as log:
             p = subprocess.Popen([self.python, "-m", "research.jobs.dispatch", "launch", str(spec)], stdout=log, stderr=subprocess.STDOUT,
                                  env=self.env(), start_new_session=True)
@@ -493,10 +719,21 @@ class ResearchRunner:
         from .. import runs as R
 
         d = self._run_dir(run_id)
+        if job["kind"] == RUN_KIND:
+            from ..cli import _moved_to
+
+            return observe_run(d, remote.fetch, stdout_tail, _moved_to)
         rec = remote.fetch(d)
         if rec.get("last_fetch_error"):
             return Observation("running", f"machine unreachable (rc {rec['last_fetch_error'].get('rc')})")
         return classify(job["kind"], R.summarize(d))
+
+    def cancel(self, run_id: str) -> None:
+        """The run cancelled as `research cancel` does it: SIGTERM to its process group on its machine, or withdrawn while it
+        waits for its hold."""
+        from .. import remote
+
+        remote.cancel(self._run_dir(run_id), reason="its research-run job was cancelled", by="research worker --dispatch")
 
     def stop(self, run_id: str) -> None:
         from .. import remote
@@ -540,6 +777,57 @@ def classify(kind: str, s: dict) -> Observation:
     return Observation("error", what)
 
 
+def stdout_tail(run_dir: Path) -> bytes:
+    """The last TAIL_BYTES of the run's stdout.log on its machine; nothing while it has none, and why when it can't be read."""
+    from .. import remote
+
+    rec = remote._read_json(run_dir / "remote.json") or {}
+    if not rec.get("remote_run_dir"):
+        return b""
+    try:
+        r = remote.ssh_run(remote.ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"),
+                           ["tail", "-c", str(TAIL_BYTES), f"{rec['remote_run_dir']}/stdout.log"], timeout=60)
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"(stdout.log unread: {type(e).__name__}: {e})".encode()
+    return r.stdout[-TAIL_BYTES:] if r.returncode == 0 else b""
+
+
+#: a twin's twin is never launched (only the first's asker launches one), so a run is followed at most this far
+TWIN_HOPS = 2
+
+
+def observe_run(run_dir: Path, fetch: Callable[[Path], dict], read_tail: Callable[[Path], bytes],
+                moved: Callable[[Path], Path | None]) -> Observation:
+    """A research-run's run as its machine has it now (`fetch`), followed to its late twin when it left its line unstarted
+    (`moved`, as `research run --wait` follows it), with its progress {run_id, machine, state, rc, tail}; once it has ended,
+    its outcome and summary: its `research status` row, the tail and its result.json when that is at most RESULT_BYTES."""
+    from .. import asker
+    from .. import runs as R
+    from ..cli import _fmt
+
+    for _ in range(TWIN_HOPS + 1):
+        rec = fetch(run_dir)
+        if rec.get("last_fetch_error"):
+            return Observation("running", f"machine unreachable (rc {rec['last_fetch_error'].get('rc')})", run_dir.name)
+        s = R.summarize(run_dir)
+        if not (s["state"] in R.ENDED and not asker.started(s) and (twin := moved(run_dir))):
+            break
+        run_dir = twin
+    raw = read_tail(run_dir)[-TAIL_BYTES:]
+    text = raw.decode(errors="replace")
+    progress = {"run_id": run_dir.name, "machine": (s.get("remote") or {}).get("machine"), "state": s["state"], "rc": s["rc"],
+                "tail": text}
+    obs = classify(RUN_KIND, s)
+    if obs.state == "running":
+        return Observation("running", str(s["state"]), run_dir.name, progress)
+    summary = f"{_fmt(s)}\n--- the last {len(raw)} bytes of stdout.log ---\n{text}"
+    if (result := run_dir / "result.json").is_file():
+        size = result.stat().st_size
+        summary += (f"\n--- result.json ---\n{result.read_bytes().decode(errors='replace')}" if size <= RESULT_BYTES else
+                    f"\n--- result.json: {size} bytes, over the {RESULT_BYTES} a summary holds ---")
+    return Observation(obs.state, summary, run_dir.name, progress)
+
+
 # ---- the launch child ---------------------------------------------------------------------------------------------------------------
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -576,6 +864,12 @@ def command(job: dict, pod: str, python: str, pack: Path | None, preflight: bool
     raise ValueError(f"this dispatcher doesn't run {job['kind']} jobs")
 
 
+def run_command(plan: RunPlan, python: str) -> list[str]:
+    """What the launch child runs in a research-run's worktree: `research run` from the dispatcher's tree, never the worktree's
+    (`-P`: the working directory is not on the path; `-s`: no user site; `run_env` names the tree)."""
+    return [python, "-P", "-s", "-m", "research", "run", "--source", ".", "--project", PROJECT, *plan.opts, "--", *plan.argv]
+
+
 #: the repository's address before its move into the organization (GitHub redirects it); a job from a submitter still on the old
 #: name is the same repository, so submitters and dispatchers don't have to change in lockstep
 MOVED = {"danielreuter/verity": "compute-verification/verity"}
@@ -583,6 +877,9 @@ MOVED = {"danielreuter/verity": "compute-verification/verity"}
 
 def validate(job: dict, repo: str) -> None:
     p = job["payload"]
+    if job["kind"] == RUN_KIND:
+        run_plan(p, repo)
+        return
     if MOVED.get(p.get("repo", repo), p.get("repo", repo)) != MOVED.get(repo, repo):
         raise ValueError(f"the job is for {p.get('repo')}, and this dispatcher checks {repo}")
     if not SHA.fullmatch(str(p.get("commit", ""))):
@@ -617,16 +914,29 @@ def launch(spec_path: Path) -> dict:
 
             pack = Path(LocalStore().fetch(p["verdict_pack"]))
         from .. import remote
+        from .. import runs as R
 
-        cmd = command(job, pod, spec["python"], pack, preflight=hasattr(remote, "run_preflight"))
+        env, plan, before = None, None, set()
+        if job["kind"] == RUN_KIND:
+            if spec.get("launcher_tree") is None:
+                raise RuntimeError("the dispatcher runs from no checkout, so it has no tree to launch `research run` from")
+            plan = run_plan(p, spec["repo"])
+            if why := launcher_refusal(spec["launcher_tree"], wt):
+                print(why, flush=True)
+                return {"rc": 2, "run_id": None, "tail": why + "\n"}
+            cmd, env = run_command(plan, spec["python"]), run_env(dict(os.environ), Path(spec["launcher_tree"]), plan.lane)
+            before = set(os.listdir(R.runs_root())) if R.runs_root().is_dir() else set()
+        else:
+            cmd = command(job, pod, spec["python"], pack, preflight=hasattr(remote, "run_preflight"))
         print(f"dispatch: job {job['id']} in {wt}: {' '.join(shlex.quote(c) for c in cmd[:8])} ...", flush=True)
-        proc = subprocess.Popen(cmd, cwd=wt, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        proc = subprocess.Popen(cmd, cwd=wt, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
+                                stdin=subprocess.DEVNULL if plan else None)
         run_id, tail = None, []
         for line in proc.stdout:
             sys.stdout.write(line)
             sys.stdout.flush()
             tail = (tail + [line])[-20:]
-            if m := LAUNCHED.search(line):
+            if (m := LAUNCHED.search(line)) and (plan is None or (run_id is None and launched_by(m.group(1), plan, before))):
                 run_id = m.group(1)
         rc = proc.wait()
     finally:
@@ -634,6 +944,35 @@ def launch(spec_path: Path) -> dict:
             fcntl.flock(lock, fcntl.LOCK_EX)
             _git(clone, "worktree", "remove", "--force", str(wt), check=False)
     return {"rc": rc, "run_id": run_id, "tail": "".join(tail)}
+
+
+def launcher_refusal(tree: str, source: Path) -> str | None:
+    """Why `research run` would refuse ``tree`` as the trusted tree of a launch from ``source`` (research.launcher's own
+    message), asked here first with this process's launcher: `research run` imports itself from ``tree``, so a tree too broken
+    for that would end in an import error, not the launcher's refusal. None when it would launch."""
+    from .. import launcher, settings
+
+    was = settings.get(launcher.ENV)
+    os.environ[launcher.ENV] = tree
+    try:
+        return launcher.refusal(source)
+    finally:
+        if was is None:
+            del os.environ[launcher.ENV]
+        else:
+            os.environ[launcher.ENV] = was
+
+
+def launched_by(run_id: str, plan: RunPlan, before: set[str]) -> bool:
+    """Whether ``run_id``, named in a research-run's launch output, is the run this launch made: a run dir new since the launch
+    began, whose command ends in the plan's workload. The output can carry the lead's own text, and a run id taken from it is
+    one the dispatcher cancels."""
+    from .. import remote
+    from .. import runs as R
+
+    rec = remote._read_json(R.runs_root() / run_id / "remote.json") if run_id not in before else None
+    command = (rec or {}).get("command")
+    return isinstance(command, list) and len(command) >= len(plan.argv) and command[len(command) - len(plan.argv):] == plan.argv
 
 
 def _launch_main(argv: list[str]) -> int:
