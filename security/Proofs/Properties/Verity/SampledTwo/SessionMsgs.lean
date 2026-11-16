@@ -17,7 +17,8 @@ messages `SpotFlock.V h` reads: SpotFlock's tagged Flock messages, not the recor
   `Spot.OneStageZk.heldStep` finds it, and the session's record on the blobs.
 * **Its statement** (`stmtRaw`, `stmtAtCase`): the statement the form verifies the session at
   (`Member.statement`, then `step` at the record's sample): `verity-verify-proof verify --zk` at `verity/flock-circuit`, the
-  member's circuit and public file, the blobs' lookup tables, the record's sample (`sampleBytes`), the member's partition
+  member's circuit and public file, its own lookup tables (`Spot.OneStageZk.ownTables`: the blobs' pinned tables its
+  circuit looks up), the record's sample (`sampleBytes`), the member's partition
   object and program and its registered reads, each JSON value as `Flock.RecordText.printT` prints it. Its fields are
   `SpotFlock.HeldOf.memberRaw`'s, so `pinOk` compares it with template `t`'s reference statement like with like.
 * **The statements' message** (`stmtsMsg`): one statement an entry of the evidence's `stmts`, which the run's
@@ -87,7 +88,7 @@ def stmtRaw (m : Spot.OneStageZk.Member) (circuit pub : ByteArray) (tables : Lis
     publicInputs := none }
 
 /-- **Template `t`'s session statement on the case**: its member's statement at its session's record's sample, with
-the member's own circuit, public file and registered reads and the blobs' lookup tables. -/
+the member's own circuit, public file, lookup tables (`Spot.OneStageZk.ownTables`) and registered reads. -/
 def stmtAtCase (k : Case) (t : ℕ) : Option Msg := do
   let pe ← formOf k
   let m ← memberAt pe.1 pe.2 t
@@ -95,7 +96,8 @@ def stmtAtCase (k : Case) (t : ℕ) : Option Msg := do
   let record ← recordAt k.blobs s
   let circuit ← (k.blobs.get m.own.circuit "circuit").toOption
   let pub ← (k.blobs.get m.own.pub "public file").toOption
-  pure (stmtRaw m circuit pub (Spot.OneStageZk.tablesOf k.blobs) (sampleBytes record)
+  let tables ← (Spot.OneStageZk.ownTables m.own k.blobs).toOption
+  pure (stmtRaw m circuit pub tables (sampleBytes record)
     (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode
 
 /-- **The session statements' encoding**: the list of statements as `SpotFlock.stmtsOf` reads one back. -/
@@ -230,15 +232,16 @@ theorem stmtAt_stmtsMsg (h : SpotFlock.Held) {k : Case} {m : Msg} (hm : stmtsMsg
 
 /-- **Template `t`'s session statement is its member's statement** at its session's record's sample. -/
 theorem stmtAtCase_some {k : Case} {t : ℕ} {x : Msg} (h : stmtAtCase k t = some x) :
-    ∃ p e m s record circuit pub, formOf k = some (p, e) ∧ memberAt p e t = some m ∧ filesAt e t = some s ∧
+    ∃ p e m s record circuit pub tables, formOf k = some (p, e) ∧ memberAt p e t = some m ∧ filesAt e t = some s ∧
       recordAt k.blobs s = some record ∧ (k.blobs.get m.own.circuit "circuit").toOption = some circuit ∧
       (k.blobs.get m.own.pub "public file").toOption = some pub ∧
-      x = (stmtRaw m circuit pub (Spot.OneStageZk.tablesOf k.blobs) (sampleBytes record)
+      (Spot.OneStageZk.ownTables m.own k.blobs).toOption = some tables ∧
+      x = (stmtRaw m circuit pub tables (sampleBytes record)
         (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode := by
   unfold stmtAtCase at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at h
-  obtain ⟨⟨p, e⟩, hf, m, hm, s, hs, record, hr, circuit, hc, pub, hp, rfl⟩ := h
-  exact ⟨p, e, m, s, record, circuit, pub, hf, hm, hs, hr, hc, hp, rfl⟩
+  obtain ⟨⟨p, e⟩, hf, m, hm, s, hs, record, hr, circuit, hc, pub, hp, tables, ht, rfl⟩ := h
+  exact ⟨p, e, m, s, record, circuit, pub, tables, hf, hm, hs, hr, hc, hp, ht, rfl⟩
 
 theorem getLast?_cons_concat (a b : Msg) : ∀ l : List Msg, ((a :: l) ++ [b]).getLast? = some b
   | [] => rfl

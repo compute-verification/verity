@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.SessionMsgs
 public import Proofs.Properties.Verity.SampledTwo.Steps
+public import Proofs.Properties.Spot.Tables
 
 /-!
 # A session's statement on an accepted case is under `2^64` bytes
@@ -14,8 +15,9 @@ sessions on the blobs (`stmtSizeAt`) it sums the lengths the session's statement
 
 * `stmtRaw_le`: a member's session statement (`SessionMsgs.stmtRaw`) encodes in no more bytes than the form's sum.
 * `pair_mem`: the `t`-th of the statements' sessions and its statement are a pair the form's step ran on.
-* `stmtAt_lt`: where the step passed, template `t`'s member's statement at its session's record's sample is under
-  `2^64` bytes.
+* `stmtAt_lt`: where the step passed, template `t`'s member's statement at its session's record's sample and its own
+  lookup tables is under `2^64` bytes. The form sums the bytes of every pinned table the blobs hold, and a member's
+  own tables are a filter of them (`tablesSize_ownTables_le`), so the form's bound holds them (`stmtSize_mono`).
 * `stmtAtCase_lt`: on a case the form's check accepts, template `t`'s session statement (`SessionMsgs.stmtAtCase`)
   is under `2^64` bytes.
 -/
@@ -113,16 +115,47 @@ theorem pair_mem {l : List Spot.OneStageZk.StatementFiles} {t : ℕ} {st : Spot.
     cases hs
     exact List.mem_of_getElem? hq
 
+/-- A filter of a list of tables is of no more bytes (`tablesSize`). -/
+theorem tablesSize_filter_le (q : String × ByteArray → Bool) :
+    ∀ l : List (String × ByteArray),
+      VStar.Recursive.SampledTwo.tablesSize (l.filter q) ≤ VStar.Recursive.SampledTwo.tablesSize l
+  | [] => Nat.le_refl _
+  | a :: l => by
+    have ih := tablesSize_filter_le q l
+    unfold VStar.Recursive.SampledTwo.tablesSize at ih ⊢
+    rw [List.filter_cons]
+    split <;> simp only [List.map_cons, List.sum_cons] <;> omega
+
+/-- **A member's own lookup tables are of no more bytes than every pinned table the blobs hold**: they are a filter
+of them (`Properties.Spot.SecurityProofs.ownTables_ok`, `Spot.OneStageZk.tablesAmong`). -/
+theorem tablesSize_ownTables_le {o : Spot.OneStageZk.Own} {bs : Core.Blobs} {tables : List (String × ByteArray)}
+    (h : Spot.OneStageZk.ownTables o bs = .ok tables) :
+    VStar.Recursive.SampledTwo.tablesSize tables ≤
+      VStar.Recursive.SampledTwo.tablesSize (Spot.OneStageZk.tablesOf bs) := by
+  obtain ⟨-, names, -, -, rfl⟩ := Properties.Spot.SecurityProofs.ownTables_ok h
+  exact tablesSize_filter_le _ _
+
+/-- `stmtSize` grows with its tables' bytes. -/
+theorem stmtSize_mono (o : Spot.OneStageZk.Own) (circuit pub : ByteArray) {a b : ℕ} (hab : a ≤ b)
+    (draw : Option Json) :
+    VStar.Recursive.SampledTwo.stmtSize o circuit pub a draw ≤
+      VStar.Recursive.SampledTwo.stmtSize o circuit pub b draw := by
+  unfold VStar.Recursive.SampledTwo.stmtSize
+  omega
+
 /-- **Where the form's step passed, template `t`'s member's statement is under `2^64` bytes**, at its session's
-record's sample, the member's circuit and public files and the blobs' lookup tables. -/
+record's sample, the member's circuit and public files and its own lookup tables: the form bounds the statement at
+every pinned table the blobs hold (`stmtsBytesFit`), and the member's own are of no more bytes
+(`tablesSize_ownTables_le`). -/
 theorem stmtAt_lt {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence} {bs}
     (hfit : VStar.Recursive.SampledTwo.stmtsBytesFit p e bs = .ok ()) {t : ℕ} {m : Spot.OneStageZk.Member}
-    {s : Spot.OneStageZk.RunFiles} {record : String} {circuit pub : ByteArray}
+    {s : Spot.OneStageZk.RunFiles} {record : String} {circuit pub : ByteArray} {tables : List (String × ByteArray)}
     (hm : SessionMsgs.memberAt p e t = some m) (hs : SessionMsgs.filesAt e t = some s)
     (hrec : SessionMsgs.recordAt bs s = some record)
     (hc : (bs.get m.own.circuit "circuit").toOption = some circuit)
-    (hpb : (bs.get m.own.pub "public file").toOption = some pub) :
-    (SessionMsgs.stmtRaw m circuit pub (Spot.OneStageZk.tablesOf bs) (SessionMsgs.sampleBytes record)
+    (hpb : (bs.get m.own.pub "public file").toOption = some pub)
+    (ht : (Spot.OneStageZk.ownTables m.own bs).toOption = some tables) :
+    (SessionMsgs.stmtRaw m circuit pub tables (SessionMsgs.sampleBytes record)
       (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode.length < 2 ^ 64 := by
   unfold SessionMsgs.memberAt at hm
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at hm
@@ -136,7 +169,8 @@ theorem stmtAt_lt {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.S
     unfold SessionMsgs.recordAt at hrec
     unfold VStar.Recursive.SampledTwo.stmtSizeAt
     simp only [hname, hfind, hrec, hc, hpb, Option.bind_eq_bind, Option.bind_some, Option.pure_def]
-  exact Nat.lt_of_le_of_lt (stmtRaw_le m circuit pub _ (_root_.Flock.Witness.recordDraw record))
+  exact Nat.lt_of_le_of_lt (Nat.le_trans (stmtRaw_le m circuit pub tables (_root_.Flock.Witness.recordDraw record))
+    (stmtSize_mono m.own circuit pub (tablesSize_ownTables_le (SpotFlock.HeldOf.ok_of_toOption ht)) _))
     (VStar.Recursive.SampledTwo.stmtsBytesFit_at hfit hmem hsz)
 
 /-- **On a case the form's check accepts, template `t`'s session statement is under `2^64` bytes**: the check ran
@@ -146,9 +180,10 @@ theorem stmtAtCase_lt {k : Case} {p : VStar.Recursive.SampledTwo.Params} {e : VS
     {c ξ pub prof} (hf : SessionMsgs.formOf k = some (p, e))
     (hck : VStar.Recursive.SampledTwo.checkBlobsAtWith true p c ξ e k.blobs = .accept pub prof) {t : ℕ} {x : Msg}
     (hx : SessionMsgs.stmtAtCase k t = some x) : x.length < 2 ^ 64 := by
-  obtain ⟨p', e', m, s, record, circuit, pubB, hf', hm, hs, hrec, hc, hpb, rfl⟩ := SessionMsgs.stmtAtCase_some hx
+  obtain ⟨p', e', m, s, record, circuit, pubB, tables, hf', hm, hs, hrec, hc, hpb, ht, rfl⟩ :=
+    SessionMsgs.stmtAtCase_some hx
   rw [hf] at hf'
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hf')
-  exact stmtAt_lt (VStar.Recursive.SampledTwo.accepted_stmtsBytesFit hck) hm hs hrec hc hpb
+  exact stmtAt_lt (VStar.Recursive.SampledTwo.accepted_stmtsBytesFit hck) hm hs hrec hc hpb ht
 
 end Verity.SampledTwo.StmtBytes

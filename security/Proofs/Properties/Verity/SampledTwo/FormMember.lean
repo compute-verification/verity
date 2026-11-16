@@ -29,15 +29,15 @@ have the same units (`MembersApart`, a theorem at any case).
   model's population check at a part, and whose header as the form reads it holds the units `us`, has `us` the
   part's slots, in order. The header and its `norm` are equivalent (`FlockDeploy.jsonEquiv_norm`), so their
   `units.indices` read the same numbers.
+* **`MemberAtFixed`** (`memberAtFixed_of_coins`), from the four, `StageCoinsOne` and `MembersApart`: the two plays'
+  members at template `t` have the units of one part, so they are one member.
 * **`MembersApart`** (`membersApart`), with no hypothesis: the parameters' reading (`Spot.OneStageZk.membersOf`)
   refuses a member with no range, a range with no unit and a range that starts before another member's ends, so two
   members it returns have no unit in common and a member has one (`FormMember.membersOf_apart`). The reader is
   walked join point by join point (`SpotFlock.DoWalk`).
 
-**Not established here**: `MemberAtFixed`, which reads template `t`'s statement decoded at its member's files
-(`FormDraw.lean`): the form sets each session up at the pinned tables its member's circuit looks up
-(`Spot.OneStageZk.ownTables`), and the statement reads every pinned table the blobs hold (`Spot.OneStageZk.tablesOf`).
-`StageCoinsOne` is a hypothesis, which `stageCoinsOne_of_play` (`FormDraw.lean`) gives from `PlayCoinsOne`.
+**Not established here**: `StageCoinsOne`, a hypothesis, which `stageCoinsOne_of_play` (`FormDraw.lean`) gives from
+`PlayCoinsOne`.
 -/
 
 @[expose] public section
@@ -194,6 +194,57 @@ whose units, each range's in order (`Spot.OneStageZk.Member.indices`), are the s
 def MembersApart (C : CaseOf) : Prop :=
   ∀ o k p e, C o = some k → SessionMsgs.formOf k = some (p, e) →
     ∀ m ∈ p.members, ∀ m' ∈ p.members, m.indices = m'.indices → m = m'
+
+/-- **`MemberAtFixed` from the stage coins** (`StageCoinsOne`) and `MembersApart`, where the reading's statements
+are the case's: each play's `t`-th statement is its member's at the member's public file on the blobs
+(`stmtAt_raw`), the model's check holds both files' headers to template `t`'s part at one replay sample's size
+(`SpotFlock.population_of_stmtOk`), and the form's check holds each file's units to its member's
+(`SessionCoins.population_at`, `population_units`), so the two members' units are the part's slots
+(`units_of_population`) and the two are one member. -/
+theorem memberAtFixed_of_coins {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
+    {L : CoinMap.Locate} (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg) (hst : StmtsRead A C S)
+    (hcount : StmtsCount A C Good) (hfit : SessionCoins.StmtsFit C Good) (hone : StageCoinsOne A C S Good L)
+    (hapart : MembersApart C) : MemberAtFixed A C Good L := by
+  intro o o' k k' p e e' hA hG hA' hG' hk hk' hlog hf hf' t ht
+  obtain ⟨x₀, hx₀⟩ := stmtAtCase_of_read hS hst hcount hA hG hk hf ht
+  obtain ⟨x₀', hx₀'⟩ := stmtAtCase_of_read hS hst hcount hA' hG' hk' hf' ht
+  obtain ⟨p₁, e₁, _, fs, record, _, _, _, hf₁, -, hfs, hrec, -, -, -, -⟩ := SessionMsgs.stmtAtCase_some hx₀
+  obtain ⟨rfl, rfl⟩ : p = p₁ ∧ e = e₁ := Prod.mk.inj (Option.some.inj (hf.symm.trans hf₁))
+  obtain ⟨p₁', e₁', _, fs', record', _, _, _, hf₁', -, hfs', hrec', -, -, -, -⟩ := SessionMsgs.stmtAtCase_some hx₀'
+  obtain ⟨rfl, rfl⟩ : p = p₁' ∧ e' = e₁' := Prod.mk.inj (Option.some.inj (hf'.symm.trans hf₁'))
+  obtain ⟨m₂, m, circuitB, pubB, tables, hm₂, hm, hp, hdec, -⟩ :=
+    stmtAt_raw hS hst hcount hfit hA hG hk hf ht hfs hrec
+  obtain ⟨m₂', m', circuitB', pubB', tables', hm₂', hm', hp', hdec', -⟩ :=
+    stmtAt_raw hS hst hcount hfit hA' hG' hk' hf' ht hfs' hrec'
+  obtain ⟨x, x', m₁, m₁', c₀, c₁, hok, hok'⟩ :=
+    hone o o' k k' p e e' m₂ m₂' hA hG hA' hG' hk hk' hlog hf hf' hm₂ hm₂'
+  have key : ∀ {o : Verity.Exchange} {k : Case} {e : VStar.Recursive.SampledTwo.Evidence} {x m₁ m₂ : Msg}
+      {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray} {tables : List (String × ByteArray)} {record : String},
+      FormAccepts C o → C o = some k →
+      SessionMsgs.formOf k = some (p, e) → SessionMsgs.memberAt p e t = some m →
+      k.blobs.get m.own.pub "public file" = .ok pubB →
+      FlockDeploy.decode (SpotFlock.stmtAt A.h m₂ t) =
+        some (SessionMsgs.stmtRaw m circuitB pubB tables (SessionMsgs.sampleBytes record)
+          (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)) →
+      SpotFlock.stmtOk A.h x m₁ m₂ c₀ c₁ = true →
+      m.indices.toList =
+        (List.range ((A.h.reg.sample (SpotFlock.src c₀)).size *
+          (SpotFlock.partAt A.h (A.h.reg.sample (SpotFlock.src c₀)).size t).n)).map
+          ((SpotFlock.partAt A.h (A.h.reg.sample (SpotFlock.src c₀)).size t).lo + ·) := by
+    intro o k e x m₁ m₂ m circuitB pubB tables record hA hk hf hm hp hdec hok
+    obtain ⟨w, hd, hw, hH, hpo⟩ := SpotFlock.population_of_stmtOk hok ht
+    obtain rfl := Option.some.inj (hw.symm.trans hdec)
+    have hH₁ : SpotFlock.headerOf pubB = some hd := hH
+    obtain ⟨pubB₂, slice, hp₂, hpop⟩ := SessionCoins.population_at hA hk hf (memberAt_mem hm)
+    obtain rfl : pubB₂ = pubB := Except.ok.inj (hp₂.symm.trans hp)
+    obtain ⟨hdr, hh, hu⟩ := population_units hpop
+    obtain rfl : hdr = Flock.norm hd := Except.ok.inj (hh.symm.trans (header_norm hH₁))
+    exact units_of_population hH₁ hpo hu
+  have hi := key hA hk hf hm hp hdec hok
+  have hi' := key hA' hk' hf' hm' hp' hdec' hok'
+  rw [hm, hm']
+  exact congrArg some
+    (hapart o k p e hk hf m (memberAt_mem hm) m' (memberAt_mem hm') (Array.toList_inj.1 (hi.trans hi'.symm)))
 
 /-! ## No two members of the parameters have the same units -/
 

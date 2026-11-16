@@ -345,20 +345,21 @@ theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) 
 
 /-- **Template `t`'s session statement carries the files the check verified its session on**: where the template's
 member, its session's record's text and the member's circuit and public files on the blobs are read,
-`SessionMsgs.stmtAtCase` is the member's statement (`SessionMsgs.stmtRaw`) at those files, the blobs' lookup tables,
-the record's sample and the member's registered reads. -/
+`SessionMsgs.stmtAtCase` is the member's statement (`SessionMsgs.stmtRaw`) at those files, its own lookup tables
+(`Spot.OneStageZk.ownTables`), the record's sample and the member's registered reads. -/
 theorem stmtAtCase_of_member {k : Case} {p : VStar.Recursive.SampledTwo.Params}
     {e : VStar.Recursive.SampledTwo.Evidence} (hf : SessionMsgs.formOf k = some (p, e)) {t : ℕ}
     {m : Spot.OneStageZk.Member} (hm : SessionMsgs.memberAt p e t = some m) {fs : Spot.OneStageZk.RunFiles}
     (hs : SessionMsgs.filesAt e t = some fs) {record : String} (hr : SessionMsgs.recordAt k.blobs fs = some record)
     {circuitB pubB : ByteArray} (hc : k.blobs.get m.own.circuit "circuit" = .ok circuitB)
-    (hp : k.blobs.get m.own.pub "public file" = .ok pubB) :
+    (hp : k.blobs.get m.own.pub "public file" = .ok pubB) {tables : List (String × ByteArray)}
+    (ht : Spot.OneStageZk.ownTables m.own k.blobs = .ok tables) :
     SessionMsgs.stmtAtCase k t =
-      some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.sampleBytes record)
+      some (SessionMsgs.stmtRaw m circuitB pubB tables (SessionMsgs.sampleBytes record)
         (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).encode := by
   unfold SessionMsgs.stmtAtCase
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq]
   exact ⟨(p, e), hf, m, hm, fs, hs, record, hr, circuitB, congrArg Except.toOption hc, pubB,
-    congrArg Except.toOption hp, rfl⟩
+    congrArg Except.toOption hp, tables, congrArg Except.toOption ht, rfl⟩
 
 end Verity.SampledTwo.SessionCoins
