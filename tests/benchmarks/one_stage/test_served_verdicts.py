@@ -4457,7 +4457,7 @@ def test_under_pearlplus_tie_a_uniform_rate_goes_on_where_pearlplus_tie_uniform_
     rc, lines, order, _limits = _v3c(tmp_path, **{**PEARL_TIED, "V3C_LAW": stated, "PEARLPLUS_TIE_UNIFORM": "1"})
     assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
     assert _audited(tmp_path, ("--sampling-design", "--ports")) == {"--sampling-design": stated, "--ports": "16"}
-    assert (f"V3C-TIE: sampled at {stated}, no stratified rate (PEARLPLUS_TIE_UNIFORM=1): a weaker tie, not the tied "
+    assert (f"V3C-TIE: sampled at {_published(stated)}, no stratified rate (PEARLPLUS_TIE_UNIFORM=1): a weaker tie, not the tied "
             "guarantee") in lines
 
 
