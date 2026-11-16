@@ -396,22 +396,30 @@ number. Recursion is no member, because its seconds are a whole recursive run's.
 
 ## On a machine of your own
 
-The install, from a clone of the tree: `uv sync --all-packages --extra torch-cpu` (the printer and `research`, the
-store's client, which only a run id needs). The runs below build M0's `flock-circuit` (Rust, `cargo`) and Lean's
-`verity-verify-proof` (the tree's Lean toolchain, through `elan`) from the tree themselves. Each writes its result under
-`$OUT`, default `$RESEARCH_RUN_DIR/out` (a5's `./out` outside a run, recursion's `/tmp/rec-bench-PID/out`); give that
+The install, from a clone of the tree, with [uv](https://docs.astral.sh/uv/getting-started/installation/):
+`uv sync --all-packages --extra torch-cpu` (the printer and `research`, the store's client, which only a run id needs).
+The runs below build M0's `flock-circuit` (Rust, `cargo`) and Lean's `verity-verify-proof` (the tree's Lean
+toolchain, through `elan`) from the tree themselves. Each writes its result under `$OUT`, default `$RESEARCH_RUN_DIR/out` (a5's `./out` outside a run, recursion's `/tmp/rec-bench-PID/out`); give that
 directory to the printer's flag. In order, each from the tree's root:
 
-1. **The sampling layer, and the workload directory the next two read**, on one H200 with 192 GB (the script's usage
-   line): `OUT=DIR bash benchmarks/one_stage/a5_llama1b_h200.sh`. It leaves the Commit's workload directory `D` under
-   `$A5_ROOT/RUN/` (default `/workspace/research/vllm-sha512-a5`). Give `DIR` to `--sampling`.
+1. **The sampling layer, and the workload directory the next two read**, on one H200 with about 400 GB of host memory
+   (the script's usage line), after its one bootstrap, `(cd adapters/vllm && bash verity_vllm/ops/pod_bootstrap.sh
+   --cases LLAMA32_1B_INT8)`, which makes the vLLM environment, the int8 checkpoint and the sm_90 taps it reads under
+   `WORK` (default `/workspace`): `A5_KEEP=1 OUT=DIR bash benchmarks/one_stage/a5_llama1b_h200.sh`. With `A5_KEEP=1`
+   it leaves the Commit's workload directory `D` under `$A5_ROOT/RUN/` (default `$WORK/a5-llama1b`); without it the
+   script removes `D` at exit. Give `DIR` to `--sampling`.
 2. **The Flock layer**, on CPU with 64 GB (`benchmarks/prove_path/run.sh`'s usage line), on the machine that holds `D`:
    `PP_LLAMA=D LROW=ROW PP_PLAIN=1 PP_PARTITION=FILE PP_FORGED_PARTITION=FILE bash benchmarks/prove_path/run.sh`, where
-   `LROW` is the workload's name, `PP_PARTITION` the honest partition (`..._step1_all_stratified.json`, plain's sample
-   is stratified) and `PP_FORGED_PARTITION` the forged arm's. `benchmarks/prove_path/README.md` says what each variable
-   is, and `run.sh`'s usage line their current form. Give the honest arm's directory to `--flock`.
+   `LROW` is the workload's name (a5's: `llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager`),
+   `PP_PARTITION` the honest partition
+   (`benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json`, plain's sample is stratified)
+   and `PP_FORGED_PARTITION` the forged arm's
+   (`benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24_stratified.json`).
+   `benchmarks/prove_path/README.md` says what each variable is, and `run.sh`'s usage line their current form. Give
+   the honest arm's directory to `--flock`.
 3. **The zero-knowledge layer**, the same without `PP_PLAIN=1` and `PP_FORGED_PARTITION` (the forged arm then takes
-   `run.sh`'s default), with `PP_PARTITION` the unstratified `..._step1_all.json`. Give its honest arm to `--zk`.
+   `run.sh`'s default), with `PP_PARTITION` the unstratified
+   `benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json`. Give its honest arm to `--zk`.
 4. **The recursion layer**, on 32 CPU cores with 128 GB (`run.py`'s memory behind the ZK server), about an hour at
    K = 4096:
    `taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=DIR`. Give its `$OUT` to
@@ -419,8 +427,8 @@ directory to the printer's flag. In order, each from the tree's root:
 
 Then `verity bench prove layers --flock A --zk B --sampling C --recursion E`, which reads only those directories.
 
-What needs a team node today: a5 reads, under the team's work directory, vLLM's venv (`/workspace/cp/venv312`), the
-int8 checkpoint (`/workspace/hf`), the sm_90 taps (`/workspace/research/vllm-composed-h200int8`) and `gpu-lease`, so
+What needs a team node today: a5 reads, under the team's work directory, vLLM's venv (`/workspace/venv312`), the
+int8 checkpoint (`/workspace/hf`), the sm_90 taps (`/workspace/cp`) and `gpu-lease`, so
 step 1 doesn't run elsewhere as written, and steps 2 and 3 need its `D`. Recursion's launcher, `verity bench
 recursion_e2e run`, starts a `research run` on a team node; `job.sh` as above is the same job without it.
 
