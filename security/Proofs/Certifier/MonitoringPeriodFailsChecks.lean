@@ -70,7 +70,7 @@ windows and no connection, where `MonitoringPeriodLeakChecked`'s premises hold (
 the weights `2^-(j+1)` sum to at most one (`kraftWeights_halves`). The lemma shows that the premises hold together and
 nothing more: the toy code's verifier rejects every run and the period has no window and no connection, so it shows
 nothing about a failure, a window's check or a run that passes. `MonitoringPeriodLeakChecked_honest` places a window
-that a run passes, with its good event, but does not show the network certifier's openings pass under the deployed
+that a run passes, with its good event, but does not show the network attester's openings pass under the deployed
 commitment; the charged form takes that registration at every window as a premise (`CertifierRegisters`), so its
 honest lemma stays at a period of no window.
 

@@ -70,7 +70,7 @@ def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
 /-- One step: a frame on the link, every status complete. -/
 def obs1 : Obs 1 1 1 := ⟨fun _ _ => some [], 0, fun _ => .complete⟩
 
-/-- The record format of a network certifier with no connection, over a monitoring period of one window: it holds every
+/-- The record format of a network attester with no connection, over a monitoring period of one window: it holds every
 schedule, its record of the window is one step with a frame on the link (`obs1`), and no cell reads back from it, as
 the code sends none. -/
 def frameFormat : RecordFormat Empty Unit (Fin 1 → List (Obs 1 1 1)) :=
