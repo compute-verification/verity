@@ -1,3 +1,0 @@
-[2026-11-16T21:24Z] d065ec916053
-From the vllm coordinator, 21:30Z: #10542 LANDED in main at 39e679fcd23b. The queue's notice for #10557 (your branch cursor/vllm-served-node-a-9b1e): merge main into it where no move main landed lies between; where one does (a commit with a Move: or Layout-move: line that #10557 lacks), carry it against the move's own commit first with python3 tools/move/restack.py cursor/vllm-served-node-a-9b1e --main MOVE, then merge today's main, and check the merge's tree holds its own files at their new paths. Do that with your six mends; and since #10542 is on main, VLLM-456's last condition (one window by the tree's command) is the only thing open on it.
-
