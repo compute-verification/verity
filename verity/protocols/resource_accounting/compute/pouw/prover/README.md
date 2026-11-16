@@ -28,7 +28,7 @@ device (`serving/tensors.py`; the device adapter does, at import), and `lowering
 distribution's row in `tests/import_order.toml` until `verity_flock` joins `verity`. It reads no environment variable
 outside `kernels/`, and nothing under `benchmarks/` or `adapters/`; outside `kernels/`, `serving/` and `lowering/` it reads
 no file. Its tests are in `tests/` and in
-`verity/protocols/resource_accounting/compute/pouw/verifier/tests/`; the device adapter's own tests cover the device code
+`tests/verity/protocols/resource_accounting/compute/pouw/verifier/`; the device adapter's own tests cover the device code
 it hands in, and the vLLM adapter's own tests drive `serving/` on its engine.
 
 `kernels/` holds the device code, one directory each:

@@ -60,5 +60,5 @@ in `../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/`; wh
 `edited_gemm/`'s references import `floored_gemm/derive.py`'s `tile_receipts` (the duo receipts of one 128 x 128 tile)
 beside `floored_gemm/ref.py`;
 The r9 folds' reference as recorded is the receipts' fixture
-(`verity/protocols/resource_accounting/compute/pouw/verifier/receipts/tests/fixtures/receipt_folds_r9.py`), held by its
+(`tests/verity/protocols/resource_accounting/compute/pouw/verifier/receipts/fixtures/receipt_folds_r9.py`), held by its
 sha256, so leave it unedited.

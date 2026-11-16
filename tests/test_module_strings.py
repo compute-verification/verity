@@ -39,23 +39,23 @@ HISTORY_KEYS = frozenset({"argv", "command", "cmd", "invocation", "provenance", 
 #: (file, the string as written: `module` or `module:attr`) that don't resolve and aren't meant to, each with why
 EXEMPT = {
     # the reuse probe's candidates: names a design document left unstated, tried one by one on the pod
-    ("adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:check_applicability"):
+    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:check_applicability"):
         "probed",
-    ("adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:load_artifact"):
+    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:load_artifact"):
         "probed",
-    ("adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.applicability:check"):
+    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.applicability:check"):
         "probed",
-    ("adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.pipeline.build:check_applicability"):
+    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.pipeline.build:check_applicability"):
         "probed",
     # the tool specs the preflight tests feed it, which name no tool on purpose
-    ("tools/research/tests/test_remote_preflight.py", "tools.fake.tool:FAKE"): "a stand-in",
-    ("tools/research/tests/test_remote_preflight.py", "tools.other.tool:X"): "a stand-in",
+    ("tests/tools/research/test_remote_preflight.py", "tools.fake.tool:FAKE"): "a stand-in",
+    ("tests/tools/research/test_remote_preflight.py", "tools.other.tool:X"): "a stand-in",
     # a tool declaration the move guards find in a synthetic tree, under its pre-move or post-move path
-    ("tools/research/tests/test_store_prov.py", "tools.agree.tool:AGREE"): "a stand-in",
+    ("tests/tools/research/test_store_prov.py", "tools.agree.tool:AGREE"): "a stand-in",
     # a file of the small tree the import order's checks are held on, which names a module of that tree
     ("tests/test_boundaries.py", "verity.runtime.toy:run"): "a stand-in",
     # the shell line the one-CLI lint must pass over: a `-m` in a comment
-    ("adapters/vllm/tests/lint/test_p06_one_cli.py", "verity_vllm.not_code"): "a stand-in",
+    ("tests/adapters/vllm/tests/lint/test_p06_one_cli.py", "verity_vllm.not_code"): "a stand-in",
     # the vLLM row tools research's registry names: research_tools computes them from `research` on first read (its
     # `__getattr__`), so no top-level line binds them
     **{("tools/research/src/research/store/tools_registry.py", f"adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_{s}"):
@@ -247,6 +247,6 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     seen = {(p, k, m + (f":{a}" if a else "")) for p, k, m, a in scan()}
     registry = "tools/research/src/research/store/tools_registry.py"
     assert {(registry, "attr", "tools.check.tool:CHECK"), ("tools/research/pyproject.toml", "attr", "research.cli:main"),
-            ("adapters/vllm/tests/ops/test_epoch_row.py", "main", "verity_vllm.pipeline.cli"),
-            ("adapters/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.observe.fold.profiles.derived_B0_ovs"),
+            ("tests/adapters/vllm/tests/ops/test_epoch_row.py", "main", "verity_vllm.pipeline.cli"),
+            ("tests/adapters/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.observe.fold.profiles.derived_B0_ovs"),
             ("benchmarks/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity_flock.register")} <= seen

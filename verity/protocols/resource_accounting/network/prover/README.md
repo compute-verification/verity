@@ -34,4 +34,4 @@ statics and tie are vLLM's compiler's (`adapters/vllm/verity_vllm/compiler`).
 - **Loads from**: `verity.protocols.resource_accounting.network.verifier` (the schedule and records the Definitions are stated over, and
   the Definitions they build on), `verity.protocols.proofs.spot.verifier`, `verity.circuits` and `verity.commitments`.
 - **Tests**: the drivers' are in `tests/`, run with no proof drivers installed; the Definitions' are in
-  `verity/protocols/resource_accounting/network/verifier/tests`, with the verifier's.
+  `tests/verity/protocols/resource_accounting/network/verifier`, with the verifier's.

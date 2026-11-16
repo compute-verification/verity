@@ -223,7 +223,7 @@ what `MemAvailable` says less a reserve, and the whole DRAM is declared (`wipe_s
 rest counts in `R`.
 
 Tests: `uv run pytest verity/protocols/resource_accounting/memory/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
-Regenerate the vectors with `python verity/protocols/resource_accounting/memory/pous/verifier/tests/pous_vectors.py`, and the Lean vectors with
+Regenerate the vectors with `python tests/verity/protocols/resource_accounting/memory/pous/verifier/pous_vectors.py`, and the Lean vectors with
 `tests/lean/generate.sh`.
 
 ## P2
