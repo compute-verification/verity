@@ -21,6 +21,19 @@ The verifier replays a recorded session offline, on the CPU, in interactive mode
 verifier's live session record, and the transcript never hashes to derive a challenge. Fiat–Shamir, the union prover,
 forks and grinding are refused where they could appear.
 
+## Try it
+
+~~~sh
+V=verity/protocols/proofs/flock/verifier
+bash tools/verity/lean/setup.sh $V && (cd $V && lake build verity-verify-proof)
+uv run python verity/protocols/proofs/flock/prover/agreement/layout_agree.py \
+  --lean $V/.lake/build/bin/verity-verify-proof --out /tmp/layout_agree --n 20
+~~~
+
+It holds the Lean layout check to its Python reference (`verity_flock.layouts`) on random archives and prints one line:
+how many archives it accepted and refused, and on how many the two disagreed (`n_disagreements`; any exits 1). The
+other `*_agree.py` scripts do the same for their parts; the agreement with upstream needs a pod (below).
+
 ## Where each part is in the Lean
 
 The protocol is the Flock paper (Bünz, Rothblum, Wang, ePrint 2026/1329: §4 and Appendices A–C). Upstream's code
