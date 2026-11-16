@@ -1,4 +1,4 @@
-"""No library file of the adapter imports a protocol's `verifier` or `device` module, but those `KNOWN` lists.
+"""No library file of the adapter imports a protocol's `verifier` or `attester` module, but those `KNOWN` lists.
 
 The adapter is the provers' side: what it needs of a protocol is a constant, a type or a pure helper the protocol also offers
 from a module outside its trusted code. The scan reads every import with `ast`, function-local ones and literal `import_module`
@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PREFIX = "verity.protocols."
-TRUSTED = ("verifier", "device")
+TRUSTED = ("verifier", "attester")
 LANES = {
     "proofs.": "proofs",
     "registration.": "proofs",
@@ -193,8 +193,8 @@ def scan() -> dict[str, dict[str, set[str]]]:
 def test_no_new_verifier_or_device_import():
     new = [f"{lane}: {f}: {n}" for lane, files in scan().items() for f, names in files.items()
            for n in sorted(names - set(KNOWN.get(lane, {}).get(f, ())))]
-    assert not new, ("library files import a protocol's verifier or device module: import the name from the protocol's "
-                     "module outside its verifier/ and device/ (ask its lane to offer it there), never by adding it to "
+    assert not new, ("library files import a protocol's verifier or attester module: import the name from the protocol's "
+                     "module outside its verifier/ and attester/ (ask its lane to offer it there), never by adding it to "
                      "KNOWN:\n" + "\n".join(new))
 
 
