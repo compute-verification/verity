@@ -859,12 +859,12 @@ and for responses of any length. What it doesn't establish:
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
 The Program fixes each real frame's content, its **anchor** (the recorded bucket of the request it answers) and its
-**logical index** λ (its position in its session, never negative). A window declares one clock-sync value
+**logical index** λ (its position in its session, never negative). An execution phase declares one clock-sync value
 `ClockSync(δ, ρ)` from the public set Σ_sync (`SyncSet`; 16 offsets × 8 rates is 7 bits). A frame is **eligible** at
-`anchor + δ + ⌊λ/ρ⌋` under the sync of its anchor's window, the shaper **hands** it to the network attester in canonical order at
+`anchor + δ + ⌊λ/ρ⌋` under the sync of its anchor's execution phase, the shaper **hands** it to the network attester in canonical order at
 `h(k) = max(eligible(k), h(k−1))`, and the network attester's grid **releases** it. Stated in Lean:
 `security/Definitions/Certifier/Schedule.lean` (`NetTiming`'s `eligible`, `handingBuckets`, `expectedRow` and
-`constantRate`, the Program whose advice is the content advice and one in-set sync per window), with the network attester
+`constantRate`, the Program whose advice is the content advice and one in-set sync per execution phase), with the network attester
 program's `NetworkCertifier.Schedule` as its code; `schedule.py` (`expected_grids`, `run_shaper`) is the Python.
 
 ## The audit (`audit`)
@@ -875,24 +875,24 @@ Lean as a core protocol: `NetworkCheck.Check` (`verity/network-certificate/v4`, 
 the acceptance conditions and the violations, the first that applies naming it (`no-verdict`, `duplicate`, `signature`,
 `status:<reason>`, `advice`, `mismatch`), and `verity/protocols/resource_accounting/network/verifier/network/tests/test_network_check_protocol.py` and
 `test_network_records_protocol.py` hold them to `audit.py`. A violation is recorded and the run rejected; there is no
-halt, and later windows are still checked.
+halt, and later execution phases are still checked.
 
-**One clock per spatial unit.** Every egress link of the unit reads the same sync in a window. The audit keeps each
-window's sync (`Audit.syncs`), set by the first egress link checked for that window. A link that declares a different
-sync for the window is an `advice` violation in that window, even if its sync is in Σ_sync. The reason is the bound:
-the accepted-runs bound charges one sync per window for all links. Its advice is `Ac × (Fin W → Σ_sync)`, so its 7 bits
-per window at 16 × 8 are `#Σ_sync^W` values over W windows. A sync per link
+**One clock per spatial unit.** Every egress link of the unit reads the same sync in an execution phase. The audit keeps
+each one's sync (`Audit.syncs`), set by the first egress link checked for it. A link that declares a different
+sync for the execution phase is an `advice` violation in it, even if its sync is in Σ_sync. The reason is the bound:
+the accepted-runs bound charges one sync per execution phase for all links. Its advice is `Ac × (Fin W → Σ_sync)`, so
+its 7 bits per execution phase at 16 × 8 are `#Σ_sync^W` values over W execution phases. A sync per link
 would be advice of `#Σ_sync^(L·W)` over L egress links, L times the bits, and an audit that took each link's syncs on
 their own would accept it.
 
-A declared sync outside Σ_sync, or other than the unit's, is an `advice` violation in its own window only. The
+A declared sync outside Σ_sync, or other than the unit's, is an `advice` violation in its own execution phase only. The
 Program's grids are computed from each link's syncs as declared, out-of-set values included (any δ ≥ 0 and ρ > 0 gives
-a schedule), and every other window is checked against them. A window's grid reads only the syncs of its own and
-earlier windows: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
-carries forward, for any clock-sync values, in the set or not (`expected_grids`). So a window before the violating one gets the same verdict whatever sync that window
+a schedule), and every other execution phase is checked against them. An execution phase's grid reads only the syncs
+of its own and earlier ones: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
+carries forward, for any clock-sync values, in the set or not (`expected_grids`). So an execution phase before the violating one gets the same verdict whatever sync that one
 gave, and a later one is checked against the grid its advice gives it. No Lean states it of the check's grid.
 
-**Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
+**Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`, `windows` its execution phases). Lean's acceptance
 needs every boundary link's status to be complete, ingress links included, since an ingress status is itself an egress
 channel (`security/Proofs/Certifier/README.md`, modelling choice 6). An ingress link's rows are the Program's input, which it reads rather
 than predicts, so no grid is compared. An ingress execution phase is accepted if it has exactly one record, present by
@@ -904,9 +904,9 @@ head's, so it rests on the network attester instead, and the audit (`check_ingre
 requires the head's T, r, B, τ_b and parameters digest to be `params`'s, or it is a `mismatch`. A run is accepted only
 if every execution phase of every link the audit checks is, so an accepted verdict on every link of ∂X, with
 `check_link` on egress and `check_ingress_link` on ingress, means every boundary link's status was complete in every
-window audited.
+execution phase audited.
 
-Every capacity bound holds on accepted runs only. A rejected window may already have carried up to its unbound capacity,
+Every capacity bound holds on accepted runs only. A rejected execution phase may already have carried up to its unbound capacity,
 about 8·T·r·B bits. On committed records, the bounds also assume `cr/sha-512`; on certified
 records, `cr/sha-512`, the signature's unforgeability and an honest network attester.
 
@@ -919,32 +919,32 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network atte
 | Exactly M released | at most `binom(T + M − 1, M)` | `NetTiming.card_counts_eq_le` |
 | At most M available | at most `binom(T + M, M)` grids | `NetTiming.encard_fifoGrids_le_of_available` |
 | Envelope, with no clock | `T·log2(r + 1)` bits per execution phase | Proposition 2 |
-| Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per window at 16 × 8 sync values under J | no Lean statement |
-| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | no Lean statement |
+| Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per execution phase at 16 × 8 sync values under J | no Lean statement |
+| Accepted runs of the check, over its first m execution phases | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per execution phase opened at 16 × 8 sync values under J, counted from the run's first | no Lean statement |
 | The reference schedule, k advice bits per execution block | `E·k + n·log2 D` bits over E execution blocks of g·T buckets, for n ≤ E·g·T steps | `NetTiming.encard_accSeqs_le_constantRate` |
 | The reference schedule, over the first m execution blocks | `min(E, m)·k + n·log2 D` bits, for n ≤ m·g·T steps | `NetTiming.encard_accSeqs_le_constantRate_executionPhases` |
 | The circuit's Program under a sampled audit of its step proof blocks, at δ | `c + log2 #(incorrect sets) + Σ_{v incorrect} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and an incorrect set is one `RAcc δ` allows (in `M_δ`, no proof block sampled `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no proof block may be incorrect, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
-| The network attester (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each window's sampled charge (the row above) at the network attester's rows | for a decoder of the client's view, under `trusted-device`, `Claims.SamplingGeneric.Compiled.KS` and `Commitment.Binds`, `SecurityProofs.MonitoringPeriodLeakAccepted` |
+| The network attester (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each execution phase's sampled charge (the row above) at the network attester's rows | for a decoder of the client's view, under `trusted-device`, `Claims.SamplingGeneric.Compiled.KS` and `Commitment.Binds`, `SecurityProofs.MonitoringPeriodLeakAccepted` |
 | No advice, under J (D = 1) | 0 bits: one accepted sequence for the ingress | `NetTiming.encard_accSeqs_le_constantRate` at k = 0 and D = 1 |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
-| Ingress, per execution phase (the K charge's unit) | `T·log2(r_in + 1)` bits per execution phase over the first m whole windows, plus `T·log2 D` of jitter per window, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
+| Ingress, per execution phase (the K charge's unit) | `T·log2(r_in + 1)` bits per execution phase over the first m whole ones, plus `T·log2 D` of jitter per execution phase, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
 
 **The advice's charge.** The advice string is the circuit's Program's content advice, so its charge is the sampled row's
 `c`. The sampled leak bound takes `c` as declared and public, with the premise that at most `2^c` advice values are
 charged `c` bits or fewer (`hAs` in `security/Definitions/Certifier/Guarantees/SampledCharge.lean`), as for any
-prefix-free code (Kraft). Advice v1's charge is `code_v1`'s length for the whole window: its segment, every count and
+prefix-free code (Kraft). Advice v1's charge is `code_v1`'s length for the whole execution phase: its segment, every count and
 value inside the arithmetic coder, then its length terms' fixed-width tail while the registration sends them. Its
-strings are prefix-free, so at most `2^c` advice values (each window's decisions, hits, order entries and length terms)
+strings are prefix-free, so at most `2^c` advice values (each execution phase's decisions, hits, order entries and length terms)
 are charged `c` bits or fewer (`protocol/charge-chain.md`, "The bound"). Lean mirrors the
 charge's references one for one: `ChargeCount_v1{N}`'s (`arith_encode.py`'s `reference_charge`,
 `security/Definitions/Certifier/AdviceV1.lean`) and `ChargeCount_v2{N, H, O, L}`'s (`window_charge.py`'s
 `reference_window`, `security/Definitions/Certifier/WindowCharge.lean`). Which slots ask (`en`) is not charged
-because it is not advice: the compile slice, its charge included, is proved on every advised window and never sampled,
-so `en` is pinned by that slice's scan, and the carry across windows is chained from the book's priors
-(`charge_chain.check_chain`). That the circuits compute Lean's windows (`ChargeCount_v1`'s `AdviceV1.window`,
+because it is not advice: the compile slice, its charge included, is proved on every advised execution phase and never sampled,
+so `en` is pinned by that slice's scan, and the carry across execution phases is chained from the book's priors
+(`charge_chain.check_chain`). That the circuits compute the Lean definitions (`ChargeCount_v1`'s `AdviceV1.window`,
 `ChargeCount_v2`'s `WindowCharge.window`) is held by tests: circuit-check holds each circuit to its Python reference,
-and the Lean is held to those references by the charge difftests: the certifier program's `NetworkCertifier.AdviceV1`
+and the Lean is held to those references by the charge difftests: the network attester's program's `NetworkCertifier.AdviceV1`
 and `NetworkCertifier.WindowCharge`, proved equal to the definitions (`CodeChargesV1`, `CodeChargesWhole`), give what
 `reference_charge` and `reference_window` give on 4,000 random instances each (`runs` in `../attester/program/lean/lean-audit.json`, their
 data checked by `verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_charge_lean_difftest.py` and
@@ -956,7 +956,7 @@ step proof block can be incorrect: every step proof block sampled `All`, or a sa
 sampled audit gives `Accepted` only with the incorrect proof blocks' committed gates held as advice
 (`SampledAuditAccepted`), and the charge adds the incorrect proof blocks' committed bits and log2 of the number of possible
 incorrect sets, except with probability δ + ε_ks + ε_bind over the selection (`SecurityProofs.SampledLeakAccepted`).
-Charging a window only for the windows up to it would need a causality assumption about the Program, which the statement
+Charging an execution phase only for those up to it would need a causality assumption about the Program, which the statement
 doesn't take.
 
 **The network attester's row.** The network attester terminates both connections and sends every cell in its bucket: a connection admitted
@@ -967,11 +967,11 @@ scheduled end. So the client's view of the server side is the schedule, each con
 data in the cells: the server's accept time, send timing, ACKs and flow control reach it only through the fail cells.
 One run of the network attester's code gives both the cells the client receives and its record of them
 (`security/Definitions/Certifier/Tap.lean`, under `trusted-device`). The inference-only policy's transfer gates are these cells' bits,
-whose number per window the schedule fixes. The schedules are charged `log2 #schedules`, so a schedule that came to
+whose number per execution phase the schedule fixes. The schedules are charged `log2 #schedules`, so a schedule that came to
 depend on the server is still counted. The content term comes from the audits, not from a premise:
-`SecurityProofs.MonitoringPeriodLeakAccepted` composes each window's sampled leak bound at the network attester's rows with the
-client's view read back from its record, over a monitoring period of sampled audits. Each window adds its fresh
-inputs' bits, log2 of its possible incorrect sets, their committed bits and the timing, and each window's audit fails with
+`SecurityProofs.MonitoringPeriodLeakAccepted` composes each execution phase's sampled leak bound at the network attester's rows with the
+client's view read back from its record, over a monitoring period of sampled audits. Each execution phase adds its fresh
+inputs' bits, log2 of its possible incorrect sets, their committed bits and the timing, and each one's audit fails with
 probability at most δ + ε_ks + ε_bind + Pr[B_tap].
 
 The inference-only policy charges an inference block the ingress covert capacity from the last wipe before it starts,
@@ -982,7 +982,7 @@ as no-function: each is stated over the model, not the network check's code (`se
 "The records"); one named `NetTiming.…` is a lemma, proved and audited, with no record. The ingress bounds
 are over a monitoring period (the K charge, `SecurityProofs.EncardIngressObsDecodableLe`) and per execution phase
 (`SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, whose interaction is any link's). The egress charge per
-window, `log2 #Σ_sync` for each window opened, counted from the run's first window, is the check's, which no Lean
+execution phase, `log2 #Σ_sync` for each one opened, counted from the run's first, is the check's, which no Lean
 states, as no Lean states the table's two rows of the check's accepted runs. The steps of their proofs are lemmas
 (`security/Proofs/Certifier/Lemmas.lean`): proved and audited, with no record.
 
@@ -992,24 +992,24 @@ the FIFO restarting empty at each block's start. They hold with no dataflow hypo
 operator, over a monitoring period within the E execution blocks with advice (n ≤ E·g·T), since those are the blocks
 the audit checks. The bound is k bits per execution block, summed from the run's start
 (`NetTiming.encard_accSeqs_le_constantRate`). A monitoring period within the first m execution blocks is charged only
-those m (`NetTiming.encard_accSeqs_le_constantRate_executionPhases`). The check, which reads one clock sync per window, is that Program as
-one execution block of its W windows, with the send ticks the program computes from the syncs: its accepted runs
-number at most `#Ac · #Σ_sync^W · D^(W·T)`, 7 bits per window at 16 × 8 sync values. At one execution block the
+those m (`NetTiming.encard_accSeqs_le_constantRate_executionPhases`). The check, which reads one clock sync per execution phase, is that Program as
+one execution block of its W execution phases, with the send ticks the program computes from the syncs: its accepted runs
+number at most `#Ac · #Σ_sync^W · D^(W·T)`, 7 bits per execution phase at 16 × 8 sync values. At one execution block the
 reference's forms over the first m blocks and per block give nothing finer, so the check's bound over its first m
-windows comes from the program instead: a window's sync moves no hand tick before the window's start, so the first m
-windows' rows read only the content advice and those windows' syncs, and their sequences number at most
-`#Ac · #Σ_sync^min(W, m) · D^(m·T)`. No Lean states either count of the check. The per-block form, a window's bits given everything the run showed before it, need not hold
-of the check: the queue and the hand ticks carry from one window into the next, so the run shown before a window need
-not fix the rows the window's sync gives.
+execution phases comes from the program instead: an execution phase's sync moves no hand tick before its start, so the
+first m execution phases' rows read only the content advice and their syncs, and their sequences number at most
+`#Ac · #Σ_sync^min(W, m) · D^(m·T)`. No Lean states either count of the check. The per-block form, an execution phase's bits given everything the run showed before it, need not hold
+of the check: the queue and the hand ticks carry from one execution phase into the next, so the run shown before one
+need not fix the rows its sync gives.
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
 execution phase (times `D^T` for jitter, 1 under J), given the frames' content, on runs whose statuses are all complete
 (`StatusComplete`). The reference audits ingress statuses (see above), so an accepted verdict on every link of ∂X
-establishes `StatusComplete` for the windows audited. That is the acceptance hypothesis of every ingress guarantee:
+establishes `StatusComplete` for the execution phases audited. That is the acceptance hypothesis of every ingress guarantee:
 `SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe`, their `Contents` versions and
-the two per-window forms. Over the first m whole windows of a run (n = m·T; for the K charge, the run from the last
-wipe) the count factors per execution phase: `(r_ℓ + 1)^T` on each link in each window, `T·log2(r_in + 1)` bits, which
+the two per-execution-phase forms. Over the first m whole execution phases of a run (n = m·T; for the K charge, the run from the last
+wipe) the count factors per execution phase: `(r_ℓ + 1)^T` on each link in each execution phase, `T·log2(r_in + 1)` bits, which
 is the K charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, and
 `SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase` for the `Contents` version).
 
