@@ -978,28 +978,30 @@ def Unforgeable (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : By
   Hash.Assumptions.LmsUnforgeable lmsVerify (V.epsForge θ) (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a)
     (V.signatures θ) (V.forger a θ F c σ)
 
+/-- **Subprotocol `a`'s bound at a strategy**: its published `δ` at the strategy's SHA-512 calls, plus the published
+`ε_forge(t, Q)` at the forger's budget and the device's signatures (`epsForge`), plus its loss at the probability that
+the finder outputs a collision, the form of `ResourceAccounting.PeriodLive.error` with the forgery term beside `δ`. -/
+noncomputable def errorBound (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
+  V.delta θ a (V.cost θ F c σ) +
+    ENNReal.ofReal (V.epsForge θ (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a) (V.signatures θ)) +
+    V.loss a θ (ENNReal.ofReal ((V.finder a θ F c σ).Pr sha512Msg))
+
 /-- **Subprotocol `a`'s error at a strategy**: where the finders built from this strategy meet their collision premises
 (`finderCR`, `premises`, `FinderCR`) and its forger its forgery premise (`Unforgeable`), each asked of this strategy
-alone, its published `δ` at the strategy's SHA-512 calls, plus the published
-`ε_forge(t, Q)` at the forger's budget and the device's signatures (`epsForge`), plus its loss at the probability that
-the finder outputs a collision, the form of `ResourceAccounting.PeriodLive.error` with the forgery term beside `δ`; elsewhere no
-bound (`⊤`), as `ResourceAccounting.condError` reads it. Flock's conditional bound is the case `loss = 0`. -/
+alone, its bound at the strategy (`errorBound`); elsewhere no bound (`⊤`), as `ResourceAccounting.condError` reads it.
+Flock's conditional bound is the case `loss = 0`. -/
 noncomputable def error (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
   condError (fun σ => V.finderCR a θ F c σ ∧ V.premises a θ F c σ ∧ V.FinderCR a θ F c σ ∧ V.Unforgeable a θ F c σ)
-    (fun σ => V.delta θ a (V.cost θ F c σ) +
-      ENNReal.ofReal (V.epsForge θ (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a) (V.signatures θ)) +
-      V.loss a θ (ENNReal.ofReal ((V.finder a θ F c σ).Pr sha512Msg))) σ
+    (V.errorBound a θ F c) σ
 
-/-- **Subprotocol `a`'s published error is below 1 at the parameters `θ`**: at some count `t` of SHA-512 calls and
-some collision probability `p`, its `δ`, plus `ε_forge` at the forger's budget at `t` calls, plus its loss at `p` (the
-bound `error` states wherever its premises hold) is below 1. A bound of 1 or more on a probability holds of every
-prover, so a witness bounded by `error` shows something of a cheating prover only where this holds. Wherever the error
-does not decrease in `t`, "at some `t`" amounts to "below 1 at zero calls", so a lemma concluding this shows only that
-the bound is not vacuous, and is no bound at the deployed call budget. -/
-def ErrorBelowOne (θ : ByteArray) (a : Subprotocol) : Prop :=
-  ∃ (t : ℕ) (p : ℝ≥0∞), p ≤ 1 ∧
-    V.delta θ a t + ENNReal.ofReal (V.epsForge θ (V.callsMul θ a * t + V.callsAdd θ a) (V.signatures θ)) +
-      V.loss a θ p < 1
+/-- **Subprotocol `a`'s bound is below 1 at the honest prover**: at the parameters `θ`, files `F` and commitments `c`,
+the bound `error` states where its premises hold (`errorBound`) is below 1 at the deployment's honest strategy, at its
+SHA-512 calls and its finder's collision probability. A bound of 1 or more on a probability holds of every prover, so a
+witness bounded by `error` shows something of a cheating prover only where this holds, and this says nothing of the
+bound at any other strategy. -/
+def ErrorBelowOne (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (a : Subprotocol) : Prop :=
+  V.errorBound a θ F c (V.honest θ F c) < 1
 
 /-- **Soundness at composite `k` for the acceptance `acc`, in the causal game.** At all parameters `θ`, committed files
 `F` and commitments `c`, and for every strategy, the probability that `acc` holds of what the prover sent for files

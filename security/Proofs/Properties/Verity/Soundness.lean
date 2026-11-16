@@ -451,7 +451,7 @@ namespace Idle
 /-- At `unbounded`, every subprotocol's error is `⊤`. -/
 theorem error_unbounded (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (unbounded.game θ F c)) :
     unbounded.error a θ F c σ = ⊤ := by
-  unfold Vocab.error ResourceAccounting.condError
+  unfold Vocab.error ResourceAccounting.condError Vocab.errorBound
   split_ifs <;> simp [unbounded, vocab]
 
 /-- At `unbounded`, every subprotocol meets its target at every composite. -/
@@ -481,10 +481,46 @@ theorem forger_pr (verify : Hash.Msg → Hash.Msg → Hash.Msg → Bool) : forge
 /-- At `exact`, every subprotocol's error is `0`: its finder and forger meet their premises, and every term is `0`. -/
 theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (exact.game θ F c)) :
     exact.error a θ F c σ = 0 := by
-  unfold Vocab.error ResourceAccounting.condError
+  unfold Vocab.error ResourceAccounting.condError Vocab.errorBound
   rw [if_pos ⟨trivial, trivial, (finder_pr _).trans_le
     (div_nonneg (Claims.Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)), fun _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
+
+/-- At `unbounded`, no subprotocol's bound is below 1 at the honest prover: its `δ` is `⊤`. -/
+theorem not_errorBelowOne_unbounded (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (a : Subprotocol) :
+    ¬ unbounded.ErrorBelowOne θ F c a := by
+  intro h
+  unfold Vocab.ErrorBelowOne Vocab.errorBound at h
+  simp [unbounded, vocab] at h
+
+/-- At `exact`, every subprotocol's bound is below 1 at the honest prover: every term is `0`. -/
+theorem errorBelowOne_exact (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (a : Subprotocol) :
+    exact.ErrorBelowOne θ F c a := by
+  unfold Vocab.ErrorBelowOne Vocab.errorBound
+  simp [exact, vocab]
+
+/-- **`unbounded` with `δ` zero at no calls and `⊤` at every other count, and every strategy making one call.** -/
+noncomputable def oneCall : Vocab device Unit :=
+  { unbounded with
+    delta := fun _ _ t => if t = 0 then 0 else ⊤
+    cost := fun _ _ _ _ => 1
+    finders := fun _ _ _ _ => []
+    finder_calls := unbounded.finder_calls
+    forger_calls := unbounded.forger_calls }
+
+/-- At `oneCall`, every subprotocol's error is `⊤` at every strategy. -/
+theorem error_oneCall (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (oneCall.game θ F c)) : oneCall.error a θ F c σ = ⊤ := by
+  unfold Vocab.error ResourceAccounting.condError Vocab.errorBound
+  split_ifs <;> simp [oneCall]
+
+/-- At `oneCall`, no subprotocol's bound is below 1 at the honest prover, though its `δ` is `0` at no calls:
+`ErrorBelowOne` reads the bound at the honest strategy's own calls. -/
+theorem not_errorBelowOne_oneCall (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (a : Subprotocol) :
+    ¬ oneCall.ErrorBelowOne θ F c a := by
+  intro h
+  unfold Vocab.ErrorBelowOne Vocab.errorBound at h
+  simp [oneCall] at h
 
 /-- At `exact`, PoUW's claim fails on every play after the empty commitment: where the composite doesn't list Pearl+'s
 id (onsite) it certifies one gate computed, which no play computes, and where it does (remote) no credit is published,
