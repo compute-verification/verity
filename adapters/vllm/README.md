@@ -180,8 +180,9 @@ first card of compute capability 9.0. The tree does not make the machine:
 - `uv` ([its installer](https://docs.astral.sh/uv/getting-started/installation/)) and `curl` on the `PATH`;
 - 35 GB free at the work directory (the install holds the environment twice until it removes its cache, where the disk
   can't hardlink);
-- network access to GitHub, PyPI, download.pytorch.org, Hugging Face (no token) and the store's public site
-  (`website-docs-sage.vercel.app/store`, which redirects to its bucket).
+- network access to GitHub, PyPI, download.pytorch.org, Hugging Face (no token) and the store's public site, from which
+  the workload step fetches the workload file with no key: its address is `research.store.fetchset.PUBLIC_URL`, which
+  `RESEARCH_PUBLIC_URL` overrides.
 
 Building the six CUDA taps is the longest step: it builds the attention taps for the row's head size (64) only, with one
 compile job per CPU the script may run on (`MAX_JOBS`, which the dry run prints), so its time falls with the CPUs you give
