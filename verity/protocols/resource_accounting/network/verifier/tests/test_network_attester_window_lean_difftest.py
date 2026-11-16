@@ -3,7 +3,7 @@
 `device/program/lean/scripts/window_vectors.py` writes 4,000 instances, a book, a carry and windows of decision, hit, order and length
 slots, and `reference_window`'s results on each: window by window from the carry, and chained from the book's first
 carry. `check` runs the Lean half in its Lean audit (`runs` in `device/program/lean/lean-audit.json`):
-`device/program/lean/NetworkCertifier/WindowDifftestMain.lean` evaluates every instance with the program's `WindowCharge.window` and
+`device/program/lean/NetworkAttester/WindowDifftestMain.lean` evaluates every instance with the program's `WindowCharge.window` and
 `WindowCharge.charges` and fails on any difference, and `security_proofs` proves `charges` equal to
 `NetTiming.WindowCharge`'s (`CodeChargesWhole`). circuit-check holds `ChargeCount_v2{N, H, O, L}`'s circuit to
 `reference_window`, so this is what holds the circuit's charge to the Lean definition's. The audit checks that data
@@ -32,7 +32,7 @@ SCRIPT = LEAN / "scripts" / "window_vectors.py"
 _spec = importlib.util.spec_from_file_location("window_vectors", SCRIPT)
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NetworkCertifier.WindowDifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NetworkAttester.WindowDifftestMain"]
 
 
 def test_the_data_is_what_the_audit_pins(tmp_path):
@@ -144,7 +144,7 @@ def test_a_slices_lengths_fit_a_length_slot_up_to_the_leans_mt_cap():
     length slot: L ≤ `MT_CAP`, the largest max_tokens the program's `WindowCharge` charges a length term at, which the
     vectors above reach at and past (a max_tokens at `MT_CAP`, charged, and past it, refused). Checked at 0, 1 and each
     power of two up to 2^40 with its neighbours."""
-    lean = re.search(r"^def MT_CAP : Nat := 2 \^ (\d+) - 1$", (LEAN / "NetworkCertifier" / "WindowCharge.lean").read_text(),
+    lean = re.search(r"^def MT_CAP : Nat := 2 \^ (\d+) - 1$", (LEAN / "NetworkAttester" / "WindowCharge.lean").read_text(),
                      re.M)
     assert lean and WC.MT_CAP == (1 << int(lean[1])) - 1 == (1 << charge_chain.LENGTH_BITS) - 1
     for L in sorted({0, 1} | {v for k in range(41) for v in (2 ** k - 1, 2 ** k, 2 ** k + 1)}):

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Actual
+public import Definitions.ResourceAccounting.Actual
 public import Definitions.InferenceOnly
 public import Definitions.Slowdown.Untied
 public import Proofs.Slowdown.Cut
@@ -22,8 +22,8 @@ gate a tied word can be:
   fed the word stay in their blocks, each block is what is left of it without `E` (`Partition.asInputs`), and the
   charged work is a `Work` of the circuit with the words as inputs: no MAC is charged there for an output that lies in
   the words (`y_not_subset_asInputs`). It is also the circuit without a set of blocks, whose gates the kept blocks then
-  read as input, and at the complement of a set `S` it is `Accounting.Placed.cut S`, outputs aside
-  (`Accounting.Placed.cut_eq_asInputs`).
+  read as input, and at the complement of a set `S` it is `ResourceAccounting.Placed.cut S`, outputs aside
+  (`ResourceAccounting.Placed.cut_eq_asInputs`).
 * **A tied word is a registered input**: `RegisteredCircuit.untie`, where `E`'s gates leave `θ`. The circuit, its
   blocks and any charged work on it stay as they are. At a computed gate it changes nothing (`unregistered_untie`), so
   it says nothing about a word the circuit computes.
@@ -125,11 +125,11 @@ theorem Circuit.mk_congr {N : ℕ} {w : Fin N → ℕ} {isInput isInput' : Fin N
   subst hi hr hop ho
   rfl
 
-/-- **`Accounting.Placed.cut` is `Circuit.asInputs`.** A set `S` of an actual circuit's gates as a circuit whose inputs
+/-- **`ResourceAccounting.Placed.cut` is `Circuit.asInputs`.** A set `S` of an actual circuit's gates as a circuit whose inputs
 are what it reads is that circuit with every gate outside `S` as an input, and `S` as its outputs. -/
-theorem _root_.Accounting.Placed.cut_eq_asInputs {L : Type*} (A : Accounting.Placed L) (S : Finset (Fin A.N)) :
+theorem _root_.ResourceAccounting.Placed.cut_eq_asInputs {L : Type*} (A : ResourceAccounting.Placed L) (S : Finset (Fin A.N)) :
     A.cut S = { A.toCircuit.asInputs Sᶜ with outputs := S } := by
-  unfold Accounting.Placed.cut
+  unfold ResourceAccounting.Placed.cut
   refine Circuit.mk_congr (funext fun g => ?_) (funext fun g => ?_) (funext fun g => funext fun v => ?_) rfl
   · show _ = (A.isInput g || decide (g ∈ Sᶜ))
     by_cases h : g ∈ S <;> simp [h]

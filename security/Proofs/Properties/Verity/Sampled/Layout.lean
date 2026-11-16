@@ -31,7 +31,7 @@ namespace Verity.Sampled
 
 open FlockSoundness.Discharge
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The session `--zk` sets up -/
 

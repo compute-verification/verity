@@ -29,7 +29,7 @@ from verity.protocols.resource_accounting.network.verifier.tests.test_network_at
     B, LEN, PLAIN, D, R, T, answer, id_req, traffic)
 from verity.protocols.resource_accounting.network.verifier.tests.test_network_attester import (
     TAU, Client, Server, SocketClient, records, run)
-from verity.protocols.resource_accounting.network.verifier.network_attester import REFUSED, LENGTHS_FORMS, NetworkCertifier, NetworkCertifierParams, cell, cells
+from verity.protocols.resource_accounting.network.verifier.network_attester import REFUSED, LENGTHS_FORMS, NetworkAttester, NetworkAttesterParams, cell, cells
 
 #: the lengths tests' schedule at form 2, and the content tables tests' classes at it, each its two sizes
 TWO = dataclasses.replace(LEN, lengths=2)
@@ -67,16 +67,16 @@ FORM_1_LATE = ("115ee1bd14ba2473588110c114c4c6d6d49c99e83a133171a2c4324d7afc88d1
                "4e903e44ce765310b28ae5ad0c0551d6a3637623ea446574b6ba0ac27a1b5df5")
 
 
-def ends(device: NetworkCertifier) -> list[tuple[int, bool]]:
+def ends(device: NetworkAttester) -> list[tuple[int, bool]]:
     """Each execution phase the device ended, in the order it ended them, and whether it handed it."""
     return [(w, strides is not None) for w, strides in device.lengths]
 
 
-def handed(device: NetworkCertifier) -> dict:
+def handed(device: NetworkAttester) -> dict:
     return {w: strides for w, strides in device.lengths if strides is not None}
 
 
-def order_of(device: NetworkCertifier) -> dict[int, int]:
+def order_of(device: NetworkAttester) -> dict[int, int]:
     """Each released connection's place in the release order, by its ordinal, as the device's log has it."""
     return {e["ordinal"]: e["release"] for e in device.log if e["release"] is not None}
 
@@ -99,7 +99,7 @@ def test_form_2_is_a_value_of_its_own_digest_and_a_schedule_at_form_1_leaves_wha
         [(name, size) for name, _, size in CR.tables_of(CON)]
     assert (TWO.stride_releases, TWO.span) == (LEN.stride_releases, LEN.span)
     assert SPAN == D + (LEN.egress_cells - 1) // R
-    assert NetworkCertifierParams(**json.loads(json.dumps(dataclasses.asdict(TWO_CON)))) == TWO_CON
+    assert NetworkAttesterParams(**json.loads(json.dumps(dataclasses.asdict(TWO_CON)))) == TWO_CON
     for bad in (0, 3, True, "2", 2.0):
         with pytest.raises(ValueError, match="lengths is 1 or 2"):
             dataclasses.replace(PLAIN, lengths=bad)
@@ -145,7 +145,7 @@ def test_a_connection_that_may_end_past_the_run_is_never_admitted():
     assert len(server.conns) == 3 and one.requests_released == 3 and one.turned_away == 0
 
 
-def last_phase_most(params: NetworkCertifierParams) -> tuple[int, int]:
+def last_phase_most(params: NetworkAttesterParams) -> tuple[int, int]:
     """The most connections form 2 admits in a run's last execution phase, and the most releases that execution phase
     holds. It admits in its first A = T − `span` buckets, and a lane admits every D + 1 buckets at the most. A lane
     may also release there a connection admitted in the `ingress_buckets` − 1 buckets before it, which holds the lane
@@ -187,7 +187,7 @@ def test_a_runs_last_execution_phase_holds_at_most_what_its_first_buckets_admit(
 class Stamped(Client):
     """A client that keeps the device's clock at each write to it, at its stream's end and at its close."""
 
-    def __init__(self, device: NetworkCertifier, data) -> None:
+    def __init__(self, device: NetworkAttester, data) -> None:
         self.clock, self.at, self.ended_at, self.closed_at = device.clock, [], None, None
         super().__init__(device, data)
 
@@ -205,7 +205,7 @@ class Stamped(Client):
         super().close()
 
 
-def through(params: NetworkCertifierParams, before: int, long: bool, **kw):
+def through(params: NetworkAttesterParams, before: int, long: bool, **kw):
     """A run of `RUN` execution phases with `before` arrivals before `FIRST`, the first two, which take the lanes,
     two buckets before it and the rest in the bucket before it, and `LATE`'s after them; the first two connections
     admitted answer the longest response when `long`, every other the shortest. Returns the device, the clients of
@@ -219,7 +219,7 @@ def through(params: NetworkCertifierParams, before: int, long: bool, **kw):
     return device, clients[:before], clients[before:], server
 
 
-def left(device: NetworkCertifier, clients: list) -> str:
+def left(device: NetworkAttester, clients: list) -> str:
     """A digest of what a run left: each client's writes with their buckets and whether it was closed, the log, the
     counts, each record published or withheld, and the hands."""
     doc = ([(c.writes, c.closed) for c in clients], sorted(device.log, key=lambda e: e["ordinal"]),
@@ -291,7 +291,7 @@ class Ticking:
 
     def __init__(self, server: Server, **hooks) -> None:
         self.clock = VirtualClock(-TAU / 2)
-        self.device = NetworkCertifier(TWO, server.connect, origin=0.0, windows=1, clock=self.clock, sleep=self.clock.sleep,
+        self.device = NetworkAttester(TWO, server.connect, origin=0.0, windows=1, clock=self.clock, sleep=self.clock.sleep,
                              **hooks)
         self.running = asyncio.create_task(self.device.run())
 
@@ -406,7 +406,7 @@ def test_an_arrival_with_no_tick_left_is_closed_with_no_cell():
     counted."""
     async def main():
         clock = VirtualClock(-TAU / 2)
-        device = NetworkCertifier(TWO, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+        device = NetworkAttester(TWO, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
         running = asyncio.create_task(device.run())
         for t in range(T - 1):
             clock.advance(t * TAU)
@@ -555,11 +555,11 @@ def test_the_records_count_the_release_order_only_up_to_one_that_isnt_complete()
             CR.of_records(TWO, *records(whole)[:2], wrong)
 
 
-async def stopped(params: NetworkCertifierParams, windows: int, ticks: int, **hooks) -> NetworkCertifier:
+async def stopped(params: NetworkAttesterParams, windows: int, ticks: int, **hooks) -> NetworkAttester:
     """A run of `windows` execution phases with no traffic, cancelled after `ticks` ticks, or ended by what its
     hooks raise."""
     clock = VirtualClock(-TAU / 2)
-    device = NetworkCertifier(params, Server([]).connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
+    device = NetworkAttester(params, Server([]).connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
     running = asyncio.create_task(device.run())
     for t in range(ticks):
         clock.advance(t * TAU)

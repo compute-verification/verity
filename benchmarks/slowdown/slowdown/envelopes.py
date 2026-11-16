@@ -312,7 +312,7 @@ class Certifier:
     """A network attester on each host's links, and the channels it doesn't read.
 
     With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
-    inference block runs on a single server (ruled). At the network attester form's public parameters (the `NetworkCertifierParams` of
+    inference block runs on a single server (ruled). At the network attester form's public parameters (the `NetworkAttesterParams` of
     `verity/protocols/resource_accounting/network/prover/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
     `IDB` bits an id, `D`, `T`) a request's declared input is at most
 
@@ -366,7 +366,7 @@ class Certifier:
     #: the declared-ingress rule, and line rate the upper end until Lean proves the per-server bound
     declared_x: float = 1.0
 
-    CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "Accounting.Covered", "Accounting.TrustedUnits")
+    CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "ResourceAccounting.Covered", "ResourceAccounting.TrustedUnits")
     INTAKE = ("draft:declared-ingress",)
     DECLARED = ("draft:declared-ingress", "draft:per-server-ingress")
 
@@ -502,7 +502,7 @@ class Remote:
     #: premises, and the registration
     CITES = ("Slowdown.Guarantees.SlowdownRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
     #: the server-block bound each of its cuts is an argument of: the inference-block yield alone
-    BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
+    BOUND = ("ResourceAccounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
     ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 
@@ -562,7 +562,7 @@ class Onsite(Remote):
     gets the serving cut `q(c_S, k_S) + ω_max μ k_S` as well, and contributes the lesser."""
 
     #: the server-block bound, both its cuts' minimum
-    BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBound",)
+    BOUND = ("ResourceAccounting.Guarantees.ServingBlocks.ServingBlockBound",)
 
     wipe: Wipe = Wipe()
     certifier: Certifier = Certifier()
@@ -571,12 +571,12 @@ class Onsite(Remote):
     form: str = "certified"
 
     #: `Windows` as proved: memory and line rate, on the physical annotation's four constraints
-    LINKS = ("Accounting.Guarantees.Actual.ServerBlocks", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
-             "Accounting.Placed.Memory", "Accounting.Placed.Links")
+    LINKS = ("ResourceAccounting.Guarantees.Actual.ServerBlocks", "ResourceAccounting.Placed.Causal", "ResourceAccounting.Placed.ComputeRate",
+             "ResourceAccounting.Placed.Memory", "ResourceAccounting.Placed.Links")
     #: `ServerBlocksAt` at the wipes, its state term from the wipe and its binding error from the certifier's ingress, which
     #: bounds information where `ServerBlocksAt` reads width at line rate: the information form is a draft
-    SERVING = ("Accounting.Guarantees.Actual.ServerBlocksAt", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
-               "Accounting.Placed.Links", "draft:windows-information-form")
+    SERVING = ("ResourceAccounting.Guarantees.Actual.ServerBlocksAt", "ResourceAccounting.Placed.Causal", "ResourceAccounting.Placed.ComputeRate",
+               "ResourceAccounting.Placed.Links", "draft:windows-information-form")
     PHYSICAL = tuple(dict.fromkeys(LINKS + SERVING + Wipe.SERVER + Wipe.DEVICE + Certifier.CITES + Certifier.INTAKE
                                    + Certifier.DECLARED))
 

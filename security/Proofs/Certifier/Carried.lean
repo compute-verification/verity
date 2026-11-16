@@ -546,7 +546,7 @@ theorem encard_pooledCarried_le {L K S m : ℕ} (lay : AuditStatement → Bounda
     arr f tap run htrust cap Ss hfit Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω)
     (fun z hz => hdz z hz ω) (fun z => W z ω) (fun z i => hWn z ω i) Fmax
 
-/-- **The leak through the network certifier over a monitoring period whose runs carry the pool**:
+/-- **The leak through the network attester over a monitoring period whose runs carry the pool**:
 `Guarantees.PooledLeakCarried`. The escape bound is `pr_pooled_le` at each run's leak relation and no collision at its
 opening, at the pattern serving picked. Where every audit accepts, the roots the record rule names there
 (`CarriedRoots`) and those two give rows that chain, since equal roots are equal rows or a collision
@@ -654,7 +654,7 @@ theorem pooledGoodCarried_of_checked {L K S m : ℕ} {lay : AuditStatement → B
       (fun _ => []) Fmax W o :=
   ⟨h.1, fun _ => [], fun _ => [], fun _ => by simp [poolOpen], fun i => leakAtCarried_of_leakAtChecked (h.2 i)⟩
 
-/-- **The leak through the network certifier over a monitoring period, with the checked inputs left out, over windows
+/-- **The leak through the network attester over a monitoring period, with the checked inputs left out, over windows
 that each hold a pool of their own**: `pooledLeakCarried` at the empty pool, where no run opens or closes a row and the
 one pattern restarts none. There a period's good event with valid runs is its good event over the pool, every run opens
 the empty row's root, and no opening collides (`poolColl_empty`), so the escape bound is `PooledLeakAccepted`'s with

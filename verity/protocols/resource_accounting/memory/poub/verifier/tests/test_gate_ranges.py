@@ -1,15 +1,15 @@
-"""The primitives' output intervals (`Accounting.Guarantees.Gates.FmaxfRange`, `FminfRange`, `RzByteRange`), held to the
+"""The primitives' output intervals (`ResourceAccounting.Guarantees.Gates.FmaxfRange`, `FminfRange`, `RzByteRange`), held to the
 Python they state.
 
-`Accounting.Gates.f32Fmaxf`, `f32Fminf` and `f32RzByte` (security/Definitions/Accounting/Gates/Ranges.lean) are the
+`ResourceAccounting.Gates.f32Fmaxf`, `f32Fminf` and `f32RzByte` (security/Definitions/ResourceAccounting/Gates/Ranges.lean) are the
 evaluators the theorems are over, and `fmaxfRule`, `fminfRule` and `rzByteRule` property/v1's interval rules for them
-(`stacking.RANGES`). security/Proofs/Accounting/Gates.lean carries rows of each that the kernel evaluates the Lean
+(`stacking.RANGES`). security/Proofs/ResourceAccounting/Gates.lean carries rows of each that the kernel evaluates the Lean
 functions on (`f32MaxMin_f32Rows`, `f32RzByte_rzRows`, `rules_ruleRows`, `rzByteRule_rzRuleRows`), and the tests here
 recompute each row from the Python: `scalar.F32Fmaxf` and `F32Fminf`, `cvt.rzi.u32.f32`'s low byte by the float's
 truncation (the evaluator of record, `dsv4_qnorm_insert.f32_to_u32_rz_byte`, is in `verity_vllm`, which `verity` doesn't
 import), and property/v1's rules where `verity.circuits.stacking` exists. An f32 is its encoding read as s32.
 
-`Accounting.Gates.exp2Lut127` (Ranges.lean), the table `Exp2Lut127Range` and `LutPvWindow` are over, is held to vLLM's
+`ResourceAccounting.Gates.exp2Lut127` (Ranges.lean), the table `Exp2Lut127Range` and `LutPvWindow` are over, is held to vLLM's
 LUT softmax table on all 256 entries: `fixtures/exp2_lut127.json` pins `engine.int8_attention.LUT` as vLLM
 writes it, and its words' sha256 is the one `verity_flock.tail_pieces.EXP2_LUT127_SHA256` pins there.
 """
@@ -30,8 +30,8 @@ import pytest
 from verity.circuits.ops.scalar import F32Fmaxf, F32Fminf
 
 ROOT = Path(__file__).resolve().parents[7]
-LEAN_GATES = ROOT / "security" / "Proofs" / "Accounting" / "Gates.lean"
-LEAN_RANGES = ROOT / "security" / "Definitions" / "Accounting" / "Gates" / "Ranges.lean"
+LEAN_GATES = ROOT / "security" / "Proofs" / "ResourceAccounting" / "Gates.lean"
+LEAN_RANGES = ROOT / "security" / "Definitions" / "ResourceAccounting" / "Gates" / "Ranges.lean"
 LUT_FIXTURE = Path(__file__).parent / "fixtures" / "exp2_lut127.json"
 #: `tail_pieces.EXP2_LUT127_SHA256`: the sha256 of the table's 256 little-endian u32 words
 EXP2_LUT127_SHA256 = "6eb8e9b3478db58b4e5a711f31968394f7e93fa4e1df2e0d801eab92a5f66f84"
