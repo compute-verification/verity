@@ -2291,8 +2291,8 @@ def test_a_root_the_lints_come_to_read_brings_the_base_s_findings_but_no_new_one
         **_reads_the_root(), RUFF_VLLM_JSON: _allowlist(T201, _printed("test_a.py"))})
     [c] = G.gate("main", "pr")["changes"]
     assert c["verdict"] == "passed", c["why"]
-    assert c["pooled"] == [f"{RUFF_VLLM_JSON} records 1 finding(s) in 1 file(s) under {ROOT}, which the change's lints come "
-                           "to read and the base's tree already holds"]
+    assert c["pooled"] == [(f"{RUFF_VLLM_JSON} records 1 finding(s) in 1 file(s) under {ROOT}, which the change's lints come "
+                           "to read and the base's tree already holds")]
     rooted.commit("a new use under the root", {f"{ROOT}test_b.py": "print(2)\n",
                                                RUFF_VLLM_JSON: _allowlist(T201, _printed("test_a.py"), _printed("test_b.py"))})
     [c] = G.gate("main", "pr")["changes"]
@@ -2341,8 +2341,8 @@ def test_a_root_s_mypy_entries_are_held_to_what_mypy_finds_in_the_base_s_tree(ro
         **_reads_the_root(), MYPY_JSON: json.dumps({"rule": "mypy", "environment": env, "entries": [wrong]})})
     [c] = G.gate("main", "pr")["changes"]
     assert c["verdict"] == "passed", c["why"]
-    assert c["pooled"] == [f"{MYPY_JSON} records 1 finding(s) in 1 file(s) under {ROOT}, which the change's lints come to "
-                           "read and the base's tree already holds"]
+    assert c["pooled"] == [(f"{MYPY_JSON} records 1 finding(s) in 1 file(s) under {ROOT}, which the change's lints come to "
+                           "read and the base's tree already holds")]
     rooted.commit("a second error there", {
         f"{ROOT}test_c.py": 'X: int = "a"\nY: int = "b"\n',
         MYPY_JSON: json.dumps({"rule": "mypy", "environment": env, "entries": [{**wrong, "count": 2}]})})

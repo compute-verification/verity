@@ -797,12 +797,11 @@ def blobs(shas: set[str]) -> dict[str, bytes]:
     return out
 
 
-def ruff_findings(ruff: list[str], configs: dict[str, str], files: dict[str, bytes], run_from: str | None = None,
-                  excluding: bool = False) -> list[tuple[str, str, int, str]]:
+def ruff_findings(ruff: list[str], configs: dict[str, str], files: dict[str, bytes], run_from: str | None = None
+                  ) -> list[tuple[str, str, int, str]]:
     """(file, rule, line, message) of each finding ``ruff`` makes on ``files`` (path: content), laid out as in the tree with
     ``configs`` (path: text), run from ``run_from`` (default: the first config's directory) and given the first config, as
-    the ruff lint that reads it runs it (``RUFF_LINTS``, ``RUFF_FROM``: the repository's, ``{REPO_RUFF_CONFIG: text}``);
-    ``excluding``, a file the config excludes is left out, as from a directory the lint names."""
+    the ruff lint that reads it runs it (``RUFF_LINTS``, ``RUFF_FROM``: the repository's, ``{REPO_RUFF_CONFIG: text}``)."""
     if not files:
         return []
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-ruff-") as d:
@@ -813,7 +812,7 @@ def ruff_findings(ruff: list[str], configs: dict[str, str], files: dict[str, byt
         at = root / run_from if run_from is not None else (root / next(iter(configs))).parent
         at.mkdir(parents=True, exist_ok=True)       # the integration's tests and their config lie outside ``run_from``
         r = subprocess.run([*ruff, "check", "--config", os.path.relpath(root / next(iter(configs)), at), "--no-cache",
-                            "--exit-zero", "--output-format", "json", *(["--force-exclude"] if excluding else []), "--",
+                            "--exit-zero", "--output-format", "json", "--",
                             *(os.path.relpath(root / f, at) for f in sorted(files))],
                            cwd=at, capture_output=True, text=True, stdin=subprocess.DEVNULL)
         try:
@@ -1079,46 +1078,60 @@ def mypy_environment() -> dict[str, str | None]:
     return {"python": f"{sys.version_info.major}.{sys.version_info.minor}", **{p: version(p) for p in MYPY_PACKAGES}}
 
 
-def root_findings(rev: str, s: str, root: str, recorded: object = None) -> Counter | str:
-    """What the integration's lint ``s`` finds under ``root`` (a tests root, ``ROOTS``) in ``rev``'s tree, per (file key,
-    kind): ruff as that lint runs it, with ``rev``'s configs and pin, or mypy as ``test_mypy`` runs a tests root (on its own,
-    at ``--follow-imports skip``, under ``rev``'s ``[tool.mypy]``) when this process's environment is the one its list
-    records (``recorded``); else why it can't run here."""
-    files = {f for f in git("ls-tree", "-r", "--name-only", rev, "--", root).splitlines() if f.endswith(".py")}
-    if s in INTEGRATION_RUFF:
-        _, configs = RUFF_LINTS[s]
-        texts = {p: git("show", f"{rev}:{p}") for p in configs if git("ls-tree", "--name-only", rev, "--", p).strip()}
-        if configs[0] not in texts:
-            return f"{rev[:12]} has no {configs[0]}"
-        found = ruff_findings([*python_for(ruff_pin(rev), [s]), "-m", "ruff"], texts, tree_files(rev, files),
-                              RUFF_FROM.get(s), excluding=True)
-        return Counter((key_of(f), rule) for f, rule, *_ in found)
-    if (now := mypy_environment()) != recorded:
-        return f"this environment ({now}) isn't the one its list records ({recorded})"
-    if not files:
-        return Counter()
-    with tempfile.TemporaryDirectory(prefix="ratchet-gate-mypy-", ignore_cleanup_errors=True) as d:
+def root_findings(rev: str, root: str, lints: dict[str, object]) -> dict[str, Counter | str]:
+    """{lint: what it finds under ``root`` (a tests root, ``ROOTS``) in ``rev``'s tree, per (file key, kind), or why it can't
+    run here}, each of the integration's ``lints`` run on a checkout of ``rev`` as it runs a tests root: ruff on the root
+    with ``rev``'s config and pin, from where that lint runs it; mypy on the root on its own, at ``--follow-imports skip``
+    under ``rev``'s ``[tool.mypy]``, when this process's environment is the one ``lints`` says its list records."""
+    out: dict[str, Counter | str] = {}
+    runs = {}
+    with tempfile.TemporaryDirectory(prefix="ratchet-gate-root-", ignore_cleanup_errors=True) as d:
         tree = Path(d) / "tree"
         with worktree_turn():
             git("worktree", "add", "-q", "--detach", "--no-checkout", str(tree), rev)
         try:
             git("-C", str(tree), "reset", "-q", "--hard", "--no-recurse-submodules")
-            r = subprocess.run([sys.executable, "-m", "mypy", "--config-file", "pyproject.toml", "--cache-dir", "/dev/null",
-                                "-O", "json", "--follow-imports", "skip", os.path.relpath(tree / root, tree / INTEGRATION)],
-                               cwd=tree / INTEGRATION, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            for s, recorded in lints.items():
+                if not (tree / root).is_dir():
+                    out[s] = Counter()
+                    continue
+                if s == MYPY_LINT:
+                    if (now := mypy_environment()) != recorded:
+                        out[s] = f"this environment ({now}) isn't the one its list records ({recorded})"
+                        continue
+                    at = tree / INTEGRATION
+                    cmd = [sys.executable, "-m", "mypy", "--config-file", "pyproject.toml", "--cache-dir", "/dev/null",
+                           "-O", "json", "--follow-imports", "skip", os.path.relpath(tree / root, at)]
+                else:
+                    config = RUFF_LINTS[s][1][0]
+                    if not (tree / config).is_file():
+                        out[s] = f"{rev[:12]} has no {config}"
+                        continue
+                    at = tree / RUFF_FROM.get(s, str(PurePosixPath(config).parent))
+                    cmd = [*python_for(ruff_pin(rev), [s]), "-m", "ruff", "check", "--config", os.path.relpath(tree / config, at),
+                           "--no-cache", "--exit-zero", "--output-format", "json", os.path.relpath(tree / root, at)]
+                runs[s] = (at, subprocess.run(cmd, cwd=at, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                                              env={**os.environ, "RUFF_CACHE_DIR": str(Path(d) / "ruff-cache")}))
         finally:
             drop_worktree(tree)
-    if r.returncode not in (0, 1):
-        return f"mypy exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}"
-    found: Counter = Counter()
-    for line in r.stdout.splitlines():
+    for s, (at, r) in runs.items():
+        if r.returncode not in ((0, 1) if s == MYPY_LINT else (0,)):
+            out[s] = f"{s} exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}"
+            continue
         try:
-            e = json.loads(line)
+            records = [json.loads(line) for line in r.stdout.splitlines()] if s == MYPY_LINT else json.loads(r.stdout)
         except ValueError:
-            return f"mypy wrote {line[:200]!r}, not a JSON record"
-        if e.get("severity") == "error":
-            found[(key_of(os.path.normpath(f"{INTEGRATION}/{e['file']}")), e.get("code") or "misc")] += 1
-    return found
+            out[s] = f"{s} wrote {r.stdout.strip()[:200]!r}, not JSON"
+            continue
+        found: Counter = Counter()
+        for e in records:
+            if s == MYPY_LINT and e.get("severity") == "error":
+                found[(key_of(os.path.relpath(os.path.normpath(at / e["file"]), tree)), e.get("code") or "misc")] += 1
+            elif s != MYPY_LINT:
+                found[(key_of(Path(e["filename"]).resolve().relative_to(tree.resolve()).as_posix()),
+                       e["code"] or "syntax-error")] += 1
+        out[s] = found
+    return out
 
 
 def from_new_roots(c: Change, before: dict[str, list], after: dict[str, list]
@@ -1131,20 +1144,20 @@ def from_new_roots(c: Change, before: dict[str, list], after: dict[str, list]
     change's, and so does any list's growth elsewhere."""
     out, admitted, unchecked = dict(after), [], []
     for prefix, root in new_roots(c).items():
+        def under(e: object, prefix: str = prefix) -> bool:
+            return isinstance(e, dict) and isinstance(e.get("file"), str) and e["file"].startswith(prefix)
+        lints = {}
         for s in (*INTEGRATION_RUFF, MYPY_LINT):
-            def under(e: object, prefix: str = prefix) -> bool:
-                return isinstance(e, dict) and isinstance(e.get("file"), str) and e["file"].startswith(prefix)
-            if any(under(e) for e in before.get(s, [])) or not any(under(e) for e in out.get(s, [])):
-                continue
+            if not any(under(e) for e in before.get(s, [])) and any(under(e) for e in out.get(s, [])):
+                try:
+                    lints[s] = json.loads(git("show", f"{c.hi}:{LINT}/allowlists/{s}.json")).get("environment")
+                except (GitError, ValueError, AttributeError):
+                    lints[s] = None
+        for s, at_base in (root_findings(c.lo, root, lints) if lints else {}).items():
             listed: Counter = Counter()
             for e in out[s]:
                 if under(e):
                     listed[(e["file"], kind(e))] += count(e)
-            try:
-                recorded = json.loads(git("show", f"{c.hi}:{LINT}/allowlists/{s}.json")).get("environment")
-            except (GitError, ValueError, AttributeError):
-                recorded = None
-            at_base = root_findings(c.lo, s, root, recorded)
             name = f"{LINT}/allowlists/{s}.json"
             if isinstance(at_base, str):
                 unchecked.append(f"{name}'s {sum(listed.values())} finding(s) under {root}, which the change's lints come "
