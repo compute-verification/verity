@@ -21,8 +21,8 @@ untraced = [
 # network_certifier_zk, which it imports), whose --v3c reads the scan state window-commit opens for it (`scan_state_opening`); of
 # `research`, what the served compiler's identity imports (`code_identity`: `research_tools` and `source_identity`);
 # `deployments.json`: the census's reference deployment window_cost (and one_stage's block record) read.
-inputs = ["verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/one_stage", "verity/protocols/accounting/certifier/prover/leak_scan.py",
-          "verity/protocols/accounting/certifier/prover/scan_zk.py", "verity/protocols/accounting/certifier/prover/network_certifier_zk.py",
+inputs = ["verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/one_stage", "verity/protocols/resource_accounting/network/prover/leak_scan.py",
+          "verity/protocols/resource_accounting/network/prover/scan_zk.py", "verity/protocols/resource_accounting/network/prover/network_certifier_zk.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "benchmarks/census/deployments.json", "benchmarks/network_traces/zk_drivers.py",
@@ -36,17 +36,17 @@ inputs = ["verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/
           # signs with auditor read
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/settings.py",
-          "benchmarks/network_traces/network_certifier_chain.py", "verity/protocols/accounting/certifier/device/network_certifier_serve.py",
-          "verity/protocols/accounting/certifier/device/connection_rows_run.py",
-          "verity/protocols/accounting/certifier/device/runner_parts.py", "verity/protocols/accounting/certifier/device/certifier_key.py",
-          "verity/protocols/accounting/certifier/device/runner_cli.py",
-          "verity/protocols/accounting/certifier/device/load_relay.py", "verity/protocols/accounting/certifier/device/stall_probe.py",
-          "benchmarks/network_traces/site.json", "verity/protocols/compose/device/live_challenger/auditor.py",
-          "verity/protocols/compose/device/live_challenger/host.json", "verity/protocols/compose/device/live_challenger/serve.py",
+          "benchmarks/network_traces/network_certifier_chain.py", "verity/protocols/resource_accounting/network/attester/network_certifier_serve.py",
+          "verity/protocols/resource_accounting/network/attester/connection_rows_run.py",
+          "verity/protocols/resource_accounting/network/attester/runner_parts.py", "verity/protocols/resource_accounting/network/attester/certifier_key.py",
+          "verity/protocols/resource_accounting/network/attester/runner_cli.py",
+          "verity/protocols/resource_accounting/network/attester/load_relay.py", "verity/protocols/resource_accounting/network/attester/stall_probe.py",
+          "benchmarks/network_traces/site.json", "verity/protocols/compose/verifier/live_challenger/auditor.py",
+          "verity/protocols/compose/verifier/live_challenger/host.json", "verity/protocols/compose/verifier/live_challenger/serve.py",
           # Pearl+'s verdict, whose W check (`verify_run.tie`) test_pearltie runs on its toy's passes: verify_run, what it
           # imports, and the settings registry it loads (`verity_config.settings.of`, which finds it beside pouw's pyproject)
           "benchmarks/pouw/pearl_c_vllm/verify_run.py", "benchmarks/pouw/pearl_c_vllm/fast_tile.py",
-          "verity/protocols/accounting/pouw/prover/clear", "benchmarks/pouw/settings.py", "benchmarks/pouw/pyproject.toml",
+          "verity/protocols/resource_accounting/compute/pouw/prover/clear", "benchmarks/pouw/settings.py", "benchmarks/pouw/pyproject.toml",
           "tools/config/verity_config",
           # verity_difftest, which test_prove_path imports: under `verity` until the difftest map moved it
           "tools/difftest"]

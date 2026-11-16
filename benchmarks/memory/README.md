@@ -25,11 +25,11 @@ verifier times every pass and checks each one's answers against the store's comm
 - **A vLLM environment, `VLLM_PY`:** a Python with vLLM installed (`uv venv V && uv pip install --python V/bin/python
   vllm`). Without it `--local` runs nothing and says how to make one. It serves the checkpoint and fetches it:
   `unsloth/Llama-3.2-1B` at the revision core's pin names
-  (`verity/protocols/accounting/pouw/verifier/lean/check/models.json`), about 2.5 GB from Hugging Face, not gated, so
+  (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json`), about 2.5 GB from Hugging Face, not gated, so
   no token.
 - **The CUDA toolkit with `nvcc`** (under `/usr/local/cuda*` or `CUDA_HOME`). The driver alone is not enough: the
   session compiles its kernels for your card.
-- **Lean:** `bash tools/verity/lean/setup.sh verity/protocols/accounting/poub/verifier/lean` installs `elan` and the
+- **Lean:** `bash tools/verity/lean/setup.sh verity/protocols/resource_accounting/memory/poub/verifier/lean` installs `elan` and the
   verifier's dependencies. On your machine the Lean verifier builds from source: several minutes and about 4 GB of
   memory the first time, reused after.
 - **Disk:** the checkpoint, the caches and each run's records go into `LOCAL_WORK` (default
@@ -77,7 +77,7 @@ target is 0.14 at an error of at most 2^-100.**
   not a number from another.
 - The share is of the one card's read rate and its host's: the verifier's node is one card of the card's node sheet,
   handed to it as `--node`. A line names the card and the sheet with the SHA-256 of the tree's data sheets
-  (`hardware/`) and of the verifier (`verity/protocols/accounting/poub/verifier/`), Markdown left out, in the JSON's
+  (`hardware/`) and of the verifier (`verity/protocols/resource_accounting/memory/poub/verifier/`), Markdown left out, in the JSON's
   `machine` with the arena's GiB and vLLM's share of the card.
 
 **Exit codes:**
@@ -110,8 +110,8 @@ at its end. The sample term is next; it falls with more openings a stretch, whic
 line prints the measured pass and the lateness allowed.
 
 - the pass that reads the arena, and its pacing against the verifier's coins
-  (`verity/protocols/accounting/poub/prover/remote_session/session.cu`, `benchmarks/remote_session/node.py`);
-- how the arena is encoded and decoded on the GPU (`verity/protocols/accounting/poub/prover/word_codec/kv.cu`), and
+  (`verity/protocols/resource_accounting/memory/poub/prover/remote_session/session.cu`, `benchmarks/remote_session/node.py`);
+- how the arena is encoded and decoded on the GPU (`verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu`), and
   how the engine serves from it (`benchmarks/remote_session/engine.py`);
 - the arena's size: `ARENA_GIB` (default 0.88 of the card's memory less 12 GiB, `arena_of`; 112 GiB on an H200, 72
   on an RTX PRO 6000) and vLLM's share `UTIL` (default 0.88). The document says what it was;
@@ -120,7 +120,7 @@ line prints the measured pass and the lateness allowed.
 
 ## What is fixed
 
-- the verifier and its Lean (`verity/protocols/accounting/poub/verifier/`, its `lean/`);
+- the verifier and its Lean (`verity/protocols/resource_accounting/memory/poub/verifier/`, its `lean/`);
 - the ledger that turns a session into the share and its error (`verifier/session/verifier.py`), and the error rule
   (an error of 1 or more prints no number);
 - the session's form: one paced session (`--paced 1:1000:2773:7`, a coin every pass group, seven credited stretches

@@ -20,8 +20,8 @@ SM=${CC/./}
 [[ $SM =~ ^[0-9]+$ ]] || { echo "node.sh: the leased cards name no compute capability ($CC)"; exit 4; }
 [ "${CC%%.*}" -ge 9 ] && SM+=a
 FLAGS=(-O3 -gencode "arch=compute_$SM,code=sm_$SM" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
-nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/resource_accounting/memory/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
+nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
 MODEL=${MODEL:-unsloth/Llama-3.1-8B}
 # The cache holds snapshots without refs, which an offline lookup by name doesn't resolve.
 if [ ! -d "$MODEL" ]; then
@@ -46,7 +46,7 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
 V=
 if [ "${ROLE:-both}" = both ]; then
   # shellcheck disable=SC2086
-  taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py $VERIFY_ARGS ${VERIFIER_ARGS:-} > "$O/verifier.log" 2>&1 & V=$!
+  taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py $VERIFY_ARGS ${VERIFIER_ARGS:-} > "$O/verifier.log" 2>&1 & V=$!
 fi
 # shellcheck disable=SC2086
 taskset -c "$PROVER_CPUS" "$PY" $RS/node.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \

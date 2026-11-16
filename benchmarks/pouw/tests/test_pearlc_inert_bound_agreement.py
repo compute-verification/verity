@@ -14,16 +14,16 @@ from types import SimpleNamespace
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "tests"))
 import clear_work as CW
 import test_circuit_inert_bound as T
-from verity.protocols.accounting.pouw.prover.circuit import inert_bound
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound
 from verity.circuits.evaluation import evaluate
-from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape, Tile
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_work import UnitRecord
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape, Tile
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_work import UnitRecord
 
 H100 = DEVICES["h100"]
 H3, H0 = C.PearlC(forming="v1", device=H100, hashing="h3"), C.PearlC(forming="v1", device=H100, hashing="h0")

@@ -185,8 +185,8 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     verifier as V,
 )
 from .one_stage.verdict import Verdict, _Collect
-from verity.protocols.proofs.spot.device.challenger import ChallengerKey
-from verity.protocols.proofs.spot.device.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
+from verity.protocols.proofs.spot.verifier.challenger.challenger import ChallengerKey
+from verity.protocols.proofs.spot.verifier.challenger.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 HIDING = "hm96-sha512/"
