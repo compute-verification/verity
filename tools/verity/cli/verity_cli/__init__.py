@@ -7,8 +7,9 @@
     verity ci ls [--hours H]        recent check runs, running and ended, from the store's live records (tools/check/live.py)
     verity ci inspect RUN           a check's steps: state, elapsed, an ETA from each step's recorded median, and its reds so far
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
-    verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
-                                    a configuration's parties on this machine, and its verdict (run.py)
+    verity run CONFIG [--party ROLE ...] [--on MACHINE ...] [--periods N] [--state DIR]
+                                    a configuration's parties on the machines this host stands for, and its verdict
+                                    (run.py)
     verity config new|check|hash    write, check or hash a configuration (run.py)
     verity verify proof [ARGS]      Flock's Lean verifier, the executable `lake build` writes in its package, with ARGS as
                                     its own (`verity verify proof verify --zk --circuit F --public F --session DIR`), run
@@ -23,7 +24,8 @@
     verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
     verity graph check --local [--family F]
                                     run the graph serially here, uncached: the reference executor
-    verity demo [NAME] [ARGS]       `verity run demos/NAME.toml ARGS`, the demo's one file; NAME defaults to onsite_compute
+    verity demo [NAME] [ARGS]       `verity run demos/NAME.toml ARGS`, the demo's one file, with an --on for each of its
+                                    machines unless ARGS give one; NAME defaults to onsite_compute
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
                                     holds it, with its Lean options as `lake build` gives them, exiting with lean's
                                     status, and last the axiom probe: each theorem whose
@@ -79,6 +81,10 @@ def verify_proof_exe(root: Path) -> str:
     return names[0]
 
 
+def verify_proof_path(root: Path) -> Path:
+    return root / VERIFIER / ".lake" / "build" / "bin" / verify_proof_exe(root)
+
+
 def _run(argv: list[str]) -> int:
     return subprocess.run(argv, cwd=ROOT).returncode
 
@@ -105,8 +111,8 @@ def _runner(top: str, command: str, args: list[str]) -> int:
 
 
 def _demo(args: list[str]) -> int:
-    """`verity demo [NAME] [ARGS]`: `verity run demos/NAME.toml ARGS`, NAME `onsite_compute` when the first of ``args`` is
-    a flag or there is none."""
+    """`verity demo [NAME] [ARGS]`: `verity run demos/NAME.toml ARGS`, with ``--on`` for each of the file's machines
+    unless ``args`` name one, NAME `onsite_compute` when the first of ``args`` is a flag or there is none."""
     name, rest = (args[0], args[1:]) if args and not args[0].startswith("-") else (DEFAULT_DEMO, args)
     config = ROOT / "demos" / f"{name.replace('-', '_')}.toml"
     if not config.is_file():
@@ -114,6 +120,9 @@ def _demo(args: list[str]) -> int:
         raise SystemExit(f"verity demo [NAME] [ARGS] (a - in NAME is a _): NAME is one of {', '.join(names) or 'none'}")
     from . import run
 
+    if "--on" not in rest:
+        machines = dict.fromkeys(p["machine"] for p in tomllib.loads(config.read_text()).get("party", []))
+        rest = [*(x for m in machines for x in ("--on", m)), *rest]
     return run.run_main([str(config), *rest])
 
 
@@ -296,9 +305,8 @@ def _verify(args: list[str]) -> int:
     if args[:1] != ["proof"]:
         raise SystemExit((f"verity verify: no command {args[0]!r}\n" if args else "") + "verity verify proof [ARGS]")
     name = verify_proof_exe(ROOT)
-    exe = ROOT / VERIFIER / ".lake" / "build" / "bin" / name
     try:
-        return subprocess.run([str(exe), *args[1:]]).returncode
+        return subprocess.run([str(verify_proof_path(ROOT)), *args[1:]]).returncode
     except FileNotFoundError:
         raise SystemExit(f"verity verify proof: {VERIFIER}/.lake/build/bin/{name} is not built: `bash "
                          f"tools/verity/lean/setup.sh {VERIFIER}` installs elan, the toolchain and the package's "
