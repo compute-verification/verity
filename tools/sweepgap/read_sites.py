@@ -6,7 +6,7 @@
 The ten are spread evenly over the word's sites (sorted by file, line), and up to three more in each lane that owns sites of
 the word, so that a lane's count of the word comes with sites opened in its files.  A site is held when it is a stored record (the
 store's moves.json, a lock record, a fixture), a path that still exists at REF and names a directory or file by the old
-spelling, or a line one of the word's maps' [keep] patterns matches; else it is not held.  Each opened site's `reading`
+spelling, or a line one of the word's maps' [keep] patterns matches around the old spelling (the match covers the word's own place); else it is not held.  Each opened site's `reading`
 starts with `opened:`; the others keep the first guess."""
 from __future__ import annotations
 
@@ -70,9 +70,12 @@ def read(old: str, s: dict, keeps) -> tuple[str, str]:
         if live:
             return "held", f"the registry names {live[0]}, which still exists at the base"
         return "not held", f"the registry names {paths[0] if paths else 'a path'}, which does not exist at the base: a stale entry"
+    occ = [(mo.start(), mo.end()) for mo in re.finditer(r"(?<![\w])" + re.escape(old) + r"(?![\w])", text)]
     for mp, what, rx, glob in keeps:
-        if rx.search(text) and (glob is None or fnmatch.fnmatch(f, glob)):
-            return "held", f"{mp}'s {what} matches the line"
+        if glob is not None and not fnmatch.fnmatch(f, glob):
+            continue
+        if any(a <= s and e <= b for mo in rx.finditer(text) for a, b in [mo.span()] for s, e in occ):
+            return "held", f"{mp}'s {what} matches the line where it stands around the old spelling"
     if "/" in old:
         live = [p for p in PATHISH.findall(text) if old in p and (p in base_files or p in base_dirs)]
         if live:
@@ -81,6 +84,16 @@ def read(old: str, s: dict, keeps) -> tuple[str, str]:
     kind = "a Lean line" if f.endswith(".lean") else "a Python line" if f.endswith(".py") else "a Markdown or text line" if f.endswith((".md", ".txt")) else "a line of " + (Path(f).suffix or "text")
     maps = ", ".join(sorted({p["map"] for p in pairs[old]}))[:90]
     return "not held", f"{kind}; no [keep] pattern of {maps} matches and no stored record holds it"
+
+
+def holder_of(why: str) -> str:
+    m = re.match(r"([\w.]+_map\.toml)'s (\[keep(?:_in)?\])", why)
+    if m:
+        return f"{m.group(1)} {m.group(2)}"
+    for key, label in (("moves.json", "moves.json"), ("lock record", "a lock record"), ("registry", "the skills registry"), ("fixture", "a fixture or lock file"), ("still exists", "a path that exists at the base")):
+        if key in why:
+            return label
+    return why[:40]
 
 
 summary = []
@@ -107,7 +120,7 @@ for old, idxs in sorted(by.items(), key=lambda kv: -len(kv[1])):
     for i in pick:
         verdict, why = read(old, sites[i], keeps)
         sites[i]["reading"] = f"opened: {verdict}: {why}"
-        held[(verdict, why.split(" (")[0].split(":")[0][:60] if verdict == "held" else "")] += 1
+        held[(verdict, holder_of(why) if verdict == "held" else "")] += 1
     h = sum(c for (v, _), c in held.items() if v == "held")
     what = "; ".join(sorted({w for (v, w) in held if v == "held"}))
     summary.append([old, len(idxs), len(pick), h, len(pick) - h, what])

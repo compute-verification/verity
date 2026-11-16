@@ -172,10 +172,10 @@ with open(out / "names.v2.tsv", "w", newline="") as fh:
         ev = d["ev"]
         w.writerow([sp, term, ctx, d["sites"], len(d["files"]), d["lean"], ", ".join(f"{o}:{n}" for o, n in d["own"].most_common(6)),
                     " ".join(d["ex"]), new, d["kinds"].most_common(1)[0][0], cls, ev])
-with open(out / "sites_attesters.tsv", "w") as fh:
-    fh.write("term\tfile\tline\tspelling\tkind\towner\tcontext\tclass\n")
-    for r in site_out:
-        fh.write("\t".join(map(str, r)) + "\n")
+with open(out / "sites_attesters.tsv", "w", newline="") as fh:
+    w = csv.writer(fh, delimiter="\t", lineterminator="\n")
+    w.writerow(["term", "file", "line", "spelling", "kind", "owner", "context", "class"])
+    w.writerows(site_out)
 print(collections.Counter(r[7] for r in site_out))
 
 

@@ -22,8 +22,8 @@ ref = sys.argv[5] if len(sys.argv) > 5 else "c41a7b5a6d5c59bb95363a01770633933a8
 csv.field_size_limit(1 << 28)
 
 
-def rd(p):
-    return list(csv.DictReader(open(p), delimiter="\t"))
+def rd(p, **kw):
+    return list(csv.DictReader(open(p), delimiter="\t", **kw))
 
 
 glossary = subprocess.run(["git", "show", f"{ref}:GLOSSARY.md"], capture_output=True, text=True).stdout
@@ -39,7 +39,7 @@ sites_all = rd(v2 / "both_live_sites.tsv")
 by_lane_read = rd(v2 / "readings_by_lane.tsv")
 names = rd(n2 / "names.v2.tsv")
 att = rd(n2 / "sites_attesters.tsv")
-over = rd(over_path)
+over = rd(over_path, quoting=csv.QUOTE_NONE)
 
 problems: list[str] = []
 for r in names:
@@ -104,7 +104,7 @@ for lane in lanes:
     if rows:
         lines += ["| old | new | your sites | opened in your files | held among those opened |", "|---|---|---:|---:|---:|"]
         for r in sorted(rows, key=lambda r: -int(r["sites_in_lane"])):
-            lines.append(f"| `{r['old']}` | {new_word.get(r['old'], '')[:60]} | {r['sites_in_lane']} | {r['opened_in_lane']} | {r['held_among_opened']} |")
+            lines.append(f"| `{r['old']}` | {new_word.get(r['old'], '')[:60].replace('|', '/')} | {r['sites_in_lane']} | {r['opened_in_lane']} | {r['held_among_opened']} |")
         lines += ["", "Each row's old sites are in `both_live_sites.tsv` with the `reading` column filled for the opened ones."]
     else:
         lines.append("No BOTH LIVE word with over 50 old sites has a site in your files.")
@@ -120,7 +120,7 @@ for lane in lanes:
         lines += ["| word | context | your sites | option | paths (sites) |", "|---|---|---:|---|---|"]
         for (term, ctx), rs in sorted(ren.items(), key=lambda kv: -len(kv[1])):
             opts = collections.Counter((r["spelling"], new_of.get((term, r["spelling"], ctx), "")) for r in rs).most_common(3)
-            opt = "; ".join(f"`{a}` -> `{b}`" for a, b in opts)
+            opt = "; ".join(f"`{a}` -> `{b}` ({n})" for (a, b), n in opts)
             paths = ", ".join(f"`{f}` {n}" for f, n in collections.Counter(r["file"] for r in rs).most_common(3))
             lines.append(f"| {term} | {ctx[:50]} | {len(rs)} | {opt} | {paths} |")
     else:
