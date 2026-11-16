@@ -66,7 +66,6 @@ benchmarks/machine_model/data/cover/corpus.json
 benchmarks/machine_model/data/cover/bu_12_9.json
 benchmarks/machine_model/data/cover/sass_isa_tables.json
 benchmarks/training_slowdown/data/v3-selection.json
-benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json
 tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs
 tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs-blocks
 tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner

@@ -1,8 +1,8 @@
 """h1u.cu's units kernel for the served H1 receipt producer (`verity_torch.pouw.h1.receipts.Receipts`, the served
 path's `Served.receipts`), and `check`, which holds the receipts it kept to `h1tile.reference`.
 
-`Units` wraps `kh_seeds`, `kh_unit` and `kh_units_multi` of an -hbc build (`benchmarks/hash/dither/sbench.sh`'s
-h1u_kc.so). `Receipts(served, units=Units(so), device="cuda")` computes each call's receipts with it, word for word the
+`Units` wraps `kh_seeds`, `kh_unit` and `kh_units_multi` of an -hbc build.
+`Receipts(served, units=Units(so), device="cuda")` computes each call's receipts with it, word for word the
 torch chain's (`pouw_h1_receipts`, the reference the units kernels are gated against): a call at a time, or a step's
 calls of one K in a few `kh_units_multi` launches (`Receipts.prepare`), each launch's codes copied to the device and its
 receipts back on streams of their own, beside the launches before and after. The kernel needs 512 | K (`kh_unit`); its

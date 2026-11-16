@@ -9,7 +9,7 @@ is taken bound unless DITHER_NUMA=0.
 
 CMD always runs: with DITHER_NUMA=0, or no numactl, GPU, node or shared CPU, or a bind numactl refuses, it runs unbound.
 Either way RECORD (JSON) and one `numa:` line on stdout say how it ran and why, and CMD's environment carries the record as
-DITHER_NUMA_RECORD (sbench.py's summary keeps it as "numa").
+DITHER_NUMA_RECORD.
 """
 from __future__ import annotations
 

@@ -35,7 +35,7 @@ def _engine(device: str) -> E.Engine:
     return (E.Engine if device == "host" else TorchEngine)(device, build=BUILD)
 
 
-#: one layer of commit_slots' frozen H200 layout, the benchmarks' too (bench.h200_rows)
+#: one layer of commit_slots' frozen H200 layout
 H200_LAYER = check.layout_rows(S.h200_layout(layers=1).groups[0])
 
 ENGINES = ["host", pytest.param("cuda", marks=pytest.mark.skipif(not _cuda(), reason="no CUDA device"))]

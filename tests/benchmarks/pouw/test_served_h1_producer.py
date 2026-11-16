@@ -261,7 +261,7 @@ def test_each_calls_receipt_table_is_h1tile_reference_through_served():
 def _kernel():
     so = getattr(SETTINGS, SO)
     if not so or not torch.cuda.is_available():
-        pytest.skip(f"no GPU, or {SO} names no h1u.cu -hbc build (benchmarks/hash/dither/sbench.sh's h1u_kc.so): its run "
+        pytest.skip(f"no GPU, or {SO} names no h1u.cu -hbc build: its run "
                     "is a recorded run on vy-nebius-2, about 5 minutes")
     return PR.Units(so)
 

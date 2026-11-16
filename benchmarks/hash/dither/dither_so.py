@@ -11,8 +11,8 @@ after it, beside a later step's forward; their receipts go under a later round. 
                      streams above the GEMM's priority, joined at the last call and at every qkv call under piecewise
                      graphs), exactlin's GEMM with the z/y records (dither-a's -zy) and the served y's records
                      (`dithera_ycommit`).  No seeds and no units: nothing in the forward reads a coin.
-    between steps    under -ab, every call's rows >= m cleared and the step's A tables in one h1c_build (h1agate.py's
-                     `batch`: a per-step A commitment, a scheme change not ruled in, so a separate arm); the step's
+    between steps    under -ab, every call's rows >= m cleared and the step's A tables in one h1c_build (a per-step
+                     A commitment, a scheme change not ruled in, so a separate arm); the step's
                      A slots, scales, A roots, live rows and step into ring slot s mod D; the admit tables (under -pt on
                      their own stream), the z/y leaf tables and the served y's tables (their run-time compare);
                      round s over a-step, admit-step, z-step, y-step and receipt-step, whose leaf is the receipt-table
@@ -263,7 +263,7 @@ def smq_of(v: str) -> tuple[int, int, int]:
 # the A tables: "m" per call in the forward on NA_MULTI streams; "b" once a step between steps (not ruled in); "n" after
 # either: each call's noise on NA_MULTI streams beside the units
 AO = {"m": "per call, in the forward", "mn": "per call, in the forward; noise on its own streams",
-      "b": "once a step (h1agate's batch; not ruled in)", "bn": "once a step (not ruled in); noise on its own streams"}
+      "b": "once a step (not ruled in)", "bn": "once a step (not ruled in); noise on its own streams"}
 NA = DA.NA_MULTI
 
 
@@ -1280,8 +1280,8 @@ class SoSide(DA.Side):
                    *(("kh_units_multi_j10rc", "kh_j10r_ws_bytes") if self.j10rc_min_t else ()))
             missing = [f for f in fns if not hasattr(self.h, f)]
             if not self.fused or missing or settings.get(DA.LANE_REFS_ENV) or not settings.get(JS.TREE_ENV):
-                raise ValueError(f"${UNITS_ENV}=j10r: needs ${FUSED_ENV}=1, J10R's tree at ${JS.TREE_ENV} (sbench.sh's "
-                                 f"J10R_SHA={JS.J10R_SHA}), no ${DA.LANE_REFS_ENV} (its lane records are today's form) "
+                raise ValueError(f"${UNITS_ENV}=j10r: needs ${FUSED_ENV}=1, J10R's tree at ${JS.TREE_ENV}, "
+                                 f"no ${DA.LANE_REFS_ENV} (its lane records are today's form) "
                                  f"and an h1u build with {', '.join(fns)} (missing: {missing})")
             self.h.kh_h1rcall_bytes.restype = C.c_uint
             if int(self.h.kh_h1rcall_bytes()) != int(win.r.lib.h1r_call_bytes()):
@@ -1336,7 +1336,7 @@ class SoSide(DA.Side):
     def set_units_smq(self, q: int, den: int = 8, cap: int = 0) -> None:
         """The units launch on the SMs whose id % den < q, at most cap CTAs on each (0: no cap), from the next dispatch
         on (q 0: kh_units_multi's every SM), each (ring slot, m) graph captured again at its next step: a screen of the
-        SM share inside one engine (sbench's SBENCH_SMQ_SWEEP); a served row's share is $DITHER_SO_UNITS_SMQ's, fixed at
+        SM share inside one engine; a served row's share is $DITHER_SO_UNITS_SMQ's, fixed at
         the build."""
         self._check_smq(q, den, f"set_units_smq({q}, {den}, {cap})", cap)
         torch.cuda.synchronize()
@@ -1759,7 +1759,7 @@ class Ov:
 
     @contextlib.contextmanager
     def phase(self, name: str) -> Iterator[None]:
-        """`DitherState.phase`'s NVTX range on this thread (stepprof joins a launch to its own thread's phase)."""
+        """`DitherState.phase`'s NVTX range on this thread."""
         if not self.win.nvtx:
             yield
             return
@@ -1948,7 +1948,7 @@ class Spill:
     slot s mod R at its copy s + R).  The records' live prefixes go through one device buffer and one transfer.  The
     pool's chunks are never freed: an execution phase's go back to it at its end, a named or off-node execution phase's after `check_end`
     (`release`).  An off-node execution phase's pool is pinned whole when the spill is made, at its open (`reserve`); an
-    in-process arm's grows in sbench's warm-up."""
+    in-process arm's grows."""
 
     def __init__(self, win: SoWindow, sd: SoSide, mode: str) -> None:
         if mode not in SPILLS:

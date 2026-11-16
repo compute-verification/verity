@@ -1601,7 +1601,7 @@ __device__ __forceinline__ void a_seg_words(u64 w[16], const uint8_t* row, const
   if (q == nb - 1) w[15] = 8ull * (128 + L);
 }
 
-// h1agate's phase stamps (h1c_a_stamps; null on the served path): the last block's index at 0, %globaltimer at 1 + lv after
+// Phase stamps (h1c_a_stamps; null on the served path): the last block's index at 0, %globaltimer at 1 + lv after
 // each level, and block b's at 32 + 8 b + i: i = 0 its start, 1 its segments, 2 its x, 3 its leaves, 4 its arrival
 __device__ u64* ap_stamps = nullptr;
 __device__ __forceinline__ void ap_stamp(int i) {
