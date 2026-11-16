@@ -382,6 +382,7 @@ job is added, claimed by a worker under a lease, renewed while it runs and compl
 research jobs add merge-check --commit REF      # or `lean-regen --commit REF --package DIR`, or `audit-main`
 research jobs list [--state S] [--kind K] [--json]    research jobs show ID    research jobs cancel ID
 research worker --dispatch --pods A,B [--once]  # claims jobs and runs each with `research run --on` on one of the pods
+research worker --dispatch --kinds research-run [--slots 4] --name control  # a lead's `research run` line, CPU machines only
 ~~~
 
 `research.jobs.model` is the queue's reference semantics; `vectors.json` beside it pins every rule as request and response
