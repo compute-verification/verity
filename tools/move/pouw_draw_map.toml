@@ -188,6 +188,8 @@ strings = [
   "(its coin was drawn on run",
   "), so its draw is over that",
   "): prove every drawn lanes-form leaf as its lanes and combine",
+  "Commit every call's credit bit in its manifest row, and the Commit record, before the draw root",
+  "One stratum per template, its units as merged ranges, in the order of their first unit (`Commitments/Draw.lean` `strataOf",
   "Prove and verify every drawn unit",
   "a drawn leaf's statement",
   "a retry never redraws",
@@ -196,11 +198,14 @@ strings = [
   "calls_root, before the draw coin, and a step serves at most its tables",
   "commits no draw K (draw_k",
   "committed: verify each drawn unit",
+  "credit coin: the draw's session is not trusted",
   "drawn on the serving node",
   "draws from one tile stratum (TileSampleIsCoin): serve a window",
   "each drawn lanes-form leaf",
+  "evidence: public: keys are not draw",
   "failed drawn unit refuses the whole window, not only its call (no partial credit, and",
   "false) in its manifest row, under calls_root, before the draw coin",
+  "filler certified fraction 0.99 is under CH (withdrawn, decision 27",
   "followed: a credit bit, a call or the Commit record changed after the draw coin, or the draw opened after",
   "has a leaf statement and is no drawn lanes-form leaf",
   "has a proof outcome and was not drawn",
@@ -208,13 +213,19 @@ strings = [
   "has a statement and no drawn unit: only the draw",
   "has a statement and no drawn unit: only the draw's units are proved",
   "has two proof outcomes: a drawn unit is proved and verified once, and a retry",
+  "has two statements: a call's drawn units are proved in one statement and verified once, and a retry never reproves them",
   "in the period-open, beside its draw K, before any draw",
   "is not drawn",
+  "is opened twice: a retry never redraws",
   "never redrawn",
+  "outcome outcome: unit # has a proof outcome and was not drawn",
+  "outcome: call # has a statement and no drawn unit",
   "part of the run's record was withdrawn, none of it a file read here",
+  "pouw/round coin 1 is already open: a retry never redraws",
   "profile: drawn",
   "program is not the SHA-512 of the descriptor whose layout the window was drawn over):",
   "public: keys are not draw, and optionally salt",
+  "range, and runs out on a short stream, as Lean's ``Draw.subset`` does",
   "root, and never change them after the draw coin",
   "s calls_root before the draw coin",
   "s credit bit in its manifest row, and the Commit record, before the draw",
@@ -232,6 +243,8 @@ strings = [
   "s unit reads no salt: no drawn proof of it is held to the",
   "s unit reads no salt: no drawn proof of it is held to the window",
   "s verdict for a drawn unit",
+  "samples 2 and 1; a floor of 3 on T2 samples 3. The rule's own example (`Commitments/Draw.lean`) also gives work to a second template (T1, 3 units of",
+  "signed`), under the challenger key the execution phase's parameters pin (``key``, the record's): its ``pouw/draw`` coin 0",
   "the coin commitment's coins are not a live window's draw session's",
   "the coin commitment's coins are not a live window's draw session's: its draw coin alone",
   "the credited work, as the tile count padded to a grid level: the draw ranges over its N",
@@ -243,13 +256,20 @@ strings = [
   "the draw's session is not trusted: the auditor's ledger opens no challenger session for this window",
   "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict",
   "the epoch has no coin commitment for its draw coin to open against",
+  "the epoch's pouw/round coin 1 is opened twice: a retry never redraws",
+  "the salt its pass was checked against, and its sample is its sampling session's ``pouw/draw`` coin 0 opened after the",
   "the units are not the draw coin's",
   "the units are not the draw coin's subset",
+  "the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the window's certified salt",
   "the window's draw coin, the produced record's draw, is not a live opening",
   "the window's draw root, the produced record's",
+  "unit # is not drawn",
+  "unit 0 has a leaf statement and is no drawn lanes-form leaf: only the draw's leaves at a K committed as lanes are proved as lanes",
   "was withdrawn",
   "what the credit rests on: every drawn tile was proved and opened, or not",
   "with one missing is refused whole (no partial credit). Prove and verify every drawn unit",
+  "withdrawn whole, or in a part that holds a file the command reads, is refused before anything is fetched, and a",
+  "withhold``), marks the record with the reserve before its open, and returns the session's ``pouw/draw`` coin 0",
 ]
 
 [keep_in]
@@ -277,17 +297,63 @@ files = ["verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_a
 "drawn: int" = "sample_size: int"
 "self.drawn" = "self.sample_size"
 
+# tests/benchmarks/pouw/pearlplus_lean/test_pearlplus_lean.py: its quotes of our messages, as the map renames each message
+[[words_in]]
+files = ["tests/benchmarks/pouw/pearlplus_lean/test_pearlplus_lean.py"]
+[words_in.words]
+"the record's draw coin: the coin commitment's coins are not a live window's draw session's" = "the record's sampling coin: the coin commitment's coins are not a live window's draw session's"
+"the record's draw coin: coin was not opened after what the verifier recorded" = "the record's sampling coin: coin was not opened after what the verifier recorded"
+"the record's source is not its draw session's coin" = "the record's source is not its sample session's coin"
+
 # tests/benchmarks/pouw/test_pearl_c_vllm.py: its quotes of our messages, as the map renames each message
 [[words_in]]
 files = ["tests/benchmarks/pouw/test_pearl_c_vllm.py"]
 [words_in.words]
+"A pass with no credited cell, as a no-write control whose rows are all excluded, samples no tile (`clear_work.draw`), so" = "A pass with no credited cell, as a no-write control whose rows are all excluded, samples no tile (`clear_work.sample`), so"
+"verify_passes``' ``draw(C, asking)``: its source is the sample's coin on the run's commitment C, recorded (v2) with" = "verify_passes``' ``sample(C, asking)``: its source is the sample's coin on the run's commitment C, recorded (v2) with"
+"fresh-draws`: the per-input mode's inputs, each by N work-weighted trials under a salt of its own derived from the" = "fresh-samples`: the per-input mode's inputs, each by N work-weighted trials under a salt of its own derived from the"
+"bench_arm.LiveDraw` (``served_passes.py verify`` under PEARLC_CHALLENGER_GATE/PEER/LANE): with no period of the" = "bench_arm.LiveSample` (``served_passes.py verify`` under PEARLC_CHALLENGER_GATE/PEER/LANE): with no period of the"
+"drawn tiles and the exclusion tiles over 1 passes" = "sampled tiles and the exclusion tiles over 1 passes"
 "draw session" = "sample session"
+
+# tests/benchmarks/pouw/test_pearl_c_vllm_head.py: its quotes of our messages, as the map renames each message
+[[words_in]]
+files = ["tests/benchmarks/pouw/test_pearl_c_vllm_head.py"]
+[words_in.words]
+"the call's first, a middle and its last column tile (``clear_work.draw`` patched), and the exclusion tile of the +0 row" = "the call's first, a middle and its last column tile (``clear_work.sample`` patched), and the exclusion tile of the +0 row"
+
+# tests/benchmarks/pouw/test_served_h1.py: its quotes of our messages, as the map renames each message
+[[words_in]]
+files = ["tests/benchmarks/pouw/test_served_h1.py"]
+[words_in.words]
+"Off the node the sampling coin (`Coins.draw`) is its own sample session's, opened withheld on the sample root: with no gate" = "Off the node the sampling coin (`Coins.sample`) is its own sample session's, opened withheld on the sample root: with no gate"
+"plain: a draw session is withheld" = "plain: a sample session is withheld"
 
 # tests/benchmarks/pouw/test_served_zk.py: its quotes of our messages, as the map renames each message
 [[words_in]]
 files = ["tests/benchmarks/pouw/test_served_zk.py"]
 [words_in.words]
 "after the epoch's draw coin" = "after the epoch's sampling coin"
+
+# tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pouw_credit_cases.py: its quotes of our messages, as the map renames each message
+[[words_in]]
+files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pouw_credit_cases.py"]
+[words_in.words]
+"open root and its circuit, `registered.domain`), and the sample: `credit.draw_root` over them, recorded by the" = "open root and its circuit, `registered.domain`), and the sample: `credit.sample_root` over them, recorded by the"
+"steps they run or will, each held to the Lean on its own: `credit._credited`, `credit.drawn`, `credit._outcome" = "steps they run or will, each held to the Lean on its own: `credit._credited`, `credit.sampled`, `credit._outcome"
+
+# tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pouw_pass_cases.py: its quotes of our messages, as the map renames each message
+[[words_in]]
+files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pouw_pass_cases.py"]
+[words_in.words]
+"An honest sample under a live execution phase's sample session's coins (`window.draw_challenger`), held as their signed record" = "An honest sample under a live execution phase's sample session's coins (`window.sample_challenger`), held as their signed record"
+"manifest\"}``, and `core_check.draw_twin`'s, ``{\"coins\", \"recorded\", \"opening\", \"stream\", \"registration\", \"receipt\", \"k" = "manifest\"}``, and `core_check.sample_twin`'s, ``{\"coins\", \"recorded\", \"opening\", \"stream\", \"registration\", \"receipt\", \"k"
+
+# tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_difftest.py: its quotes of our messages, as the map renames each message
+[[words_in]]
+files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_difftest.py"]
+[words_in.words]
+"credit coin: the draw coin" = "credit coin: the sampling coin"
 
 # tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/test_difftest.py: its quotes of our messages, as the map renames each message
 [[words_in]]
@@ -299,12 +365,23 @@ files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/
 [[words_in]]
 files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_plan.py"]
 [words_in.words]
+"under the one execution phase key. A receipt lists each call index once, and `Traced.draw` admits the call to the execution phase's" = "under the one execution phase key. A receipt lists each call index once, and `Traced.sample` admits the call to the execution phase's"
+"receipt\": digest}, and `Traced.draw` refuses a ledger not opened from a receipt and a call the receipt doesn't list" = "receipt\": digest}, and `Traced.sample` refuses a ledger not opened from a receipt and a call the receipt doesn't list"
+"shape and commitment, and is immutable; `Ledger.open` derives the key from it alone, under `DRAW_DOMAIN` with" = "shape and commitment, and is immutable; `Ledger.open` derives the key from it alone, under `SAMPLE_DOMAIN` with"
+"Traced.draw` reads it from the ledger, so a caller's key never reaches a sample" = "Traced.sample` reads it from the ledger, so a caller's key never reaches a sample"
 "once its draw is sent" = "once its sample is sent"
+
+# tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_core_check.py: its quotes of our messages, as the map renames each message
+[[words_in]]
+files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_core_check.py"]
+[words_in.words]
+"core_check.draw_twin` accepts an honest sample under seeded coins or a live execution phase's (a certified execution phase's, held as its" = "core_check.sample_twin` accepts an honest sample under seeded coins or a live execution phase's (a certified execution phase's, held as its"
 
 # tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_credit.py: its quotes of our messages, as the map renames each message
 [[words_in]]
 files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_credit.py"]
 [words_in.words]
+"credit.drawn` derives the sampled proof blocks from the sampling coin: each stratum's units are its own, its count the work" = "credit.sampled` derives the sampled proof blocks from the sampling coin: each stratum's units are its own, its count the work"
 "the draw coin" = "the sampling coin"
 
 # tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_epoch_coins.py: its quotes of our messages, as the map renames each message
@@ -312,6 +389,19 @@ files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_
 files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_epoch_coins.py"]
 [words_in.words]
 "draws from its draw coin, not from bare bytes" = "samples from its sampling coin, not from bare bytes"
+
+# tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_pearl_c_work.py: its quotes of our messages, as the map renames each message
+[[words_in]]
+files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_pearl_c_work.py"]
+[words_in.words]
+"draw_after`): a foreign challenger's coin, a coin not under the commitment, the execution phase's salt coin, a coin opened" = "sample_after`): a foreign challenger's coin, a coin not under the commitment, the execution phase's salt coin, a coin opened"
+
+# verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/tests/difftest_vectors.py: its quotes of our messages, as the map renames each message
+[[words_in]]
+files = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/tests/difftest_vectors.py"]
+[words_in.words]
+"verity/protocols/resource_accounting/compute/pouw/prover/clear``: `Sampled.select`'s and `clear_work.draw`'s), each run as written with only its tickets given" = "verity/protocols/resource_accounting/compute/pouw/prover/clear``: `Sampled.select`'s and `clear_work.sample`'s), each run as written with only its tickets given"
+"with no coin commitment; the audit, sample and replay keys and `draw_after`; and the clear audit's work-weighted samples" = "with no coin commitment; the audit, sample and replay keys and `sample_after`; and the clear audit's work-weighted samples"
 
 # PoUW's Python: coin phrases and proof blocks first, then every name
 [[words_in]]

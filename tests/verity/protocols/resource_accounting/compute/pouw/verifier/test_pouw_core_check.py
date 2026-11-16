@@ -100,7 +100,7 @@ EXPECT = {
     "answer-shape": "evidence: answer: an accept has no reason", "answer-profile": "evidence: profile.levels: not a list",
     "answer-profile-delta": 'evidence: profile.delta: "2/4" is not in lowest terms',
     "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset, stratified or work sample",
-    "answer-public": "evidence: public: keys are not sample",
+    "answer-public": "evidence: public: keys are not draw",
     "answer-public-law": "evidence: public.draw: keys are not law, p, population, units",
     "answer-protocol": "outcome: protocol", "answer-other": "outcome: for registration",
     "answer-null": "outcome: for registration null", "answer-reject": "service: the audit's reject",
