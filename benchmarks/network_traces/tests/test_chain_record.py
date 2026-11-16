@@ -517,7 +517,7 @@ def test_free_inputs_hold_to_the_period_count_on_wires_and_registered_reads():
             assert terms == {k: lean[k] for k in ("inputs", "wired", "registered", "free")}
 
 
-def test_the_faulty_sets_bits_are_the_powers_without_computing_it():
+def test_the_incorrect_sets_bits_are_the_powers_without_computing_it():
     """`power_bits` is ``(m^f - 1).bit_length()``: computed on small cases, and read off the logarithm (forced with
     ``exact_below=0``) it agrees with the power everywhere; at keep-591e's sample (``m`` 6,963,297, ``f`` 96,531,780) it
     finishes, within one bit of ``f·log2 m``."""

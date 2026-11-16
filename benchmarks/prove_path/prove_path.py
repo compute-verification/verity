@@ -1314,7 +1314,7 @@ def audit(a: argparse.Namespace) -> int:
                                                          "negatives_refused": all((s.get("negatives") or {"none": False}).values())})
              | {"charge": {x: (s.get("charge") or {}).get(x) for x in ("c", "bound", "location_bits", "harm_bound",
                                                                       "exfiltration_bound")}
-                | {"wrong_units_bound": ((s.get("charge") or {}).get("wrong_units") or {}).get("bound")}}
+                | {"incorrect_proof_blocks_bound": ((s.get("charge") or {}).get("wrong_units") or {}).get("bound")}}
              for r, s in summary["ranks"].items()}
     print("PROVE-PATH " + json.dumps({"run_root" if single(a) else "tp_run_root": root, "forged": a.forged, "ok": summary["ok"],
                                       "proof": "plain" if a.plain else "zk", **({"plain": summary["plain"]} if a.plain else {}),

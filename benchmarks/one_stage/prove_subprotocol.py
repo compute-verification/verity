@@ -554,7 +554,7 @@ def refused(subprotocol: dict, member: str | None = None) -> bool:
     return units is None or any(u["verdict"] != "accept" for u in units)
 
 
-def wrong_unit(honest: dict, a: str, b: str, tools: Tools, out: Path) -> dict:
+def incorrect_proof_block(honest: dict, a: str, b: str, tools: Tools, out: Path) -> dict:
     """Member ``a``'s honest session checked as member ``b``'s: the auditor's committed circuit for ``b``'s stratum is
     ``b``'s pin, which ``a``'s circuit file doesn't hash to (the proof system's own check, `proofs.verify`'s
     ``circuit``), and Lean verifies ``a``'s session against ``b``'s circuit file."""
@@ -640,7 +640,7 @@ def negatives(members: list[Member], coins, registered: Path | None, tools: Tool
                             "checks_before_draw": subprotocol.get("checks_before_draw")}
 
     if len(members) > 1:
-        neg["wrong-unit"] = wrong_unit(honest, members[0].name, members[1].name, tools, out / "wrong-unit")
+        neg["incorrect-proof-block"] = incorrect_proof_block(honest, members[0].name, members[1].name, tools, out / "incorrect-proof-block")
     if registered is not None:
         neg["tampered-registered-root"] = tampered_registered_root(honest, m.name, registered, tools,
                                                                    out / "tampered-registered-root")

@@ -120,7 +120,7 @@ def test_a_prove_paths_output_is_adopted_and_held_to_the_given_advice(tmp_path):
     assert got["bound"] is False and got["bound_why"] == "the --advice file isn't these runs' advice"
     assert chain.prove_path(d, info, True)["bound_why"].startswith("the Commit it proves isn't held to these runs'")
     assert got["arms"]["glm"]["ranks"]["0"] == {"ok": True, "accepted": True, "population": 10, "drawn": 2,
-                                                "wrong_units_bound": 3, "negatives_refused": True,
+                                                "incorrect_proof_blocks_bound": 3, "negatives_refused": True,
                                                 "forged_refused": None, "seconds": 1.5, "source": "stand-in",
                                                 "per_unit": {}}
     assert got["arms"]["glm-forged"]["ranks"]["0"]["forged_refused"] is True

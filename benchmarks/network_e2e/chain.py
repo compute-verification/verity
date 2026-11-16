@@ -542,7 +542,7 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
                 a = x.get("audit") or {}
                 ranks[r] = {"ok": x.get("ok") is True, "accepted": a.get("accepted"), "population": x.get("population"),
                             "drawn": len(x.get("draw") or ()),
-                            "wrong_units_bound": (a.get("wrong_units") or {}).get("bound"),
+                            "incorrect_proof_blocks_bound": (a.get("wrong_units") or {}).get("bound"),
                             "negatives_refused": bool(x.get("negatives")) and all(map(_refused, x["negatives"].values())),
                             "forged_refused": (x.get("forged") or {}).get("ok") if s.get("forged") else None,
                             "seconds": x.get("seconds"), "source": x.get("source"), "per_unit": per_unit(x)}
@@ -831,7 +831,7 @@ def markdown(c: dict) -> list[str]:
             return _cell("; ".join(f"{m} {_cell(v[k])}" for m, v in x["per_unit"].items()) or None)
         for name, arm in p["arms"].items():
             lines += [f"| {name} | {arm['ok']} | {r} | {_cell(x['accepted'])} | {_cell(x['population'])} | {x['drawn']} | "
-                      f"{_cell(x['wrong_units_bound'])} | {x['negatives_refused']} | {_cell(x['forged_refused'])} | "
+                      f"{_cell(x['incorrect_proof_blocks_bound'])} | {x['negatives_refused']} | {_cell(x['forged_refused'])} | "
                       f"{_cell(x['seconds'])} | {each(x, 'prove_s_per_unit')} | {each(x, 'lean_verify_s_per_unit')} | "
                       f"{each(x, 'proof_bytes')} | {_cell(x['source'])} |" for r, x in arm["ranks"].items()]
     n = c.get("negatives")

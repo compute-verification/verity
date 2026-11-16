@@ -74,7 +74,7 @@ def five_strips():
 
 @pytest.mark.parametrize("role, where", [("digest", (3,)), ("node", (2,)), ("key", ()), ("form_x", (4,)), ("tile", (2, 1)),
                                          ("dequant", (4, 2, 37))])
-def test_the_gate_names_the_first_wrong_unit(five_strips, role, where):
+def test_the_gate_names_the_first_incorrect_proof_block(five_strips, role, where):
     call, nat, ref = five_strips
     u = nat.index(role, *where)
     bad = PN.commit_call(0, "ncp-v2", call, tamper={(u, 0): int(nat.outputs(u)[0]) ^ 1}, side=ref.side)

@@ -365,7 +365,7 @@ def test_proved_units_are_the_sample():
     assert D.check_proved(good, [1, 4, 5], 3).codes == ("instances", "units")
 
 
-def test_profile_counts_wrong_units():
+def test_profile_counts_incorrect_proof_blocks():
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     p = audit.profile(rec, d, 0.25)

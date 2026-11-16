@@ -37,7 +37,7 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
 ../../Definitions/Certifier/RecordRows.lean  trusted: the network certifier's record as the Python one writes it
     (RowsFormat): a row a bucket of frames that name their connections, in ordinal order
     (bucketFrames), the lanes read back from them (lanesOfRows), and the schedules it holds (Fits)
-../../Definitions/Certifier/SampledCharge.lean  trusted: what the faulty proof blocks add under a sampled audit: their
+../../Definitions/Certifier/SampledCharge.lean  trusted: what the incorrect proof blocks add under a sampled audit: their
     committed bits (faultyBits), the possible incorrect sets at δ (incorrectSets), the
     sequences accepted with one (AcceptedFaulty, AccSeqsSampled), and what an accepted
     audit gives that count (AdviceIn, freeInputs, AsReg, RLeak); the runs before a
