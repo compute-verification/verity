@@ -1,0 +1,532 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "headline",
+ "model": "GLM-5.3",
+ "status": "modeled",
+ "provisional": true,
+ "source": "design (d) at 600 s execution phases, the wait at e included, each row three ways labelled by what it rests on (the planner's sweep over the (d) path; its runs record the source); each cell the per-execution-phase overhead pooled over the period, a share of the compute it covers",
+ "runs": [
+  "r20261109-191629-7cc0",
+  "r20261109-192926-0dd9",
+  "r20261109-201233-0467",
+  "r20261109-201252-08f7"
+ ],
+ "owner": "@proofs",
+ "value": {
+  "bases": [
+   "served-measured",
+   "served-card-priced",
+   "design"
+  ],
+  "rows": [
+   {
+    "row": "(i)",
+    "label": "(i) today's served blocks, registered MoE cut",
+    "pricing": "as the planner prices it",
+    "basis": "served-card-priced",
+    "basis_from": [
+     "every type at the proof-overhead card's price: classes, siblings, seeded stagings, computed rules; none measured on served values"
+    ],
+    "rests_on": [
+     "\u03bb = 1 (approved: 1.05)",
+     "P4's 4\u00d7 prover goal (measured: 3.71\u00d7)",
+     "P5's templated-check goal for every type (measured: two families)",
+     "N2's lifetime replay (not built)",
+     "N4's front run beside device work (not measured)",
+     "P2's flat-column cut (assumed)",
+     "sparse MLA at the census request's keys (128k's are about 8\u00d7)",
+     "design (d): approved, not built",
+     "the 875-token cap: approved, not certified",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
+     "the wait at e: the cache's hold on the trace (modeled)",
+     "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
+     "the deterministic top-k: kernel-modeled",
+     "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
+     "m = 37: not built (its cells only)"
+    ],
+    "cells": {
+     "875-token cap at 32 bits a token": {
+      "without m = 37": {
+       "world week": 0.9282549874593987,
+       "world month": 0.9437942533270585,
+       "world year": 0.9704545910488822,
+       "datacenter week": 0.8402575281761406,
+       "datacenter month": 0.8558355207876751,
+       "datacenter year": 0.8825629584099283
+      },
+      "with m = 37": {
+       "world week": 0.6543871710404833,
+       "world month": 0.665074827662226,
+       "world year": 0.6834114240693211,
+       "datacenter week": 0.5938638185866633,
+       "datacenter month": 0.6045781134882515,
+       "datacenter year": 0.6229608551429691
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 0.9057642449726208,
+       "world month": 0.9211403843690028,
+       "world year": 0.947548629606233,
+       "datacenter week": 0.8205400522772209,
+       "datacenter month": 0.8359018057631904,
+       "datacenter year": 0.8623802159439183
+      },
+      "with m = 37": {
+       "world week": 0.641521102039778,
+       "world month": 0.652096126193648,
+       "world year": 0.6702586978055813,
+       "datacenter week": 0.5812366845354471,
+       "datacenter month": 0.5934827243712144,
+       "datacenter year": 0.6116943777959192
+      }
+     },
+     "census S": {
+      "without m = 37": {
+       "world week": 1.0105644055417426,
+       "world month": 1.0263246070907517,
+       "world year": 1.0533848650975588,
+       "datacenter week": 0.9213071446947322,
+       "datacenter month": 0.9371072549815085,
+       "datacenter year": 0.9642152114657476
+      },
+      "with m = 37": {
+       "world week": 0.7183146990460756,
+       "world month": 0.7291306115166286,
+       "world year": 0.7476842665092911,
+       "datacenter week": 0.6640235350725238,
+       "datacenter month": 0.6678586700239426,
+       "datacenter year": 0.6864816400077279
+      }
+     }
+    },
+    "runs": [
+     "r20261109-191629-7cc0",
+     "r20261109-201233-0467"
+    ]
+   },
+   {
+    "row": "(i)",
+    "label": "(i) today's served blocks, registered MoE cut",
+    "pricing": "on its own premises",
+    "basis": "served-card-priced",
+    "basis_from": [
+     "every type at the proof-overhead card's price: classes, siblings, seeded stagings, computed rules; none measured on served values"
+    ],
+    "rests_on": [
+     "\u03bb = 1.05 on every block",
+     "each modelled lever at its measured value or reverted to what's built",
+     "sparse MLA at the 128k plan's selected keys (modeled, rough)",
+     "design (d): approved, not built",
+     "the 875-token cap: approved, not certified",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
+     "the wait at e: the cache's hold on the trace (modeled)",
+     "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
+     "the deterministic top-k: kernel-modeled",
+     "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
+     "m = 37: not built (its cells only)"
+    ],
+    "cells": {
+     "875-token cap at 32 bits a token": {
+      "without m = 37": {
+       "world week": 1.2450071753171303,
+       "world month": 1.2615406691687605,
+       "world year": 1.2899526753598958,
+       "datacenter week": 1.1507770589813877,
+       "datacenter month": 1.1674873757693294,
+       "datacenter year": 1.1961783544248887
+      },
+      "with m = 37": {
+       "world week": 0.8693495358951439,
+       "world month": 0.8809545713722133,
+       "world year": 0.9008955542469319,
+       "datacenter week": 0.8032074273984828,
+       "datacenter month": 0.8149375717656543,
+       "datacenter year": 0.8350763180322041
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 1.1383995271827956,
+       "world month": 1.1549091969603145,
+       "world year": 1.183208231345826,
+       "datacenter week": 1.0442571451252989,
+       "datacenter month": 1.0610081831696465,
+       "datacenter year": 1.0897145537702473
+      },
+      "with m = 37": {
+       "world week": 0.8074451681175213,
+       "world month": 0.8190166201923271,
+       "world year": 0.8388509361625865,
+       "datacenter week": 0.7414628392760196,
+       "datacenter month": 0.7532030693467067,
+       "datacenter year": 0.7733222588508584
+      }
+     },
+     "census S": {
+      "without m = 37": {
+       "world week": 1.413834280998141,
+       "world month": 1.4335212514816764,
+       "world year": 1.4673086432606068,
+       "datacenter week": 1.3023958433755378,
+       "datacenter month": 1.3221150909447168,
+       "datacenter year": 1.3559642754326802
+      },
+      "with m = 37": {
+       "world week": 0.9699436096025352,
+       "world month": 0.9837414230401327,
+       "world year": 1.0074218730003828,
+       "datacenter week": 0.8918405164560881,
+       "datacenter month": 0.905661046081469,
+       "datacenter year": 0.9293845968987214
+      }
+     }
+    },
+    "runs": [
+     "r20261109-192926-0dd9",
+     "r20261109-201252-08f7"
+    ]
+   },
+   {
+    "row": "(ii)",
+    "label": "(ii) per-expert fused cut at FUSED_H200",
+    "pricing": "as the planner prices it",
+    "basis": "design",
+    "basis_from": [
+     "the per-expert fused MoE cut at FUSED_H200: measured on synthetic statements, a cut no serving path commits yet"
+    ],
+    "rests_on": [
+     "\u03bb = 1 (approved: 1.05)",
+     "P4's 4\u00d7 prover goal (measured: 3.71\u00d7)",
+     "P5's templated-check goal for every type (measured: two families)",
+     "N2's lifetime replay (not built)",
+     "N4's front run beside device work (not measured)",
+     "P2's flat-column cut (assumed)",
+     "sparse MLA at the census request's keys (128k's are about 8\u00d7)",
+     "design (d): approved, not built",
+     "the 875-token cap: approved, not certified",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
+     "the wait at e: the cache's hold on the trace (modeled)",
+     "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
+     "the deterministic top-k: kernel-modeled",
+     "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
+     "m = 37: not built (its cells only)"
+    ],
+    "cells": {
+     "875-token cap at 32 bits a token": {
+      "without m = 37": {
+       "world week": 0.09726083604401795,
+       "world month": 0.09714784276944197,
+       "world year": 0.09801931913098041,
+       "datacenter week": 0.09509032469754457,
+       "datacenter month": 0.09539205038686273,
+       "datacenter year": 0.09592250823400324
+      },
+      "with m = 37": {
+       "world week": 0.07806374552517632,
+       "world month": 0.07829476825586,
+       "world year": 0.07869036847615597,
+       "datacenter week": 0.07675805133633398,
+       "datacenter month": 0.07699102615332237,
+       "datacenter year": 0.07738680506138233
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 0.0836599393453981,
+       "world month": 0.08395365316332637,
+       "world year": 0.0844555910366099,
+       "datacenter week": 0.08199060503078037,
+       "datacenter month": 0.08228799727489165,
+       "datacenter year": 0.08279734250488319
+      },
+      "with m = 37": {
+       "world week": 0.0711589564713207,
+       "world month": 0.07138145138754139,
+       "world year": 0.07176335469647273,
+       "datacenter week": 0.06992132505195776,
+       "datacenter month": 0.07013865834464994,
+       "datacenter year": 0.07051152713576558
+      }
+     },
+     "census S": {
+      "without m = 37": {
+       "world week": 0.12879014265026992,
+       "world month": 0.12913893755148487,
+       "world year": 0.1297407581855553,
+       "datacenter week": 0.126813794538589,
+       "datacenter month": 0.12716392761166853,
+       "datacenter year": 0.12776417748155422
+      },
+      "with m = 37": {
+       "world week": 0.0972229927643111,
+       "world month": 0.09749705025820168,
+       "world year": 0.09796795834272802,
+       "datacenter week": 0.09567324833099883,
+       "datacenter month": 0.09594730912635092,
+       "datacenter year": 0.09641783701846292
+      }
+     }
+    },
+    "runs": [
+     "r20261109-191629-7cc0",
+     "r20261109-201233-0467"
+    ]
+   },
+   {
+    "row": "(ii)",
+    "label": "(ii) per-expert fused cut at FUSED_H200",
+    "pricing": "on its own premises",
+    "basis": "design",
+    "basis_from": [
+     "the per-expert fused MoE cut at FUSED_H200: measured on synthetic statements, a cut no serving path commits yet"
+    ],
+    "rests_on": [
+     "\u03bb = 1.05 on every block",
+     "each modelled lever at its measured value or reverted to what's built",
+     "sparse MLA at the 128k plan's selected keys (modeled, rough)",
+     "design (d): approved, not built",
+     "the 875-token cap: approved, not certified",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
+     "the wait at e: the cache's hold on the trace (modeled)",
+     "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
+     "the deterministic top-k: kernel-modeled",
+     "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
+     "m = 37: not built (its cells only)"
+    ],
+    "cells": {
+     "875-token cap at 32 bits a token": {
+      "without m = 37": {
+       "world week": 0.25657428869102705,
+       "world month": 0.2569436170672517,
+       "world year": 0.25755978573644217,
+       "datacenter week": 0.25453236947983665,
+       "datacenter month": 0.25490260070135085,
+       "datacenter year": 0.2555217329895569
+      },
+      "with m = 37": {
+       "world week": 0.17099433426135147,
+       "world month": 0.17132588147931702,
+       "world year": 0.17188418236078454,
+       "datacenter week": 0.16914525307600384,
+       "datacenter month": 0.1694779216765438,
+       "datacenter year": 0.17003902915268423
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 0.17969878629441857,
+       "world month": 0.1800310783893075,
+       "world year": 0.18061352219511181,
+       "datacenter week": 0.1776889015172618,
+       "datacenter month": 0.17806354932680762,
+       "datacenter year": 0.1787044039191885
+      },
+      "with m = 37": {
+       "world week": 0.13377617179595486,
+       "world month": 0.13411847151531509,
+       "world year": 0.13470859849733843,
+       "datacenter week": 0.1318628576763168,
+       "datacenter month": 0.13219224302964513,
+       "datacenter year": 0.1327709532756691
+      }
+     },
+     "census S": {
+      "without m = 37": {
+       "world week": 0.33758693504534876,
+       "world month": 0.3380682850560984,
+       "world year": 0.33889489238526366,
+       "datacenter week": 0.3348646410358622,
+       "datacenter month": 0.33534581681332737,
+       "datacenter year": 0.33617260336509774
+      },
+      "with m = 37": {
+       "world week": 0.22399228990072262,
+       "world month": 0.22439366964383883,
+       "world year": 0.22508333928951818,
+       "datacenter week": 0.22172247365279218,
+       "datacenter month": 0.22212369716346897,
+       "datacenter year": 0.2228130255886268
+      }
+     }
+    },
+    "runs": [
+     "r20261109-192926-0dd9",
+     "r20261109-201252-08f7"
+    ]
+   },
+   {
+    "row": "(iii)",
+    "label": "(iii) (ii) with the warm served-block estimate",
+    "pricing": "as the planner prices it",
+    "basis": "design",
+    "basis_from": [
+     "the per-expert fused MoE cut at FUSED_H200: measured on synthetic statements, a cut no serving path commits yet",
+     "the warm served-block estimate on 14 card- and computed-priced families"
+    ],
+    "rests_on": [
+     "\u03bb = 1 (approved: 1.05)",
+     "P4's 4\u00d7 prover goal (measured: 3.71\u00d7)",
+     "P5's templated-check goal for every type (measured: two families)",
+     "N2's lifetime replay (not built)",
+     "N4's front run beside device work (not measured)",
+     "P2's flat-column cut (assumed)",
+     "sparse MLA at the census request's keys (128k's are about 8\u00d7)",
+     "design (d): approved, not built",
+     "the 875-token cap: approved, not certified",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
+     "the wait at e: the cache's hold on the trace (modeled)",
+     "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
+     "the deterministic top-k: kernel-modeled",
+     "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
+     "m = 37: not built (its cells only)"
+    ],
+    "cells": {
+     "875-token cap at 32 bits a token": {
+      "without m = 37": {
+       "world week": 0.07526718024924105,
+       "world month": 0.07574139881651835,
+       "world year": 0.07624527856754093,
+       "datacenter week": 0.07354499607429925,
+       "datacenter month": 0.0738518277104268,
+       "datacenter year": 0.07458831000641993
+      },
+      "with m = 37": {
+       "world week": 0.06430003297556156,
+       "world month": 0.0645023481759256,
+       "world year": 0.06473725994082327,
+       "datacenter week": 0.06294603297548836,
+       "datacenter month": 0.0631614353360554,
+       "datacenter year": 0.06352931577906587
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 0.07055912821028033,
+       "world month": 0.07083326356053284,
+       "world year": 0.07130197659671222,
+       "datacenter week": 0.06873138053836646,
+       "datacenter month": 0.06927719499894257,
+       "datacenter year": 0.06951322700687246
+      },
+      "with m = 37": {
+       "world week": 0.061612983346248096,
+       "world month": 0.061806663289318074,
+       "world year": 0.06213893409361824,
+       "datacenter week": 0.06035499788590947,
+       "datacenter month": 0.06056001910963275,
+       "datacenter year": 0.06104749222282509
+      }
+     },
+     "census S": {
+      "without m = 37": {
+       "world week": 0.09576711344828248,
+       "world month": 0.0961166741719396,
+       "world year": 0.09741637750770502,
+       "datacenter week": 0.09379040529169483,
+       "datacenter month": 0.09413994533837429,
+       "datacenter year": 0.09474012054545304
+      },
+      "with m = 37": {
+       "world week": 0.0773440929841503,
+       "world month": 0.07757625774240465,
+       "world year": 0.07797498413845255,
+       "datacenter week": 0.07603122563113898,
+       "datacenter month": 0.07626338108993369,
+       "datacenter year": 0.07666199783683882
+      }
+     }
+    },
+    "runs": [
+     "r20261109-191629-7cc0",
+     "r20261109-201233-0467"
+    ]
+   },
+   {
+    "row": "(iii)",
+    "label": "(iii) (ii) with the warm served-block estimate",
+    "pricing": "on its own premises",
+    "basis": "design",
+    "basis_from": [
+     "the per-expert fused MoE cut at FUSED_H200: measured on synthetic statements, a cut no serving path commits yet",
+     "the warm served-block estimate on 14 card- and computed-priced families"
+    ],
+    "rests_on": [
+     "\u03bb = 1.05 on every block",
+     "each modelled lever at its measured value or reverted to what's built",
+     "sparse MLA at the 128k plan's selected keys (modeled, rough)",
+     "design (d): approved, not built",
+     "the 875-token cap: approved, not certified",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
+     "the wait at e: the cache's hold on the trace (modeled)",
+     "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
+     "the deterministic top-k: kernel-modeled",
+     "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
+     "m = 37: not built (its cells only)"
+    ],
+    "cells": {
+     "875-token cap at 32 bits a token": {
+      "without m = 37": {
+       "world week": 0.1234533928939477,
+       "world month": 0.12382267928434082,
+       "world year": 0.12444953393505173,
+       "datacenter week": 0.12137832746893003,
+       "datacenter month": 0.12174916374098012,
+       "datacenter year": 0.12237928626367255
+      },
+      "with m = 37": {
+       "world week": 0.09791104858691059,
+       "world month": 0.09822042365940746,
+       "world year": 0.09874661165671128,
+       "datacenter week": 0.09616942854466756,
+       "datacenter month": 0.09648016459599597,
+       "datacenter year": 0.09700911901782631
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 0.10149249371503866,
+       "world month": 0.10186713714084007,
+       "world year": 0.1025115945922283,
+       "datacenter week": 0.0993851180570555,
+       "datacenter month": 0.09975253641945216,
+       "datacenter year": 0.10039123783856857
+      },
+      "with m = 37": {
+       "world week": 0.08613626062702325,
+       "world month": 0.08644750492323353,
+       "world year": 0.0869827028563818,
+       "datacenter week": 0.08438364244376678,
+       "datacenter month": 0.08468985418649301,
+       "datacenter year": 0.08522121703535637
+      }
+     },
+     "census S": {
+      "without m = 37": {
+       "world week": 0.16916921131929263,
+       "world month": 0.16958944919378138,
+       "world year": 0.1703110943987124,
+       "datacenter week": 0.16679272091911346,
+       "datacenter month": 0.16721290052318113,
+       "datacenter year": 0.1679345593087797
+      },
+      "with m = 37": {
+       "world week": 0.13356190061440956,
+       "world month": 0.13390776753127587,
+       "world year": 0.13450179621784691,
+       "datacenter week": 0.13160603523116624,
+       "datacenter month": 0.13195185177684887,
+       "datacenter year": 0.13254576971399956
+      }
+     }
+    },
+    "runs": [
+     "r20261109-192926-0dd9",
+     "r20261109-201252-08f7"
+    ]
+   }
+  ],
+  "quote": "no row is served-measured; the served cut's rows are card-priced: (i) today's served blocks, registered MoE cut as the planner prices it, (i) today's served blocks, registered MoE cut on its own premises"
+ },
+ "art": "art:71e23833d3a538d2fc7abd33f396f2fc3e4ba9f639ad721fac57cf4f6eded249"
+}

@@ -1,0 +1,267 @@
+{
+ "sm80.mma.m16n8k16.bf16": {
+  "dossier": "art:997eefe82d733c30d689801236cd682a47844b52dfcfe1d4ea61d44d99c837cc",
+  "run": "r20260921-232750-56c5",
+  "canonical": {
+   "a100": "r20260922-231411-1d5e",
+   "rtx4090": "r20260922-231751-38ca",
+   "h100": "r20260922-231751-2442",
+   "rtx5090": "r20260922-231751-6617"
+  },
+  "canaries": [
+   "r20260922-231832-9980",
+   "r20260922-232813-0d92",
+   "r20260922-232442-2eba",
+   "r20260922-232443-9ce8"
+  ]
+ },
+ "sm89.mma.m16n8k16.bf16": {
+  "dossier": "art:e37fcb69bb1d7020cb1a81b71b525b76da2389b5bf3240f9668ed053637d34fe",
+  "run": "r20260921-231618-ea24",
+  "canonical": {
+   "a100": "r20260922-231411-1d5e",
+   "rtx4090": "r20260922-231751-38ca",
+   "h100": "r20260922-231751-2442",
+   "rtx5090": "r20260922-231751-6617"
+  },
+  "canaries": [
+   "r20260922-231832-9980",
+   "r20260922-232813-0d92",
+   "r20260922-232442-2eba",
+   "r20260922-232443-9ce8"
+  ]
+ },
+ "sm90.mma.m16n8k16.bf16": {
+  "dossier": "art:0664d5c367791927273cf038f0f6caa326a00801a3d563210c1969f159d3afff",
+  "run": "r20260922-185339-e337",
+  "dataset": "docs/data/tc-hopper-2026-09-07",
+  "canonical": {
+   "a100": "r20260922-231411-1d5e",
+   "rtx4090": "r20260922-231751-38ca",
+   "h100": "r20260922-231751-2442",
+   "rtx5090": "r20260922-231751-6617"
+  },
+  "canaries": [
+   "r20260922-231832-9980",
+   "r20260922-232813-0d92",
+   "r20260922-232442-2eba",
+   "r20260922-232443-9ce8"
+  ],
+  "second_h100": {
+   "run": "r20260926-023321-ecb5",
+   "device": "GPU-7e095246-1454-01f4-2b76-197d7ab9d18b"
+  }
+ },
+ "sm90.wgmma.m64n8k16.bf16": {
+  "dossier": "art:50508ab77719ba3d93bd2985416eba0029116f313304a4632e67ad0dd28579d9",
+  "device": "GPU-d5e245b4-5429-c607-9efb-a3578c7334e2",
+  "ss": {
+   "run": "r20260926-020157-242a",
+   "art": "art:8f903385776fdb04bd3008120f44422b76fa4e2cbb5ad6533275a67548d7a6a0"
+  },
+  "rs": {
+   "run": "r20260926-020210-aee8",
+   "art": "art:f9508ae817053e57d93332518608430d7988a7bf2fdf0fc0d58bcf6695ec74d5"
+  },
+  "first_pair": [
+   "r20260926-015601-b530",
+   "r20260926-015605-bc89"
+  ],
+  "canary": {
+   "run": "r20260926-021005-456c",
+   "art": "art:4ca1294d1cf34183e57d638873ea6cbee75ee42054e88c6b105ac61e0f49b513"
+  },
+  "dataset": "docs/data/tc-hopper-2026-09-07"
+ },
+ "sm89.mma.m16n8k32.e4m3": {
+  "dossier": "art:2acd0d37dc729e36570bffdee35e6445d4e095d9be9f39bcd11222c439e8197c",
+  "run": "r20260922-175246-0477"
+ },
+ "sm89.mma.m16n8k32.e5m2": {
+  "dossier": "art:9a5f8e71b80b72a70e5a2536dff85c169e3a592404c092f00c1cd976dd479dc8",
+  "runs": [
+   "r20260922-175732-172a",
+   "r20260922-182641-e27d"
+  ]
+ },
+ "sm90.wgmma.m64n8k32.e4m3": {
+  "dossier": "art:f5e282ad4fe3a7d8ab2777cced6a1b0e8692375529fd031f99d24b3c98035755",
+  "run": "r20260922-183435-fd5d",
+  "dataset": "docs/data/tc-fp8-2026-09-08"
+ },
+ "sm90.wgmma.m64n8k32.e5m2": {
+  "dossier": "art:27fbc67eed97901502f646218cf25d8fe4db2fe2d65d30eefd9efb77923b02a3",
+  "run": "r20260922-183837-940b"
+ },
+ "sm90.wgmma.m64n8k8.tf32": {
+  "run": "r20261013-115825-580e"
+ },
+ "sm90.mma.m16n8k32.e4m3": {
+  "e4m3": "r20260922-184111-671e",
+  "e5m2": "r20260922-184835-4b95"
+ },
+ "sm120.mma.m16n8k16.bf16": {
+  "dossier": "art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2",
+  "run": "r20260922-182911-1f10",
+  "canonical": {
+   "a100": "r20260922-231411-1d5e",
+   "rtx4090": "r20260922-231751-38ca",
+   "h100": "r20260922-231751-2442",
+   "rtx5090": "r20260922-231751-6617"
+  },
+  "canaries": [
+   "r20260922-231832-9980",
+   "r20260922-232813-0d92",
+   "r20260922-232442-2eba",
+   "r20260922-232443-9ce8"
+  ]
+ },
+ "sm120.mma.m16n8k32.e4m3": {
+  "dossier": "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89",
+  "compile_check": "r20260930-063200-8640",
+  "run": "r20260930-063457-5410",
+  "device": "GPU-83455c5b-f2a1-c810-0a97-a01ddf05c4ba"
+ },
+ "sm120.mma.m16n8k32.e5m2": {
+  "dossier": "art:fc4bb8915dd22f22b3d0260a00a6d694750322852c5163ddb80a05948370a94f",
+  "compile_check": "r20260930-063200-8640",
+  "run": "r20260930-063527-4d6b",
+  "device": "GPU-6fbd6701-ccfb-e008-dc6e-986175046bc7",
+  "second_die": {
+   "run": "r20260930-073650-c9c5",
+   "device": "GPU-5f1149a4-e5f5-1007-ec78-7cd350a69a4f"
+  }
+ },
+ "sm120.mma.m16n8k64.e2m1.nvf4": {
+  "dossier": "art:3e02931df28cccd398de4219f9d977371a58cdc6e8addfb7ff0a6269e5481b0e",
+  "nvf4": [
+   "r20260922-215616-3c10",
+   "r20260922-221716-65b9"
+  ],
+  "mxf4": [
+   "r20260922-215831-c3d8",
+   "r20260922-221824-8d99",
+   "r20260922-222148-6342"
+  ],
+  "dataset": "fp4-evidence-v2",
+  "run": "r20260922-182011-88f8",
+  "probe2": "r20260922-182132-d6db",
+  "fresh_seed": {
+   "device": "GPU-1257f022-5d0f-1ea9-7922-bc7bc7959672",
+   "nvf4": "r20260922-234714-0fc0",
+   "mxf4": "r20260922-235348-a405"
+  }
+ },
+ "sm120.mma.m16n8k64.e2m1.mxf4": {
+  "dossier": "art:d8d4d1b602c9fde61df218c315430535fe5181882ab6b26c2b95dd81dc1b5d92",
+  "nvf4": [
+   "r20260922-215616-3c10",
+   "r20260922-221716-65b9"
+  ],
+  "mxf4": [
+   "r20260922-215831-c3d8",
+   "r20260922-221824-8d99",
+   "r20260922-222148-6342"
+  ],
+  "dataset": "fp4-evidence-v2",
+  "fresh_seed": {
+   "device": "GPU-1257f022-5d0f-1ea9-7922-bc7bc7959672",
+   "nvf4": "r20260922-234714-0fc0",
+   "mxf4": "r20260922-235348-a405"
+  },
+  "pro6000": {
+   "run": "r20261001-000520-2440",
+   "device": "GPU-a98a36f6-1393-7cad-32ea-e9f7ec25376a"
+  }
+ },
+ "sm120.mma.m16n8k32.s8": {
+  "dossier": "art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474",
+  "tc_evidence": {
+   "run": "r20261015-084000-06d8",
+   "art": "art:67b817fc8b2237694c271a97110f6a9881644c4d7701cdd4abcc090b3d220148"
+  },
+  "census": "r20261015-062626-f65b"
+ },
+ "sm90.wgmma.m64n8k32.s8": {
+  "dossier": "art:c222e6aa27484eb4a5b5aab7131c7e0a2f843e1bbb441c072705c7df1a17deb6",
+  "tc_evidence": {
+   "run": "r20261019-043020-f267",
+   "art": "art:240115d34164094f3254ce6c2c68aff72eda20cc62195b7150d990fa226ba14c"
+  }
+ },
+ "sm90.wgmma.m64n64k32.s8": {
+  "dossier": "art:cefe56718712a2f5aab9f11bcc93f88d1397f65de22214cdc9e9ea4a6a9b25ae",
+  "tc_evidence": {
+   "run": "r20261026-010336-7755",
+   "art": "art:383858621ad3a9bbcc29e1f84c17abd2bb57c6ba755fcc818b00bb3327b64686"
+  }
+ },
+ "sm90.wgmma.m64n128k32.s8": {
+  "dossier": "art:0591e812e5d097de162d8fd7123b587205b41ea1cb8aa762e6f7c77b0d29ecec",
+  "tc_evidence": {
+   "run": "r20261026-010336-7755",
+   "art": "art:0a2c4a3b704b37a5a34389cf47cabd6210a948a54f62606c58a67f70916773ef"
+  }
+ },
+ "sm90.wgmma.m64n256k32.s8": {
+  "dossier": "art:a8edefe33c92be56eec3de9fc36e3c313cad3ba7657fc3b924367d834547665a",
+  "tc_evidence": {
+   "run": "r20261026-010336-7755",
+   "art": "art:99307205fd01b708f117203d2a483f74e3d2660c723288031d830f66df0b8ecf"
+  }
+ },
+ "sm90.mma.m16n8k32.s8": {
+  "dossier": "art:c096491133b0b29c7de13f61da53b485181c2e787d75a531921445b4e759c1c8",
+  "tc_evidence": {
+   "run": "r20261019-043020-f267",
+   "art": "art:685ea38bbfba1f93c37a73587b3d8ae365d452e70427afcfaa60d5bdd4e746ac"
+  }
+ },
+ "sm100.tcgen05.mma.s8": {
+  "dossier": "art:919827b671e809b6410ba2f17d587b3cf516705aecd2815d84f7e914abf2cb8c",
+  "tc_evidence": {
+   "run": "r20261019-042817-8fd3",
+   "art": "art:643f9653b0c66bd3668e204c6cda6681ced32f2003138061a365a1ee3f401939"
+  }
+ },
+ "sm100.mma.m16n8k32.s8": {
+  "dossier": "art:e643f46610121a534fc3c78045df77681bae7670e1f50abfa9c5dbb2f90411a1",
+  "tc_evidence": {
+   "run": "r20261019-042817-8fd3",
+   "art": "art:dbe41cd4d04534db4a7ac27d01950e172d4a12e9714e59abd04c6f88143a613a"
+  }
+ },
+ "sm100.mma.m16n8k16.bf16": {
+  "dossier": "art:9f8188ab6585d976056623b31baa21dcfdbb3a9c7842aa28a5cd341bc0ba0626",
+  "run": "r20261019-001149-cc3d",
+  "same_b200": "r20261018-234914-864e",
+  "tc_evidence": "art:a064d5875a659edd6fae154a3a379e8bb6ecbda29914d71bbb58f7eacc6ccbe3"
+ },
+ "sm100.tcgen05.mma.e2m1.nvf4": {
+  "stage0": "r20260923-001336-5a50",
+  "runs": [
+   "r20260923-001528-f5c5",
+   "r20260923-001759-d869",
+   "r20260923-001856-7d63",
+   "r20260923-002315-b793"
+  ]
+ },
+ "sm100.tcgen05.mma.e2m1.mxf4": {
+  "stage0": "r20260923-001336-5a50",
+  "mxf4": [
+   "r20260923-001838-42a4",
+   "r20260923-002320-6fbf"
+  ],
+  "mxf4nvf4_2x": [
+   "r20260923-001832-17dc",
+   "r20260923-001903-c420"
+  ]
+ },
+ "sm100.tcgen05.mma.bf16": {
+  "dossier": "art:8a14058ec2dc4f080af1523d55326e11484123feaf0726200473644de51f4765",
+  "run": "r20261018-234914-864e",
+  "device": "GPU-2e39ef52-bf0d-0527-f3f1-5a27025bb6ff",
+  "tc_evidence": "art:c0ce3a0abdc5866d9cc77ab8c5470ab19217946412f9b3029c286a954707f8f2",
+  "enable_input_d0": "art:f5719a55353078221c982e34d08906e3a3eb5595a72dd0613490cef5da7781e4"
+ }
+}

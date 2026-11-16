@@ -1,0 +1,8 @@
+{
+ "schema": "telemetry/failure/v0.1",
+ "classifier_version": "0.1.2",
+ "attempt_dir": "/workspace/research/runs/r20260922-120000-abcd",
+ "class": "SUCCESS",
+ "certainty": "established",
+ "why": "rc 0, no cancel marker, no OOM evidence"
+}

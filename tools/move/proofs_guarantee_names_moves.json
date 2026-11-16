@@ -1,0 +1,15 @@
+{
+ "Flock.SecurityProofs.EndToEndDrawn": "Flock.SecurityProofs.EndToEndSampled",
+ "Flock.SecurityProofs.EndToEndHiddenDrawn": "Flock.SecurityProofs.EndToEndHiddenSampled",
+ "Flock.SecurityProofs.EndToEndRegisteredDrawn": "Flock.SecurityProofs.EndToEndRegisteredSampled",
+ "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": "Flock.SecurityProofs.EndToEndRegisteredSampledFlat",
+ "Flock.SecurityProofs.IntegrityHorizon": "Flock.SecurityProofs.IntegrityPooled",
+ "Flock.SecurityProofs.IntegrityHorizonBlocks": "Flock.SecurityProofs.IntegrityPooledBlocks",
+ "Flock.SecurityProofs.IntegrityHorizonCarried": "Flock.SecurityProofs.IntegrityPooledCarried",
+ "Flock.SecurityProofs.JointHorizonV5": "Flock.SecurityProofs.JointPooledV5",
+ "Flock.SecurityProofs.JointStratifiedHorizon": "Flock.SecurityProofs.JointStratifiedPooled",
+ "Flock.SecurityProofs.JointStratifiedHorizonMT": "Flock.SecurityProofs.JointStratifiedPooledMT",
+ "FlockSoundness.Audit.audit_window_split_of_record": "FlockSoundness.Audit.audit_executionPhase_split_of_record",
+ "Properties.Pouw.Window.drawMisses": "Properties.Pouw.Window.sampleMisses",
+ "Properties.Spot.SecurityProofs.drawMisses": "Properties.Spot.SecurityProofs.sampleMisses"
+}

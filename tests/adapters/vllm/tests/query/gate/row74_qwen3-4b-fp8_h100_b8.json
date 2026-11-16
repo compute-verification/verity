@@ -1,0 +1,36 @@
+{
+ "row": "74",
+ "row_id": "qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager",
+ "mode": "v2",
+ "build_seconds": 492,
+ "v2_identities_rows": 262885,
+ "v2_complete": true,
+ "v2_unmodelled": {},
+ "v2_manifest_digest": "ecb28d4ebc78423c3725d10d42faa5f317584a2628093ab2ca4bb8365a0e0ff9",
+ "v1_manifest_digest": "ecb28d4ebc78423c3725d10d42faa5f317584a2628093ab2ca4bb8365a0e0ff9",
+ "program_digest_equal": true,
+ "v1_identities": 258637,
+ "v2_identities": 258637,
+ "common": 258637,
+ "v1_rows": 262885,
+ "v2_rows": 262885,
+ "multiplicity_diff_n": 0,
+ "only_v1_n": 0,
+ "only_v2_n": 0,
+ "lines": {
+  "member_rename": [],
+  "range": [],
+  "only_v1": [],
+  "only_v2": []
+ },
+ "multiplicity": [],
+ "residuals_applied": {
+  "RoPE_v1:key->1": 145260,
+  "RoPE_v1:query->0": 145260,
+  "ScaledMmFp8Block_v1:out->0": 581040,
+  "encoding:hidden": 18216,
+  "encoding:in": 4035,
+  "encoding:sampled_token_ids": 506
+ },
+ "aliases": 35
+}

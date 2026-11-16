@@ -1,0 +1,27 @@
+# The Match stage's capture by its module's name (`python3 tools/move/rename.py --map tools/move/match_capture_words_map.toml`):
+# after `match_capture_map.toml` moved `m1_capture` to `match_capture`, the import aliases that kept the old name and the
+# prose that names it say `match_capture`. Kept: the command's name `m1-capture` (another word); the values its records
+# carry, the acquisition's `source="m1_capture"` label, its timeline's stage name and restart reason, with the tests
+# that hold them; P11's own test data and allowlist entry (the name it refuses); and the by-name allowlist's record of
+# where `dump_cos_sin` came from. The rules for [words] are `rename_map.toml`'s.
+
+[rewrite]
+exclude = [
+    "archive/**",
+    "tools/move/**",
+    "**/CHANGELOG.md",
+    "tools/research/src/research/store/moves.json",
+]
+
+[words]
+"match_capture as m1_capture" = "match_capture"
+"m1_capture" = "match_capture"
+
+[keep]
+strings = ['"m1_capture"', "one m1_capture per Match arm"]
+
+[keep_in]
+"adapters/vllm/verity_vllm/acquire/stage.py" = ["m1_capture"]
+"adapters/vllm/tests/lint/test_p11_names.py" = ["m1_capture"]
+"adapters/vllm/tests/lint/allowlists/p11_names.json" = ["m1_capture"]
+"adapters/vllm/tests/by_name_allowlist.json" = ["m1_capture"]

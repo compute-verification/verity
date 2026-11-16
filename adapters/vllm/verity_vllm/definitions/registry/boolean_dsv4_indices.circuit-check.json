@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "Dsv4CombineTopkSwa_v2{TOPK=128,RATIO=128,WINDOW=128,WIDTH=256}": {
+   "and": 33329,
+   "type": "25bac34109442b3b420d0fdde35a76abd63ed6cb68179ee0b85f908ed0738d955b6cf9eb77b87e4d0ac76ba4cc3232c906b65772c1e4620ae7d0978c0287e64d"
+  },
+  "Dsv4CombineTopkSwa_v2{TOPK=8,RATIO=4,WINDOW=4,WIDTH=16}": {
+   "and": 2563,
+   "type": "a18e318ceec8452b7a9223ead27249dea22072364bd338d8c4533c75b225d268f254c090e61a8e8a376527f9295b35fa4d44e667b7b6a298c0c6b2a4c185242b"
+  }
+ }
+}
