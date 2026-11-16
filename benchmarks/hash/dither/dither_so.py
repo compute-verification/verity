@@ -153,7 +153,7 @@ FUSED_ENV = "DITHER_SO_FUSED"
 COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
 # "q" or "q/den" (den 8 without it): that launch on the SMs whose id % den < q alone (kh_units_multi_sm), each warp
 # taking the next unit in turn, so the rest of the SMs stay whole to the next forward's kernels; "q/den/cap" with at
-# most cap of its CTAs on each of those SMs (kh_units_multi_smc; "1/1/cap" every SM), so each keeps the rest of its slots
+# most limit of its CTAs on each of those SMs (kh_units_multi_smc; "1/1/cap" every SM), so each keeps the rest of its slots
 # to them; the same receipts.  den at most SMQ_DEN_MAX (h1u.cu's), past every %smid, so q/256 keeps the SMs below q
 UNITS_SMQ_ENV = "DITHER_SO_UNITS_SMQ"
 SMQ_DEN_MAX = 256
@@ -170,7 +170,7 @@ UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each ca
 # R (with $DITHER_SO_UNITS=j10r and $DITHER_SO_FUSED=1): a step whose units compute at least R rows (the layout's M, its
 # live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column tiles once too, beside its rows, and its units
 # read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace kh_j10r_ws_bytes at T
-# rows; under $DITHER_SO_UNITS_SMQ without a cap, kh_units_multi_j10rc_sm); the same receipts.  Unset, never: J10-R's
+# rows; under $DITHER_SO_UNITS_SMQ without a limit, kh_units_multi_j10rc_sm); the same receipts.  Unset, never: J10-R's
 # units hash a column tile once in each row tile
 # they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference
 J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
@@ -253,7 +253,7 @@ def end_steps(depth: int) -> int:
 
 
 def smq_of(v: str) -> tuple[int, int, int]:
-    """$DITHER_SO_UNITS_SMQ's "q[/den[/cap]]" as (q, den, cap): den 8 and cap 0 (none) where unset, cap 0 where q is."""
+    """$DITHER_SO_UNITS_SMQ's "q[/den[/cap]]" as (q, den, limit): den 8 and limit 0 (none) where unset, limit 0 where q is."""
     q, den, cap, *more = v.split("/") + ["", ""]
     if any(more) or not q.isdigit() or not (den or "8").isdigit() or not (cap or "0").isdigit():
         raise ValueError(f"${UNITS_SMQ_ENV}={v}: q, q/den or q/den/cap")
@@ -1334,7 +1334,7 @@ class SoSide(DA.Side):
                              "and an h1u build with kh_units_multi_j10rc_sm")
 
     def set_units_smq(self, q: int, den: int = 8, cap: int = 0) -> None:
-        """The units launch on the SMs whose id % den < q, at most cap CTAs on each (0: no cap), from the next dispatch
+        """The units launch on the SMs whose id % den < q, at most limit CTAs on each (0: no limit), from the next dispatch
         on (q 0: kh_units_multi's every SM), each (ring slot, m) graph captured again at its next step: a screen of the
         SM share inside one engine (sbench's SBENCH_SMQ_SWEEP); a served row's share is $DITHER_SO_UNITS_SMQ's, fixed at
         the build."""

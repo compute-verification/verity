@@ -299,7 +299,7 @@ def stock_checkpoint(pin: str, scratch: Path) -> Path:
 
 def engine_args(gpu_mem: float, own_batch: bool = False) -> dict:
     # FlashInfer's autotune off, as `engine.build` sets it for the int8-exact engine (it tunes no kernel these engines run)
-    # vLLM refuses max_num_seqs above max_num_batched_tokens; every arm of a run gets the same cap, but a stock arm under
+    # vLLM refuses max_num_seqs above max_num_batched_tokens; every arm of a run gets the same limit, but a stock arm under
     # --stock-own-batch, which keeps vLLM's own max_num_seqs and max_num_batched_tokens
     t = MAX_TOKENS_STEP if settings.SBENCH_T is None else settings.SBENCH_T
     a = {"max_num_seqs": min(MAX_SEQS, t), "max_num_batched_tokens": t,
@@ -414,7 +414,7 @@ SUFFIXES = {"-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS
             "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-tail2": env_of("DITHER_SO_TAIL", "2"), "-mmc": mm_cfg,
             "-preq": env_of("DITHER_SO_PREQ", "1"), "-mmq": mm_smq}
 # -smqQ / -smqQoD / -smqQoDcC: a dither-a-so arm's units on the SMs whose id % D < Q, at most C CTAs on each
-# ($DITHER_SO_UNITS_SMQ=Q/D/C, D 8 and no cap without them; -smq0 every SM, whatever the run's environment says)
+# ($DITHER_SO_UNITS_SMQ=Q/D/C, D 8 and no limit without them; -smq0 every SM, whatever the run's environment says)
 SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?(?:c(\d+))?$")
 
 
