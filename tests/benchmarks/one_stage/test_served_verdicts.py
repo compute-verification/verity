@@ -1049,13 +1049,13 @@ def test_a_composite_that_doesnt_parse_gives_no_answer_and_a_directory_without_o
     """A composite.json that doesn't parse gives no Lean answer, saying so, rather than being passed over for another
     composite; a directory holding none (the run's other output) is no composite at all."""
     c = tmp_path / "composite"
-    _composite(c, "remote", "verity/remote/v0", "accept")
+    _composite(c, "remote-v1", "verity/remote/v1", "accept")
     (c / "logs").mkdir()
     assert S.composite_answer(c, "remote", WINDOW_DIGEST)[0]["verdict"] == "accept"
-    (c / "remote-v1").mkdir()
-    (c / "remote-v1" / "composite.json").write_text("{")
+    (c / "remote").mkdir()
+    (c / "remote" / "composite.json").write_text("{")
     answer, why = S.composite_answer(c, "remote", WINDOW_DIGEST)
-    assert answer is None and why.startswith("remote-v1/composite.json doesn't parse"), why
+    assert answer is None and why.startswith("remote/composite.json doesn't parse"), why
 
 
 def test_the_window_record_is_the_one_spots_audit_sampled_against(tmp_path):
@@ -1064,6 +1064,10 @@ def test_the_window_record_is_the_one_spots_audit_sampled_against(tmp_path):
     assert S.window_digest(_window_case(tmp_path / "audit"))[0] == WINDOW_DIGEST
     digest, why = S.window_digest(tmp_path / "none")
     assert digest is None and why.startswith(f"SPOT's audit {tmp_path / 'none'} names no window record"), why
+
+
+DEVELOPMENT_COMPOSITE = ("not of record: development composite: remote/composite.json (verity/remote/v0), not the remote "
+                         "check of record (verity/remote/v1)")
 
 
 #: a composite's cases where PoUW's commitment didn't decode, so its answer names no digest
@@ -1108,23 +1112,23 @@ def test_a_composite_of_another_window_is_refused_whatever_its_lean_said(tmp_pat
 
 
 @pytest.mark.parametrize("composites, pouw, composed, rc, lean", [
-    ({}, "accept", "pending", 2, "0 composites of the remote check (verity/remote/v0, verity/remote/v1) in {c}, not one"),
-    ({"remote": ("verity/remote/v0", "accept")}, "accept", "accept", 0,
-     "verity/remote/v0's Lean check, compiled, in remote/composite.json"),
+    ({}, "accept", "pending", 2, "0 composites of the remote check (verity/remote/v1) in {c}, not one"),
+    ({"remote": ("verity/remote/v0", "accept")}, "accept", "pending", 2, DEVELOPMENT_COMPOSITE),
+    ({"remote": ("verity/remote/v0", "reject")}, "accept", "pending", 2, DEVELOPMENT_COMPOSITE),
     ({"remote-v1": ("verity/remote/v1", "accept")}, "accept", "accept", 0,
      "verity/remote/v1's Lean check, compiled, in remote-v1/composite.json"),
-    ({"remote": ("verity/remote/v0", "reject")}, "accept", "reject", 1,
-     "verity/remote/v0's Lean check, compiled, in remote/composite.json"),
-    ({"remote": ("verity/remote/v0", "undecided")}, "accept", "pending", 2,
-     "verity/remote/v0's Lean check, compiled, in remote/composite.json"),
-    ({"remote": ("verity/remote/v0", None)}, "accept", "pending", 2, "remote/composite.json: its Lean gave no answer"),
-    ({"remote": ("verity/remote/v0", "accept", {"development": "composed on the served node"})}, "accept", "pending", 2,
-     "remote/composite.json is a development check, which claims no record: composed on the served node"),
-    ({"remote": ("verity/remote/v0", "accept"), "remote-v1": ("verity/remote/v1", "accept")}, "accept", "pending", 2,
-     "2 composites of the remote check"),
+    ({"remote-v1": ("verity/remote/v1", "reject")}, "accept", "reject", 1,
+     "verity/remote/v1's Lean check, compiled, in remote-v1/composite.json"),
+    ({"remote-v1": ("verity/remote/v1", "undecided")}, "accept", "pending", 2,
+     "verity/remote/v1's Lean check, compiled, in remote-v1/composite.json"),
+    ({"remote-v1": ("verity/remote/v1", None)}, "accept", "pending", 2, "remote-v1/composite.json: its Lean gave no answer"),
+    ({"remote-v1": ("verity/remote/v1", "accept", {"development": "composed on the served node"})}, "accept", "pending",
+     2, "remote-v1/composite.json is a development check, which claims no record: composed on the served node"),
+    ({"remote-v1": ("verity/remote/v1", "accept"), "remote-v1-again": ("verity/remote/v1", "accept")}, "accept",
+     "pending", 2, "2 composites of the remote check"),
     ({"onsite": ("verity/onsite/v0", "accept")}, "accept", "pending", 2, "0 composites of the remote check"),
-    ({"remote": ("verity/remote/v0", "accept")}, "reject", "reject", 1, "verity/remote/v0's Lean check"),
-    ({"remote": ("verity/remote/v0", "reject")}, None, "reject", 1, "verity/remote/v0's Lean check"),
+    ({"remote-v1": ("verity/remote/v1", "accept")}, "reject", "reject", 1, "verity/remote/v1's Lean check"),
+    ({"remote-v1": ("verity/remote/v1", "reject")}, None, "reject", 1, "verity/remote/v1's Lean check"),
     ({"remote-v1": ("verity/remote/v1", "accept", {"window": REG.digest({**WINDOW_RECORD, "window": 2})})}, "accept",
      "pending", 1, "remote-v1/composite.json is refused, not this window's composite: its verity/sampled-proofs/v1 case"),
 ])
@@ -4593,10 +4597,10 @@ FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
 printf "%s\\n" "$SERVED_NODE" "$@" > "$ORDER.composite"
 printf "%s" "${COMPOSE_DEVELOPMENT:-}" > "$ORDER.development"
 if [ -n "${LEAN:-}" ]; then
-  mkdir -p "$2/composite/remote"
+  mkdir -p "$2/composite/remote-v1"
   dev=${COMPOSE_DEVELOPMENT:+", \\"development\\": \\"$COMPOSE_DEVELOPMENT\\""}
-  echo "{\\"product\\": \\"verity/remote/v0\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v0\\", \\"verdict\\": \\"$LEAN\\"}$dev}" \\
-    > "$2/composite/remote/composite.json"
+  echo "{\\"product\\": \\"verity/remote/v1\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v1\\", \\"verdict\\": \\"$LEAN\\"}$dev}" \\
+    > "$2/composite/remote-v1/composite.json"
 fi
 echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
 
@@ -4739,7 +4743,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert (tmp_path / "order.development").read_text().startswith(
         "composed by a deferral's follow-on on cpu-6, a prover node, which the prover controls: a development check")
     if lean:
-        assert json.loads((out / "composite" / "remote" / "composite.json").read_text())["development"].startswith(
+        assert json.loads((out / "composite" / "remote-v1" / "composite.json").read_text())["development"].startswith(
             "composed by a deferral's follow-on on cpu-6")
     assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
