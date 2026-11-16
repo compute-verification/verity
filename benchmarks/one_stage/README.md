@@ -30,7 +30,9 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   LLAMA32_1B_INT8)`, and the script then runs with the same `WORK` (default `/workspace`). The bootstrap makes all the script reads
   under `WORK`: vLLM's environment (`venv312`), the int8 checkpoint (`hf`) and the sm_90 taps (`cp`: the guarded FA3 build and the
   norm tap). Before any build, the script refuses each one it doesn't find, naming that command. Under `gpu-lease` it leases one card
-  (`A5_CARD=N` names it, else any free one) for its Match capture and its Commit's engine only, and no cores: its builds, replay and
+  (`A5_CARD=N` names it, else any free one) for its Match capture and its Commit's engine only, and every lease names the
+  cores `A5_CORES=CPUS` gives (`--cores`; CPUS the cores the machine's map gives the lane, e.g. `40-59`), since a lease
+  without them holds every other lane out; without `A5_CORES` the script refuses before any build. Its builds, replay and
   audit run on the cores the job is given (`nproc`). With no `gpu-lease` it takes card `A5_CARD` (default 0) directly. The row dir,
   the window and the audit's private files are under `WORK/a5-llama1b/RUN` (`A5_ROOT`). They are removed at exit, success or
   failure, unless `A5_KEEP=1`. M0's Flock build (`A5_FLOCK_WORK`, default `WORK/a5-llama1b/flock-work`) is kept for the next run.

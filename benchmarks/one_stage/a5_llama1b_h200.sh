@@ -24,7 +24,7 @@
 #    summary.json's ``epsilon`` is the window's sampling design's bound at several deltas (`Stratified.count_bound`).
 #
 #   research run --on MACHINE --project verity --source TREE --cwd clone --mem-gb 448 --timeout 3h \
-#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/one_stage/a5_llama1b_h200.sh
+#     --env GPU_LEASE_WHO=LANE --env A5_CORES=CPUS -- bash benchmarks/one_stage/a5_llama1b_h200.sh
 #   or, on a machine of your own, from the tree's root: bash benchmarks/one_stage/a5_llama1b_h200.sh   (its record in ./out)
 # Uses: about 400 GB of memory at its peak (399 GB measured at k=256, 377 GB at k=880), about 3 GB of disk under A5_ROOT
 #   while it runs (the row dir and the window, removed at exit) and 0.3 GB for M0's Flock build (A5_FLOCK_WORK, kept), and 13-16 min on one H200 with M0's
@@ -35,7 +35,9 @@
 #   sm_90 taps under A5_TAPS (default WORK/cp: the guarded FA3 build and the norm tap; the unguarded FA3 build only where it
 #   is there, as the row runs the guarded one). WORK defaults to the bootstrap's, /workspace. With gpu-lease the row leases
 #   the GPU for its Match capture and its Commit's engine only (A5_CARD=N leases card N alone, on a machine whose other
-#   cards are others'); on a machine with no gpu-lease it takes card A5_CARD (default 0) directly, and its COINS line says so.
+#   cards are others'), and every lease names the CPUs A5_CORES gives (gpu-lease --cores, e.g. 40-59: the machine's map
+#   gives each lane its cores, and a lease without them holds every other lane out), refused before any build when unset;
+#   on a machine with no gpu-lease it takes card A5_CARD (default 0) directly, and its COINS line says so.
 # The uv venv, Lean's verifiers and M0's flock-circuit build in the background while the GPU stages run (M0 in
 # A5_ROOT/flock-work, or A5_FLOCK_WORK, kept for a rerun; a build killed mid-clone leaves one that 20-gpu-link.sh takes as
 # built, so a rerun after one names another). The row dir, the window and the audit's private files are under
@@ -81,6 +83,9 @@ print(checkpoint_dir(*sys.argv[1:]) or "")' "$REPO" "$REV" "$HF_HOME" 2>/dev/nul
 [ -e "$PART" ] || refuse "no partition file at $PART (A5_PARTITION): a copy of benchmarks/one_stage/llama32_1b_rope_d64_l0.json with its sampling design (its law key)"
 [ -z "$A5_PLAIN" ] || "$VENV/bin/python" -c 'import json, sys; sys.exit(not json.load(open(sys.argv[1]))["law"].startswith("stratified-rate:"))' "$PART" \
   || refuse "A5_PLAIN=1 takes a partition whose sampling design (its law key) is stratified-rate:NUM/DEN (a plain audit's sample is stratified, and the Commit registers the partition's sampling design): $PART"
+if [ -n "${GPU_LEASE-}" ] || command -v gpu-lease >/dev/null; then
+  [[ ${A5_CORES:-} =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || refuse "A5_CORES=${A5_CORES:-}: every gpu-lease names its CPUs (--cores), and a lease without them holds every other lane out: A5_CORES=CPUS, the cores this machine's map gives you (e.g. 40-59)"
+fi
 command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: the workload serves on one H200 (sm_90), which this machine doesn't show"
 UNGUARDED=(); [ ! -e "$FA3" ] || UNGUARDED=(--hidden-so-fa3 "$FA3")
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
@@ -96,15 +101,12 @@ finish() {  # at exit, success or failure: BASE (the row dir, the window, the au
 }
 trap finish EXIT
 if [ -n "${GPU_LEASE-}" ] || command -v gpu-lease >/dev/null; then
-  CARD="card ${A5_CARD:-any} leased by gpu-lease for Match and Commit"
-  if [ -n "${A5_CARD:-}" ]; then
-    real=$(command -v "${GPU_LEASE:-gpu-lease}")
-    mkdir -p "$BASE/bin"
-    printf '#!/usr/bin/env bash\n[ "$1" = status ] && exec %q "$@"\nn=$1; shift\nexec %q "$n" --on %q "$@"\n' \
-      "$real" "$real" "$A5_CARD" > "$BASE/bin/gpu-lease" && chmod +x "$BASE/bin/gpu-lease"
-    GPU_LEASE=$BASE/bin/gpu-lease
-  fi
-  GPU_LEASE=${GPU_LEASE:-gpu-lease}
+  CARD="card ${A5_CARD:-any} and CPUs $A5_CORES leased by gpu-lease for Match and Commit"
+  real=$(command -v "${GPU_LEASE:-gpu-lease}")
+  mkdir -p "$BASE/bin"
+  printf '#!/usr/bin/env bash\n[ "$1" = status ] && exec %q "$@"\nn=$1; shift\nexec %q "$n" %s--cores %q "$@"\n' \
+    "$real" "$real" "${A5_CARD:+--on $(printf %q "$A5_CARD") }" "$A5_CORES" > "$BASE/bin/gpu-lease" && chmod +x "$BASE/bin/gpu-lease"
+  GPU_LEASE=$BASE/bin/gpu-lease
 else  # an unleased row (pipeline.gpu_lease: no GPU_LEASE, nothing changes) on the one card it is shown
   CARD="card ${A5_CARD:-0} taken directly, no gpu-lease on this machine"
   GPU_LEASE= CUDA_VISIBLE_DEVICES=${A5_CARD:-0}; export CUDA_VISIBLE_DEVICES
