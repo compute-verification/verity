@@ -638,7 +638,7 @@ class Record:
     one), which, with each pass's head (`WindowRecord.heads`), the memory-map unit's verdict is on
     (`RequirementLink.mapped`), and the receipts every sample requested (`Params.samples`, None in a record no session
     made): a sample over U receipts takes min(`samples`, U), so `samples` is the k_t of the sample's rejection
-    Σ_t k_t/2^64 (`ledger.rejection`), which a sample opening all its receipts doesn't show.  `samples` is also the
+    Σ_t k_t/2^256 (`ledger.rejection`), which a sample opening all its receipts doesn't show.  `samples` is also the
     session's sample cap s and `append_coins` the append coins its coin commitment reserved, which bound every window
     of the session, whatever its outcome (`ledger.binding`; None in a record no session made).  `public` is what
     acceptance makes public; `profile` is the protocol's profile, each window's schedule and openings sampling design

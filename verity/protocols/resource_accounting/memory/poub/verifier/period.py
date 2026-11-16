@@ -66,7 +66,8 @@ def payloads(store: bytes) -> list[bytes]:
 
 
 def eps(windows: int, groups_per_coin: int, samples: int) -> Fraction:
-    """`Poub.Protocol.eps`: δ + ⌈W/g⌉·s/2^256 for a session of W `windows`, g `groups_per_coin` and s `samples`."""
+    """`Poub.Protocol.eps`: δ + ⌈W/g⌉·s/2^256 for a session of W `windows`, g `groups_per_coin` and s `samples`. It
+    leaves out the network attesters' term δnet (`IngressCounted`), which `LineHeld`'s bound carries beside it."""
     return DELTA + Fraction(C.openings_coins(windows, groups_per_coin) * samples, 2 ** 256)
 
 

@@ -98,8 +98,9 @@ F·C in a record written before it), and `sketch_queries` every Q the run's sess
 parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 140 bits, 67
 in a record written before it, and 41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's
 2118 passes), the coin commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the
-sketch's, and the sample's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the
-rejection added to the total of a record whose ledger didn't charge them). The total leaves out the windows' PRF
+sketch's, and the sample's rejection Σ_t k_t/2^256, k_t the session's `samples` (the hiding, the binding and the
+rejection added to the total of a record whose ledger didn't charge them, the rejection at 2^-64 a sample,
+`UNRECORDED_REJECTION_LOG2`). The total leaves out the windows' PRF
 advantages Σ_t adv_t, which nothing prices and the line doesn't assume: every error names them (`NAMED_TERMS`, claim
 prf/sha-512) with no number, in no total, and reads `ledger.DELTA_FORM` where printed. The line at each T, and the line of record over every T
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
@@ -185,6 +186,10 @@ UNBOUND = "the verifier held no checkpoint: the store's bytes are the developer'
 """What an unbound store's line rests on (`bound_check`), in benchmarks/memory's words (`run.UNBOUND`)."""
 DEVELOPERS, MODELS = "the developer's choice", "the model's"
 """Whose the store is (`bound_check`'s `store`): unbound, or bound to the model."""
+UNRECORDED_REJECTION_LOG2 = 64
+"""The sample's rejection a sample, in bits, for a record whose ledger didn't charge it: such a record's verifier
+predates the proof of `ledger.REJECTION_LOG2`'s 2^-256 (`PooledSample`), so it is charged the 2^-64 a uniform first
+word's rejection gives."""
 STORE_PREMISE = "DeveloperStore"
 PREMISES = {STORE_PREMISE: (
     f"{UNBOUND}: no auditor's machine reads a checkpoint, so the blocks the line credits as weights are the "
@@ -470,7 +475,7 @@ def session_error(session: dict) -> dict:
     `declared`), read and never recomputed, so it charges whatever the ledger does (the F the node states among it);
     beside it its six parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
     2^-slack a pass, `delta_hiding`, the coin commitment's Σ_t hide_t, `delta_binding`, the receipts' binding term,
-    `delta_sketch`, δs, and `delta_rejection`, the sample's Σ_t k_t/2^64. A record that carries the parts (verifier.json's
+    `delta_sketch`, δs, and `delta_rejection`, the sample's Σ_t k_t/2^256. A record that carries the parts (verifier.json's
     `delta`) must sum to the total as the ledger adds them, exactly where the ledger writes them as ratio text and in
     floats where an older record wrote floats, or there is no line (`Disagree`); one written before them
     gives the profile δ from its windows (`recorded_windows`) and the slack from its passes at the slack its ledger was
@@ -479,7 +484,8 @@ def session_error(session: dict) -> dict:
     from its windows (`recorded_windows`, as `ledger.hiding` reads them), the binding at the session's bounds
     (`recorded_binding`, as `ledger.binding` reads them), reading Q off the record's sketch term (`sketch_failure`),
     so a record with none has no binding term here, and the rejection at its windows' requested samples (the session's
-    `samples` in each, as `ledger.rejection` reads them off the record). Each in floats and exact beside them
+    `samples` in each, as `ledger.rejection` reads them off the record), at `UNRECORDED_REJECTION_LOG2`. Each in floats
+    and exact beside them
     (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
     total. `{"undecided": why}` where the ledger's declared outputs are undecided."""
     lg = session["ledger"]
@@ -520,7 +526,7 @@ def session_error(session: dict) -> dict:
         total += binding
     if rejection is None:
         windows = len(V.recorded_windows(session)[0])
-        rejection = Fraction(windows * session["samples"], 2 ** ledger.REJECTION_LOG2)
+        rejection = Fraction(windows * session["samples"], 2 ** UNRECORDED_REJECTION_LOG2)
         total += rejection
     exact = {"delta_profile": profile, "delta_slack": slack, "delta_hiding": hiding, "delta_binding": binding,
              "delta_sketch": sketch, "delta_rejection": rejection, "total": total}
@@ -1148,7 +1154,7 @@ def table(doc: dict) -> str:
                       + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")")
                    + (f", error {ledger.DELTA_FORM}, δ = {row['error']['total']:.3g} "
                       f"(2^{row['error']['log2']:.2f}): the ledger's δ "
-                      "(profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the credited "
+                      "(profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^256) summed over the credited "
                       f"sessions; Σ_t adv_t (claim {ledger.PRF_CLAIM}) is named, with no value and in no total"
                       if row["error"]["sessions"] else ""))
     out.append(f"line by {doc['line_by']}; {doc['credit']['summary']}")

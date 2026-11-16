@@ -133,7 +133,8 @@ def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
 
 /-- The error an accepted session's `q_bytes` holds at: `DELTA + ⌈W/g⌉·s/2^256`, the pooled bound's δ and the
 samples' rejection at the session's `samples` s a sample, the size `PooledSample` proves for the sampler's first
-blocks. -/
+blocks. It leaves out the network attesters' term δnet, the chance their count of what enters the node is wrong
+(`IngressCounted`), which `LineHeld`'s and `LineHeldAtSubprotocol`'s bounds carry as a term of their own beside it. -/
 def eps (params : Session.Params) (g : Nat) : Rat :=
   DELTA + ((openingsCoins params g * params.samples : Nat) : Rat) / (2 ^ 256 : Nat)
 
