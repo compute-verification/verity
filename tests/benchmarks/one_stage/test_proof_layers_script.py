@@ -14,7 +14,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-SCRIPT = HERE.parent / "proof_layers.sh"
+SCRIPT = ROOT / "benchmarks" / "one_stage" / "proof_layers.sh"
 TEXT = SCRIPT.read_text()
 SETTINGS = ["A5_CARD", "A5_CORES", "WORK", "GPU_LEASE_WHO"]
 LAWS = {"flock": "stratified-rate:880/880", "zk": "subset:880", "sampling": "subset:256"}
