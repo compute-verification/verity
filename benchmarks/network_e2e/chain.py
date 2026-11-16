@@ -158,7 +158,7 @@ def bits(adv, T: int, windows: int, config: dict | None, io: list[dict] | None) 
 # --- the endpoint's own advice ----------------------------------------------------------------------------------------
 
 ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
-SLACK_S = 1.0  # the endpoint's clock against the certifier's: a Commit window opening this soon before the run's origin
+SLACK_S = 1.0  # the endpoint's clock against the attester's: a Commit window opening this soon before the run's origin
 COUNTS = ("v0_bits", "derived_bits", "derived_shaped_bits", "forced_bits")
 ROW_ORDER = {"runner": "batch", "scheduling": "scheduling"}
 
@@ -671,20 +671,20 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
             out.append(f"I/O tie: {next(t['why'] for t in ties if not t['ran'])}.")
         else:
             out.append("I/O tie: `io_tie`'s reference in the clear on a fake upstream's cells and Commit port of the "
-                       "advice and the given ids, not the network certifier's cells under its root and the endpoint's Commit "
+                       "advice and the given ids, not the network attester's cells under its root and the endpoint's Commit "
                        "proved in an IoTieWindow unit.")
     t = c.get("tie")
     if t is not None and t["ran"]:
         out.append("I/O tie: `io_tie`'s reference in the clear on the negatives' stand-ins (each window's certified "
-                   "frames held to their head and committed under fake salts in place of the network certifier's cells, the "
+                   "frames held to their head and committed under fake salts in place of the network attester's cells, the "
                    f"sampled ids from {t['from']} under fake salts in place of the Commit's port), not the endpoint's "
-                   "Commit and the network certifier's cells in an IoTieWindow unit.")
+                   "Commit and the network attester's cells in an IoTieWindow unit.")
     where = str(r.get("where") or "")
     if where.startswith("off the developer's node"):
-        out.append("Auditor device: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
+        out.append("Auditor device: the attester ran on another node than the endpoint's, through an ssh forward, not on "
                    "the auditor device (--from takes a gate run's fetch).")
     elif not where.startswith("gate: "):
-        out.append("Auditor device: the certifier ran off the gate (--from takes a gate run's fetch).")
+        out.append("Auditor device: the attester ran off the gate (--from takes a gate run's fetch).")
     return out
 
 
