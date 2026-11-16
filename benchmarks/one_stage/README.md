@@ -313,7 +313,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   execution phase, marked proved or scaled by the record's rules. It refuses a record whose labels its rules contradict:
   K/m proved past one phase, a node cell proved over a period the run doesn't cover, a datacenter or world cell proved,
   a proved statement outside the lock, a rule without its sources. The tight K is shown conditional on what is open.
-  Its test reads stand-ins cut from the writer's own record (`tests/fixtures/onsite_periods/make.py`).
+  Its test reads stand-ins cut from the writer's own record (`tests/benchmarks/one_stage/fixtures/onsite_periods/make.py`).
 - `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B
   prefill mix (prompts of 1,024 ids, `max_tokens` 1, all queued at once, T tokens a step), one arm a run (stock, the
   Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.
