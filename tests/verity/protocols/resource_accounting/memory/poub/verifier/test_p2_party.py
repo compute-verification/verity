@@ -226,29 +226,33 @@ def test_a_line_before_the_verifier_asked_for_one_ends_it_out_of_phase(store) ->
     assert isinstance(done, Finish) and done.outcome["answer"]["reason"] == "out-of-phase"
 
 
-def test_the_verifiers_start_refuses_a_closer_key_the_configuration_does_not_pin(tmp_path, monkeypatch) -> None:
-    from types import SimpleNamespace
-
-    from verity.channel import Refused
+def test_the_verifiers_start_is_not_yet_a_path_that_runs_and_reads_no_key(tmp_path) -> None:
     from verity.protocols.resource_accounting.memory.pous.attester import onsite
-
-    def pinned(key: bytes) -> dict:
-        pin = {"party": "memory-challenger", "protocol": "pous", "key-sha512": hashlib.sha512(key).hexdigest()}
-        return {"pin": [pin]}
 
     assert p2_parties.VERIFIER not in p2_parties.PROTOCOLS[p2_parties.ID].starts
     start = p2_parties.starts(onsite.pin, onsite.signer)[p2_parties.VERIFIER]
-    bound = {"challenger": str(tmp_path)}
-    with pytest.raises(Refused, match="pin"):
-        start({}, bound, None)
-    with pytest.raises(Refused, match="state"):
-        start(pinned(b"key"), bound, None)
-    (tmp_path / "seed").write_bytes(b"seed")
-    (tmp_path / onsite.KEY_STATE).write_text(json.dumps({"public": b"key".hex()}))
-    monkeypatch.setattr(onsite, "device_key", lambda directory: SimpleNamespace(public_key=b"key"))
-    with pytest.raises(Refused, match="pin"):
-        start(pinned(b"another key"), bound, None)
     with pytest.raises(NotImplementedError, match=p2_parties.GOAL):
-        start(pinned(b"key"), bound, None)
+        start({}, {"challenger": str(tmp_path)}, None)
     with pytest.raises(NotImplementedError, match=p2_parties.GOAL):
-        p2_party_prover.PROTOCOL.starts[p2_parties.PROVER](pinned(b"key"), {}, None)
+        p2_party_prover.PROTOCOL.starts[p2_parties.PROVER]({}, {}, None)
+
+
+def test_the_party_refuses_a_closer_key_other_than_the_one_its_pin_names_before_any_session(tmp_path, capsys) -> None:
+    """`main` loads the memory challenger's key only through the pin (``--trusted-sha512``): another key, or a
+    challenger with no pin named, is refused before the registration is read, so no session's close is signed."""
+    from types import SimpleNamespace
+
+    key = SimpleNamespace(public_key=b"the memory challenger's key")
+    pin = hashlib.sha512(key.public_key).hexdigest()
+    absent = tmp_path / "no-registration.json"
+    mc.SessionLog.create(tmp_path / "sessions")
+    argv = ["--registration", str(absent), "--stdio", "--challenger", str(tmp_path), "--session", "ab" * 32]
+    with pytest.raises(SystemExit) as refused:
+        p2_parties.main([*argv, "--trusted-sha512", hashlib.sha512(b"another key").hexdigest()],
+                        device_key=lambda directory: key)
+    assert refused.value.code == 2 and "not the one --trusted-sha512 pins" in capsys.readouterr().err
+    with pytest.raises(SystemExit) as refused:
+        p2_parties.main(argv, device_key=lambda directory: key)
+    assert refused.value.code == 2 and "go together" in capsys.readouterr().err
+    with pytest.raises(FileNotFoundError, match="no-registration"):
+        p2_parties.main([*argv, "--trusted-sha512", pin], device_key=lambda directory: key)

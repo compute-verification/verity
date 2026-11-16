@@ -79,7 +79,7 @@ ONSITE = "verity/onsite/v0"
 BINDINGS = "bindings.json"
 WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_CHALLENGER = SP.CHALLENGER, WP.CHALLENGER
-BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", NC.NETWORK_CERTIFIER
+BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = P2.CLOSER_PARTY, NC.NETWORK_CERTIFIER
 #: served_verdicts.py's record reads each piece's answer by its runner name
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
