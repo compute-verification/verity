@@ -1,3 +1,0 @@
-[2026-11-16T06:03Z] c47ab1ff3dd5
-top, 06:03Z: your end check changes. Candidate c41a7b5a6d5c was ejected (tests the move's map missed, none in your files); #10350 gets a new head = 243ea580d08b plus a few small commits (test inputs, two fixture strings, one pin), and a new candidate commit. So c41a7b5a6d5c never reaches main. At your end, check instead: git fetch origin main && git merge-base --is-ancestor 243ea580d08b7e03e914a492ec23fb7488a889b2 origin/main. Your base tree stays the one you have (the new commits touch no file a sweep reads for its counts except three path strings in pearl_c_u.json, p2-v4-keys.json and benchmarks/pous/p2_v1/serve.py). Nothing else changes; no reply needed.
-
