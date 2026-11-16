@@ -354,6 +354,16 @@
    "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
    "why": "The parameters the bound speaks of: a per-round floor p, a bad-event mass ε₀ and k rounds with (1 − p)^k + k·ε₀ ≤ c."
   },
+  "Pous.StreamedWipe.FillsSegment": {
+   "owner": "@memory-accounting",
+   "digest": "3b562ca902b009ae95b447de74d775431a0d94f6b6188602b1b89bac55769c8d",
+   "why": "restricts the wipe bound to fills of at least one 32 MiB segment, 2^19 labels of 64 bytes"
+  },
+  "Pous.StreamedWipe.PriorAtLeastForeignBits": {
+   "owner": "@memory-accounting",
+   "digest": "1fa5511bde69d301591cd1f48bd5327f5d1274900052caf5a4f5c0d3ed35c9b8",
+   "why": "restricts the wipe bound to prior content of at least the figure verity/wipe/v0 publishes, ⌈M/19⌉ + E bits for a fill of n labels (M = 512·n) and E bits of egress"
+  },
   "Pouw.Dither.CallsAtPub": {
    "owner": "@compute-research",
    "digest": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201",
@@ -4958,6 +4968,10 @@
    "honest": ["Slowdown.Cut.SecurityProofs.HECharged_honest"],
    "nontrivial": "Slowdown.Cut.SecurityProofs.HECharged_nontrivial",
    "kind": "exclusion"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeets96GiB": {
+   "honest": ["Pous.SecurityProofs.StreamedWipeMeets96GiB_honest"],
+   "nontrivial": "Pous.SecurityProofs.StreamedWipeMeets96GiB_nontrivial"
   }
  },
  "unwitnessed": {
@@ -15868,6 +15882,58 @@
    },
    "type_hash": "a3671a8a99f4c7b653b5751bd24cb714a5764f731e9563fa3b20b1072228a5e2",
    "unfolded_hash": "37f7bcfaa7774cf93391a95b1efaeb42ee1e0c7e21a08707ff16fe72a6f93659"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeets96GiB": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeets96GiB : Pous.Guarantees.StreamedWipeMeets96GiB"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pous.StreamedWipe.FillsSegment", "Pous.StreamedWipe.PriorAtLeastForeignBits"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "610f906d2a73a8612b035d1cfe33141715f61fda55f081c36162e0dc9afda003",
+   "unfolded_hash": "96738ff647cf8c6c644bc4ee59c48f6efe9ad56f50b5b91d9c07003d31ecdf8f"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeets96GiB_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipeMeets96GiB_honest :",
+    "  And (Pous.StreamedWipe.FillsSegment 1610612736)",
+    "    (And (Pous.StreamedWipe.PriorAtLeastForeignBits 1610612736 0 43401774781)",
+    "      (Exists fun prf =>",
+    "        Exists fun P => Eq (Pous.pr fun x => Pous.StreamedWipe.Accepts P x.fst.fst (prf x.snd) x.fst.snd) 1))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "1b82be52c44e3f97a36ace8ce899ffe3110765aa2eb7b2ace51879927c5f2cde"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeets96GiB_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipeMeets96GiB_nontrivial :",
+    "  Exists fun prf =>",
+    "    Exists fun P =>",
+    "      Not",
+    "        (ENNReal.instLE.le (Pous.StreamedWipe.winRealBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) prf P)",
+    "          (instHAdd.hAdd (instHPow.hPow (ENNReal.instInv.inv 2) 128)",
+    "            (Pous.StreamedWipe.prfAdvantage prf",
+    "              (Pous.StreamedWipe.wipeDistinguisherBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) P))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "0470c6c2019371e2b8351284c6545100fa1b635f1fd5afed60e72637c66d00bc"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsDisk": {
    "owner": "@memory-accounting",
@@ -28540,9 +28606,9 @@
    "Verity.Guarantees.RegistrationSound_nontrivial": "unstated: the view of a log whose device names no sheet failing the registered facts, stated with RegistrationSound; no theorem proves it, and it is restated and listed with RegistrationSound once that is.",
    "ResourceAccounting.Guarantees.B4UnderId": "unstated: stated in the spec and proved by ResourceAccounting.SecurityProofs.B4UnderId in Proofs.ResourceAccounting.Actual.LinkEnds, listed as a guarantee after the landing, NET-450, Wed 18 Nov",
    "ResourceAccounting.Guarantees.B4Via": "unstated: stated in the spec, no theorem proves it yet; Proofs.ResourceAccounting.Actual.LinkEnds derives it from B4 only at a Site whose every place is its own link end (b4Via_of_ownLinkEnds), NET-450, Wed 18 Nov",
-   "Pous.Guarantees.StreamedWipeMeets96GiB": "unstated: the streamed-label wipe bound at the 96 GiB device, whose guarantee Pous.SecurityProofs.StreamedWipeMeets96GiB left the lock by name because it takes its size premises inline; it is listed again once they are named (owner @memory-accounting).",
    "Slowdown.Cut.SecurityProofs.HECharged": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry (ValuesInjective, NoSharedPair), under the named (H) and (E) (security/Definitions/Assumptions.lean), with the fresh-input budget k on a set G of a partition's blocks only: the blocks outside G are charged whole, at the MACs each holds whole, and what all the blocks read outside θ is a total T. It is not about the code of the inference-only policy's check; nothing joins it to a verdict yet.",
-   "ResourceAccounting.Guarantees.LeakPartsRegistered": "unstated: the registered site's leak bound, whose guarantee ResourceAccounting.SecurityProofs.LeakPartsRegistered left the lock by name until its honest lemma concludes RatedOn; it is listed again with that lemma (owner @network-accounting)."
+   "ResourceAccounting.Guarantees.LeakPartsRegistered": "unstated: the registered site's leak bound, whose guarantee ResourceAccounting.SecurityProofs.LeakPartsRegistered left the lock by name until its honest lemma concludes RatedOn; it is listed again with that lemma (owner @network-accounting).",
+   "Pous.SecurityProofs.StreamedWipeMeets96GiB": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, on any card whose device memory fills a segment or more, the 96 GiB device among them, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -36643,8 +36709,9 @@
    }
   },
   "Definitions.Pous.Guarantees.StreamedWipeFamily": {
-   "digest": "0b56d5ede145fb39e818b1945d0484cd35b1ba0dd4418473a91270950a9562c0",
+   "digest": "4b3048563a8c5de2943d0e07a23b66b10c1937c33662e2eb27260b814d4d4f71",
    "definitions": {
+    "Pous.Guarantees.StreamedWipeMeets96GiB": "ae6118833d4f609fe596a99290a41b1967b26ec009ec164a7540f57aa5dc6747",
     "Pous.Guarantees.StreamedWipeMeetsFamily": "23dfe40e93f228a0f7eaae86c52a43dd31cf0661a09b2ec5a4323d9e1d277362"
    }
   },
@@ -36897,10 +36964,12 @@
    }
   },
   "Definitions.Pous.Model.StreamedWipe": {
-   "digest": "88d297836bcfbae72f43a36a867a61a3b0ef06d80a34513a4ba206d6861e67e8",
+   "digest": "d0320ea906c645f7487b79695a3fffd4540f05712667c0ce7355802a96c2a389",
    "definitions": {
     "Pous.StreamedWipe.Accepts": "6dba3997a1d31914b4fad7a11dee65a34946b12fdae60391d3ee5bf41a6ea9c6",
+    "Pous.StreamedWipe.FillsSegment": "3b562ca902b009ae95b447de74d775431a0d94f6b6188602b1b89bac55769c8d",
     "Pous.StreamedWipe.Keeps": "12705843bf37f84d4e65419e4062e8dc26882d7de2b742c8bedf4696e76901f4",
+    "Pous.StreamedWipe.PriorAtLeastForeignBits": "1fa5511bde69d301591cd1f48bd5327f5d1274900052caf5a4f5c0d3ed35c9b8",
     "Pous.StreamedWipe.Prover": "3ee3eda544016b9aadb0873d8ff9d9ab27f02346773831efbacd4292a8a02411",
     "Pous.StreamedWipe.Prover.answer": "81b99dd89ff56d9bc604a57a7006aadd2b8d6a88ef28898171a6369f003cba6a",
     "Pous.StreamedWipe.Prover.fill": "61206db5e07feba3c1db58d84667e97ce32e8cb8ec8f4913089d9427fcb2ddfe",
