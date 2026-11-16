@@ -189,7 +189,20 @@ HEADER = """# The Lean names pass: written by `python3 tools/move/lean_names_pas
 # Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that
 # `tools/verity/lean/check.py --update --moved` takes.
 """
-TAIL = """[keep_paths]
+TAIL = """# The area's directories where a Python file builds the path from its parts.
+[[words_in]]
+files = ["*.py"]
+[words_in.words]
+'"Proofs" / "Accounting"' = '"Proofs" / "ResourceAccounting"'
+'"Definitions" / "Accounting"' = '"Definitions" / "ResourceAccounting"'
+
+# The area by its directory's name, in the trees' READMEs and AGENTS.md's list of areas.
+[[words_in]]
+files = ["security/Definitions/README.md", "security/Proofs/README.md", "security/Properties/README.md", "AGENTS.md"]
+[words_in.words]
+"`Accounting" = "`ResourceAccounting"
+
+[keep_paths]
 # PoUS's own `Pous.Accounting` keeps its directories, though some of its files open the root namespace.
 "security/*/Pous/Accounting*" = ["Accounting"]
 
@@ -202,8 +215,9 @@ patterns = [
 ]
 
 [rewrite]
+# `test_merge.py` names what its recorded locks (`fixtures/merge/`) hold, so it keeps their names.
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "**/fixtures/**", "fixtures/**", "*.patch",
-           "**/TRUSTED.sha256", "uv.lock", "tools/research/src/research/store/**"]
+           "**/TRUSTED.sha256", "uv.lock", "tools/research/src/research/store/**", "tools/verity/lean/tests/test_merge.py"]
 """
 
 
