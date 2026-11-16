@@ -54,7 +54,7 @@ The verdict is the Lean verifier's: `inference-only-check --count` on one window
 a registered read of a pinned parameter bound at registration and named in θ (`held_inputs`, `count_instance`). It
 decides each block's gates against c and fresh bits against k; n is judged on the exact count, the sealed windows' blocks.
 The record's count (``record_count``: `block_counts.fresh` and the rows the record's wires and the pinned tables'
-openings fill, `judge` on its rows) is carried beside it and never decides it. The session Program carries no wires,
+openings fill) is carried beside it and never decides it. The session Program carries no wires,
 so the Lean verifier counts a wired row and a table opening as fresh where the record's count does not. Its whole
 verdict counts that one window's blocks, so the public verdict takes only its gates a block, fresh bits, ``complies``
 and the rule that failed, or its refusal's ``error`` and ``message`` (`lean_said`), and the private one the whole call.
