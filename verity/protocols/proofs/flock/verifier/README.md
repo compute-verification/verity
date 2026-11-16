@@ -13,12 +13,12 @@ The ZK server's Lean is here too (`Flock.ZkServer`), and so is the recursion's (
 ~~~sh
 bash tools/verity/lean/setup.sh verity/protocols/proofs/flock/verifier
 (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof)
-verity verify proof --help
 ~~~
 
-The first line installs elan, the toolchain this directory pins and the packages it requires; it fetches nothing else.
-The second builds the verifier on the CPU, and the third prints its commands. What each command checks and its flags
-are in [the agreement's README](../prover/agreement/README.md), with how the verifier is held to upstream's Rust one.
+The first line installs elan, the toolchain this directory pins and the packages it requires, and restores `main`'s
+build from the Lean cache where it can. The second builds the verifier on the CPU and ends with
+`Build completed successfully`. Then `verity verify proof ARGS` runs the binary it wrote. Its commands, what each checks,
+and how the verifier is held to upstream's Rust one are in [the agreement's README](../prover/agreement/README.md).
 
 ## What it is proved to do
 
