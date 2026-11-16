@@ -26,7 +26,6 @@ Notes are records, never messages.
   research msg read --as NAME --mark-through TS [--json]           # mark read only those at or before TS (a --peek listing's last)
   research msg names open|read|close|list|revoke [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
-  research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (by record), median and p90 minutes
   research msg pickup --thread TS                                  # 👀 on an ask you own
   research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent
   research msg roster --thread TS [--json]                         # an announcement's status lines; exit 0 when all are done
@@ -57,7 +56,7 @@ Notes are records, never messages.
   research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]  # asks' pages edited lately: Status, Decision, newest comment
 
 An ask lives in one record, by its target: a handle's ask is an issue in its Linear team, and an ask to @daniel is a page in the
-Asks for Daniel database; `traffic` reads that record's state for whether, and `--latency` for when, it was answered.
+Asks for Daniel database; `traffic` reads that record's state for whether it was answered.
 
 `reply` is an older spelling of `send --thread`, kept while callers move.
 
@@ -3059,17 +3058,17 @@ class Pages:
     """Each card's page state, read once; the Notion client is made on the first read, and its absence (no $NOTION_API_KEY)
     is an error per page rather than for the whole report."""
 
-    def __init__(self, client: Callable[[], "Notion"] | None = None):
-        self.make, self.client, self.seen = client, None, {}
+    def __init__(self):
+        self.client, self.seen = None, {}
 
     def state(self, page: str) -> dict:
         if page not in self.seen:
-            if not (self.make or os.environ.get("NOTION_API_KEY")):
+            if not os.environ.get("NOTION_API_KEY"):
                 self.seen[page] = {"status": None, "answered": False, "at": None,
                                    "error": "no $NOTION_API_KEY (a Notion connection's token, shared on the Asks for Daniel database)"}
                 return self.seen[page]
             try:
-                self.client = self.client or (self.make or Notion)()
+                self.client = self.client or Notion()
                 self.seen[page] = page_state(self.client, page)
             except (SlackError, ValueError) as e:
                 self.seen[page] = {"status": None, "answered": False, "at": None, "error": str(e)}
@@ -3083,144 +3082,14 @@ def is_ask(m: dict) -> bool:
 
 
 ANSWER_REACTIONS = ("eyes", "white_check_mark", "x")
-LINEAR_ANSWER_Q = ("query($id: String!) { issue(id: $id) { createdAt history(first: 100) { nodes { createdAt fromState { type } toState { type } } } "
-                   "comments(first: 100) { nodes { createdAt user { name } botActor { userDisplayName } body } } } }")
 
 
 def _iso_epoch(stamp: str) -> float:
     return datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
 
 
-def issue_answer(lin: Any, ident: str, asker: str | None) -> dict | None:
-    """When the Linear issue `ident` was first taken up: its first move out of Backlog (by anyone: every write is the
-    Verity Asks app's, so `by` is None), or the first comment by someone other than `asker`; {at, how, by}, or None when
-    neither happened.
-    An issue filed straight into another state shows that as a move out of Backlog at its creation, which times no answer:
-    with nothing later, it is answered but untimed (`linear-filed`, like an issue filed already Done)."""
-    i = lin.gql(LINEAR_ANSWER_Q, {"id": ident})["issue"]
-    born = _iso_epoch(i["createdAt"])
-    out = [{"at": _iso_epoch(h["createdAt"]), "how": "linear-state", "by": None}
-           for h in i["history"]["nodes"]
-           if (h.get("fromState") or {}).get("type") == "backlog" and (h.get("toState") or {}).get("type") not in (None, "backlog")
-           and _iso_epoch(h["createdAt"]) > born]
-    for c in i["comments"]["nodes"]:
-        if (who := comment_by(c)) and who != asker:
-            out.append({"at": _iso_epoch(c["createdAt"]), "how": "linear-comment", "by": who})
-    if not out and any((h.get("fromState") or {}).get("type") == "backlog" and (h.get("toState") or {}).get("type") not in (None, "backlog")
-                       for h in i["history"]["nodes"]):
-        return {"at": born, "how": "linear-filed", "by": None}
-    return min(out, key=lambda a: a["at"], default=None)
-
-
 def nearest_rank(xs: list[float], q: float) -> float | None:
     return sorted(xs)[max(math.ceil(q * len(xs)), 1) - 1] if xs else None
-
-
-def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, now: float, stale_s: float,
-                linear_client: Callable[[], Any] | None = None, notion_client: Callable[[], Any] | None = None) -> dict:
-    """Each ask posted in (since, now] that rang a lane's inbox, and each #ask-daniel card linking its page, and how long its
-    first answer took, as the ask's record shows it (`record`, `ref`):
-    - an ask linked to a Linear issue: the issue's first move out of Backlog or first comment by anyone but the asker
-      (`issue_answer`), with who gave it (`answer_by`), or the addressed lane's own reply in the thread, whichever came first.
-      An issue Linear can't read leaves the ask to Slack (`linear_errors`).
-    - a card to @daniel (lane `daniel`): its page's Status leaving PAGE_WAITING, at the page's last edit (`page_state`); `state`
-      is the Status.  A page Notion can't read leaves the card unanswered (`notion_errors`).
-    - any other ask: the first reply in its thread under a name of the lane's inbox (its own, or one it was renamed from).
-      One with no reply that carries 👀, ✅ or ❌ and rang only this lane counts as answered but untimed: Slack keeps no time
-      for a reaction, and every handle reacts as one bot.
-    Only a lane or a named person asks: a machine's alert (`vy-monitors`) isn't an ask.  Answers after `now` don't count.  Per lane: asks, answered (by Slack, Linear, Notion or untimed), the nearest-rank
-    median and p90 of the timed answers in minutes, the unanswered, and those unanswered for longer than `stale_s`."""
-    tops: dict[str, dict[str, dict]] = {}                            # channel -> ts -> top-level post
-    replies: dict[tuple[str, str], list[dict]] = {}
-    asks, counted, names = [], set(), {}
-    askers = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
-    for r in routes.all().values():
-        names.setdefault(r.get("inbox_ts"), set()).add(r["name"])  # a renamed lane answers under its old name too
-    for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
-        if not r.get("inbox_ts") or r["inbox_ts"] in counted:
-            continue                                                 # a renamed name forwards into its successor's inbox
-        counted.add(r["inbox_ts"])
-        rch = r.get("channel") or ch
-        if rch not in tops:
-            tops[rch] = {m["ts"]: m for m in api.paged("conversations.history", "messages", channel=rch, oldest=f"{since:.6f}")
-                         if float(m["ts"]) <= now}
-        seen = set()
-        for b in api.paged("conversations.replies", "messages", channel=rch, ts=r["inbox_ts"], oldest=f"{since:.6f}"):
-            d = DOORBELL_RE.match(b.get("text") or "") if is_doorbell(b, reg) and b.get("ts") != r["inbox_ts"] else None
-            if not d or (d[4] and d[4] != d[3]) or d[3] in seen:
-                continue                                             # a reply's doorbell, or one `deliver` rang again
-            root = tops[rch].get(d[3])
-            if root and is_ask(root) and poster(root, reg) in askers and poster(root, reg) not in names[r["inbox_ts"]]:
-                seen.add(d[3])
-                asks.append({"lane": r["name"], "names": names[r["inbox_ts"]], "channel": rch, "root": root})
-    rang: dict[tuple[str, str], int] = {}
-    for a in asks:
-        rang[(a["channel"], a["root"]["ts"])] = rang.get((a["channel"], a["root"]["ts"]), 0) + 1
-    lin, issues, linear_errors = None, {}, []
-    out = []
-    for a in asks:
-        root, lane, t0 = a["root"], a["lane"], float(a["root"]["ts"])
-        key = (a["channel"], root["ts"])
-        asker, record, ref, found = poster(root, reg), "slack", None, None
-        if link := LINEAR_LINK_RE.search(root.get("text") or ""):
-            if (link[1], asker) not in issues:
-                from . import linear
-                try:
-                    lin = lin or (linear_client or linear.Linear)()
-                    issues[(link[1], asker)] = {"answer": issue_answer(lin, link[1], asker)}
-                except (linear.LinearError, OSError, KeyError, TypeError, ValueError) as e:   # the ask still counts, from Slack
-                    issues[(link[1], asker)] = None
-                    linear_errors.append(f"{link[1]}: {e}")
-            if (read := issues[(link[1], asker)]) is not None:
-                record, ref = "linear", link[1]
-                found = [ans] if (ans := read["answer"]) and ans["at"] <= now else []
-        if root.get("reply_count") and key not in replies:          # the addressee's own reply answers too, record or not
-            replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
-        found = (found or []) + [{"at": float(m["ts"]), "how": "slack-reply", "by": poster(m, reg)} for m in replies.get(key, [])
-                                 if m.get("ts") != root["ts"] and poster(m, reg) in a["names"] and t0 < float(m["ts"]) <= now]
-        first = min(found, key=lambda x: x["at"], default=None)
-        untimed = (record == "slack" and first is None and rang[key] == 1
-                   and any(x.get("name") in ANSWER_REACTIONS for x in root.get("reactions", [])))
-        out.append({"lane": lane, "ts": root["ts"], "by": asker, "linear": link[1] if link else None, "record": record, "ref": ref,
-                    "first": first["how"] if first else "reaction" if untimed else None, "answer_by": first["by"] if first else None,
-                    "minutes": round(max(first["at"] - t0, 0) / 60, 1) if first and first["how"] != "linear-filed" else None,
-                    "age_minutes": round((now - t0) / 60, 1)})
-    pages, notion_errors = Pages(notion_client), []
-    for c in daniel_cards(api, reg, since, now):
-        t0, st = float(c["ts"]), pages.state(c["page"])
-        if st.get("error"):
-            notion_errors.append(f"{c['url']}: {st['error']}")
-        done = st["answered"] and st["at"] is not None and st["at"] <= now
-        out.append({"lane": DANIEL, "ts": c["ts"], "by": c["by"], "linear": None, "record": "notion", "ref": c["url"],
-                    "state": st["status"], "first": "notion-status" if done else None, "answer_by": None,
-                    "minutes": round(max(st["at"] - t0, 0) / 60, 1) if done else None, "age_minutes": round((now - t0) / 60, 1)})
-    lanes = []
-    for lane in sorted({x["lane"] for x in out}):
-        mine = [x for x in out if x["lane"] == lane]
-        timed = [x["minutes"] for x in mine if x["minutes"] is not None]
-        unanswered = [x for x in mine if not x["first"]]
-        lanes.append({"lane": lane, "asks": len(mine), "answered": len(mine) - len(unanswered),
-                      "slack": sum(x["first"] == "slack-reply" for x in mine),
-                      "linear": sum((x["first"] or "").startswith("linear-") and x["first"] != "linear-filed" for x in mine),
-                      "notion": sum(x["first"] == "notion-status" for x in mine),
-                      "untimed": sum(x["first"] in ("reaction", "linear-filed") for x in mine),
-                      "median_min": nearest_rank(timed, 0.5), "p90_min": nearest_rank(timed, 0.9),
-                      "unanswered": len(unanswered), "stale": sum(x["age_minutes"] * 60 > stale_s for x in unanswered)})
-    return {"since": since, "now": now, "lanes": lanes, "asks": out, "linear_errors": linear_errors, "notion_errors": notion_errors}
-
-
-def render_latency(rep: dict, hours: float) -> str:
-    cols = ("asks", "answered", "slack", "linear", "notion", "untimed", "median_min", "p90_min", "unanswered", "stale")
-    lines = [f"ask latency over the last {hours:g} h (to {both(rep['now'])}): minutes from an ask to the first answer its record "
-             f"shows (Linear for a handle's linked ask, the Notion page's Status for Daniel's, else Slack)",
-             f"  {'lane':<26}" + "".join(f"{c:>11}" for c in cols)]
-    for x in rep["lanes"]:
-        lines.append(f"  @{x['lane']:<25}" + "".join(f"{'-' if x[c] is None else x[c]:>11}" for c in cols))
-    if rep["linear_errors"]:
-        lines.append(f"  linear: {len(rep['linear_errors'])} issue(s) unread, counted from Slack alone: {rep['linear_errors'][0]}")
-    if rep["notion_errors"]:
-        lines.append(f"  notion: {len(rep['notion_errors'])} page(s) unread, counted unanswered: {rep['notion_errors'][0]}")
-    return "\n".join(lines)
 
 
 VOLUME_WORDS = 80                                                # a post longer than this is a brief: it belongs in its issue
@@ -3329,18 +3198,13 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     reply, or 👀, ✅ or ❌).  An ask unanswered after --stale-h hours is listed with its record's state; one whose record can't
     be read (no Linear or Notion credentials) is listed apart as unchecked, so a missing key is one finding, not a false alert
     per ask.  A mirrored machine alert (a post of kind `alert`) is no ask: it is listed once per alert, however often it
-    repeats (`alert_post`), as an alert to the names it addresses.  With --latency, how fast each lane first answered its
-    asks instead (`ask_latency`); with --volume, how much each poster wrote (`volume`)."""
+    repeats (`alert_post`), as an alert to the names it addresses.  With --volume, how much each poster wrote instead (`volume`)."""
     api, ch, routes = client(ns), channel_id(ns, reg, FRONT_DOOR), routes_of(ns)
     now = time.time() if ns.now is None else float(ns.now)
     since = now - ns.hours * 3600
     if ns.volume:
         rep = volume(api, reg, ch, since, now)
         print(json.dumps(rep, indent=2) if ns.json else render_volume(rep, ns.hours))
-        return 0
-    if ns.latency:
-        rep = ask_latency(api, reg, routes, ch, since, now, ns.stale_h * 3600)
-        print(json.dumps(rep, indent=2) if ns.json else render_latency(rep, ns.hours))
         return 0
     rows, counted = [], set()
     for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
@@ -4738,9 +4602,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    help="an ask its record doesn't show answered after this many hours is unanswered: its Linear issue still "
                         "in Backlog with no comment but the asker's, Daniel's page still Waiting on Daniel, or (no record) no "
                         "👀, ✅, ❌ or reply; one whose record can't be read is unchecked")
-    p.add_argument("--latency", action="store_true", help="instead: per lane (and @daniel), its asks, how many its record shows "
-                                                         "answered (Linear, Notion, or Slack where there's no record), and the "
-                                                         "median and p90 minutes to the first answer")
     p.add_argument("--volume", action="store_true", help="instead: per poster in #agent-coordination, its posts and their median, "
                                                         f"p90 and most words, and those over {VOLUME_WORDS} words; and the "
                                                         "threads with the most replies")
