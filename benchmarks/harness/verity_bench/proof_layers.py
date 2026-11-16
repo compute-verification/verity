@@ -58,11 +58,11 @@ from verity_bench.proof_layers_result import (
     RECURSION,
     REPORT,
     RUN_ID,
-    Result,
     SCHEMA,
     STAND_IN,
-    Unreadable,
     VALUES_NOT_STATED,
+    Result,
+    Unreadable,
 )
 
 __all__ = [
@@ -86,11 +86,11 @@ __all__ = [
     "RECURSION",
     "REPORT",
     "RUN_ID",
-    "Result",
     "SCHEMA",
     "STAND_IN",
-    "Unreadable",
     "VALUES_NOT_STATED",
+    "Result",
+    "Unreadable",
     "add_arguments",
     "detect",
     "document",

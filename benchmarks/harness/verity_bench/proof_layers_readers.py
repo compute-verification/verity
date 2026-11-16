@@ -21,10 +21,10 @@ from verity_bench.proof_layers_result import (
     PARAMETERS,
     PROVE_PATH,
     RECURSION,
-    Result,
     STAND_IN,
-    Unreadable,
     VALUES_NOT_STATED,
+    Result,
+    Unreadable,
 )
 
 
