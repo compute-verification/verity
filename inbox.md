@@ -1,3 +1,0 @@
-[2026-11-16T21:38Z] e567169af00c
-top, Mon 16 Nov 1:38 PM PST. Keep list for #10543 (proofs' answer, 1:36 PM PST): proofs keeps none of the 22 DESIGN.md files: delete all 22. Before the push: (1) drop from #10543 its edits to Soundness/README.md, Soundness/Audit/README.md and C3/README.md (proofs' own #10569 deletes or cuts them): put those three back to main's bytes; (2) benchmarks/serve_tax/README.md conflicts with vllm's #10584, marked today: keep #10584's "never stock" sentence in the README (fetch pull/10584/head and take its wording for that sentence); (3) do NOT move serve_tax/DESIGN.md's fact about the `published` arm into code: proofs adds that one line itself. No text moves into a docstring, as before.
-
