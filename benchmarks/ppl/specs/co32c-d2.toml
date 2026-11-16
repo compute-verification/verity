@@ -1,0 +1,38 @@
+description = "co32c with a 2-bit dither: every coin on the linears, Q and K is R uniform on {0..3}, served as floor(x / s) - 1 + R (the 1-bit dither's mean given x), each operand within its co32c top: activations absmax / 125 (served within [-126, 127]), weights absmax / 61 (within [-62, 63]), Q and K keep x / s in [-63, 62) (within [-64, 63]); V keeps its bit"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+weight_top = 63
+dither_bits = 2
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+q_top = 63
+k = "dither"
+k_top = 63
+v = "dither"
+qk_bits = 2
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

@@ -1,0 +1,32 @@
+# The wipe's entry on a node back beside the benchmark that starts it: what `tools/move/layout.py --map
+# tools/move/memory_gpu_wipe_back_map.toml` moves and rewrites.
+#
+# `wipe_on_node.py` starts a run: it imports the runtime's `Side.of` and hands it to `wipe_run.main`, and no file of a
+# protocol imports the runtime (`tests/test_boundaries.py`'s `RUNTIME_FREE`), only what starts a run (a demo, a
+# benchmark, the `verity` command). The one thing that runs it is the wipe piece's `demo.sh` in
+# `benchmarks/pous/streamed_wipe/`, so it goes back there, and `wipe_run.py`, which takes `side_of` as an argument,
+# stays in PoUS's prover. No file is split, edited beyond its paths or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/accounting/pous/prover/wipe_on_node.py" = "benchmarks/pous/streamed_wipe/wipe_on_node.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), files whose bytes a digest pins, lock files and Lean sources; and the network certifier's files.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "**/*vectors*.json",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/research/src/research/store/moves.json",
+           "**/*.lean", "tests/tree.toml", "verity/protocols/accounting/certifier/**"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"verity.protocols.accounting.pous.prover.wipe_on_node" = "benchmarks.pous.streamed_wipe.wipe_on_node"

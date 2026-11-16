@@ -1,0 +1,403 @@
+# Benchmarks
+
+`benchmarks/` holds measurement only: each directory measures something, or holds the data measurements are computed
+against. A benchmark is never the verifier, writes no verdict and computes no number a guarantee reads, and
+nothing outside `benchmarks/` reads it. A demo is one configuration file in `demos/`, which `verity run`
+reads. This file is the directory's interface: its entry points, the shared harness, what a benchmark may import
+and write, and the index of every directory.
+
+## Entry points
+
+`verity bench NAME [ARGS]` runs the directory NAME's own runner, its `run.py` or else its `run.sh`, and hands it ARGS (a
+`-` in NAME is a `_`). A runner that needs a GPU or a whole node is the command of a `research run`, as its header
+says. These are the directories that have one:
+
+| Command | What it runs |
+| --- | --- |
+| `verity bench bandwidth` | the device ceilings PoUB's timing cites, one probe a run: `chip` (what a card holds on chip) and `write_gpu` on one GPU, `write_host` on the host's CPUs |
+| `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
+| `verity bench certifier_term` | the network attester's term for GLM-5.3 at a scope's load, in bits and GB |
+| `verity bench certifier_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
+| `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside the slowdown calculator's shape-derived ones |
+| `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
+| `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |
+| `verity bench dsa_topk` | the canonical top-k on one GPU node: its outputs run to run and in two processes at once, the plugin as vLLM loads it, and its cost |
+| `verity bench exfiltration` | GLM-5.3's exfiltration capacity in GB over a monitoring period at 10% of total compute: the compute audit's part beside the network attester's, each input labelled |
+| `verity bench f32_exhaustive` | a reference primitive against MPFR, or a Boolean version against its word, on all 2^32 binary32 words |
+| `verity bench flock_s8_block` | Flock `--zk`'s price for proof blocks of adjacent cells of one int8 GEMM output row, on one GPU node |
+| `verity bench inference_only` | the inference-only policy of Llama 3.2 1B as served, and its one number: the least slowdown of training run inside the policy's inference blocks |
+| `verity bench int8_class_rate` | one card's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 |
+| `verity bench landing` | mark to `main` over the last 7 days, plain and Lean: each class's p90, median, count and share within 2 h, as a local research run (its README) |
+| `verity bench lean_unread_gate` | the unread landing gate on one change, timed by stage with its git calls counted, and with `--against REV` its guard: the same verdict as the gate at REV |
+| `verity bench memory` | the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, from a gate run on the whole node, a recorded run or a loopback |
+| `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network attester's calibration |
+| `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a benchmark result, the reference checker |
+| `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
+| `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.py` or else its `run.sh`; given no NAME, the names |
+| `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
+| `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
+| `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
+| `verity bench property_redteam` | a stacking-property check graded against the red team's cases |
+| `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`) for each block type, and the Lean verifier timed on one kept proof (`lean-verify`); and the proof benchmark by layer, Flock, with zero knowledge, with sampling and with recursion, the benchmark result for each layer read from its own run's output (`layers`) |
+| `verity bench prove_path` | a served run's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
+| `verity bench rate_squaring` | squarings a second modulo the store codec's primes, each form gated before it is timed: `sq` on one GPU, `ifma` on the host's CPUs |
+| `verity bench recursion_e2e` | recursive witness zero knowledge, timed step by step: `plan`, `run`, `result`, `table` and `store` |
+| `verity bench remote_session` | PoUB's sessions: a verifier's and a prover's process over TCP, end to end |
+| `verity bench replay_determinism` | whether a served MoE window's recorded schedule, replayed, gives its served bytes, op by op |
+| `verity bench replay_ladder` | the same replay across a ladder of dense and MoE models, with the per-model status table |
+| `verity bench route_capture` | what a model executes when served, step by step, and the routes class G's Definitions don't cover |
+| `verity bench scan_cost` | one scan of the network attester's synthetic run with every block proved, and what it costs for each second of execution phase: the prover's seconds and the Lean verifier's CPU seconds on one core |
+| `verity bench serve_tax` | what each change to serving costs vLLM's own server against stock compiled vLLM, at three loads |
+| `verity bench served_commit` | served vLLM against served vLLM with every value committed, interleaved, through `verity-bench vllm` |
+| `verity bench served_errors` | error terms of the quoted guarantees that had no value, evaluated at the served sizes, each with its formula and premises |
+| `verity bench tensor_duty` | the tensor-duty sweep on one H200: dense tensor MACs a second by duty cycle, against the card's tensor clock |
+| `verity bench training_slowdown` | every job of an attack config and of its honest config, each found by its label and run where it is missing |
+| `verity bench unit_block` | a word primitive's Boolean version built as one Flock proof block, against Flock's proved range |
+| `verity bench unit_lowering` | writing a PoUW H1 circuit file: peak memory and wall time by K, its SHA-512 held to a reference |
+| `verity bench unit_walk` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds at each width |
+| `verity bench verifier_cost` | a verifier's time against the size of the description it reads and of the circuit that description unrolls to |
+| `verity bench word_codec` | the KV cache's Sloth codec on one GPU: its tests and its benchmark at each width |
+
+A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
+README. `benchmarks/kernels/`'s directories have no `verity bench` name: each runs as its script's header says, the
+canonical `moe_align_block_size` on one GPU as `bash benchmarks/kernels/moe_align/run.sh`. `verity-bench` is the
+harness's own command. `verity bench numerical judge` compares two results under the proof campaign's contract.
+
+## The harness
+
+`benchmarks/harness/verity_bench` (the distribution `verity-bench`) is the shared harness. It measures what an arm, a
+protocol option or an experimental install, adds to served inference against stock vLLM, through the vLLM
+integration's public interfaces. A spec in `benchmarks/harness/specs/` names a preset, its arms and its sweep, and expands to
+points, each with an identity. `verity-bench run SPEC` records one run per point without a passing run, `check` passes
+only when every point has one, `compare` and `table` accept results only when their identities agree, and
+`served-table` and `breakdown` render from the evidence store. It also holds the code behind `verity bench overhead`.
+The harness's kit (`harness/verity_bench/kit.py`) holds what runners share, each written once: the GPU lease, the host
+stamp, the paired ratio, the result's writer, which records measurements and refuses a verdict of record, and the
+report, the one way `verity bench compute`, `verity bench memory` and `verity bench inference_only` print and write
+their number. The report prints the text, then one line of JSON whose first keys are `value`, `unit`, `commit` and
+`run`. Under a research run it writes that line to `$RESEARCH_RUN_DIR/out/NAME.json` and the measurements to
+`$RESEARCH_RUN_DIR/result.json`; outside one, with `OUT` set, to `$OUT/NAME.json` and `$OUT/result.json`; with
+neither set, or set empty, it writes nothing. A command's `--out DIR` names the place in place of those.
+`benchmarks/harness/README.md` is its contract: how a point is timed and what a result says.
+
+## What a benchmark may import and write
+
+- **It imports like any other caller.** `verity` from the owning module, an integration through its public modules
+  (`tests/test_vllm_public_api.py`; only the integration imports vLLM, `tests/test_vllm_boundary.py`), the harness,
+  and other benchmarks.
+- **Nothing outside imports it,** by package name, by a path put on `sys.path` or loaded by file. A number a protocol
+  uses reaches it through a card file citing an `art:` id, and code that a protocol, a device or a verifier runs is not
+  a benchmark: it moves out to the package that uses it. `BENCHMARKS_IMPORTERS` in `tests/test_boundaries.py` names the
+  files that still import a benchmark, and only shrinks.
+- **It writes measurements, under its run's output directory** (`$OUT` under `research run`, else its `--out`). The
+  run publishes them to the evidence store, and tables are rendered from the store on demand. Results, tables and
+  plots are not committed (`tests/test_repository.py`); the tree keeps code, the parameters code reads and small
+  fixtures beside their generators.
+- **It writes no verdict.** Whether an audit passed is the verifier's to say. A benchmark that runs a
+  verifier records what the verifier returned, and its own gates say only whether its measurement stands.
+
+Some files here still break these rules: a kernel or a store the integration loads, a probe whose rate a card file
+holds, the exporter of Lean data a guarantee reads. Each moves out to the package that uses it, and none is a pattern
+for a new benchmark.
+
+## The core benchmarks' interface
+
+The core benchmarks take and print the same things in the same form. Each rule is a call of the harness's kit
+(`harness/verity_bench/kit_report.py`, re-exported by `kit`), so a command follows it by calling it.
+
+1. **What a command takes:** `--from DIR`, a run's record as a directory (the run's directory as `research run` leaves
+   it: its `job.json` and `out/`). It is read with nothing of ours: no store, no host, no key and no import of
+   `research`. A run id is taken only where `research` is installed, and is fetched to such a directory first, past
+   the store's withdrawals: a run withdrawn whole, or in a part that holds a file the command reads, is refused with its
+   reason before anything is fetched, and a withdrawal of only other files of it is printed beside the number and is
+   the document's `withdrawn` (`kit.report(..., withdrawn=...)`). `kit.record_dir(arg, paths=...)` gives the directory,
+   and `kit.record(arg, paths=...)` the directory and the withdrawals (`kit.Record`); each refuses anything else in one
+   line naming the fix (`kit.NoRecord`).
+2. **One line of coins and parameters,** right after the command's first line: `ran with: coins COINS; parameters
+   PARAMETERS (DETAIL)`, and in the document `ran_with: {coins, parameters, detail}`. COINS is `deployed challenger`,
+   `local challenger` (its own process on this machine) or `in-process` (the serve holds the challenger); PARAMETERS
+   is `deployed` or `development`; DETAIL is the command's own words (its sample, δ, scheme, key). `kit.ran_with(coins,
+   parameters, detail, verified=...)` refuses other words. `verified=True` is passed only where the command itself
+   checked the challenger's signature on the coins against a pinned key. `deployed challenger` without it is the
+   record's own word: the object holds `verified: false`, and the line `coins by the record's own word, not checked` is
+   printed under the audit line. A record that predates the field prints `ran with: not stated` (`ran_with=None`), and
+   `ran_with` null.
+3. **A number only from a run the Lean verifier accepted:** a command's headline, its number, is its text's first line,
+   opening with `NAME:` (`compute: 0.75 …`). `kit.report(..., accepted=False, why=WHY)` prints `NAME: no number: WHY`
+   in its place: a first line that opens with `NAME:` is dropped, and the rest of the text follows as the command's
+   detail, which states no number of the run. It writes `value` null beside `no_number`, writes each measurement with no
+   value and its why, and returns exit code 1, which `main()` returns; an accepted run returns 0.
+4. **Not an audit:** the document holds `audit: true` only for coins the deployed challenger flipped, verified by the
+   command against a pinned key, at `deployed` parameters. Anywhere else the line `a measurement, not an audit` is
+   printed under the `ran with` line, and the document holds `audit: false`. A record's own word about its coins is
+   stated as such and is never an audit. The kit derives it from `ran_with`; the command does not choose it.
+5. **Its README's three parts,** under these headings: `## What you may change`, `## What is fixed` and
+   `## How a cheating change is refused`.
+6. **Its numbers on the dashboard:** every number the command prints is also a measurement, written by the kit's writer
+   (`kit.report`'s `measured`), under the `id` of a metric of its directory's `metrics.toml` (a variant of one
+   number, such as a clock reading, is that metric's `member`), and the metric's `goal` is the benchmark's goal. Only
+   a run of ours through `research run` reaches the Metrics tab ("Metrics" below); a person outside gets the print and
+   `result.json`.
+
+**A made-up record** (a fixture, a test's record, anything no run left) is reported with `kit.report(...,
+made_up=True)`: the line `a made-up record, not a run's` is printed under the audit line, the document holds
+`made_up: true` and is no audit, and every measurement written from it is marked `modeled` (figures no run measured)
+and carries `made_up: true`, so its `result.json` passed on alone never reads as a run's measurement. A fixture record
+passes `made_up=True` wherever it is reported, whatever its own files say of its coins, parameters or commit.
+
+`kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=...)` is the command's
+last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit").
+
+A command declares that it follows the interface in its own directory's `pyproject.toml`, in the change that makes it
+follow:
+
+```toml
+[tool.verity.interface]
+core = "verity bench NAME"
+```
+
+`harness/tests/test_interface.py` reads that key from every `benchmarks/*/pyproject.toml` and holds each directory that
+declares it to its README's three headings, its call of `kit.report` with `ran_with` and `accepted`, and each
+measurement name its source gives as a metric of its `metrics.toml` with a `goal` (rule 6, for a directory the test's
+`DASHBOARD_NOT_YET` doesn't name, each entry saying what it writes that is no metric). The harness's suite lists the
+directory and its README among its inputs, which the test checks too.
+
+## Metrics
+
+Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
+(the first `.py` or `.sh` under `benchmarks/`, `demos/`, `infra/` or `tools/` the command names:
+`benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
+`infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each metric's `owner` owns its
+file: the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a
+lead's numbers in another lead's directory take a file entry of their own there. The console's Metrics tab reads every
+`metrics.toml` on `main` under `benchmarks/`, `demos/`, `infra/` or `tools/`, and `research metrics show` reads the
+tab's report.
+
+A metric's value has one of two sources. A run's value is the measurement its `id` names in the run's `result.json`,
+which the benchmark records it under (`serve_tax`'s `Model.metric`) and `research run` preserves to the evidence store;
+it reaches the tab only from that preserved `result.json`, through the store's index, up to an hour after the run is
+preserved. A loop that samples a number (the control pod's, `infra/control/loop_metrics.py`) sends it as a reading to
+the site's `POST /api/metrics` (`research.metrics.send`) under a site key with `panels:write`; an agent's identity
+can't send one. A reading names the `command` that computed it and never a run, and the site refuses a reading that
+names a run. So every value on the tab is a preserved run's or a sent reading's. Of the readings sent for a metric, the
+tab's values are those that name no `period`, `over` or `member`, from the last 62 days: each of the last day, and the
+last of each three hours before it. Beside them it lists the newest reading of each line that names a `member`, which
+stays listed while it is within that window, whether or not the loop still sends it.
+
+Its owner keeps a metric within its `every`: the control pod's rerun loop (`infra/control/metrics_rerun.py`) launches
+the `command` of a metric whose newest value is older than its `every` as a `research run`, within the bounds its
+docstring lists, and a metric whose command's script is under `infra/control/` is a loop's, which the loop sends. A
+metric's keys:
+
+- `id`: `OWNER/NAME`, under its owner's prefix.
+- `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
+- `owner`: a handle in the registry.
+- `unit`: the unit its value is in, at most three words (`hours`, `GB`), a rate's two sides, either side of " a ",
+  counted apart (`prover GPUs a serving GPU`); a span of time or compute goes in the measurement's `period` or `over`,
+  not the unit.
+- `axis`: one sentence, on one line and ending with a period, saying what the chart's y axis is.
+- `better`: `lower` or `higher`.
+- `command`: the one command that measures it, whose script's directory records it under `id`.
+- `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
+  stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
+- Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
+  list of words.
+
+The site refuses a metric with any other key: it lists the metric with why and shows none of it, so a new key reaches
+the site's reader before a metric uses it.
+
+Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
+writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
+and also writes as the first of its `inputs`, where the tab reads it until it reads `mark`. A sent reading carries
+`mark` itself, which the site requires.
+
+A value over a span of time or of compute says which, each as its own field of the measurement, held only where given:
+`period`, one of `phase`, `week`, `month` or `year` (`kit.PERIODS`), and `over`, `world` or `datacenter` (`kit.OVER`). A
+run's result holds one measurement a name, period and `over`, and the writer refuses a second, so one id may give a
+value for each period and scope it is computed at, each in its own unit (`verity bench exfiltration`'s three, over a
+week, a month and a year of a datacenter's and of the world's compute). A value for one member of a set (a deployed
+guarantee, a lead) names it as `member`, a non-empty string held only where given, and the writer keys on it too, so one
+id gives a value for each member (`lean/trust-gap`'s, one a deployed guarantee). Of a run's measurements under one id,
+the tab's value is the one written last that names no member, or, where the run wrote none without a member, the one
+written last: one point a run. Beside it the tab lists the measurements that name a member from the newest run that
+wrote any. So a benchmark that writes one id for several periods, scopes or members writes the metric's own last: the
+one its `title`, `unit` and `axis` are for (`exfiltration-gb-world-year`'s, the `year` over the `world`).
+
+The tab lists each number under every top goal its `goal` is or sits under, a top goal being a goal on the Goals page
+that nothing waits on, other than `top/parked`. A number whose goal sits under `top/parked` and under no top goal reads
+"parked".
+
+`tests/test_metrics_registry.py` refuses a metric that lacks a key the list above doesn't mark optional or holds one it
+doesn't list, an id declared twice across all the files, an unknown owner, an owner who doesn't own the metric's file,
+an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a `better` other than `lower`
+or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing or whose
+directory never names the id, a metric whose command's first script is outside the directory of the file declaring it,
+and a shared `metrics.toml` directly under `benchmarks/`.
+
+## Index
+
+Every directory has one row, in the group of what it measures; `tests/test_benchmarks_index.py` holds the rows to the
+tree. A directory's status is one of:
+
+- **maintained**: developed against the current tree, and its commands run from it;
+- **frozen**: kept so that what it measured can be measured again, and changed only to keep it running;
+- **data**: no measuring code, only numbers that other code takes as parameters.
+
+### Protocol overhead
+
+What the protocols cost: measured on served inference, and bounded on training.
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `harness/` | `verity-bench`: its specs and sweeps (`specs/`, one TOML file each), recorded runs and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
+| `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
+| `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
+| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`); and the share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the auditor's machine (`sampled_accepted.py`) | maintained |
+| `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
+| `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
+| `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
+| `serve_tax/` | what each change to serving (step trace, release order, the certified tick, committing tokens and the KV cache) costs vLLM's own server against stock compiled vLLM at three loads, the serving cost (one number with a target: the served engine's best goodput against stock's, by vLLM's own benchmark client), and replaying a recorded window under its committed schedule | maintained |
+| `prod_repro/` | one command over the serving cost benchmark's serve, load and replay: what the serve turned on (prefix caching, speculative decoding, the context limit), whether the replayed window's tokens are the served ones, what our changes cost over stock with its interval, and the advice a request, each measured or said not to be | maintained |
+| `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
+| `inference_only/` | the inference-only policy of Llama 3.2 1B as served, stated, and of the class this tree builds, with the Lean count's verdict on it, and each one's number: the least slowdown of training run inside the policy's inference blocks, under the min-cut bound | maintained |
+| `slowdown/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
+| `nci/` | the sources, parameters and policies the inference-only policy's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
+| `training_slowdown/` | the grader (`grader/`): a training step's matrix products, their multiply-adds and output wires, and the circuit's size, read off the Boolean circuit a lane hands over, beside training's slowdown code's trace of the same step; `verity bench training-slowdown CONFIG`, an attack config's jobs, each found by its label and run where it is missing | maintained |
+
+### Kernels
+
+GPU code held bit for bit to its reference or Definition before it is timed.
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses) and the served path's SHA-512 commitment library (`lib/`) | maintained |
+| `flock_kernels/` | Flock's CUDA prover kernels on one GPU, each printing a digest of its output beside its time so that builds against two trees' kernels compare word for word: hm96's leaves (`hm96_leaves.cu`) | maintained |
+| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`) and the store's load with bandwidth receipts (`p2_stage`) | maintained |
+| `kernels/` | the served path's exact kernels and what a kernel build ships with: the exact W8A8 linear (`s8_linear`), vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`), the nvcc a job's own library compiles with (`job_nvcc.sh`), and the Marlin MoE path's `moe_align_block_size` made a function of its inputs by the integration's `verity_vllm.engine.moe_align`, checked run to run and against the pin's op and timed against it (`moe_align`) | maintained |
+| `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
+| `tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
+| `tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and each sm_120a multiplier priced against dense NVFP4 | maintained |
+| `native_peak/` | a card's measured dense-GEMM throughput for one datatype (`native-peak/v1`) | maintained |
+| `int8_class_rate/` | the H200's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 at a ratio of compressions a T MAC (timings only) | maintained |
+| `tensor_duty/` | the falsification test of the H200 card's tensor clock: dense tensor MACs a second over the host's wall clock by tensor duty cycle, operand class and fill, at maximum power, against 132 x 4096 x `clock.tensor` (timings only) | maintained |
+
+### Proving and recursion
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a served window's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics) | maintained |
+| `two_stage/` | the two-stage audit end to end on a toy replay block: the boundary registered, a first-stage sample of replay blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome, with its negatives | maintained |
+| `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
+| `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
+| `unit_walk/` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds a statement at each width (lane groups a pass), distance asked ahead and pool size, with and without its row vectors kept, every walk's packed words held to the first's | maintained |
+| `spot_proved/` | a replayed served step's values proved: one replayed step of a recorded replay block captured per TP rank under CUDA graphs, staged as each sampled type's proof blocks, and audited one stage end to end by the Lean verifier | maintained |
+| `multi_unit/` | an FP8 GEMM's proof blocks staged as Flock statements in several layouts: prover and verifier time, peak memory and proof bytes | maintained |
+| `flock_s8_block/` | Flock `--zk`'s price for a proof block of adjacent cells of one int8 GEMM output row, on one GPU node and on the CPU | maintained |
+| `unit_block/` | a word primitive's Boolean version built as one Flock proof block: the select's slot alone and with its rows' openings, against the 2^27 block | maintained |
+| `prove/` | `verity bench prove`, the one command for a proof system's prover on a workload: per block type the blocks proved per token, the ms per block and that figure's source, and the prover GPUs per serving GPU with every block proved or at a sampling plan, from the store's labelled records | maintained |
+| `proof_throughput/` | the proof blocks a second Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |
+| `commitments/` | the commitment schemes' cost: hashing leaves and building the tree, hiding leaves per row, and serving's per-step row tables | maintained |
+| `sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |
+| `spot_figures/` | the SPOT post's Figures 1-3 for a model from its cards (`spot-card/v1`) and SPOT's planner: what an adversary serving it on all of a scope's compute can exfiltrate, infiltrate or skip against total cost (each server configuration's serve tax plus the share of compute for verification) and against proof overhead, proof overhead per proof-block type, and the serve-time commitment's cost over fast serving (a model, not a measurement) | maintained |
+| `exfiltration/` | `verity bench exfiltration`: GLM-5.3's exfiltration capacity in GB over a monitoring period at 10% of total compute, the compute audit's part (the break-even planner's rows of record, from the store) beside the network attester's part (`certifier_term/`'s rows), every input labelled with its mark | maintained |
+| `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
+| `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
+| `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
+| `private_circuit/` | the universal unit, which runs any private circuit of a size class, proved under `--zk` and verified by the Lean verifier | frozen |
+
+### Checks
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `lean_records/` | a records run of `security/Proofs` under a base version of `tools/verity/lean/` and this tree's, and at a lower reservation: the build step's seconds, the tools' own CPU, peak memory and `lean` jobs at once, each arm on a lemma of its own | maintained |
+
+### Circuits
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `bool_build_cost/` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule | maintained |
+| `compile_cost/` | what compiling a class-G window's Programs costs (`predict.steps.compile_steps`, GLM-5.3 at TP8 on one rank): wall time and peak RSS, by phase, its digests held to their pins | maintained |
+| `circuit_properties/` | structural properties of a Boolean circuit's counted operations, measured exactly: fan-out, fan-in, their count and s_× | maintained |
+| `route_capture/` | what a model executes when served: every engine step's launch-shape class under CUDA-graph serving, and the kernels of the first steps of each class; and the gap: every (route, statics) pair the captured steps need that class G's registered Definitions don't cover, with its owner | maintained |
+| `unit_lowering/` | writing a PoUW H1 circuit file (a leaf's lane and combine, or the whole tile unit, at any tile R × C): peak memory and wall time by K, the file's AND rows, bytes and block (k_log), its SHA-512 held to a reference, and where the memory goes | maintained |
+
+### Compute
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `compute/` | `verity bench compute`, the front door for the compute audit's number: the share of a served model's MACs (its linears', attention's and LM head's) that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record; and `h200_share.py`, the share of an H200's capacity an honest Pearl+ prover is credited, modeled from that share and a recorded tensor-rate run | maintained |
+| `served_errors/` | error terms of the quoted guarantees that had no value, evaluated at the served sizes: PoUW's δ_ks, δ_bind and p, the Sm120 headlines' n_π·δ_ZK, Pearl+'s ε_a and δ_a, Dither's κ_S, the integrity subprotocol's ks_t and the remote product's joint error, each with its formula and premises (a model, not a measurement) | maintained |
+| `machine_model/` | the ACCEL model of each measured card: its rows, census, attack families and designs as data, and a design's ε from them (`machine-model`) | maintained |
+
+### Network
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `network_traces/` | the network attester's runs in front of a served endpoint, and their zero-knowledge proofs | maintained |
+| `network_e2e/` | the network chain's steps after N2 (`chain.py`) held on fakes and recorded endpoint runs, the advice encodings (`encodings/`) and vLLM's scheduler traces (`traces/`) | maintained |
+| `certifier_term/` | the network attester's term for GLM-5.3 at the load of a node, a datacenter and the world, in bits and GB, each row by its check's own counting rule: the scan as the monitoring-period check charges it, the scan under each change to its check, and the design with no run behind it, without its stop block and with it (`network_traces/leak_bounds.py`'s runner) | maintained |
+| `network_sim/` | the workload's Programs (`workload/`): a Boolean MLP and vLLM's serving Program, which `verifier_cost` measures a verifier on | maintained |
+| `certifier_timing/` | the bits an interval a server moves through when the network attester releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
+| `scan_cost/` | what the network attester's scan costs for each second of execution phase it covers: proving seconds (the round's sessions and their staging) and the Lean verifier's CPU seconds on one core, at a fixed identity, each with its stages, a guard on the round's answer, a baseline and two targets | maintained |
+| `mempool/` | the certifier's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces; `stream.py` holds `CacheStep_v3`'s stream to it after every call): a window's cost at its busiest stretch, and `MemCheck_v1`'s and `CacheStep_v3`'s vectors | maintained |
+| `datacenter/` | a datacenter as Verity accounts for it, in a small Python API: the Program, hardware, binding, plan, run, claims and account | maintained |
+
+### Memory
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `pous/` | every PoUS implementation on one dataset, by its effective weight bandwidth | maintained |
+| `bandwidth/` | the device ceilings PoUB's timing cites: how fast a card and a host write labels, and the chip's on-chip stores; and a node's own report of its interfaces' line rates, its disks' interfaces and its cards' usable memory | maintained |
+| `remote_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's demo is `demos/remote.toml`, not this | maintained |
+| `memory/` | `verity bench memory`, the front door for the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, at the data sheet's read bandwidth, from a gate run on the whole node, a recorded run or a loopback | maintained |
+| `kv_filler/` | the filler top-up beside vLLM serving, and what it costs inference | maintained |
+| `stacked_share/` | the share of a node's live KV a prover could hold as encoded carriers inside the audit's compute budget | maintained |
+| `word_codec/` | the store's Sloth codecs (the word codec, the KV codec that PoUB's `codec.py` mirrors, the wide codecs): each a byte-exact reference, a CUDA kernel and its benchmark | maintained |
+| `codec_tensor/` | PoUB's receipts, leaves and receipt tree on the GPU, and the tensor-core wide-word codec | maintained |
+| `property_redteam/` | attacks on the stacking property and on the gate model's counts behind the encode bound | maintained |
+| `rate_squaring/` | squaring rates modulo the codec's primes on the GPU and on the host's AVX-512 IFMA, the evidence for PoUB's stated squaring ceiling | maintained |
+
+### Numerics
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `ppl/` | the perplexity an intervention on a served model's matmuls or attention costs, against bf16 and plain int8 | maintained |
+| `f32_exhaustive/` | a correctly rounded reference primitive (`F32LogRn_v1`, `F32ExpRn_v1`) against MPFR, or a Boolean version (`F32Sqrt_v2`) against its word, on all 2^32 binary32 words | maintained |
+| `definitions/` | the GPU probes behind the numerics Definitions: the approximate instructions FlashAttention-2 and the RMSNorm kernel run (`MUFU` exp2, reciprocal, square root and tanh), measured on every 32-bit input | maintained |
+| `numerical/` | the bench spine (`verity_numerical.bench`) that Flock and `circuit-check` import, and the per-unit-type cost inventory; the archived proof systems' tables are in the evidence store | frozen |
+
+### Landing
+
+How long the team's own changes take to reach `main`: measured on the verified queue's records, not on a protocol.
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `landing/` | mark to `main`: for each PR the verified queue landed in the last 7 days, the hours from its ready mark at the head that landed to the move of `main` that holds it, split as the queue batches (plain, Lean), each class's p90, median, count and share within 2 h | maintained |
+| `lean_unread_gate/` | the unread gate a ready mark's preflight runs (`tools/verity/lean/unread_gate.py`) on one change: its time by stage and its git calls, from an empty gate cache, and its guard, the same verdict and `--json` as the gate at another revision | maintained |
+
+### Communication
+
+How fast the team's leads answer each other: measured on Linear's comments, not on a protocol.
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `communication/` | over the last 24 hours, the minutes from a Linear comment ringing at most three lanes to each rung lane's answer on the issue, as a 90th percentile, and the asks open over 30 minutes (`response.py`, on `research msg linear response`) | maintained |
+
+### Census data
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `census/` | the fixed quantities benchmarks are computed against: hardware, datatypes, networks, deployments, subcircuits and workloads | data |
+
+### The repository
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`); the rows of `ARCHITECTURE.md`'s table of code to write (`not_built.py`); and the sites the ratchet lints find, their lists allow and the lints find past their entries, in total and by lead (`lint_sites.py`, over `lint_counts.py`) | maintained |
+| `proof_status/` | the proofs' status as the Lean locks record it (`verity lean deployed`): the deployed guarantees, those at a trust gap of zero, each one's gap, and each lead's open premises and guarantees with no honest witness (`run.py`) | maintained |
+
+### Security
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `security_findings/` | the security review's serious findings still open (`findings.toml`): each closed only by the check `open_findings.py` holds for it, run on the checkout, the machine it runs on and the readings of what it can't reach (`readings.toml`) | maintained |

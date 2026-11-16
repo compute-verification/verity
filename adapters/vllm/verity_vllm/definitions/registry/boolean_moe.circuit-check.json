@@ -1,0 +1,60 @@
+{
+ "definitions": {
+  "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='block'}": {
+   "and": 11371,
+   "type": "389b57f106ba8f56be73fc1ce1064c8f00d1de0712a5aec0cb09a62cd339f5ee7c2ccb4bd55ad23bd288e74f3aa1fc0228f12ca1e77e2274fb5c9853d3d3ee83"
+  },
+  "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='warp'}": {
+   "and": 12914,
+   "type": "a21502c56749a0825b4856fe13bd1464ec445188d1474786f4b65e31ac9c53b61ef00477eed690dd060b989ece2146025e2798e4b8ef7bd0dabf9d2f8d7f7d07"
+  },
+  "MoeRouterNormalize_v1{E=8,VPT=4}": {
+   "and": 26738,
+   "type": "f877d64df774b6cd676e9c82871e21434ac456ebf46529addfc23492acafbe174fc4bbdb550ecb12b1d1a9df0fb66c168dda5c4fee430b69ad4b0b1e9f344a98"
+  },
+  "MoeRouterSelect_v1{E=8,TOPK=2}": {
+   "and": 2261,
+   "type": "4757f93e922e43e1183861ab59797fc68585539d0ff5d332174cb8678a77ca56efbe8c7e4f65a4d7b3a5751481d0c69211475e9bd00a5d44528a1faedc69620b"
+  },
+  "MoeRouterShift_v1{E=8,VPT=4}": {
+   "and": 6268,
+   "type": "c3eb03fb3c6654569ffc6001173d3a19be22e93fee78791729458e3e2c8e1c4da4505940eac304e23b53d2900164976ef4f6b01951aedb8afd02875c5d631486"
+  },
+  "MoeRouterSigmoidIn_v1": {
+   "and": 23369,
+   "type": "f5c67a7f4d25addb36a770c53ad9fec215b41c1b4020592537fd224b6e98f871e08a26a5511ae189d6ab40fb46ae8db7478027f4d9d37825726decbbcb7b5f64"
+  },
+  "MoeRouterSigmoidMid_v1": {
+   "and": 719,
+   "type": "0edd992676c45f8ceb14e59e441e54cbe96f51289643205fd6562a7cec26b9207517db8a15175b8b82b628fcb988840a0ff18bb4c79872fd515dd62e15d2ccc7"
+  },
+  "MoeRouterSigmoidOut_v1": {
+   "and": 4776,
+   "type": "cc3a33ef423e3e042cde8f2ebc72ea4eac89926bd4475f76a9ceb2710d1d37ba3d5bd38849b9412f36461d254db65dbb2a3febad9b671f745494325761dd7419"
+  },
+  "MoeRouterSigmoidScore_v2": {
+   "and": 30795,
+   "type": "539493be73f74930c0f9fb66d1348bcb22a9da7ea97ce5a245c30a991bf9dc6856bc9ec6f662b5f121cddc50b27c0776763f2ff8050161fd3f76ac0c26b41a1d"
+  },
+  "MoeSumCoordinate_v2{TOPK=8}": {
+   "and": 5222,
+   "type": "eefd679a8f473e9089a61c7fef1c079fbf7d7a2ac22efc5851bd61cd77188312dd56c1cd2dd6e480cd5a1b7f3c8aeda3381eaae7073af0124721e3de4376b95c"
+  },
+  "MoeSum_v2{TOPK=8,H=8}": {
+   "and": 41776,
+   "type": "79a140cb71c9a28e26afac3fe527f649f641e26351659fb71d8db96826999cfeb3702b7798ecbfb8bb3d648206881cc5fd48263e1a63d45beab642dba654944a"
+  },
+  "NvExpfIn_v1": {
+   "and": 9556,
+   "type": "a079864dc07332cb64dfe86eab22b842034e146532ab421d73c61d2c43e4316dc90809e0d3a4e8d0e817b1e304973145f7ec24ac613183b10ddf7d7301591d57"
+  },
+  "NvExpfOut_v1": {
+   "and": 743,
+   "type": "61a865605c3ee5803f99fe3ace9fd97691fdfed0c128bb440790e44016b5d7fa9f7d34f67c0c100f886d998b94833919390333f89a674f41413e36ac936ba7ec"
+  },
+  "NvExpf_v2": {
+   "and": 11371,
+   "type": "5e49fef0fae3d2c3db2ef8b84f7cffe933a5fff0d3dcea2319e8dd658499ade17f1bc6fcf9be00551256352b8538677ea3570e492af44b062643f7b420e4e5bb"
+  }
+ }
+}

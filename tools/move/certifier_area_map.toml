@@ -1,0 +1,35 @@
+# A draft: the network accounting area of `security/` takes its protocol's name, Certifier (ARCHITECTURE.md's table of
+# parts: "**Certifier** `protocols/accounting/certifier`"), by `tools/move/rename.py --map
+# tools/move/certifier_area_map.toml`: `security/{Definitions,Properties,Proofs}/NetworkCertifier` and
+# `security/Proofs/Properties/NetworkCertifier` become `.../Certifier`, with their modules and the namespace
+# `Properties.NetworkCertifier`.
+# The device keeps its one name, network certifier (AGENTS.md, "Auditor-trusted devices"): its program's Lean package
+# `NetworkCertifier` (`verity/protocols/accounting/certifier/device/program/lean/`) is no area of `security/`, and only the
+# rows below, each prefixed by a tree of `security/`, are renamed. The area's own namespace `NetTiming` is not a protocol's
+# name either, and stays until the architecture names it.
+# The other areas, by the same table:
+# - `Nci` becomes `InferenceOnly`: `inference_only_map.toml`.
+# - `Flock`, `Spot`, `Pouw` and `Pous` already carry their protocols' names.
+# - `Accounting` holds PoUB's, Registration's, Compose's, the certifier's, PoUW's and PoUS's files: its split is a
+#   layout map once the split is decided.
+# - `WeightSecurity` and `Properties/NetworkScan` are no protocol's: the architecture names neither.
+# - `Core`, `Hash`, `Claims`, `Assumptions` and `Properties/Verity` are the one vocabulary and the whole protocol's
+#   statements, no protocol's area.
+# Declarations keep their place in the locks' records: `rename.py --moves` prints the renames `check.py --update
+# --moved` takes. Not a move, so by hand beside it: `tests/test_boundaries.py`'s globs `security/*/NetworkCertifier`,
+# which `move_check.py` reads as no moved path, and GLOSSARY.md's "the `NetworkCertifier` Lean".
+
+[words]
+"Definitions/NetworkCertifier" = "Definitions/Certifier"
+"Properties/NetworkCertifier" = "Properties/Certifier"
+"Proofs/NetworkCertifier" = "Proofs/Certifier"
+"Definitions.NetworkCertifier" = "Definitions.Certifier"
+"Properties.NetworkCertifier" = "Properties.Certifier"
+"Proofs.NetworkCertifier" = "Proofs.Certifier"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock", "tools/research/src/research/store/moves.json", "tools/research/tests/test_queue.py"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']

@@ -1,0 +1,41 @@
+description = "NVFP4: the full E2M1 grid in blocks of 16 along k, each block's scale the smallest UE4M3 odd integer (1, 3, ..., 15) that holds it, one float scale per token and per output row after accumulation; both operands dithered (the level below or above by a fresh fair bit), after SmoothQuant 0.5 and the rotation; the adopted int8 attention"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "grid"
+grid = "fp4"
+act = "dither"
+weight = "dither"
+block = 16
+scales = "odd"
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q_top = 63
+k = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "q"
+width = 64
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

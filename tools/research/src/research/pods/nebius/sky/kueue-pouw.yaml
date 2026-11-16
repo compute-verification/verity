@@ -1,0 +1,50 @@
+# The PoUW server's queue, for its own single-node cluster on vy-nebius-2 (the two servers are not joined: shared code, separate
+# clusters, and node 2 stays quiet). On vy-nebius-2, from a synced checkout:
+#   VY_MACHINE=vy-nebius-2 VY_POOL=vy-nebius-2 VY_QUEUES=kueue-pouw.yaml VY_DIRECT_GPUS=none cluster_up.sh --apply
+# Jobs: the jobs/ templates with infra ssh/vy-nebius-2 and kueue.x-k8s.io/queue-name: pouw (submit.sh: VY_MACHINE=vy-nebius-2
+# VY_POOL=vy-nebius-2). pouw lends nothing (lendingLimit 0, and it's alone in its cohort anyway).
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata: {name: vy-nebius-2}
+spec:
+  nodeLabels: {verity.dev/server: vy-nebius-2}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata: {name: pouw}
+spec:
+  cohortName: nebius
+  namespaceSelector: {}
+  queueingStrategy: BestEffortFIFO
+  preemption:
+    reclaimWithinCohort: Any
+    borrowWithinCohort: {policy: LowerPriority}
+    withinClusterQueue: LowerPriority
+  resourceGroups:
+  - coveredResources: [nvidia.com/gpu, cpu, memory]
+    flavors:
+    - name: vy-nebius-2
+      resources:
+      - {name: nvidia.com/gpu, nominalQuota: 8, lendingLimit: 0}
+      - {name: cpu, nominalQuota: 188, lendingLimit: 0}
+      - {name: memory, nominalQuota: 1664Gi, lendingLimit: 0}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata: {name: pouw, namespace: default}
+spec: {clusterQueue: pouw}
+---
+# PoUW's priorities. A timed run (all 8 GPUs, released within ~20 min) preempts pouw's own lower-priority jobs, such as the red
+# team's, through withinClusterQueue: LowerPriority above; preempted SkyPilot managed jobs are requeued and restart afterwards.
+# pouw has no flavor on vy-nebius-1, so these values never preempt anything there.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: pouw-timed}
+value: 800
+description: PoUW timed runs that need the whole node quiet
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: pouw}
+value: 200
+description: PoUW streams, harness and red-team jobs

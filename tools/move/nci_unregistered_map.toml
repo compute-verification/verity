@@ -1,0 +1,27 @@
+# Unregistered hardware in `benchmarks/nci`: what `tools/move/rename.py --map tools/move/nci_unregistered_map.toml`
+# renames, the older names "unmonitored" for unregistered hardware's share, ε_unreg, and "monitored" for registered
+# hardware (GLOSSARY.md, Older names: "unmonitored", ε_dark; "monitored" (compute, hardware, a server), now unregistered
+# hardware, ε_unreg, and registered hardware).
+# - `tiers.py`'s parameter and term `unmonitored` become `unregistered`, in `DEFAULTS`, `SPEC`, `evaluate`'s terms and
+#   every reader in the directory, with the tests whose names spell the word, and `monitored` (a local, and prose)
+#   becomes `registered`.
+# - One reader outside the directory, a hand edit in the same commit: `benchmarks/slowdown/tests/test_envelopes.py`
+#   reads `evaluate`'s term `t1["unmonitored"]`; every other `unmonitored` of `benchmarks/slowdown` is the calculator's
+#   own regime and stays for its map.
+# What stays: "monitoring" (the monitoring period keeps its name), the cited Notion section's title ([keep]), and the
+# data files' prose (`arguments.json`), which a hand edit takes.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/nci/*.py", "benchmarks/nci/tests/*.py", "benchmarks/nci/README.md"]
+words = { "unmonitored" = "unregistered", "Unmonitored" = "Unregistered", "monitored" = "registered", "Monitored" = "Registered" }
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock"]
+
+[keep]
+# a cited Notion section's title
+patterns = []
+strings = ['"Monitored compute residual"']
