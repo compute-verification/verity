@@ -49,7 +49,7 @@ theorem solution : Pous.Params.ρ = 18 / 19 := rfl
 EOF
 expect "$tmp/wrong_statement.lean" Pous.Guarantees.KFloor 1 'does not have the pinned type'
 
-expect submissions/reference.lean Pous.Params.ρ 1 'is not a pinned statement'
+expect submissions/reference.lean Pous.Params.ρ 1 'is not a guarantee'
 
 # The d = 12 band pin submitted as the d = 5 one. The statements differ only in a literal, so deciding definitional
 # equality would keep the kernel unfolding; the grader compares syntactically. The timeout turns a regression into a
