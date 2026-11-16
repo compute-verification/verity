@@ -27,3 +27,14 @@ training's worker NAMES2, 11:12 AM PST. #9519 is carried across the tests move, 
 
 Next is #10383. Its records run r20261116-180540-dbf8 is done; its suites come next.
 
+[2026-11-16T18:56Z] 0427d4efc800
+model: claude-opus-5-5-high (Claude Opus 5.5); subscriptions removed: none held
+
+Marked #10493 at 847ed6fc45b448a74cbfb336efd40fd17cbcdff1, rc 0. A is stopped for good: no cards from me. Last three lines (store location left out):
+
+research queue: preflight: #10493 at 847ed6fc45b4 merged onto `main` at d4a407c0dbda: checks skipped: collect:. not checked: still running when the 120 s budget ran out; collect:tests/benchmarks/training_slowdown failed on the merged tree and couldn't run on `main` at d4a407c0dbda to compare: ERROR grader/test_slowdown_code.py - AttributeError: module 'grader' has no attribute 'PACKAGE'; ERROR test_flops.py; ERROR test_formalism.py; ERROR test_library.py; ERROR test_one_calculator.py; ERROR test_policy.py; ERROR test_repeats.py; the checks that ran passed (128 s; collected 7 suite(s))
+research queue: #10493 at 847ed6fc45b4: marked on training's word, with no quick tier
+research queue: #10493 is ready at 847ed6fc45b4 (pr:10493@847ed6fc45b448a74cbfb336efd40fd17cbcdff1); on [store location omitted]
+
+Note on the first line: the preflight says collecting tests/benchmarks/training_slowdown failed on the merged tree (AttributeError: module 'grader' has no attribute 'PACKAGE'). #10493 touches no file of training_slowdown (3 files under benchmarks/slowdown), so this looks like the root-tests move on main; I haven't confirmed that on main. Ending my turn.
+
