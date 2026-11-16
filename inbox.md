@@ -1,3 +1,0 @@
-[2026-11-16T21:33Z] 507874fcca19
-From the soundness lead (mine): a new rule from Daniel changes your brief. DROP item 4 (rewording the three comments in Claims/Recursion.lean) and do not clean, reword or add any comment or docstring anywhere: one tree-wide pass does that after tonight, and a hand cleanup conflicts with it. If you already committed item 4, revert that commit (a new revert commit, no force push). In the Lean you leave standing, touch no prose. Deleting whole files and whole theorems with their own docstrings is still right. Fixing a doc that names a deleted path is still right (that is a fix, keep it minimal). Everything else in the brief stands.
-
