@@ -626,6 +626,16 @@ on it; this exposes the inner `sortStrings` over the tree's structurally-reducib
 private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
     Spot.keys? (Lean.Json.obj kvs) = some (Spot.sortStrings (kvs.toArray.map (·.1))) := rfl
 
+/-- v1's `paramsParsed` grows the keys it expects one optional field at a time, `let keys := if (field? j k).isSome then
+keys.push k else keys`. The parameters it reads are symbolic (their `proofs` holds the generalized digests), so the walk
+substitutes each such `let` rather than binding it, and an `if` left undecided doubles the key array's term at every
+field. These take each `if` to its branch, `j`'s field read by the kernel. -/
+private theorem ite_field_none {α : Type} (j : Json) (k : String) (a b : α) (h : Spot.field? j k = none) :
+    (if (Spot.field? j k).isSome then a else b) = b := by simp [h]
+
+private theorem ite_field_some {α : Type} (j : Json) (k : String) (a b : α) (h : (Spot.field? j k).isSome = true) :
+    (if (Spot.field? j k).isSome then a else b) = a := by simp [h]
+
 /-! ## v2's parameters, with every field named -/
 
 /-- A verifier that names its window's open root has no unwindowed registered value: `unwindowed` returns `#[]` at once
@@ -910,8 +920,8 @@ private theorem params_full :
     -- `Spot.keys?` and `Spot.sortStrings` are blocked so the walk never hands the parser's key checks (`exactly`, whose
     -- body reads them) to the kernel's `whnf`, which cannot reduce `sortStrings`'s well-founded `Array.qsort`; the rules
     -- below (`keys?_mkObj`, `keys?_obj`, `sortStrings_of_sorted`, `sortStrings_eq_sortLt`) rewrite each occurrence instead.
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, hgw_dg, hgh_dg, heither, ratio_half, split_half, poolValues_none,
-      keys?_mkObj,       keys?_obj, sortStrings_of_sorted, sortStrings_eq_sortLt, PortsFacts.ports_entries, PortsFacts.rest_eq,
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, hgw_dg, hgh_dg, heither, ite_field_none, ite_field_some, ratio_half,
+      split_half, poolValues_none, keys?_mkObj,       keys?_obj, sortStrings_of_sorted, sortStrings_eq_sortLt, PortsFacts.ports_entries, PortsFacts.rest_eq,
       unwindowed_some, Array.mapM_empty]
       block [Flock.canon, Spot.Program.parse, Flock.unhex, Spot.keys?, Spot.sortStrings] shallow []
     case f1 => rw [hq]; kernel_rfl'   -- own.partition = partitionObj (resolve the RHS's `keys? query` keys check by `hq`)
