@@ -80,6 +80,10 @@ coins (``coin_source``), and whether the Lean verifier ran as of record (``--of-
 `pearlplus-lean-check.json`'s ``argv``; with a ``local`` challenger, ``of record against the local challenger's key``,
 the test key the run made), each ``not stated`` where the record holds none. None of them refuses a number.
 
+The passes the credit counts are those of W, the window record the Pearl+ verdict holds them to (`serve.sh`'s
+``verify --tie W``): W is the developer's own record of its passes, and nothing here holds it to the bytes the requests
+received or to the checkpoint, which a line under the share says (`HELD_TO_W`).
+
 The record holds neither the tokens the run served nor the seconds it served them in (both stay on the developer's
 node). So the tokens are the class's, and the capacity share (the credited MACs over the card's rate times the seconds
 the verifier holds the passes to) is printed as absent: a Pearl+ answer states no seconds, and the node's own are not
@@ -147,7 +151,7 @@ from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_bench.kit_report import RUN_ID
 
-__all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DEVELOPMENT", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
+__all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DEVELOPMENT", "HELD_TO_W", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
            "POLICY",
            "RECORDS", "RESTS_ON", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
            "amounts", "capacity", "coins", "from_dir", "from_run", "main", "model_macs", "uncredited_words"]
@@ -213,6 +217,9 @@ SOURCE = {"node": "the serving machine", "challenger": "a challenger"}
 #: what the credit rests on, printed under the answer's verdict
 RESTS_ON = ("  the credit rests on Pearl's conjecture TT_OUT rev1, which this repository's red-team rates refuted: that "
             "a credited MAC was computed is an open assumption, not a proved guarantee")
+#: what holds the passes the share counts, printed under the share
+HELD_TO_W = ("  the passes the share counts are W's, the window record the verdict holds them to: W is the developer's own "
+             "record of its passes, and nothing here holds it to the bytes the requests received or to the checkpoint")
 #: the data sheet's readings of a device's peak, each a clock of its card file (`clock.tensor`, `clock.sm`)
 READINGS = ("tensor", "sm")
 #: the operand format of the MACs Pearl+ credits
@@ -820,6 +827,7 @@ def text(doc: dict) -> str:
                  + f"{100 * share:.2f}% of the model's MACs at this class: "
                  + (f"its passes hold {doc['passes_macs']:,} of them and " if doc["passes_macs"] is not None else "")
                  + f"its credit is {100 * doc['credited_macs'] / can:.2f}% of them all")
+    lines.append(HELD_TO_W)
     lines.append(f"  tokens, the class's since the record holds no count of those served: {tokens['prompt']:,} prompt "
                  f"and {tokens['output']:,} output, over {tokens['positions']:,} positions")
     lines.append(f"  capacity share: {ABSENT}")

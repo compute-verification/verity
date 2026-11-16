@@ -211,6 +211,7 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
          "policy's own count of its class"),
         ("  Pearl+ credits linears alone, 96.89% of the model's MACs at this class: its passes hold 136,201,633,792 of "
          "them and its credit is 98.73% of them all"),
+        C.HELD_TO_W,
         ("  tokens, the class's since the record holds no count of those served: 128 prompt and 16 output, over 140 "
          "positions"),
         f"  capacity share: {C.ABSENT}",
@@ -222,6 +223,9 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
     assert doc["made_up_says"] == SAYS
     assert (doc["target"], doc["met"], doc["lean"], doc["policy_agrees"]) == (0.97, False, True, True)
     assert doc["record"] == {"verdict": "missing", "why": WHY}
+    assert C.HELD_TO_W == ("  the passes the share counts are W's, the window record the verdict holds them to: W is "
+                           "the developer's own record of its passes, and nothing here holds it to the bytes the "
+                           "requests received or to the checkpoint")
     assert C.RESTS_ON == ("  the credit rests on Pearl's conjecture TT_OUT rev1, which this repository's red-team rates "
                           "refuted: that a credited MAC was computed is an open assumption, not a proved guarantee")
     # the answer's ε and δ are sampling's, and the document names them so: it has no `epsilon` or `delta` of the credit
@@ -668,7 +672,7 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
     assert sum(Fraction(c["macs"]) for c in got["causes"]) == got["give_up"]
     assert [(c["pass"], c["call"], c["linear"]) for c in got["top"]] == [(0, 2, "gate_up"), (0, 6, "gate_up")]
     assert got["top"][1]["causes"] == {"epsilon_macs": "1073741824/25", "rho_macs": "6643777536/625"}
-    assert text[12:] == [
+    assert text[13:] == [
         ("  per call: the model gives up 6,096,318,838 of its MACs (4.34%); by cause, from the verifier's split of "
          "its 256 calls (out/pieces/pouw/verify.json):"),
         "    LM head, which Pearl+ doesn't credit         4,202,692,608 MACs   68.94%",
