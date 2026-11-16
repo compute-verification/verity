@@ -11,7 +11,7 @@ import all Spot.Json
 import all Flock.HmRow
 import all Flock.TemplateQuery
 import all Commitments.Draw
-import all Circuits.Program
+import Circuits.Program
 import all Circuits.Steps
 import all Init.Data.Array.QSort.Basic
 import all Lean.Data.Json.Basic
@@ -306,7 +306,7 @@ theorem isInput_in16 (s : String) (h : s = "Input16_v1") : Flock.TemplateQuery.i
   subst h; show (Program.inputId? _).isSome = _; rw [inputId_in16 _ rfl]; rfl
 
 theorem inputId_unit : Flock.Program.inputId? "Unit_v1" = none := by
-  simp +decide [Flock.Program.inputId?, Flock.Program.widthAfter?]
+  simp +decide [ProgramProof.inputId_K, ProgramProof.widthAfterK]
 
 theorem isInput_unit (s : String) (h : s = "Unit_v1") : Flock.TemplateQuery.isInput s = false := by
   subst h; show (Program.inputId? _).isSome = _; rw [inputId_unit]; rfl

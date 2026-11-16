@@ -8,7 +8,7 @@ public import Proofs.Flock.SessionLoop.Concrete.Fwd
 public import Proofs.Pouw.Period.Sort
 public import Proofs.Flock.Recursive.FirewallJson
 public import Std.Data.String.ToNat
-import all Circuits.Program
+import Circuits.Program
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Std.Data.TreeMap.Raw.Basic
@@ -332,7 +332,17 @@ theorem repr_one : toString (1 : Nat) = "1" := by
   simp [Nat.toDigits_of_lt_base]
   all_goals decide +kernel
 
+/-- `Program.widthAfter?` (private), restated: `inputId_K` reads `inputId?` through it by unfolding alone. -/
+def widthAfterK (pre id : String) : Option Nat :=
+  if !(id.startsWith pre && id.endsWith "_v1") then none else
+  let w := ((id.drop pre.length).dropEnd 3).toString
+  if w.length > 0 && w.all Char.isDigit && w.front != '0' then w.toNat? else none
+
+theorem inputId_K (id : String) : Flock.Program.inputId? id = match widthAfterK "Input" id with
+    | some w => some (Flock.Program.RUN, w)
+    | none => (widthAfterK "RegisteredInput" id).map (Flock.Program.REGISTRATION, ·) := rfl
+
 theorem inputId_not16 : Flock.Program.inputId? "Not16_v1" = none := by
-  simp +decide [Flock.Program.inputId?, Flock.Program.widthAfter?]
+  simp +decide [inputId_K, widthAfterK]
 
 end Verity.Sampled.Instance.HonestSession.ProgramProof

@@ -106,7 +106,7 @@ theorem toNat16 : "16".toNat? = some 16 := by
 
 theorem inputId_in16 (s : String) (h : s = "Input16_v1") : Program.inputId? s = some (Program.RUN, 16) := by
   subst h
-  unfold Program.inputId? Program.widthAfter?
+  rw [ProgramProof.inputId_K]; unfold ProgramProof.widthAfterK
   have hs : "Input16_v1".startsWith "Input" = true := by simp +decide
   have hl : "Input".length = 5 := by simp +decide
   simp only [hs, ends_in16, hl, drop_in16]
