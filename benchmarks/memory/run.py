@@ -1,7 +1,9 @@
 """`verity bench memory`: the share of a node's memory read rate that one accepted PoUB session leaves uncertified, at
 the data sheet's read bandwidth: the session's γ in its verifier's ledger at the specification's rate, as text and as
-one line of JSON (`value`, `unit`, `commit`, `run`, `error`). A session that the Lean verifier didn't accept (its
-record's `verdict` is not `lean`) prints no number and exits 1.
+one line of JSON (`value`, `unit`, `commit`, `run`, `error`), exiting 0. A session that the Lean verifier didn't accept
+(its record's `verdict` is not `lean`) prints no number and exits 1; a command line or a record that can't be read exits
+2; and where no session ran to a verdict (`CouldNotRun`: no NVIDIA driver, no row or data sheet for the card, a
+bootstrap that failed or that `--local` won't run, a session's processes that failed) it prints no number and exits 3.
 The number is printed with its error, the ledger's δ for that γ summed over the session's windows, and the text says
 how it reads (`ERROR_FORM`): that δ, and the term no δ holds. Where the error is 1 or more the session bounds nothing:
 the command prints "no bound at this period" (`verity.protocol.NO_BOUND`) with the error and no number, and its
@@ -191,7 +193,11 @@ WAIT_MIN = 9 * 60
 
 
 class NoNumber(Exception):
-    """The session has no number to print: it wasn't accepted, or its run left no record of one."""
+    """The session has no number to print: it wasn't accepted, or it was and its record holds none (exit 1)."""
+
+
+class CouldNotRun(NoNumber):
+    """No session ran to a verdict: this machine lacks what it needs, or the session's processes failed (exit 3)."""
 
 
 class Unreadable(Exception):
@@ -393,7 +399,7 @@ def from_run(store, run: str, k: int | None) -> dict:
         host = named.read_text().strip()
         verifier = tree / "out" / "host" / host / "out" / "verifier.json"
     if verifier is None or not verifier.is_file():
-        raise NoNumber(f"{run} left no verifier's record (it ended rc {(attempt.get('status') or {}).get('rc')})")
+        raise CouldNotRun(f"{run} left no verifier's record (it ended rc {(attempt.get('status') or {}).get('rc')})")
     was = kind_of(tree, run)
     return document(session(verifier, k), commit_of(attempt), run, loopback=was == "loopback", host_run=host,
                     local=was == "local", machine=left(tree).get("machine"))
@@ -415,7 +421,7 @@ def from_dir(tree: Path, k: int | None) -> dict:
         host = named.read_text().strip()
         verifier = tree / "out" / "host" / host / "out" / "verifier.json"
     if not verifier.is_file():
-        raise NoNumber(f"{tree} holds no verifier's record (out/verifier.json)")
+        raise CouldNotRun(f"{tree} holds no verifier's record (out/verifier.json)")
     if mine and run and mine.get("run") not in (None, run):
         raise Unreadable(f"{tree}'s out/memory.json is the document of {mine.get('run')}, not of {run}")
     was = kind_of(tree, mine.get("run") if mine else run or str(tree))
@@ -457,20 +463,35 @@ def loopback(run: Callable = subprocess.run) -> dict:
         env.pop("SERVE", None)
         done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
         if done.returncode:
-            raise NoNumber(f"the loopback's processes failed (run.sh exited {done.returncode}); their logs are above")
+            raise CouldNotRun(f"the loopback's processes failed (run.sh exited {done.returncode}); their logs are above")
         s = session(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json", None, python_ledger=True)
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=True)
 
 
 def gpu_of(run: Callable = subprocess.run) -> tuple[str, str]:
     """The name and compute capability nvidia-smi gives for GPU (the first card where it is unset)."""
-    asked = run(["nvidia-smi", "--query-gpu=name,compute_cap", "--format=csv,noheader",
-                 *(["-i", SETTINGS.GPU] if SETTINGS.GPU else [])], capture_output=True, text=True)
+    try:
+        asked = run(["nvidia-smi", "--query-gpu=name,compute_cap", "--format=csv,noheader",
+                     *(["-i", SETTINGS.GPU] if SETTINGS.GPU else [])], capture_output=True, text=True)
+    except FileNotFoundError as e:
+        raise CouldNotRun("--local serves on an NVIDIA GPU, and there is no nvidia-smi here, so no NVIDIA driver") from e
     if asked.returncode or not asked.stdout.strip():
-        raise NoNumber(f"--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc {asked.returncode}: "
+        raise CouldNotRun(f"--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc {asked.returncode}: "
                        f"{(asked.stderr or asked.stdout).strip()[-200:]})")
     name, _, cc = asked.stdout.strip().splitlines()[0].rpartition(",")
     return name.strip(), cc.strip()
+
+
+def bootstrap_failed(out: Path, rc: int) -> str:
+    """Why the bootstrap failed, from the step it names last in `out/bootstrap.fail` (`BOOTSTRAP_FAIL_STEP: why`)."""
+    fail = out / "bootstrap.fail"
+    lines = fail.read_text(errors="replace").strip().splitlines() if fail.is_file() else []
+    step, _, why = (lines[-1] if lines else "").partition(": ")
+    if not step.startswith("BOOTSTRAP_FAIL_"):
+        return f"the bootstrap failed (pod_bootstrap.sh exited {rc}, naming no step); its logs are in {out}"
+    step = step.removeprefix("BOOTSTRAP_FAIL_")
+    hint = ": a checkpoint that won't download means Hugging Face can't be reached from here" if step == "CHECKPOINT" else ""
+    return f"the bootstrap failed at its {step} step ({why.strip()[-300:]}); its logs are in {out}{hint}"
 
 
 def card_row(name: str, cc: str) -> str:
@@ -478,7 +499,7 @@ def card_row(name: str, cc: str) -> str:
     if row := SETTINGS.LOCAL_ROW:
         return row
     if (row := LOCAL_ROWS.get(cc)) is None:
-        raise NoNumber(f"{name} is compute capability {cc}, and the tree has a Llama 3.2 1B row only "
+        raise CouldNotRun(f"{name} is compute capability {cc}, and the tree has a Llama 3.2 1B row only "
                        f"for {' and '.join(LOCAL_ROWS)} ({', '.join(LOCAL_ROWS.values())}): make one for this card "
                        "(`verity-vllm workload --row-id ROW ...`, its target with \"async_scheduling\": false) and "
                        "name it with LOCAL_ROW")
@@ -490,9 +511,10 @@ def sheet_of(name: str) -> str:
     if kind := SETTINGS.LOCAL_NODE:
         return kind
     if (kind := next((k for word, k in LOCAL_SHEETS.items() if word in name), None)) is None:
-        raise NoNumber(f"the tree has no data sheet for {name} (hardware/nodes/ has {', '.join(LOCAL_SHEETS.values())} "
-                       "for its cards): add its card and a node of it there (hardware/README.md) and name the node "
-                       "with LOCAL_NODE")
+        raise CouldNotRun(f"the tree has no data sheet for {name} (hardware/nodes/ has "
+                          f"{', '.join(LOCAL_SHEETS.values())} for its cards), and the share is of the card's own sheet: "
+                          "add its card and a node of it there (hardware/README.md) and name the node with LOCAL_NODE; "
+                          "a result against a sheet not on main is not comparable, and its digest says so")
     return kind
 
 
@@ -542,7 +564,7 @@ def local(run: Callable = subprocess.run) -> dict:
     if not SETTINGS.VLLM_PY:
         script = BOOTSTRAP.read_text()
         if outside := [why for held, why in OUTSIDE_WORK.items() if held in script]:
-            raise NoNumber(f"this tree's bootstrap ({BOOTSTRAP.name}) {' and '.join(outside)}, so --local doesn't run "
+            raise CouldNotRun(f"this tree's bootstrap ({BOOTSTRAP.name}) {' and '.join(outside)}, so --local doesn't run "
                            "it: set VLLM_PY to a vLLM environment of your own, or run from a tree whose bootstrap "
                            "keeps to LOCAL_WORK")
         work.mkdir(parents=True, exist_ok=True)
@@ -552,9 +574,7 @@ def local(run: Callable = subprocess.run) -> dict:
         done = run(["bash", str(BOOTSTRAP), "--cases", LOCAL_CASE, "--out", str(work / "bootstrap")],
                    cwd=BOOTSTRAP.parents[2], env=boot, stdout=sys.stderr)
         if done.returncode:
-            raise NoNumber(f"the bootstrap failed (pod_bootstrap.sh exited {done.returncode}; its logs are in "
-                           f"{work / 'bootstrap'}): a checkpoint that won't download means Hugging Face can't be reached "
-                           "from here")
+            raise CouldNotRun(bootstrap_failed(work / "bootstrap", done.returncode))
         env.update(VLLM_PY=str(work / "venv312" / "bin" / "python"), NODE_WORKSPACE=str(work), HF_HOME=str(work / "hf"),
                    UV_CACHE_DIR=boot["UV_CACHE_DIR"], PIP_CACHE_DIR=boot["PIP_CACHE_DIR"],
                    XDG_CACHE_HOME=boot["XDG_CACHE_HOME"],
@@ -575,7 +595,7 @@ def local(run: Callable = subprocess.run) -> dict:
           f"{held}/out", file=sys.stderr)
     done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
     if done.returncode:
-        raise NoNumber(f"the served session failed (run.sh exited {done.returncode}); its logs are above and in "
+        raise CouldNotRun(f"the served session failed (run.sh exited {done.returncode}); its logs are above and in "
                        f"{held}/out")
     s = session(Path(held) / "out" / "verifier.json", None, python_ledger=True)
     machine = {"card": name, "sheet": kind, "sheet_sha256": digest(SHEETS), "verifier_sha256": digest(VERIFIER)}
@@ -611,7 +631,7 @@ def node(store, period: str, dry: bool, k: int | None, run: Callable = subproces
         print("memory: a dry run: nothing reached either gate, and there is no number", file=sys.stderr)
         return rc
     if rc:
-        raise NoNumber(f"the gate run did not launch (gate_run.sh exited {rc})")
+        raise CouldNotRun(f"the gate run did not launch (gate_run.sh exited {rc})")
     state = Path.home() / ".research" / "gate-runs" / f"{period}.env"
     ids = dict(line.split("=", 1) for line in state.read_text().splitlines() if "=" in line)
     fire, prover = ids["fire"], ids["prover"]
@@ -621,7 +641,7 @@ def node(store, period: str, dry: bool, k: int | None, run: Callable = subproces
         if store.attempt(fire) is not None:
             return from_run(store, fire, k)
         wait(60)
-    raise NoNumber(f"{fire} left no record in the store within {WAIT_MIN} minutes")
+    raise CouldNotRun(f"{fire} left no record in the store within {WAIT_MIN} minutes")
 
 
 def _gb(n: float) -> str:
@@ -893,10 +913,12 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
         kept = bool(held) and (was := kind(left(Path(held)))) is not None and was != kind(doc)
         ledger = doc.pop("ledger")
     except NoNumber as e:
+        code = 3 if isinstance(e, CouldNotRun) else 1
         if a.local or a.loopback:
-            return refused(str(e), local=a.local, run=run)
-        print(f"memory: no number: {e}", file=sys.stderr)
-        return 1
+            refused(str(e), local=a.local, run=run)
+        else:
+            print(f"memory: no number: {e}", file=sys.stderr)
+        return code
     except Unreadable as e:
         print(f"memory: {e}", file=sys.stderr)
         return 2
