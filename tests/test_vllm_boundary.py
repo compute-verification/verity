@@ -62,8 +62,6 @@ ALLOWED = {
     **dict.fromkeys(("benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
                      "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/dither_so.py"),
                     "kernels: Dither's served arms, a stock vllm.LLM per arm with its int8 linears swapped in process"),
-    **dict.fromkeys(("benchmarks/kernels/exactlin/share.py",),
-                    "kernels: sbench's served arms over stock vLLM int8 (TritonInt8ScaledMMLinearKernel)"),
     **dict.fromkeys(("benchmarks/kernels/moe_align/served.py", "benchmarks/kernels/moe_align/stress.py"),
                     "kernels: verity_vllm.engine.moe_align's canonical moe_align_block_size held to vLLM's op and to its "
                     "Marlin MoE path, served at TP8"),
