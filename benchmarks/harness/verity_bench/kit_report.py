@@ -149,7 +149,8 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
            why: str | None = None, made_up: bool = False, withdrawn: Sequence[str] = ()) -> int:
     """A command's last step, the one way it prints and writes its number: prints `text`, then `doc` as one line of
     JSON, and where it has a place to write (`out` where the caller names one, its `--out`; else under a research run its
-    `out/`, `$RESEARCH_RUN_DIR/out`, and outside one `$OUT` where set) writes that line to `<name>.json` there and
+    `out/`, `$RESEARCH_RUN_DIR/out`, and outside one `$OUT` where set; inside pytest only `out`, and it raises where one of
+    those would be the place) writes that line to `<name>.json` there and
     appends each of `measured`, the keywords of a `Writer.measurement`, at `mark` (``"measured"`` where None) to the
     run's result (`kit.writer`). An empty variable names no place. With `document` False the place keeps the
     `<name>.json` it holds.
@@ -207,6 +208,11 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
         place = out
     else:
         place = Path(settings.RESEARCH_RUN_DIR) / "out" if settings.is_set("RESEARCH_RUN_DIR") else settings.OUT
+        from verity_bench import kit
+
+        if place and kit.under_pytest():
+            raise ValueError(f"{name}: inside pytest the kit writes only where its caller names, and with no out it would "
+                             f"write {place}, a research run's place: pass out=, a test's tmp_path")
     if place:
         place = Path(place)
         if document:

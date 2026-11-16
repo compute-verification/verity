@@ -5,7 +5,8 @@
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
-  (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
+  (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one or inside pytest
+  `out/result.json`.
   `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once, and
   `writer(out, kind)` writes a result of that `kind`, the artifact kind `research` stores it as.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
@@ -31,7 +32,7 @@ name covers. The writer also puts it first among the `inputs`, where the console
 only where given: `period`, one of `PERIODS` (a verification phase, a week, a month or a year), and `over`, one of
 `OVER` (the world's compute or one datacenter's). A measurement of one member of a set (a deployed guarantee, a lead)
 says which as `member`, a non-empty string, held only where given. The writer appends: every
-writer of a research run, whatever its `out`, appends to the run's one result and keeps what the run already wrote there.
+writer of a research run outside pytest, whatever its `out`, appends to the run's one result and keeps what the run already wrote there.
 A result holds one run's measurements, one a name, period, `over` and member (a name given none is one of them), and one
 validation, so a rerun writes a fresh directory.
 
@@ -60,6 +61,7 @@ import re
 import shutil
 import statistics
 import subprocess
+import sys
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -500,13 +502,20 @@ class Writer:
         return doc
 
 
+def under_pytest() -> bool:
+    """Whether this process runs pytest: there the kit writes only where its caller names, never a research run's
+    directory, so a test's figures can't become a run's measurements (a test that writes as a run patches this)."""
+    # pytest's own modules load before any conftest or test module; PYTEST_CURRENT_TEST misses collection and imports
+    return "_pytest" in sys.modules
+
+
 def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
     """The writer of this run's result (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now, of `kind`
     where given (`Writer.kind`). Under a research run (`RESEARCH_RUN_DIR` set) the result is
     `$RESEARCH_RUN_DIR/result.json`, the one file `research` reads a run's result from, whatever `out` is, so its evidence
-    paths are relative to the run's directory; outside one it is `out/result.json`."""
+    paths are relative to the run's directory; outside one, and inside pytest (`under_pytest`), it is `out/result.json`."""
 
-    where = settings.RESEARCH_RUN_DIR if settings.is_set("RESEARCH_RUN_DIR") else out
+    where = settings.RESEARCH_RUN_DIR if settings.is_set("RESEARCH_RUN_DIR") and not under_pytest() else out
     return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp(), kind)
 
 
