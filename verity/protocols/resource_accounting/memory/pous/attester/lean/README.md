@@ -1,6 +1,6 @@
-# The memory challenger's verdicts in Lean (`core_memory_challenger`)
+# The memory attester's verdicts in Lean (`core_memory_challenger`)
 
-This Lake package is code: the memory challenger's two verdicts as executable Lean, their record formats and crypto, and
+This Lake package is code: the memory attester's two verdicts as executable Lean, their record formats and crypto, and
 each verdict behind the core protocol interface (`Core.Protocol`). It imports Lean core, Flock's verifier for its
 hashes and canonical JSON, and core's randomness, LMS, attest, protocol interface and difftest packages; no Mathlib and
 nothing of `security/`. `security/Properties/Pous/` states its properties against these functions (the area's README,
