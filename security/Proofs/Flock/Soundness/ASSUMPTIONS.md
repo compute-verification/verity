@@ -1,8 +1,7 @@
 # Flock interactive soundness: what the theorems assume
 
 For the expert reviewer and for Table 1. This file states every named assumption and every named hypothesis the Flock
-soundness theorems take, each in full; the detail behind them is in `assumption-notes/`. What is proved is in `README.md`
-and, for the audit layer, `Audit/README.md`. `DESIGN.md` holds the derivations.
+soundness theorems take, each in full; the detail behind them is in `assumption-notes/`. What is proved is in `README.md`.
 
 **The guarantee of record** for the one-stage `--zk` audit is `Flock.Guarantees.EndToEnd`
 (`../EndToEnd/Statement.lean`, proved as `Flock.SecurityProofs.EndToEnd`). It bounds the executable verifier's
@@ -58,7 +57,7 @@ hash, nor false of every hash.
 **`SHA512CRStrict`. Strict-time collision resistance of SHA-512** (`cr/sha-512`).
 
 - **Statement.** A collision finder that makes at most `q` SHA-512 evaluations on every outcome succeeds with probability
-  at most `q²/2^513`: the generic birthday bound `q(q − 1)/(2·2^512)` for a budget fixed in advance (`DESIGN.md` §1).
+  at most `q²/2^513`: the generic birthday bound `q(q − 1)/(2·2^512)` for a budget fixed in advance.
 - **The budgets are not checked.** `StrictCR.Finder.CR H F q` takes `SHA512CRStrict` with the cost `q` on every outcome,
   so nothing in Lean ties `q` to the evaluations the finder makes. Each budget must bound its finder's real SHA-512
   evaluations, for `t′` the prover's in one session run and `v` one opening's verification:
@@ -182,7 +181,7 @@ and two verifications; a one-run finder's `qS` one run and one verification; `qT
 |---|---|---|---|
 | the compiled theorem | `SHA512CRStrict` | `table_sound_compiled_strict` (`CompiledCR`) | `tableError + √(2^{log N₀}·2Q₀·qF²/2^513) + Σ_{r<2} Σ_ℓ √(2^{log N_ℓ}·Q_ℓ·qF²/2^513) + qS²/2^513` |
 | `ε_ks`, the knowledge term | `SHA512CRStrict` | `ksBoundAccB_le_strict`, `ksAvgBE_le_strict` (`TableCR`, `hKS`) | `ksAvgStrict`: per table `ksStrict = tableError + Σ_{r<2} Σ_ℓ √(2^{log N_ℓ}·Q_ℓ·qF²/2^513) + qS²/2^513 + √(k·qF²/2^513)`, over `1 − N₀/(ek)`, its largest after each sample averaged over the sample |
-| `δ_tree`, the serving roots' binding | `SHA512CRStrict` | `tree_le_strict`, `TreeRewind.le` (`tr`, `hT`) | `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` (`DESIGN.md` §1) |
+| `δ_tree`, the serving roots' binding | `SHA512CRStrict` | `tree_le_strict`, `TreeRewind.le` (`tr`, `hT`) | `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` |
 | `δ_reg`, the registered reads' path binding | `SHA512CRStrict` | `Reads.prob_off_le` (`hR`) | `qR²/2^513` |
 | `ε_bind`, the binding error | `SHA512CRExpected` | `flock_batched_linkSoundE` (`LinkCR`, `hCR`) | `linkBoundE`, finite at the provers whose link finders satisfy it |
 | `ε_bind`, under `cr/sha-512` alone | `SHA512CRStrict` | `CROnly.linkCR_of_strict` (`LinkCRStrict`, `hCRs`: the same finders stopped at `q` evaluations) | `linkBoundE` at per-run cost `strictRunCost t' q = 2^256·(t'/q + q²/2^513)`; at `q³ = t'·2^512` the hash part is `3(1 + k)·t'^{2/3}/2^{512/3}` (`CROnly.linkBoundE_at_cube`) |
@@ -406,8 +405,7 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
     and VU), and `aliased` from the flat statement's copies, which `unitPlace_of_setupH` takes as a hypothesis
     (`Layout.Aliased`).
 
-**The audit layer's named hypotheses** (`Prop`s taken as hypotheses; no `axiom`; the theorems are in
-`Audit/README.md`):
+**The audit layer's named hypotheses** (`Prop`s taken as hypotheses; no `axiom`):
 
 | Hypothesis | Term | Meaning | To be discharged by |
 |---|---|---|---|
@@ -432,8 +430,7 @@ before the session's first coin, not bounds state by state.
 
 - **SHA-512 for the Merkle openings** (`Flock.Merkle`, with SHA-512 leaves and nodes), under the two forms above: the
   compiled theorem needs only `SHA512CRStrict`, for every classical prover, and the audit's value layer adds
-  `SHA512CRExpected`. DESIGN.md §1 explains why SHA-512 rather than SHA-256, and how the bound depends on the hash's
-  width.
+  `SHA512CRExpected`.
 - **No assumption for the rounds.** The verifier keeps each round's bytes, then flips that round's coins, and the
   replay compares bytes. This replaces the SHA-256 round digests. Keeping the bytes costs about the proof size, 0.7 MB
   per rep.
@@ -452,8 +449,8 @@ before the session's first coin, not bounds state by state.
 - **`tree` coins** (`--zk`, `--coins tree`; `coin-tree/hm96-sha512/v2`): the `--zk` headlines' coins, and a plain
   one's under `--coins tree`. Soundness pays `N·2^-256` for the commitment's statistical hiding (A6, tree coins); zero
   knowledge uses its binding (`cr/sha-512`).
-- **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check (DESIGN.md §2).
-- **Quantum provers** (DESIGN.md §9). The oracle layer holds against them, but the compiled theorem is classical. The
+- **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check.
+- **Quantum provers.** The oracle layer holds against them, but the compiled theorem is classical. The
   compiled protocol is post-quantum sound only asymptotically, and only if SHA-512 is collapsing, which is a conjecture
   (Table 1 would need `collapsing/sha-512`). No concrete post-quantum bound is known at these parameters, and none is
   claimed.
