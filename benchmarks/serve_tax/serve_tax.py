@@ -465,15 +465,17 @@ MODELS = {
     # glm53's target is the cost model's share for serving (the spot figures' serving cost card, its `tokens`
     # configuration): extra GPU time at equal tokens, which reads no SLO, for a server that does not cut its cache at a
     # phase edge and keeps vLLM's prefix cache on, priced at one engine across eight H200s under the chat load at 384
-    # requests at once. None of its parts is measured here: a run measures a part where one of its arms turns on that
-    # part's changes alone (`cost_report`'s `measured`). It has no part for prefix caching off, the served ids or
-    # the network attester in front.
+    # requests at once, but for the canonical top-k's, which is measured (`total_cost.TOPK_SHARE`): a run measures a
+    # part where one of its arms turns on that part's changes alone (`cost_report`'s `measured`). It has no part for
+    # prefix caching off, the served ids or the network attester in front.
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
-                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=2.13, target_basis="modeled",
+                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=10.25, target_basis="modeled",
                    target_parts=(
                        Part("the certified tick", 1.63, ("admission on the certified tick",),
                             "the queue-dependent tick's throughput, simulated on traces", "simulated"),
-                       Part("the tie order", 0.25, ("the canonical top-k",)),
+                       Part("the canonical top-k", 8.37, ("the canonical top-k",),
+                            "prod-record over prod-trace on the agentic load at 4 users, its pass bisecting every "
+                            "wrong fast selection by one program", "measured"),
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on"),

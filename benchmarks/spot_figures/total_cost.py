@@ -141,8 +141,11 @@ HISTORY_ROW_BYTES = 2 * 576 + 192 + 128
 HISTORY_FILL = (1.4, 1.0, 2.0)
 #: the measured serving runs of `SERVED_HIGH` and `EDGE_PAUSE`, and of `ENGINE_STEP`, `STEP_ROWS` and `REQUEST_RATE`
 SERVED_RUNS = ["r20261107-155724-3f53", "r20261111-162328-f498"]
-#: the deterministic DSA top-k that makes GLM-5.3's replay bit-exact, a share of serving (kernel-modeled)
-TOPK_SHARE = 0.0025
+#: the canonical DSA top-k that makes GLM-5.3's replay bit-exact, a share of serving: prod-record over prod-trace on
+#: the agentic load at 4 users, its pass bisecting every wrong fast selection, the mean over lifetime pairs and its 95%
+#: interval; and its run
+TOPK_SHARE = (0.0837, 0.0713, 0.0961)
+TOPK_RUNS = ["r20261116-122320-c688"]
 #: the serve tax's part a server pays only if it snapshots at each replay block's edge
 EDGE = "token commits and replay-block edge snapshot"
 #: batch-invariant kernels' throughput tax against stock compiled vLLM at saturation on one H200: the MoE's
@@ -317,10 +320,13 @@ def priced_card(model: str = "GLM-5.3", serving: str = "assumed") -> dict:
                       f"replay block's edge to copy and hash the KV pool, {EDGE_PAUSE[0]:.2f} s at the median and "
                       f"{EDGE_PAUSE[1]:.2f} s at most; the throughput with the step record, the token commits and an "
                       f"edge each 30 s within noise at every load, up to {SERVED_HIGH:.1%} at saturation"}
-    topk = {"part": "deterministic top-k", "status": "modeled", "share": TOPK_SHARE, "low": TOPK_SHARE,
-            "high": TOPK_SHARE,
-            "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8 mid-traffic, "
-                      "kernel-modeled"}
+    topk = {"part": "deterministic top-k", "status": "measured", "share": TOPK_SHARE[0], "low": TOPK_SHARE[1],
+            "high": TOPK_SHARE[2],
+            "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served "
+                      "engine against the same server with it off (prod-record over prod-trace), sampled agentic "
+                      "sessions at 4 users whose contexts pass 2,048 keys, the mean over server-lifetime pairs and "
+                      "its 95% interval; its pass then bisected every wrong fast selection by one program, which its "
+                      "refinement replaces"}
     invariant = {"part": "batch-invariant kernels", "status": "measured", "share": BATCH_INVARIANT[0],
                  "low": BATCH_INVARIANT[1], "high": BATCH_INVARIANT[2],
                  "source": "throughput against stock compiled vLLM at saturation on one H200, measured on these "
@@ -335,7 +341,8 @@ def priced_card(model: str = "GLM-5.3", serving: str = "assumed") -> dict:
     def entry(config: str, parts: list[dict], lower_bound: bool = False) -> dict:
         return {"config": config, "status": "priced", "tax": sum(p["share"] for p in parts),
                 "low": sum(p["low"] for p in parts), "high": sum(p["high"] for p in parts), "lower_bound": lower_bound,
-                "parts": parts} | ({"runs": SERVED_RUNS} if edge in parts else {})
+                "parts": parts} | ({"runs": runs} if (runs := [*(SERVED_RUNS if edge in parts else []),
+                                                               *(TOPK_RUNS if topk in parts else [])]) else {})
 
     return spot_cards.check({
         "schema": spot_cards.SCHEMA, "slot": "serve_tax", "model": model, "status": "modeled", "provisional": True,
@@ -343,7 +350,7 @@ def priced_card(model: str = "GLM-5.3", serving: str = "assumed") -> dict:
                   + ("the serving_rate card's measured tokens a GPU-second" if "serving_rate" in c
                      else "serving's MFU on the H200's dense FP8 peak")
                   + " (total_cost.priced_card); measured values replace it configuration by configuration",
-        "runs": SERVED_RUNS, "owner": "@proofs",
+        "runs": [*SERVED_RUNS, *TOPK_RUNS], "owner": "@proofs",
         "value": {"baseline": "stock vLLM, compiled, on the model's served circuit",
                   "configurations": [entry("tokens", [ticks, *served, edge, topk]),
                                      entry("tokens_bi", [ticks, *served, edge, topk, invariant]),

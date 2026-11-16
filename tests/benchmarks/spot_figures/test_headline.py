@@ -581,7 +581,7 @@ def test_row_ii_at_the_control_s_table_is_the_plan_s():
     p = H.plan(spec, row, reads, {}, P)
     got = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
     assert isclose(got["bound_bits"] / 8e9, 2635.9320571029266, rel_tol=1e-12)
-    assert isclose(got["total"], 0.10086052035955254, rel_tol=1e-12)
+    assert isclose(got["total"], 0.18206052035955253, rel_tol=1e-12)
     assert len(p["cells"]) + len(p["left_out"]) == 193
     assert [x["block"] for x in reads["strata"]] == [x["block"] for x in want["strata"]]
     cells = [astuple(c) for c in reads["design"]["cells"]]
@@ -683,7 +683,7 @@ def test_row_ii_at_the_control_s_table_on_the_served_cut_prices_the_units_at_the
     assert not any(x["block"].startswith("SparseMlaHeadBlock_v1{") for x in reads["strata"])
     assert {"own row", "family row", H.PLANNER} <= set(got["split"]["sources"])
     assert isclose(got["bound_bits"] / 8e9, 1602.7440106923727, rel_tol=1e-9)
-    assert isclose(got["total"], 0.10090789369288586, rel_tol=1e-9)
+    assert isclose(got["total"], 0.18210789369288585, rel_tol=1e-9)
 
 
 HEAD_V1 = ('SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
