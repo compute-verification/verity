@@ -301,13 +301,14 @@ if trees not in TREES or (os.environ["A5_COINS"] == "challenger" and not os.envi
     sys.exit(f"a5_llama1b_h200.sh: no COINS line: the audit's summary says coin_trees={trees!r}, and a --zk audit on the "
              f"challenger's coins must have every session's tree from that challenger session's release log (window)")
 trees = f"coin trees {trees}: {TREES[trees]}"
-sample = (f"law {law.get('law', '?')} k={law.get('k', '?')} of {summ.get('population', '?')} units, delta {summ.get('delta', '?')}, "
-          f"drew {len(summ['draw']) if isinstance(summ.get('draw'), list) else '?'}" + (f", sampled at {rate}" if rate else ""))
+sample = (f"{len(summ['draw']) if isinstance(summ.get('draw'), list) else '?'} of {summ.get('population', '?')} proof blocks "
+          f"sampled (law {law.get('law', '?')} k={law.get('k', '?')}, delta {summ.get('delta', '?')}"
+          + (f", at {rate}" if rate else "") + ")")
 if os.environ["A5_PLAIN"]:
     line = (f"COINS draw: one local challenger session (the auditor device's service run on this machine, a development "
             f"stand-in for the auditor's, its key made for the run at the deployed LMS parameters), {sample}; sessions: Flock "
-            f"plain, no ZK server ({trees}); the audit {accepted}" + (", by Flock's plain per-session Lean verify --coins tree "
-            "--stratified K and Lean's draw" if audit.get("accepted") is True else "") + "; SPOT's one-stage check does not "
+            f"plain, no ZK server ({trees}); the audit {accepted}" + (", by Flock's plain per-session Lean verification, "
+            "with --coins tree and --stratified K, and Lean's draw" if audit.get("accepted") is True else "") + "; SPOT's one-stage check does not "
             f"apply (OneStageZk checks --zk sessions); {card}")
 elif os.environ["A5_COINS"] == "challenger":
     v2 = [x for x in (d / "v2.log").read_text(errors="replace").splitlines()] if (d / "v2.log").is_file() else []
@@ -320,8 +321,8 @@ elif os.environ["A5_COINS"] == "challenger":
 else:
     line = (f"COINS draw: development coins (in-process secrets.token_bytes), no auditor's challenger, by Lean's draw, {sample}; "
             f"sessions: Flock {'plain' if summ.get('plain') else '--zk'} ({trees}), arm {summ.get('arm', '?')} "
-            f"({'the ZK server' if summ.get('firewall') else 'no ZK server'}); {accepted} by Flock's per-session Lean verify "
-            f"--zk and Lean's draw, not by SPOT's one-stage check (OneStageZk did not run; it refuses a case naming no "
+            f"({'the ZK server' if summ.get('firewall') else 'no ZK server'}); {accepted} by Flock's per-session Lean verification "
+            f"with --zk and Lean's draw, not by SPOT's one-stage check (OneStageZk did not run; it refuses a case naming no "
             f"challenger); {card}")
 print(line)
 if s.is_file():  # benchmarks' printer reads summary.json's coins, an object: the line rides as its text
@@ -335,8 +336,8 @@ if s.is_file():  # benchmarks' printer reads summary.json's coins, an object: th
     profile = core_sampling_design(design, n) if isinstance(design, dict) and isinstance(n, int) else None
     if profile is not None:
         doc["epsilon"] = {"design": design, "population": n,
-                          "rule": "except with probability delta, an accepted audit has at most wrong_units of the population's "
-                          "units wrong: the window's sampling design's Stratified.count_bound(delta), a stratum a template; "
+                          "rule": "except with probability delta, an accepted audit has at most wrong_units incorrect proof "
+                          "blocks of the population's proof blocks: the window's sampling design's Stratified.count_bound(delta), a stratum a template; "
                           "epsilon = wrong_units/population",
                           "table": [{"delta": x, "wrong_units": profile.count_bound(x), "epsilon": round(profile.count_bound(x) / n, 6)}
                                     for x in (0.5, 0.1, 0.01, 1e-3, 1e-6, 1e-9)]}
