@@ -1,46 +1,21 @@
 # The replay ladder
 
-Does replaying a served window under its recorded schedule give the served tokens on models other than the one it was
-first measured on? On each model of a ladder of pinned checkpoints (`ladder.LADDER`: dense, MoE and FP8 MoE at one GPU,
-a dense model at TP2, an FP8 MoE at TP4 and GLM-5.3, an FP8 MoE with DeepSeek sparse attention, at TP8), `ladder.py` serves one saturated window with the scheduler's step trace,
-replays it several times on compiled vLLM at the integration's pin (d9105ea80), and serves a sample of its requests alone.
-It runs `benchmarks/serve_tax`'s `record` arm and `replay.py` unchanged, so every model sees the same server, workload
-and replay.
+SPOT's proof server replays the requests an audit samples, under the schedule serving recorded, and a replay is of use
+only if it gives back the served tokens exactly. This benchmark asks whether it does on more than one model: on each
+model of a ladder of pinned checkpoints (`ladder.LADDER`: dense, MoE and FP8 MoE at one GPU, a dense model at TP2, an
+FP8 MoE at TP4 and GLM-5.3 at TP8), `ladder.py` serves one saturated period, replays it several times on compiled vLLM
+at the adapter's pin, and serves a sample of its requests alone, then reports each replay's share of output tokens
+exact. It runs `benchmarks/serve_tax`'s server, workload and replay unchanged. `ladder.py`'s and `run.sh`'s headers say
+what each step and arm does; `inductor_pin.py`'s says why the `pinned` arm exists.
 
-For each model:
+## Try it
 
-- `serve`: one burst of 800 requests at 1,000 req/s on stock compiled vLLM measures the model's capacity; then the
-  `record` arm serves serve_tax's workload (C4 prompts from the whole shard, each opening with the checkpoint's own
-  document start and blank line, most behind one of eight shared prefixes, Poisson arrivals, every request decoding to
-  its cap) at 1.45 times that capacity for 60 s: a saturated window of mixed arrivals, prefill chunks beside decodes.
-- `replay`: in a fresh process, the window replayed under its recorded schedule, compiled, compared with serving step by
-  step and token by token, and from the second replay on with the first replay too. `run.sh` runs three replays on
-  vLLM's compile cache (the first fills it: the server's entries don't match an offline engine's, so it compiles) and
-  one that compiles from empty caches (`VLLM_DISABLE_COMPILE_CACHE=1`, fresh Inductor and Triton directories); each
-  replay's summary says which. Replays differing from each other at the same schedule are run-to-run variation.
-- The arms (`LADDER_ARM`, declared in `settings.py`): `run.sh` serves and replays each model twice. Unpinned, Inductor
-  times candidates on the device and keeps the fastest: a kernel's configs on its first launch in each process, such as
-  a norm's tilings, and at compile time whether to fuse kernels. Two processes can choose differently, and a
-  reduction's config sets the order of its sums. `pinned` makes every one of those timings the same in every process of
-  the server and of each replay (`inductor_pin.py`, a vLLM general plugin in the server's processes), so each choice
-  keeps Inductor's first candidate. Inductor's own deterministic mode can't do this at the integration's torch: Dynamo
-  turns it off after a process's first compile, and while it holds it refuses the combo-kernel timing vLLM's compile
-  runs. `unpinned` runs three replays without the pin, which say whether the model needs it. `rblock` (on request) sets
-  `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`, which drops the halved-R0_BLOCK candidate but leaves a reduction's other
-  candidates to the timing. Each arm compiles into its own caches, since a compile cache keeps the choices made where it
-  was written. The capacity server's processes and each replay's log the configs their reductions kept at run time
-  (`tilings.PID.jsonl`); the summary counts the reductions that kept more than one config over serving and the
-  replays.
-- `alone`: 64 of the window's requests, evenly spaced in arrival order, each served by itself on an empty prefix cache in
-  one compiled engine, compared with serving and with the first replay: how far a request's tokens depend on its batch,
-  which is why a replay needs the recorded schedule.
-- `summary`: each model's window, replays and alone sample in summary.json and summary.md. A row of output is one
-  request's token at one position, and its share exact is the window's output tokens less those that differ, over the
-  window's output tokens.
+~~~sh
+uv run tools/check/suites.py benchmarks/replay_ladder
+~~~
 
-`status_table.py` renders the per-model status table, one row per model with its Circuit, Replay (pinned), Replay unpinned and
-Proved status, from a sidecar that backs every cell with its run or art ids, and fills each ladder model's Replay cells
-from a summary.json's two arms.
+It runs the ladder's tests on the CPU (the pin's plugin, the plan, the summary, the status table and the top-k probe)
+in a few seconds; the ladder itself needs GPUs, below.
 
 ## Running it
 
