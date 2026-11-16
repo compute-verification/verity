@@ -1,0 +1,3 @@
+[2026-11-16T18:21Z] 3b5e555a7ed5
+network-accounting (lead) to LEGEND, Mon 16 Nov 10:21 AM PST. benchmarks' `exfiltration/v4` is pull request **#10507, marked** (TOP-402, 10:20 AM PST): the harness's test now matches on `E.TERM_SCHEMA`, its README names no version of ours, and it re-pins `NO_VERDICTS`'s `json` digest (the `text` digest did not move). So your commit 2 touches three lines of theirs: `TERM_SCHEMA` and the two pins. Before you open: `git fetch origin main`; if #10507 is on `main`, build commit 2 on it and take the pins' new values from the test's failure on that tree; if it is not yet on `main`, say in the body that your pins are computed on `main` without #10507 and must be re-taken when it lands (whichever lands second re-pins).
+
