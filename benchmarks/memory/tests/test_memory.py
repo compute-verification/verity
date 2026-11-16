@@ -790,8 +790,8 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     assert (held / "out" / "memory.json").read_text() == line + "\n"
     assert sorted(p.name for p in (held / "out").iterdir()) == ["memory.json"]
     assert list(doc) == ["value", "unit", "commit", "run", "loopback", "local", "machine", "gamma_decided_by",
-                         "host_run", "no_bound", "session", "verdict", "error", "rate_bytes_per_s", "store_bytes",
-                         "node_gpu_bytes", "model", "bound", "parameters", "beside", "ran_with", "audit"]
+                         "numbers_decided_by", "host_run", "no_bound", "session", "verdict", "error",
+                         "rate_bytes_per_s", "store_bytes", "node_gpu_bytes", "model", "bound", "parameters", "beside", "ran_with", "audit"]
     got = written(held)
     assert list(got) == WRITTEN
     assert {n: m["value"] for n, m in got.items()} == {
@@ -1381,6 +1381,40 @@ def test_where_the_lean_leaves_gamma_undecided_the_one_machine_ways_print_the_py
     assert text[1] == f"  {M.LOOPBACK if way == '--loopback' else M.LOCAL}"
     assert text[2] == f"  {M.PYTHON_LEDGER_WORDS}" and "has not decided" in text[2]
     assert (doc["value"], doc["error"], doc["gamma_decided_by"]) == (0.199, 2.0 ** -40, M.PYTHON_LEDGER)
+    assert doc["numbers_decided_by"] == M.NUMBERS_PYTHON
+
+
+@pytest.mark.parametrize("way", ["--loopback", "--local"])
+def test_where_the_lean_decided_gamma_the_one_machine_ways_print_it_with_no_python_ledger_line(
+        store, capsys, work, monkeypatch, way):
+    """A session whose γ the Lean verifier decided prints its share with no Python ledger line, and the JSON's
+    `gamma_decided_by` is `lean`; `numbers_decided_by` says the share and the windows' δ are the Lean's and the
+    sketch's and the sample's terms in its error the Python ledger's."""
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
+    machine = Machine(record=a_local_record(a_session(gamma=0.125)))
+    assert bench(store, way, run=machine) == 0
+    text, doc, _ = printed(capsys)
+    assert text[0].startswith("memory: 0.125 of the node's memory read rate")
+    assert not any("python ledger" in t.lower() for t in text)
+    assert (doc["value"], doc["gamma_decided_by"], doc["numbers_decided_by"]) == (0.125, "lean", M.NUMBERS_LEAN)
+
+
+@pytest.mark.parametrize("way", ["--from", "--loopback"])
+def test_a_gamma_the_lean_refused_prints_no_number_and_why(store, capsys, work, monkeypatch, way):
+    """A reading the Lean verifier's γ terms refuse (`{"refused": why}`, a disagreement with the Python ledger's or a
+    refusal of either) prints no number and exits 1, naming why: the verifier refused it, which is no failure to run."""
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
+    why = "the Lean verifier's γ terms and the Python ledger's disagree at .gamma: the Lean's \"1\", the Python's 0.25"
+    s = a_session()
+    s["ledger"]["spec"] = {"capacity_bytes_per_s": 1.0, "refused": why}
+    if way == "--from":
+        store.add(RUN, {"out/verifier.json": a_record(s)})
+        assert bench(store, "--from", RUN) == 1
+    else:
+        assert bench(store, way, run=Machine(record=a_record(s))) == 1
+    out, err = capsys.readouterr()
+    assert f"session 0 was accepted and its γ at the specification's rate is refused: {why}" in out + err
+    assert not any(line.startswith("memory: 0") for line in out.splitlines())
 
 
 def test_no_audit_reads_the_python_ledgers_gamma(store, capsys, tmp_path):
@@ -1401,7 +1435,7 @@ def test_no_audit_reads_the_python_ledgers_gamma(store, capsys, tmp_path):
     store.add(FIRE, {"out/verifier.json": a_record(a_session(gamma=0.125))})
     assert bench(store, "--from", FIRE) == 0
     _, doc, _ = printed(capsys)
-    assert doc["gamma_decided_by"] == "lean"
+    assert (doc["gamma_decided_by"], doc["numbers_decided_by"]) == ("lean", M.NUMBERS_LEAN)
 
 
 def test_from_a_records_directory_reads_it_with_nothing_of_ours(store, capsys, tmp_path, work):

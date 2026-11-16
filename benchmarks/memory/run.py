@@ -166,6 +166,14 @@ PYTHON_LEDGER_WORDS = ("python ledger: the share and its error are the Python le
                        "the Lean verifier has not decided them, so no audit reads them")
 #: and the premise a Metrics row of such a share names in its verdict
 PYTHON_LEDGER_PREMISE = "the share is the Python ledger's: the Lean verifier has not decided it"
+#: `numbers_decided_by`: which of the printed numbers the Lean verifier decided and which are the Python ledger's, each
+#: by its key in the session's ledger.  Where the Lean decided the share, its error is the sum of the three: the
+#: windows' δ and AuditRO's slack (the reading's own error, held to the Lean's), and the sketch's term and the sample's
+#: rejection and binding terms (`draw`), which no Lean computes yet
+NUMBERS_LEAN = {"lean": ["spec.gamma", "spec.error.windows"],
+                "python_ledger": ["declared.gamma.spec.error.sketch", "declared.gamma.spec.error.draw"]}
+NUMBERS_PYTHON = {"lean": [], "python_ledger": ["spec.python_ledger.gamma",
+                                                "declared.python_ledger.gamma.spec.error.windows"]}
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
 #: what an unbound session's number rests on, in its Metrics row's verdict
 HELD_NONE = "the verifier held no checkpoint"
@@ -280,7 +288,8 @@ def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict
     `remote_session/summary.py`'s `gamma_spec` of the session. Where the Lean's answer for γ's terms isn't written,
     the reading is undecided and there is no number, unless `python_ledger`, which only `--loopback` and `--local`
     pass: then γ and its error are the Python ledger's reading the record carries beside it (`python_ledger`), and
-    `gamma_decided_by` says so (`PYTHON_LEDGER`); else it is `lean`."""
+    `gamma_decided_by` says so (`PYTHON_LEDGER`); else it is `lean`.  `numbers_decided_by` names which of the
+    printed numbers each decided (`NUMBERS_LEAN`, `NUMBERS_PYTHON`)."""
     try:
         v = json.loads(record.read_text())
         sessions = {s["k"]: s for s in v["sessions"]}
@@ -308,11 +317,15 @@ def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict
         if not python_ledger or not isinstance(spec.get("python_ledger"), dict):
             raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is {undecided}")
         spec, decided_by, under = spec["python_ledger"], PYTHON_LEDGER, ("python_ledger",)
+    if (why := spec.get("refused")) is not None:
+        raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is refused: {why}")
     gamma = spec.get("gamma")
     if isinstance(gamma, bool) or not isinstance(gamma, (int, float)):
         raise NoNumber(f"session {vs['k']} was accepted and its ledger holds no γ at the specification's rate")
     binding = v.get("binding") or {}
-    return {"value": gamma, "gamma_decided_by": decided_by, "session": vs["k"], "verdict": vs.get("verdict"),
+    return {"value": gamma, "gamma_decided_by": decided_by,
+            "numbers_decided_by": NUMBERS_PYTHON if decided_by == PYTHON_LEDGER else NUMBERS_LEAN,
+            "session": vs["k"], "verdict": vs.get("verdict"),
             "error": error_of(ledger, *under),
             "rate_bytes_per_s": (ledger.get("inputs") or {}).get("spec_bytes_per_s"),
             "store_bytes": blocks * BLOCK_BYTES,
@@ -358,8 +371,9 @@ def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, ho
     why = None if s.get("error") is None else no_bound(s["error"])
     return {"value": None if why else s["value"], "unit": UNIT, "commit": commit, "run": run, "loopback": loopback,
             "local": LOCAL if local else None, "machine": machine, "gamma_decided_by": s["gamma_decided_by"],
-            "host_run": host_run,
-            "no_bound": why, **{k: v for k, v in s.items() if k not in ("value", "gamma_decided_by")}}
+            "numbers_decided_by": s["numbers_decided_by"], "host_run": host_run,
+            "no_bound": why, **{k: v for k, v in s.items() if k not in ("value", "gamma_decided_by",
+                                                                       "numbers_decided_by")}}
 
 
 def left(tree: Path) -> dict:
