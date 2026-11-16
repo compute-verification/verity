@@ -63,8 +63,6 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 - `glm53-flock-steady-head-block-h200`: GLM-5.3's sparse MLA head block at 64 visible keys, in both its forms, at one,
   two and four provers on one H200 with ten cores, each statement fetched from the store.
-- `glm53-flock-steady-head-block-h200-c24`: the same two forms at four provers on 24 cores, six a prover, so a node
-  whose NUMA nodes hold 24 cores keeps all of a point on the card's node.
 
 ## Sweeps
 
