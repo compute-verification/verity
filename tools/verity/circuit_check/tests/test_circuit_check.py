@@ -1128,17 +1128,22 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
     assert not {"DotBf16_v3", "AttnBlock_v6"} & calls
 
 
-#: Calls over `Options.partition_max_gates` or `Options.partition_max_leaves` whose partition stays unchecked, each with why it
-#: is allowed: the suite's, and any range spot or callee of one `_unchecked_walk` reaches; none is.  Each passes no Call status
-#: to its callees (`targets.callee_calls`): their boundaries are not the proof blocks its pending cut makes.  A hold keeps these
-#: walks from failing on it; circuit-check still warns on it over the cost target (``partition/over-cost-target``) and fails it
-#: by name over the leaf budget (``partition/unpartitioned``), and whether that may stay red is drive's policy (policy.toml's
-#: allowances).  Over the cost target alone, GLM-5.3 TP8's served two-shot MNNVL all-reduces (past 22 rows of 6,144) and multimem ones (past 50) are cut
+#: Calls over `Options.partition_max_gates` (the cost target) whose partition stays unchecked, each with why it is allowed: the
+#: suite's, and any range spot or callee of one `_unchecked_walk` reaches.  Each passes no Call status to its callees
+#: (`targets.callee_calls`): their boundaries are not the proof blocks its pending cut makes.  A hold keeps these walks from
+#: failing on it as circuit-check does, which warns on it (``partition/over-cost-target``); a Call over the leaf budget, which
+#: circuit-check fails (``partition/unpartitioned``), or one whose proof block is past Flock's range (``block``, held there
+#: or not), can't be held here.  Over the cost target alone, GLM-5.3 TP8's served two-shot MNNVL all-reduces (past 22 rows of 6,144) and multimem ones (past 50) are cut
 #: member by member; the σ Definitions at their smallest bindings (`boolean_sigma.circuit-check.py`, whose split moves
 #: GLM-5.3's and DeepSeek-V4's word digests), multimem at 86 rows and more, over the leaf budget too, and GLM-5.3's served
 #: expert GEMMs, over the leaf budget (an E = 256 stack of FP8 weights: 805M leaves for w13, 403M for w2), are partitioned by
 #: their callees
-OVER_PARTITION_BUDGET: dict[str, str] = {}
+OVER_PARTITION_BUDGET: dict[str, str] = {
+    "DsaLatentRowDsMla_v2{KVL=256,R=8,TILE=64,EPS=1e-05}": (
+        "the FP8 cache row, a served Call since the vocabulary kind dsa_latent_row_ds_mla: 7,915,960 gates in one proof block of "
+        "2^23 bits, which serving proves whole; its norm DsaRMSNormSumSq_v2 is no Call, and serving's cut of the row (CIR-292's "
+        "second change) replaces the callee table rather than extend it"),
+}
 
 
 def _over_budget(catalog, calls: set[str]) -> dict[str, str]:
@@ -1203,11 +1208,16 @@ def _unchecked_walk(catalog) -> tuple[dict[str, set[str]], set[str], dict[str, s
 @pytest.mark.slow
 @_opt_in("~40 min")
 def test_every_call_the_suite_checks_is_partitioned(catalog):
-    """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
-    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
-    smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, is cut member by member with each member within
-    them, or is partitioned by its callees (`_gap` finds none), apart from `OVER_PARTITION_BUDGET`, which holds only Calls
-    that are still none of these."""
+    """Each Call the suite checks is within `Options.partition_max_gates` (the Boolean attention Calls at T = 17 are about
+    1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their smallest whole
+    blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, is cut member by member with each member within them, or is
+    partitioned by its callees (`_gap` finds none), or is held in `OVER_PARTITION_BUDGET`: unchecked over the cost target, as
+    circuit-check warns (``partition/over-cost-target``).  A held Call is still none of the others, within the leaf budget
+    (over it circuit-check fails it), and its proof block fits Flock's range (`checks.block_range`, the ``block`` check), so the
+    hold lets through only what circuit-check passes with that warning."""
+    from circuit_check import block_held
+    from verity.circuits.evaluation.reference import signature_of
+
     suite, calls = catalog.suite, TG.call_families()
     over = _over_budget(catalog, calls)
     gaps = {k: f"{why}; {gap}" for k, why in over.items() if k not in OVER_PARTITION_BUDGET and (gap := _gap(suite[k])) is not None}
@@ -1217,6 +1227,16 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
         "no longer an over-budget Call the suite checks, or a range spot or callee of one: remove it from OVER_PARTITION_BUDGET"
     assert sorted(k for k in OVER_PARTITION_BUDGET if k in suite and _gap(suite[k]) is None) == [], \
         "cut member by member or partitioned by its callees now: remove it from OVER_PARTITION_BUDGET"
+    held = {k: suite[k] if k in suite else TG.definition(k) for k in OVER_PARTITION_BUDGET}
+    assert sorted(k for k, fn in held.items() if sum(pt.leaves for pt in signature_of(fn)[0]) > OPTS.partition_max_leaves) == [], \
+        "over the leaf budget, which circuit-check fails (partition/unpartitioned): cut it rather than hold it in OVER_PARTITION_BUDGET"
+    past = {}
+    for k, fn in held.items():
+        F = CK.Findings()
+        CK.block_range(fn, F)
+        past.update({k: f["name"] for f in F.failures})
+    past.update({k: "held by block_held" for k in set(held) & set(block_held.held())})
+    assert past == {}, f"past Flock's range, which `block` fails: {past}; a proof block past it can't be held in OVER_PARTITION_BUDGET"
 
 
 @pytest.mark.slow
@@ -1225,7 +1245,9 @@ def test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees(c
     """`targets.callee_calls` is the families of the Definitions an `checks.uncut` Call calls (and, through each callee `uncut`
     itself, its callees), apart from those that are Calls otherwise, each with the families of the Calls that pass it
     (`_unchecked_walk`).  The uncut Calls are the suite's and the range spots' (`circuit_check.ranges`), apart from
-    `OVER_PARTITION_BUDGET`'s: they pass nothing, and stay unchecked until their cut lands.  Every other one the walk reaches,
+    `OVER_PARTITION_BUDGET`'s: they pass nothing, and stay unchecked until their cut lands (each over the cost target alone and
+    within Flock's range, which the walk above holds, so circuit-check passes it with ``partition/over-cost-target``).  Every
+    other one the walk reaches,
     primitives included, is partitioned by its callees: an uncut primitive callee has none, so it fails here by name, and
     circuit-check leaves its Call unchecked (``partition/over-cost-target``, or ``partition/unpartitioned`` over the leaf
     budget).  A listed Call that no longer passes a family Call status only warns:

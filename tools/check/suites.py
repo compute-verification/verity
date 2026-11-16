@@ -36,7 +36,14 @@ recorded run that earned it (`--run`, which check passes), and a reuse prints th
 A suite nested in another's directory is its own. The outer suite's directory leaves it out of the outer one's key and inputs
 (`dropped`), unless another of the outer suite's inputs covers it (a path it declares, a dependency's directory), so an edit to
 the nested suite re-runs that suite alone. The guard fails a test of the outer suite that reads one of its files, as it fails any
-read outside the inputs (`VERITY_SUITE_DENY`). The repository's own suite keeps every path: its tests read the whole tree.
+read outside the inputs (`VERITY_SUITE_DENY`). The repository's own suite keeps every path: its tests read the whole tree. No
+suite collects another's tests: pytest ignores each suite under its test paths (`Suite.inner`), the root's own included.
+
+The root's `tests/` mirrors the tree by path (`MIRROR`): the tests of `X` are at `tests/X`. A mirrored suite counts as part of
+the `X` that names it (`mirror_of`): an input or dependency directory `X` covers `tests/X` too, as it covered `X/tests`, and
+the suite at `tests/X` keeps the name `X` gave it: its path `X` without a `[project]`, and for the virtual member `N-tests`
+that holds the tests of distribution N (at `tests/X` or `tests/X/tests`, or at `X/tests` before the move), N
+(`suite_name`).
 
 The key is content, not location. Whatever is at or under the suite's own directory is keyed by its path from there (`_rel`,
 written `<suite>/...`): the directory's git tree id (which hashes each file's path inside it and its blob, and not the
@@ -191,6 +198,7 @@ import tempfile
 import threading
 import time
 import tomllib
+from collections import Counter
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -348,6 +356,7 @@ class Suite:
     inputs_only: bool = False    # [tool.verity.tests] inputs_only: its dependencies' directories are left out (`inputs_of`)
     worker_gb: float = 0.0       # [tool.verity.tests] worker_gb: one xdist worker's peak, which `--mem-gb` divides (0: unbounded)
     nested: tuple[str, ...] = ()  # the suites under its directory, which its own directory leaves out (`dropped`)
+    inner: tuple[str, ...] = ()   # the suites under its test paths, which its pytest ignores (the root's included)
     parts: int = 0               # [tool.verity.tests] parts: the parts by test id check runs it in (`id_part_of`; 0: whole)
     timeout_workers: int = 0     # [tool.verity.tests] timeout_workers: the xdist workers its timeout_s holds for (`bound`; 0: any)
     workers: int = 0             # [tool.verity.tests] workers: the xdist workers it runs on at least, where they fit (`held_workers`)
@@ -487,15 +496,50 @@ def metadata() -> list[str]:
     return sorted(set(listed)) + ["uv.lock"]
 
 
+#: the root's directory that mirrors the tree by path: the tests of `X` are at `tests/X`
+MIRROR = "tests"
+
+
+def mirror_of(path: str) -> str | None:
+    """The directory whose tests a directory under the root's `tests/` holds (`tests/X/...` -> `X/...`), or None."""
+    return path[len(MIRROR) + 1:] if path.startswith(MIRROR + "/") else None
+
+
+def tested(path: str) -> tuple[str, ...]:
+    """The directories a suite at ``path`` under `tests/` holds the tests of, as `select` and the check's tables name it:
+    `tests/X` and `tests/X/tests` hold `X`'s. None elsewhere."""
+    src = mirror_of(path)
+    return () if src is None else tuple(dict.fromkeys((src, src.removesuffix("/tests"))))
+
+
+def suite_name(path: str, project: dict, dirs: dict[str, str]) -> str:
+    """A suite's name: `repository` for the root's, else its distribution's, else its path. A suite at `tests/X` is named as `X`
+    named it: by its path `X`; and the virtual member `N-tests` that holds the tests of the member N, at `X/tests` or (mirrored)
+    `tests/X` or `tests/X/tests`, where `X` is N's directory (``dirs``: {member directory: name}), by N."""
+    if path == ".":
+        return "repository"
+    if not project:
+        return mirror_of(path) or path
+    name = _norm(project["name"])
+    for d in tested(path) or (path.removesuffix("/tests"),):
+        if name.endswith("-tests") and dirs.get(d) == name.removesuffix("-tests") and d != path:
+            return dirs[d]
+    return name
+
+
 def discover() -> list[Suite]:
-    suites = []
+    suites, testpaths = [], {}
+    dirs = {d: n for n, d in members().items()} if (ROOT / "pyproject.toml").is_file() else {}
     for f in metadata()[:-1]:
         path = str(Path(f).parent)
         data = _pyproject(path)
         if "pytest" not in data.get("tool", {}):
             continue
         project = data.get("project", {})
-        name = "repository" if path == "." else _norm(project["name"]) if project else path
+        name = suite_name(path, project, dirs)
+        base = "" if path == "." else path + "/"
+        testpaths[path] = [base + t.strip("/") if t not in (".", "") else path
+                           for t in data["tool"]["pytest"].get("ini_options", {}).get("testpaths", ["."])]
         tests = data["tool"].get("verity", {}).get("tests", {})
         parts = tests.get("parts", 0)
         if "parts" in tests and (type(parts) is not int or parts < 2):
@@ -512,9 +556,17 @@ def discover() -> list[Suite]:
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
                             tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True,
                             float(tests.get("worker_gb", 0)), parts=parts, timeout_workers=held, workers=least))
+    named = Counter(s.name for s in suites)
+    if clash := sorted(n for n, k in named.items() if k > 1):
+        raise ValueError(f"two suites have each of the names {', '.join(clash)}: a suite at `tests/X` takes the name `X` gave it "
+                         "(`suite_name`), so the suite at `X` and its mirror can't both configure pytest; move what is left at "
+                         "`X` to `tests/X`")
+    inner = {s.path: tuple(sorted(t.path for t in suites if t.path != s.path and _under(t.path, testpaths[s.path])))
+             for s in suites}
     # the repository's own suite keeps every path: its tests (test_repository, test_boundaries, test_doc_paths) read the whole tree
-    return [replace(s, nested=tuple(sorted(t.path for t in suites if t.path != s.path and _under(t.path, [s.path]))))
-            if s.path != "." else s for s in suites]
+    return [replace(s, nested=tuple(sorted(t.path for t in suites if t.path != s.path and _under(t.path, [s.path]))),
+                    inner=inner[s.path])
+            if s.path != "." else replace(s, inner=inner[s.path]) for s in suites]
 
 
 #: what each Lake package's build is keyed by, per checkout and package (`built_from`), and under the package "" the checkout's tree
@@ -834,8 +886,9 @@ def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     """Its directory, its dependencies' directories, and its declared inputs. A declared workspace package is its directory
     alone: the guard allows what this returns, so a test that reads that package's own dependencies fails until they are
     declared too. A suite that declares `inputs_only = true` leaves its dependencies' directories out: its `inputs` name what
-    its tests read of them, which the guard holds it to."""
-    return sorted({suite.path, *([] if suite.inputs_only else closure(suite, pkgs)), *suite.inputs})
+    its tests read of them, which the guard holds it to. A path `X` holds its tests too, mirrored at `tests/X` (`MIRROR`)."""
+    ins = {suite.path, *([] if suite.inputs_only else closure(suite, pkgs)), *suite.inputs}
+    return sorted(ins | {f"{MIRROR}/{p}" for p in ins if p != "." and mirror_of(p) is None and (ROOT / MIRROR / p).exists()})
 
 
 def _under(path: str, prefixes: list[str]) -> bool:
@@ -1169,7 +1222,8 @@ class Modules:
         cfg = _pyproject(suite.path).get("tool", {}).get("pytest", {}).get("ini_options", {})
         base = "" if suite.path == "." else suite.path + "/"
         self.testpaths = [base + t.strip("/") if t not in (".", "") else suite.path for t in cfg.get("testpaths", ["."])]
-        self.texts = {p: t for p, t in texts.items() if _under(p, self.testpaths)}
+        self.inner = list(suite.inner)
+        self.texts = {p: t for p, t in texts.items() if _under(p, self.testpaths) and not _under(p, self.inner)}
         self.scans = {p: scan(t) for p, t in self.texts.items()}
         by_name: dict[str, list[str]] = {}
         for p in self.texts:
@@ -1183,7 +1237,7 @@ class Modules:
         """A test module a key may leave out: a `test_*.py` file under the test paths, outside a data directory."""
         parts = path.split("/")
         return (parts[-1].startswith("test_") and parts[-1].endswith(".py") and not _DATA_DIRS.intersection(parts[:-1])
-                and _under(path, self.testpaths))
+                and _under(path, self.testpaths) and not _under(path, self.inner))
 
     def modules(self) -> list[str]:
         return sorted(p for p in self.texts if self.narrowable(p))
@@ -2200,7 +2254,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     start, ooms = time.monotonic(), oom_kills()
     with log.open("w") as out:
         p = subprocess.Popen([sys.executable, "-P", "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
-                              *spread, *([f"--basetemp={basetemp / 'b'}"] if basetemp else []), *args], cwd=ROOT / suite.path,
+                              *(f"--ignore={ROOT / q}" for q in suite.inner), *spread, *([f"--basetemp={basetemp / 'b'}"] if basetemp else []), *args], cwd=ROOT / suite.path,
                              env=env, stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
         if basetemp:
             with contextlib.suppress(OSError, IndexError, ValueError):
@@ -2476,7 +2530,7 @@ def select(suites: list[Suite], names: list[str]) -> list[Suite]:
         return suites
     chosen = []
     for n in names:
-        exact = [s for s in suites if n in (s.name, s.path, s.path.rstrip("/"))]
+        exact = [s for s in suites if n in (s.name, s.path, s.path.rstrip("/"), *tested(s.path))]
         hits = exact or [s for s in suites if n in s.name or n in s.path]
         if len(hits) != 1:
             sys.exit(f"suites: {n!r} matches {len(hits)} suites: {', '.join(s.name for s in hits) or 'none'} (see --list)")

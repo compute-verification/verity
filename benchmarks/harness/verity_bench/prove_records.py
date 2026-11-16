@@ -37,6 +37,14 @@ checks it didn't pass, and one whose attempt carries no verdict can't be told an
 timed outside the harness's point or before it, has no verdict of its own and is judged by `CHECKS` alone, whatever
 the other four say. `report_why` judges a report.
 
+A row whose card was on another NUMA node than its CPUs still prices its type. Where a row records its card's node
+(`CARD_NUMA`), it is off that node when its CPUs (`cores.numa_nodes`) aren't on that node alone, and on it otherwise.
+Where it records none, its run decides by `OFF_NODE`'s scan of the runs' own host records: off where the scan lists
+the run, on where the scan read the run and doesn't list it, and not recorded where the scan didn't read it
+(`off_node`). The table's notes and the proving totals' inputs count the priced rows of each kind with the share of
+the proving time they hold, and the rows priced from the single-session card, whose table records no CPUs
+(`prove.report`'s `off_node`).
+
 A type is priced at the stated prover count (`--provers`), from the rows at that count only, and at
 the stated host CPU cores a card (`--cores`): from the rows whose provers held that many, else from those that held
 the fewest above it, named on the type's row and counted in the totals; a row timed at fewer cores prices nothing. A
@@ -86,6 +94,7 @@ import re
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from functools import cache
 from pathlib import Path
 from typing import Any, TypeGuard
 
@@ -120,6 +129,13 @@ CHECKS = (steady.accepted, steady.exits, steady.not_void, steady.flat, steady.no
 STEADY_POINT_TOOL = "steady_point"
 #: what a refusal of a run by its own verdict opens with: the measurements name each such refusal among their inputs
 OWN_VERDICT = "its own steady-state verdict"
+#: a row's field for the NUMA node of the card its provers ran on, as the harness's timed step reads it inside the
+#: lease (null where the node doesn't say), held to the row's `cores.numa_nodes`
+CARD_NUMA = "card_numa_node"
+#: a scan of the runs' own host records, for rows that don't record `CARD_NUMA`: the runs it read (`covered`: every
+#: run from `first` to `last` save those `unread` lists), those of them whose card was on another NUMA node than
+#: their CPUs (`runs`, each with both nodes), and in `source` what was read (`OffNodeScan`)
+OFF_NODE = Path(__file__).resolve().parent / "data" / "off_node.json"
 #: what a row holds, beside what those checks read, for the command to price it, by the script's names (`stage.word`,
 #: the census type it was staged for, names its block type, and `stage.definition`, the form staged, where it has no
 #: `stage.word`; `verify_s` is there only where the verifier was timed, and `cores`, the CPU cores its provers held for
@@ -324,6 +340,65 @@ def row_cores(row: Mapping[str, Any], unstated: int = P.UNSTATED_CORES) -> int |
     return stated if _count(stated) else None
 
 
+def _node(x: Any) -> TypeGuard[int]:
+    return isinstance(x, int) and not isinstance(x, bool) and x >= 0
+
+
+_RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
+
+
+@dataclass(frozen=True)
+class OffNodeScan:
+    """A scan of runs' own host records (`OFF_NODE`): it read every run from `first` to `last`, by run id (an id
+    orders runs by their start), save those in `unread`, and found the card on another NUMA node than its CPUs in
+    those in `off`."""
+
+    first: str
+    last: str
+    unread: frozenset[str]
+    off: frozenset[str]
+
+    def of(self, run: str) -> bool | None:
+        """Whether `run`'s card was off its CPUs' node by the scan, None where the scan didn't read `run`."""
+
+        if run in self.off:
+            return True
+        return False if self.first <= run <= self.last and run not in self.unread else None
+
+
+@cache
+def off_node_scan(path: Path = OFF_NODE) -> OffNodeScan:
+    """`OFF_NODE`'s scan, refused unless its range is two run ids in order, every run it lists unread is inside that
+    range, and every run it lists off is inside it, read, with a card's node and CPUs' nodes that aren't that one."""
+
+    doc = json.loads(path.read_text())
+    covered, runs = doc["covered"], doc["runs"]
+    first, last, unread = covered["first"], covered["last"], frozenset(covered["unread"])
+    if not (_RUN_ID.fullmatch(first) and _RUN_ID.fullmatch(last) and first <= last):
+        raise ValueError(f"{path}: `covered` isn't two run ids in order: {first!r} to {last!r}")
+    if outside := sorted(r for r in unread if not (_RUN_ID.fullmatch(r) and first <= r <= last)):
+        raise ValueError(f"{path}: `covered.unread` lists runs outside {first} to {last}: {', '.join(outside)}")
+    for run, x in runs.items():
+        if not (_RUN_ID.fullmatch(run) and first <= run <= last and run not in unread):
+            raise ValueError(f"{path}: run {run} is no run the scan read ({first} to {last}, save `unread`)")
+        card, cpus = x.get("card_numa_node"), x.get("cpu_numa_nodes")
+        if not (_node(card) and isinstance(cpus, list) and cpus and all(_node(n) for n in cpus) and cpus != [card]):
+            raise ValueError(f"{path}: run {run} lists no card's NUMA node and CPUs' NUMA nodes other than it alone")
+    return OffNodeScan(first, last, unread, frozenset(runs))
+
+
+def off_node(row: Mapping[str, Any], run: str, scan: OffNodeScan | None = None) -> bool | None:
+    """Whether a row's card was on another NUMA node than its CPUs, None where that isn't recorded. A row that records
+    its card's node (`CARD_NUMA`) and its CPUs' (`cores.numa_nodes`) is off when they aren't that one node and on
+    otherwise. A row that doesn't (or records null) is as its run is by the scan (`off_node_scan`): off where it lists
+    the run, on where it read it and doesn't, and not recorded where it didn't read it."""
+
+    card, cpus = row.get(CARD_NUMA), _field(row, "cores.numa_nodes")
+    if _node(card) and isinstance(cpus, list) and cpus and all(_node(n) for n in cpus):
+        return cpus != [card]
+    return (off_node_scan() if scan is None else scan).of(run)
+
+
 def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES,
                refused: str | None = None) -> PF.Steady | str:
     """A `RATES` row as a staged type's measurement at its prover count and its cores: a statement's GPU-seconds are
@@ -333,7 +408,7 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
     `stage.word` is its `stage.definition`'s. A row that names no staged Definition can't be put on a block
     type's row, and is its reason instead. `art`: the art that holds the row as its `ART_RATES`, where the run's files
     don't. `refused`: why the row's run prices none of its rows (`own_verdict`), which the row is refused with in
-    place of `CHECKS`' answers."""
+    place of `CHECKS`' answers. Whether its card was off its CPUs' NUMA node is `off_node`'s."""
 
     name = f"`{row.get('type')}` at {row.get('provers')} provers"
     definition = _field(row, "stage.definition")
@@ -351,11 +426,12 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
     k_log = stage["k_log"] if isinstance(stage.get("k_log"), int) else 0
     held = RATES if art is None else ART_RATES
     cores = row_cores(row, unstated) or unstated
+    off = off_node(row, run)
     if why:
         return PF.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, refused=why, provers=provers,
-                        art=art, cores=cores, form=form)
+                        art=art, cores=cores, form=form, off_node=off)
     return PF.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, row["gpus"] / row["statements_per_s"],
-                    row.get("verify_s"), provers=provers, art=art, cores=cores, form=form)
+                    row.get("verify_s"), provers=provers, art=art, cores=cores, form=form, off_node=off)
 
 
 def own_verdict(store: Any, run: str, attempt: Mapping[str, Any] | None) -> str | None:
@@ -440,7 +516,8 @@ def rates(store: Any, run: str) -> tuple[list[PF.Steady], list[str]]:
             found.append(PF.Steady(
                 name, types[name]["definition"], staged["k_log"], staged["c"], staged["full"], run, where,
                 gpu and gpu["mean"], verify and verify["mean"],
-                why or (None if gpu else "no statement of it finished in the steady span"), provers=provers))
+                why or (None if gpu else "no statement of it finished in the steady span"), provers=provers,
+                off_node=off_node({}, run)))
     return found, []
 
 
@@ -862,7 +939,10 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     the records the table read, then each steady-state run its own verdict refused (`own_verdict`), with why; a total
     with none has those words as its `why`. The prover GPUs a serving GPU are the
     proving total over the stated serving rate, so their mark is the weaker of the two's (`STRENGTH`), first among
-    their inputs, then proving's words and the serving rate's. The figure at the exfiltration run of record's design
+    their inputs, then proving's words and the serving rate's. Both proving totals then say how many of the priced
+    steady-state rows ran with their card off their CPUs' NUMA node, how many on it and how many don't record it
+    (`off_node_line`):
+    a statement about the rows they rest on, which moves neither value nor mark. The figure at the exfiltration run of record's design
     (`AT_RECORD`) is read from that run alone, which its inputs name in place of the table's records. The figures of
     `TARGETED` carry `GPUS_PER_SERVING_GPU_TARGET` as their `target`, and, where they have a value, its check against
     it as their `verdict`: `meets` at or under it, `misses` over it."""
@@ -889,6 +969,8 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
         if figure == "gpus_per_serving_gpu":
             mark = max(mark, s["status"], key=STRENGTH.index)
             inputs = [mark, f"proving: {said}", f"serving rate ({s['status']}, a stated input): {s['basis']}"]
+        if (off := doc["totals"].get("off_node")) and figure in ("gpus_per_serving_gpu", "gpu_seconds_per_token"):
+            inputs.append(off_node_line(off))
         out.append({"name": name, "value": value, "unit": FIGURES[figure], "inputs": [*inputs, *targets], "mark": mark})
     for m, figure in zip(out, metrics.values(), strict=True):
         if figure in TARGETED:
@@ -963,6 +1045,21 @@ def _missing_share(m: Mapping[str, Any]) -> str:
 
     blocks = f"{m['block_share']:.2%} of the blocks"
     return blocks if m["mac_share"] is None else f"{blocks}, {m['mac_share']:.2%} of the blocks' MACs"
+
+
+def off_node_line(off: Mapping[str, Any]) -> str:
+    """How many of the steady-state rows that price a type ran with their card off their CPUs' NUMA node, how many on
+    it and how many don't record it, each with its share of the proving time, then the rows priced from the
+    single-session card, whose table records no CPUs (`prove.report`'s `off_node`)."""
+
+    def share(kind: Mapping[str, Any]) -> str:
+        return f"{kind['time_share'] or 0.0:.4%}"
+
+    return (f"card off its CPUs' NUMA node: {off['off']['rows']} of {off['rows']} priced steady rows, "
+            f"{share(off['off'])} of the proving time; on its node by the runs' own records: {off['on']['rows']} rows, "
+            f"{share(off['on'])}; not recorded: {off['not_recorded']['rows']} rows, {share(off['not_recorded'])}; "
+            f"priced from the single-session card, whose table records no CPUs: {off['single']['rows']} rows, "
+            f"{share(off['single'])}")
 
 
 def _above_line(above: Mapping[str, Any], partial: bool) -> str:
@@ -1155,6 +1252,8 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
         lines += _record_lines(doc)
     if above := t["above_cores"]:
         lines.append(_above_line(above, bool(t["missing"])))
+    if off := t.get("off_node"):
+        lines.append(f"- {off_node_line(off)}")
     if planned:
         lines += _planned_lines(planned)
     if t["range_basis"]:

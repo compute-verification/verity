@@ -137,13 +137,11 @@ def authed(auth: tuple[str, ...]):
                 os.environ[k] = v
 
 
-def takes_bookkeeping(repo: Path) -> bool:
-    """Whether ``repo``'s train.sh, which a records run launches from, takes `--bookkeeping-warn` (the run repairs bookkeeping
-    and warns); one that predates it would refuse every records run."""
-    try:
-        return "--bookkeeping-warn" in (repo / "tools" / "check" / "train.sh").read_text()
-    except OSError:
-        return False
+#: the train.sh the loop's detached launches run: its own, deployed with its pin, so neither a candidate's tree nor the tree the
+#: queue's clone has checked out decides how a launch starts or is waited for
+OWN_TRAIN = Path(__file__).resolve().parents[3] / "check" / "train.sh"
+#: the files beside train.sh that it reads by its own path, which a detached launch copies beside its copy of it (`detach`)
+TRAIN_COMPANIONS = ("settings.py",)
 
 
 def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = (),
@@ -157,9 +155,9 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--ratchet-base RBASE] [--shard [auto:]K/N [--shard-plan-file PLAN]]
     [--deselect FILE] [--cc-records[-from ART@SHA256]]` from the queue's clone (``cc_records``, circuit-check's records step alone;
     ``deselect``, the tests a `--deferred` run's suites leave out): (the run ids it printed,
-    its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its
-    own path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
-    `launched` reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a
+    its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh beside copies of the files it
+    reads by its own path (`TRAIN_COMPANIONS`), which finds the clone from its working directory and checks the commit out in a
+    worktree of its own, and returned at once as the record `launched` reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a
     password at the tty).  ``rank`` is its check's `slot.py --rank` (CHECK_SLOT_RANK), none for an unranked one.
     ``bookkeeping_warn`` (a records run) has its lean-audit repair the locks' bookkeeping and warn (`--bookkeeping-warn`).
     ``script_from``, detached, is the train.sh that runs instead of the clone's (the loop's own)."""
@@ -177,7 +175,7 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci",
            "CHECK_SLOT_RANK": "" if rank is None else str(rank)}
     if detached:
-        return detach(repo, argv, env, script=argv[1], source=script_from)
+        return detach(repo, argv, env, script=argv[1], source=script_from, companions=TRAIN_COMPANIONS)
     r = subprocess.run(argv, cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL, env=env)
     m = RUN_RE.search(r.stdout)
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
@@ -195,16 +193,23 @@ LAUNCH_LOST_S = 5400
 DETACH_JOB = 'd=$1; shift; "$@" > "$d/log" 2>&1; echo "$?" > "$d/rc.tmp" && mv "$d/rc.tmp" "$d/rc"'
 
 
-def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None = None, source: Path | None = None) -> dict:
+def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None = None, source: Path | None = None,
+           companions: tuple[str, ...] = ()) -> dict:
     """``argv`` in ``repo``, in a session of its own, so no tick waits on it (train.sh takes minutes to print a Lean
     check's run ids): its output and exit go to a directory of their own under
-    `LAUNCHES`.  ``script``, a path of ``repo`` in ``argv``, runs from a copy there (of ``source`` when given): bash reads a
-    script as it runs, and a later tick resets and checks out ``repo``.  Returns the record `launched` reads."""
+    `LAUNCHES`.  ``script``, a path of ``repo`` in ``argv``, runs from a copy there (of ``source`` when given), beside copies
+    of the files ``companions`` names from beside the file copied: bash reads a script as it runs, and a later tick resets and
+    checks out ``repo``, whose working tree may hold another commit's files or none.  A companion missing there is left for the
+    script to name.  Returns the record `launched` reads."""
     root = Path(tempfile.gettempdir()) / LAUNCHES
     root.mkdir(parents=True, exist_ok=True)
     d = tempfile.mkdtemp(prefix="train-", dir=root)
     if script:
-        copy = shutil.copy(source or repo / script, Path(d) / Path(script).name)
+        src = Path(source or repo / script)
+        copy = shutil.copy(src, Path(d) / Path(script).name)
+        for name in companions:
+            with contextlib.suppress(FileNotFoundError):
+                shutil.copy(src.parent / name, Path(d) / name)
         argv = [str(copy) if a == script else a for a in argv]
     p = subprocess.Popen(["sh", "-c", DETACH_JOB, "sh", d, *argv], cwd=repo, env=env, stdin=subprocess.DEVNULL,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
@@ -976,12 +981,12 @@ class Landing:
                           cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan,
                           ratchet_base=ratchet_base, rank=AFTER_LANDING_SLOT_RANK, script_from=train_from, deselect=deselect))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
-        #: a candidate's records run (`vqueue_records.start`): `train.sh SHA MACHINES --deferred lean-audit`, detached, its check
-        #: at `AFTER_LANDING_SLOT_RANK`, repairing the locks' bookkeeping where train.sh takes `--bookkeeping-warn`
+        #: a candidate's records run (`vqueue_records.start`): `train.sh SHA MACHINES --deferred lean-audit --bookkeeping-warn`,
+        #: the loop's own (`OWN_TRAIN`), detached, its check at `AFTER_LANDING_SLOT_RANK`, repairing the locks' bookkeeping
         self.launch_locks: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine: train_launch(repo, commit, machine, False, auth=q.auth, deferred=LEAN_STEP,
-                                                        detached=True, rank=AFTER_LANDING_SLOT_RANK,
-                                                        bookkeeping_warn=takes_bookkeeping(repo)))
+                                                        detached=True, rank=AFTER_LANDING_SLOT_RANK, bookkeeping_warn=True,
+                                                        script_from=OWN_TRAIN))
             if launch is train_launch else (lambda repo, commit, machine: self.launch(repo, commit, machine, False)))
         #: a candidate's quick tier (`vqueue_slim.start_quick`): `quick_launch`, detached
         self.launch_quick: Callable[[Path, str, str, str], tuple[list[str], str] | dict] = (

@@ -1,0 +1,58 @@
+# The network attester, in prose: what `tools/move/rename.py --map tools/move/ontology_words_map.toml` renames. The
+# auditor's device on each node's uplink is "the network attester", no longer "the network certifier"; its directory is
+# the network protocol's `attester/` (`ontology_paths_map.toml`). This move renames prose only (`scope = "prose"`): a
+# word in a comment, a docstring or Markdown's text, never in code, a string, backticks or a data file, so it moves no
+# path, renames no declaration and leaves every lock and pin as it is. The code's names are `ontology_names_map.toml`'s,
+# whose move runs after this one.
+#
+# Every form the tree spells, counted on the tip this map was written on (occurrences outside this directory and the
+# archive; in Python, split by what the tokenizer says the word stands in), and what renames it:
+#
+#   form                    count  where                                              renamed by
+#   "network certifier"      3695  py-string 2261, lean 654, md 441, py-comment 165,  this map: prose (comments,
+#                                  sh 59, lock 49, toml 37, json 26, other 3            docstrings, Markdown text)
+#   "network certifiers"       68  lean 42, py-string 18, md 8                        this map
+#   "Network certifier"         8  md 6, py-string 1, json 1                          this map
+#   "NETWORK CERTIFIER"         5  py-string 5 (a heading a program prints)           stays: a string literal
+#   network_certifier        2068  py-code 1146, py-string 552, json 129, md 94,      `ontology_names_map.toml`:
+#                                  sh 51, py-comment 38, toml 29, lean 29              92 Python and shell files'
+#                                                                                       names, modules and code
+#   NetworkCertifier         1381  py-code 383, lean 364, lock 216, json 172,         stays: the Lean package
+#                                  py-string 163, md 62, toml 13, py-comment 8        `NetworkCertifier` and its
+#                                                                                       modules (lean's ruling),
+#                                                                                       with the Python names
+#                                                                                       `NetworkCertifierParams`
+#                                                                                       (416), `NetworkCertifierProfile`
+#                                                                                       (29) and the class
+#                                                                                       `NetworkCertifier`, which
+#                                                                                       follow it in one names move
+#   NETWORK_CERTIFIER         307  py-code 215, py-string 52, sh 21, py-comment 16,   stays: constants and
+#                                  md 3                                                environment variables a
+#                                                                                       caller sets; no path, so no
+#                                                                                       names move certifies it
+#   networkCertifier           14  lean 12, md 2 (`Kind.networkCertifier`)            stays: a Lean name
+#   network-certifier         249  py-string 175, lean 55, toml 10, md 6, sh 2        stays: the party's name
+#                                  (`verity-network-certifier/.../vN` tags 155;        in configurations and in
+#                                  the party `network-certifier` 41; the labels        signed key messages, domain
+#                                  `network-certifier-form` 17, `-serve` 11)           tags and format ids, labels
+#
+# Not this word: "network certification" (47) and "network certificate" (29) name the protocol's activity and its record;
+# the bare word "certifier" (7,793) names the protocol as often as the device, and `certifier-coverage` and every other
+# claim id stay (`tools/verity/lean/claim_ids.py`).
+#
+# Left as they are ([rewrite] exclude): the Lean (its comments rebuild their modules; the Lean's prose goes with lean's
+# rename of its names), this directory's maps, the archive, changelogs, fixtures, and research's store vocabulary and
+# `moves.json`.
+scope = "prose"
+
+[words]
+"network certifiers'" = "network attesters'"
+"network certifier's" = "network attester's"
+"network certifiers" = "network attesters"
+"network certifier" = "network attester"
+"Network certifiers" = "Network attesters"
+"Network certifier" = "Network attester"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "**/fixtures/**", "fixtures/**", "*.patch",
+           "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/*.lean", "tools/research/src/research/store/**"]

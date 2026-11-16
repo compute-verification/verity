@@ -119,12 +119,12 @@ def test_each_check_catches_its_failure():
     assert dead_entries(files, ("a/device/", "gone/", "a/device/run.py", "*.lean", "*.rs")) == ["gone/", "*.rs"]
     paths = {"v/circuits": True, "v/circuits/ops": False, "v/channel.py": True, "v/defs": False}
     assert never_plain(["a/device/x.py", "b/verifier/__init__.py", "x/Y.lean", "p/lean-audit.json", "p/lakefile.toml",
-                        "tools/research/x.py", "tools/verity/check/drive.toml", "tools/verity/lean/check.py",
+                        "tools/research/x.py", "tools/verity/check/merge_map.py", "tools/verity/lean/check.py",
                         "v/circuits/program.py", "v/channel.py", "tools/move/restack.py", "benchmarks/one_stage/a5.py",
                         "benchmarks/network_traces/x.py", "benchmarks/remote_session/auditor_line.py",
                         "v/circuits/ops/add.py", "v/defs/__init__.py", "benchmarks/remote_session/x.py", "pyproject.toml"],
                        paths) == [
         "a/device/x.py", "b/verifier/__init__.py", "x/Y.lean", "p/lean-audit.json", "p/lakefile.toml", "tools/research/x.py",
-        "tools/verity/check/drive.toml", "tools/verity/lean/check.py", "v/circuits/program.py", "v/channel.py",
+        "tools/verity/check/merge_map.py", "tools/verity/lean/check.py", "v/circuits/program.py", "v/channel.py",
         "tools/move/restack.py", "benchmarks/one_stage/a5.py", "benchmarks/network_traces/x.py",
         "benchmarks/remote_session/auditor_line.py"]

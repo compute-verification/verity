@@ -25,6 +25,10 @@ Hugging Face and Python.  Every `Registry` reads them too, and a distribution wi
 `of` checks a registry's prefixes (`Registry.validate_environ`) when it first loads it, so a misspelt or retired knob fails
 the run instead of being ignored.
 
+Every test is under the root's ``tests/``, mirrored by path, and a suite's ``pyproject.toml`` is with its tests: a directory
+``X`` whose suite is at ``tests/X`` keeps its ``settings.py`` without a pyproject, and `of` finds it for ``X``'s files and for
+its tests (``tests/X``, or ``tests/X/tests`` where the tests are a package imported as ``tests``) alike.
+
 A ship (files a build copies out of the tree to run on another machine) takes its distribution's ``settings.py`` with it,
 and `of` finds it beside them.  A file that can't import the registry at all (stdlib only, or run under another tree's
 PYTHONPATH) reads the environment itself; the registry still declares each variable it reads and names the file
@@ -54,6 +58,8 @@ from verity_config.verity_settings import (DEBUG as DEBUG, REDACTED as REDACTED,
 RECORD_SCHEMA = "verity-config/settings/v1"
 #: a distribution's registry, beside its pyproject.toml
 REGISTRY_FILE = "settings.py"
+#: the directory that mirrors the tree by path: the tests of `X`, and their suite's pyproject.toml, are at `tests/X`
+MIRROR = "tests"
 
 
 class Registry(settings.EnvSettings):
@@ -111,17 +117,37 @@ def _loaded(root: Path) -> Registry:
     return mod.REGISTRY
 
 
+def _tested(suite: Path) -> Path | None:
+    """The directory ``X`` with a registry whose tests a suite's directory under the mirror holds (``tests/X``, or
+    ``tests/X/tests``), or None."""
+    for top in suite.parents:
+        rest = suite.relative_to(top).parts
+        if len(rest) > 1 and rest[0] == MIRROR:
+            for x in (top.joinpath(*rest[1:]), top.joinpath(*rest[1:-1]) if rest[-1] == MIRROR else top):
+                if x != top and (x / REGISTRY_FILE).is_file():
+                    return x
+    return None
+
+
+def _mirrored(d: Path) -> bool:
+    """Whether directory ``d``'s suite is at its mirror, ``tests/<d>``."""
+    return any((top / MIRROR / d.relative_to(top) / "pyproject.toml").is_file() for top in d.parents)
+
+
 def of(path: str | os.PathLike) -> Registry:
     """The registry of the distribution ``path`` is in: the ``settings.py`` beside the nearest ``pyproject.toml`` above it,
-    or, in a ship (files copied out of the tree with their registry, no ``pyproject.toml`` above them), the ``settings.py``
-    beside ``path``.  Loaded once a process (by its path, never by its module name) and checked then
-    (`Registry.validate_environ`)."""
+    where a suite's ``pyproject.toml`` under the mirror (``tests/X``) stands for ``X``'s, and ``X``'s ``settings.py`` without
+    a pyproject is found from ``X``'s files too; or, in a ship (files copied out of the tree with their registry, no
+    ``pyproject.toml`` above them), the ``settings.py`` beside ``path``.  Loaded once a process (by its path, never by its
+    module name) and checked then (`Registry.validate_environ`)."""
     here = Path(path).resolve()
     for root in here.parents:
         if (root / "pyproject.toml").is_file():
-            if not (root / REGISTRY_FILE).is_file():
+            if (found := root if (root / REGISTRY_FILE).is_file() else _tested(root)) is None:
                 raise LookupError(f"{here}: its distribution ({root}) has no settings registry: declare its variables in "
                                   f"{root / REGISTRY_FILE} (verity_config.settings), or read the shared ones from SHARED")
+            return _loaded(found)
+        if (root / REGISTRY_FILE).is_file() and _mirrored(root):
             return _loaded(root)
     if (here.parent / REGISTRY_FILE).is_file():
         return _loaded(here.parent)

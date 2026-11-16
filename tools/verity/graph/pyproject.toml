@@ -32,3 +32,4 @@ untraced = [
 # The listing digests every file a task reads, which is most of the tree and some of its Markdown, and the invariants list the
 # whole tree: a listed `.md` keys its Markdown too (`suites.markdown`).
 inputs = [".", "tools/verity/graph/README.md"]
+parallel = true

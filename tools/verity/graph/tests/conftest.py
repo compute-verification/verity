@@ -1,8 +1,12 @@
 """A toy checkout for the graph's tests: a git repository holding a `tasks.toml`, runner stubs and a few files, and a lister
-over it.  `toy_tree(tmp_path)` builds one; a family's own tests write their table and files into it the same way."""
+over it.  `toy_tree(tmp_path)` builds one; a family's own tests write their table and files into it the same way.  `once`
+makes what several tests read, and no test changes, once a run, for every xdist worker."""
 from __future__ import annotations
 
+import fcntl
+import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -56,6 +60,27 @@ def toy_tree(root: Path, spec: str = SPEC, files: dict[str, str] | None = None) 
     git(root, "add", "-A")
     git(root, "commit", "-q", "-m", "toy")
     return root
+
+
+def once(config: pytest.Config, tmp_path_factory: pytest.TempPathFactory, name: str, make: Callable[[Path], None]) -> Path:
+    """The directory ``name`` that ``make`` fills, once a run: xdist's workers (each with a `workerinput`) share their
+    basetemp's parent and wait on its lock, so the first makes it and the rest read it.  A ``make`` that fails leaves
+    nothing, and the next caller tries again."""
+    base = tmp_path_factory.getbasetemp()
+    root = base.parent if hasattr(config, "workerinput") else base
+    d = root / f"once-{name}"
+    with open(root / f"once-{name}.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not (d / ".made").is_file():
+            shutil.rmtree(d, ignore_errors=True)
+            d.mkdir()
+            try:
+                make(d)
+            except BaseException:
+                shutil.rmtree(d, ignore_errors=True)
+                raise
+            (d / ".made").write_text("")
+    return d
 
 
 def toy(root: Path, files: list[str]) -> list[dict]:

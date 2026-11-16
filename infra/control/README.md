@@ -241,9 +241,10 @@ the lead's, one `[[free]]` table a machine, with `machine`, `from` and `until` (
 it is free for: a row naming none is free for none, and said. Never `auto`, never vy-nebius-cpu-2, -4, -5 or -6. A pass
 launches at most `--max`; never a number whose last launch of the loop's is in flight (a run whose state can't be read
 stays so) or ran and ended less than its `every` ago, whatever the door says; never a command that takes a run id only its
-owner picks (FIRE_RUN); never a loop's own number (a row whose command's script is under `infra/`); never a command that
-failed twice running under its rows as they are, until a change to them. The loop names each run (`--id`) and records it
-before launching, so a launch that prints no run line, or that its timeout kills, is judged by that run's own record: a
+owner picks (FIRE_RUN); never a loop's own number (a row whose command's script is under `infra/control/`); never a parked
+number (a row whose `goal` is `top/parked`, rerun only by hand), and said; never a command
+that failed twice running under its rows as they are, until a change to them. The loop names each run (`--id`) and records
+it before launching, so a launch that prints no run line, or that its timeout kills, is judged by that run's own record: a
 run that registered and reached its machine is in flight and never launched again while it is. A launch that never ran
 (its run never registered or never reached its machine, or ended without taking its slot, as when a pool refuses it at
 once) is a fault of the launch, not of the command: after two in a row the number waits its `every` from the last, and is

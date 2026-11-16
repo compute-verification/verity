@@ -72,8 +72,8 @@ def test_proved_is_printed_only_where_every_lock_entry_has_no_open_premise(tmp_p
     doc = W.account(record, tree(tmp_path), kinds=ALL_LEAN, holes=CLOSED)
     out = W.render(doc)
     assert doc["verdict"]["mark"] == W.PROVED and doc["to_fully_proved"] == []
-    assert "- **verdict: proved.** Every sampled proof block's proof accepted by the Lean verifier (2 of 2 sessions); the final accept " \
-           "given by `lean-outcome`." in out
+    assert ("- **verdict: proved.** Every sampled proof block's proof accepted by the Lean verifier (2 of 2 sessions); the final accept "
+            "given by `lean-outcome`.") in out
     assert "- **to fully proved**: nothing in the run's own files or in its verdicts' lock entries." in out
     assert out.count("proved by `Made.up`, which takes no open premise") == 3 and all(k[W.PROVED] for k in doc["verdicts"])
     assert doc["verdict_record"] == {"piece": "second_stage", "control": None, "run": record["run"],
@@ -124,12 +124,12 @@ def test_one_thing_open_and_the_mark_is_run_not_proved(tmp_path, how):
         "no entry named": ["`lean-draw` (`lean-lean-draw`): no lock entry is named for it (`served_row.json`)"],
         "entry not in the lock": ["`lean-verify` (`lean-lean-verify`): `Made.other` is not in the lock"],
         "python": ["decided by a verifier that is not Lean: `pins` (`lean-pins`)"],
-        "stand-in": ["the replay block is the stand-in (`Select{V=8}`), not a Definition of the request: the model's "
-                     "layers are not covered"],
-        "no layout": ["the replay block is not known: no layout is given (the first stage's `stage1.json`, or the serve's "
-                      "`commit.json`)"],
-        "inputs after the sample": ["the replay block's inputs are committed after the sample: the interior registers "
-                                    "`logits` after the first stage's sample"]}[how]
+        "stand-in": [("the replay block is the stand-in (`Select{V=8}`), not a Definition of the request: the model's "
+                      "layers are not covered")],
+        "no layout": [("the replay block is not known: no layout is given (the first stage's `stage1.json`, or the "
+                       "serve's `commit.json`)")],
+        "inputs after the sample": [("the replay block's inputs are committed after the sample: the interior registers "
+                                     "`logits` after the first stage's sample")]}[how]
     # the holes and the theorem are the other block's to print: this one reads them for its mark and says nothing of them
     assert doc["mark_reads"] == {"theorem": THEOREM, "open_premises": int(how == "theorem"), "holes": holes}
     # (the verdict's record names the theorem in its own fields, as the command's verdicts of record do)
@@ -158,8 +158,8 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
     assert doc["verdict"]["line"] == ("every sampled proof block's proof accepted by the Lean verifier (2 of 2 sessions); the final accept "
                                       "withheld, reason `two-stage-form` (the two-round form's soundness is not proved)")
     assert "final accept given" not in out and "| withheld (`two-stage-form`) |" in out
-    assert "  - the final accept is withheld by `spot-verifier`: `two-stage-form`, the two-round form's " \
-           "soundness is not proved" in out
+    assert ("  - the final accept is withheld by `spot-verifier`: `two-stage-form`, the two-round form's "
+            "soundness is not proved") in out
     # who decided each verdict is the table's, and a verdict no Lean verifier decided is listed
     assert {k["kind"]: k["decided_by"] for k in doc["verdicts"]} == {"lean-draw": "lean", "lean-verify": "lean",
                                                                      "m0-verifier": "rust and python"}
@@ -176,10 +176,10 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
     assert "The record names no" not in out
     alone = W.account(R.read(served(tmp_path / "alone")["second"])[0], tree(tmp_path), holes=CLOSED)
     assert {k: alone["verdict_record"][k] for k in W.NAMES} == NAMED | {"class": None, "serve": None}
-    assert "The record names no `class` and `serve`: the served run's files give none, so a reader that holds four verdicts to one " \
-           "class of one serve under one registration cannot count it." in W.render(alone)
-    assert "  - the replay block's inputs are committed after the sample: the interior registers `logits` after the " \
-           "first stage's sample" in out
+    assert ("The record names no `class` and `serve`: the served run's files give none, so a reader that holds four verdicts to one "
+            "class of one serve under one registration cannot count it.") in W.render(alone)
+    assert ("  - the replay block's inputs are committed after the sample: the interior registers `logits` after the "
+            "first stage's sample") in out
     # a run whose interior registers nothing names the form alone
     plain = W.account(record_of(tmp_path / "plain", registered=()), tree(tmp_path), holes=CLOSED)
     assert plain["verdict_record"]["open"] == "the two-round form's soundness is not proved"
@@ -270,8 +270,8 @@ def test_the_provers_seconds_say_which_they_are_and_a_noted_card_is_said_beside_
     kinds = W.table() | {"cards": [{"machine": "made-up-node", "card": 1, "note": "a made-up note"},
                                    {"machine": "another-node", "card": 0, "note": "not this machine's"}]}
     out = W.render(W.account(R.read(**dirs)[0], tree(tmp_path), kinds=kinds, holes=CLOSED))
-    assert "- the sessions' proving: 41.0 s over 2 sessions, by the proof server's own clock on each session's prover " \
-           "(`busy_s`). 2 of 2 sessions held a GPU, 41.0 GPU-seconds in all." in out
+    assert ("- the sessions' proving: 41.0 s over 2 sessions, by the proof server's own clock on each session's prover "
+            "(`busy_s`). 2 of 2 sessions held a GPU, 41.0 GPU-seconds in all.") in out
     assert "- card 0 of made-up-node: 1 sessions, 20.0 s busy.\n" in out
     assert "- card 1 of made-up-node: 1 sessions, 21.0 s busy. **A made-up note.**" in out and "not this machine's" not in out
     # a session's seconds, wait included, are an upper bound and said so; sessions on the host's cores hold no GPU-seconds
