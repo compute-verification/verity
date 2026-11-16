@@ -564,6 +564,20 @@ def test_a_reused_lean_pass_carrying_how_the_run_that_stored_it_ran_agrees_with_
         f"where its key is `{'9' * 12}`), its report differing in `axioms`"], "what it found still differs by name"
 
 
+def test_where_a_sandboxed_build_read_its_tree_is_no_difference_and_what_it_found_still_is():
+    """A sandboxed build reads the tree at check.py's fixed path, and its report's `bound` names that path and the run's own
+    tree, which is another directory in every run: two reports equal but for it agree, and one that also differs in what
+    the package's check found disagrees, naming only that."""
+    mine, theirs = uncached(), recorded()
+    package(mine, "lean/y").update(sandbox=True, bound=["/var/tmp/verity", "/root/fast/nightly-check/trees/2026-10-19-c0ffee000000"])
+    package(theirs[SHARDS[1]], "lean/y").update(sandbox=True, bound=["/var/tmp/verity", f"/workspace/research/src/{COMMIT}"])
+    got = tally(mine, theirs)
+    assert (got["agree"], got["disagree"]) == (12, [])
+    package(theirs[SHARDS[1]], "lean/y").update(guarantees=[])
+    assert tally(mine, theirs)["disagree"] == [
+        f"Lean package `lean/y`: passed here, key `{'2' * 12}`; passed in `{SHARDS[1]}`, its report differing in `guarantees`"]
+
+
 def test_a_part_on_one_side_only_is_listed_and_neither_agrees_nor_disagrees():
     mine, theirs = uncached(), recorded()
     mine["suites"].append(suite("pkg/new", "passed", key=key("0")))             # no shard has a row for it

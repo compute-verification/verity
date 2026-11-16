@@ -104,10 +104,11 @@ LEAN_AUDIT = "lean-audit/audit.json"            # the Lean check's report there:
 BY_PART = ("pytest", "lean-suites", "lean-audit")
 #: the fields of a Lean package's report that say how its check ran; the others say what it found. A reused pass's report is
 #: the one its storing run wrote, so these are that run's: its times, sample, seal and replay, its node's (`sandbox`,
-#: `build_threads`, `peak_gib`, and whether it used its replay and facts caches, `replay_cache`, `facts_cache`), the content
-#: address of its build (`facts_key`: it folds the `.olean` files, whose bytes differ between machines, and only a records
-#: run's `--facts-cache` writes it) and the records run whose facts it was judged from (`judged_from`)
-RUN_FIELDS = frozenset({"seconds", "sampled", "staged", "replay", "pipeline", "sandbox", "build_threads", "peak_gib",
+#: `build_threads`, `peak_gib`, and whether it used its replay and facts caches, `replay_cache`, `facts_cache`), where its
+#: sandboxed build read the tree (`bound`: check.py's fixed path and the run's own tree, another directory in every run), the
+#: content address of its build (`facts_key`: it folds the `.olean` files, whose bytes differ between machines, and only a
+#: records run's `--facts-cache` writes it) and the records run whose facts it was judged from (`judged_from`)
+RUN_FIELDS = frozenset({"seconds", "sampled", "staged", "replay", "pipeline", "sandbox", "bound", "build_threads", "peak_gib",
                         "replay_cache", "facts_cache", "facts_key", "judged_from"})
 VERDICTS = ("passed", "failed")
 LOST = ("launcher-exited", "runner-gone")       # a run that ended leaving no status (research.runs.ENDED)
