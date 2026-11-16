@@ -67,6 +67,16 @@ Cutting operand words off from the inputs outside θ costs at least the sum of t
 whichever side of a product it sits on. T1 fails for registered weights (κ_θ = 0) and for fast weights computed from θ
 and a prompt of fewer than k bits. Lean: `Slowdown.Cut.Assumptions.Hardness`, named assumption `training-cut-hardness`.
 
+T1 formalizes the three properties above:
+
+1. New: κ_θ(S) is measured from the unregistered inputs. A word that can be computed from θ alone has κ_θ = 0, so T1
+   rules it out.
+2. Large: the left side grows by the price of each word. If each updated parameter has p bits and the update can be
+   compressed by a factor of r, then its price is about p/r.
+3. Expensive to compute: the bound holds for every set of words with κ_θ(S) ≤ k, so no k wires can determine many
+   updated parameters. This fails if the unregistered information behind the update is small, e.g. if the entire
+   training run reads fewer than k unregistered bits.
+
 **Property T2 (exports are wide).** For β_y > 0, 𝓜 *satisfies T2* with β_y if every set A of gates of C has
 
 $$ \kappa\big(A \to E(A)\big) \ge \beta_y\,|E(A)|. $$
