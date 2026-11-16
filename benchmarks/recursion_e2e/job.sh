@@ -53,12 +53,22 @@ MODES=${MODES:-zk_server}; NEG=${NEG-challenge,query}; NEG=${NEG//,/ }
 [[ ,$MODES, == *,zk_server,* ]] && OPROVE_GPU=${OPROVE_GPU:-0} || OPROVE_GPU=${OPROVE_GPU:-${GPU:-1}}
 # V*'s statements one at a time, as the ZK server proves outer proofs: 85 proves 4 at once by default
 export OPROVE_JOBS=${OPROVE_JOBS:-1}
+# 85 moves HOME where it can't write; its Lean builds (the Lean verifier, the ZK server's Lean session loop) must find the same elan
+[ -w "$HOME" ] || { export HOME=$FLOCK_WORK/home; mkdir -p "$HOME"; }
+refused=0; refuse() { echo "job.sh: $1" >&2; refused=1; }
+/usr/bin/time -v true > /dev/null 2>&1 || refuse "no GNU time at /usr/bin/time, which times every step: apt-get install time"
+command -v cargo > /dev/null || [ -x "$HOME/.cargo/bin/cargo" ] || refuse "no cargo, which builds the prover: curl -sSf https://sh.rustup.rs | sh -s -- -y"
+command -v lake > /dev/null || [ -x "$HOME/.elan/bin/lake" ] || command -v curl > /dev/null \
+  || refuse "no lake, nor curl to install elan, which builds the Lean verifier: install elan (https://github.com/leanprover/elan)"
+[ "$(nproc)" -ge 32 ] || refuse "$(nproc) cores, and the job runs on 32: run it under taskset -c 0-31 on a node with 32 or more"
+mem_gb=$(( $(getconf _PHYS_PAGES) * $(getconf PAGE_SIZE) >> 30 ))
+need_gb=64; [[ ,$MODES, == *,zk_server,* && ,$STEPS, == *,oprove,* ]] && need_gb=128
+[ "$mem_gb" -ge $need_gb ] || refuse "$mem_gb GiB of memory, and the job asks $need_gb: run it with --mem-gb $need_gb on a node with that much"
+[ $refused = 0 ] || exit 2
 PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @benchmarks --expires 7d --priority low \
   --regenerate "bash benchmarks/recursion_e2e/job.sh K=$K N=$N" \
   --why "the recursion bench's builds (and a KEEP_DATA=1 run's data/TAG): a cache, rebuilt by the next run" > "$O/keep.json" 2>&1 \
   || echo "no retention record on $FLOCK_WORK: $(tail -1 "$O/keep.json")" >&2
-# 85 moves HOME where it can't write; its Lean builds (the Lean verifier, the ZK server's Lean session loop) must find the same elan
-[ -w "$HOME" ] || { export HOME=$FLOCK_WORK/home; mkdir -p "$HOME"; }
 RR=/workspace/jobs/rec-reprice
 [ -z "${CUDA_TK:-}" ] && [ -x $RR/cuda-13.3.1/bin/nvcc ] && export CUDA_TK=$RR/cuda-13.3.1
 [ -z "${WARM_FROM:-}" ] && [ -d $RR/flock-gpu-link/flock ] && export WARM_FROM=$RR/flock-gpu-link

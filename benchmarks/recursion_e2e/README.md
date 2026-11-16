@@ -28,6 +28,8 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes zk_server --oprove-runs 1 
        --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
 
+`job.sh` needs GNU time at `/usr/bin/time`, cargo, lake (or curl to install elan), 32 cores and 128 GB of memory with an oprove behind the ZK server (else 64), and refuses, before it builds anything, a machine that lacks one.
+
 - **Where it runs.** A run with no GPU prove (behind the ZK server, on the pod script's CPU prover, the default; or `--cpu`) is a plain run on a
   CPU node (`CPU_NODE` in `run.py`): `job.sh` with `GPU=0 FLOCK_WORK=/workspace/cache/rec-bench`, pinned to `--cores`
   (`taskset -c 0-31`), under `--mem-gb` and a timeout of `--max-min`; `run --dry-run` prints the launch. `--on` picks
