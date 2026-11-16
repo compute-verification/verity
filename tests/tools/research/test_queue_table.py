@@ -162,15 +162,9 @@ def doc() -> dict:
             "runs": [*runs().values(),
                      {"id": "r20261110-020000-cccc", "kind": "tier", "took": qt.ts(at("02:20")), "end": qt.ts(at("02:50")), "slot_state": "held",
                       "slot": "r0", "slot_cores": 16, "cpu_s": 3600.0, "mem_peak_gb": 8.0},
-                     {"id": "r20261110-024500-dddd", "kind": "tier", "took": None, "end": None, "slot_state": "waiting"},
-                     {"id": "r20261110-023000-eeee", "kind": "worker", "took": qt.ts(at("02:30")), "end": qt.ts(at("02:40")), "slot": "g0",
-                      "slot_cores": 32, "cpu_s": 1200.0, "mem_peak_gb": 2.0, "tasks": 3, "first_own_s": 5.0,
-                      "results": [qt.ts(at("02:30")) + 15, qt.ts(at("02:35")), qt.ts(at("02:40"))]}]}
+                     {"id": "r20261110-024500-dddd", "kind": "tier", "took": None, "end": None, "slot_state": "waiting"}]}
     return {"now": qt.ts(at("03:00")), "day": DAY, "errors": [], "check_nodes": ["vy-nebius-cpu-1"], "off_gate": ["circuit-check"],
-            "control": {"decisions": decisions(), "ticks": [at("02:50"), at("02:54"), at("02:58")], "args": "",
-                        "executor": [{"at": "20261110T010000", "sha": "a" * 12, "tasks": {"hit": 30, "done": 10}},
-                                     {"at": "20261110T024000", "sha": "d" * 12, "tasks": {"hit": 10, "waiting": 6, "queued": 3, "leased": 1}},
-                                     {"at": "20261110T005000", "sha": "e" * 12, "tasks": {"queued": 2}}]},
+            "control": {"decisions": decisions(), "ticks": [at("02:50"), at("02:54"), at("02:58")], "args": ""},
             "nodes": {"vy-nebius-cpu-1": node}, "open": {"3": "h3", "4": "h4", "5": "h5", "6": "h6"}, "labels": labels,
             "lean": {"a" * 12: [5, 0], "b" * 12: [3, 2]}}
 
@@ -205,13 +199,6 @@ def test_the_table_holds_each_number_over_its_windows():
     assert rows["Red: drop to the next candidate built"]["day"] == "p50 10, p90 10 min (n=1)"
     assert rows["Reds by kind"]["day"] == "1 test, 0 Lean audit, 0 preflight, 0 infrastructure"
     assert rows["PR-rounds lost, by cause"]["day"] == "3: 2 red, 1 dropped base"
-    assert rows["Executor (in shadow, not the gate): tasks finished a minute"]["hour"] == "0.1"             # 3 results in 60 min
-    assert rows["Executor: cores working in a slot"]["day"] == "2.0 on average, p50 2.0 (n=1 runs)"
-    assert rows["Executor: overhead before a run's first task result"]["day"] == "p50 10, p90 10 s (n=1)"
-    cache = rows["Executor: share served from the cache; tasks waiting on other tasks"]
-    assert cache["now"] == ("6 waiting on other tasks, 5 waiting for a slot, 1 given to a worker, in 2 checks; 1 of those checks, with 2 of "
-                            "the tasks, are of no candidate being checked now")
-    assert cache["hour"] == "50% from the cache (10 of 20 tasks in 1 checks)" and cache["day"] == "65% from the cache (40 of 62 tasks in 3 checks)"
     assert rows["Cores busy over cores paid, the check nodes"]["now"] == "25 of 100 (25%)"
     assert rows["Cores busy over cores paid, the check nodes"]["hour"] == "30 of 100 (30%), the average over the last 60 min"
     assert rows["Slots busy over slots, the check nodes"]["now"] == (
@@ -283,7 +270,7 @@ def test_the_slots_row_says_which_free_slots_a_run_sent_with_on_auto_can_take(mo
     monkeypatch.setattr(qt, "collect", lambda *a, **kw: d)
     monkeypatch.setattr(qt, "STATE", tmp_path / "queue-table.json")
     assert qt.main(short=True) == 0
-    assert f"| 7 | {SLOTS_ROW} | {text} |" in capsys.readouterr().out
+    assert f"| 6 | {SLOTS_ROW} | {text} |" in capsys.readouterr().out
     assert qt.main(as_json=True) == 0
     out = json.loads(capsys.readouterr().out)
     assert {r["name"]: r for r in out["rows"]}[SLOTS_ROW]["now"] == text and out["pools"] == groups
@@ -408,8 +395,6 @@ def test_the_rendered_table_is_markdown_and_names_what_was_not_read():
     d["errors"] = ["vy-nebius-cpu-2: no answer in 100 s"]
     short = qt.render(qt.table(d), d, short=True)
     assert "| # | Number | Now | Last hour | Last 24 h | Target |\n|---|---|---|---|---|---|\n" in short and "How it is measured" not in short
-    d["control"]["executor"], d["control"]["executor_why"] = [], "its status printed nothing"
-    assert "| not measured: its status printed nothing |" in qt.render(qt.table(d), d)
 
 
 def test_a_workers_memory_is_held_to_its_suites_declaration_over_the_saved_readings():
@@ -645,8 +630,7 @@ def test_a_window_that_ended_is_cut_to_what_was_known_then():
     assert rows["Marked and waiting now (the backlog)"]["now"].startswith("5 PRs: 2 with a land verdict, 3 without; 5 in a candidate being checked")
     assert "a floor" in rows["Marked and waiting now (the backlog)"]["now"]
     for name in ("Cores busy over cores paid, the check nodes", "Slots busy over slots, the check nodes", "Reserved against used, a check's shard",
-                 "Parallel suites running in a shard: a worker's memory against what it declares",
-                 "Executor: share served from the cache; tasks waiting on other tasks"):
+                 "Parallel suites running in a shard: a worker's memory against what it declares"):
         assert rows[name]["now"] == qt.PAST, name
     assert rows["Cores busy over cores paid, the check nodes"]["hour"] == qt.PAST
     text = qt.render(list(rows.values()), d, short=True)
@@ -654,7 +638,7 @@ def test_a_window_that_ended_is_cut_to_what_was_known_then():
     assert "| # | Number | At its end | Its last hour | Its 24 h | Target |" in text and "in the 24 hours to 2026-11-10 02:00Z" in text
     later = qt.cut(dict(doc(), read=qt.ts(at("03:00"))), qt.ts(at("02:35")))                          # after B's drop, before D's build
     assert {r["name"]: r for r in qt.table(later)}["Candidates by outcome"]["day"] == "3 built: 1 green, 1 red, 1 dropped for another reason, 0 being checked"
-    assert [r["id"][-4:] for r in later["nodes"]["vy-nebius-cpu-1"]["runs"]] == ["aaaa", "bbbb", "cccc", "eeee"]
+    assert [r["id"][-4:] for r in later["nodes"]["vy-nebius-cpu-1"]["runs"]] == ["aaaa", "bbbb", "cccc"]
     assert later["nodes"]["vy-nebius-cpu-1"]["runs"][2]["end"] is None                                  # the quick tier ended at 02:50
 
 

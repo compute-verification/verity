@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 import pytest
 
 from research import run_records, run_times as R
-from research.store.local import LocalStore
 
 NOW = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
 POOLED = ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/check/slot.py", "--by", "proofs",
@@ -183,31 +182,6 @@ def test_percentiles_are_by_kind_machine_and_pool():
     assert s["parts"]["ship"]["p95_min"] == 0.1 and s["parts"]["line"]["n"] == 21
 
 
-def _event(event, task, at, sub="s1", **k):
-    return {"event": event, "task": task, "submission": sub, "ts": at, **k}
-
-
-def test_a_graph_task_waits_from_when_it_could_first_run_not_from_its_submission():
-    events = [_event("queued", "test-file:a", "2026-10-28T09:00:00Z"),
-              _event("queued", "lean-module:b", "2026-10-28T10:30:00Z"),
-              _event("started", "lean-module:b", "2026-10-28T10:45:00Z", wait_s=6300.0, worker="cpu-7/c1"),
-              _event("finished", "lean-module:b", "2026-10-28T10:46:00Z", seconds=60.0, status="pass"),
-              _event("started", "test-file:a", "2026-10-28T11:00:00Z", wait_s=7200.0, worker="cpu-1/c2"),
-              _event("errored", "test-file:a", "2026-10-28T11:01:00Z", seconds=60.0, status="error"),
-              _event("started", "test-file:a", "2026-10-28T11:05:00Z", wait_s=7500.0, worker="cpu-1/c2"),
-              _event("queued", "test-file:c", "2026-10-28T11:10:00Z"),
-              _event("queued", "test-file:d", "2026-10-28T11:10:00Z"), _event("hit", "test-file:d", "2026-10-28T11:10:01Z"),
-              _event("started", "test-file:c", "2026-10-28T12:30:00Z", worker="cpu-1/c2")]
-    g = R.graph_tasks(events, datetime(2026, 10, 28, 10, 0, tzinfo=UTC), NOW)
-    assert [(t["task"], t["machine"], t["wait_s"], t["run_s"], t["status"]) for t in g["tasks"]] == [
-        ("lean-module:b", "cpu-7", 900.0, 60.0, "pass"), ("test-file:a", "cpu-1", 7200.0, 60.0, "error"),
-        ("test-file:a", "cpu-1", None, None, None)], "b by its queued event, not its wait_s; a's retry has no wait"
-    assert g["silent"] == [{"task": "test-file:c", "submission": "s1"}], "queued, and no event by the window's end; d was a hit"
-    s = R.graph_summary(g)
-    assert (s["all"]["tasks"], s["all"]["wait"]["n"], s["all"]["over"]) == (3, 2, 2) and list(s["kind"]) == ["lean-module", "test-file"]
-    assert s["submissions_over"] == {"s1": {"tasks": 2, "longest_min": 120.0}} and s["silent"] == {"tasks": 1, "submissions": 1}
-
-
 def _machine(root):
     """`ssh MACHINE python3 - RUNS FIRST LAST` with run_records.py on its stdin, answered here from ``root``."""
     def run(argv, script):
@@ -219,15 +193,6 @@ def _machine(root):
             rc = run_records.main([str(root), *args[1:]])
         return subprocess.CompletedProcess(argv, rc, out.getvalue().encode(), b"")
     return run
-
-
-def _store(tmp_path, events=()):
-    cfg = tmp_path / "store.toml"
-    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
-    part = tmp_path / "vault" / "events" / "v1" / "s1" / "part-000000.jsonl"
-    part.parent.mkdir(parents=True)
-    part.write_text("".join(json.dumps(e) + "\n" for e in events))
-    return LocalStore(tmp_path / "reader", config_path=cfg)
 
 
 def test_it_reads_each_machine_and_names_one_that_did_not_answer(runs, tmp_path, capsys, monkeypatch):
@@ -244,17 +209,14 @@ def test_it_reads_each_machine_and_names_one_that_did_not_answer(runs, tmp_path,
         return _machine(runs)(argv, script)
 
     monkeypatch.setattr(R, "clock", lambda: NOW)
-    store = _store(tmp_path, [_event("queued", "test-file:a", "2026-10-28T10:00:00Z"),
-                              _event("started", "test-file:a", "2026-10-28T10:01:00Z", worker="n1/c1")])
-    assert R.main(["--hours", "2", "--on", "n1,n2,n3,n4", "--json"], store=store, reach=reach, run=run) == 0
+    assert R.main(["--hours", "2", "--on", "n1,n2,n3,n4", "--json"], reach=reach, run=run) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["window"] == {"start": "2026-10-28T10:00:00Z", "end": "2026-10-28T12:00:00Z"} and out["read"] == ["n1"]
     assert out["unread"] == {"n2": f"no answer in {R.READ_TIMEOUT_S} s", "n3": "exit 255: ssh: connect to host n3 port 22: Connection "
                              "timed out", "n4": "its answer was cut short: 1 run(s) and no closing count that matches"}
     assert [(r["run"], r["machine"], r["outcome"]) for r in out["runs"]] == [
         (WAITED, "n1", "started"), (AT_ONCE, "n1", "started"), (REFUSED, "n1", "refused"), (CANCELLED, "n1", "cancelled")]
-    assert out["summary"]["machine"]["n1"]["runs"] == 4 and out["graph"]["all"]["wait"] == {"n": 1, "p50_min": 1.0, "p90_min": 1.0,
-                                                                                            "p95_min": 1.0}
+    assert out["summary"]["machine"]["n1"]["runs"] == 4
 
 
 def test_the_table_names_each_run_over_ten_minutes_and_a_window_takes_only_its_launches(runs, capsys, monkeypatch):
@@ -264,7 +226,7 @@ def test_the_table_names_each_run_over_ten_minutes_and_a_window_takes_only_its_l
     assert "runs launched 2026-10-28 09:02Z to 2026-10-28 10:02Z: 3 on 1 machine(s)" in out and CANCELLED not in out
     assert "runs that waited over 10 min: 1 of the 2 that asked to start; behind: slots busy 1" in out
     named = out.split("runs that waited over")[1]
-    assert WAITED in named and "every check slot is taken (r1: busy)" in named and AT_ONCE not in named and "graph2" not in out
+    assert WAITED in named and "every check slot is taken (r1: busy)" in named and AT_ONCE not in named
     assert R.main(["--runs", str(runs), "--until", "2026-10-28T11:00:00Z", "--hours", "1"]) == 0
     assert "cancelled 3 check(s) ahead in line; cancelled (manual: ran elsewhere)" in " ".join(capsys.readouterr().out.split())
     assert "refused: 1 (MemoryNotAvailable 1)" in out
@@ -290,31 +252,13 @@ def test_a_record_that_is_there_and_unreadable_is_named_never_read_as_absent(tmp
     assert f"1 run(s) have a record file that is there and couldn't be read, and their rows are made without it: {WAITED} (" in out
 
 
-def test_an_events_part_that_is_not_json_leaves_the_graph_unread_by_name(runs, tmp_path, capsys, monkeypatch):
-    monkeypatch.setattr(R, "clock", lambda: NOW)
-    store = _store(tmp_path, [_event("queued", "test-file:a", "2026-10-28T10:00:00Z")])
-    part = tmp_path / "vault" / "events" / "v1" / "s1" / "part-000000.jsonl"
-    part.write_text(part.read_text() + "\n" + json.dumps(_event("started", "test-file:a", "2026-10-28T10:01:00Z", worker="n1/c1")) + "\n")
-
-    def read() -> dict:
-        assert R.main(["--hours", "2", "--on", "n1", "--json"], store=store, reach=lambda name: (["ssh", name], "/w/runs"),
-                      run=_machine(runs)) == 0
-        return json.loads(capsys.readouterr().out)
-
-    assert read()["graph"]["all"]["tasks"] == 1, "a blank line is no line"
-    part.write_text(part.read_text() + '{"event": "started", "task": "test-fi\n')
-    out = read()
-    assert len(out["runs"]) == 4 and out["left_out"] == {}, "the runs are read all the same"
-    assert out["graph"].startswith("ValueError: events/v1/s1/part-000000.jsonl has a line that is not JSON")
-
-
 def test_with_no_machine_read_it_answers_nothing(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(R, "clock", lambda: NOW)
 
     def reach(name):
         raise RuntimeError(f"machine {name!r} is not listed")
 
-    assert R.main(["--on", "nowhere"], store=LocalStore(tmp_path / "s"), reach=reach) == 1
+    assert R.main(["--on", "nowhere"], reach=reach) == 1
     out, err = capsys.readouterr()
-    assert "UNREAD, in no number here: nowhere (machine 'nowhere' is not listed)" in out and "graph2's tasks: UNREAD" in out
+    assert "UNREAD, in no number here: nowhere (machine 'nowhere' is not listed)" in out
     assert "no machine was read" in err

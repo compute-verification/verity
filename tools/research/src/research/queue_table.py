@@ -10,8 +10,7 @@ Each row is one number with its unit, over three windows: now, the last hour, an
   the run directories       on every node, each run's `job.json` (its command and commit), `slot.json` (when it took a check
                             slot, and for a check's shard what its scope used at its most, `used`), `status.json` (when it
                             ended), and for a check's shard `check-live.json`, `steps.jsonl`, `spans.jsonl`'s `memory.peak`,
-                            `suites.failed.json` and three lines of `lean-audit.log`; for a run of the task graph's executor,
-                            the result files under `out/results`
+                            `suites.failed.json` and three lines of `lean-audit.log`
   GitHub                    the open PRs and their heads, and each counted head's subject and nearest first parents, which
                             say whether a restack made it and from which head
   the nodes                 `/proc/stat` twice, a few seconds apart, and `slot.py --status --json` for each slots file, which
@@ -85,7 +84,7 @@ PAST = "not read: the window ended in the past"
 OWN_POOLS_NAMED = 4
 
 CONTROL_SCRIPT = r'''
-import ast, json, re, shlex, subprocess, sys
+import json, re, sys
 live, since = sys.argv[1], sys.argv[2]
 rows = []
 for line in open(live + "/decisions.jsonl", errors="replace"):
@@ -95,11 +94,11 @@ for line in open(live + "/decisions.jsonl", errors="replace"):
         r = json.loads(line)
     except ValueError:
         continue
-    if r.get("at", "") < since or r.get("action") not in ("build", "advance", "drop", "slim", "compare", "retry", "eject",
+    if r.get("at", "") < since or r.get("action") not in ("build", "advance", "drop", "slim", "retry", "eject",
                                                            "conflict", "skip", "leave"):
         continue
-    keep = {k: r.get(k) for k in ("action", "at", "sha", "base", "members", "heads", "why", "shadow", "done", "cancel", "check",
-                                  "graph2", "voided_why", "number", "cause")}
+    keep = {k: r.get(k) for k in ("action", "at", "sha", "base", "members", "heads", "why", "shadow", "done", "voided_why",
+                                  "number", "cause")}
     if r["action"] == "conflict":      # a head that doesn't merge onto `main`: its line gives the files and no reason
         keep["why"] = "conflicts with `main` in " + ", ".join(map(str, r.get("files") or []))
     keep["why"] = (keep["why"] or "")[:400]
@@ -114,23 +113,7 @@ try:
     args = open(live + "/args").read()
 except OSError:
     args = ""
-# the executor's own list of its checks: one line a check, its tasks by state (`graph2.py status`, which only reads)
-checks, why = [], ""
-try:
-    words = shlex.split(args, comments=True)
-    g2 = shlex.split(words[len(words) - words[::-1].index("--graph2")]) if "--graph2" in words[:-1] else []
-    out = subprocess.run([*g2, "status"], capture_output=True, text=True, timeout=40).stdout if g2 else ""
-    why = "" if out else "the loop's args name no --graph2, or its status printed nothing"
-except (OSError, ValueError, subprocess.SubprocessError) as e:
-    out, why = "", repr(e)[:200]
-for line in out.splitlines():
-    m = re.match(r"s(\d{8}T\d{6})Z-\w+ (\w+) \S+ (\{.*\})$", line)
-    if m and m.group(1) >= since.replace("-", "").replace(":", ""):
-        try:
-            checks.append({"at": m.group(1), "sha": m.group(2), "tasks": ast.literal_eval(m.group(3))})
-        except (ValueError, SyntaxError) as e:
-            why = "a status line did not parse: " + repr(e)[:120]
-print(json.dumps({"decisions": rows, "ticks": ticks, "args": args, "executor": checks, "executor_why": why}))
+print(json.dumps({"decisions": rows, "ticks": ticks, "args": args}))
 '''
 
 NODE_SCRIPT = r'''
@@ -332,8 +315,7 @@ for d in sorted(glob.glob(ROOT + "/runs/r2*")):
     job = load(d + "/job.json") or {}
     argv = [str(a) for a in ((job.get("store") or {}).get("params") or {}).get("argv") or []]
     text = " ".join(argv)
-    kind = ("shard" if "--shard" in argv and "check.py" in text else "worker" if "graph2.py" in text
-            else "tier" if "--quick" in text and "suites.py" in text else "other")
+    kind = ("shard" if "--shard" in argv and "check.py" in text else "tier" if "--quick" in text and "suites.py" in text else "other")
     slot = load(d + "/slot.json") or {}
     tr = (load(d + "/status.json") or {}).get("transitions") or []
     last = tr[-1] if tr else {}
@@ -371,14 +353,6 @@ for d in sorted(glob.glob(ROOT + "/runs/r2*")):
                 # the report's time; a suite killed at its time limit writes none, and its log's time is its last test's
                 failed.append([f.get("suite") or f.get("name"), (base and mtime(d + "/suites/" + base + ".json")) or None])
         row["failed"] = failed
-    elif kind == "worker":
-        i = argv.index("-c") if "-c" in argv else len(argv)
-        row["tasks"] = max(0, len(argv) - i - 3)
-        res = sorted((m, p) for p in glob.glob(d + "/out/results/*.json") if (m := mtime(p)))
-        row["results"] = [round(m) for m, _ in res]
-        if res:
-            own = (load(res[0][1]) or {}).get("seconds")       # the task's wall seconds: its `cpu_s` counts every core
-            row["first_own_s"] = own if isinstance(own, (int, float)) else None
     runs.append(row)
 
 def slot_status(slot_py, f, limit=30):
@@ -714,7 +688,7 @@ def cut(doc: dict, end: float) -> dict:
     """``doc`` as a window that ended at ``end``, a past time, in place: without the loop's lines, the labels and the runs
     after it; a run or a step that ended after it is still running, and a run that took its slot after it is in line.  The
     PRs open then are those open now and those landed since; one closed since without landing, or marked then at a head it
-    has left without a restack, is not known.  What the machines only say of now (cores, slots, cgroups, the executor's list)
+    has left without a restack, is not known.  What the machines only say of now (cores, slots, cgroups)
     stays in the document, and the table leaves it out (`PAST`)."""
     control = doc["control"]
     for r in control.get("decisions") or []:
@@ -722,7 +696,6 @@ def cut(doc: dict, end: float) -> dict:
             doc["open"].update(zip(map(str, r.get("members") or []), r.get("heads") or []))
     control["decisions"] = [r for r in control.get("decisions") or [] if ts(r["at"]) <= end]
     control["ticks"] = [t for t in control.get("ticks") or [] if ts(t) <= end]
-    control["executor"] = [c for c in control.get("executor") or [] if rid_time("r" + c["at"][:8] + "-" + c["at"][9:]) <= end]
     doc["labels"] = {k: [lab for lab in labs if ts(lab["ts"]) <= end] for k, labs in doc["labels"].items()}
     for node in doc["nodes"].values():
         runs = []
@@ -739,8 +712,6 @@ def cut(doc: dict, end: float) -> dict:
                               for st in r["steps"] if (st.get("start") or (st.get("end") or 0) - (st.get("seconds") or 0)) <= end]
             if "failed" in r:
                 r["failed"] = [f for f in r["failed"] if (f[1] or r.get("end") or end + 1) <= end]
-            if "results" in r:
-                r["results"] = [m for m in r["results"] if m <= end]
             runs.append(r)
         node["runs"] = runs
     doc["now"] = doc["until"] = end
@@ -1277,58 +1248,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     add("5", "PR-rounds lost, by cause", "", "", f"{sum(lost.values())}: " + ", ".join(f"{v} {k}" for k, v in sorted(lost.items(), key=lambda kv: -kv[1]))
         if lost else "0", "", "one PR in one candidate that was dropped before `main` moved to it, by the loop's reason for the drop")
 
-    # 6. the executor
-    workers = [r for r in runs.values() if r["kind"] == "worker"]
-    done = sorted(m for r in workers for m in r.get("results") or [])
-    over = [(m, r["results"][0] - rid_time(r["id"]) - r["first_own_s"]) for r in workers
-            if (m := (r.get("results") or [None])[0]) and r.get("first_own_s") is not None]
-    compares = {r["sha"]: r for r in decisions if r["action"] == "compare" and ts(r["at"]) >= day}
-    cancelled = len({r["sha"] for r in decisions if r["action"] == "drop" and ts(r["at"]) >= day and r.get("cancel") == "cancelled"})
-    wslots = pct([r.get("slot_cores") or 0 for r in workers if r.get("slot_cores")], .5)
-
-    def working(since: float) -> str:
-        rs = [r for r in workers if r.get("end") and r.get("took") and r.get("cpu_s") and r["end"] > r["took"] and r["end"] >= since]
-        if not rs:
-            return "none"
-        return (f"{sum(r['cpu_s'] for r in rs) / sum(r['end'] - r['took'] for r in rs):.1f} on average, "
-                f"p50 {pct([r['cpu_s'] / (r['end'] - r['took']) for r in rs], .5):.1f} (n={len(rs)} runs)")
-
-    add("6", "Executor (in shadow, not the gate): tasks finished a minute", f"{sum(m >= now - 600 for m in done) / 10:.1f} (last 10 min)",
-        f"{sum(m >= hour for m in done) / 60:.1f}", f"{sum(m >= day for m in done) / (hours * 60):.1f} ({len(done)} tasks in {len(workers)} runs)",
-        "230", "result files under `out/results` of the executor's worker runs, by file time; 230 a minute is a 15-minute check")
-    add("6", "Executor: cores working in a slot", "", working(hour), working(day), f"{wslots:.0f} (the slot)" if wslots else "",
-        "worker runs that ended in the window: CPU seconds (the run's cgroup's last sample) over seconds in the slot")
-    add("6", "Executor: overhead before a run's first task result", "", _dist(win(over, hour), "s"), _dist(win(over, day), "s"), "",
-        "the run id's time to its first result file, less that task's own wall seconds; a run holds p50 "
-        f"{pct([r.get('tasks') or 0 for r in workers], .5) or 0:.0f} tasks")
-    submitted = [dict(c, at=rid_time("r" + c["at"][:8] + "-" + c["at"][9:])) for c in doc["control"].get("executor") or []]
-    unfinished = [c["tasks"] for c in submitted if any(c["tasks"].get(k) for k in ("queued", "waiting", "leased"))]
-    checked = {c["sha"][:12] for c in cands if c["outcome"] == "running"}
-    stray = [c["tasks"] for c in submitted if c["sha"][:12] not in checked and any(c["tasks"].get(k) for k in ("queued", "waiting", "leased"))]
-
-    def cached(since: float) -> str:
-        cs = [c["tasks"] for c in submitted if c["at"] >= since and sum(c["tasks"].values())]
-        if not cs:
-            return "none"
-        hit, every = sum(t.get("hit", 0) for t in cs), sum(sum(t.values()) for t in cs)
-        return f"{hit / every:.0%} from the cache ({hit} of {every} tasks in {len(cs)} checks)"
-
-    if submitted:
-        add("6", "Executor: share served from the cache; tasks waiting on other tasks", past or (
-            f"{sum(t.get('waiting', 0) for t in unfinished)} waiting on other tasks, {sum(t.get('queued', 0) for t in unfinished)} waiting for a slot, "
-            f"{sum(t.get('leased', 0) for t in unfinished)} given to a worker, in {len(unfinished)} checks"
-            + (f"; {len(stray)} of those checks, with {sum(t.get(k, 0) for t in stray for k in ('queued', 'waiting', 'leased'))} of the tasks, "
-               "are of no candidate being checked now" if stray else "")), cached(hour), cached(day), "",
-            "the executor's own list of its checks (`graph2.py status`): a check's tasks by state; the share is tasks answered from the "
-            "cache over all the tasks of the checks submitted in the window, so a task cancelled before it ran counts as not served")
-    else:
-        add("6", "Executor: share served from the cache; tasks waiting on other tasks",
-            f"not measured: {doc['control'].get('executor_why') or 'the executor listed no check'}")
-    add("6", "Executor: shadow checks", "", "", f"{sum(r.get('graph2') in ('pass', 'fail') for r in compares.values())} reached a pass or a fail, "
-        f"{len(compares)} compared with the shards, {sum(r.get('check') == r.get('graph2') for r in compares.values())} agreed; "
-        f"{cancelled} cancelled with their candidate", "", "the loop's `compare` lines, and its `drop` lines whose cancel of the executor's check went through")
-
-    # 7. cores and slots
+    # 6. cores and slots
     def cores_row(name: str, names: list[str]) -> None:
         total = sum(doc["nodes"][n]["cores"] for n in names)
         busy = sum(doc["nodes"][n]["busy"] * doc["nodes"][n]["cores"] for n in names)
@@ -1338,13 +1258,13 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
             used = sum((doc["nodes"][n]["stat"][0] - prev["nodes"][n]["stat"][0]) / doc["nodes"][n]["hz"] for n in names)
             if used >= 0:
                 span = f"{used / dt:.0f} of {total} ({used / dt / total:.0%}), the average over the last {dt / 60:.0f} min"
-        add("7", name, past or f"{busy:.0f} of {total} ({busy / max(1, total):.0%})", past or span, "", "",
+        add("6", name, past or f"{busy:.0f} of {total} ({busy / max(1, total):.0%})", past or span, "", "",
             "now: the non-idle share of `/proc/stat` over a few seconds on each node, times its cores; the hour: each node's busy CPU "
             f"seconds between two runs of this command; {len(names)} nodes read")
 
     cores_row("Cores busy over cores paid, the check nodes", checks)
     cores_row("Cores busy over cores paid, every CPU node", sorted(doc["nodes"]))
-    add("7", "Slots busy over slots, the check nodes", past or "; ".join(map(slots_text, slot_groups(doc))) or "not read", "", "", "",
+    add("6", "Slots busy over slots, the check nodes", past or "; ".join(map(slots_text, slot_groups(doc))) or "not read", "", "", "",
         "`slot.py --status --json` for each slots file, added up by whose runs take its slots: the check slots and the executor's, "
         "on the check nodes; the shared pool, the one `research run --on auto` places a run in (`auto.SPILL_POOL`), on every CPU "
         "node read, since a launch asks each of them; and the lanes' own pools, on the check nodes, each taking only the runs "
@@ -1377,7 +1297,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
             f"{most([(r.get('used') or {}).get('anon_max_gib') for r in rs], ' GiB', 'not kept')}; memory.peak "
             f"{most([r.get('mem_peak_gb') for r in rs], ' GB', 'not kept')}" for part, rs in sorted(by.items())) or "none ended"
 
-    add("7", "Reserved against used, a check's shard", past or ((f"{len(going)} of the {live} running, the ones whose cgroup was found: cores p50 {pct([r['cores'] for r in going], .5):.0f}, most "
+    add("6", "Reserved against used, a check's shard", past or ((f"{len(going)} of the {live} running, the ones whose cgroup was found: cores p50 {pct([r['cores'] for r in going], .5):.0f}, most "
         f"{max(r['cores'] for r in going):.0f}, of {pct([r.get('slot_cores') or 0 for r in going], .5):.0f} in its slot; memory without the page "
         f"cache p50 {pct([r['scope_anon_gb'] for r in going], .5):.0f} GiB, most {max(r['scope_anon_gb'] for r in going):.0f} GiB; peak with the "
         f"page cache most {max(r['scope_peak_gb'] for r in going):.0f} GiB" + (f", of {pct(res, .5):.0f} GiB reserved" if res else ""))
@@ -1403,7 +1323,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         return "; ".join(f"`{m['suite']}`: most {m['most']:.1f} GiB a worker, running at {m['readings']} of {len(rs)} readings; {declares(m)}"
                          for m in sorted(most.values(), key=lambda m: -m["most"])) or f"no parallel suite was running in a shard at any of {len(rs)} readings"
 
-    add("7", "Parallel suites running in a shard: a worker's memory against what it declares", past or "; ".join(
+    add("6", "Parallel suites running in a shard: a worker's memory against what it declares", past or "; ".join(
         f"`{m['suite']}`: {m['workers']} workers in {m['shards']} shard{'s' * (m['shards'] != 1)}, a worker holds p50 {m['p50']:.1f}, most {m['most']:.1f} GiB"
         + (f" ({m['tree']:.1f} GiB with the processes it started)" if m["tree"] > m["most"] + 1 else "") + f"; {declares(m)}" for m in held)
         or (f"no parallel suite is running in the {len(read)} shard{'s' * (len(read) != 1)} running" if read else "no shard is running"),
@@ -1414,20 +1334,19 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         "memory); with the processes it started, each page once (`Pss_Anon` of `smaps_rollup`); the declaration is `worker_gb` of `[tool.verity.tests]` in the suite's `pyproject.toml` at the candidate's "
         "commit, else `TEST_PROCESS_GB` of `suites.py`, which the runner divides the slot's GiB by; the hour and the 24 hours: the same "
         "over this machine's saved readings")
-    for kind, name in (("tier", "a quick tier"), ("worker", "an executor run")):
-        rs = [r for r in runs.values() if r["kind"] == kind and r.get("end") and r.get("took") and r.get("cpu_s") and r["end"] > r["took"]]
-        res = [mem[(r["node"], r["slot"])] for r in rs if (r["node"], r.get("slot")) in mem]
-        add("7", f"Reserved against used, {name}", "", "", (f"cores: p50 {pct([r['cpu_s'] / (r['end'] - r['took']) for r in rs], .5):.1f} used of "
-            f"{pct([r.get('slot_cores') or 0 for r in rs], .5):.0f} in its slot; memory: p50 {pct([r.get('mem_peak_gb') or 0 for r in rs], .5):.0f} GiB peak"
-            + (f" of {pct(res, .5):.0f} GiB reserved" if res else ", its slot reserves none") + f" (n={len(rs)})") if rs else "none ended", "",
-            "the window's runs that ended: CPU seconds and peak memory from the run's cgroup's last sample; the slot's cores and `mem=`")
+    rs = [r for r in runs.values() if r["kind"] == "tier" and r.get("end") and r.get("took") and r.get("cpu_s") and r["end"] > r["took"]]
+    res = [mem[(r["node"], r["slot"])] for r in rs if (r["node"], r.get("slot")) in mem]
+    add("6", "Reserved against used, a quick tier", "", "", (f"cores: p50 {pct([r['cpu_s'] / (r['end'] - r['took']) for r in rs], .5):.1f} used of "
+        f"{pct([r.get('slot_cores') or 0 for r in rs], .5):.0f} in its slot; memory: p50 {pct([r.get('mem_peak_gb') or 0 for r in rs], .5):.0f} GiB peak"
+        + (f" of {pct(res, .5):.0f} GiB reserved" if res else ", its slot reserves none") + f" (n={len(rs)})") if rs else "none ended", "",
+        "the window's runs that ended: CPU seconds and peak memory from the run's cgroup's last sample; the slot's cores and `mem=`")
 
-    # 8. what else explains waiting
+    # 7. what else explains waiting
     ps = parts(doc)
     for key, name, how in (("to_build", "Ready to built", "the later of a PR's mark and land verdict to the first candidate built with it"),
                            ("rework", "First candidate to the one it landed in", "the build of the first candidate holding the PR to "
                             "the build of the candidate `main` moved to: the rounds lost")):
-        add("8", name, "", _dist([p[key] for p in ps if p["landed"] >= hour]), _dist([p[key] for p in ps]), "", how + "; PRs landed in the window")
+        add("7", name, "", _dist([p[key] for p in ps if p["landed"] >= hour]), _dist([p[key] for p in ps]), "", how + "; PRs landed in the window")
 
     def by_cause(since: float) -> str:
         got = [p for p in ps if p["landed"] >= since]
@@ -1438,7 +1357,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         return f"{total:.0f} PR-min over {len(got)} PRs: " + ", ".join(
             f"{c} {m:.0f} ({m / total:.0%})" for c, m in sorted(mins.items(), key=lambda kv: -kv[1]))
 
-    add("8", "Ready to built, by the loop's reason", "", by_cause(hour), by_cause(day), "",
+    add("7", "Ready to built, by the loop's reason", "", by_cause(hour), by_cause(day), "",
         "the minutes of `Ready to built` by the cause of the loop's newest line leaving the PR's head out since its mark (`leave`, "
         f"or a build's `conflict` or `skip`), each until the next such line or the first candidate; `{UNLOGGED}` before the "
         "first; PRs landed in the window")
@@ -1447,18 +1366,18 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     v2l = [(c["landed"], _m(c["landed"] - c["verdict"])) for c in cands if c.get("landed") and c.get("verdict")]
     b2s = [(max(s["took"] for s in c["shards"]), _m(max(s["took"] for s in c["shards"]) - c["build"]))
            for c in cands if c["shards"] and all(s.get("took") for s in c["shards"])]
-    add("8", "The loop's tick: minutes between tick ends", f"last ended {_m(now - ticks[-1]):.0f} min ago" if ticks else "not read",
+    add("7", "The loop's tick: minutes between tick ends", f"last ended {_m(now - ticks[-1]):.0f} min ago" if ticks else "not read",
         _dist(win(gaps, hour), digits=1), _dist(win(gaps, day), digits=1), "", "the loop's log; every build, verdict, drop and move of `main` waits for a tick")
-    add("8", "Candidate: build to its last shard holding a slot", "", _dist(win(b2s, hour)), _dist(win(b2s, day)), "",
+    add("7", "Candidate: build to its last shard holding a slot", "", _dist(win(b2s, hour)), _dist(win(b2s, day)), "",
         "the loop's `build` to the latest `took` among its shards: the launch and the wait for a check slot")
-    add("8", "Green candidate: verdict to `main`", "", _dist(win(v2l, hour)), _dist(win(v2l, day)), "",
+    add("7", "Green candidate: verdict to `main`", "", _dist(win(v2l, hour)), _dist(win(v2l, day)), "",
         "`judged pass` to `advance`: the wait for the candidates below it and for the tick")
     def floor(since: float) -> str:
         rs = [c for c in cands if c.get("verdict") and c["verdict"] >= since]
         _, suites, tests = zip(*map(slowest, rs)) if rs else ((), (), ())
         return (a_suite(suites) + a_test(tests))[2:] or "none"
 
-    add("8", "The floor: a round's slowest suite and slowest test", "", floor(hour), floor(day), "",
+    add("7", "The floor: a round's slowest suite and slowest test", "", floor(hour), floor(day), "",
         "what a round's tests take with unlimited cores: the slowest suite that ran among its shards (`suites.json`), or its slowest "
         "passed test where that suite is split (the suites' reports, of each shard's three slowest suites); rounds with a verdict in "
         "the window; the longest chain of Lean modules is not read")
