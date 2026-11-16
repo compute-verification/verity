@@ -1001,7 +1001,7 @@ def _check_reads(r: Mapping[str, Any], unit: Mapping[str, Any], row: bytes, payl
 
 
 def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] | None = None,
-          replay_units: bool = True) -> dict[str, str]:
+          replay_blocks: bool = True) -> dict[str, str]:
     """The consumer's check of a bundle (module docstring): ``{key: why}``, empty when it holds. ``docket``: the
     window's ``registration.json``, whose roots and sampling design the bundle's must be, and whose ``window.commitment``
     (`steps_provenance`) names every step root the bundle opens against: a step it doesn't name fails closed."""
@@ -1097,7 +1097,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] |
                 bad[key] = f"the step commitment's rows are {S.ROW_SCHEMA}"
             elif (why := _check_slot(r, unit, row, bc, com)) is not None:
                 bad[key] = why
-        if replay_units and f"unit:{u}" not in bad and not any(k.startswith(f"unit:{u}/") for k in bad):
+        if replay_blocks and f"unit:{u}" not in bad and not any(k.startswith(f"unit:{u}/") for k in bad):
             try:
                 if not replay(unit, payload):
                     bad[f"unit:{u}"] = "its committed outputs are not its Definition's on its committed inputs"
