@@ -181,6 +181,23 @@ def test_the_same_post_by_two_event_ids_is_routed_once(world):
     assert len(world.rung("top")) == 1 and len(router_lines(world, CHAT, post["ts"])) == 1
 
 
+@pytest.mark.parametrize("who", ["person", "external"])
+def test_a_post_delivered_by_slacks_event_and_by_reconciliation_rings_only_the_inbox_still_missing(world, who):
+    """Slack's event rang one inbox and failed on the other; reconciliation's delivery of the post, under its own key,
+    rings only that other, and a third delivery rings nothing."""
+    ch, by = (CHAT, {"user": LUKE}) if who == "person" else (COORD, {"username": "Codex", "bot_id": BOT,
+                                                                       "subtype": "bot_message"})
+    post = world.slack.add(ch, text="@circuits @kernels which tile?", **by)
+    world.slack.fail_threads = {world.boxes["kernels"]}
+    with pytest.raises(Retry):
+        consume(world.deps, world.event(ch, post, "EvT"), 1)
+    assert (len(world.rung("circuits")), len(world.rung("kernels"))) == (1, 0)
+    world.slack.fail_threads = set()
+    assert consume(world.deps, world.event(ch, post, f"reconcile:{ch}:{post['ts']}"), 1) == "rule"
+    assert consume(world.deps, world.event(ch, post, "EvT"), 2) == "rule"
+    assert (len(world.rung("circuits")), len(world.rung("kernels"))) == (1, 1)
+
+
 def test_a_failing_post_retries_with_backoff_then_is_dead_lettered_said_in_its_thread_and_rung_to_top(world, monkeypatch):
     post = world.slack.add(CHAT, text="@circuits is the TP8 sweep done?", user=LUKE)
     payload = world.event(CHAT, post, "EvD")

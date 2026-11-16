@@ -73,12 +73,6 @@ class Deps:
             self.log("cache-write-failed", key=key, error=error(e))
 
 
-def message_key(channel: str, ts: str) -> str:
-    """A message's idempotency key on the topic: the same from Slack's event and from reconciliation's read of the channel,
-    so whichever comes second is dropped."""
-    return f"message:{channel}:{ts}"
-
-
 def error(e: BaseException) -> str:
     """An exception for the log: its type, and the message only for `research msg`'s own errors, which carry method names
     and Slack's error codes, never a post's text."""

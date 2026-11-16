@@ -11,8 +11,10 @@ what they find next time); both stamp last_success_at in the cache.
 - `reconcile` (every 10 minutes): each chat and ask channel's last hour, and the front door's.  A person's post (not in the
   front door, where the sender delivers) that should ring someone and has neither a routing line nor a doorbell in any
   inbox, and a post under an `external_posters` name with a name it rings whose inbox has no doorbell for it, are
-  enqueued again, keyed on the channel and ts as Slack's event is (`message_key`), so the event and a second pass add
-  nothing.  The oldest such post is what health reports as `oldest_unprocessed_age_s`.  And `silence`: a message it read
+  enqueued again under reconciliation's own key, `reconcile:{channel}:{ts}`, so a second pass adds nothing while the
+  queue keeps the key (24 h), and a post whose event was queued and then lost is still enqueued once.  When Slack's
+  event and this one are both consumed, `deliver` rings only the inboxes still without the post's doorbell, and a
+  routing line already in the thread is reused.  The oldest such post is what health reports as `oldest_unprocessed_age_s`.  And `silence`: a message it read
   more than SILENT_S newer than Slack's last signed request rings STALL_TO (at most hourly), since Slack switches event
   delivery off without a word and then nothing is enqueued for `stall` to judge."""
 from __future__ import annotations
@@ -33,7 +35,6 @@ from .deps import (
     TOPIC,
     Deps,
     error,
-    message_key,
 )
 
 REMIND_S, ESCALATE_S = 15 * 60, 60 * 60
@@ -327,7 +328,7 @@ def reconcile(deps: Deps) -> dict:
                 oldest = p["ts"] if oldest is None or float(p["ts"]) < float(oldest) else oldest
                 if float(p["ts"]) > now - SETTLE_S:
                     continue                                       # in flight: the consumer may not have reached it
-                eid = message_key(ch, p["ts"])
+                eid = f"reconcile:{ch}:{p['ts']}"
                 ev = {**{k: p[k] for k in ("ts", "thread_ts", "text", "user", "bot_id", "username", "subtype", "reactions")
                          if k in p}, "type": "message", "channel": ch}
                 deps.queue.send(TOPIC, {"kind": "event", "event_id": eid, "event": ev, "source": "reconcile"},

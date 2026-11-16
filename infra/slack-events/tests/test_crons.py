@@ -171,7 +171,7 @@ def test_reconciliation_enqueues_a_missed_post_once_and_the_consumer_routes_it(w
     assert world.deps.cache.get(OLDEST) == {"ts": missed["ts"], "at": world.clock()}
     assert crons.reconcile(world.deps)["queued"] == 2                      # sent again, and the queue keeps the first
     sent = world.deps.queue.on(TOPIC)
-    assert [p["event_id"] for p in sent] == [f"message:{CHAT}:{missed['ts']}", f"message:{TEAM}:{asked['ts']}"]
+    assert [p["event_id"] for p in sent] == [f"reconcile:{CHAT}:{missed['ts']}", f"reconcile:{TEAM}:{asked['ts']}"]
     assert young["ts"] not in {p["event"]["ts"] for p in sent}
     for p in sent:
         consume(world.deps, p, 1)
@@ -322,7 +322,7 @@ def test_reconciliation_enqueues_a_missed_external_post_in_the_front_door_a_chat
     assert crons.reconcile(world.deps)["queued"] == 4                      # sent again, and the queue keeps the first
     sent = world.deps.queue.on(TOPIC)
     assert sorted(p["event_id"] for p in sent) == sorted(
-        f"message:{ch}:{m['ts']}" for ch, m in ((COORD, top), (COORD, reply), (CHAT, chat), (TEAM, asked)))
+        f"reconcile:{ch}:{m['ts']}" for ch, m in ((COORD, top), (COORD, reply), (CHAT, chat), (TEAM, asked)))
     assert all(consume(world.deps, p, 1) == "rule" for p in sent)
     assert sorted(t.split(":")[0] for t in world.rung("circuits")) == [f"from codex, #chat-luke thread {chat['ts']}",
                                                                        f"from codex, thread {top['ts']}"]
@@ -346,7 +346,7 @@ def test_an_external_post_is_enqueued_while_an_inbox_it_names_lacks_its_doorbell
     assert not [p for m, p in world.slack.calls[calls:]                    # doorbells() reads it, without metadata; threads() never
                 if m == "conversations.replies" and p["ts"] == box and p.get("include_all_metadata") == "true"]
     [p] = world.deps.queue.on(TOPIC)
-    assert p["event_id"] == f"message:{TEAM}:{both['ts']}" and consume(world.deps, p, 1) == "rule"
+    assert p["event_id"] == f"reconcile:{TEAM}:{both['ts']}" and consume(world.deps, p, 1) == "rule"
     assert len(world.rung("circuits")) == len(world.rung("kernels")) == 1 and owner() == ["@circuits in an inbox thread"]
 
 
