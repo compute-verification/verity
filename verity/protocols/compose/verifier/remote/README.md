@@ -15,8 +15,8 @@ whose clause is proved on the Program its check judges, the two statements that 
 (`Vocab.WiresSound`, `GateARow`).
 
 This file is an outline with signposts; the Lean is the definition. The vocabulary is `ARCHITECTURE.md`'s
-Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `Session*` means a
-run of a subprotocol, and `window` an execution phase (`Credit.window`, a record's `windows`).
+Glossary, with `GLOSSARY.md` for the notation and the older names. In Lean's older
+names, `Session*` means a run of a subprotocol.
 
 **Which "remote".** Four things in the tree are called "remote", and this page means the first:
 
@@ -108,9 +108,9 @@ failure probability that, beyond the sample and SHA-512, rests on undischarged p
 - the committed computation satisfies the registered circuit, except on few proof blocks;
 - the hardware's credited time went to the registered circuit's work, on part 3's premises, which the deployed path
   doesn't meet;
-- once remote runs the inference-only policy's check (part 4), which it doesn't yet, the registered circuit divides
-  into inference blocks of at most Γ gates, each reading at most α_f fresh bits per gate, hence padded blocks of c = Γ
-  gates and k = ⌊α_f·Γ⌋ fresh bits.
+- the registered circuit the policy's case names divides into inference blocks of at most Γ gates, each reading at
+  most α_f fresh bits per gate, hence padded blocks of c = Γ gates and k = ⌊α_f·Γ⌋ fresh bits (part 4); that it is
+  the committed files' circuit is open.
 
 Conditionally on the items under What's open below, a fourth claim follows: training a new frontier model takes more
 fleet-time than it would without the protocol, by the slowdown bound (part 6). That bound is the argument's one
@@ -226,7 +226,7 @@ The time credit adds the data sheet's rates.
 - SPOT: `Properties.Spot.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
   form (v2) ends, on its own run's verdicts.
 - PoUW's period credit: `Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`, `CheckedCreditMonitoringPeriod`'s conclusion
-  at `PouwCheck.Credit.window`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
+  at `PouwCheck.Credit.executionPhase`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
   (`GUARANTEE`) and refuses every other form of an execution phase for, **proved** under the premises above.
 - The time credit: `Accounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
 - The proofs behind PoUW's credit, `Accounting.Guarantees.TS.SessionSoundAt`: **proved**, under `AcceptedLive` (no
@@ -244,43 +244,44 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `SlowdownThreaded` 
 
 **How it is checked.**
 
-- *By whom.* Not by remote yet: the policy isn't one of its subprotocols (Subprotocols, above). Its check runs on its
-  own, as `inference-only-check` (`InferenceOnlyCheck.Theta.check`, `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean`); once composed, the
-  verifier runs it on an auditor device in each verification phase.
+- *By whom.* By remote's verifier, whose subprotocol it is (Subprotocols, above), and on its own as
+  `inference-only-check` (`InferenceOnlyCheck.Theta.check`, `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean`).
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
-- *From which coins.* None. The check is deterministic, so it adds no failure probability of its own. What is to bind
-  it to the other subprotocols is a commitment to the registration PoUW and SPOT commit to; no composite rule
-  ties them yet.
-- *In the clear.* The check reads the inference partition and θ's provenance in the clear. Before a composite may run
-  it, it needs a private form: the partition committed under hiding commitments, and compliance proved in zero
-  knowledge.
+- *From which coins.* None. The check is deterministic, so it adds no failure probability of its own. The run's record
+  binds it to the others: the policy and SPOT commit to one record (`Core.Remote.V1.tied`), which Pearl+'s run names
+  (`V1.run`), and an accepted composite meets both (`Properties.Composition.AcceptSame`, `AcceptTied`, **proved**).
+- *In the clear.* The check reads the inference partition and θ's provenance in the clear, and v0 publishes the
+  division and each block's gates and fresh bits: remote composes it for one run of record only, a stated exception to
+  everything-zero-knowledge (`CoreRemote.lean`), until its private form (the division under hiding leaves, compliance
+  proved) replaces it.
 
 **Assumes.** The data the registration names was public, not computed off the books before
 (`InferenceOnly.Assumptions.ThetaRegistered`; only part 6 reads its Lean form); the verifier's copy of the registration log
 is the deployment's; that the registered roots bind their data (`InferenceOnly.Assumptions.RootsBind`, named in
-`security/Properties/InferenceOnly/Theta.lean`, not yet stated); and, once the policy is composed, SHA-512 collision resistance
-for its tie to one registration. Nothing about learning: the policy restricts the shape of the registered circuit, and
+`security/Properties/InferenceOnly/Theta.lean`, not yet stated); and SHA-512 collision resistance for its tie to one
+record. Nothing about learning: the policy restricts the shape of the registered circuit, and
 part 6's premises say why that shape trains little.
 
 **Lean, and how it discharges `CompliesRate`, link by link.**
 
-1. *Remote's verdict means the policy accepted the same registration.* **Open**: remote doesn't run the policy, and no
-   composite rule ties the policy's registration to the one SPOT and PoUW bind. The composition's proved
-   property, `Properties.Composition.AcceptMeans`, makes a composite accept each subprotocol's accept, so this link
-   needs the policy among remote's subprotocols, with that tie.
-2. *The policy's check accepts ⇒ `Theta.evaluate` complies ⇒ `Desc.evaluate` complies.* The bridge `theta_desc`
-   is a proof lemma (`security/Proofs/InferenceOnly/Cover/Checked.lean`), not a locked property, and the policy's check has no
-   `AcceptMeans`: **open** as a property. θ's provenance: `InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance`,
-   **proved**.
+1. *Remote's verdict means the policy accepted the same registration.* **Proved** of the case as sent: the policy
+   accepted its own case, on SPOT's record (`Properties.Composition.AcceptMeans`, `AcceptSame`, `AcceptTied`), and
+   remote's soundness carries its clause, `Properties.Remote.PolicyHeld`, proved by `Vocab.inferenceOnlySound`. That
+   the case's circuit is the committed files' is **open** (`Vocab.WiresSound`, `GateARow`: the open gap).
+2. *The policy's check accepts ⇒ `Theta.evaluate` complies ⇒ `Desc.evaluate` complies.*
+   `InferenceOnlyCheck.Properties.ProtocolAccepts`, **proved**: where the policy's check accepts, `Theta.evaluate`
+   accepts with `complies` true, and `Desc.evaluate` gives that verdict too. θ's provenance:
+   `InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance`, **proved**.
 3. *A compliance verdict of `Desc.evaluate` ⇒ `InferenceOnly.CompliesRate Γ α_f` of the laid-out `Verity.RegisteredCircuit`, on every
    expansion:*
    `InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
    is the definition's), **proved**; `refines` bounds the unrolled check's blocks by (Γ, α_f·Γ). `SlowdownThreaded`
-   takes `CompliesRate Γ α_f d`, what this verdict gives: links 1 and 2 are open.
+   takes `CompliesRate Γ α_f d`, what this verdict gives, and `PolicyHeld` holds it of the case's circuit
+   (`Properties.Remote.PolicyMet`).
 4. *`CompliesRate` ⇒ the (c, k)-partition the local bounds read:* `InferenceOnly.Guarantees.CompliesCK`, and through the
-   bit-level expansion `InferenceOnly.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
-   is open with links 1 and 2.
+   bit-level expansion `InferenceOnly.Guarantees.ExpandComplies`, **proved**. `PolicyMet` holds both of the
+   case's circuit, its constants registered; of the committed files' circuit they wait on link 1's two statements.
 5. *A block's effective fresh input:* k plus k_F, the bits incorrect proof blocks inject into it, plus k_a, the advice bits
    its structure depends on. SPOT bound the incorrect proof blocks and the advice's length is public, but no
    statement bounds either per inference block yet: **open**.
@@ -319,7 +320,7 @@ fleet's capacity, registered and unregistered hardware). It holds except with th
 η + δ + …: an accepted run reaches the target in less fleet-time at most that often. **This is the argument's one
 endpoint.** No Lean states it: it is derived in prose (`security/README.md`, part 4) from the local bounds,
 `Verity.Guarantees.Counting` and `Slowdown.Guarantees.CapabilityFloor`. The Lean bound `SlowdownRemote` is a different,
-older formula (below), and the Results table comes from a third route, the calculator's.
+older formula (below), and the calculator's figures (Results per monitoring period) come from a third route.
 
 **Its total failure probability** over a monitoring period of n verification phases is at most
 
@@ -347,7 +348,8 @@ neither does the total. With e the per-phase sum, a week, a month and a year at 
 
 **Conditional on three things not in place yet:**
 
-- the inference-only policy's guarantee doesn't reach the local bounds yet (part 4, links 1, 2, 5 and 6);
+- the inference-only policy's guarantee doesn't reach the local bounds yet (part 4: link 1's two statements on the
+  committed files, and links 5 and 6);
 - there is no utilization policy, so nothing bounds f uniformly over accepted runs;
 - the rate ceiling ζ̄ is a hypothesis: reference efficiency, ζ̄ equal to the reference's measured rate ζ_ref, is open.
 
@@ -422,10 +424,9 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileSampleIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
-- **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
-  with a rule tying its registration to the one SPOT and PoUW bind; the policy's check accepting as a
-  property (`theta_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading a
-  verdict's rate.
+- **The inference-only policy's link to the bound** (part 4, links 1, 5 and 6): the policy's clause on the committed
+  files (`Vocab.WiresSound` and `GateARow`, above); bounds on k_F and k_a per inference block; and the bound reading
+  a verdict's rate.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.
 - **The utilization policy.** Nothing bounds the free share f over every accepted run.
@@ -474,7 +475,7 @@ SPOT (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 
 PoUW, as `H1J10RCheckedCreditMonitoringPeriod` takes them (`security/Properties/Pouw/MonitoringPeriodJ10R.lean`):
 
-- `Properties.Pouw.MonitoringPeriodJ10R.TileServiceSound`: the proof system is sound against `Credit.window` at each sampled
+- `Properties.Pouw.MonitoringPeriodJ10R.TileServiceSound`: the proof system is sound against `Credit.executionPhase` at each sampled
   proof block, Flock's soundness under live coins. It is a named assumption: no theorem discharges it yet.
 - `Properties.Pouw.MonitoringPeriodJ10R.TileSampleIsCoin`: on every accepted execution phase, the proof blocks the check demands proofs of
   are the tile stratum's sample at the phase's coin. A protocol-code fact still to prove.
@@ -521,28 +522,18 @@ The local bounds (part 6):
 
 ## Results per monitoring period
 
-These figures come from a third route, neither part 6's displayed bound nor `SlowdownRemote`: the slowdown
-calculator, `benchmarks/slowdown`.
-Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
-(`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
-(`uv run python benchmarks/slowdown/periods.py --scenario reference-remote-h200`):
+The slowdown calculator, `benchmarks/slowdown`, a third route beside part 6's displayed bound and `SlowdownRemote`,
+gives the slowdown bound for monitoring periods of a week, a month and a year (`periods.py`), over one datacenter
+(`reference-h200`, the census's 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario
+`reference-remote-h200` (`uv run python benchmarks/slowdown/periods.py --scenario reference-remote-h200`). Run it for
+the figures: this page keeps none.
 
-| Over | Week | Month | Year | Range (week, month, year) | Worst corner |
-|---|---|---|---|---|---|
-| one datacenter | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.9 | 1 |
-| the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.9 | 1 |
-
-- **What the figures mean.** Each figure is the slowdown over the reference training algorithm at its MFU,
-  MFU₀ (`Slowdown.Slowdown.hardwareMultiple`): at least 1, and 1 with no protocol.
-- **Their status.** Draft (`draft:no-straddle`). `min-cut` sets them, `reference-remote-h200-pouw`'s and
-  `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, with `training-cut-hardness` and
-  `training-cut-exports` assumed. `cover` sets `reference-remote-h200-elementary`'s 1, conditional, premises assumed.
-- **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
-  98%): the figures are the composition's, and with PoUW crediting nothing the same scenario gives 1.
-- **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all
-  at once.
+- **What a figure means.** The slowdown over the reference training algorithm at its MFU, MFU₀
+  (`Slowdown.Slowdown.hardwareMultiple`): at least 1, and 1 with no protocol.
+- **Beside each.** Its range (each ranged parameter alone at either end of its plausible range), its worst corner (all
+  at once), and the bound that sets it, with each assumption's standing.
 - **The failure probability.** The δ is pooled over the monitoring period (`IntegrityPooled`, `CircuitCreditMonitoringPeriod`),
-  not per verification phase. The calculator prints its own beside them: `CertificateSlack`'s p/ε′ at ε′ = 10⁻⁴,
+  not per verification phase. The calculator prints its own: `CertificateSlack`'s p/ε′ at ε′ = 10⁻⁴,
   PoUW's per-phase p assumed at 3·2⁻⁴⁰ (δ_bind, δ_ks unnumbered, part 5), with no term growing with the period.
 
 ## The demo
