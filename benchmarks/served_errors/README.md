@@ -1,8 +1,8 @@
 # served_errors
 
 Some of the guarantees we quote have error terms that no Lean instance or run gives a value for. This benchmark
-evaluates each of those terms at the sizes we serve, one row each, beside the guarantee it sits in and what its formula
-rests on; evaluating a formula discharges nothing. `run.py`'s docstring says how to read a row, and lists the sizes and
+evaluates each of those terms at the sizes we serve, beside the guarantee it sits in and what its formula
+rests on; evaluating a formula discharges nothing. `run.py`'s docstring says how to read what it prints, and lists the sizes and
 where each parameter is read.
 
 ## Try it
@@ -11,9 +11,9 @@ where each parameter is read.
 uv run verity bench served_errors
 ~~~
 
-It needs only the checkout and takes under a second. Each row prints the term, its value, its tag and the sizes it is
+It needs only the checkout and takes under a second. For each term it prints its value, its tag and the sizes it is
 evaluated at, and under it the guarantee, the formula and, in brackets, what the formula rests on. `--json` prints the
-same rows as JSON.
+same as JSON.
 
 The terms:
 
