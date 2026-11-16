@@ -1574,8 +1574,8 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: 
     from verity_vllm.program.predict import scan_state as SS
 
     if kept_ingress is None:
-        raise ValueError("a window's scan reads the network certifier run its serve kept, or that it kept none, by the "
-                         "caller's reader, since SPOT imports neither the certifier nor a benchmark: run this from a "
+        raise ValueError("a window's scan reads the network attester run its serve kept, or that it kept none, by the "
+                         "caller's reader, since SPOT imports neither the attester nor a benchmark: run this from a "
                          "caller that passes it (main's kept_ingress, as benchmarks/one_stage/window_commit.py does)")
     if (kept := kept_ingress(serve_dir)) is None:
         return None

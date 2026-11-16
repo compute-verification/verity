@@ -401,7 +401,7 @@ class DeviceState:
             fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             self._lock.close()
-            raise StartRefused(f"{self.path} is held by another run of the network certifier under this key") from None
+            raise StartRefused(f"{self.path} is held by another run of the network attester under this key") from None
         try:
             self._count, self._sessions = self._read()
         except BaseException:

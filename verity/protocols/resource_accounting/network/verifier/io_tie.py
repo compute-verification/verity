@@ -318,7 +318,7 @@ def window_map(shape: Shape, outputs: Sequence[Output], release: Sequence[int], 
     for o, b in zip(outputs, release):
         want = admitted[o.request] + D + o.index // r
         if b != want:
-            raise ValueError(f"request {o.request}'s output {o.index} is released at bucket {b}, not the network certifier's {want}")
+            raise ValueError(f"request {o.request}'s output {o.index} is released at bucket {b}, not the network attester's {want}")
         if o.index in outs[o.request] or not 0 <= o.row < sh.P:
             raise ValueError(f"an output is its request's once, at a batch row below P = {sh.P}, not {o}")
         outs[o.request][o.index] = o

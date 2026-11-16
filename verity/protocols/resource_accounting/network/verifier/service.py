@@ -486,7 +486,7 @@ class TransferBlocks:
 
     def __post_init__(self) -> None:
         if self.network_attester is None:
-            raise ValueError("a link is the network certifier's: TransferBlocks(network_attester=NetworkAttesterProfile(windows, digest))")
+            raise ValueError("a link is the network attester's: TransferBlocks(network_attester=NetworkAttesterProfile(windows, digest))")
         if self.ingress_params != self.params:
             raise ValueError("a network certifier link's two ends are on the network certifier's one grid")
 

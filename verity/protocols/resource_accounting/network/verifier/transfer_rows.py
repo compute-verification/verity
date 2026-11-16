@@ -256,7 +256,7 @@ def check_registration(doc: Any, key: PublicKey, session: bytes, *, link: str, d
     if cert.digest != head.digest():
         raise ValueError("the transfer registration's certificate doesn't sign its head")
     if not cert.verify(key, session):
-        raise ValueError(f"the transfer registration's certificate doesn't verify under the network certifier's key in its "
+        raise ValueError(f"the transfer registration's certificate doesn't verify under the network attester's key in its "
                          f"session for {link} {direction.value} window {window}")
     return head, dom
 

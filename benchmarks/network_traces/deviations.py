@@ -427,10 +427,10 @@ def stop_words(cls: str, lost: Sequence[int], error: str | None) -> str | None:
     why = []
     if lost:
         more = "" if len(lost) <= 8 else f" and {len(lost) - 8} more"
-        why.append(f"a lost release: its network certifier's log names {len(lost)} lost on the watermark "
+        why.append(f"a lost release: its network attester's log names {len(lost)} lost on the watermark "
                    f"({', '.join(map(str, lost[:8]))}{more}), so the try did not reach its server whole")
     if error:
-        why.append(f"a watermark error ({error}): its network certifier's log says the stream stopped, so its server "
+        why.append(f"a watermark error ({error}): its network attester's log says the stream stopped, so its server "
                    "did not get the watermark whole")
     return f"{cls}: STOPPED at {'; and at '.join(why)}" if why else None
 
@@ -442,7 +442,7 @@ def watermark_stop(cls: str, run: Path, watermark: bool) -> str | None:
     what its watermark named isn't known."""
     mark = watermark_log(run)
     if mark is None and watermark and (run / "deployment.json").exists():
-        return (f"{cls}: STOPPED: its network certifier ran with the watermark and wrote no log ({RELAY_LOG}), so "
+        return (f"{cls}: STOPPED: its network attester ran with the watermark and wrote no log ({RELAY_LOG}), so "
                 "whether a line named a lost release isn't known")
     return stop_words(cls, mark["lost"], mark["error"]) if mark else None
 

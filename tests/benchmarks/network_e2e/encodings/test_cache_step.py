@@ -1,6 +1,6 @@
-"""CacheStep_v1's specification (`verity_vllm.compiler.cache_step.reference`) against the derived rules'
-prefix rules (`derived.Prefixes`) over whole traces, through `cache_vectors.drive`, and the certifier's difftest vectors
-as `cache_vectors` makes them now."""
+"""CacheStep_v1's specification (`verity_vllm.compiler.cache_step.reference`) against the derived rules' prefix rules
+(`derived.Prefixes`) over whole traces, through `cache_vectors.drive`, and network certification's difftest vectors as
+`cache_vectors` makes them now."""
 from __future__ import annotations
 
 import importlib.util
@@ -54,7 +54,8 @@ def test_the_cache_is_derived_s_prefix_rules_over_a_whole_trace(name) -> None:
 
 
 def test_the_vectors_are_current() -> None:
-    """The certifier's vectors (`cache_step_vectors.json`) are what `cache_vectors` makes from these fixtures now."""
+    """Network certification's vectors (`cache_step_vectors.json`) are what `cache_vectors` makes from these fixtures
+    now."""
     want = json.loads(VECTORS.read_text())
     for name, sl in want["slices"].items():
         assert V.slice_of(_trace(name), sl["statics"]["N"], sl["steps"]) == sl, name

@@ -732,7 +732,7 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
             if len(got) != grid.buckets:
                 raise ValueError(f"{link} window {window} closed after {len(got)} rows, not {grid.buckets}")
             if grid_digest(got) != digest:
-                raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the network certifier closed")
+                raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the network attester closed")
             publisher.keep(BlockGrid(link, window, got, Status(reason)), grid, withheld=withheld)
             filling[link] = []
         results.send(("done", {"refused": publisher.close(), "usage": _usage()}))
@@ -1190,7 +1190,7 @@ def _params(args) -> NetworkAttesterParams:
 
 def _check_paced(args) -> None:
     if not args.slack < args.paced_ms / 1000 < args.bucket_ms / 1000:
-        raise SystemExit(f"--paced-ms {args.paced_ms:g}: the network certifier always paces, each bucket released past the slack "
+        raise SystemExit(f"--paced-ms {args.paced_ms:g}: the network attester always paces, each bucket released past the slack "
                          f"({args.slack * 1000:g} ms) and before the next boundary ({args.bucket_ms} ms)")
 
 

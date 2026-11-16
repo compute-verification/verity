@@ -614,7 +614,7 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
     if cert.digest != head.digest():
         raise ValueError("the registration's certificate doesn't sign its head")
     if not cert.verify(key, session):
-        raise ValueError("the registration's certificate doesn't verify under the network certifier's key in the "
+        raise ValueError("the registration's certificate doesn't verify under the network attester's key in the "
                          "session")
     return head, domains
 

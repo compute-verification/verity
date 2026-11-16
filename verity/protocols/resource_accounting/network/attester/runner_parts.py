@@ -104,7 +104,7 @@ class Keeper:
 
     def __init__(self, out: Path, issuer: Issuer, params: NetworkAttesterParams, link: str, back=None) -> None:
         if (back is None) != (params.head_offset is None):
-            raise ValueError("in a schedule with a head offset, and in no other, the network certifier's tick writes "
+            raise ValueError("in a schedule with a head offset, and in no other, the network attester's tick writes "
                              "each execution phase's line, so the keeper hands the line back (`back`)")
         self.out, self.issuer, self.params, self.link, self.back = out, issuer, params, link, back
         self.open: dict[int, dict[int, Sequence[Released]]] = {}

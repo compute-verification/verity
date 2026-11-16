@@ -482,7 +482,7 @@ def blocks(sh: Shape, opened: Rows, requests: Sequence[Sequence[Request]]) -> li
         for k, (got, want) in enumerate(zip(slot.iter_unpack(row), slot.iter_unpack(signed))):
             for name, a, b in zip(("N + 1", "bytes", "n"), got, want):
                 if a != b:
-                    raise Refused(f"row {j}: slot {k}: the request row gives {name} = {a} and the network certifier "
+                    raise Refused(f"row {j}: slot {k}: the request row gives {name} = {a} and the network attester "
                                   f"signed {b}")
         out.append(RowBlock(j, tuple(_slots(sh, mine)), failed, failures, row))
     return out

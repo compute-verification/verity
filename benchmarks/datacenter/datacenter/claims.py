@@ -128,7 +128,7 @@ def check_records(records: list[PortRecord], declared: dict[tuple[Port, int], Po
     for (port, w), d in declared.items():
         on = On("port", repr(port), Interval(w * per, (w + 1) * per))
         r = have.get((port, w))
-        problems = (["no record: the certifier was down or its record was withheld"] if r is None else
+        problems = (["no record: the attester was down or its record was withheld"] if r is None else
                     ["occupancy differs from the declared profile"] * (r.counts != d.counts)
                     + ["a frame is not a committed crossing"] * (r.digest != d.digest))
         out += [Refused(on, why) for why in problems] or [Carried(port, math.log2(cadence.jitter_classes), on.during)]

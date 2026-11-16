@@ -265,7 +265,7 @@ class Class:
                 "egress": (params.egress == "id", "= id, the egress record's form")}
         bad = [f"{k} {want} (it is {getattr(params, k)})" for k, (ok, want) in need.items() if not ok]
         if bad:
-            raise ValueError(f"{self} doesn't serve the network certifier at these parameters: set " + "; ".join(bad))
+            raise ValueError(f"{self} doesn't serve the network attester at these parameters: set " + "; ".join(bad))
 
 
 def slot_layout(cls: Class) -> tuple[tuple[str, int], ...]:

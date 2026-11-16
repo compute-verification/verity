@@ -746,7 +746,7 @@ def network_certifier_run(run: Path, setup: Setup, windows: list[int], out: Path
             cells = WR.Cells.of(RC.LINK, direction, record, params, session, row_salts, wiring_salt)
             if cells.head != head:
                 raise SystemExit(f"--warden-run {run}: {side} execution phase {w}'s record under cells.salts isn't the rows "
-                                 "whose root the network certifier signed")
+                                 "whose root the network attester signed")
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
     fails = [((r.window - windows[0]) * params.window + t, sum(f is not None for f in row))
              for r in records[RC.FAILS] if r.window in windows for t, row in enumerate(r.grid)]
@@ -853,7 +853,7 @@ def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
                                    f"{SCAN_STATE}'s root and domain")
     if bad := [t for t in range(n) if words[t] != _words(states[t])]:
         raise _v3c_refused(window, f"its {SCAN_STATE} rows {bad[:4]} aren't the scan's (row t S_(t-1) from the "
-                                   "empty state of execution phase 0): it scanned another network certifier run or execution phase")
+                                   "empty state of execution phase 0): it scanned another network attester run or execution phase")
     return held
 
 
@@ -947,11 +947,11 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
         raise SystemExit(f"egress buckets {bad} don't compute the network attester's rows from the views their ingress buckets "
                          f"wrote, and the network attester failed a connection in buckets {void}")
     if void != got.fail_buckets:
-        raise SystemExit(f"egress buckets {void} hold a FAIL and the network certifier's fails record has a reason in buckets "
+        raise SystemExit(f"egress buckets {void} hold a FAIL and the network attester's fails record has a reason in buckets "
                          f"{got.fail_buckets}, not the same: a failed connection's reason is in its FAIL's bucket"
                          + (f" ({'; '.join(got.failed_why)})" if got.failed_why else ""))
     if early := sorted({windows[t // T] for t in void if t // T != group - 1}):
-        raise SystemExit(f"the network certifier failed a connection in execution phases {early}, which the scan refuses, and the "
+        raise SystemExit(f"the network attester failed a connection in execution phases {early}, which the scan refuses, and the "
                          "execution phase after a refused one has no start the verifier holds: prove the group up to "
                          f"the first of them (--group {early[0] - start + 1})")
     if not 0 <= setup.A < group * T or setup.A % T + 2 >= T:
