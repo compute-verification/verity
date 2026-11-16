@@ -4,15 +4,15 @@ public import Proofs.Properties.Verity.Sampled.HonestSession.ProgramParse
 public import Proofs.Properties.Verity.Sampled.HonestSession.Program
 public import Proofs.Flock.Bridge.PopMatches
 import Proofs.Flock.Verifier.Hash
-import all Spot.Partition
-import all Spot.Slots
-import all Spot.Program
-import all Spot.Json
-import all Flock.HmRow
-import all Flock.TemplateQuery
-import all Commitments.Draw
+import Spot.Partition
+import Spot.Slots
+import Spot.Program
+import Spot.Json
+import Flock.HmRow
+import Flock.TemplateQuery
+import Commitments.Draw
 import Circuits.Program
-import all Circuits.Steps
+import Circuits.Steps
 import all Init.Data.Array.QSort.Basic
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic

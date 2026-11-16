@@ -4,8 +4,8 @@ public import Proofs.Properties.Verity.Sampled.HonestSession.ProgramProof
 public import Proofs.Properties.Verity.Sampled.HonestSession.JsonCanonFacts
 import Proofs.Flock.Verifier.Hash
 import all Circuits.Program
-import all Flock.Firewall
-import all Proofs.Flock.Recursive.FirewallJson
+import Flock.Firewall
+import Proofs.Flock.Recursive.FirewallJson
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Std.Data.TreeMap.Raw.Basic
