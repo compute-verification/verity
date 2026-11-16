@@ -149,16 +149,17 @@ def shaped() -> tuple[dict, dict]:
 
 
 def test_a_sketch_sessions_whole_error_is_the_ledgers_and_is_far_above_its_eps():
-    """The answer's `eps` is δ₀ and the rejection, 1.443·10⁻¹⁴. The whole error adds the sketch's term at 16 rows and
-    the prover's budget Q = 2^`audit.QUERIES_LOG2`, which is all of it but 3·10⁻⁸: 2.805·10⁻⁵, 1.94·10⁹ times the `eps`.
+    """The answer's `eps` is δ₀ and the rejection, 3.944·10⁻³¹. The whole error adds the sketch's term at 16 rows and
+    the prover's budget Q = 2^`audit.QUERIES_LOG2`, which is all of it but 3·10⁻⁸: 2.805·10⁻⁵, 7.11·10²⁵ times the
+    `eps`.
     The table reads the whole error, so a period's row sums that and not the `eps`: over 12,500 machines every period's
     row sums to more than 1 and has no amount."""
     answer, error = shaped()
     eps = Fraction(answer["public"]["eps"])
-    assert f"{float(eps):.4g}" == "1.443e-14"
-    assert error["horizon"] == 2.8047496788605297e-05 and error["sketch"] == 2.8047495864679864e-05
+    assert f"{float(eps):.4g}" == "3.944e-31"
+    assert error["horizon"] == 2.8047496774174566e-05 and error["sketch"] == 2.8047495864679864e-05
     assert error["sketch"] / error["horizon"] == pytest.approx(1, abs=1e-7)
-    assert error["horizon"] / float(eps) == pytest.approx(1.9436e9, rel=1e-4)
+    assert error["horizon"] / float(eps) == pytest.approx(7.1109e25, rel=1e-4)
     table = monitoring.table(answer, error, 12_500, 600)
     o = table["observed"]
     assert (o["eps"], o["error"]) == (str(eps), error["horizon"])
