@@ -1570,8 +1570,8 @@ def told(f: dict) -> list[str]:
         gone = ", ".join(f"line {i}" + (f" ({' '.join(what)})" if what else "") for i, what in m.get("gone", []))
         out.append(f"{now}, {m['after']} after" + (f"; adds {', '.join(m['added'])}" if m["added"] and m["now"] is not None else "")
                    + (f"; drops {drops}" if drops else "") + (f"; the lines that go: {gone}" if gone else ""))
-    if f.get("out"):
-        out.append("leaves out " + ", ".join(f"{n} ({why})" for n, why in f["out"].items()))
+    if left := {n: why for n, why in (f.get("out") or {}).items() if n not in (f.get("machines") or {}).get("says", {})}:
+        out.append("leaves out " + ", ".join(f"{n} ({why})" for n, why in left.items()))
     if a := f.get("accept"):
         out.append(f"its key can't be read here ({a['unread']})" if "unread" in a else
                    "its key is taken from anywhere already (its line has no from=), and stays so" if a.get("anywhere") else

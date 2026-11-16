@@ -336,7 +336,7 @@ def test_a_roll_takes_a_stopped_machine_out_of_every_list_only_with_allow_shrink
     assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--allow-shrink") == 0         # the dry run says it all
     out = capsys.readouterr().out
     assert out.count(f"names 4 machines now, 3 after; drops vy-cpu-2 (stopped since {since}); the lines that go: line 4 "
-                     f"(vy-cpu-2); leaves out vy-cpu-2 (stopped since {since})") == 2
+                     "(vy-cpu-2); its key") == 2
     assert f"c  passed by: stopped since {since}" in out and "c" not in {n for n, _ in fleet["calls"]}
     assert all((tmp / n / "etc" / "peers").read_text() == LIST for n in "abc")
 
