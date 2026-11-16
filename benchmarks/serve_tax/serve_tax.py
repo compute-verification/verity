@@ -1396,8 +1396,7 @@ def sends_seed(arm: Arm) -> bool:
     whose replay samples each request again under the request's own seed. A stock arm is sent none, as a served
     request carries none, so vLLM samples its requests as it samples any without a seed; what a seed changes in
     vLLM's sampling is then on our side of a cost, as a change of ours. An arm that says so is sent them with no
-    record kept (`Arm.seeds`): stock's server under the recording arm's client, which reads that change apart. That
-    arm is the seeded arm, never stock: a cost is over stock, and ours over the seeded arm is printed beside it."""
+    record kept (`Arm.seeds`): stock's server under the recording arm's client, which reads that change apart."""
     return "record" in arm.plugin or arm.seeds
 
 
@@ -2606,8 +2605,7 @@ def tax(ref: dict, arm: dict) -> dict | None:
 #: the arm the serving cost is of (the two-stage serve's launch line) and the arm it is over
 OURS, REFERENCE = "two-stage", "compiled"
 UNIT = "percent of stock's serving compute"
-#: a sessions load's cost (`session_cost`) is a pass's wall time at a few users on one node, which no rung shows
-#: saturated: serving time, not compute
+#: a sessions load's cost (`session_cost`): a pass's wall time at a few users, unsaturated
 SESSION_UNIT = "percent of stock's serving time"
 #: what a served engine of ours can change that the two-stage serve leaves off and no arm here turns on, so no cost
 #: here counts it

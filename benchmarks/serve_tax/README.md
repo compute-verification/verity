@@ -324,9 +324,8 @@ Under `SAMPLED=1` the client sends `prod-record`, as it sends every arm that kee
 the request (`serve_tax.user_seed`, `sends_seed`): its replay samples the request again under that seed. `prod` is
 sent none, so vLLM samples its requests as it samples any without a seed, and what a seed changes in vLLM's sampling
 is in `prod-record`'s cost over `prod`, a change of ours like the record and the top-k; `prod-seeded` is `prod` sent
-the seeds, the one arm sent them that keeps no record (`Arm.seeds`), which reads that change apart: the seeded arm,
-never stock. The cost and its headline are over `prod`, and ours over `prod-seeded` is printed beside it. The seed is the
-client's; a served request need not send one. It is made from the user's name and, under `LIFETIMES`, the lifetime's number: a
+the seeds, the one arm sent them that keeps no record (`Arm.seeds`), which reads that change apart: never stock,
+which a cost is over. The seed is the client's; a served request need not send one. It is made from the user's name and, under `LIFETIMES`, the lifetime's number: a
 pass's users have the same names in every lifetime, and a server samples much the same tokens again under one seed,
 so with the name alone every lifetime of `prod-record` would serve one sample of text where `prod`'s serve a new one
 each. The share of its drafts' tokens a text accepts sets how many steps it takes to serve, so that one sample's

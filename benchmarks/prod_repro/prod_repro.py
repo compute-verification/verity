@@ -792,32 +792,11 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
 
 
 def scope(c: dict) -> str:
-    """What a measured cost line's figure is of, in a few words: serving time at one operating point, never compute."""
-    how = c["how"]
-    if how["client"] != S.BENCH:
-        return f"serving time, one node, one load at {how['rate']:g} requests a second"
-    sat = "saturated" if how["saturated"] else "unsaturated"
-    return f"serving time, {sat}, one node, one load at {how['rung']} {'users' if how.get('sessions') else 'in flight'}"
-
-
-def seeded_cost(by: dict[str, dict], seeded: str, ours: str, load: str, target: float) -> dict:
-    """``ours`` over ``seeded``, an arm that is stock's server sent ours's seeds (`serve_tax.Arm.seeds`), on ``load``,
-    by the cost line's own method: printed beside the cost and in no verdict, since stock is the arm sent none."""
-    mine, ref = by[ours], by[seeded]
-    try:
-        if getattr(S.LOADS.get(load), "sessions", False):
-            own = S.session_cost([ref, mine], ours, seeded, target, load)
-            c = own and {"value": _frac(own["value"]), "ci95": own["ci95"] and [x / 100 for x in own["ci95"]],
-                         "over": "lifetimes"}
-        elif load in S.bench_loads(ref):
-            c = S.serving_cost(ref, mine, load)
-            c = c and {"value": c["value"], "ci95": c.get("ci95"), "over": "passes"}
-        else:
-            c = S.tax(*(S.summary([r.get("output_tok_per_s") for r in a["loads"][load]]) for a in (ref, mine)))
-            c = c and {"value": c["value"], "ci95": c.get("ci95"), "over": "passes"}
-    except SystemExit as e:
-        return {"arm": seeded, "value": None, "why": str(e)}
-    return {"arm": seeded, **c} if c else {"arm": seeded, "value": None, "why": f"{seeded} and {ours} share no rep of {load}"}
+    """What a measured cost line's figure is of: serving time at one operating point on one node, never compute."""
+    h = c["how"]
+    at = f"{h['rate']:g} requests a second" if h["client"] != S.BENCH else \
+        f"{h['rung']} {'users' if h.get('sessions') else 'in flight'}, {'' if h['saturated'] else 'un'}saturated"
+    return f"serving time, one node, one load at {at}"
 
 
 # --------------------------------------------------------------------------------------------------------- the advice
@@ -937,9 +916,6 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
     meta = read(f"{ours}'s record", lambda: json.loads((dirs[ours][0] / "meta.json").read_text())) if ours in dirs else {}
     line = read("the cost", lambda: cost(out, by, stock, ours, again, load, target)) if stock else not_measured(
         f"no stock arm was served: the job serves {ours} alone")
-    if line["measured"]:
-        line["seeded"] = [seeded_cost(by, a, ours, load, target) for a in by
-                          if a not in (stock, ours) and getattr(S.ARMS.get(a), "seeds", False)]
     if len(sets) == 2 and (differ := settings_differ(sets[stock], sets[ours])):
         line["settings_differ"] = differ
         if line["measured"]:
@@ -989,8 +965,8 @@ def measurement(r: dict) -> dict | None:
     if not (c.get("measured") and c.get("stands") and c.get("metric")) or c.get("settings_differ"):
         return None
     life = c["lifetimes"]
-    return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "label": scope(c), "mark": "measured",
-            "better": "lower", "target": c["target"],
+    return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "mark": "measured", "better": "lower",
+            "target": c["target"],
             "ci95": life["ci95"] and [S._pct(x) for x in life["ci95"]], "verdict": c["verdict"], "load": r["load"],
             "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"], "commit": r["commit"],
             "run": r["run"],
@@ -1028,18 +1004,13 @@ def measurements(r: dict) -> list[dict]:
 
 
 def against_target(validation: dict, c: dict) -> dict:
-    """``validation`` with the cost line's verdict against its target as a field of its own (``target``: the
-    figure, the target, the verdict and whether it misses), and its ``detail`` saying so. Its ``status`` stays what the
-    run's own gates say: a cost over its target is a result, not a run that broke."""
-    verdict = c["verdict"] if c["measured"] else NOT_SHOWN
-    value = S._pct(c["value"]) if c["measured"] else None
-    target = TARGET if c.get("target") is None else c["target"]
-    told = (f"MISSES its target: {value:+.2f}% of stock's serving time, against under {target:g}%" if verdict == OVER
-            else f"the cost against its target of under {target:g}%: {verdict}")
-    detail = validation.get("detail")
-    return {**validation, "detail": f"{detail}; {told}" if isinstance(detail, str) and detail else told,
-            "target": {"metric": c.get("metric"), "value": value, "unit": UNIT, "target": target,
-                       "verdict": verdict, "misses": verdict == OVER}}
+    """``validation`` with the cost line's verdict against its target as a field (``target``) and in its ``detail``.
+    Its ``status`` stays the run's own gates': a cost over its target is a result, not a run that broke."""
+    t = {"value": S._pct(c["value"]) if c["measured"] else None, "target": c.get("target") or TARGET,
+         "verdict": c["verdict"] if c["measured"] else NOT_SHOWN}
+    told = (f"MISSES its target: {t['value']:+.2f}% of stock's serving time, against under {t['target']:g}%"
+            if t["verdict"] == OVER else f"the cost against its target of under {t['target']:g}%: {t['verdict']}")
+    return {**validation, "detail": "; ".join(filter(None, (validation.get("detail"), told))), "target": t}
 
 
 def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
@@ -1511,10 +1482,7 @@ def text(r: dict) -> str:
             lines.append(f"  STOCK DIFFERS FROM STOCK: the noise floor's interval leaves out 0, so two servers of {stock} "
                          + ("differ by more than their passes do" if noise["over"] == "passes" else
                             "did not serve at the same rate"))
-        lines += [f"  what it is: {scope(c)}",
-                  *(f"  beside, the seeded arm, not stock: {ours} over {x['arm']} "
-                    + (f"{_pct(x['value'])}{_interval(x)} over the {x['over']}" if x["value"] is not None else
-                       f"not measured: {x['why']}") + "; in no verdict" for x in c.get("seeded") or ())]
+        lines.append(f"  what it is: {scope(c)}")
     if c.get("settings_differ"):
         lines.append(f"  NOT at the same settings: {ours} and {stock} differ in {', '.join(c['settings_differ'])}, so the "
                      "figure is not our changes' cost")
