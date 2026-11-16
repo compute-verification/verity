@@ -30,6 +30,3 @@ python benchmarks/pouw/facet_break/loads.py refit RUN/out/rows.jsonl --row R1
 python benchmarks/pouw/facet_break/loads.py family RUN/out/rows.jsonl --family R1 KFFMA0 --name EFFMA --kind FFMA --emit VF3q-16
 python benchmarks/pouw/facet_break/loads.py summary RUN/out/rows.jsonl --full --epoch VF3s-16
 ~~~
-
-[`DESIGN.md`](DESIGN.md) says what each file holds, what a run writes, how a load is counted and why it is a lower
-bound, and how the table route's L2 facet is read.

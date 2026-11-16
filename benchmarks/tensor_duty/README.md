@@ -28,5 +28,4 @@ uv run tools/check/suites.py benchmarks/tensor_duty
 ~~~
 
 `run.sh --arms fp32-beside` asks a second question of the same card: whether a pipe beats its ceiling when both are
-busy. [`DESIGN.md`](DESIGN.md) says what each kernel runs, how a point is judged against the card's rate, and what the
-second question's arms are.
+busy.

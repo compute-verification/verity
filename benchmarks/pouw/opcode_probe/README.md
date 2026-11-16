@@ -75,6 +75,4 @@ The probes in `../dc/`, `../facet_break/` and `../sass_census/` are written and 
      --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/run.sh benchmarks/pouw/opcode_probe/probes/my.cu
    ~~~
 
-`probe.py --help` lists the harness's commands. [`DESIGN.md`](DESIGN.md) says what each probe source measures,
-what a run writes and how a rate is computed, why each known-invalid probe is refused, and what other directories read
-from here.
+`probe.py --help` lists the harness's commands.

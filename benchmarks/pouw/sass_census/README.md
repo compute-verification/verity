@@ -32,5 +32,3 @@ python3 sass_count.py summary census.json
 python3 diff_menu.py FAMILY census.json [--out diff.json] [--unused]              # FAMILY: sm_90, sm_100 or sm_120
 python3 eps_counts.py OUT --src TAG=APV_CU [--src ...] [--json FILE]              # an eps_counts.sh run's counts
 ~~~
-
-[`DESIGN.md`](DESIGN.md) says what each job runs on and writes, what each reader does, and how the probes are built.

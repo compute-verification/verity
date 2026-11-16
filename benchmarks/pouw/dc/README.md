@@ -3,7 +3,7 @@
 How much can one H200 and one B200 do in each SM each clock? PoUW's ε for a card is computed from a model of that
 card, and this directory measures the H200 (sm_90a) and the B200 (sm_100a) for it: their tensor instructions, the
 scalar pipes that bound the fold, the uniform datapath, and the honest Dither GEMM with its duo fold, checked word for
-word. Every rate comes from an opcode probe timed only after its SASS gate passes. The ACCEL model's census lines for
+word. Every probe's rate is timed only after its SASS gate passes, and the GEMMs' only after they are exact. The ACCEL model's census lines for
 both cards are written from these runs.
 
 ## Try it
@@ -28,8 +28,7 @@ research run --on H200 ... -- bash benchmarks/pouw/dc/run.sh sm90jb   # the stre
 ~~~
 
 A run builds and SASS-gates everything before it touches the GPU, and `DC_BUILD_ONLY=1` builds and gates without one.
-Its results are not kept here: the analyses print them from a run's `out/`. [`DESIGN.md`](DESIGN.md) gives the other
-jobs, what each writes, the analyses, what each source file probes, and the tests.
+Its results are not kept here: the analyses print them from a run's `out/`.
 
 ## What is not covered
 

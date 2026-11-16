@@ -32,5 +32,3 @@ python3 sm80.py gate OUT BIN...                         # the timing gate on eve
 python3 sm80.py analyze OUT                             # a run_sm80.sh run's table
 python3 sm80.py census OUT... --extension OUT... [--to DIR]   # sm_80's rows.csv and census.csv for the ACCEL model
 ~~~
-
-[`DESIGN.md`](DESIGN.md) says how the coefficient is fitted, what the other two jobs time, and what each run writes.

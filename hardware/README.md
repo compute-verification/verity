@@ -11,7 +11,7 @@ it carries, has one file in `nodes/`: what a node's registration states that no 
 from verity.device import load_card, number, skus
 skus("host")                                    # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
 load_card("xeon-6776p-2s")["rate"]["ops"]       # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
-drift = load_card("nebius-vm-monotonic-raw")["drift"]["max"]   # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
+(drift := load_card("nebius-vm-monotonic-raw")["drift"]["max"])   # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
 number(drift)                                   # Fraction(1, 2000)
 ~~~
 
@@ -37,8 +37,7 @@ In `uv run python` from a clone, each line gives what its comment shows. A numbe
 | NVIDIA DGX H200, a server none of our nodes is | server | `hardware/cards/dgx-h200.toml` |
 | `CLOCK_MONOTONIC_RAW` in a Nebius virtual machine, a KVM guest on `kvm-clock` or `tsc` | timebase | `hardware/cards/nebius-vm-monotonic-raw.toml` |
 
-A new SKU is a new card file. Every card of a kind has the same sections and entries, and [`DESIGN.md`](DESIGN.md)
-says what each section holds.
+A new SKU is a new card file. Every card of a kind has the same sections and entries.
 
 **The device's own report.** A ceiling is the hardware's, never its firmware's. A few entries marked `ceiling` are
 today what the device reports under its vBIOS, with no document behind them: `clock.sm` on the RTX PRO 6000 and the
@@ -57,5 +56,4 @@ likewise its guest's CPUID.
 | An H200 node, one card | `hardware/nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | `eth0`, which reads no rate, and the storage path |
 
 A node file names no machine, no address and no provider: it is the kind's, read on one node of it. Its numbers are
-entries under the cards' rules. [`DESIGN.md`](DESIGN.md) says what a node file states (its memory leaves and its ways
-out), how `verity.device` reads it, and how a node registers.
+entries under the cards' rules.

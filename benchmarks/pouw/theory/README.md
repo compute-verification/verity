@@ -25,6 +25,3 @@ uv run python benchmarks/pouw/theory/run.py --quick
 
 Without `--quick`, one search runs for CPU-hours. The sm_120 probes, the `*.sh` jobs, need an RTX PRO 6000 and run
 through `research run`; no Python here touches a GPU.
-
-[`DESIGN.md`](DESIGN.md) says what each script checks and which Lean or test reads it, how the checks, the C
-enumerators and the probes are run, and which scripts other code imports.
