@@ -98,6 +98,7 @@ theorem publishes_publishedQBytes_iff : PublishedQBytes ↔
 theorem sqrt_two_ge_one : (1 : ℝ) ≤ Real.sqrt 2 := by
   nlinarith [Real.sq_sqrt (show (0 : ℝ) ≤ 2 by norm_num), Real.sqrt_nonneg 2]
 
+set_option exponentiation.threshold 1024 in
 /-- Inside `refusal`'s caps the constant bounds every term of `constantTerms`. -/
 theorem constantTerms_le {params : Poub.Session.Params} {g : ℕ} {reg : Poub.Registration} {n : ℕ}
     (h : Poub.Protocol.refusal params g reg n = none) :
@@ -110,8 +111,21 @@ theorem constantTerms_le {params : Poub.Session.Params} {g : ℕ} {reg : Poub.Re
       simp [Poub.Protocol.sampleReceipts, hp]
     simp only [Poub.Protocol.refusal, hp, hu, Poub.Protocol.PASSES_MAX, Poub.Protocol.BINDING_SQ_MAX,
       Poub.Protocol.REJECTION_MAX] at h
-    split_ifs at h with h1 h2 h3 h4 h5
-    all_goals try exact absurd h (Option.some_ne_none _)
+    have h1 : ¬ (!(reg.receipt == .sketch && reg.rows == 64)) = true := by
+      intro hc; rw [if_pos hc] at h; exact absurd h (Option.some_ne_none _)
+    rw [if_neg h1] at h
+    have h2 : ¬ Poub.Protocol.mostBlocks reg n > 2 ^ 64 := by
+      intro hc; rw [if_pos hc] at h; exact absurd h (Option.some_ne_none _)
+    rw [if_neg h2] at h
+    have h3 : ¬ params.windows * pace.k > 2 ^ 30 := by
+      intro hc; rw [if_pos hc] at h; exact absurd h (Option.some_ne_none _)
+    rw [if_neg h3] at h
+    have h4 : ¬ Poub.Protocol.openingsCoins params g * Poub.Protocol.openingsCoins params g *
+        (max g 1 * pace.k * Poub.Protocol.mostBlocks reg n) * params.samples > 2 ^ 92 := by
+      intro hc; rw [if_pos hc] at h; exact absurd h (Option.some_ne_none _)
+    rw [if_neg h4] at h
+    have h5 : ¬ Poub.Protocol.openingsCoins params g * params.samples > 2 ^ 40 := by
+      intro hc; rw [if_pos hc] at h; exact absurd h (Option.some_ne_none _)
     simp only [constantTerms, hp, hu]
     set G := Poub.Protocol.openingsCoins params g
     set U := max g 1 * pace.k * Poub.Protocol.mostBlocks reg n
