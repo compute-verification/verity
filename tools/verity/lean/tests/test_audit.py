@@ -501,20 +501,20 @@ def test_a_layer_admits_a_toolchain_module_its_imports_already_reach():
     """A proof's `import all Init.Data.Array.Basic` brings nothing in: `Init` reaches it. A toolchain module nothing admitted
     reaches is still outside the layer, and so is a module this repository builds, however it is reached."""
     lib, tc = "/r/Q/.lake/build/lib/lean/", "/elan/toolchains/v4/lib/lean/"
-    graph = {"P.Defs": {"imports": ["Init", "Q.Draw"], "olean": "/r/P/.lake/build/lib/lean/P/Defs.olean"},
-             "Q.Draw": {"imports": ["Init", "Q.Json"], "olean": lib + "Q/Draw.olean"},
+    graph = {"P.Defs": {"imports": ["Init", "Q.Lib"], "olean": "/r/P/.lake/build/lib/lean/P/Defs.olean"},
+             "Q.Lib": {"imports": ["Init", "Q.Json"], "olean": lib + "Q/Lib.olean"},
              "Q.Json": {"imports": ["Init"], "olean": lib + "Q/Json.olean"},
              "Init": {"imports": ["Init.Data.Array.Basic"], "olean": tc + "Init.olean"},
              "Init.Data.Array.Basic": {"imports": [], "olean": tc + "Init/Data/Array/Basic.olean"},
              "Lean.Data.Json.Basic": {"imports": ["Init"], "olean": tc + "Lean/Data/Json/Basic.olean"}}
-    pol = recorded() | {"layers": {"P.Defs": {"imports": ["Q.Draw"]}}}
+    pol = recorded() | {"layers": {"P.Defs": {"imports": ["Q.Lib"]}}}
     def fails(*imports):
         f = facts(graph=graph)
-        return A.judge(pol, f | {"imports": f["imports"] | {"P.Defs": ["Init", "Q.Draw", *imports]}}, FILES)[0]
+        return A.judge(pol, f | {"imports": f["imports"] | {"P.Defs": ["Init", "Q.Lib", *imports]}}, FILES)[0]
     assert fails("Init.Data.Array.Basic") == []
     assert fails("Lean.Data.Json.Basic") == [
-        "layers: P.Defs imports Lean.Data.Json.Basic, outside P.Defs's layer (Q.Draw)"]
-    assert fails("Q.Json") == ["layers: P.Defs imports Q.Json, outside P.Defs's layer (Q.Draw)"]
+        "layers: P.Defs imports Lean.Data.Json.Basic, outside P.Defs's layer (Q.Lib)"]
+    assert fails("Q.Json") == ["layers: P.Defs imports Q.Json, outside P.Defs's layer (Q.Lib)"]
 
 
 def test_a_sealed_layer_answers_only_to_its_own_rule_and_is_reached_only_by_name():
@@ -849,7 +849,7 @@ def test_a_statement_reads_nothing_of_the_proofs_tree_and_the_trusted_trees_impo
 
 def test_an_exception_to_the_trees_names_a_prefix_and_a_reason_and_excepts_something():
     both = facts(pins={"P.t": fact(reads=fact()["reads"] + AUX)}, imports=facts()["imports"] | {"P.Defs": ["P.Thms"]})
-    why = "C-Flock is excepted until proofs extracts its spec"
+    why = "excepted until proofs extracts its spec"
     assert A.tree_failures({"trees": {"except": {"P.Thms": why, "P.Defs": why}}}, both, TREES) == []
     assert A.tree_failures({"trees": {"except": {"P": why}}}, both, TREES) == [], "a prefix covers its modules"
     assert A.tree_failures({"trees": {"except": {"P.Thms": why, "P.Defs": why, "P.Old": why}}}, both, TREES) == [
@@ -881,7 +881,7 @@ def test_the_record_follows_a_statement_through_the_modules_the_trees_except(tmp
     a `proved_in` package proves, as `security`'s are. The witnesses rule reads what the record holds: a claim, or a
     verifier's acceptance, read only through an excepted module holds the guarantee to witnesses as one under `meaning`
     does."""
-    why = "C-Flock is excepted until its spec is extracted"
+    why = "excepted until its spec is extracted"
     pol = {"roots": ["S"], "meaning": ["S.Defs"], "trees": {"proofs": ["SP"], "except": {"SP.Loop": why, "S.Defs": why}}}
     assert A.record_scope(pol) == ["S.Defs", "SP.Loop"]
     assert A.record_scope({"roots": ["S"]}) == ["S"]
@@ -2626,7 +2626,7 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_structure_moved_with_its_field_renamed_is_the_same_statement_on_a_real_build(tmp_path):
     """`Facts.lean`'s maps on a real build, for the shape of compute-accounting's two moves: a structure renamed and its
-    field `law` renamed `samplingDesign` under it (`RECORD_MOVES`'s form) reads back, so the guarantee over it is the same
+    field renamed under it (`RECORD_MOVES`'s form) reads back, so the guarantee over it is the same
     statement, and a map under which a name of the lock doesn't come back fails the audit.  Then a map whose old names
     nest and whose new ones don't, where the build reads the field under the
     structure's new name: that name maps back to the field's old name, which the map takes elsewhere, and the audit
@@ -2636,8 +2636,8 @@ def test_a_structure_moved_with_its_field_renamed_is_the_same_statement_on_a_rea
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Record\n")
     record = pkg / "Control" / "Record.lean"
-    record.write_text("namespace Control\nstructure W where\n  law : Nat\n"
-                      "theorem t (c : W) : c.law + 0 = c.law := rfl\nend Control\n")
+    record.write_text("namespace Control\nstructure W where\n  oldField : Nat\n"
+                      "theorem t (c : W) : c.oldField + 0 = c.oldField := rfl\nend Control\n")
     pol = unclaimed(A.load(pkg))
     A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Record": {"imports": []}},
                        "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.t")}})
@@ -2650,22 +2650,22 @@ def test_a_structure_moved_with_its_field_renamed_is_the_same_statement_on_a_rea
     build()
     assert unshaped(audit()) == []
     before = (pkg / A.POLICY).read_text()
-    record.write_text("namespace Control\nstructure E where\n  samplingDesign : Nat\n"
-                      "theorem t (c : E) : c.samplingDesign + 0 = c.samplingDesign := rfl\nend Control\n")
+    record.write_text("namespace Control\nstructure E where\n  newField : Nat\n"
+                      "theorem t (c : E) : c.newField + 0 = c.newField := rfl\nend Control\n")
     build()
-    moved = {"Control.W": "Control.E", "Control.W.law": "Control.E.samplingDesign"}
+    moved = {"Control.W": "Control.E", "Control.W.oldField": "Control.E.newField"}
     assert A.move_errors(moved, A.lock_names(A.load(pkg))) == []
     rep = audit(moved=moved)
     assert unshaped(rep) == [] and f"guarantee Control.t: {A.MOVED}" in rep["review"]
     rep = audit(moved={"Control": "K", "Other": "K.t"})
     assert "moved: Control.t moves to K.t, which maps back to Other: give Control.t an entry of its own" in rep["failures"]
     (pkg / A.POLICY).write_text(before)
-    record.write_text("namespace Control\nstructure E where\n  law : Nat\n"
-                      "theorem t (c : E) : c.law + 0 = c.law := rfl\nend Control\n")
+    record.write_text("namespace Control\nstructure E where\n  oldField : Nat\n"
+                      "theorem t (c : E) : c.oldField + 0 = c.oldField := rfl\nend Control\n")
     build()
-    rep = audit(moved={"Control.W": "Control.E", "Control.W.law": "Control.Law"})
+    rep = audit(moved={"Control.W": "Control.E", "Control.W.oldField": "Control.Q"})
     assert [f.split(":")[0] for f in unshaped(rep)] == ["moved"]
-    assert "Control.E.law would be Control.W.law, which moves to Control.Law" in rep["failures"][0]
+    assert "Control.E.oldField would be Control.W.oldField, which moves to Control.Q" in rep["failures"][0]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -3660,9 +3660,9 @@ def test_a_move_map_renames_by_its_longest_prefix_and_must_map_back():
 
 def test_the_nested_moves_of_a_structure_and_its_field_read_back_but_their_shadows_do_not():
     """The two cases the rule refused before it asked the names (`fixtures/moved/nested.json`): a structure renamed, and
-    its field `law` renamed `samplingDesign` under it.  Every old name of the lock and new name of the build comes back
-    to itself, but for the one name under the outer entry that lands on the inner one's other side: an old
-    `….samplingDesign` (the lock's, refused here) or a new `….law` (the build's, which `Facts.lean` refuses)."""
+    its field renamed under it.  Every old name of the lock and new name of the build comes back to itself, but for the
+    one name under the outer entry that lands on the inner one's other side: an old name with the field's new spelling
+    (the lock's, refused here) or a new one with its old spelling (the build's, which `Facts.lean` refuses)."""
     for case, c in json.loads((HERE / "fixtures" / "moved" / "nested.json").read_text()).items():
         moves = c["moves"]
         assert A.move_errors(moves) == [], case
@@ -3681,10 +3681,10 @@ def test_a_move_map_and_lock_it_accepts_come_back_and_keep_each_sections_names_a
     up to six witness lines, which may stand under a guarantee's new name): whenever `move_refusals` accepts a map and a
     lock, every name of the lock the map moves maps forward and back to itself and no two names of one section land on
     one new name; whenever it refuses them, it refuses each such name or pair and names it: a name with the other old name
-    its new name maps back to, or the names that land together and their section.  The draws hold nested entries whose
+    its new name maps back to, or the names that land together and their section.  The cases hold nested entries whose
     old names nest otherwise, names that don't come back (shadows) and names of one section that land together, the
-    last refused alone in some draw; a map whose names overlap (`move_errors`' chains) is refused before the lock is
-    read, which leaves no draw refused for a shadow alone (the round trip's own case is
+    last refused alone in some case; a map whose names overlap (`move_errors`' chains) is refused before the lock is
+    read, which leaves no case refused for a shadow alone (the round trip's own case is
     `test_moves_refused_against_a_lock_are_refused_before_anything_is_written`); and accepted locks where a guarantee's
     record meets a witness line on one new name, as the landing's pass had them."""
     rng, parts = random.Random(20261115), ["a", "b"]
@@ -5741,13 +5741,13 @@ def test_a_moved_field_on_a_variable_follows_the_move_through_what_the_build_say
             assert A.inline_failures(pol, f)[1] == {}, (was, moves, shown)
 
 
-#: compute-accounting's structure move, with `law_lean_moves.json`'s entry for its field under it
+#: compute-accounting's structure move, with the entry of `main`'s moves files for its field under it
 RECORD_MOVES = {"PouwCheck.WindowCommitmentRecord": "PouwCheck.ExecutionPhaseCommitmentRecord",
                 "PouwCheck.WindowCommitmentRecord.law": "PouwCheck.ExecutionPhaseCommitmentRecord.samplingDesign"}
 
 
 def test_a_field_renamed_with_its_structure_follows_both_moves():
-    """`c.law` to `c.samplingDesign` where the structure moved too: the old field's constant is the field's old name in
+    """A field renamed where its structure moved too: the old field's constant is the field's old name in
     the structure's old namespace, so the premise takes its entry's place; with the field's entry alone it doesn't."""
     was, now = "Eq (P.view c.law) P.zero", "Eq (P.view c.samplingDesign) P.zero"
     shown = [["c", "samplingDesign", "PouwCheck.ExecutionPhaseCommitmentRecord.samplingDesign"]]
@@ -5755,7 +5755,7 @@ def test_a_field_renamed_with_its_structure_follows_both_moves():
     pol, f = renamed_inline(was, now, ["Eq", "P.view", "P.zero"], constants, RECORD_MOVES, shown)
     assert inline_codes(pol, f) == []
     assert A.judge(pol, f, FILES, update=True)[1]["shape"] == {"inline": {"P.t": {now: WHY}}}
-    field_only = {k: v for k, v in RECORD_MOVES.items() if k.endswith(".law")}
+    field_only = {k: v for k, v in RECORD_MOVES.items() if k != "PouwCheck.WindowCommitmentRecord"}
     pol, f = renamed_inline(was, now, ["Eq", "P.view", "P.zero"], constants, field_only, shown)
     assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"]
 
@@ -6086,7 +6086,7 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
 
 def test_a_premise_free_exclusion_theorem_is_witnessed_by_its_bound_failing_at_an_explicit_circuit():
     """An exclusion theorem that takes no premise (`premise_free`: training's `ServingBlocks.UncertifiedElementary`, a
-    cap at every unit of every refinement) has none to drop: its nontrivial witness is the bare `¬ bound` at an explicit
+    bound at every unit of every refinement) has none to drop: its nontrivial witness is the bare `¬ bound` at an explicit
     circuit, where a tighter bound fails, and a missing witness is asked for in that form. It still negates the bound,
     constructs its circuit and takes only listed assumptions. A hypothesis no constant heads is a premise all the same,
     and a guarantee with a premise still drops one."""
@@ -6585,7 +6585,7 @@ def test_the_lean_checks_audit_passes_record_differences_and_names_the_records_t
 
 
 def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_requires(tmp_path, monkeypatch):
-    """`b` requires `a` by path, and `c` requires nothing. Each fake audit blocks on the event it needs, so the run finishes
+    """`b` requires `a` by path, and `c` requires nothing. Each fake audit waits on the event it needs, so the run finishes
     only when `c` runs beside `a`'s build, and `b`'s build beside the rest of `a`'s audit."""
     a, b, c = tmp_path / "a", tmp_path / "a" / "b", tmp_path / "c"
     for p in (a, b, c):
@@ -7941,12 +7941,12 @@ def test_a_base_commit_without_the_lock_is_reported_and_one_git_cannot_read_refu
 
 def test_a_chain_or_a_swap_in_a_moves_file_is_refused_and_told_to_split(tmp_path):
     """`rename.py` has already renamed the lock's hand-kept lines when `--moved` re-keys them, which is the identity only
-    while no entry's new name lies at, under or over another entry's old name; a chain or a swap would move Period's
-    lines onto Window's, and `{P.A: P.X, P.X.Q: R}` the lines `rename.py` put at `P.X.Q.t` (for `P.A.Q.t`) on to `R.t`, so
+    while no entry's new name lies at, under or over another entry's old name; a chain or a swap would move one entry's
+    lines onto another's, and `{P.A: P.X, P.X.Q: R}` the lines `rename.py` put at `P.X.Q.t` (for `P.A.Q.t`) on to `R.t`, so
     each is refused, saying to split it into two passes.  Monday's map and nested pairs pass."""
-    chain = {"N.Window": "N.ExecutionPhase", "N.Period": "N.Window"}
+    chain = {"N.B": "N.C", "N.A": "N.B"}
     assert A.move_errors(chain) == [
-        "N.Period moves to N.Window, and N.Window, which moves to N.ExecutionPhase, is at, under or over it: a chain or a "
+        "N.A moves to N.B, and N.B, which moves to N.C, is at, under or over it: a chain or a "
         "swap, which the lock's lines `rename.py` already renamed would follow twice; split it into two passes, each its "
         "own moves file"]
     assert len(A.move_errors({"N.X": "N.Y", "N.Y": "N.X"})) == 2
