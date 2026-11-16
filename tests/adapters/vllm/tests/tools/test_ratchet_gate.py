@@ -1810,8 +1810,8 @@ REPO_TERMS_JSON = "tests/lint/allowlists/repo_retired_terms.json"
 TOY_GLOSSARY = '# Glossary\n\n## Older names\n\n| Old name, where it stays | Term |\n|---|---|\n| "teapot" | kettle |\n'
 
 
-def test_a_retired_term_is_counted_as_the_glossary_of_the_tree_the_gate_runs_in_retires_it(repo):
-    """The retired-terms lint, loaded alone from the base, reads the checkout's GLOSSARY.md: a new use in a file the change
+def test_a_retired_term_is_counted_as_the_base_s_glossary_retires_it(repo):
+    """The retired-terms lint, loaded alone from the base, reads the base's GLOSSARY.md: a new use in a file the change
     touches is refused with the term to say, and saying it passes."""
     repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY,
                                   REPO_TERMS_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nA teapot boils it.\n"})
@@ -1824,6 +1824,18 @@ def test_a_retired_term_is_counted_as_the_glossary_of_the_tree_the_gate_runs_in_
     repo.commit("says the term", {"docs/a.md": "# A\n\nA kettle boils it.\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["counted"].get("repo_retired_terms")) == ("passed", ["docs/a.md"]), c["why"]
+
+
+def test_a_change_that_renames_a_row_s_old_name_and_its_use_together_adds_no_use(repo):
+    """A rename pass that renames a retired name in GLOSSARY.md's row and in its use: the base's lint counts with the
+    base's row, which retires the old name the base's text used and not the new one, so the change adds no use."""
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY,
+                                  REPO_TERMS_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nA teapot boils it.\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("the row's old name and its use renamed", {"GLOSSARY.md": TOY_GLOSSARY.replace("teapot", "samovar"),
+                                                         "docs/a.md": "# A\n\nA samovar boils it.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("passed", []), c["why"]
 
 
 @pytest.fixture

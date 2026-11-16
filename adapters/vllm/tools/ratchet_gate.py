@@ -206,6 +206,8 @@ PYPROJECT = "pyproject.toml"
 REPO_LINT = "tests/lint"
 REPO_RUFF_LINT = "repo_ruff"
 REPO_RUFF_CONFIG = "ruff.toml"
+#: the retired-terms lint's term source, which it reads from the tree it runs in: the base's lint reads the base's
+TERMS = "GLOSSARY.md"
 #: the repository's ruff lint's module, whose ``LEFT_OUT`` says which files the source lint leaves to others, and its list
 REPO_RUFF_MODULE = f"{REPO_LINT}/test_{REPO_RUFF_LINT}.py"
 REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
@@ -863,7 +865,7 @@ def counted_paths(slug: str) -> tuple[str, str]:
 @functools.cache
 def counted_lint_at(rev: str, slug: str, sites: str, noun: str) -> types.ModuleType | None:
     """The repository's counted lint ``slug`` as ``rev`` has it, loaded (it imports only the standard library) without
-    running a test, or None when ``rev`` has none."""
+    running a test, or None when ``rev`` has none; one that reads its terms (``glossary_text``) reads ``rev``'s ``TERMS``."""
     module, _ = counted_paths(slug)
     try:
         source = git("show", f"{rev}:{module}")
@@ -882,6 +884,12 @@ def counted_lint_at(rev: str, slug: str, sites: str, noun: str) -> types.ModuleT
                            f"change's {noun}s") from e
     if missing := [n for n in ("LEFT_OUT", "FIX", "parse", sites) if not hasattr(lint, n)]:
         raise GitError(f"{module} at {rev[:12]} has no {', '.join(missing)}, so the gate can't count the change's {noun}s")
+    if hasattr(lint, "glossary_text"):
+        try:
+            terms = git("show", f"{rev}:{TERMS}")
+        except GitError:
+            return lint
+        lint.glossary_text = lambda: terms
     return lint
 
 
@@ -1143,7 +1151,8 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
                tables: dict[str, dict[str, dict[str, str]]] | None = None, without: Iterable[str] = ()
                ) -> tuple[list[str], list[dict]]:
     """(the lints run, their failures): each lint directory's base code, its lints ``selection`` names (None: all of them),
-    run on the change's tree against its allowlists, P16's with the change's public commands, with the base's ruff configs;
+    run on the change's tree against its allowlists, P16's with the change's public commands, with the base's ruff configs
+    and ``TERMS``;
     with ``tables`` (`placed`), each lint file's tables hold those rows, and the tree is without the files ``without``."""
     selection = {lint: s for lint, s in selection.items() if git("ls-tree", "--name-only", c.lo, "--", lint).strip()}
     if not selection:
@@ -1164,7 +1173,7 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
                 git("-C", str(tree), "checkout", "-q", c.lo, "--", lint)
             for f in without:
                 (tree / f).unlink(missing_ok=True)
-            for config in (RUFF_CONFIG, REPO_RUFF_CONFIG):
+            for config in (RUFF_CONFIG, REPO_RUFF_CONFIG, TERMS):
                 if git("ls-tree", "--name-only", c.lo, "--", config).strip():
                     git("-C", str(tree), "checkout", "-q", c.lo, "--", config)
             for lint, slugs in selection.items():
