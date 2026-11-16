@@ -257,7 +257,7 @@
   },
   "Proofs.Flock.SessionLoop.Concrete.Fwd": {
    "why": "fwd_walk and fwd_def, a tactic and a command that step through a computation of the verifier by its head (a let, a let applied to arguments, which takes them under it, a jump, a bind, an if or a match, and a for loop whose body always yields as a fold) to the value it returns, rewriting by the hypotheses and lemmas they are given, in the concrete statement's walks of its circuit file's parse, its public file's load, Raw.ins and Ins.setup (SessionLoop/Concrete/File.lean to Inputs.lean); fwd_def adds the value as a definition and the walk's equation as a theorem with addDecl. kernel_rfl' closes an equation under metadata with Eq.refl, and case_both cases one discriminant on both sides of an equation (Concrete/Delta.lean). They run only inside the elaborator and read or write nothing outside it, and the kernel checks every definition and proof they add.",
-   "digest": "b1608d78c37350a8938e1936e57d048ae76ea82a930c1b063992d492c561420c"
+   "digest": "7d76241dbefcfc367160bdd00ee18f9e00df32a82780fd9370e03213776b6509"
   },
   "Proofs.Flock.Soundness.Refine.OkLe": {
    "why": "ok_le_walk, the tactic (an elab, over okLeStep) that walks two runs of one executable at once by their heads, closing each step with the module's okLe_bind/ite/dite/let/jp/forIn/throw lemmas (Refine/Lookups.lean's proofs that more lookup tables change nothing). It reads no files and does no IO, and the kernel replays every proof it builds.",
