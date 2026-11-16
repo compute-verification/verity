@@ -1,2 +1,0 @@
-[vllm.general_plugins]
-verity_dsa_topk = dsa_topk:register
