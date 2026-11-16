@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from functools import cache
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.serving.credit_gate import GEMMS, KNOWN, NOT_GEMMS, Invocation
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.credit_gate import GEMMS, KNOWN, NOT_GEMMS, Invocation
 
 
 def _impl(func: Any, args: Sequence[Any]) -> Any:

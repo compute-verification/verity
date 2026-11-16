@@ -17,9 +17,9 @@ at their first group's coin `s_lo`, before their paced session's `e_lo` (`Proper
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
-open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Pouw Absence
+open Finset ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions Pouw Absence
 
 variable {Ω : Type} {T : Trace Ω}
 
@@ -188,4 +188,4 @@ theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β
   have hO2 := mul_le_mul_of_nonneg_left hO hL0
   linarith
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

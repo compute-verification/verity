@@ -1,6 +1,6 @@
 """vLLM serving under PoUB: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
 with `verity_vllm.protocols.poub.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
-PoUB's prover's `serving.StoreBackend` (`verity.protocols.accounting.poub.prover.node_store.serving`) proves that store to a
+PoUB's prover's `serving.StoreBackend` (`verity.protocols.resource_accounting.memory.poub.prover.node_store.serving`) proves that store to a
 verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass
 reads every live block at it (`prover.py`'s serve modes: ``serve``, or ``servedrop:K``, which withholds the first K
@@ -51,7 +51,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(ROOT), str(ROOT / "adapters" / "vllm")]
 
-from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "head_dim": 64, "num_hidden_layers": 2, "vocab_size": 256,
@@ -263,8 +263,8 @@ def engine(work: Path):
 def provers():
     """PoUB's prover's serving loop and its store, which serving proves by; none of it the adapter's, vLLM's or a
     GPU's (the adapter's `Binder` is imported where the engine is built)."""
-    from verity.protocols.accounting.poub.prover.node_store import serving
-    from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
+    from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
+    from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
     return serving, NodeMemory
 
 
@@ -291,7 +291,7 @@ def backend_class(serving):
 
 
 def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) -> None:
-    from verity.protocols.accounting.poub.verifier.session import verifier
+    from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier
 
     import sheets
 
@@ -305,7 +305,7 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
                               clock=clock, log=lambda m: None, lifetime=a.lifetime)
         v.register()
         out["verifier"] = v.session(0, v.allowance(v.ping(4)), None)
-    except BaseException as e:  # noqa: BLE001
+    except BaseException as e:
         out["error"] = e
         raise
     finally:

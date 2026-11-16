@@ -7,7 +7,7 @@ from typing import Any
 from verity.commitments.merkle import CommitmentDomain
 from verity.errors import Refused
 
-from verity.protocols.accounting.pouw.prover.serving.lead.rows import A_LEAF_TAG, A_SEGMENT, CHUNK_WORDS, WORDS_LEAF_TAG, chunk_count
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead.rows import A_LEAF_TAG, A_SEGMENT, CHUNK_WORDS, WORDS_LEAF_TAG, chunk_count
 
 
 def _tree_step(ext, dom: CommitmentDomain):

@@ -8,8 +8,8 @@
     verity ci inspect RUN           a check's steps: state, elapsed, an ETA from each step's recorded median, and its reds so far
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
-                                    a deployment configuration's parties on this machine, and its verdict (run.py)
-    verity config new|check|hash    write, check or hash a deployment configuration (run.py)
+                                    a configuration's parties on this machine, and its verdict (run.py)
+    verity config new|check|hash    write, check or hash a configuration (run.py)
     verity verify proof [ARGS]      Flock's Lean verifier, the executable `lake build` writes in its package, with ARGS as
                                     its own (`verity verify proof verify --zk --circuit F --public F --session DIR`), run
                                     in the directory you are in and exiting with its status

@@ -38,7 +38,7 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.workspace]
-members = ["tools/research", "tools/config", "infra/cluster", "infra/ops", "benchmarks/numerical", "benchmarks/harness", "adapters/vllm", "infra/slack-events", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/tests", "tools/verity/circuit_check", "tools/check", "tools/verity/lean", "benchmarks/native_peak", "benchmarks/tc_probe", "benchmarks/tc_probe_fp4", "benchmarks/commitments", "benchmarks/pouw", "benchmarks/machine_model", "benchmarks/network_traces", "benchmarks/network_e2e", "benchmarks/certifier_timing", "tools/verity/cli", "tools/verity/graph", "tools/verity/landq", "tools/difftest", "verity/protocols/accounting/pous/verifier/check", "verity/commitments/identity", "verity/protocols/compose/verifier/lean", "verity/circuits/evaluate", "verity/protocols/proofs/recursion/verifier/zk_server", "verity/protocols/proofs/spot/verifier/lean", "verity/protocols/accounting/pouw/verifier/lean/window", "verity/protocols/accounting/pouw/verifier/lean/check", "verity/protocols/accounting/pous/device/lean", "benchmarks/pouw/exact_kit", "benchmarks/proof_throughput", "benchmarks/harness/specs", "adapters/torch"]
+members = ["tools/research", "tools/research/tests", "tools/config", "tools/config/tests", "infra/cluster", "infra/cluster/tests", "infra/ops", "infra/ops/tests", "benchmarks/numerical", "benchmarks/numerical/tests", "benchmarks/harness", "benchmarks/harness/tests", "adapters/vllm", "adapters/vllm/tests", "infra/slack-events", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/tests", "tools/verity/circuit_check", "tools/verity/circuit_check/tests", "tools/check", "tools/check/tests", "tools/verity/lean", "benchmarks/native_peak", "benchmarks/tc_probe", "benchmarks/tc_probe_fp4", "benchmarks/commitments", "benchmarks/pouw", "benchmarks/machine_model", "benchmarks/machine_model/tests", "benchmarks/network_traces", "benchmarks/network_e2e", "benchmarks/certifier_timing", "tools/verity/cli", "tools/verity/cli/tests", "tools/verity/graph", "tools/verity/graph/tests", "tools/verity/landq", "tools/verity/landq/tests", "tools/difftest", "tools/difftest/tests", "verity/protocols/resource_accounting/memory/pous/verifier/check", "verity/commitments/identity", "verity/protocols/compose/verifier/lean", "verity/circuits/evaluate", "verity/protocols/proofs/recursion/verifier/zk_server", "verity/protocols/proofs/spot/verifier/lean", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/window", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check", "verity/protocols/resource_accounting/memory/pous/attester/lean", "benchmarks/pouw/exact_kit", "benchmarks/pouw/exact_kit/tests", "benchmarks/proof_throughput", "benchmarks/proof_throughput/tests", "benchmarks/harness/specs", "adapters/torch", "adapters/torch/tests"]
 exclude = ["infra/slack-events/service"]               # a Vercel project's root, which Vercel installs on its own
 
 [tool.uv.sources]
@@ -59,6 +59,8 @@ verity-difftest = { workspace = true }
 verity-exact-kit = { workspace = true }
 verity-proof-throughput = { workspace = true }
 verity-torch = { workspace = true }
+verity-machine-model = { workspace = true }
+verity-landq = { workspace = true }
 
 [dependency-groups]
 # pyyaml: the tests of node 1's dispatcher and pack pilot (research/pods/nebius), which render Job templates with it on the

@@ -208,7 +208,7 @@ def plain(built, tmp_path_factory):
 def test_the_plain_sessions_coins_are_the_challengers(plain):
     """The plain session's coin tree is one the challenger's release log shows it sampled, with the rounds it opened; with
     one of its link points changed, it is refused at them."""
-    from verity.protocols.proofs.spot.device import challenger as C, remote as R
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as C, remote as R
 
     trees = C.coin_trees_of(R.log_lines(plain / "challenger" / R.RELEASES))
     rec = json.loads((plain / "session" / "session.json").read_text())

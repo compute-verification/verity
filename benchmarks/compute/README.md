@@ -1,15 +1,15 @@
 # compute: the share of a served model's MACs that Pearl+ credits
 
-`verity bench compute` prints one number for one served run: the share of the served model's multiply-accumulates
-(MACs) that the Pearl+ verifier credits. PoUW, proof of useful work, is how this repository credits a GPU's matrix
-multiplications: the prover commits to every product it computed, a random coin drawn after the commitment picks a
-sample of them, and the verifier recomputes the sample and credits the whole only if the sample is right. Pearl+ is
-PoUW's verifier for Pearl, a proof-of-work scheme whose products are FP8 (E4M3) matrix multiplications on an H100 or
-H200. The number is the MACs Pearl+ credits over all the MACs the model computes on a fixed load, and its target is
-97%.
+`verity bench compute`, the compute benchmark, prints one metric for one served run: the share of the served model's
+multiply-accumulates (MACs) that the Pearl+ verifier credits. PoUW, proof of useful work, is how this repository credits
+a GPU's matrix multiplications: the prover commits to every product it computed, a random coin flipped after the
+commitment picks a sample of them, and the verifier recomputes the sample and credits the whole only if the sample is
+right. Pearl+ is PoUW's verifier for Pearl, a proof-of-work scheme whose products are FP8 (E4M3) matrix multiplications
+on an H100 or H200. The number is the MACs Pearl+ credits over all the MACs the model computes on a fixed load, and its
+target is 97%.
 
 It is a measurement, never an audit: your own run writes every file of the record it reads, coins included, so nothing
-in a record can show that the auditor drew the coins rather than you, re-rolling them until a run passed. The output
+in a record can show that the auditor flipped the coins rather than you, re-rolling them until a run passed. The output
 says so on its third line, always, and refuses a record that claims a deployed challenger or deployed parameters
 (exit 2). Reading a deployed run needs a check of the challenger's signature against a pinned key, which this command
 doesn't have yet.
@@ -19,7 +19,7 @@ doesn't have yet.
 How the work is done, and nothing the verifier reads:
 
 - **The kernel** that computes the served model's matrix multiplications
-  (`verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/`: `pearl_c_sm90.cu`, the inert-work counter
+  (`verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/`: `pearl_c_sm90.cu`, the inert-work counter
   `debit_sm90.cu`, `build.sh`, built by `benchmarks/harness/setup/pearl_c_sm90.sh`). Any code may replace it that
   commits the same operand rows, checked words and served outputs bit for bit: the verifier recomputes a sampled tile
   from its opened rows and never sees how they were computed (`checkTile`). `build.sh` refuses a binary that fails
@@ -29,17 +29,19 @@ How the work is done, and nothing the verifier reads:
   one engine step), and the streams, graphs and overlap on the card. Which rows each step computes is the load's, so
   what is left free is inside a pass.
 - **The give-up rule**: which rows of each matrix multiplication the prover gives up, declaring them uncredited, before
-  the coin is drawn (`served_passes.py volunteer`), at most ⌈m/64⌉ rows of the activations A a call and ⌈n/64⌉ rows of
+  the coin is flipped (`served_passes.py volunteer`), at most ⌈m/64⌉ rows of the activations A a call and ⌈n/64⌉ rows of
   a fixed weight B (`voluntaryCap`, `checkRecords`); and which passes to drop (`served_passes.py retain`). Both credit
   nothing. Giving up rows that would fail the verifier's per-row rules costs less than having the run rejected.
 - **The sample size, locally.** On your machine you are the verifier too, so you choose t, the number of tiles sampled
   (`served_passes.py verify --draws`, 459 by default). The verifier takes a share ε_s off the credit for what the
-  sample could miss, about ln(1/δ_s)/t: 1/100 at 459 draws and δ_s = 1/100. Doubling t halves ε_s, which raises the
+  sample could miss. Where no sampled tile is over its inert-work bound, ε_s is about ln(1/δ_s)/t: 1/100 at t = 459
+  and δ_s = 1/100. Each sampled tile over its bound enlarges ε_s (its rule is below), so the number moves
+  with the sample from one run to the next, on the same kernel and load. Doubling t halves ε_s, which raises the
   number by about half of ε_s's deduction (in the fixture below, from 95.66% to about 96.15%), and doubles the replay.
   In an audit t is the auditor's.
 
 A faster kernel or schedule makes the run quicker but does not move the share; a give-up rule that loses fewer rows, or
-more draws, does.
+a larger sample, does.
 
 **Why 97% is out of reach today.** Pearl+ credits the model's linear layers, and the LM head (the last projection onto
 the vocabulary) only where the passes hold its calls. Attention and the LM head are the rest of the MACs. At the fixed
@@ -57,7 +59,7 @@ What the number is of, and the verifier that decides it. Change any of these and
   by come from the model's shape and the class (`MODELS`, `model_macs` in `run.py`); attention is counted and never
   credited.
 - **The verifier**: the Lean program `pouw-pearlplus` (package `pouw_pearlplus` in
-  `verity/protocols/accounting/pouw/verifier/lean/pearlplus/`, `PouwCheck.PearlPlus`'s `check`) and its Python twin
+  `verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/`, `PouwCheck.PearlPlus`'s `check`) and its Python twin
   `benchmarks/pouw/pearl_c_vllm/verify_run.py`, which must agree. The number needs the Lean verdict.
 - **The scheme**: `pearl-c-h100-v1-h3` alone (`schemeOf` refuses the RTX PRO 6000's schemes by name), with 64 × 64
   tiles and a matrix depth k (the length of the products' dot products) of at least 1,024 (`TILE`, `K_MIN`) or
@@ -80,8 +82,8 @@ properties are stated in `security/Properties/Pouw/PearlPlus.lean` (`AcceptMeans
 
 **What the credit rests on.** That a credited MAC was computed rests on SHA-512's collision resistance and on Pearl's
 conjecture TT_OUT rev1 (`TTOutPearlCDevRev1`, per tile `TTOutTilePearlCH100Rev1`), which proofs' red-team rating
-refutes (`verity/protocols/accounting/pouw/verifier/README.md`), and no proved guarantee covers a Pearl+ run's credit:
-the number counts what the verifier credits, and that this is work done is an open premise. A bridge from acceptance
+refutes (`verity/protocols/resource_accounting/compute/pouw/verifier/README.md`), and no proved guarantee covers a Pearl+ run's credit:
+the number counts what the verifier credits, and that this is work done is an open assumption. A bridge from acceptance
 to the audit game is proved (`acceptGivesTheAudit` in `security/Proofs/Pouw/PearlPlus/Sample.lean`).
 
 **Computing fewer products, or wrong ones.** `checkTile` recomputes a sampled tile's checked words from its opened rows
@@ -100,10 +102,10 @@ coins that didn't come live from the auditor's challenger (`ofRecordReason`). Wi
 one.
 
 **Choosing the sample.** Tiles are sampled by a key of the coin's source and the run's commitment (`drawKey`). A coin
-record of another commitment is `after-coin`; a verdict of record refuses a sample the serving machine drew itself
+record of another commitment is `after-coin`; a verdict of record refuses a sample the serving machine took itself
 (`of-record`). One
 sampling session a root, ever, is the challenger's own rule, in Python on the auditor's device (`open_refusal` in
-`verity/protocols/compose/device/live_challenger/auditor.py`), not in Lean. On your own machine nothing refuses a
+`verity/protocols/compose/verifier/live_challenger/auditor.py`), not in Lean. On your own machine nothing refuses a
 retried sample.
 
 **Dropping passes after the sample.** The run's commitment covers the retained passes (`runCommitment`) and must be
@@ -115,7 +117,7 @@ Inert work below the bound, and any other skip, is what TT_OUT rev1 bounds.
 
 **Crediting cheap or padded rows.** `rowsFailure`: a credited row must pass the noise floor and liveness (`floorOK`,
 `liveRow`), and an excluded row must fail them; a filler row is zero and no row holds a word past the kept width
-(`not zero past the kept width`). `checkRecords` caps voluntary rows.
+(`not zero past the kept width`). `checkRecords` limits voluntary rows.
 
 **Crediting one call twice.** `passesDistinct` refuses `repeated-call` (an index repeated under one salt) and
 `call-range`; `workloadReason` refuses repeated matmul indices.
@@ -135,7 +137,7 @@ refuses an answer whose passes or credit hold more MACs than one load of the cla
 where the passes hold the head's calls), in Python on the measuring side.
 
 **Serving with weights other than the model's: not refused today.** The registration log can carry a checkpoint's
-SHA-512 (`checkpoint` in `verity/protocols/accounting/registration/verifier/lean/RegistrationLog.lean`), but no check
+SHA-512 (`checkpoint` in `verity/protocols/registration/verifier/lean/RegistrationLog.lean`), but no check
 recomputes the committed weight rows' root from the published checkpoint, so other weights of the same shapes can be
 credited.
 
@@ -166,17 +168,18 @@ The first lines of the output, on the fixture:
 
 ~~~text
 compute: 95.66% of the served model's MACs (134,502,518,410 of 140,598,837,248), below the 97% target. ...
-ran with: coins in-process; parameters development (draws 459, delta 1/100, scheme pearl-c-h100-v1-h3, ...)
+ran with: coins in-process; parameters development (sample size 459, delta 1/100, scheme pearl-c-h100-v1-h3, ...)
 a measurement, not an audit
 ~~~
 
-The second line says who drew the coins (`local challenger`, a challenger you run as its own process; or `in-process`,
-the run's own process), and that the sample size and δ are development ones. The fixture's sample was drawn by the
-serving machine itself: it is a development run. The lines after name the run and say that the Pearl+ verifier's answer
-accepts at ε_s and δ_s and the Lean verifier agrees: ε_s and δ_s are sampling's, the credit misses more than the share
-ε_s of the work with probability at most δ_s. Then one line says what the credit rests on, and one gives PoUW's verdict
-in the run's record of verdicts (`out/record/verdicts.json`, every protocol's verdict on the run): on your own card it
-is not an accept, so PoUW credits nothing of the run, and the number is the Pearl+ verifier's answer alone.
+The second line says who flipped the coins (`local challenger`, a challenger you run as its own process; or
+`in-process`, the run's own process), and that the sample size and δ are development ones. The fixture's sample was
+taken by the serving machine itself: it is a development run. The lines after name the run and say that the Pearl+
+verifier's answer accepts at ε_s and δ_s and the Lean verifier agrees: ε_s and δ_s are sampling's, the credit misses
+more than the share ε_s of the work with probability at most δ_s. Then one line says what the credit rests on, and one
+gives PoUW's verdict in the run's record of verdicts (`out/record/verdicts.json`, every protocol's verdict on the run):
+on your own card it is not an accept, so PoUW credits nothing of the run, and the number is the Pearl+ verifier's answer
+alone.
 
 To keep what it prints as files too (`compute.json` and `result.json`, below), set `OUT` to a
 directory: `OUT=/tmp/compute uv run verity bench compute --from benchmarks/compute/tests/fixtures/record`.
@@ -197,13 +200,14 @@ research run --on NODE --project verity --source . --cwd clone --timeout 2h -- b
 
 The first line is the one for your own machine. The second is how we run it on Verity's machines: `research run` is
 our job runner, which runs the command on one of our machines (a node; `NODE` is its name) and records the run under
-a run id such as `r20261115-200421-8c63`. You need neither.
+a run id. You need neither.
 
 The record directory is `RUN_DIR`, else the run directory under `research run`, else `./compute-run`. The command
 exits 0 only where both verdicts accept and the number prints. Each step's log is `out/logs/STEP.log`, its status a
 line of `out/steps.txt`, and its seconds are in `out/compute-run.json`'s `steps`. A share it prints is always this
-run's: it refuses a record directory that already holds a record, and a failed step ends it with exit 1, a sentence
-naming the step, `out/compute-run.json` written and no number. `COINS=local`, the default, runs a local challenger:
+run's: it refuses a record directory that already holds a record, a refused earlier try's `out/logs` included (remove
+`./compute-run`, or give `RUN_DIR` a new directory, before you run it again), and a failed step ends it with exit 1,
+a sentence naming the step, `out/compute-run.json` written and no number. `COINS=local`, the default, runs a local challenger:
 infra's gate code on a scratch auditor host with a test key, each session's challenger its own process on 127.0.0.1,
 so the Lean verdict is taken of record. Of record here means only that the Lean verifier took its of-record path
 (`--of-record`) against the local challenger's key, the test key this run made, not the auditor's: the `ran with`
@@ -215,7 +219,10 @@ in `/tmp`.
 It needs:
 
 - one idle H100 or H200 (the scheme follows the H100's FP8 tensor core): `GPU` is its index, default 0 (`nvidia-smi
-  -L` lists them), and serve.sh checks before any step that it is a compute capability 9.0 card with no process on it;
+  -L` lists them), and serve.sh checks before any step that it is a compute capability 9.0 card with no process on it.
+  Run under a `gpu-lease` already held (`research run --gpus 1`, or your own `gpu-lease 1 --on 0 --cores CPUS -- bash
+  benchmarks/compute/serve.sh` to pin the run to some CPUs), it serves on that lease's card and takes no lease of its
+  own;
 - nvcc from CUDA 13.0 (12.8 or newer) at /usr/local/cuda-13.0, or wherever `CUDA_HOME` names: the kernel is built by
   `benchmarks/harness/setup/pearl_c_sm90.sh`, which hands `build.sh` that toolkit;
 - vLLM at commit d9105ea80 with torch 2.13.0+cu129 and the checkpoint `unsloth/Llama-3.2-1B` at the revision
@@ -224,20 +231,21 @@ It needs:
   flash-attention's taps (which serve.sh's serve doesn't load) and its install caches, of which it removes only those it
   made. So set `WORK` to a directory of yours for it and for serve.sh, which finds the venv there too. From the
   clone's root: `cd adapters/vllm && WORK=$HOME/verity-work bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B
-  --gpu`, then back at the root, `WORK=$HOME/verity-work bash benchmarks/compute/serve.sh`. Neither the time it takes
-  nor the disk the environment fills has been measured;
-- this tree's `adapters/torch` importable (`verity_torch`, which the served model's PoUW hooks import): `research run`
-  puts it on `PYTHONPATH`; a bare `bash benchmarks/compute/serve.sh` needs it there where `benchmarks/harness/env.sh`
-  doesn't put it (`export PYTHONPATH=$PWD/adapters/torch:$PYTHONPATH`); serve.sh checks it before any step;
+  --gpu`, then back at the root, `WORK=$HOME/verity-work bash benchmarks/compute/serve.sh`. In our measured run from a
+  fresh clone, the clone took 191 s and 2.1 GB, and the bootstrap took 1,069 s and filled `WORK` with 15 GB;
+- this tree's `adapters/torch` importable (`verity_torch`, which the served model's PoUW hooks import):
+  `benchmarks/harness/env.sh`, which serve.sh sources, puts every workspace member's packages on `PYTHONPATH`, this
+  one's among them, and serve.sh checks it before any step;
 - Lean v4.34.0, through [elan](https://github.com/leanprover/elan), to build the Lean verifier: `lake` on `PATH` or
   in `~/.elan/bin`, which serve.sh also checks first;
 - about 2 GB of disk for the run's passes, besides the checkpoint and the vLLM environment; the record itself is about
   200 MB;
 - memory for the Python verdict's workers, one a core unless `JOBS` says otherwise: on a 96-core H200 machine the
-  run's processes peaked at 400 GB resident, summed over the workers.
+  run's processes peaked at 400 GB resident, summed over the workers. It grows with `JOBS`: a smaller `JOBS` holds
+  less and makes `python-verify` slower.
 
-A run takes about an hour. Our run `r20261115-200421-8c63`, on one H200 of a 96-core machine with `COINS=local`, took
-59 minutes. The steps took:
+A run takes one to one and a half hours: our measured runs took 59 minutes on one H200 of a 96-core machine with
+`COINS=local`, and 92 minutes on a 36-core machine. On the 96-core run the steps took:
 
 | step | seconds |
 |---|---|
@@ -253,6 +261,11 @@ A run takes about an hour. Our run `r20261115-200421-8c63`, on one H200 of a 96-
 The `gate` and `lean` times include building their Lean programs from a fresh clone. The run was alone on its card,
 but for the first few minutes of `python-verify` another run's Lean verdict was also running on the same machine.
 
+On fewer cores the two verdicts take longer. On 36 cores `python-verify` took 1,355 s and `lean` 3,451 s, and the
+whole run 92 minutes; on 20 cores `python-verify` took 2,368 s, and `lean` took more than 3,600 s. The Lean verdict has
+`LEAN_TIMEOUT` seconds: 3,600 on 96 or more cores, and 3,600 × 96 over the cores serve.sh may run on (`nproc`) on
+fewer, 17,280 on 20. Give `research run` a `--timeout` to match: the `2h` above is for 96 cores.
+
 ## A record directory
 
 The paths below are relative to the record directory.
@@ -263,8 +276,8 @@ The paths below are relative to the record directory.
   and the class. The model's MACs are counted from it.
 - `out/pieces/pouw/pearlplus-lean.json` and `out/pieces/pouw/pearlplus-lean-check.json`: the Lean verifier's verdict,
   and the record's comparison of it with the answer. Without either there is no number (exit 1, naming the file).
-- `out/record/verdicts.json` (optional): the run's composed record, every protocol's verdict on the run, of which
-  PoUW's row is printed beside the number. A served run on your own card reads `missing` there: the credit is then the
+- `out/record/verdicts.json` (optional): the run's composed record, every protocol's verdict on the run, of which PoUW's
+  verdict is printed beside the number. A served run on your own card reads `missing` there: the credit is then the
   Pearl+ verifier's alone.
 - `out/pieces/pouw/verify.json` (optional): the Pearl+ verifier's document. Its per-call split says whether the
   passes hold the LM head's calls, and `--per-call` prints it.
@@ -306,7 +319,7 @@ prints. Under the answer's verdict a line says the credit rests on Pearl's conje
 repository's red-team rates refuted.
 The second and third are the harness kit's (`benchmarks/harness/README.md`): the coins and parameters the record states
 (`ran_with` in the JSON), and `a measurement, not an audit`, always (`audit` is false, in `compute.json` and in each
-entry of `result.json`). Where the record doesn't say whose challenger drew a challenger's coins, the second line is
+entry of `result.json`). Where the record doesn't say whose challenger flipped a challenger's coins, the second line is
 `ran with: not stated` and a line under it says what the record does state.
 
 **What it writes:** two files, through the harness kit's report (`kit.report`): under `research run` in its run
@@ -323,14 +336,14 @@ directory, outside one where `OUT` names a directory, and otherwise nothing.
 **Exit code:** 0 with the number printed; 1 with none; 2 when the command line, the record or its policy can't be read,
 when the policy's load is not the benchmark's (`load.toml`), or when the split `--per-call` reads is not the answer's.
 
-## Ours: the evidence store and the metric rows
+## Ours: the evidence store and the metrics
 
 On our machines `--from` also takes a run id of our evidence store, read through research's store client with a key
 that reads the store; a withdrawal of part of a stored record is honored (a withdrawn required file refuses the record,
 a withdrawn optional one is read as absent). `verity bench compute --from RUN` reads a run id that names no directory.
 
-`metrics.toml` holds the rows the console's Metrics tab reads: `compute-accounting/verified-compute-share` (the number)
-and the others `run.py` writes, each with the run it reads; `h200_share.py` writes
+`metrics.toml` holds the metrics the console's Metrics tab reads: `compute-accounting/verified-compute-share`
+(the number) and the others `run.py` writes, each with the run it reads; `h200_share.py` writes
 `compute-accounting/h200-capacity-credited-share` for the goal `accounting/h200-97-percent`: an honest H200's e4m3 rate
 (a `benchmarks/tensor_duty --arms fp32-beside` run's arm A on uniform operands) over the card's ceiling at each reading
 of its tensor clock, times `run.py`'s share of a served run. Both need the store:

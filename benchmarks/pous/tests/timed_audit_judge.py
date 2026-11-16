@@ -17,7 +17,7 @@ def exe(directory: Path, reject: bool = False) -> Path:
 
 
 def main(argv: list[str]) -> int:
-    from verity.protocols.accounting.pous.device.timed_audit import verdict
+    from verity.protocols.resource_accounting.memory.pous.attester.timed_audit import verdict
 
     reject = argv[:1] == ["--reject"]
     ready, leaves, doc = argv[1:] if reject else argv

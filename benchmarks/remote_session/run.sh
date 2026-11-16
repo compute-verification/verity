@@ -30,7 +30,7 @@
 # connections to its own 127.0.0.1:PORT cross the network; then ROLE=prover on PEER, which connects there, and which
 # takes its lease only once that tunnel listens (up to TUNNEL_WAIT_S, default 7200).
 #
-# Against the auditor's verifier host (`verity/protocols/accounting/poub/device/live_verifier/host.py`), the lane starts the run there with its
+# Against the auditor's verifier host (`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`), the lane starts the run there with its
 # gate key (its gate's `run --port PORT ...`) and ROLE=prover gets VERIFIER_SSH, ssh's `-i KEY prover@HOST`: the
 # prover opens `ssh -L PORT` to the host's tunnel account, which forwards only to the run ports, and takes its lease once
 # that account says the run's verifier listens.
@@ -47,7 +47,7 @@
 # the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as shell
 # words (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs), under ROLE=both too: with `--challenger serve
 # --challenger-key DIR` each session's coins come from the challenger's own process,
-# `verity/protocols/compose/device/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+# `verity/protocols/compose/verifier/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
 # --challenger-period P --challenger-main FILE` (FILE: `git rev-list --first-parent origin/main`, the auditor's own),
 # from the auditor device's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
@@ -229,7 +229,7 @@ export B RS GIB=${GIB:-16}
 [ "$ROLE" != both ] || [ -z "${LEAN_EXE:-}" ] || [ -x "$LEAN_EXE" ] || refuse "LEAN_EXE=$LEAN_EXE is not an executable"
 lean_exe() { # LEAN_EXE, else the Lean verifier built in its package
   [ -n "${LEAN_EXE:-}" ] && return 0
-  LEAN_EXE=$("$PY" -c 'from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
+  LEAN_EXE=$("$PY" -c 'from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
     2> "$O/lean-build.log") ||
     { tail -20 "$O/lean-build.log"; echo "run.sh: the Lean verifier's build failed (LEAN_EXE names a built one)"; exit 4; }
 }
@@ -322,7 +322,7 @@ if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
   if [ -n "${CLOSE:-}" ]; then
-    "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --registry "$REGISTRY" --close "$CLOSE" \
+    "$PY" verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py --registry "$REGISTRY" --close "$CLOSE" \
       > "$O/verifier.log" 2>&1; W=$?
     cat "$O/verifier.log"
     cp "$REGISTRY" "$O/registry.json"
@@ -339,7 +339,7 @@ if [ "$ROLE" = verifier ]; then
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
   eval "VA=(${VERIFIER_ARGS:-})"
   # shellcheck disable=SC2086
-  "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
+  "$PY" verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
     > "$O/verifier.log" 2>&1 & V=$!
   while kill -0 $V 2> /dev/null; do
     kill -0 $T 2> /dev/null || { echo "the tunnel to $PEER ended"; cat "$O/tunnel.log"; kill $V; break; }
@@ -438,7 +438,7 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
         [[ $KV_ARCH =~ ^sm_[0-9]+a?$ ]] || refuse "KV_ARCH=$KV_ARCH is no card's architecture (sm_90), and the row's target" \
           "declares no compute_capability to build kv.cu for: state KV_ARCH, or KV_LIB=cpu"
         nvcc -O3 -arch="$KV_ARCH" -std=c++17 -Xcompiler -fPIC -shared -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" \
-          verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.build.log" 2>&1 ||
+          verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.build.log" 2>&1 ||
           { tail -40 "$O/kv.build.log"; echo "run.sh: kv.cu's build for $KV_ARCH failed (KV_LIB=cpu encodes on the CPU)"; exit 4; }
         sha256sum "$B/kv.so" > "$O/libs.sha256"
         KV=(--remote-kv-lib "$B/kv.so") ;;
@@ -471,7 +471,7 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
     lean_exe
     eval "VA=(${VERIFIER_ARGS:-})"
     set -m # a process group of its own: stopping it stops its Lean verifier and its check workers with it
-    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 \
+    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 \
       "${VERIFY[@]}" --lean-exe "$LEAN_EXE" "${VA[@]}" < /dev/null > "$O/verifier.log" 2>&1 &
     SV=$!
     set +m
@@ -536,8 +536,8 @@ fi
     [[ $SM =~ ^[0-9]+$ ]] || { echo "run.sh: the leased card names no compute capability ($CC)"; exit 4; }
     [ "${CC%%.*}" -ge 9 ] && SM+=a
     FLAGS=(-O3 -gencode "arch=compute_$SM,code=sm_$SM" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
-    nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-    nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+    nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/resource_accounting/memory/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
+    nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
     wait $K || { tail -40 "$O/kv.ptxas"; exit 4; }
     sha256sum "$B"/*.so > "$O/libs.sha256"
@@ -547,7 +547,7 @@ fi
   if [ "$ROLE" = both ]; then
     eval "VA=(${VERIFIER_ARGS:-})"
     # shellcheck disable=SC2086
-    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
+    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
   fi
   PIN=(taskset -c "$PROVER_CPUS")
   if [ -n "${PROVER_SLICE:-}" ]; then
@@ -557,7 +557,7 @@ fi
       --nice=0 -p AllowedCPUs="$PROVER_CPUS" -p MemoryMax="${PROVER_MEM_GB:-300}G" -p MemorySwapMax=0 --
       setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- "${PIN[@]}")
   fi
-  "${PIN[@]}" "$PY" verity/protocols/accounting/poub/prover/remote_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
+  "${PIN[@]}" "$PY" verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
     "${DEV[@]}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
   P=$?
   W=0

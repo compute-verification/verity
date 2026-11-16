@@ -35,8 +35,8 @@ def test_weight_sets_are_the_frozen_benchmarks():
 
 
 def test_harness_registry_and_certificate_gate():
-    pytest.importorskip("verity.protocols.accounting.pous.verifier")
-    from verity.protocols.accounting.pous.verifier import schemes
+    pytest.importorskip("verity.protocols.resource_accounting.memory.pous.verifier")
+    from verity.protocols.resource_accounting.memory.pous.verifier import schemes
 
     bench = _bench()
     assert set(bench.IMPLS) == {"reference", "vllm-gpu", "band-gpu", "p2-v3-gpu", "p2-v3-mc-gpu"}

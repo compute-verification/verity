@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
-from verity.protocols.accounting.pouw.prover.serving import CommitRecord, commit_registration
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import CommitRecord, commit_registration
 from verity_vllm import messages as M
 
 #: the deployment's registration log under the serve dir's ``h1/``: one line a record, W at its writing and R once bound

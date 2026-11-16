@@ -72,7 +72,7 @@ class Fused:
         "hypothesis": "decode's kernels leave the tensor pipe idle while they wait on memory: filler warps in the "
                       "linears and attention blocks, beside the pump on the rest, cover 0.70-0.82 of int8 peak on "
                       "decode at <= 5% slowdown"})
-    sources: tuple = ("verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu", "verity/protocols/accounting/pouw/prover/kernels/filler/flin.cuh",
+    sources: tuple = ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/flin.cuh",
                       "benchmarks/pouw/filler/fscore.cu", "benchmarks/pouw/filler/fused_arm.py",
                       "benchmarks/pouw/filler/fused_score.py")
     filler: A.Filler | None = A.Filler(W=8, NC=4, S=2048, chunk_log2=19, noise="chained")

@@ -1,6 +1,6 @@
 # A3: why per test, what ties it to the verifier, its scope, and where it is used
 
-The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event), which the unit sample takes, and
+The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event), which the proof-block sample takes, and
 `UniformRandomBytesTest L t E η` (A3 per test, one event within `η`, either way), which zero knowledge takes.
 
 - **Why per test.** The every-event form is refutable at the deployed source. Linux's CRNG (5.18 and later,
@@ -9,7 +9,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `n` uniform bytes: any source with fewer outcomes than byte strings fails it. Its zero is an idealization, the CSPRNG taken as exactly
   uniform; the true bound carries the CSPRNG's distinguishing advantage against the theorem's test, which is the per-test
   form's `η`. A salt is 192 bytes and a rep's samples are `sampleBytes` bytes, so zero knowledge takes the per-test form.
-  The unit sample still takes the every-event form, under the same idealization, since its reads are past 32 bytes too.
+  The proof-block sample still takes the every-event form, under the same idealization, since its reads are past 32 bytes too.
 - **Why it is not stated about `IO.getRandomBytes`.** To Lean's logic an `IO` action is a function of the world and
   `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random would be refutable, and every theorem
   taking it vacuous. At run time, Lean v4.34.0's runtime implements it as `lean_io_get_random_bytes`
@@ -27,7 +27,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   bytes `L` the model reads. The live sample reads as many as its reruns need, and its miss probability is the
   limit as `L` grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take
   uniform streams as their probability space, the same assumption. The recursive audit's sessions of V* need none of
-  it: their sampling design is the full sample, which samples every unit at every byte string (`execOS_subset_full_mem`,
+  it: their sampling design is the full sample, which samples every proof block at every byte string (`execOS_subset_full_mem`,
   `execOS_subset_full_escape`), so `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditHolo` are proved from
   their forms with no A3 premise (`…NoA3`). `RecursiveSound` is proved the same way but is no longer a guarantee: its
   form admits a possibilistic break, and the recursion's guarantee is `Flock.Guarantees.RecursiveKS`. Those are fork
@@ -53,7 +53,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt and the pads tree's salts. The tap
   (`flock-zk-server tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
   salts and the coin tree's nonce. What ties them to the model is `Claims.ZKServer.frame_cmd` and `frame_samples` (the
-  frame's read, on rep `i`'s stream of the tape, is the release's samples), as `sampleOS_def` is for a unit sample;
+  frame's read, on rep `i`'s stream of the tape, is the release's samples), as `sampleOS_def` is for a proof-block sample;
   `Claims/ZK/Os.lean` takes the ZK server's three theorems to those bytes (`zkServerLeanOs`). So no premise on a stream
   generator is left on the salts or the masks.
 - **What is outside it.** A VM snapshot restored more than once repeats the kernel's CRNG state unless the kernel

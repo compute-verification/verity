@@ -3,7 +3,7 @@ arguments and targets it serves and refuses, the store binder it installs before
 and its audit run in lockstep with the Commit's instrumented run (`lockstep`: each pass's engine step the run's next
 step), over a CPU store and PoUB's verifier on a thread.  PoUB's serving loop under it, and the helpers these tests share
 with its tests (`PassClock`, `verifying`, `store`, `engine`, `TickingBackend`), are PoUB's prover's
-(`verity/protocols/accounting/poub/tests/test_remote_session.py`)."""
+(`verity/protocols/resource_accounting/memory/poub/tests/test_remote_session.py`)."""
 from __future__ import annotations
 
 import json
@@ -18,11 +18,11 @@ from xml.etree import ElementTree
 
 import numpy as np
 import pytest
-from verity.protocols.accounting.poub.prover.node_store import serving
-from verity.protocols.accounting.poub.prover.node_store.registry import ArrayBacking, NodeMemory
-from verity.protocols.accounting.poub.tests.test_memory_map import BLOCK
-from verity.protocols.accounting.poub.tests.test_registry import CODEC, RECEIPT
-from verity.protocols.accounting.poub.tests.test_remote_session import (
+from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import ArrayBacking, NodeMemory
+from verity.protocols.resource_accounting.memory.poub.tests.test_memory_map import BLOCK
+from verity.protocols.resource_accounting.memory.poub.tests.test_registry import CODEC, RECEIPT
+from verity.protocols.resource_accounting.memory.poub.tests.test_remote_session import (
     P512,
     PassClock,
     TickingBackend,
@@ -31,8 +31,8 @@ from verity.protocols.accounting.poub.tests.test_remote_session import (
     store,
     verifying,
 )
-from verity.protocols.accounting.poub.verifier import audit, coins, memory_map
-from verity.protocols.accounting.poub.verifier.session import verifier, wire
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, memory_map
+from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier, wire
 
 from verity_vllm.protocols.poub import remote
 
@@ -320,8 +320,8 @@ def test_a_paced_commits_session_runs_a_step_a_coin_and_tags_each_pass_with_its_
     the next window); the audit run's record tags each pass with the step the verifier's record has for it, a step of
     the map; the calibration's pass times carry ``step_ms``, so the allowance covers the step.  The Commit's store is
     the weights and filler (the KV outside it), so its steps write no registered chunk, every pass reads all N, and the
-    declared line is undecided: the verifier's Lean answer for the γ terms isn't written yet (`coins.undecided`), with
-    the Python ledger's declaration of the accepted session beside it (`python_ledger`)."""
+    declared line is the Lean verifier's: its γ terms decide both readings, so neither is undecided and no Python
+    ledger's reading is recorded beside them."""
     pace = verifier.pace_of("1:1000:4096:2", 1000 / 3)
     assert pace["groups"] == 3
     rec, r, cs, _ = lockstep(tmp_path, monkeypatch, 40, pace=pace, step_ms=2.5, served=True)
@@ -335,9 +335,9 @@ def test_a_paced_commits_session_runs_a_step_a_coin_and_tags_each_pass_with_its_
     assert {p.length for _, p in cs.backend.plans} == {4}
     assert rec["step_ms"] == 2.5 and cs.backend.calibrate()["step_ns"] == 2_500_000
     declared = r["ledger"]["declared"]
-    assert set(declared) == {"undecided", "python_ledger"} and declared["undecided"] == coins.undecided("γ terms")
-    assert set(declared["python_ledger"]) == {"accepted", "gamma", "memory", "windows"}
-    assert declared["python_ledger"]["accepted"] is True and declared["python_ledger"]["windows"] == len(wins)
+    assert set(declared) == {"accepted", "gamma", "memory", "windows"}
+    assert declared["accepted"] is True and declared["windows"] == len(wins)
+    assert not any(k in r["ledger"][n] for n in ("spec", "measured") for k in ("undecided", "python_ledger"))
 
 
 def test_a_run_that_ends_before_its_session_fails_the_session(tmp_path, monkeypatch):
@@ -401,7 +401,7 @@ import os
 from pathlib import Path
 
 from tests.protocols.poub import test_commit_session as C
-from verity.protocols.accounting.poub.tests import test_remote_session as T
+from verity.protocols.resource_accounting.memory.poub.tests import test_remote_session as T
 
 
 def deliberate(*a, **kw):

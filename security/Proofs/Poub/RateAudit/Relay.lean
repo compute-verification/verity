@@ -55,7 +55,7 @@ them whose contents the chip never queried under the stream:
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -211,11 +211,11 @@ theorem card_relay_le (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits
         rw [hcodes, horacle, ← e]
         ring
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate Accounting.Rate.RelayDevice
+open ResourceAccounting.Rate ResourceAccounting.Rate.RelayDevice
 open Pous (Bits pr)
 open scoped ENNReal
 open Bandwidth (card_filter_prod_le card_filter_prod_le' pr_le_of_card pr_mono pr_or_le pr_eq_zero_of_card)
@@ -223,7 +223,7 @@ open Bandwidth.AuditRO (card_sample)
 
 /-- The rate audit's bound with relayed tags, for a relay device whose side sources may depend on the oracle: the floor
 at `k − m` words, at `((k − 1)/N)^s + C(N, m)·2^L/2^(h·m) + C(q, k − m)/2^λ`. -/
-theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A : RelayDevice N b h ρ S L q)
+theorem _root_.ResourceAccounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A : RelayDevice N b h ρ S L q)
     (s k m F cTag cEnc lam : ℕ) :
     pr (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
@@ -301,4 +301,4 @@ theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A 
     push_cast
     rfl
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

@@ -158,8 +158,8 @@ def _tree_drive(**lists: list[str] | None) -> str:
     ("a benchmark", {"benchmarks/census/README.md": "x\n"}, vqueue_slim.QUICK),
     ("the circuit language", {"verity/circuits/program.py": "x = 1\n"}, "check"),
     ("the root's tests", {"tests/test_tree.py": "x = 1\n"}, vqueue_slim.QUICK),
-    ("a verifier", {"verity/protocols/accounting/pouw/verifier/audit.py": "x = 1\n"}, "check"),
-    ("a device", {"verity/protocols/compose/device/live_challenger/auditor.py": "x = 1\n"}, "check"),
+    ("a verifier", {"verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "x = 1\n"}, "check"),
+    ("a device", {"verity/protocols/compose/verifier/live_challenger/auditor.py": "x = 1\n"}, "check"),
     ("a Lean source", {"Lib/A.lean": "def a := 1\n"}, "check"),
     ("a lock", {"pkg/lean-audit.json": "{}\n"}, "check"),
     ("a move", {"c.txt": None, "moved/c.txt": "c\n", "a.txt": "moved/c\n"}, "check"),
@@ -210,9 +210,9 @@ def test_under_gate_verdict_no_file_of_the_tree_the_low_risk_lane_keeps_off_is_p
     audited = {f for f in files if f.endswith(".py") and {"verifier", "device"} & set(f.split("/")[:-1])
                and "tests" not in f.split("/") and not PurePosixPath(f).name.startswith("test_")}
     assert audited and not audited & plain, f"plain verifier or device Python: {sorted(audited & plain)[:10]}"
-    whole = {"verity/protocols/accounting/pouw/verifier/audit.py", "verity/protocols/compose/device/live_challenger/auditor.py",
+    whole = {"verity/protocols/resource_accounting/compute/pouw/verifier/audit.py", "verity/protocols/compose/verifier/live_challenger/auditor.py",
              "tools/research/src/research/cli.py", "tools/verity/lean/check.py", "tools/check/check.py",
-             "benchmarks/one_stage/a5.py", "verity/protocols/accounting/certifier/device/network_certifier_serve.py",
+             "benchmarks/one_stage/a5.py", "verity/protocols/resource_accounting/network/attester/network_attester_serve.py",
              "benchmarks/remote_session/auditor_line.py", "tools/move/restack.py"}
     quick = {"GLOSSARY.md", "benchmarks/census/README.md", "infra/README.md", "tools/agent-guard/boot.sh"}
     assert whole | quick <= set(files) and not whole & plain and quick <= plain

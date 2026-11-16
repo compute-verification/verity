@@ -48,7 +48,7 @@ import Proofs.Certifier.Tap
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The leak through the network certifier over a monitoring period of sampled audits
+# The leak through the network attester over a monitoring period of sampled audits
 
 The probability half: each window's audit, given the earlier windows' coins, accepts with probability at most
 `(1 - q)^|W_i| + e_i`, and the escapes multiply over the windows with the errors adding (`pr_adaptive_add_le`). That is
@@ -62,7 +62,7 @@ each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBit
 (`encard_leakAt_le`, from `encard_acceptedFaulty_le` at `AsReg`), and the window's operator is the one the earlier
 windows' observations fix (`runsBefore`), so the periods number at most the product of the windows' bounds, by
 induction over the windows (`encard_chain_le`); the faulty bits sum to at most `b · Fmax`. Under `trusted-device` the
-cells the client receives read back from the network certifier's record under the schedule, one its record format
+cells the client receives read back from the network attester's record under the schedule, one its record format
 holds (`certifier_cells_read`), so they
 number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_pooledGood_le`);
 `∏_c (cap_c + 1)` is room, as in the period's bound.
@@ -399,7 +399,7 @@ theorem pr_pooled_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} (acc : Fin
     _ ≤ ((1 - q) ^ Fmax + ∑ i, e i) + ∑ i, e' i :=
         add_le_add hmiss ((Pr_exists_mem_le_sum univ _).trans (sum_le_sum fun i _ => hleak i))
 
-/-- **The leak through the network certifier over a monitoring period**: `Guarantees.PooledLeakAccepted`, from
+/-- **The leak through the network attester over a monitoring period**: `Guarantees.PooledLeakAccepted`, from
 `pr_pooled_le` at the leak relations, `(1 - q)^Fmax ≤ δ` at `Fmax ≥ ln(1/δ)/q`, and `encard_pooledGood_le` at each sample
 of the coins. -/
 theorem pooledLeak : Guarantees.PooledLeakAccepted := by

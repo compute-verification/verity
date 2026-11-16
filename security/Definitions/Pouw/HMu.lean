@@ -52,7 +52,7 @@ give it.
 * `SkipRound.PointMass μ` is (H-μ): on every deficient view, each value of the skipped value has probability at most
   `μ` given the view. `SkipRound.Inj Z` is Lemma B's (Inj) with fibre `Z`: on every deficient view, at most `Z` of the skipped
   values the view leaves possible give one honest receipt. `SkipRound.HMuPlus μ Z` is both: (H-μ⁺) as Lemma B consumes it.
-* `coinSum v e = Σ_j [e_j]·v_j`: a skipped value's part on fresh coin bits (`Accounting.Tag.unreadSum`'s sum, over any
+* `coinSum v e = Σ_j [e_j]·v_j`: a skipped value's part on fresh coin bits (`ResourceAccounting.Tag.unreadSum`'s sum, over any
   finite index and any additive group). Every noise in play puts a skipped value in the form `base + coinSum weight e`,
   with `base` and `weight` fixed functions of committed data and the round's other coins:
   * Dither's `{0,1}` bit per operand coordinate (the weights are the other operand's entries);
@@ -69,7 +69,7 @@ give it.
 
 @[expose] public section
 
-namespace Accounting.HMu
+namespace ResourceAccounting.HMu
 
 open Pouw.RelativeSecurity
 
@@ -150,4 +150,4 @@ def chain {S W : Type} (step : ℕ → S → W → S) (s₀ : S) (w : ℕ → W)
 /-- **A persistent pattern**: the words `w` with `X` added at every position of `P`. -/
 def persist {W : Type} [Add W] (w : ℕ → W) (P : Finset ℕ) (X : W) : ℕ → W := fun n => if n ∈ P then w n + X else w n
 
-end Accounting.HMu
+end ResourceAccounting.HMu
