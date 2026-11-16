@@ -1,0 +1,372 @@
+old	new	old_sites_now	new_sites_now	worker_sites	map	verdict
+windowOf	executionPhaseOf	0	26	1110	lean_names_map.toml | period_net_map.toml | period_proofs_map.toml	GONE: the old word has no site now
+oneWindow	oneExecutionPhase	0	38	619	lean_names_map.toml	GONE: the old word has no site now
+RemoteSession	PoubSession	0	0	429	poub_map.toml	GONE: the old word has no site now
+Accounting.Remote	Accounting.Poub	984	0	261	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+WindowAt	ExecutionPhaseAt	0	19	240	lean_names_map.toml	GONE: the old word has no site now
+saltSession	saltChallengePhase	0	17	151	lean_names_map.toml	GONE: the old word has no site now
+RemoteHeld	PoubHeld	152	0	145	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+WindowOn	ExecutionPhaseOn	0	53	140	lean_names_map.toml	GONE: the old word has no site now
+windowOn	executionPhaseOn	0	4	140	period_soundness_map.toml	GONE: the old word has no site now
+Accounting.Guarantees.Remote	Accounting.Guarantees.Poub	201	0	125	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+windowOpenRoot	executionPhaseOpenRoot	1	9	118	lean_names_map.toml	both live
+WindowReads	ExecutionPhaseReads	0	11	107	lean_names_map.toml	GONE: the old word has no site now
+pinnedSession	pinnedChallengePhase	0	56	102	period_proofs_map.toml	GONE: the old word has no site now
+windowA	executionPhaseA	0	55	94	period_soundness_map.toml	GONE: the old word has no site now
+noiseBlock	noiseChunk	3	14	92	retired_ids_map.toml	both live
+periodLayer	monitoringPeriodLayer	0	81	90	period_map.toml	GONE: the old word has no site now
+WindowsIn	ExecutionPhasesIn	0	5	81	lean_names_map.toml	GONE: the old word has no site now
+WrongAt	IncorrectAt	0	15	81	lean_names_map.toml	GONE: the old word has no site now
+windowsIn	runsIn	0	27	81	lean_names_map.toml	GONE: the old word has no site now
+Accounting/Remote	Accounting/Poub	95	0	79	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+Proofs/Accounting/ReadUnit	Proofs/Poub/ReadUnit	77	69	77	accounting_split_poub_map.toml	both live
+periodGame	monitoringPeriodGame	0	76	77	period_map.toml	GONE: the old word has no site now
+windowForm	executionPhaseForm	1	5	76	lean_names_map.toml	both live
+StageWindow	StageExecutionPhase	0	31	75	period_map.toml	GONE: the old word has no site now
+Identity.Domains	Randomness.Domains	80	0	72	domains_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+periodOn	monitoringPeriodOn	0	12	72	period_soundness_map.toml	GONE: the old word has no site now
+periodE	monitoringPeriodE	6	68	70	kernels_names_map.toml	both live
+REMOTE_VERIFIER	POUB_VERIFIER	13	0	69	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+remote-verifier	poub-verifier	33	46	69	poub_map.toml	both live
+remote_verifier	poub_verifier	15	0	69	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+Properties/Accounting/Remote	Properties/Compose/Remote | Properties/Poub/Remote	66	100	66	accounting_split_compose_map.toml | poub_area_map.toml	both live
+periodMode	monitoringPeriodMode	0	69	65	period_map.toml	GONE: the old word has no site now
+Proofs/Accounting/TS	Proofs/Pouw/TS	63	82	63	accounting_split_pouw_map.toml	both live
+WindowCommitmentRecord	ExecutionPhaseCommitmentRecord	58	55	63	lean_names_map.toml	both live
+windowProblem	executionPhaseProblem	1	2	59	lean_names_map.toml	both live
+WindowsAt	ServerBlocksAt	0	25	54	period_map.toml	GONE: the old word has no site now
+Proofs.Accounting.ReadUnit	Proofs.Poub.ReadUnit	56	0	53	accounting_split_poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+WindowAccepted	ExecutionPhaseAccepted	0	7	53	period_net_map.toml	GONE: the old word has no site now
+auditedSession	auditedChallengePhase	0	19	53	period_proofs_map.toml	GONE: the old word has no site now
+Properties/Compose/Remote	Properties/Poub/Remote	51	49	51	accounting_split_memory_poub_map.toml	both live
+session_run	challengePhase_run	10	5	51	lean_names_map.toml	both live
+RemoteAudit	Poub | PoubCheck	39	4391	49	poub_names_map.toml | poub_map.toml	both live
+remote-audit	poub | poub-check	0	1500	49	poub_names_map.toml | poub_map.toml	GONE: the old word has no site now
+remote_audit	poub | poub_check	0	1500	49	poub_names_map.toml | poub_map.toml	GONE: the old word has no site now
+sessionBytes	attachmentBytes	0	18	49	period_net_map.toml	GONE: the old word has no site now
+windowP	executionPhaseP	7	23	49	lean_names_map.toml	both live
+SampledWindow	SampledExecutionPhase	0	15	46	period_map.toml	GONE: the old word has no site now
+WindowDelta	ExecutionPhaseDelta	0	34	46	lean_names_map.toml	GONE: the old word has no site now
+creditedSession	creditedChallengePhase	0	21	45	period_proofs_map.toml	GONE: the old word has no site now
+windowCheck	executionPhaseCheck	7	0	45	period_net_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+windowsOn	executionPhasesOn	0	4	45	period_net_map.toml	GONE: the old word has no site now
+WindowBound	ExecutionPhaseBound	0	17	41	lean_names_map.toml	GONE: the old word has no site now
+sameWindow	sameExecutionPhase	0	4	41	period_map.toml	GONE: the old word has no site now
+isWindow	isRun	2	24	39	period_proofs_map.toml	both live
+m1_capture	match_capture	18	93	39	match_capture_words_map.toml	both live
+windowSession	executionPhaseSession	0	30	39	lean_names_map.toml	GONE: the old word has no site now
+wrongSet	incorrectSet	0	277	39	lean_names_map.toml	GONE: the old word has no site now
+closeWindow	closeExecutionPhase	0	0	38	period_net_map.toml	GONE: the old word has no site now
+WindowRegistered	ExecutionPhaseRegistered	0	10	36	lean_names_map.toml	GONE: the old word has no site now
+onWindow	onExecutionPhase	10	11	36	lean_names_map.toml	both live
+WindowInstance	ExecutionPhaseInstance	0	41	35	lean_names_map.toml	GONE: the old word has no site now
+Properties.Identity	Properties.Hash.Identity	45	21	33	security_areas_map.toml | areas_map.toml	both live
+WindowOpened	ExecutionPhaseOpened	0	6	33	period_net_map.toml	GONE: the old word has no site now
+periodR	monitoringPeriodR	78	78	32	period_map.toml	both live
+windowKeys	executionPhaseKeys	1	5	32	lean_names_map.toml	both live
+RemoteSketch	PoubSketch	47	0	31	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+WindowSessions	ExecutionPhaseSessions	3	22	31	lean_names_map.toml	both live
+period_union	monitoringPeriod_union	0	30	30	kernels_names_map.toml	GONE: the old word has no site now
+wrongIn	incorrectIn	0	101	29	lean_names_map.toml	GONE: the old word has no site now
+Proofs/Accounting/RateAudit	Proofs/Poub/RateAudit	28	38	28	accounting_split_poub_map.toml | poub_area_map.toml	both live
+windowReg	executionPhaseReg	0	26	28	lean_names_map.toml	GONE: the old word has no site now
+Definitions/Compose/Remote	Definitions/Poub/Remote	27	25	27	accounting_split_memory_poub_map.toml	both live
+wrongBlocks	incorrectBlocks	0	53	27	lean_names_map.toml	GONE: the old word has no site now
+RateAuditRemote	RateAuditPoub	45	0	26	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+public_registration	public_docket	12	0	26	docket_code_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+tiedWindow	tiedExecutionPhase	0	36	26	period_net_map.toml	GONE: the old word has no site now
+wrongShare	incorrectShare	0	21	26	lean_names_map.toml | na_retired_map.toml	GONE: the old word has no site now
+windowTest	executionPhaseTest	0	16	25	period_proofs_map.toml	GONE: the old word has no site now
+NoEscape	NoMissProb	0	9	24	lean_names_map.toml	GONE: the old word has no site now
+Proofs/Properties/Compose/Remote	Proofs/Properties/Poub/Remote	24	15	24	accounting_split_memory_poub_map.toml	both live
+escapeTest	missProbTest	0	51	24	lean_names_map.toml	GONE: the old word has no site now
+periodCovers	monitoringPeriodCovers	0	11	23	period_map.toml	GONE: the old word has no site now
+windowPrograms	executionPhasePrograms	0	7	22	period_net_map.toml	GONE: the old word has no site now
+windowRecords	executionPhaseRecords	0	17	22	period_soundness_map.toml	GONE: the old word has no site now
+WindowPasses	ExecutionPhasePasses	1	14	21	lean_names_map.toml	both live
+cutWindow	cutServerBlock	0	9	21	period_map.toml	GONE: the old word has no site now
+periodPositions	monitoringPeriodPositions	0	22	21	period_map.toml	GONE: the old word has no site now
+windowVectors	executionPhaseVectors	0	2	21	lean_names_map.toml	GONE: the old word has no site now
+BaselineDifftest	ThetaDifftest	2	22	20	theta_map.toml	both live
+h1_registration	h1_docket	1	22	20	docket_code_map.toml	both live
+Definitions/Accounting/TS	Definitions/Pouw/TS	19	31	19	accounting_split_pouw_map.toml	both live
+WindowRead	ExecutionPhaseRead	0	46	19	lean_names_map.toml	GONE: the old word has no site now
+A registration record	A docket	6	30	18	docket_names_map.toml	both live
+No IU	No inference block	0	0	18	inference_block_prose_map.toml	GONE: the old word has no site now
+WindowEvidence	RunEvidence	0	17	18	lean_names_map.toml	GONE: the old word has no site now
+a registration record	a docket	12	98	18	docket_names_map.toml	both live
+no IU	no inference block	0	22	18	inference_block_prose_map.toml	GONE: the old word has no site now
+periodGood_of_plays	monitoringPeriodGood_of_plays	0	18	18	kernels_names_map.toml	GONE: the old word has no site now
+remote_coins	poub_coins	3	0	18	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+Identity/Domains	Randomness/Domains	17	0	17	domains_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+link term	binding error	2	165	17	terms_map.toml	both live
+sessionOf_record	challengePhaseOf_record	0	4	17	period_proofs_map.toml	GONE: the old word has no site now
+windowG	executionPhaseG	0	23	17	lean_names_map.toml	GONE: the old word has no site now
+Proofs/Accounting/RemoteHeld	Proofs/Compose/RemoteHeld	16	31	16	accounting_split_compose_map.toml	both live
+in IU	in inference block	0	9	16	inference_block_prose_map.toml	GONE: the old word has no site now
+runWindow	runExecutionPhase	1	5	16	lean_names_map.toml	both live
+RemoteWindow	PoubWindow	29	0	15	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+RemoteBinding	PoubBinding	19	0	14	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+WindowAccepts	ExecutionPhaseAccepts	0	28	13	lean_names_map.toml	GONE: the old word has no site now
+auditor hosts	auditor devices	0	22	13	device_term_map.toml | device_tokens_map.toml	GONE: the old word has no site now
+blockBit	chunkBit	0	375	13	chunk_words_map.toml	GONE: the old word has no site now
+periodNaming	monitoringPeriodNaming	0	7	13	period_soundness_map.toml	GONE: the old word has no site now
+period_prod	monitoringPeriod_prod	0	13	13	kernels_names_map.toml	GONE: the old word has no site now
+windowOff	executionPhaseOff	0	6	13	lean_names_map.toml	GONE: the old word has no site now
+Definitions/Accounting/Remote	Definitions/Compose/Remote | Definitions/Poub/Remote	12	52	12	accounting_split_compose_map.toml | poub_area_map.toml	both live
+WindowsHold	ExecutionPhasesHold	0	22	12	lean_names_map.toml	GONE: the old word has no site now
+WindowsPlaced	ExecutionPhasesPlaced	2	34	12	lean_names_map.toml	both live
+blockWrong	blockIncorrect	0	4	12	lean_names_map.toml	GONE: the old word has no site now
+remote-plan	poub-plan	7	0	12	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+remote_plan	poub_plan	5	0	12	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+windowCoin	executionPhaseCoin	0	5	12	period_map.toml	GONE: the old word has no site now
+Proofs/Accounting/Bandwidth	Proofs/Poub/Bandwidth	12	19	11	accounting_split_poub_map.toml | poub_area_map.toml	both live
+RemoteOutside	PoubOutside	13	0	11	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+WindowDesign	ExecutionPhaseDesign	0	39	11	period_map.toml	GONE: the old word has no site now
+WrongWords	IncorrectWords	0	5	11	na_retired_map.toml	GONE: the old word has no site now
+remote-filler-gib	poub-filler-gib	7	0	11	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+remote_filler_gib	poub_filler_gib	4	0	11	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+wrongWords	incorrectWords	0	4	11	na_retired_map.toml	GONE: the old word has no site now
+Challenger/Session	Challenger/ChallengePhase	2	2	10	period_proofs_map.toml	both live
+Identity/Domains.lean	Randomness/Domains.lean	10	0	10	domains_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+Proofs/Accounting/Compose	Proofs/Compose/Compose	17	21	10	accounting_split_compose_map.toml	both live
+_registration_verdict	_docket_verdict	0	3	10	docket_code_map.toml	GONE: the old word has no site now
+everyWindow_at	everyExecutionPhase_at	0	3	10	period_map.toml	GONE: the old word has no site now
+periodGood_mono	monitoringPeriodGood_mono	0	10	10	kernels_names_map.toml	GONE: the old word has no site now
+remote-kv-lib	poub-kv-lib	7	0	10	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+remote_kv_lib	poub_kv_lib	3	0	10	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+sessionLayout	runLayout	5	31	10	lean_names_map.toml	both live
+windowLayout	executionPhaseLayout	0	15	10	lean_names_map.toml	GONE: the old word has no site now
+BlockEscapes	BlockMissProb	0	11	9	lean_names_map.toml	GONE: the old word has no site now
+Proofs/Accounting/Headline	Proofs/Pouw/Headline	17	24	9	accounting_split_pouw_map.toml	both live
+TapOpens	CertifierRegisters	9	70	9	na_retired_map.toml	both live
+windowAnchors	executionPhaseAnchors	0	7	9	lean_names_map.toml	GONE: the old word has no site now
+windowOut	executionPhaseOut	0	7	9	lean_names_map.toml	GONE: the old word has no site now
+Definitions/Accounting/JointBridge	Definitions/Certifier/JointBridge	8	12	8	accounting_split_certifier_map.toml	both live
+Proofs/Accounting/HeadlineDc	Proofs/Pouw/HeadlineDc	8	11	8	accounting_split_pouw_map.toml	both live
+Proofs/Pous/Tag	Proofs/Poub/Tag	8	7	8	accounting_split_memory_poub_map.toml	both live
+WindowSamplingDesign	ExecutionPhaseSamplingDesign	0	11	8	lean_names_map.toml	GONE: the old word has no site now
+WindowVerdict	ExecutionPhaseVerdict	0	8	8	period_net_map.toml	GONE: the old word has no site now
+remote-weight-blocks	poub-weight-blocks	5	0	8	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+remote_weight_blocks	poub_weight_blocks	3	0	8	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+step_registration	step_docket	1	0	8	docket_code_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+Definitions.Accounting.ReadUnit	Definitions.Poub.ReadUnit	10	0	7	accounting_split_poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+Definitions/Accounting/HeadlineDc	Definitions/Pouw/HeadlineDc	7	18	7	accounting_split_pouw_map.toml	both live
+Redrawing	Resampling	1	23	7	draw_words_network_benchmarks_map.toml | draw_words_certifier_map.toml | draw_words_map.toml	both live
+TrustedHost	TrustedDevice	0	89	7	device_map.toml	GONE: the old word has no site now
+WindowReaches	ExecutionPhaseReaches	0	8	7	lean_names_map.toml	GONE: the old word has no site now
+WindowSeedSalt	RunSeedSalt	0	4	7	period_proofs_map.toml	GONE: the old word has no site now
+cost_window	cost_serverBlock	0	7	7	period_map.toml	GONE: the old word has no site now
+redrawing	resampling	6	41	7	draw_words_network_benchmarks_map.toml | draw_words_certifier_map.toml | draw_words_map.toml	both live
+rootWindow	rootExecutionPhase	0	3	7	lean_names_map.toml	GONE: the old word has no site now
+trusted-host	trusted-device	3	275	7	device_term_map.toml | device_tokens_map.toml	both live
+trusted_host	trusted_device	0	23	7	device_tokens_map.toml	GONE: the old word has no site now
+windowIds	executionPhaseIds	0	4	7	period_soundness_map.toml	GONE: the old word has no site now
+Definitions/Accounting/Bandwidth	Definitions/Poub/Bandwidth	7	23	6	accounting_split_poub_map.toml | poub_area_map.toml	both live
+Novel bits	Fresh input bits	0	0	6	fresh_input_prose_map.toml	GONE: the old word has no site now
+Proofs/Pous/Memory	Proofs/Pous/Accounting/Memory	6	6	6	accounting_split_memory_pous_map.toml	both live
+RegistrationSize	DocketSize	6	0	6	docket_code_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+RemoteP2	PoubP2	6	0	6	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+SessionFits	AttachmentFits	2	5	6	period_net_map.toml	both live
+WindowDeployed	ExecutionPhaseDeployed	0	20	6	lean_names_map.toml	GONE: the old word has no site now
+novel bits	fresh input bits	6	105	6	fresh_input_prose_map.toml	both live
+remote-kv-pages	poub-kv-pages	4	0	6	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+remote_kv_pages	poub_kv_pages	2	0	6	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+sessionFits	attachmentFits	0	0	6	period_net_map.toml	GONE: the old word has no site now
+windowTicks	executionPhaseTicks	0	9	6	period_map.toml	GONE: the old word has no site now
+window_fixed	executionPhase_fixed	0	2	6	period_map.toml	GONE: the old word has no site now
+Definitions/Accounting/Guarantees/Actual	Definitions/InferenceOnly/Guarantees/Actual | Definitions/Slowdown/Guarantees/Actual	5	7	5	accounting_split_inference_only_map.toml | accounting_split_slowdown_map.toml	both live
+Definitions/Accounting/Guarantees/JointBridge	Definitions/Certifier/Guarantees/JointBridge	5	6	5	accounting_split_certifier_map.toml	both live
+Definitions/Accounting/Guarantees/JointLive	Definitions/Compose/Guarantees/JointLive	5	2	5	accounting_split_compose_map.toml	both live
+Definitions/Accounting/ReadUnit	Definitions/Poub/ReadUnit	5	3	5	accounting_split_poub_map.toml	both live
+remote-step-ms	poub-step-ms	2	0	5	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+remote_step_ms	poub_step_ms	3	0	5	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+verifiers of record	verifiers	3	753	5	terms_map.toml	both live
+verity example	verity demo	7	12	5	demo_words_map.toml	both live
+weights_registration_of_serve	weights_docket_of_serve	5	0	5	docket_code_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+Definitions/Accounting/Guarantees/TS	Definitions/Pouw/Guarantees/TS	4	8	4	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Headline	Definitions/Pouw/Headline	11	36	4	accounting_split_pouw_map.toml	both live
+Definitions/Population	Definitions/SampledProofs	4	4	4	security_areas_map.toml | areas_map.toml	both live
+Definitions/Pous/Tag	Definitions/Poub/Tag	4	5	4	accounting_split_memory_poub_map.toml	both live
+Novel reads	Fresh input bits	0	0	4	fresh_input_prose_map.toml	GONE: the old word has no site now
+Proofs/Accounting/HMu	Proofs/Pouw/HMu	4	7	4	accounting_split_pouw_map.toml	both live
+Proofs/Accounting/Tag	Proofs/Pous/Tag | Proofs/Poub/Tag	4	15	4	accounting_split_pous_map.toml | poub_area_map.toml	both live
+Proofs/Population	Proofs/SampledProofs	4	4	4	security_areas_map.toml | areas_map.toml	both live
+Proofs/Pous/Responder	Proofs/Pous/Accounting/Responder	4	6	4	accounting_split_memory_pous_map.toml	both live
+WindowFiles	ExecutionPhaseFiles	2	73	4	lean_names_map.toml	both live
+WindowLength	ExecutionPhaseLength	0	19	4	lean_names_map.toml	GONE: the old word has no site now
+novel reads	fresh input bits	4	105	4	fresh_input_prose_map.toml	both live
+periodLayer_src	monitoringPeriodLayer_src	0	4	4	period_map.toml	GONE: the old word has no site now
+periodR_perLiveTile	monitoringPeriodR_perLiveTile	0	4	4	period_map.toml	GONE: the old word has no site now
+remote_receipts	poub_receipts	3	0	4	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+stateWindow	stateExecutionPhase	0	21	4	period_net_map.toml	GONE: the old word has no site now
+Definitions/Accounting/Sheets	Definitions/Registration/Sheets	3	18	3	accounting_split_registration_map.toml	both live
+Definitions/Poub/ReadUnit	Definitions/Accounting/ReadUnit	3	5	3	accounting_split_memory_shared_map.toml	both live
+EndToEndWindow	EndToEndExecutionPhase	3	9	3	lean_names_map.toml	both live
+Proofs/Accounting/Memory	Proofs/Pous/Memory | Proofs/Pous/Accounting/Memory	3	12	3	accounting_split_pous_map.toml | poub_area_map.toml	both live
+WindowProved	ExecutionPhaseProved	0	8	3	period_net_map.toml	GONE: the old word has no site now
+comm_of_periodLeak	comm_of_monitoringPeriodLeak	0	3	3	period_map.toml	GONE: the old word has no site now
+identity/Identity/Domains.lean	randomness/Randomness/Domains.lean	3	0	3	domains_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+periodGood_true	monitoringPeriodGood_true	0	3	3	kernels_names_map.toml	GONE: the old word has no site now
+periodLayer_cone	monitoringPeriodLayer_cone	0	3	3	period_map.toml	GONE: the old word has no site now
+periodR_every	monitoringPeriodR_every	0	3	3	period_map.toml	GONE: the old word has no site now
+windowJson	executionPhaseJson	0	2	3	lean_names_map.toml	GONE: the old word has no site now
+window_close	executionPhase_close	14	2	3	lean_names_map.toml	both live
+window_fold	executionPhase_fold	0	2	3	period_map.toml	GONE: the old word has no site now
+windowsCount	executionPhasesCount	0	43	3	lean_names_map.toml	GONE: the old word has no site now
+Accounting/Remote/Session	Accounting/Remote/Run	2	3	2	period_map.toml	both live
+Definitions/Accounting/Assumptions/TS	Definitions/Pouw/Assumptions/TS	2	7	2	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/Bandwidth	Definitions/Poub/Guarantees/Bandwidth	3	8	2	accounting_split_poub_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Tag	Definitions/Pous/Tag | Definitions/Poub/Tag	2	9	2	accounting_split_pous_map.toml | poub_area_map.toml	both live
+Definitions/Compose/Assumptions/Remote	Definitions/Poub/Assumptions/Remote	10	12	2	accounting_split_memory_poub_map.toml	both live
+Definitions/Compose/Assumptions/RemoteHeld	Definitions/Poub/Assumptions/RemoteHeld	2	2	2	accounting_split_memory_poub_map.toml	both live
+Definitions/Compose/Assumptions/RemoteP2	Definitions/Poub/Assumptions/RemoteP2	2	2	2	accounting_split_memory_poub_map.toml	both live
+Definitions/Compose/Assumptions/Stacking	Definitions/Poub/Assumptions/Stacking	2	2	2	accounting_split_memory_poub_map.toml	both live
+Definitions/Compose/Guarantees/RemoteHeld	Definitions/Poub/Guarantees/RemoteHeld	2	6	2	accounting_split_memory_poub_map.toml	both live
+Definitions/Compose/Guarantees/RemotePass	Definitions/Poub/Guarantees/RemotePass	2	4	2	accounting_split_memory_poub_map.toml	both live
+Definitions/Compose/Guarantees/Stacking	Definitions/Poub/Guarantees/Stacking	2	6	2	accounting_split_memory_poub_map.toml	both live
+Definitions/Pous/Guarantees/Memory	Definitions/Pous/Accounting/Guarantees/Memory	2	5	2	accounting_split_memory_pous_map.toml	both live
+Definitions/Pous/Guarantees/Responder	Definitions/Pous/Accounting/Guarantees/Responder	2	4	2	accounting_split_memory_pous_map.toml	both live
+Definitions/Pous/Memory	Definitions/Pous/Accounting/Memory	2	3	2	accounting_split_memory_pous_map.toml	both live
+Definitions/Pous/Responder	Definitions/Pous/Accounting/Responder	2	3	2	accounting_split_memory_pous_map.toml	both live
+Definitions/Pous/Wipe	Definitions/Pous/Accounting/Wipe	2	4	2	accounting_split_memory_pous_map.toml	both live
+Definitions/Pouw/BoundSketch	Definitions/Poub/BoundSketch	2	5	2	accounting_split_memory_poub_map.toml	both live
+Definitions/Pouw/Guarantees/BoundSketch	Definitions/Poub/Guarantees/BoundSketch	2	2	2	accounting_split_memory_poub_map.toml	both live
+Definitions/Registration/Capacity	Definitions/Pous/Accounting/Capacity	2	5	2	accounting_split_memory_pous_map.toml	both live
+Definitions/Registration/Carrier	Definitions/Poub/Carrier	2	4	2	accounting_split_memory_poub_map.toml	both live
+Definitions/Registration/Guarantees/Capacity	Definitions/Pous/Accounting/Guarantees/Capacity	2	3	2	accounting_split_memory_pous_map.toml	both live
+H200 example	H200 demo	2	18	2	demo_words_map.toml	both live
+Proofs/Accounting/CoinFlow	Proofs/Pouw/CoinFlow	2	5	2	accounting_split_pouw_map.toml	both live
+Proofs/Accounting/Responder	Proofs/Pous/Responder | Proofs/Pous/Accounting/Responder	2	10	2	accounting_split_pous_map.toml | poub_area_map.toml	both live
+Proofs/Compose/Remote	Proofs/Poub/Remote	33	26	2	accounting_split_memory_poub_map.toml	both live
+Proofs/Compose/Stacking	Proofs/Poub/Stacking	2	3	2	accounting_split_memory_poub_map.toml	both live
+Proofs/Registration/Capacity	Proofs/Pous/Accounting/Capacity	2	2	2	accounting_split_memory_pous_map.toml	both live
+Properties/Evaluate	Properties/Core/Evaluate	2	4	2	security_areas_map.toml | areas_map.toml	both live
+Properties/Identity	Properties/Hash/Identity	2	2	2	security_areas_map.toml | areas_map.toml	both live
+TapRecord	RecordFormat	1	86	2	na_retired_map.toml	both live
+drawSalts	sampleSalts	0	0	2	na_retired_map.toml	GONE: the old word has no site now
+failing IU	failing inference block	1	4	2	inference_block_prose_map.toml	both live
+periodLayer_writerReads	monitoringPeriodLayer_writerReads	0	2	2	period_map.toml	GONE: the old word has no site now
+rowsWindowCheck	rowsExecutionPhaseCheck	0	17	2	period_net_map.toml	GONE: the old word has no site now
+rowsWindows	rowsExecutionPhases	0	21	2	lean_names_map.toml	GONE: the old word has no site now
+sessionEntries	challengePhaseEntries	0	13	2	lean_names_map.toml	GONE: the old word has no site now
+tapRecord	recordFormat	0	7	2	na_retired_map.toml	GONE: the old word has no site now
+windowB	executionPhaseB	7	12	2	lean_names_map.toml	both live
+windowLogged	executionPhaseLogged	0	3	2	lean_names_map.toml	GONE: the old word has no site now
+windowRec	executionPhaseRec	0	32	2	lean_names_map.toml	GONE: the old word has no site now
+window_of_sampled	executionPhase_of_sampled	0	3	2	lean_names_map.toml	GONE: the old word has no site now
+wrongWeight	incorrectWeight	0	4	2	lean_names_map.toml	GONE: the old word has no site now
+Accounting/Assumptions/Remote	Accounting/Assumptions/Poub	6	0	1	poub_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+Actual/Windows	Actual/ServerBlocks	1	2	1	period_map.toml	both live
+Definitions/Accounting/Additive	Definitions/Compose/Additive	1	2	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Assumptions/Compose	Definitions/Compose/Assumptions/Compose	1	2	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Assumptions/Coverage	Definitions/InferenceOnly/Assumptions/Coverage | Definitions/Slowdown/Assumptions/Coverage	1	3	1	accounting_split_inference_only_map.toml | accounting_split_slowdown_map.toml	both live
+Definitions/Accounting/Assumptions/Parties	Definitions/Compose/Assumptions/Parties	1	2	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Assumptions/PouwFloor	Definitions/Pouw/Assumptions/PouwFloor	1	3	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Assumptions/PouwWork	Definitions/Pouw/Assumptions/PouwWork	1	2	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Assumptions/RateAudit	Definitions/Poub/Assumptions/RateAudit	2	7	1	accounting_split_poub_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Assumptions/Remote	Definitions/Compose/Assumptions/Remote | Definitions/Poub/Assumptions/Remote	6	22	1	accounting_split_compose_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Assumptions/RemoteHeld	Definitions/Compose/Assumptions/RemoteHeld	1	2	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Assumptions/RemoteP2	Definitions/Compose/Assumptions/RemoteP2	1	2	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Assumptions/Sheet	Definitions/Registration/Assumptions/Sheet	1	4	1	accounting_split_registration_map.toml	both live
+Definitions/Accounting/Assumptions/Stacking	Definitions/Compose/Assumptions/Stacking | Definitions/Poub/Assumptions/Stacking	1	4	1	accounting_split_compose_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Assumptions/Stages	Definitions/Compose/Assumptions/Stages	1	2	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/BoundSketch	Definitions/Pouw/BoundSketch | Definitions/Poub/BoundSketch	1	7	1	accounting_split_pouw_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Bridge	Definitions/Certifier/Bridge	1	2	1	accounting_split_certifier_map.toml	both live
+Definitions/Accounting/Capacity	Definitions/Registration/Capacity | Definitions/Pous/Accounting/Capacity	1	7	1	accounting_split_registration_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Carrier	Definitions/Registration/Carrier | Definitions/Poub/Carrier	1	6	1	accounting_split_registration_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/CoinFlow	Definitions/Pouw/CoinFlow	1	4	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Compose	Definitions/Compose/Compose	4	6	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Confidence	Definitions/Pouw/Confidence	1	3	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/CostModel	Definitions/Pouw/CostModel	1	2	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/CoverageToy	Definitions/InferenceOnly/CoverageToy | Definitions/Slowdown/CoverageToy	1	3	1	accounting_split_inference_only_map.toml | accounting_split_slowdown_map.toml	both live
+Definitions/Accounting/Device	Definitions/Registration/Device	1	6	1	accounting_split_registration_map.toml	both live
+Definitions/Accounting/Filler	Definitions/Pouw/Filler	1	3	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/Additive	Definitions/Compose/Guarantees/Additive	1	2	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Guarantees/BoundSketch	Definitions/Pouw/Guarantees/BoundSketch | Definitions/Poub/Guarantees/BoundSketch	1	4	1	accounting_split_pouw_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Guarantees/Bridges	Definitions/Pouw/Guarantees/Bridges	1	2	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/Capacity	Definitions/Registration/Guarantees/Capacity | Definitions/Pous/Accounting/Guarantees/Capacity	1	5	1	accounting_split_registration_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Guarantees/CoinFlow	Definitions/Pouw/Guarantees/CoinFlow	1	3	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/Compose	Definitions/Compose/Guarantees/Compose	4	7	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Guarantees/Confidence	Definitions/Pouw/Guarantees/Confidence	1	3	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/Coverage	Definitions/InferenceOnly/Guarantees/Coverage | Definitions/Slowdown/Guarantees/Coverage	1	3	1	accounting_split_inference_only_map.toml | accounting_split_slowdown_map.toml	both live
+Definitions/Accounting/Guarantees/FillerLuck	Definitions/Pouw/Guarantees/FillerLuck	1	3	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/HMu	Definitions/Pouw/Guarantees/HMu	1	3	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/Headline	Definitions/Pouw/Guarantees/Headline	2	9	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/HeadlineDc	Definitions/Pouw/Guarantees/HeadlineDc	1	3	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/Joint	Definitions/Compose/Guarantees/Joint	11	4	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Guarantees/Memory	Definitions/Pous/Guarantees/Memory | Definitions/Pous/Accounting/Guarantees/Memory	1	7	1	accounting_split_pous_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Guarantees/PerRun	Definitions/Pouw/Guarantees/PerRun	1	2	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/Pouw	Definitions/Pouw/Guarantees/Pouw	2	5	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/PouwWork	Definitions/Pouw/Guarantees/PouwWork	1	3	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Guarantees/RateAudit	Definitions/Poub/Guarantees/RateAudit	7	18	1	accounting_split_poub_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Guarantees/RemoteHeld	Definitions/Compose/Guarantees/RemoteHeld	1	2	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Guarantees/RemotePass	Definitions/Compose/Guarantees/RemotePass	1	2	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Guarantees/Responder	Definitions/Pous/Guarantees/Responder | Definitions/Pous/Accounting/Guarantees/Responder	1	6	1	accounting_split_pous_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Guarantees/Sheet	Definitions/Registration/Guarantees/Sheet	1	2	1	accounting_split_registration_map.toml	both live
+Definitions/Accounting/Guarantees/Sketch	Definitions/Poub/Guarantees/Sketch	1	3	1	accounting_split_memory_poub_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Guarantees/Stacking	Definitions/Compose/Guarantees/Stacking | Definitions/Poub/Guarantees/Stacking	1	8	1	accounting_split_compose_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Guarantees/Tag	Definitions/Pous/Guarantees/Tag | Definitions/Poub/Guarantees/Tag	1	0	1	accounting_split_pous_map.toml | poub_area_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+Definitions/Accounting/HMu	Definitions/Pouw/HMu	1	3	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Joint	Definitions/Compose/Joint	11	17	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/JointLive	Definitions/Compose/JointLive	1	7	1	accounting_split_compose_map.toml	both live
+Definitions/Accounting/Memory	Definitions/Pous/Memory | Definitions/Pous/Accounting/Memory	1	5	1	accounting_split_pous_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/NetWitness	Definitions/Certifier/NetWitness	1	3	1	accounting_split_certifier_map.toml	both live
+Definitions/Accounting/PerRun	Definitions/Pouw/PerRun	1	9	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/Physical	Definitions/Registration/Physical	1	6	1	accounting_split_registration_map.toml	both live
+Definitions/Accounting/Pouw	Definitions/Pouw/Pouw	3	9	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/PouwWitness	Definitions/Pouw/PouwWitness	1	2	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/PouwWork	Definitions/Pouw/PouwWork	1	3	1	accounting_split_pouw_map.toml	both live
+Definitions/Accounting/RateAudit	Definitions/Poub/RateAudit	11	67	1	accounting_split_poub_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Responder	Definitions/Pous/Responder | Definitions/Pous/Accounting/Responder	1	5	1	accounting_split_pous_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Slowdown	Definitions/InferenceOnly/Slowdown | Definitions/Slowdown/Tasks	1	5	1	accounting_split_inference_only_map.toml | accounting_split_slowdown_map.toml	both live
+Definitions/Accounting/Window	Definitions/Pous/Accounting/Window	1	3	1	accounting_split_memory_pous_map.toml | poub_area_map.toml	both live
+Definitions/Accounting/Wipe	Definitions/Pous/Wipe | Definitions/Pous/Accounting/Wipe	1	6	1	accounting_split_pous_map.toml | poub_area_map.toml	both live
+FIREWALLED	ZK_SERVED	0	3	1	zk_server_map.toml	GONE: the old word has no site now
+Novel input	Fresh input	0	1	1	fresh_input_prose_map.toml	GONE: the old word has no site now
+Novel inputs	Fresh inputs	0	0	1	fresh_input_prose_map.toml	GONE: the old word has no site now
+Per IU	Per inference block	0	6	1	inference_block_prose_map.toml	GONE: the old word has no site now
+Proofs/Accounting/Additive	Proofs/Compose/Additive	1	3	1	accounting_split_compose_map.toml	both live
+Proofs/Accounting/Capacity	Proofs/Registration/Capacity | Proofs/Pous/Accounting/Capacity	1	4	1	accounting_split_registration_map.toml | poub_area_map.toml	both live
+Proofs/Accounting/ChainWork	Proofs/Pouw/ChainWork	1	2	1	accounting_split_pouw_map.toml	both live
+Proofs/Accounting/Coverage	Proofs/InferenceOnly/Coverage | Proofs/Slowdown/Coverage	1	3	1	accounting_split_inference_only_map.toml | accounting_split_slowdown_map.toml	both live
+Proofs/Accounting/Device	Proofs/Registration/Device	1	2	1	accounting_split_registration_map.toml	both live
+Proofs/Accounting/FillerLuck	Proofs/Pouw/FillerLuck	1	2	1	accounting_split_pouw_map.toml	both live
+Proofs/Accounting/Joint	Proofs/Compose/Joint	22	4	1	accounting_split_compose_map.toml	both live
+Proofs/Accounting/JointLive	Proofs/Compose/JointLive	1	2	1	accounting_split_compose_map.toml	both live
+Proofs/Accounting/Lemmas/Bandwidth	Proofs/Poub/Lemmas/Bandwidth	1	2	1	accounting_split_memory_poub_map.toml | poub_area_map.toml	both live
+Proofs/Accounting/Lemmas/RateAudit	Proofs/Poub/Lemmas/RateAudit	2	7	1	accounting_split_memory_poub_map.toml | poub_area_map.toml	both live
+Proofs/Accounting/PerRunPouw	Proofs/Pouw/PerRunPouw	1	2	1	accounting_split_pouw_map.toml	both live
+Proofs/Accounting/PerRunStop	Proofs/Pouw/PerRunStop	1	2	1	accounting_split_pouw_map.toml	both live
+Proofs/Accounting/Pouw	Proofs/Pouw/Pouw	3	7	1	accounting_split_pouw_map.toml	both live
+Proofs/Accounting/PouwWork	Proofs/Pouw/PouwWork	1	3	1	accounting_split_pouw_map.toml	both live
+Proofs/Accounting/Remote	Proofs/Compose/Remote | Proofs/Poub/Remote	17	59	1	accounting_split_compose_map.toml | poub_area_map.toml	both live
+Proofs/Accounting/Stacking	Proofs/Compose/Stacking | Proofs/Poub/Stacking	1	5	1	accounting_split_compose_map.toml | poub_area_map.toml	both live
+Properties/Accounting/Compose	Properties/Compose/Compose	1	3	1	accounting_split_compose_map.toml	both live
+Spot/Registration	Spot/Docket	1	3	1	docket_lean_map.toml	both live
+The IU	The inference block	0	8	1	inference_block_prose_map.toml	GONE: the old word has no site now
+Trusted Nebius host	Trusted host	0	0	1	host_map.toml	GONE: the old word has no site now
+TrustedNebiusHost	TrustedHost	1	0	1	host_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+UNFIREWALLED	UNSERVED	0	11	1	zk_server_map.toml	GONE: the old word has no site now
+WindowBoundOfService	ExecutionPhaseBoundOfService	0	6	1	lean_names_map.toml	GONE: the old word has no site now
+WindowCertified	ExecutionPhaseCertified	0	5	1	period_net_map.toml	GONE: the old word has no site now
+WindowCovers	ExecutionPhaseCovers	0	18	1	lean_names_map.toml	GONE: the old word has no site now
+WindowGood	ExecutionPhaseGood	0	77	1	period_net_map.toml	GONE: the old word has no site now
+abortTrace	abortTranscript	1	44	1	trace_transcript_map.toml	both live
+baseline_difftest_vectors	theta_difftest_vectors	1	10	1	theta_map.toml	both live
+firewalled	ZK server | zk_served	2	2510	1	certifier_firewall_rerun_map.toml | firewall_words_map.toml | zk_server_map.toml | terms_map.toml	both live
+interiorWindowOk	interiorRunOk	1	8	1	lean_names_map.toml	both live
+its IU	its inference block	1	32	1	inference_block_prose_map.toml	both live
+keyedWindow	keyedExecutionPhase	0	51	1	period_proofs_map.toml	GONE: the old word has no site now
+network/nci	network/inference_only	1	0	1	inference_only_map.toml	MAP DID NOT RUN: the new spelling has no site, the old word is the live name
+novel input	fresh input	2	250	1	fresh_input_prose_map.toml	both live
+novel inputs	fresh inputs	1	15	1	fresh_input_prose_map.toml	both live
+per IU	per inference block	1	29	1	inference_block_prose_map.toml	both live
+the IU	the inference block	1	40	1	inference_block_prose_map.toml	both live
+trusted-nebius-host	trusted-host	0	3	1	host_map.toml	GONE: the old word has no site now
+unfirewalled	unserved	1	95	1	zk_server_map.toml | terms_map.toml	both live
+window_covers	executionPhase_covers	0	2	1	lean_names_map.toml	GONE: the old word has no site now
+window_linear	executionPhase_linear	0	4	1	lean_names_map.toml	GONE: the old word has no site now
+window_pos	executionPhase_pos	0	3	1	period_map.toml	GONE: the old word has no site now
+windowsOf_some	executionPhasesOf_some	0	4	1	lean_names_map.toml	GONE: the old word has no site now
+windowsPiece	runsPiece	1	2	1	lean_names_map.toml	both live
