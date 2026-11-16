@@ -21,7 +21,7 @@ INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
 CERTIFIED = {INGRESS: (LINK, Direction.INGRESS), EGRESS: (LINK, Direction.EGRESS),
              FAILS: (f"{LINK}-{FAILS}", Direction.EGRESS)}
 KIND_CHARS = {PAD: "p", DATA: "d", END: "e", FAIL: "f", REFUSED: "r"}
-#: a check's words for how a connection that neither ended nor was refused failed: the network certifier's own two
+#: a check's words for how a connection that neither ended nor was refused failed: the network attester's own two
 #: outcomes, and `error` for any other, a client's exception among them, whose words are its connection's own line
 FAILED = ("cut", "fail", "error")
 #: the local file beside `deployment.json` that holds the run's two addresses (`endpoints_record`), never published
@@ -50,7 +50,7 @@ def read_records(run: Path, params: NetworkCertifierParams) -> dict[str, list[Bl
 
 def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], CertifiedRecord], list]:
     """`certified.jsonl`: the certified records by (link, direction, window), and the execution phases the signer
-    refused (not those the network certifier withheld, `Publisher.withhold`)."""
+    refused (not those the network attester withheld, `Publisher.withhold`)."""
     got, refused = {}, []
     for line in path.read_text().splitlines() if path.exists() else []:
         doc = json.loads(line)
@@ -76,7 +76,7 @@ def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
 
 def check_cells(run: Path, dep: dict, params: NetworkCertifierParams, records: dict[str, list[BlockGrid]]) -> tuple[dict, list]:
     """Every execution phase of the wire's two records has a registration that `network_certifier_rows.check_registration` accepts
-    under the network certifier's key and session, whose head is the record's rows and wiring under their salts; the
+    under the network attester's key and session, whose head is the record's rows and wiring under their salts; the
     per-window cost."""
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
     got = {}
@@ -184,7 +184,7 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
     """The offline check of a served run (the module docstring's `check`). `audit_windows` is the audit's verdict of
     each execution phase that has a record, whole: whether the audit accepted it, and its problems, which `problems`
     gives as ``audit: PROBLEM`` without their execution phase, among its first 50. ``under`` is what the auditor hands
-    it: the SHA-512 of the network certifier's public key (`connection_rows_check.key_sha512`) and its session, which the
+    it: the SHA-512 of the network attester's public key (`connection_rows_check.key_sha512`) and its session, which the
     run's deployment record is held to, a problem of it the first of the problems. With ``registrations`` it leaves
     the registrations' file there: what it was checked under and each registration of connection rows it held,
     where it found no problem at all, and no file where it found one or didn't end. ValueError, before the run is

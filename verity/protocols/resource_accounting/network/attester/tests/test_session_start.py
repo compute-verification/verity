@@ -1,4 +1,4 @@
-"""`serve`'s start, without a real clock: the network certifier's runner on a clock its own wait moves, over loopback
+"""`serve`'s start, without a real clock: the network attester's runner on a clock its own wait moves, over loopback
 with no traffic. A run holds its key's device state from before its first tick until its publisher has closed, so a
 second run under the key is refused by name before it waits, ticks or writes anything; a session id the key has
 started is refused, and a new one starts where the last one's whole span ended on the key's life; the span is on

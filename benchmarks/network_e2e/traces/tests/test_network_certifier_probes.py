@@ -1,4 +1,4 @@
-"""What a network certifier trace records to tell a late tick's cause: the network certifier's probe (each tick's lateness and work, each
+"""What a network attester trace records to tell a late tick's cause: the network attester's probe (each tick's lateness and work, each
 publish, each collection), the host sampler, the cores each process gets, and the summary's layout of the late ticks."""
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def test_probe_records_every_ticks_work_each_publish_and_the_collections(probe_m
 
 
 def test_probe_follows_a_spawned_publisher_from_both_sides(tmp_path, mod):
-    """The network certifier's side (handoffs, the close's wait, the pid) and the publisher process's (`time_keeps`), joined in
+    """The network attester's side (handoffs, the close's wait, the pid) and the publisher process's (`time_keeps`), joined in
     ticks.json's `publisher`."""
     probe_mod = mod("network_certifier_probe")
 
@@ -181,7 +181,7 @@ def test_time_keeps_times_each_keep_as_the_publisher_process_calls_it(tmp_path, 
 
 
 def test_a_probe_given_no_clock_reads_the_network_certifiers_own(tmp_path, probe_mod, runner, monkeypatch):
-    """A probe's times are laid against the network certifier's origin, a reading of its host's raw clock: with no
+    """A probe's times are laid against the network attester's origin, a reading of its host's raw clock: with no
     clock given, the probe, its collections and the publisher's keeps each read that clock, by its clock id."""
     from verity.protocols.resource_accounting.network.verifier import pacer
 

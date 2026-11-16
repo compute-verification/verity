@@ -89,7 +89,7 @@ def _spread(xs: list[float]) -> dict:
 
 
 def key_sha512(key: LmsKey) -> bytes:
-    """The SHA-512 a check is handed a network certifier's public key by: over the LMS public key ``I ‖ T[1]``, the
+    """The SHA-512 a check is handed a network attester's public key by: over the LMS public key ``I ‖ T[1]``, the
     bytes a deployment record and the period check's parameters write in hex. The key's parameter set is not under
     it."""
     return hashlib.sha512(key.public).digest()
@@ -97,7 +97,7 @@ def key_sha512(key: LmsKey) -> bytes:
 
 def not_under(dep: Mapping, under: tuple[bytes, bytes]) -> list[str]:
     """The problems of a deployment record `dep` that is not of what a check was handed, ``under``: the SHA-512 of
-    the network certifier's public key (`key_sha512`) and its session. Each says which of the two differs."""
+    the network attester's public key (`key_sha512`) and its session. Each says which of the two differs."""
     key, session = key_sha512(RF.read_public(dep["key"])), bytes.fromhex(dep["session"])
     return [f"the deployment record's {what} is not the one the check was handed: {own.hex()}, not {handed.hex()}"
             for what, own, handed in (("key's SHA-512", key, under[0]), ("session", session, under[1]))
@@ -136,13 +136,13 @@ def check(run: Path, dep: Mapping, params: NetworkCertifierParams, ingress: Sequ
     """`connection_rows_run`'s check of a run's connection rows under its deployment record `dep`: the summary (the
     registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
     with the word that they have no head, of those that have none) and the problems. None for a schedule without
-    lengths rows. ``under`` is what the auditor hands the check, the SHA-512 of the network certifier's public key
+    lengths rows. ``under`` is what the auditor hands the check, the SHA-512 of the network attester's public key
     (`key_sha512`) and its session: a deployment record that is not of them is a problem (`not_under`), the first
     of those returned. With ``registrations`` it leaves the registrations' file there (`keep_registrations`),
     written only where neither it nor its caller found a problem: ``found`` is the problems of the caller's own
     check, of which this one is the last part, and a problem of the deployment record that is already among them
     is not returned again. ValueError for ``registrations`` without ``under``. A line holds no tick: the tick it
-    left at is the network certifier's own note, in its log alone (`warden.json`'s `heads`). No check and no
+    left at is the network attester's own note, in its log alone (`warden.json`'s `heads`). No check and no
     verifier reads it. Nothing holds the head's time yet: that is the auditor's side, which is not built. The check
     does read a `missed` line, unsigned, in a schedule with a head offset: the execution phase has no head. That is
     safe: it stands where a head or the word would, so it can only take one away. What an execution phase with no

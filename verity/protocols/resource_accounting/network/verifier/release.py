@@ -1,11 +1,11 @@
 """The release order on the server's side. Each request a certifier releases reaches the server with three headers:
 `x-verity-release: N`, N its 0-based index in the certifier run's release order (dense: each released request once, a
 request a fault drops before its release unnumbered); `x-verity-release-run: ID`, the run's id in hex; and, from the
-network certifier, `x-verity-release-bucket: A`, the bucket of the release, counted from 0 at the run's origin. So
+network attester, `x-verity-release-bucket: A`, the bucket of the release, counted from 0 at the run's origin. So
 `serve-openai --admit release-order` adds requests to its engine in the order the certifier released them, whatever
 order it reads their bodies in, and the advice needn't carry the permutation between the two.
 
-**The watermark** is a stream on which the server learns that a bucket has closed. The network certifier opens one
+**The watermark** is a stream on which the server learns that a bucket has closed. The network attester opens one
 connection to the server for it and sends one HTTP/1.1 request, `POST /verity/watermark`, whose head (`watermark_head`)
 names the run. Its chunked body has one chunk a tick (`watermark_chunk`), the ASCII line `t n`, then any lost releases
 ` l …`: bucket t has closed, the releases of buckets ≤ t are exactly those numbered N < n, and each l, rising, is a
@@ -14,22 +14,22 @@ and its transport's buffer emptied. t steps by 1 from 0, n never decreases, and 
 chunk (`WATERMARK_END`). Line t is sent only once each release of bucket t has been written or lost, so a server that
 has read line t has been sent every N < n that no line through t names. Those come on their own connections, which it
 may read after line t, so a server that admits at bucket t waits for each of them, and skips a lost one should its
-bytes still arrive (`read_watermark` gives t, n and the lost). The network certifier never reads the server's side of
+bytes still arrive (`read_watermark` gives t, n and the lost). The network attester never reads the server's side of
 that connection and never waits on it.
 
-The headers and the watermark are the certifier's, sent to the server only. The link's frames, the network certifier's
+The headers and the watermark are the certifier's, sent to the server only. The link's frames, the network attester's
 cells and every record hold the client's bytes, so what is certified and tied (cell counts, prompt lengths, the I/O
 tie's request frames) is the same with them or without. A lost release is the server connection's state, which the
-server sees itself. N, A and n are read back from the signed ingress records: the network certifier's `END` cells in
+server sees itself. N, A and n are read back from the signed ingress records: the network attester's `END` cells in
 record order and the bucket of each (`network_certifier.NetworkCertifier`). A client's own release headers are dropped;
 bytes that aren't an HTTP/1 request with its whole head pass unchanged. A live shim that rebuilds the POST copies the
 headers onto it (`release_of`, `release_head`).
 
-The watermark's path is the network certifier's alone: it releases no client's request that opens as one to that path
+The watermark's path is the network attester's alone: it releases no client's request that opens as one to that path
 (`to_watermark`, read on the request's first cell and on the whole request at its `END`), which would reach the server
 under the run's id as the stream does.
 
-A connection's bytes are one request, the one the headers go on: the network certifier releases none that a server
+A connection's bytes are one request, the one the headers go on: the network attester releases none that a server
 would read a second request in, or read the first of without the headers (`one_request`, read on the whole request at
 its `END`). A second request would reach the server behind the first with no release headers but its sender's own, to
 any path, the watermark's included."""

@@ -9,7 +9,7 @@ verifier reads them.
   session a window and record each in a signed, append-only ledger before its first coin. It also keeps the periods, each
   lane's declared days (the program it serves on a UTC day, signed at the host's clock before the day's first window opens)
   and the model registry (`models.py`: each served model's weights, committed by the auditor with its own salts).
-- `coin_link.py` is the network certifier's coin link for a window's session: the one path its coins take to the peer,
+- `coin_link.py` is the network attester's coin link for a window's session: the one path its coins take to the peer,
   counted and re-clocked on the link's grids.
 - `publish.sh` puts the host's pins log, ledger, model registry and every ended session into the evidence store; the control
   pod runs it on a loop.

@@ -1,9 +1,9 @@
-"""The network certifier's content tables (`content_rows`' "The tables", `connection_rows`, `network_certifier`'s "The content
+"""The network attester's content tables (`content_rows`' "The tables", `connection_rows`, `network_certifier`'s "The content
 rows"), driven tick by tick on `test_network_certifier`'s harness. A schedule without them has the digest,
 records, heads and certificates it had. With them the device hands each release its request's bytes and its ids as
 its own records hold them, the tables are the schedule's size whatever the load, a release is filed in the first
 class that holds it, each row opens the one head's root at its place, the registration reads back, and the response
-tie run on a response row and an end row the network certifier wrote returns the signed response row: for a
+tie run on a response row and an end row the network attester wrote returns the signed response row: for a
 connection that ended, one that failed and one the client aborted. Under the lengths rows' form 2 a class is (P, O)
 and its tables hold its held rows and no other: the head counts them, a class's three alike and at most
 `NetworkCertifierParams.phase_releases`, the verifier's read holds a registration to that, and a class's port is its held
@@ -193,7 +193,7 @@ def test_under_form_2_a_class_is_its_two_sizes_and_each_form_refuses_the_others_
 #: what the server sent on each released connection, by its place in the release order, and how each ended
 SENT = ((11, 22, 33), tuple(range(8)), (), (7, 8, 9, 10), (), (1, 2), (99,))
 FAILED = (False, False, False, False, True, True, True)
-#: the class the network certifier's rule files each in, and its row there
+#: the class the network attester's rule files each in, and its row there
 FILED = ((0, 0), (2, 0), (2, 1), (0, 1), (1, 0), (1, 1), (1, 2))
 #: the same under the lengths rows' form 2, where the rule files a `FAIL` before any `DATA` cell in no class
 HELD_FILED = (*FILED[:4], None, (1, 0), (1, 1))
@@ -219,7 +219,7 @@ def mixed():
 
 def leaving(gone: dict[int, int]) -> type[Client]:
     """Clients of which the k-th to connect, k from 1, goes away at bucket `gone[k]`: from then its connection is
-    closing, as a transport's is whose peer is gone, and the network certifier writes it nothing."""
+    closing, as a transport's is whose peer is gone, and the network attester writes it nothing."""
     count = itertools.count(1)
 
     class Leaving(Client):
@@ -235,7 +235,7 @@ def leaving(gone: dict[int, int]) -> type[Client]:
 
 @pytest.fixture(scope="module")
 def ran():
-    """`mixed` through the network certifier under the schedule with content rows: its requests, the device, its
+    """`mixed` through the network attester under the schedule with content rows: its requests, the device, its
     clients and its handed releases by execution phase."""
     reqs, arrivals, answers = mixed()
     device, clients, _ = run(answers, arrivals, params=CON, windows=3, client=leaving(GONE))
@@ -315,7 +315,7 @@ def rows_of(tables, i: int, r: int) -> tuple[bytes, bytes, bytes]:
 
 
 def test_the_device_hands_each_release_its_request_and_its_ids_as_its_own_records_hold_them(ran):
-    """With content rows a release carries the request's bytes as the network certifier cut them and the id of each
+    """With content rows a release carries the request's bytes as the network attester cut them and the id of each
     `DATA` cell it released: the bytes the client sent and the ids the server sent before its `END` or the `FAIL`.
     They are what the device's own signed records of the same cells hold (`connection_rows.of_records`), release for
     release, and keeping them changes no cell: the records are the ones the schedule without content rows leaves."""
@@ -400,7 +400,7 @@ def test_the_tables_are_the_schedules_size_whatever_the_load_and_hold_each_relea
 
 def test_a_release_is_filed_in_the_first_class_that_holds_it_and_the_tables_lay_the_class_they_are_given(
         ran, monkeypatch):
-    """The network certifier's rule reads a release's own sizes and nothing else: the first class the schedule lists
+    """The network attester's rule reads a release's own sizes and nothing else: the first class the schedule lists
     whose request row holds its request and whose response row holds its ids. So of two classes of one size the rule
     files in the first only. The class is an argument of `content_rows.tables`, which lays a release in whichever
     class it is told that holds it: with another rule in the one function, the tables are that rule's. A release
@@ -763,7 +763,7 @@ def test_under_form_2_a_classes_tables_are_its_held_rows_and_no_other(ran, loads
 
 def test_under_form_2_a_fail_before_any_data_cell_is_filed_in_no_class(ran, loads):
     """Where a class's tables hold its held rows and no other, the rule files in no class a release that ended in a
-    `FAIL` before any `DATA` cell. It reads the release's end as the network certifier cut it: the same release
+    `FAIL` before any `DATA` cell. It reads the release's end as the network attester cut it: the same release
     ended in its `END`, or failed after an id, is filed in the class that holds it. So no table of the execution
     phase has an end row (1, 0), a class's count is of its releases that ended in their `END` or released an id,
     and the release's lengths and fails slots are the ones it had. Under form 1 the rule reads no end, and the
@@ -792,7 +792,7 @@ def test_under_form_2_a_fail_before_any_data_cell_is_filed_in_no_class(ran, load
 
 
 def test_the_filed_releases_are_each_classes_rows_by_release_number_under_the_signed_head(loads, counted, monkeypatch):
-    """What the network certifier hands the prover of an execution phase's filing: each class's releases by their
+    """What the network attester hands the prover of an execution phase's filing: each class's releases by their
     place in the release order, in row order, so row r of class i's tables is of release `classes[i][r]`, under the
     digest of the head signed over those tables. Under form 2 the list leaves out the `FAIL` before any `DATA`
     cell, and each class's list is as long as the head's count of it; under form 1 it is the releases whose rows
@@ -1009,7 +1009,7 @@ def test_a_registration_of_a_form_2_schedule_whose_classes_have_rows_is_another_
 
 
 def _refusal(opened, head, domains, table: str, rows) -> str | None:
-    """The verifier's registered read of `rows` as every row of `table`, each under the network certifier's salt and
+    """The verifier's registered read of `rows` as every row of `table`, each under the network attester's salt and
     path for its position (`network_certifier_rows.refusal` on `connection_rows.port`): None, or why not."""
     reads = [LR.reads(opened.table(table), p) for p in range(len(rows))]
     entry = {"value": reads[0].entry["value"], "positions": list(range(len(rows))),
@@ -1079,7 +1079,7 @@ def test_under_form_2_a_classes_port_is_its_held_rows_and_a_table_of_no_row_has_
                     opened, head, domains, name, [flipped, *table.rows[1:]])
 
 
-# --- the response tie on the network certifier's rows ---------------------------------------------------------------
+# --- the response tie on the network attester's rows ---------------------------------------------------------------
 
 
 #: the forms the tie is run in at each class's size: a no-stop class's and a stop class's
@@ -1087,22 +1087,22 @@ FORMS = pytest.mark.parametrize("stop", (False, True), ids=("nostop", "stop"))
 
 
 def committed(order: int, o: int) -> tuple[int, ...]:
-    """The compute side's committed row of a release's ids: the ids the server sent, then ids the network certifier
+    """The compute side's committed row of a release's ids: the ids the server sent, then ids the network attester
     never released, to the class's size."""
     return (*SENT[order], *range(900, 900 + o - len(SENT[order])))
 
 
 def word(order: int, o: int) -> int:
     """A stop class's stop word of the release: the stop rule ends the response after the ids the server sent where
-    the connection ended, and after the row's last id where the network certifier failed it first."""
+    the connection ended, and after the row's last id where the network attester failed it first."""
     return RT.stop_word(o if FAILED[order] else len(SENT[order]), 1)
 
 
 @FORMS
 def test_the_response_tie_on_the_certifiers_end_row_returns_the_response_row_it_signed(tied, stop):
     """Each release's proof block, in a stop class's form and a no-stop class's, on the compute side's committed row
-    of the ids the server sent and the end row the network certifier wrote: it accepts, and the row its gates return
-    is the response row the network certifier wrote, so the verifier's registered read of the response table accepts
+    of the ids the server sent and the end row the network attester wrote: it accepts, and the row its gates return
+    is the response row the network attester wrote, so the verifier's registered read of the response table accepts
     the blocks' rows. That holds for a connection that ended, one that failed after two ids and before any, and the
     two the client aborted. With an id the server never sent below the count the block's row is another, and the
     read refuses it. The same blocks read the tables of either of the lengths rows' forms: under form 2 a class's
@@ -1146,7 +1146,7 @@ def test_the_response_tie_on_the_certifiers_end_row_returns_the_response_row_it_
 
 
 def test_a_connection_the_client_aborted_ends_as_its_server_does(ran):
-    """A client that goes away after its request's release changes nothing the network certifier cuts, records or
+    """A client that goes away after its request's release changes nothing the network attester cuts, records or
     hands: it has read the client's `END` and reads the client no more, so the abort has no reason, and the cells it
     no longer writes are still cut and counted on schedule. The connection ends as its server does: in its `END`,
     an end row (0, n), or in a server's `FAIL`, (1, n). A client cut short before its release is its own failure:

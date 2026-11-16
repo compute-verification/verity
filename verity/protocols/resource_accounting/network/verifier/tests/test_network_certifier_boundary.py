@@ -311,7 +311,7 @@ def test_the_scans_phases_fit(G):
     """A group of G execution phases in the composed scan's generator form at w63's class (`benchmarks/network_traces/
     scan_zk.py`), one link of G·T buckets: the scan's start (`IngressScanStart`), G·T `IngressScanBucket` and G·T
     `EgressBucket` proof blocks, each member's rows and outputs its Definition's signature's. The ingress frame is the
-    network certifier's ingress row; the egress frame is the row `EgressBucket` computes (o1), beside its u16 verdict
+    network attester's ingress row; the egress frame is the row `EgressBucket` computes (o1), beside its u16 verdict
     (o0); the start's output is wired to ingress proof block 0's ``sin``, ingress proof block t's state output (o1) to
     proof block t + 1's ``sin`` and its view output (o2) to egress proof block t's ``state``. The check passes it, and
     the checker form, its egress frame a parameter row, is refused by name."""

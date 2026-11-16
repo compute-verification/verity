@@ -1,9 +1,9 @@
 """`wipe_period` and `wipe_party`: one wipe in one process, on an injected clock, and the memory challenger's side and
 the prover's over a socket pair, each verdict of `verity/wipe/v0` (the Lean's is `MemoryChallenger.WipeProtocol`,
 difftested in `verity/protocols/resource_accounting/memory/pous/attester/lean/tests/test_wipe_protocol.py`): an honest segment accepted
-and not certified (`uncounted`) whatever egress its evidence gives, since no network certifier signs that count, with
+and not certified (`uncounted`) whatever egress its evidence gives, since no network attester signs that count, with
 the count named as the evidence writer's (`certify` computes `StreamedWipeMeetsReads`' threshold at the challenger's
-`k`, 11,709,069 + E bits at `k = 2152`, `r = 24`, for the check that composes the wipe with the network certifier),
+`k`, 11,709,069 + E bits at `k = 2152`, `r = 24`, for the check that composes the wipe with the network attester),
 an egress out of range rejected, a prover
 keeping one label past it and a late read rejected, a session the prover left undecided; the challenger chooses `k`
 (`wipe_party --reads`) and refuses a request that names it. The certificate is checked at `k = 2906`, the H200's
@@ -69,7 +69,7 @@ def writer(egress_mib: int) -> str:
 
 
 def test_an_honest_segment_is_accepted_and_not_certified() -> None:
-    """The evidence's 3 MiB is the evidence writer's count, which no network certifier signed: the wipe is accepted
+    """The evidence's 3 MiB is the evidence writer's count, which no network attester signed: the wipe is accepted
     and publishes `uncounted`, not `certify` at 3 MiB, which is what certifying it would publish."""
     w = _run(W.params_for(), egress_mib=sw.egress_units(3 * sw.EGRESS_UNIT_BITS - 5))
     key, = w.case["params"]["trusted"]
@@ -366,7 +366,7 @@ def _side(tmp_path, wipe: dict, pins: list | None = None) -> tuple[Path, Callabl
 def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
     """The subprotocol whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
     (`wipe_side.py`, its key here one the configuration pins for the wipe), its case and record written, the premise
-    recorded as held. No network certifier counted the
+    recorded as held. No network attester counted the
     egress and period.json names no count, so the check is given none and its bound is vacuous. The record names what the bound doesn't cover: the egress, the host's DRAM and
     the two links leaving the node (period.json's control link, and the challenger's as the prover connected), and
     carries the session's window on the challenger's clock."""
@@ -459,7 +459,7 @@ def writers(egress_mib: int) -> str:
 
 def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypatch) -> None:
     """A session signed under the challenger host's pinned key, with period.json's `wipe.egress_bits = 0`: the premise
-    holds and the count is 0, which no network certifier signed, so the wipe is accepted and not certified, and the
+    holds and the count is 0, which no network attester signed, so the wipe is accepted and not certified, and the
     record names the egress as the evidence writer's count."""
     period, side_of = _side(tmp_path, {"egress_bits": 0}, side_pin())
     out = tmp_path / "out"

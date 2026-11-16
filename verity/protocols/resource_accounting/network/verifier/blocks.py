@@ -1,7 +1,7 @@
 """A host's class circuit as network certification reads it: the rows that cross the host's uplink, and the pins of its loads.
 
 A circuit record is one host's: its class's window circuit, every slot's class Program whatever its traffic. Which host
-runs which units, and which request occupies which slot and step, are private: the network certifier on the host's
+runs which units, and which request occupies which slot and step, are private: the network attester on the host's
 uplink commits every row that crosses it, and the scan (`verity.protocols.resource_accounting.network.prover`'s `ingress_scan` and `egress`)
 places those rows into slots inside the zero-knowledge proof, its state committed as the registered value `SCAN_STATE`.
 What is public is the class circuit itself, protocol structure, and its padded counts: proof blocks per host and bits
@@ -10,7 +10,7 @@ inference blocks alone, the window interface's `Blocks.of`), and nothing here pi
 host sends another.
 
 Two values cross the uplink into a host's units: its loads, the registration's values, each committed by the network
-certifier as it crosses once a session (`transfer_rows`, `verity/protocols/resource_accounting/network/attester/load_relay.py`), and the scan's state,
+attester as it crosses once a session (`transfer_rows`, `verity/protocols/resource_accounting/network/attester/load_relay.py`), and the scan's state,
 which the verifier pins at the root of the scan's rows the window reads (`ingress_scan.window_state`), never here.
 
 **The check** (`check`), over the record before any coin, the work per declaration and never per unit:
@@ -28,7 +28,7 @@ which the verifier pins at the root of the scan's rows the window reads (`ingres
 made of the record (`transfer_rows.check_registration`: the host's uplink, ingress, the session's first execution phase
 `SESSION_WINDOW`, kind ``load``, the value, the record's program digest and the value's shape, its row format the
 verifier's own: 16-bit leaves in ``hm96-sha512/row/v2`` rows unless ``formats`` names another, as a load's f32 scale is
-one 32-bit leaf a row and its token embeddings ``hm96-sha512/row-seg/v1`` rows) under the host's network certifier's key
+one 32-bit leaf a row and its token embeddings ``hm96-sha512/row-seg/v1`` rows) under the host's network attester's key
 and session. A load without one, or a registration naming no load, is refused, so a load's root is pinned only from its
 certificate.
 """
@@ -234,7 +234,7 @@ def certified(doc: Mapping[str, Any], layouts: Mapping[str, Any], registrations:
               certifier: tuple[PublicKey, bytes],
               formats: Mapping[str, tuple[int, str]] | None = None) -> dict[str, TR.TransferHead]:
     """Each load's head, by value, from its registration (`transfer_rows.check_registration`, for the load `check` makes
-    of the record, at the record's program digest) under ``certifier``, the key and session of the network certifier on
+    of the record, at the record's program digest) under ``certifier``, the key and session of the network attester on
     the host's uplink ``link``. ``formats``: the verifier's own ``(word_bits, schema)`` of a load whose leaves aren't 16
     bits or whose rows aren't ``hm96-sha512/row/v2`` (its program's parameter width, `registered.width`, and its port's
     row format), a row of ``words`` u16 words then ``words · 16 / word_bits`` leaves. Refused (ValueError) when the record
