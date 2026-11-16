@@ -25,7 +25,7 @@
 #include <cuda_runtime.h>
 
 #include "sha512.cuh"
-#include "../../../../../commitments/cuda/row_commit.cuh"
+#include "../../../../../../commitments/cuda/row_commit.cuh"
 
 namespace rb {
 

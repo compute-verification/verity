@@ -83,7 +83,7 @@ DOC_TERMS = {
     "verity example": "verity demo",
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
-    "warden, network warden": "the network certifier (what keeps the older name, a format's value or a name a caller "
+    "warden, network warden": "the network attester (what keeps the older name, a format's value or a name a caller "
                               "outside the tree gives, stays in backticks: GLOSSARY.md, Older names)",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
@@ -118,7 +118,7 @@ DOC_TERMS = {
     "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
-    "uplink tap, the auditor's tap": "the network certifier, and its records network certificates",
+    "uplink tap, the auditor's tap": "the network attester, and its records network certificates",
     "timed verifier": "the memory challenger",
     "network transparency": "network accounting",
     "prover gateway, verifier gateway": "the ZK server; the challenger",

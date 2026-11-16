@@ -60,6 +60,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "tools/config/verity_config/
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
           "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/pod",
           "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/tool.py",
-          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/workload_classification/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/workload_classification/__init__.py", "verity/protocols/workload_classification/training_detection/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py",
           # the distribution the settings registry's move puts it in, which importing the registry then reads
           "tools/config/verity_config"]

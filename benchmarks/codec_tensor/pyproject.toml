@@ -28,4 +28,4 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/
           "verity/protocols/proofs/spot/verifier/challenger/challenger.py", "verity/protocols/proofs/spot/verifier/challenger/remote.py",
           "verity/commitments/crypto",
           "verity/circuits", "verity/commitments", "verity/commitments/randomness",
-          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py"]
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py"]
