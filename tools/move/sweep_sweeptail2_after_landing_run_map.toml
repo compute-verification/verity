@@ -1,0 +1,11 @@
+# "post-landing run" in tools/research: what `tools/move/rename.py --map tools/move/sweep_sweeptail2_after_landing_run_map.toml`
+# renames (GLOSSARY.md Older names: "post-landing run", "postland" are the after-landing run): the monitor's text
+# `DRIVE_LANDED_CANCEL` and the test that compares it, the two places `terms_map.toml`'s prose move did not reach.
+
+[words]
+"post-landing run" = "after-landing run"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/check/tests/test_move_check.py", ".agents/skills/friction/SKILL.md"]

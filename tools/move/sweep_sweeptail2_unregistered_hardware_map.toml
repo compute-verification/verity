@@ -1,0 +1,22 @@
+# "unmonitored" and "dark leaves" in two tests (GLOSSARY.md Older names: "unmonitored", "dark" are unregistered hardware):
+# what `tools/move/rename.py --map tools/move/sweep_sweeptail2_unregistered_hardware_map.toml` renames: the absent key the
+# calculator's analysis test asserts (`benchmarks/slowdown/tests/test_analysis.py`), and the vocabulary guard's reason text. It leaves
+# `benchmarks/slowdown`'s other `unmonitored`, which is the calculator's regime and `slowdown_map.toml`'s, and the recorded
+# reason `"unmonitored"` of a dropped window (`benchmarks/network_traces/`).
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/slowdown/tests/test_analysis.py"]
+[words_in.words]
+"{\"unmonitored\", \"vacuous\"" = "{\"unregistered\", \"vacuous\""
+
+[[words_in]]
+files = ["tests/test_lean_vocabulary.py"]
+[words_in.words]
+"serving blocks and dark leaves: rename" = "serving blocks and unregistered hardware's leaves: rename"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/check/tests/test_move_check.py", ".agents/skills/friction/SKILL.md"]

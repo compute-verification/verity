@@ -1,0 +1,26 @@
+# The ZK server's build lock and test seeds in the one place each still says "firewall" (GLOSSARY.md Older names: "firewall" is
+# the ZK server): what `tools/move/rename.py --map tools/move/sweep_sweeptail2_zk_server_map.toml` renames.
+# - `.firewall.lock`, the Lean build lock that fifteen scripts under `benchmarks/` share (`firewall_words_map.toml` left it "until
+#   proofs renames them there"; none under `verity/` spells it now), is `.zk_server.lock` in all fifteen at once.
+# - `firewall-salt` and `firewall-coins`, the seeds of the Python side of the ZK server's agreement test: both sides of the test
+#   derive from the same Python values, so no record or digest holds them.
+# It leaves everything a node, a record or a digest reads: `FC_FIREWALL*` and the refusals that name it, the party `firewall` and
+# the message `Firewall`, `firewall.json` and `firewall/v0`, the `FIREWALL*` lines, the summaries' keys `firewall*`, `t.firewall*`,
+# and the recorded refusals' text.
+
+[words]
+".firewall.lock" = ".zk_server.lock"
+
+[[words_in]]
+files = ["verity/protocols/proofs/flock/prover/tests/test_zk_server_agreement.py"]
+[words_in.words]
+"firewall-salt" = "zk-server-salt"
+"firewall-coins" = "zk-server-coins"
+
+[keep]
+strings = ["FC_FIREWALL", "FC_CORE_FIREWALL", "FIREWALL-TIMES", "FIREWALL-REFUSED", "firewall.json", "firewall/v0", "flock-firewall"]
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/check/tests/test_move_check.py", ".agents/skills/friction/SKILL.md"]

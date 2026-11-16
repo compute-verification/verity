@@ -1,0 +1,13 @@
+# "declared utilization", the retired phrase (GLOSSARY.md Older names: "certified share", "declared utilization"; now utilization):
+# what `tools/move/rename.py --map tools/move/sweep_sweeptail2_utilization_map.toml` renames, in the nine places of
+# `benchmarks/one_stage/` and its tests that still say it, comments, docstrings and one help text. "declared work" beside it is
+# `declared_words_map.toml`'s and stays. It leaves GLOSSARY.md's row and the lint's list.
+
+[words]
+"declared utilization" = "utilization"
+"Declared utilization" = "Utilization"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/check/tests/test_move_check.py", ".agents/skills/friction/SKILL.md"]
