@@ -154,7 +154,10 @@ def bundle_bytes(globs: list[str]) -> int:
                 for name in files:
                     try:
                         st = os.lstat(os.path.join(root, name))
-                    except OSError:
+                    except OSError as e:
+                        if os.path.lexists(os.path.join(root, name)):
+                            print(f"commit_pack: {os.path.join(root, name)} unread, so not counted ({type(e).__name__}: {e})",
+                                  file=sys.stderr, flush=True)
                         continue
                     if (st.st_dev, st.st_ino) not in seen:
                         seen.add((st.st_dev, st.st_ino))
@@ -177,15 +180,18 @@ def claim(spool: Path, pod: str, accept=lambda entry: True) -> tuple[str, dict] 
     for f in (spool / "queue").glob("*.json"):
         try:
             entries.append((f.stat().st_mtime, f))
-        except OSError:
-            continue
+        except OSError as e:
+            if f.exists():
+                print(f"commit_pack: {f.name} unread, so not claimed now ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     for _, f in sorted(entries):
         if not _accepts(f, accept):
             continue
         dst = mine / f.name
         try:
             f.rename(dst)
-        except OSError:
+        except OSError as e:
+            if f.exists():
+                print(f"commit_pack: {f.name} not claimed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         return f.stem, json.loads(dst.read_text())
     return None
@@ -244,7 +250,9 @@ class Mps:
         for p in Path("/proc").glob("[0-9]*/cmdline"):
             try:
                 argv = p.read_bytes().split(b"\0")
-            except OSError:
+            except OSError as e:
+                if p.parent.exists():
+                    print(f"commit_pack: {p} unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 continue
             if any(a.endswith(b"nvidia-cuda-mps-control") for a in argv[:2]):
                 return (self.pipe / "control").exists()
@@ -304,37 +312,35 @@ def label_packed(c: Client) -> str:
     return f"unlabelled {run}: rc {r.returncode}: {last}" if r.returncode else f"labelled {run}: {last}"
 
 
-def stop_client(c: Client, grace_s: int) -> None:
+def signalled(pgid: int, sig: int) -> bool:
+    """Whether `sig` reached process group `pgid`: False once the group is gone."""
     try:
-        os.killpg(c.proc.pid, signal.SIGTERM)
+        os.killpg(pgid, sig)
+        return True
     except ProcessLookupError:
+        return False
+
+
+def stop_client(c: Client, grace_s: int) -> None:
+    if not signalled(c.proc.pid, signal.SIGTERM):
         return
     try:
         c.proc.wait(grace_s)
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(c.proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        signalled(c.proc.pid, signal.SIGKILL)
         c.proc.wait()
 
 
 def stop_all(clients: list[Client], grace_s: int) -> None:
     """stop_client for several at once: SIGTERM to every one, then SIGKILL to whatever outlives the shared grace."""
     for c in clients:
-        try:
-            os.killpg(c.proc.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        signalled(c.proc.pid, signal.SIGTERM)
     deadline = time.time() + grace_s
     for c in clients:
         try:
             c.proc.wait(max(0.0, deadline - time.time()))
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(c.proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            signalled(c.proc.pid, signal.SIGKILL)
             c.proc.wait()
 
 

@@ -52,6 +52,8 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import datetime as dt
+import importlib.util
 import json
 import os
 import re
@@ -98,6 +100,20 @@ def full_id(agent: str) -> str:
         raise SystemExit(f"inbox: {agent!r} is no full agent id; the hook delivers only to the whole conversation id, "
                          "e.g. bc-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (the id the Task call returned), never a prefix")
     return agent
+
+
+TIMEFMT = Path(__file__).resolve().parents[1] / "research/src/research/timefmt.py"
+
+
+def stamp_ahead(text: str, now: dt.datetime) -> str | None:
+    """research's `timefmt.stamp_ahead` (a stamp ahead of the clock's refusal), loaded by path since the guard is stdlib
+    files; None where the checkout has no such file."""
+    if not TIMEFMT.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("research_timefmt", TIMEFMT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.stamp_ahead(text, now)
 
 
 def send(agent: str, text: str, inbox: Path = INBOX) -> Path:
@@ -281,8 +297,8 @@ def event_lines():
 
 def hook_seen(agent: str) -> bool:
     """Whether a shell hook has run for `agent` on this VM: EVENT_LOG holds an event of it, or the inbox its poll mark. Only
-    the shell hook writes that mark, and a copy from before the event log writes it too: hook.sh runs origin/main's copy,
-    which can be older than the checkout's. Another hook's event shows nothing: from a hooks.json it misreads, Cursor can
+    the shell hook writes that mark, and a copy from before the event log writes it too: the hooks run /opt/agent-guard's
+    copy, origin/main's at the VM's boot, which can be older than the checkout's. Another hook's event shows nothing: from a hooks.json it misreads, Cursor can
     run the Task hook on shell commands and no shell hook."""
     if any('"hook": "shell_hook.py"' in ln and f'"conversation_id": "{agent}"' in ln for ln in event_lines()):
         return True
@@ -390,8 +406,8 @@ def pull(agent: str, repo: Path, inbox: Path = INBOX) -> int:
         lock.unlink(missing_ok=True)
 
 
-def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) -> int:
-    """`sleep` and `clock` are what `send --wait` waits by."""
+def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic, now=lambda: dt.datetime.now(dt.UTC)) -> int:
+    """`sleep` and `clock` are what `send --wait` waits by; `now` is the time a message's stamp may not be ahead of."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("send")
@@ -452,6 +468,8 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
         return 1 if problems else 0
     if a.cmd == "send":
         text = a.text if a.text is not None else (sys.stdin.read() if a.file == "-" else Path(a.file).read_text())
+        if why := stamp_ahead(text, now()):
+            raise SystemExit(f"inbox: {why}")
         if a.local:
             print(f"queued for {a.agent}: {send(a.agent, text)}; {UNTIL_RESUMED.format(agent=a.agent)}")
             return 0

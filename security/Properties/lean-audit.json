@@ -16905,7 +16905,7 @@
    }
   },
   "Definitions.Compose.ComposeMonitoringPeriod": {
-   "digest": "4f76237e9ef2e3ae0a9708a4cbe5c278df453027d76c3cc51a1efdd5edd49122",
+   "digest": "0056f2ab00174113dea7f2b265c01468ec91dbb009098dfcabe9b0635ce8818c",
    "definitions": {
     "Accounting.Compose.DeadConeDead": "ca2183fb0f093df1f54d1a511bac3482a6808e51a6b37b292fc94e8fc2c96bc7",
     "Accounting.Compose.Declared.monitoringPeriodLayer": "9f5b3efa6406c5cc12a5a61da7f5ed66b017f23304064839fe4600690f1dd7b2",
@@ -16928,7 +16928,6 @@
     "Accounting.Compose.Outcomes.rel": "a8a4aeafd52b7b38bafb63224a5e0dad0e087b9086e62981f233dc4343138677",
     "Accounting.Compose.Outcomes.right": "c9e3052b13f635844940ec05ab1cbe759e565d22cf82e17e0acfaa31386cbf8e",
     "Accounting.Compose.PerLiveTile": "91895d8096bf1965ed5103916813e0624047592ef6933af8da4ed2cbc9c923a0",
-    "Accounting.Compose.PeriodRun": "cbfd28bc15b0c23cb462d1fe83c1978363fd39492e8c43a60f154effd6e4ae18",
     "Accounting.Compose.PrefixOf": "20e76f89ae9e8add775b41b613a433d90b79f449fac25534292108cb5c52f9d2",
     "Accounting.Compose.RoundGame.acceptsUpTo": "ad15995c52279ad19b55491447103c2df23d742e551ed9427c0eeaf15b65338d",
     "Accounting.Compose.consGame": "787ca656bf11d227172039f03bc111809deaf9200c3869cc8d7569b20bdd440b",
@@ -27168,7 +27167,7 @@
    }
   },
   "Properties.Pouw.MonitoringPeriodJ10RStrata": {
-   "digest": "15134aaab83a3968045cafb79bbe8d54100f2c0fca408441b208dd70746df3eb",
+   "digest": "637fbf07f643494d4b74d030f110f9b3180f329908d89f8842e822c7aea88678",
    "definitions": {
     "Properties.Pouw.MonitoringPeriodJ10RStrata.BlockDraw": "3fbba98f0403133da2fd115e1699465f119f6e1a215ff551a633d29c1e065672",
     "Properties.Pouw.MonitoringPeriodJ10RStrata.H1J10RCheckedCreditMonitoringPeriodStrata": "606b36ec32e386235946045c2fa9fb1c1c3442f7e5f27d15926c8999ac95a014",
@@ -27183,7 +27182,7 @@
     "Properties.Pouw.MonitoringPeriodJ10RStrata.pullAt": "50d06661e19028ed5f1fc2b1a376df275f7955981c74456a545292d9d0c5b53e",
     "Properties.Pouw.MonitoringPeriodJ10RStrata.relAt": "54d0b6fa2756b6418f8fb342bebd1af4c569e4f51dbce759300dff8ee6b29d47",
     "Properties.Pouw.MonitoringPeriodJ10RStrata.rightAt": "2437e6532cc24dcdd13e39bcbd4b10810ef5a8dfe411ff841af92ac0674ad42a",
-    "Properties.Pouw.MonitoringPeriodJ10RStrata.runAt": "d2290db924d9924f490f3c9e06ebec1e9552aaa4db80bd4ca1a8b7bc820d293d",
+    "Properties.Pouw.MonitoringPeriodJ10RStrata.runAt": "5aa2d08f2c0edb8edadc813dea9c63317a5d1b6147819b48fe13010a79d4ab42",
     "Properties.Pouw.MonitoringPeriodJ10RStrata.stratumLive": "77a33f8e28369df092beee25ee065914ddb05000feb374dc184ae528c9bd2a2c"
    }
   },

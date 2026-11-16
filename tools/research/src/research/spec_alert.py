@@ -526,7 +526,7 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
 
     try:
         text = message(repo, old, new, web(repo, remote), prs)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 (an unread record is told in the DM: the push has happened)
         text = (f"A change landed on main ({old[:9]}..{new[:9]}), and reading its `lean-audit.json` records failed: "
                 f"{type(e).__name__}: {e}")
     if text is None:
@@ -540,7 +540,7 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
         api.call("chat.postMessage", channel=who["slack_user"], text=text, username="research merge", unfurl_links=False)
         log(f"research merge: the spec change went to Daniel as a DM ({len(text)} characters)")
         return True
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 (a failed DM is printed and posted, never raised: the push has happened)
         why = (f"research merge: a spec change landed on main ({old[:12]}..{new[:12]}), and the DM to Daniel failed: "
                + (str(e) if isinstance(e, SlackError) else f"{type(e).__name__}: {e}"))
         print(why, file=sys.stderr)
@@ -548,7 +548,7 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
             api = api if api is not None else Slack(settings.get("SLACK_BOT_TOKEN"))
             api.call("chat.postMessage", channel=((reg or {}).get("channels") or {})["agent-alerts"]["id"],
                      text=why + "\n\n" + text[:LIMIT // 2], username="research merge", unfurl_links=False)
-        except Exception as e2:
+        except Exception as e2:  # noqa: BLE001 (the caller still has its own steps after a landing to run)
             print(f"research merge: posting that to #agent-alerts failed too: {type(e2).__name__}: {e2}", file=sys.stderr)
         return False
 

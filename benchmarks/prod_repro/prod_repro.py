@@ -108,6 +108,8 @@ UNIT = "percent of stock's serving time"
 MATCH = {"glm53": "vllm/prod-replay-match-glm53"}
 ADVICE = {"glm53": "vllm/prod-advice-bits-glm53"}
 MATCH_UNIT, ADVICE_UNIT = "percent of served tokens", "bits a request"
+#: the replay's match it is held to: every served token given back
+MATCH_TARGET = 100.0
 #: the keys of a checkpoint's config.json that bound its context, the smallest of which is the model's own limit
 CONTEXT_KEYS = ("max_position_embeddings", "n_positions", "max_seq_len", "seq_length", "max_sequence_length",
                 "max_seq_length", "seq_len")
@@ -979,7 +981,7 @@ def measurements(r: dict) -> list[dict]:
     if t.get("measured") and t.get("metric") and not t["record_disagrees"]:
         given, rep = t["tokens_before_first_difference"], t["window"]["rep"]
         out.append({"name": t["metric"], "value": 100 * given / t["tokens_served"], "unit": MATCH_UNIT,
-                    "mark": "measured", "better": "higher", "tokens_served": t["tokens_served"],
+                    "mark": "measured", "better": "higher", "target": MATCH_TARGET, "tokens_served": t["tokens_served"],
                     "tokens_before_first_difference": given, "requests": t["requests"],
                     "requests_differing": t["requests_differing"], "reproduces": t["reproduces"], "rep": rep, **on,
                     "inputs": [f"measured: {ours}'s served tokens on the {load} load's burst rep {rep} against its "

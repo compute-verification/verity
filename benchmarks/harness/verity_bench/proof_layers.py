@@ -1,0 +1,500 @@
+"""`verity bench prove layers`: the proof system by layer, one table of four rows (Flock, Flock with zero knowledge, with
+sampling, with recursion), each read from what its own command wrote (benchmarks/prove/README.md, "The proof system by
+layer").
+
+    verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] [--recursion DIR|RUN]
+
+DIR is a run's ``out/`` (or the run directory that holds it), read with no store; RUN is a run id, whose records are
+fetched through the evidence store where `research` is installed. A layer not given is a row that says "not run". Which
+reader a directory takes is decided by what it holds (`detect`):
+
+- ``recursion_e2e.json``: `benchmarks/recursion_e2e`'s job (`read_recursion`);
+- an arm's ``audit.log`` with its ``PROVE-PATH`` line: `benchmarks/prove_path/run.sh` (`read_prove_path`);
+- ``summary.txt``, ``a5.log`` or the audit's ``summary.json``: `benchmarks/one_stage/a5_llama1b_h200.sh`, or `a5.sh`'s
+  out (`read_a5`).
+
+A row prints its numbers only when the Lean verifier's verdict, as its output states it, is an accept; any other row
+prints none, with why. Its ``ran with: coins COINS; parameters PARAMETERS (DETAIL)`` line names only what its output
+says outright (`COINS`, `PARAMETERS`, "not stated" for a half it doesn't say, ``ran with: not stated`` for both), and
+the JSON keeps the output's own words as ``detail``.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+from verity_bench import kit, settings
+
+SCHEMA = "verity-bench/proof-layers/v1"
+#: each layer's flag and its row's title, in the table's order
+LAYERS = {"flock": "Flock", "zk": "Flock with zero knowledge", "sampling": "with sampling", "recursion": "with recursion"}
+RECURSION, PROVE_PATH, A5 = "recursion_e2e", "prove_path", "a5"
+#: the outputs a layer's row may be read from
+ACCEPTS = {"flock": (PROVE_PATH,), "zk": (PROVE_PATH, A5), "sampling": (A5, PROVE_PATH), "recursion": (RECURSION,)}
+#: the proof a row of the layer must state it ran, whichever command wrote it: the sampling layer is Flock with zero
+#: knowledge at the sampling plan
+PROOF = {"flock": "plain", "zk": "zk", "sampling": "zk"}
+#: the name the report writes its JSON under
+REPORT = "proof-layers"
+#: what a runner's metric id may name (`benchmarks/prove/run.py`'s ``LAYER_METRICS``), each with the unit it is written in
+FIGURES = {"prover_s": "s a proof block", "lean_s": "s a proof block", "proof_bytes": "bytes a proof block"}
+#: the layers each metric id holds, in the order they are written, each with its member: the sampling layer, the system
+#: as served, is the id's own reading, written last with no member
+MEMBERS = {"flock": "flock", "zk": "zero knowledge", "sampling": None}
+#: a research run's id, which the store fetches
+RUN_ID = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
+#: the files of a run's record the readers read, fetched from the store by these globs
+FETCH = ("out/recursion_e2e.json", "out/*audit.log", "out/*summary.json", "out/summary.txt", "out/verdicts.txt",
+         "out/machine.txt", "out/*a5.log")
+NOT_STATED = "not stated"
+#: what a ``ran with:`` line may say a row's coins and parameters were, each only where its output says so outright
+COINS = ("deployed challenger", "local challenger", "in-process")
+PARAMETERS = ("deployed", "development")
+#: a comma that ends a clause of recursion_e2e's ``inputs``, not one inside a Definition's braces
+CLAUSE = re.compile(r",(?![^{]*\})")
+
+
+class Unreadable(Exception):
+    """A row's output can't be found or read."""
+
+
+@dataclass
+class Row:
+    """One layer's row: what was given, what its output states, and why it has no number where it has none."""
+
+    layer: str
+    status: str = "not run"
+    given: str | None = None
+    format: str | None = None
+    workload: str = "not run"
+    lean: str = "not run"
+    accepted: bool = False
+    prover_s: float | None = None
+    prover_unit: str = "s"
+    prover_what: str = ""
+    lean_s: float | None = None
+    lean_what: str = ""
+    proof_bytes: float | None = None
+    bytes_what: str = ""
+    per_block: bool = False
+    ran_with: str = "ran with: not stated"
+    detail: str | None = None
+    proof: str | None = None
+    why: str | None = None
+    notes: list[str] = field(default_factory=list)
+
+    def withhold(self, why: str) -> None:
+        self.prover_s = self.lean_s = self.proof_bytes = None
+        self.why = self.why or why
+
+    def said(self, coins: str | None, parameters: str | None, detail: str | None) -> None:
+        """The row's ``ran with:`` line from what its output states (`COINS`, `PARAMETERS`, None where it doesn't say),
+        and `detail`, the output's own words, beside it."""
+
+        assert coins in (None, *COINS) and parameters in (None, *PARAMETERS)
+        self.detail = detail or None
+        self.ran_with = ("ran with: not stated" if coins is None and parameters is None else
+                         f"ran with: coins {coins or NOT_STATED}; parameters {parameters or NOT_STATED}"
+                         + (f" ({detail})" if detail else ""))
+
+
+def _challenger(source: Any, challenger: Any) -> str | None:
+    """`local challenger` where the output names a challenger and says it was the local one; else None."""
+
+    return "local challenger" if source == "challenger" and challenger == "local" else None
+
+
+# ---- finding a row's output ----------------------------------------------------------------------------------------------
+
+
+def fetch(run: str) -> Path:
+    """The root of `run`'s record as the evidence store holds it, with `FETCH`'s files fetched."""
+
+    try:
+        from research.store import labels_sync
+        from research.store.local import LocalStore, StoreError
+    except ImportError as e:
+        raise Unreadable(f"{run}: the evidence store's client isn't installed here ({e}): give the run's out/ directory") from e
+    store = LocalStore()
+    try:
+        attempt = store.get_attempt(run)
+        if attempt is None:
+            raise Unreadable(f"{run} is not in the evidence store this machine reads")
+        outputs = attempt.get("outputs") or {}
+        art = outputs.get("run_record") or outputs.get("run_files")
+        if not art:
+            raise Unreadable(f"{run} kept no record")
+        labels_sync.read_through(store, [run, art], lambda m: print(f"prove layers: {m}", file=sys.stderr))
+        if why := store.withdrawn(art) or store.withdrawn(run):
+            raise Unreadable(f"{run} was withdrawn ({why}): nothing of it is read")
+        return Path(store.fetch(art, paths=list(FETCH)))
+    except StoreError as e:
+        raise Unreadable(f"{run}'s record can't be fetched: {e}") from e
+
+
+def detect(d: Path) -> str | None:
+    """Which command's output `d` holds, by its files; None where it holds none of them."""
+
+    if (d / "recursion_e2e.json").is_file():
+        return RECURSION
+    if (d / "audit.log").is_file() or any(d.glob("*/audit.log")):
+        return PROVE_PATH
+    if any((d / f).is_file() for f in ("summary.txt", "a5.log", "a5/a5.log", "a5/a5/summary.json", "a5/summary.json")):
+        return A5
+    return None
+
+
+def locate(given: str, fetcher: Callable[[str], Path]) -> Path:
+    """The directory `given` names: a directory (its ``out/`` where it holds no output itself), or a run id's fetched
+    ``out/``."""
+
+    p = Path(given)
+    if p.is_dir():
+        return p / "out" if detect(p) is None and (p / "out").is_dir() else p
+    if RUN_ID.fullmatch(given):
+        return fetcher(given) / "out"
+    raise Unreadable(f"{given} is neither a directory nor a run id")
+
+
+# ---- reading -------------------------------------------------------------------------------------------------------------
+
+
+def _tagged(text: str, tag: str, bad: list[str]) -> list[dict[str, Any]]:
+    """Each line of `text` that opens with `tag` and a space, its JSON; a line that isn't JSON goes to `bad`."""
+
+    out = []
+    for line in text.splitlines():
+        if line.startswith(tag + " "):
+            try:
+                doc = json.loads(line[len(tag) + 1:])
+            except ValueError as e:
+                bad.append(f"a {tag} line isn't JSON ({e}): it may be cut short")
+                continue
+            if isinstance(doc, dict):
+                out.append(doc)
+    return out
+
+
+def _text(path: Path) -> str:
+    return path.read_text(errors="replace") if path.is_file() else ""
+
+
+def _number(x: Any) -> float | None:
+    return float(x) if isinstance(x, (int, float)) and not isinstance(x, bool) else None
+
+
+def per_unit(timing: Mapping[str, Any], counts: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """An a5 summary's ``timing`` per sampled proof block of each type, in the form prove_path's ``per_unit`` prints: the
+    blocks drawn (``draw_counts``), Flock's ``prove_total_s`` and Lean's verify seconds over them, and the proof's bytes
+    over its reps."""
+
+    out = {}
+    for key, t in timing.items():
+        tm, n = (t or {}).get("timing") or {}, counts.get(key) or 0
+        pb = tm.get("proof_bytes")
+        out[key] = {"units": n, "proof_bytes": sum(pb) if isinstance(pb, list) else pb,
+                    **{f"{x}_per_unit": v / n if n and (v := _number(raw)) is not None else None
+                       for x, raw in (("prove_s", tm.get("prove_total_s")), ("lean_verify_s", (t or {}).get("lean_verify_s")))}}
+    return out
+
+
+def _per_block(row: Row, units: Iterable[Mapping[str, Mapping[str, Any]]]) -> None:
+    """The row's prover and Lean seconds and proof bytes a block, over every drawn block of `units` (prove_path's
+    ``per_unit`` maps, one a rank): the seconds' means weighted by each type's blocks, and the bytes' sum over the blocks."""
+
+    n, figures = 0, {"prove": 0.0, "lean": 0.0, "bytes": 0.0}
+    missing: set[str] = set()
+    for per in units:
+        for key, x in per.items():
+            k = int(x.get("units") or 0)
+            if not k:
+                row.notes.append(f"no per-block figure: member {key}'s timing has no drawn-block count (draw_counts)")
+            n += k
+            for name, v in (("prove", _number(x.get("prove_s_per_unit"))), ("lean", _number(x.get("lean_verify_s_per_unit")))):
+                missing |= {name} if v is None else set()
+                figures[name] += (v or 0.0) * k
+            b = _number(x.get("proof_bytes"))
+            missing |= {"bytes"} if b is None else set()
+            figures["bytes"] += b or 0.0
+    if not n:
+        row.notes.append("no drawn block holds a timing")
+        return
+    row.notes += [f"no per-block {name} figure: a drawn member's timing doesn't give one" for name in sorted(missing)]
+    row.prover_unit, row.per_block = "s a block", True
+    row.prover_s = None if "prove" in missing else figures["prove"] / n
+    row.prover_what = f"Flock's prove_total_s a drawn block, the mean over {n}"
+    row.lean_s = None if "lean" in missing else figures["lean"] / n
+    row.lean_what = f"Lean's verify a drawn block, the mean over {n}"
+    row.proof_bytes = None if "bytes" in missing else figures["bytes"] / n
+    row.bytes_what = "a drawn block, its session's proof files over its blocks"
+
+
+def _drawn(counts: Mapping[str, Any], population: Any, ranks: int = 1) -> str:
+    drawn = ", ".join(f"{t} x {n}" for t, n in sorted(counts.items())) or "no block"
+    return f"{drawn} drawn of {population if population is not None else '?'} units" + (f" over {ranks} ranks" if ranks > 1 else "")
+
+
+def _lean_verdicts(a5_lines: Sequence[Mapping[str, Any]]) -> list[tuple[str, Any]]:
+    return [(k, v) for x in a5_lines for k, v in ((x.get("audit") or {}).get("verdicts") or {}).items()
+            if k.startswith("lean-verify")]
+
+
+def read_recursion(d: Path, row: Row) -> None:
+    """recursion_e2e.json: the headline's verdict (an accept only where Lean composed V*'s parts into the recursive
+    statement and accepted it: ``ok`` and ``composed``), one recursive run's path without Lean's step as the prover's
+    seconds, the lean step's wall as Lean's, and V*'s releases' bytes."""
+
+    doc = json.loads((d / "recursion_e2e.json").read_text())
+    h, p, inputs = doc.get("headline") or {}, doc.get("params") or {}, doc.get("inputs") or {}
+    st = doc.get("staged")
+    shape = f"{st['subcircuit']} x {st['n']}" if st else f"K = {p.get('K', '?')}, N = {p.get('N', '?')}"
+    inner = [c.strip() for c in CLAUSE.split(str(inputs.get("inner") or "")) if c.strip()]
+    row.workload = shape + (f": {inner[0]}" if inner else "")
+    row.accepted = h.get("ok") is True and h.get("composed") is True
+    if row.accepted:
+        row.lean = "accepted: Lean composed V*'s parts into the recursive statement and accepted it"
+    elif h.get("refused"):
+        row.lean = f"refused: Lean refused the composition ({h['refused']})"
+    elif not h.get("complete"):
+        row.lean = "not a whole recursive run: " + ", ".join(sorted(doc.get("steps") or {})) + " ran"
+    elif h.get("parts_ok", h.get("ok")) and h.get("composed") is not True:
+        how = "not composed" if h.get("composed") is False else "not recorded as composed"
+        row.lean = f"its parts passed and its recursive statement is {how}, so no accepted recursive run" + (
+            f": {h['not_composed']}" if h.get("not_composed") else "")
+    else:
+        row.lean = "not accepted: a part or a negative did not hold"
+    pipeline = h.get("pipeline") or {}
+    prover = {k: v for k, v in pipeline.items() if k != "Lean step_s" and _number(v) is not None}
+    if prover:
+        row.prover_s = sum(float(v) for v in prover.values())
+        row.prover_unit = "s a run"
+        row.prover_what = "wall, one recursive run's path without Lean's step: " + " + ".join(prover)
+    row.lean_s = _number(pipeline.get("Lean step_s"))
+    row.lean_what = "wall, the lean step whole: every V* release and the inner statement"
+    found = re.search(r"\(([^)]*)\)", str(h.get("outer_mode") or ""))
+    outer = (h.get("outer") or {}).get(found.group(1) if found else "") or {}
+    row.proof_bytes = _number(outer.get("proof_bytes"))
+    row.bytes_what = f"V*'s {outer.get('statements', '?')} releases summed, mode {found.group(1) if found else '?'}"
+    coins = next((c for c in inner if "coin" in c), None)
+    said = ([f"inputs.inner: {coins}"] if coins else []) + ([f"params.tree_from {p['tree_from']}"] if p.get("tree_from") else [])
+    row.said(None, None, "; ".join(said))
+
+
+def read_prove_path(d: Path, row: Row) -> None:
+    """An arm's audit.log: its honest PROVE-PATH line (``forged`` false), each rank's A5 line's Lean verify verdicts, and
+    the arm's summary.json for which challenger's coins."""
+
+    arms = [d] if (d / "audit.log").is_file() else sorted(p.parent for p in d.glob("*/audit.log"))
+    honest = []
+    for arm in arms:
+        lines = _tagged(_text(arm / "audit.log"), "PROVE-PATH", row.notes)
+        if lines and lines[-1].get("forged") is False:
+            honest.append((arm, lines[-1]))
+    if not honest:
+        raise Unreadable(f"{d} holds no arm's audit.log with an honest PROVE-PATH line (prove_path.py audit's)")
+    if len(honest) > 1:
+        raise Unreadable(f"{d} holds {len(honest)} honest arms ({', '.join(a.name for a, _ in honest)}): give one arm's "
+                         "directory")
+    arm, pp = honest[0]
+    ranks = pp.get("ranks") or {}
+    audits = [x for x in _tagged(_text(arm / "audit.log"), "A5", row.notes) if "audit" in x]
+    per_rank = [_lean_verdicts([x]) for x in audits]
+    lean = [v for vs in per_rank for v in vs]
+    each = len(audits) == len(ranks) and all(per_rank)
+    if not each:
+        row.notes.append(f"{len(audits)} audited A5 line(s) for {len(ranks)} rank(s), "
+                         f"{sum(1 for vs in per_rank if not vs)} without a Lean verify verdict: not one verdict a rank")
+    row.accepted = (pp.get("ok") is True and bool(ranks) and all(r.get("accepted") is True for r in ranks.values())
+                    and each and all(v is True for _, v in lean))
+    if row.accepted:
+        row.lean = f"accepted: every rank's audit ({len(ranks)}), each with Lean's {', '.join(sorted({k for k, _ in lean}))}"
+    else:
+        held = [f"PROVE-PATH ok {pp.get('ok')}"] + [f"rank {r} accepted {x.get('accepted')}" for r, x in sorted(ranks.items())
+                                                   if x.get("accepted") is not True]
+        held += [f"{k} {v}" for k, v in lean if v is not True] or ([] if each else ["not every rank has a Lean verify verdict"])
+        row.lean = "not accepted: " + "; ".join(held)
+    counts: dict[str, int] = {}
+    for r in ranks.values():
+        for t, n in (r.get("draw_counts") or {}).items():
+            counts[t] = counts.get(t, 0) + int(n)
+    population = sum(int(r.get("population") or 0) for r in ranks.values()) or None
+    row.workload = f"arm {arm.name}: " + _drawn(counts, population, len(ranks))
+    _per_block(row, [r.get("per_unit") or {} for r in ranks.values()])
+    summary = json.loads(_text(arm / "summary.json") or "{}")
+    challenger = (summary.get("coins") or {}).get("challenger")
+    said = ([f"PROVE-PATH coins {pp['coins']}"] if pp.get("coins") else []) + (
+        [f"summary.json coins.challenger {challenger}"] if challenger else [])
+    row.proof = pp.get("proof")
+    row.said(_challenger(pp.get("coins"), challenger), None, "; ".join(said))
+
+
+def read_a5(d: Path, row: Row) -> None:
+    """a5_llama1b_h200.sh's out (or a5.sh's): the audit's last A5 line (its Lean verify verdicts), the audit's summary.json
+    for its timing, its coins and its arm, summary.txt's STOPPED, REGISTERED and rc lines, machine.txt's row dir and
+    verdicts.txt's serving stages."""
+
+    summary_txt = _text(d / "summary.txt")
+    log = next((_text(d / f) for f in ("a5/a5.log", "a5.log") if (d / f).is_file()), summary_txt)
+    lines = _tagged(log, "A5", row.notes)
+    a5 = next((x for x in reversed(lines) if "audit" in x), lines[-1] if lines else None)
+    sj = next((d / f for f in ("a5/a5/summary.json", "a5/summary.json") if (d / f).is_file()), None)
+    summary = json.loads(sj.read_text()) if sj else {}
+    text = summary_txt.splitlines()
+    row.notes += [x for x in text if x.startswith(("replay rc=", "REGISTERED "))]
+    row.notes += [f"serving stage {x}" for x in _text(d / "verdicts.txt").splitlines() if x.strip()]
+    stopped = next((x for x in text if x.startswith("STOPPED at ")), None)
+    if a5 is None:
+        row.lean = "not reported: no A5 line in a5.log or summary.txt"
+        row.why = stopped or row.lean
+    else:
+        lean = _lean_verdicts([a5])
+        row.accepted = (a5.get("audit") or {}).get("accepted") is True and bool(lean) and all(v is True for _, v in lean)
+        row.lean = (f"accepted: the audit, with Lean's {', '.join(sorted({k for k, _ in lean}))}" if row.accepted else
+                    "not accepted: " + ("; ".join(f"{k} {v}" for k, v in lean if v is not True) or
+                                        ("audit accepted " + str((a5.get("audit") or {}).get("accepted")) if "audit" in a5
+                                         else json.dumps(a5)[:300])))
+    machine = next((x for x in _text(d / "machine.txt").splitlines() if x.startswith("row dir ")), None)
+    registered = next((x for x in text if x.startswith("REGISTERED ")), "")
+    window = " ".join(w for w in registered.split() if w.startswith(("kind=", "commitment=")))
+    counts = summary.get("draw_counts") or (a5 or {}).get("draw_counts") or {}
+    row.workload = ((f"row {Path(machine[len('row dir '):]).name}: " if machine else
+                     f"source {summary['source']}: " if summary.get("source") else "")
+                    + _drawn(counts, summary.get("population")) + (f" ({window})" if window else ""))
+    if summary.get("timing"):
+        _per_block(row, [per_unit(summary["timing"], counts)])
+    verdicts = ((a5 or {}).get("audit") or {}).get("verdicts") or {}
+    challengers = sorted(k for k in verdicts if k.startswith("challenger/"))
+    coins = summary.get("coins") or {}
+    said = (f"summary.json coins {json.dumps(coins, sort_keys=True)}" if coins else
+            f"audit verdicts {', '.join(challengers)}, a challenger per drawn member" if challengers else "")
+    row.said(_challenger(coins.get("source"), coins.get("challenger")), None, said)
+    row.proof = "plain" if summary.get("plain") else "zk" if summary else None
+    if summary.get("arm"):
+        row.notes.append(f"arm {summary['arm']}")
+
+
+READERS: dict[str, Callable[[Path, Row], None]] = {RECURSION: read_recursion, PROVE_PATH: read_prove_path, A5: read_a5}
+
+
+def read(layer: str, given: str | None, fetcher: Callable[[str], Path] = fetch) -> Row:
+    """`layer`'s row from the output `given` names (None: not run)."""
+
+    row = Row(layer)
+    if given is None:
+        row.why = f"not run: no output given (--{layer} DIR|RUN)"
+        return row
+    row.given, row.status = given, "read"
+    try:
+        d = locate(given, fetcher)
+        row.format = detect(d)
+        if row.format is None:
+            raise Unreadable(f"{d} holds none of the outputs this reads (recursion_e2e.json, an arm's audit.log, "
+                             "summary.txt or a5.log)")
+        if row.format not in ACCEPTS[layer]:
+            raise Unreadable(f"--{layer} takes {' or '.join(ACCEPTS[layer])}'s output, and {d} holds {row.format}'s")
+        READERS[row.format](d, row)
+    except (Unreadable, OSError, ValueError, KeyError, TypeError) as e:
+        row.status, row.lean, row.workload = "unreadable", "not read", "not read"
+        row.withhold(f"unreadable: {e}")
+        return row
+    if layer in PROOF and row.proof != PROOF[layer]:
+        row.withhold(f"--{layer} is the {PROOF[layer]} proof's row, and this output "
+                     + (f"says its proof is {row.proof}" if row.proof else "states no proof"))
+    if not row.accepted:
+        row.withhold(f"the Lean verdict is not an accept ({row.lean})")
+    return row
+
+
+# ---- printing and writing ------------------------------------------------------------------------------------------------
+
+
+def _cell(x: float | None, what: str, bytes_: bool = False) -> str:
+    if x is None:
+        return "—"
+    return (f"{x:,.0f}" if bytes_ else f"{x:.4g}") + (f" ({what})" if what else "")
+
+
+def render(rows: Sequence[Row]) -> str:
+    """The table as text: a row a layer, then why each row without a number has none."""
+
+    lines = ["The proof system by layer, each row read from its own run's output (`verity bench prove layers`).", "",
+             "| layer | workload | proof | prover s | Lean verifier | Lean s | proof bytes | ran with |",
+             "|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        unit = f"{r.prover_unit}: {r.prover_what}" if r.prover_what else r.prover_unit
+        proof = r.proof or (NOT_STATED if r.status == "read" else "—")
+        lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {proof} | {_cell(r.prover_s, unit)} | {r.lean} | "
+                     f"{_cell(r.lean_s, r.lean_what)} | {_cell(r.proof_bytes, r.bytes_what, bytes_=True)} | {r.ran_with} |")
+    lines += ["", *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in rows if r.why)]
+    lines += [f"- {LAYERS[r.layer]}: {n}" for r in rows for n in r.notes]
+    return "\n".join(lines).rstrip()
+
+
+def document(rows: Sequence[Row]) -> dict[str, Any]:
+    return {"schema": SCHEMA, "rows": [{"title": LAYERS[r.layer], **asdict(r)} for r in rows]}
+
+
+def measured(rows: Sequence[Row], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
+    """The writer's measurements: under each of `metrics`' ids (each naming one of `FIGURES`), one a layer of `MEMBERS`,
+    in its order. A layer's value is its figure a proof block, only where its Lean verdict is an accept; else the value is
+    None, with why. Recursion's row is no member: its seconds are a whole recursive run's."""
+
+    if bad := sorted(set(metrics.values()) - set(FIGURES)):
+        raise ValueError(f"metric ids name {bad}, not one of {sorted(FIGURES)}")
+    by_layer = {r.layer: r for r in rows}
+    out = []
+    for name, figure in metrics.items():
+        for layer, member in MEMBERS.items():
+            r = by_layer[layer]
+            value = getattr(r, figure) if r.accepted and r.per_block else None
+            why = None if value is not None else r.why or (
+                f"its output gives no {figure} a proof block" if r.per_block else "its output gives no per-block figure")
+            out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": member, "why": why,
+                        "inputs": [r.given] if r.given else [],
+                        "extra": {"layer": LAYERS[layer], "status": r.status, "format": r.format, "workload": r.workload,
+                                  "lean": r.lean, "ran_with": r.ran_with, "detail": r.detail, "proof": r.proof}})
+    return out
+
+
+def report(name: str, text: str, doc: Mapping[str, Any], measurements: Iterable[Mapping[str, Any]] = (), *,
+           mark: str = "measured") -> Path | None:
+    """The command's last step: prints `text`, then `doc` as one line of JSON, and where it has a place to write (under a
+    research run its ``out/``, else ``$OUT`` where set) writes that line to ``<name>.json`` there and each of
+    `measurements` at `mark` to the run's result (`kit.writer`); with no place it writes nothing, and an empty
+    ``$RESEARCH_RUN_DIR`` or ``$OUT`` is none, never the working directory. Its signature is the kit's report step's, so a
+    caller moves to that one by its name alone."""
+
+    print(text)
+    line = json.dumps(doc)
+    print(line)
+    run_dir = str(settings.RESEARCH_RUN_DIR or "") if settings.is_set("RESEARCH_RUN_DIR") else ""
+    out = str(settings.OUT or "") if settings.is_set("OUT") else ""
+    if not (run_dir or out):
+        return None
+    place = Path(run_dir) / "out" if run_dir else Path(out)
+    place.mkdir(parents=True, exist_ok=True)
+    (place / f"{name}.json").write_text(line + "\n")
+    if measurements := list(measurements):
+        w = kit.writer(place)
+        for m in measurements:
+            w.measurement(**m, mark=mark)
+    return place
+
+
+def add_arguments(parser: argparse.ArgumentParser) -> None:
+    for layer, title in LAYERS.items():
+        parser.add_argument(f"--{layer}", metavar="DIR|RUN",
+                            help=f"the {title} row's output: a run's out/ directory, or a run id fetched through the store")
+
+
+def run(args: argparse.Namespace) -> int:
+    rows = [read(layer, getattr(args, layer)) for layer in LAYERS]
+    report(REPORT, render(rows), document(rows), measured(rows, getattr(args, "metrics", None) or {}))
+    return 0
