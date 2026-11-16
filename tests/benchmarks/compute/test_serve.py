@@ -1,12 +1,15 @@
 """`serve.sh`'s refusal of a run directory that already holds a record, before it touches the machine or writes a file:
 a share read after a failed run would otherwise be an earlier run's number. And its serve's card under a caller's
 gpu-lease: the lease's, with no lease of its own, as gpu-lease isn't re-entrant. And the Lean verdict's limit, which
-grows as the cores fall."""
+grows as the cores fall. And PoUW's row in the record of verdicts, which is the window compose's row
+(`served_verdicts.piece`) under the local gate's key pin and lane, not one serve.sh writes itself."""
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -93,3 +96,48 @@ def test_the_lean_verdicts_limit_grows_as_the_cores_fall(tmp_path, cores, given,
     got = subprocess.run(["bash", "-c", f'{line[0]}\necho "$LEAN_TIMEOUT"'], env=env, capture_output=True, text=True,
                          check=True)
     assert got.stdout.strip() == limit
+
+
+#: a stand-in for benchmarks/one_stage/served_verdicts.py whose `piece` returns a row naming what it was asked
+PIECE_STUB = '''import json
+def piece(key, pieces_dir, run=None, **of_record):
+    asked = {"key": key, "pieces": str(pieces_dir), "run": run, **of_record}
+    return {"verdict": "missing", "owner": "compute-accounting", "why": "stub: " + json.dumps(asked, sort_keys=True)}, (None, "real")
+'''
+
+
+def verdicts(tmp_path, gate: dict | None, run_id: str = "") -> tuple[dict, str]:
+    """serve.sh's `verdicts` run alone in a tree whose served_verdicts.py is `PIECE_STUB`: the record it writes and its
+    line."""
+    fn = re.search(r"^verdicts\(\) \{.*?^\}$", SERVE.read_text(), re.M | re.S)
+    assert fn, "serve.sh's verdicts() moved: this test reads it"
+    tree, out = tmp_path / "tree", tmp_path / "out"
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(PIECE_STUB)
+    (out / "record").mkdir(parents=True)
+    (out / "compute-run.json").write_text(json.dumps({"challenger": "local"}))
+    if gate is not None:
+        (out / "auditor-gate.json").write_text(json.dumps(gate))
+    script = f'PY={sys.executable}\nOUT={out}\nREC=$OUT/record\n{fn[0]}\nverdicts\n'
+    got = subprocess.run(["bash", "-c", script], cwd=tree, env={**os.environ, "RESEARCH_RUN_ID": run_id},
+                         capture_output=True, text=True, check=True)
+    return json.loads((out / "record" / "verdicts.json").read_text()), got.stdout
+
+
+def test_pouws_row_is_the_window_composes_under_the_local_gates_key_pin_and_lane(tmp_path):
+    """The row was a fixed `missing` that named no condition of record: it is `served_verdicts.piece`'s on out/pieces,
+    with no SPOT window registration (none is made here), the local gate's key pin and lane, and the run's id."""
+    doc, line = verdicts(tmp_path, {"key_sha512": "ab" * 64, "lane": "vllm", "pin": "p"}, "r20261116-000000-abcd")
+    asked = {"key": "work", "pieces": str(tmp_path / "out" / "pieces"), "run": "r20261116-000000-abcd", "spot": None,
+             "key_sha512": "ab" * 64, "lane": "vllm"}
+    assert doc["protocols"] == {"work": {"verdict": "missing", "owner": "compute-accounting",
+                                         "why": "stub: " + json.dumps(asked, sort_keys=True)}}
+    assert doc["format"] == "verity-bench/compute-verdicts/v1" and doc["run"] == {"challenger": "local"}
+    assert line.startswith("work: missing: stub: ")
+
+
+def test_with_in_process_coins_the_row_is_asked_under_no_key_pin_or_lane(tmp_path):
+    """`COINS=in-process` writes no auditor-gate.json: the row is asked with no pin and no lane, so it can't be of record."""
+    doc, _ = verdicts(tmp_path, None)
+    assert '"key_sha512": null, "lane": null' in doc["protocols"]["work"]["why"]
+    assert '"run": null' in doc["protocols"]["work"]["why"]

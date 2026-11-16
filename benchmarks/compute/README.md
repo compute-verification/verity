@@ -264,8 +264,9 @@ The paths below are relative to the record directory.
 - `out/pieces/pouw/pearlplus-lean.json` and `out/pieces/pouw/pearlplus-lean-check.json`: the Lean verifier's verdict,
   and the record's comparison of it with the answer. Without either there is no number (exit 1, naming the file).
 - `out/record/verdicts.json` (optional): the run's composed record, every protocol's verdict on the run, of which PoUW's
-  verdict is printed beside the number. A served run on your own card reads `missing` there: the credit is then the
-  Pearl+ verifier's alone.
+  verdict is printed beside the number. serve.sh writes PoUW's row as the window's compose reads it
+  (`benchmarks/one_stage/served_verdicts.py`'s `piece`): `missing` with the first condition of record the run fails,
+  as no window registration of SPOT's is made on your own card. The credit is then the Pearl+ verifier's alone.
 - `out/pieces/pouw/verify.json` (optional): the Pearl+ verifier's document. Its per-call split says whether the
   passes hold the LM head's calls, and `--per-call` prints it.
 - `out/pieces/pouw/development.json` (optional): the Pearl+ verifier's development document. Only its `coin_source`,

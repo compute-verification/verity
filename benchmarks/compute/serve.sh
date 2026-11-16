@@ -22,10 +22,12 @@
 #   6. policy: the inference-only policy at CLASS, from this card's serve-phi cut at Pearl+'s linears
 #      (`benchmarks/one_stage/inference_only.py policy`), which names the class and the model `run.py` counts MACs at;
 #   7. circuit: the class's circuit record cut at Pearl+'s linears (`prove_path.py class-circuit`), into out/record/.
-#   8. verdicts: record/verdicts.json, PoUW's verdict: `missing`, as the window's compose (which composes it of record)
-#      isn't run here, so the credit is the Pearl+ piece's alone;
-#   9. publish and piece, after the verdicts: the verifier's coin into pieces/pouw/ (coin.json, coin-put.json: put in
-#      no store) and PoUW's development piece (`served_verdicts.py pearlplus`: development.json, its coin_source);
+#   8. publish and piece, right after the Lean step: the verifier's coin into pieces/pouw/ (coin.json, coin-put.json: put
+#      in no store) and PoUW's development piece (`served_verdicts.py pearlplus`: development.json, its coin_source);
+#   9. verdicts: record/verdicts.json, PoUW's row as the window's compose reads it (`served_verdicts.piece` on pieces/,
+#      under auditor-gate.json's key pin and lane): of record only where `served_verdicts.pearlplus_of_record` holds the
+#      piece, else `missing` naming the first condition it fails; no SPOT window registration is made here, so at best
+#      it fails at that (R chained after W);
 #  10. registered: out/registered/circuit.json and log.jsonl (W alone), what training reads; no program.json, as the
 #      tied path writes no Program;
 #  11. share: `benchmarks/compute/run.py --from RUN_DIR`, which prints the share from the record this wrote.
@@ -204,18 +206,20 @@ gate_down() {
   [ -s "$P/coin.json" ] && cp "$P/coin.json" "$PIECE/coin.json"
   return 0
 }
-verdicts() {  # PoUW's verdict as run.py reads it: missing, the window's compose not run here
-  "$PY" - "$REC/verdicts.json" "$PIECE/pearlplus-answer.json" "$OUT/compute-run.json" <<'EOF'
+verdicts() {  # PoUW's verdict as run.py reads it: the work row the window's compose reads (served_verdicts.piece)
+  "$PY" - "$REC/verdicts.json" "$OUT/pieces" "$OUT/compute-run.json" "$OUT/auditor-gate.json" "${RESEARCH_RUN_ID:-}" \
+    <<'EOF'
 import json, os, sys
-out, answer, run = sys.argv[1:4]
-a = json.load(open(answer)) if os.path.exists(answer) else {}
-row = {"verdict": "missing", "owner": "compute-accounting",
-       "why": "PoUW's row of record is the window's compose (V3c), not run here: the credit is the Pearl+ piece's alone "
-              f"(its verdict {a.get('verdict')}, development coins and parameters)"}
+from pathlib import Path
+sys.path.insert(0, "benchmarks/one_stage")
+import served_verdicts as S
+out, pieces, run, gate, run_id = sys.argv[1:6]
+g = json.load(open(gate)) if os.path.exists(gate) else {}
+row, _server = S.piece("work", Path(pieces), run_id or None, spot=None, key_sha512=g.get("key_sha512"), lane=g.get("lane"))
 doc = {"format": "verity-bench/compute-verdicts/v1", "development": True, "run": json.load(open(run)),
        "protocols": {"work": row}}
 open(out, "w").write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-print(f"work: {row['verdict']}: {row['why']}")
+print(f"work: {row['verdict']}: {row.get('why') or row.get('reason') or ''}"[:2000])
 EOF
 }
 publish() {  # the verifier's coin published in OUT alone, put in no store: coin.json and coin-put.json
