@@ -70,4 +70,27 @@ theorem ports_entries
             "proofs"))
         "ports") = #[] := by kernel_rfl'
 
+/-- `rest` collapses to a plain object of its surviving keys: `split` and `OneStageZk.paramsOfJson` drop `"form"` and
+`"proofs"` from `paramsJ`'s 16 members, leaving 14. Fed to the walk as a rewrite rule, this replaces the derived
+`without (mkObj (filter …)) "proofs"` term (whose `ofList`/`filter`/`without` the walk reduces afresh for every field it
+reads, each reduction exhausting the heartbeat budget) with one `mkObj` literal, so each later field read is a single
+lookup the walk reduces cheaply. The values are universally quantified, so `kabstract` restores whatever the walk carries
+in each (the concrete `null`s that drive control flow, the generalized digests). -/
+theorem rest_eq
+    (va vc vd vf vla vle vlo vpa vpo vpg vpr vq vr vs vw vwt : Json) :
+    Json.mkObj
+      (Spot.OneStageZk.without
+        (Json.mkObj
+          (Array.filter (fun x => x.1 != "form")
+            (Std.TreeMap.Raw.ofList
+              [("anchors", va), ("challenger", vc), ("delta", vd), ("form", vf), ("law", vla),
+               ("leaf_layer", vle), ("log", vlo), ("partition", vpa), ("ports", vpo),
+               ("program", vpg), ("proofs", vpr), ("query", vq), ("registered", vr),
+               ("scheme", vs), ("window_root", vw), ("work_table", vwt)]).toArray).toList)
+        "proofs")
+      = Json.mkObj
+          [("anchors", va), ("challenger", vc), ("delta", vd), ("law", vla), ("leaf_layer", vle), ("log", vlo),
+           ("partition", vpa), ("ports", vpo), ("program", vpg), ("query", vq), ("registered", vr), ("scheme", vs),
+           ("window_root", vw), ("work_table", vwt)] := by kernel_rfl'
+
 end Verity.Sampled.Instance.HonestSession.PortsFacts
