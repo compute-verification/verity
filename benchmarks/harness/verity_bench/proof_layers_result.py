@@ -1,5 +1,5 @@
 """What `verity bench prove layers` reads each layer into (`proof_layers`): its benchmark result (`Result`), the
-error a reader raises where an output can't be found or read (`Unreadable`), and the names, outputs and words the
+error raised where an output can't be found or read (`Unreadable`), and the names, outputs and words the
 readers and the printer share."""
 
 from __future__ import annotations

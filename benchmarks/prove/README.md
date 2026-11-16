@@ -278,8 +278,8 @@ until more types have runs of their own.
 ## The proof benchmark by layer
 
 `verity bench prove layers` prints one table of four benchmark results, Flock, Flock with zero knowledge, with sampling
-and with recursion, each read from what its own command wrote (`verity_bench/proof_layers.py`, with a reader a format in
-`verity_bench/proof_layers_readers.py`). It runs nothing. Each
+and with recursion, each read from what its own command wrote (`verity_bench/proof_layers.py`, with a reader a format;
+the table it prints is `verity_bench/proof_layers_print.py`). It runs nothing. Each
 flag takes a run's `out/` directory (or the run directory holding it), read with no store, or a run id, fetched through
 the evidence store where `research` is installed and this machine holds the store's read key. A run id the store can't
 give is refused with why and the fix: give the run's `out/` as a directory. A layer not given is printed as "not run".
