@@ -1214,7 +1214,7 @@ and checking state row u + 1. Steps past the execution phase's executed count ar
 - **The carry.** Execution phase w's state row 0 is execution phase w − 1's last state row, and its execution-phase
   row 0 is execution phase w − 1's execution-phase row 1, each under the same salt (`commit_window(carry=…)`), so the verifier checks that their openings b‖c are equal
   (`check_chain`, `C-carry`). Decisions an execution phase leaves unread carry: the load writes its own after the last
-  execution-phase row's unread ones, as it does the queue's arrivals. A5 ("What it rests on", above) charges a
+  execution-phase row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a
   decision to the earlier of its step's execution phase and its arrival's ingress execution phase, up to two before
   its step's: at T = 20, 5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries
   from execution phase 0 to their steps in execution phases 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
@@ -1289,7 +1289,7 @@ narrower w_len would each cut that, each a change to what the Definition states.
 v1 is the advice the compile slice's proof block takes: I1 v0 sent as only what the certified record, the scheduler
 replay and the derived rules leave. `v1.encode(advice, record, registered) -> bytes` and `v1.decode(bytes, record,
 registered) -> I1 v0` with `decode(encode(a)) == a`. `decode` is total: it refuses by name every string that isn't the
-canonical encoding of an advice under the record, and a string past the cap ℓ unread. It stays in the encodings until
+canonical encoding of an advice under the record, and a string past the limit ℓ unread. It stays in the encodings until
 its circuit lands.
 
 **Certified, 0 bits**: the network attester's signed records under design v3 and the id I/O they carry,
@@ -1332,7 +1332,7 @@ the order is the topological one that:
 - takes the earliest in release order where the rows leave a choice, so an order the schedule never shows costs
   nothing.
 
-**Sent**, as v1's windows (`window_charge.Advice`), and nothing else:
+**Sent**, as v1's execution phases (`window_charge.Advice`), and nothing else:
 - *The decisions*, one per open step: whether the next request had arrived.
 - *The order.* The engine admits in the API server's body-read order, which comes after the release and overtakes it
   under load: requests overtake each other by length, and the HTTP layer reorders on top. v1 sends the permutation
@@ -1342,16 +1342,16 @@ the order is the topological one that:
   of the ranks is the inversion count. The decoder (`v1._arrival`) refuses rank 0, a position or rank past the
   requests left, and a repeated position.
 - *The lengths*, while the registration sends them (`Registered.send_lengths`, on until a proof holds both halves of
-  the length rule: the stop ids and the `max_tokens` cap). A prover who controls where a response ends chooses its
+  the length rule: the stop ids and the `max_tokens` limit). A prover who controls where a response ends chooses its
   output_len, so each request's output_len goes in ⌈log2(max_tokens + 1)⌉ bits and its finish in 1, as the plain tail
-  of the window its body lands in (`advice_code.lengths`). Decode refuses a sent output_len that isn't the certified
-  ids' count and a finish that isn't the stop rule's, and a replay that admits a request in a window before its body's.
+  of the execution phase its body lands in (`advice_code.lengths`). Decode refuses a sent output_len that isn't the certified
+  ids' count and a finish that isn't the stop rule's, and a replay that admits a request in an execution phase before its body's.
 
 *Not sent: the hits.* Past the bound, eviction may shorten a hit, and the replay's pool (`pool.BlockPool`, vLLM's
-LRU) fixes it, so no hit is the prover's choice. v1's caps hold the hits, the resumes and the lag bits at 0
-(`v1.CAPS`), so their counts code in 0 bits, and the decoder refuses a window that sends one. Every value the schedule
+LRU) fixes it, so no hit is the prover's choice. v1's limits hold the hits, the resumes and the lag bits at 0
+(`v1.CAPS`), so their counts code in 0 bits, and the decoder refuses an execution phase that sends one. Every value the schedule
 reads is then replayed, derived or sent, so the encoding is injective on the whole schedule. Under the certified tick
-the registered caps hold no count, so every window's segment codes nothing: a window is charged its length terms
+the registered limits hold no count, so every execution phase's segment codes nothing: one is charged its length terms
 alone, and 0 bits where the registration sends no lengths.
 
 *Not sent: the KV pool.* `num_gpu_blocks` is public and registered before the run, in `Registered.engine`, never in
@@ -1364,29 +1364,29 @@ I1 request q's connection: the order permutation (`walk.order`) through the arri
 The I/O tie's egress tie checks each cell's stream against its request q through it. That replaces v4's stream == q, which
 refuses honest traffic wherever the engine's order isn't the network attester's.
 
-*The windows* (A5). Step s's window is the earliest window that releases an output at step s or later (the last window
-when none follows): the first window whose rows a value read at step s can change. Arrival i's ingress window is the
+*The windows* (A5). Step s's execution phase is the earliest that releases an output at step s or later (the last
+when none follows): the first whose rows a value read at step s can change. Arrival i's ingress execution phase is the
 earliest of ⌊a_j / T⌋ over it and every later arrival j. That never decreases, even where the arrivals deviate from
 release order.
-- A decision about arrival i at step k goes to the earlier of step k's window and i's ingress window.
-- An order entry for arrival p goes to the earlier of p's ingress window and the window of the first step that reads
+- A decision about arrival i at step k goes to the earlier of step k's execution phase and i's ingress execution phase.
+- An order entry for arrival p goes to the earlier of p's ingress execution phase and that of the first step that reads
   p: a decision about it, a lookup of it, or its admission.
 - Each min is never later than either rule, so it is at least as conservative for the leak bound as A5's, and every
-  value about a request is charged in or before the window the request came in.
-- Each field is nondecreasing in the replay's order. So each field's values, window after window, are in the order
+  value about a request is charged in or before the execution phase the request came in.
+- Each field is nondecreasing in the replay's order. So each field's values, execution phase after execution phase, are in the order
   the replay reads them, and the decoder replays them straight through, with no routing.
 
 *The string*, MSB first: `code_v1.encode(windows, book)`, then zero bits to a byte. W is the record's last bucket // T
 + 1.
-- `code_v1` codes each window as one terminated arithmetic segment, its counts before its values. So its decoder finds
-  each window's end, and v1 sends no length prefix (Elias-gamma(ℓ_w + 1) cost 5 to 22 bits a string).
-- A window's charge is its segment's bits (`code_v1.Encoded.lens`, `bits_by_window`), a function of the string alone,
+- `code_v1` codes each execution phase as one terminated arithmetic segment, its counts before its values. So its
+  decoder finds each one's end, and v1 sends no length prefix (Elias-gamma(ℓ_w + 1) cost 5 to 22 bits a string).
+- An execution phase's charge is its segment's bits (`code_v1.Encoded.lens`, `bits_by_window`), a function of the string alone,
   and its length tail's, whose widths the record's `max_tokens` fix.
 - The codebook is `Registered.book`, a `code_v1.Book` fit on other runs, never this one. Its digest (SHA-512 of its
-  canonical JSON) is registered before the first window.
+  canonical JSON) is registered before the first execution phase.
 - `decode` runs `code_v1.decode`, which takes only the canonical segments, then the order entries' inverse, then the
-  replay, which consumes the decisions in order. It refuses the string unless its windows are the replay's residual
-  (no hit, resume or lag bit, and every value in its window) and its order is the one `arrival_order` recovers from
+  replay, which consumes the decisions in order. It refuses the string unless each execution phase's part is the replay's
+  residual (no hit, resume or lag bit, and every value in its execution phase) and its order is the one `arrival_order` recovers from
   the advice it decodes to.
 
 The compile slice's proof block commits the values themselves, not this string, and the string's segments are only their
@@ -1394,18 +1394,18 @@ charge (the composition below): what the bound counts is the charge, not the com
 
 - *The bound.* `code_v1`'s segments are prefix-free, so the strings are prefix-free for every W, and at most
   2^c strings are charged c bits or fewer (Kraft): the sampled leak bound's premise `hAs`.
-  `code_v1.encode` is injective on the windows (`code_v1.decode` inverts it), and the order entries' inverse, the
-  replay and the walk give the advice from the windows, so at most 2^c residuals, and so at most that many advices,
+  `code_v1.encode` is injective on its `windows` (`code_v1.decode` inverts it), and the order entries' inverse, the
+  replay and the walk give the advice from them, so at most 2^c residuals, and so at most that many advices,
   are accepted at a charge of c or less.
-- *v0's per-window parts.* Each window's part is self-delimited.
+- *v0's per-execution-phase parts.* Each execution phase's part is self-delimited.
 **Composition**, all in one ZK proof under the advice's hiding root:
-1. *The values are the committed advice.* The advice's hiding rows hold each window's residual raw, as
-   `verity_vllm.compiler.replay_chain`'s window row: its decisions as bits in the scan's order, at most D a window
+1. *The values are the committed advice.* The advice's hiding rows hold each execution phase's residual raw, as
+   `verity_vllm.compiler.replay_chain`'s execution-phase row: its decisions as bits in the scan's order, at most D one
    (4,391 on the corpus' largest), in `dec` with their count `left`; its `hits` group ("The rows" below), which v1
    leaves empty; and its order entries (position, rank). No decoder runs in the circuit: the scan reads each field at a
    private head of the chain's (`dh`, `hh`).
-2. The scan of `ReplayStep_v1` over the session's steps, from the empty engine. The window row holds a queue of the
-   next Q released requests not yet arrived, in (a, ordinal) order, Q a public cap like H, and arrival p takes the one
+2. The scan of `ReplayStep_v1` over the session's steps, from the empty engine. The execution-phase row holds a queue of the
+   next Q released requests not yet arrived, in (a, ordinal) order, Q a public limit like H, and arrival p takes the one
    at its order entry's rank (0 where none names p; a rank of Q or more is refused). Q = 128 holds the network attester's traces'
    largest, 75 (heavy; p50 7) and 2 (small KV). The chain fills the step's A arrival slots from the queue, each
    `arr_id` its arrival ordinal, so `ReplayStep_v1` needs no change for the ranks. The decisions are the scan's bits.
@@ -1414,13 +1414,13 @@ charge (the composition below): what the bound counts is the charge, not the com
    one. The chain reads every committed value and none past them, so the values are exactly the asks and the
    deviations. Under async scheduling
    (AS) the certified O forces each lag row, at no decision (`ReplayStep_v1`'s "Async scheduling").
-3. *The charge.* The registered code runs forward over the same values: per window, `code_v1`'s window over
+3. *The charge.* The registered code runs forward over the same values: per execution phase, `code_v1`'s segment over
    the values charged to it, in `code_v1._window`'s order, on the encoder ("The encoder in the circuit"
-   below). A decision's context is min(run, 2), run the 0s since the last 1 in the decision stream, across windows:
-   a function of the committed decisions, which the encoder keeps in its own state. The window's coded length ℓ_w
+   below). A decision's context is min(run, 2), run the 0s since the last 1 in the decision stream, across execution phases:
+   a function of the committed decisions, which the encoder keeps in its own state. The execution phase's coded length ℓ_w
    (`code_v1.Encoded.lens`) must be at most its declared charge c_w, a protocol output. No codeword is committed, so
    nothing reads a segment at a data-dependent cursor, no ask forks the replay, and the bound above holds as it is.
-   `CompileSlice_v1` is 1–3 for one window, proved in ZK, with its stand-ins (Open).
+   `CompileSlice_v1` is 1–3 for one execution phase, proved in ZK, with its stand-ins (Open).
 4. The walk over the rows, which gives I1 v0.
 5. `AdviceCheck_v1{L}` specifies what 1–4 give. The tests hold every advice v1 decodes, random and
    bit-flipped strings' too, to I1's `advice.decode`, whose refusals that circuit makes. So it holds wherever 2 and 4
@@ -1431,11 +1431,11 @@ charge (the composition below): what the bound counts is the charge, not the com
 **The encoder in the circuit** (`arith_encode`: `ArithCountStep_v1{K, BIN, CW}`, `ArithCountFinish_v1{CW}` and
 `BookKT_v1{C}`, with their references as specs; its docstring has the mechanics).
 - *The charge is the coded length.* The scan reads the committed values (item 2). The encoder runs `code_v1`'s code
-  forward over them, once a window from `Tally()`, and counts the bits the window's segment would hold: each symbol's
+  forward over them, once an execution phase from `Tally()`, and counts the bits its segment would hold: each symbol's
   scalings, taken at once, and the termination's 2 when used. The total must be at most c_w. No codeword is committed
   and no segment is compared. `encode` is injective on the values and its strings are prefix-free, so at most 2^c value
   lists are accepted at a charge of c or less ("The bound" above).
-- *A window's run*, in `code_v1._window`'s order: n_arrived = `left`; each decision slot j < D at context min(run, 2),
+- *An execution phase's run*, in `code_v1._window`'s order: n_arrived = `left`; each decision slot j < D at context min(run, 2),
   its (f0, f1) from `BookKT_v1{3}`, coded by `ArithCountStep_v1{18, 1, 20}`; n_hits = `hleft` (0 under v1);
   n_resumes (0 under v1); n_order and each order entry's position gap and rank step; n_lag (0 under v1); then
   `ArithCountFinish_v1{20}`. Slots past a count run with en = 0. A refusal (a symbol
@@ -1443,25 +1443,25 @@ charge (the composition below): what the bound counts is the charge, not the com
   refuses a symbol.
 - *The context and the frequencies are the circuit's, never witness.* The context is a 2-bit run counter carried from
   the replay's position: an arrival resets it, and a 0 raises it, saturating. (f0, f1) come from counts that start at
-  the registered book's public priors and that each coded decision raises in the circuit, across windows. An integer's
+  the registered book's public priors and that each coded decision raises in the circuit, across execution phases. An integer's
   (cum, freq, total) come from the book's public bin tables. A context or a frequency of the prover's choosing would
   pick the code per value and charge any decisions next to nothing. The compile slice computes both in the
   circuit too, at its own model (Open), and charges the position after `ArithEncodeFinish_v1`, which counts the same
   bits.
 - *Integers.* `code_v1` codes an integer as `code.Binned` does: a bin symbol from the book's table (or the escape and a
   uniform one), then a uniform offset, each a general (cum, freq, total) that `ArithCountStep_v1{18, 0, 20}` counts.
-  `ChargeCount_v1{N}` lowers a decisions-only window's counts, the slice's one call (docstring), and
-  `ChargeCount_v2{N, H, O, L}` (`window_charge`) the whole window's, its hits and order entries with their counts too,
+  `ChargeCount_v1{N}` lowers a decisions-only execution phase's counts, the slice's one call (docstring), and
+  `ChargeCount_v2{N, H, O, L}` (`window_charge`) the whole execution phase's, its hits and order entries with their counts too,
   and its length terms' tail.
-- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`): `code_v1` over v1's windows
+- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`): `code_v1` over v1's execution phases
   (`v1.residual`, a book fit at `v1.TABLE_CAPS`) and the walk's still-sent fields. After every symbol the count's
-  interval and `used` are code.py's and its count is the bits consumed. Each window's finish gives v1's charge and
+  interval and `used` are code.py's and its count is the bits consumed. Each execution phase's finish gives v1's charge and
   refuses one bit less, each bit's estimate is the book's model's at context min(run, 2), and the bit-checking variant
   refuses every flipped or cut segment. On the 14 corpus traces at T = 600, read with the network attester's ingress and with the
   client's send as the release (order entries sent), and 6 traces' fields: no circuit case mismatches. This package's vectors (the replay's step
   traces, the trace corpus's fixture) hold no order entry.
 - *Cost* (ANDs, pinned): a decision 2,580 (the step's 2,243 and `BookKT_v1{3}`'s 337), 2.8% of a
-  `ReplayStep_v1{16,64,16}` step's 92,146; an integer's symbol 3,963; a window's finish 41. A window pays for all its
+  `ReplayStep_v1{16,64,16}` step's 92,146; an integer's symbol 3,963; an execution phase's finish 41. An execution phase pays for all its
   fixed-width slots. The corpus's largest: light's, 4,396 decisions, 11.4M; smallkv's, 1,466
   decisions and 5,686 integer symbols, 26.3M before the integers' lowering; async heavy's with the client's send, 1,000
   decisions and 1,761 integer symbols, 9.6M.
@@ -1469,9 +1469,9 @@ charge (the composition below): what the bound counts is the charge, not the com
   alternative, where the committed advice is the segments and the encoder's output must equal each, bit for bit. Its
   decision step costs 3,244, and it needs a reader at a data-dependent cursor, which isn't built.
 
-**The charge's carry across windows** (`charge_chain`, `ChargeLink_v1{N}`): [protocol/charge-chain.md](protocol/charge-chain.md).
+**The charge's carry across execution phases** (`charge_chain`, `ChargeLink_v1{N}`): [protocol/charge-chain.md](protocol/charge-chain.md).
 
-**The whole window's charge** (`window_charge`, `ChargeCount_v2{N, H, O, L}` and `ChargeLink_v2{N, H, O, L}`, the
+**The whole execution phase's charge** (`window_charge`, `ChargeCount_v2{N, H, O, L}` and `ChargeLink_v2{N, H, O, L}`, the
 coding of the hits, the order entries and their counts, and the length terms' tail):
 [protocol/charge-chain.md](protocol/charge-chain.md), "The whole window".
 
@@ -1485,7 +1485,7 @@ carry the table from call to call in `ReplayStep_v1`'s scheduling order:
   - Each candidate (the W waiting slots, then the A arrivals) then gets a lookup from the root (`admit`, nins = 0),
     always in derive mode (the call's own `sent` = 0). It checks that its wh is the longest cached prefix h*.
   - The candidate's hit h, the input `ReplayStep_v1` reads with U = B, is h* less its shortfall. The shortfall is 0
-    while the bound holds, and past it the next sent one, at the window row's head `hh`.
+    while the bound holds, and past it the next sent one, at the execution-phase row's head `hh`.
   - An admitted candidate gets a second call, which owns or appends the units its row completes. It starts from its
     hit's entry: the lookup's `trail` entry at unit h − 1, or ROOT when h = 0.
   - So a later candidate's lookup reads an earlier one's units, as vLLM caches a block when it allocates it.
@@ -1502,7 +1502,7 @@ carry the table from call to call in `ReplayStep_v1`'s scheduling order:
   witness, and the step's end checks it against the count: sent = 0 iff the count through this step is at most NB − 1.
   The count only grows, so the bit never returns to 0. Async scheduling sends from the first step.
 - *The rows.* These are the exact fields the two owners add, each little-endian, with EW = bitlen(N),
-  HW = bitlen(⌈L / B⌉) (`CacheStep_v1`'s), H the sent shortfalls a window (a public cap, like D) and
+  HW = bitlen(⌈L / B⌉) (`CacheStep_v1`'s), H the sent shortfalls an execution phase (a public limit, like D) and
   HCW = bitlen(H).
   - The replay step (`ReplayStep_v1`'s "Walk entries"): the state gains `run_pfx R×EW` after `run_comp`, the step's one
     walk input is `row_pfx R×EW`, each row's entry after its last `CacheStep_v1` call, and it outputs
@@ -1513,20 +1513,21 @@ carry the table from call to call in `ReplayStep_v1`'s scheduling order:
 
         cache    c_valid N×1 | c_parent N×EW | c_tok N×(U·TW) | c_owner N×RW | filled 1×BW | sent 1×1
 
-  - The window row gains one group after `dec`:
+  - The execution-phase row gains one group after `dec`:
 
         hits     hits H×HW | hleft 1×HCW
 
-  - `hh` is how many of the window row's shortfalls the window's steps so far read. `ReplayAdvance` checks that the
-    step's W + A shortfalls are the window row's at `hh`, with the log shifter `dh` uses, and `hh` moves by sent·Σ
-    `looked`. `ReplayLoad` writes the window's decoded shortfalls after the last window row's unread ones, as it does
+  - `hh` is how many of the execution-phase row's shortfalls its steps so far read. `ReplayAdvance` checks that the
+    step's W + A shortfalls are the execution-phase row's at `hh`, with the log shifter `dh` uses, and `hh` moves by
+    sent·Σ `looked`. `ReplayLoad` writes the execution phase's decoded shortfalls after the last execution-phase row's
+    unread ones, as it does
     `dec`, and refuses a state row 0 that left any unread.
   - The empty state's groups are all zero bits. While the bound holds, nothing leaves the cache, so N = NB − 1 entries
     hold every unit computed: 149,212 bits of table a state row at smallkv's (511, 16, 17, 10).
 - *Past the bound.* The table never evicts, so it holds every unit the session computed, not NB − 1: 961 units on
   corpus-smallkv's fixture, whose pool is 100 blocks. An evicting cache never hits past what a cache that never evicts
   holds, so a shortfall is at least 0. v1 sends none: past the bound each hit is the pool's, which `CacheStep_v3`
-  derives, so the window row's `hits` group and `CacheStep_v1`'s own `sent` = 1 mode, a hit checked only as a cached
+  derives, so the execution-phase row's `hits` group and `CacheStep_v1`'s own `sent` = 1 mode, a hit checked only as a cached
   prefix, are unused.
 - *Cost* (`verity_vllm.compiler.cache_step.size`): a call walks ⌈L / U⌉ units at about N·(2·(U·TW + EW) + 2·RW) ANDs
   each. That is 5,856 ANDs at (N, U, TW, RW, L) = (8, 4, 8, 4, 32), and 38.4M at smallkv's (511, 16, 17, 10, 2048):
@@ -1555,9 +1556,9 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
   a row completes is a write record (an append, or an owner dropping to a lower request).
   - A record is the key (parent entry and U tokens, EW + U·TW = 282 bits), the value (entry and owner) and the time,
     about 320 bits.
-  - The time is a counter in the scan's state row. The step places its records in the window row's record buffer, a
-    public cap a window like H, with the log shifter `dh` uses. So the records are values under the advice's hiding
-    root, committed with the window rows the scan already commits.
+  - The time is a counter in the scan's state row. The step places its records in the execution-phase row's record buffer, a
+    public limit an execution phase, like H, with the log shifter `dh` uses. So the records are values under the advice's hiding
+    root, committed with the execution-phase rows the scan already commits.
 - *Where the sort runs.* It runs in proof blocks of its own after the scan, under the same root: `MemSort_v1{E, w}`,
   Batcher's network at E records of w bits. It is log E·(log E + 1)/2 layers of at most E/2 comparators. A proof block
   runs a block of layers on committed records and commits its output; the last proof block runs the pass and outputs one
@@ -1587,7 +1588,7 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
 **Open.**
 - *The charge's pieces* (composition item 3, "The encoder in the circuit").
   - The counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`).
-    Lowering an integer (the window's counts and each order entry) to its `Binned` symbols in the book's public
+    Lowering an integer (the execution phase's counts and each order entry) to its `Binned` symbols in the book's public
     tables isn't built, so the circuit charges the decisions only.
   - The length terms' max_tokens in the slice. `CompileSlice_v7` reads every length slot from ``cert``, so none is free
     witness, but what holds ``cert`` to the certified record is a stand-in, the honest cert row under the network attester's
@@ -1608,24 +1609,24 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
 
 ## The compile slice (`verity_vllm.compiler.compile_slice`)
 
-`CompileSlice_v1` is the compile slice's proof block's pieces ("Advice v1" above) composed whole for one window, each
+`CompileSlice_v1` is the compile slice's proof block's pieces ("Advice v1" above) composed whole for one execution phase, each
 hit ReplayStep_v1 reads derived by `CacheStep_v1`'s calls on the certified tokens from the empty cache. Its circuit,
 verdict flags, reference (`check`), stand-ins and the phase-9 attack's cases (`phase9`) are
 `verity_vllm.compiler.compile_slice`'s docstring. Its step rows are held to the committed ``srv`` row, which the
 verifier holds by b‖c to the served rows the Commit side registers before the sample
 (`verity_vllm.compiler.served_rows`), so the phase-10 attack's six passes are refused; at G < P, the served rows'
 blocks, its P / G rows (`CompileSliceRowGroups_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its
-charge is `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's
-carry chain. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`), the served windows' slice except under the
+charge is `ChargeLink_v1{D}` over the decisions the execution phase commits, from its carry-in to its carry-out in the session's
+carry chain. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`), the served execution phases' slice except under the
 certified tick, is v1 charging the length terms too: `ChargeLink_v2{D, 0, 0, K}`, a length slot for each certified
 arrival, its certified max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and
-what binds its inputs, why every advised window is proved, a served window at its engine's class (w212 under its
+what binds its inputs, why every advised execution phase is proved, a served execution phase at its engine's class (w212 under its
 AsyncScheduler, 1,021,302 ANDs, and 857,866 at the sync class), and its `--zk` runs through
 `benchmarks/network_traces/compile_slice_zk.py`.
 
 ## The replay at the served shape
 
-In [protocol/served-shape.md](protocol/served-shape.md): a served window as the slice's input (vLLM 8eb1's w212), and
+In [protocol/served-shape.md](protocol/served-shape.md): a served execution phase as the slice's input (vLLM 8eb1's w212), and
 the replay's cost at served shapes and its split into proof blocks.
 
 ## Tests
