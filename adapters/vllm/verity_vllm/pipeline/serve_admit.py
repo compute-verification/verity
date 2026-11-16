@@ -281,7 +281,9 @@ def watermark_line(line: bytes, last: tuple[int, ...] | None = None) -> tuple[in
     names a release an earlier line counted and each lost one is named once."""
     # Imported where a line is read, not with the module, which `tick_plugin` loads in each of vLLM's processes and
     # which imports only the stdlib and this package.
-    from verity.protocols.resource_accounting.network.verifier.release import read_watermark
+    from verity.protocols.resource_accounting.network.verifier.release import (
+        read_watermark,
+    )
     return read_watermark(line, last)
 
 
